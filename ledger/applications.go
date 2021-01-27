@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,92 +20,53 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/data/transactions"
 )
 
-// AppTealGlobals contains data accessible by the "global" opcode.
-type AppTealGlobals struct {
-	CurrentRound    basics.Round
-	LatestTimestamp int64
+type logicLedger struct {
+	aidx    basics.AppIndex
+	creator basics.Address
+	cow     cowForLogicLedger
 }
 
-// appTealEvaluator implements transactions.StateEvaluator. When applying an
-// ApplicationCall transaction, InitLedger is called, followed by Check and/or
-// Eval. These pass the initialized LedgerForLogic (appLedger) to the TEAL
-// interpreter.
-type appTealEvaluator struct {
-	evalParams logic.EvalParams
-	AppTealGlobals
+type cowForLogicLedger interface {
+	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
+	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
+	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (basics.EvalDelta, error)
+
+	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error
+	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) error
+
+	round() basics.Round
+	prevTimestamp() int64
+	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 }
 
-// appLedger implements logic.LedgerForLogic
-type appLedger struct {
-	balances apply.Balances
-	appIdx   basics.AppIndex
-	schemas  basics.StateSchemas
-	AppTealGlobals
-}
-
-// Eval evaluates a stateful TEAL program for an application. InitLedger must
-// be called before calling Eval.
-func (ae *appTealEvaluator) Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error) {
-	if ae.evalParams.Ledger == nil {
-		err = fmt.Errorf("appTealEvaluator Ledger not initialized")
-		return
+func newLogicLedger(cow cowForLogicLedger, aidx basics.AppIndex) (*logicLedger, error) {
+	if aidx == basics.AppIndex(0) {
+		return nil, fmt.Errorf("cannot make logic ledger for app index 0")
 	}
-	return logic.EvalStateful(program, ae.evalParams)
-}
 
-// Check computes the cost of a TEAL program for an application. InitLedger must
-// be called before calling Check.
-func (ae *appTealEvaluator) Check(program []byte) (cost int, err error) {
-	if ae.evalParams.Ledger == nil {
-		err = fmt.Errorf("appTealEvaluator Ledger not initialized")
-		return
+	al := &logicLedger{
+		aidx: aidx,
+		cow:  cow,
 	}
-	return logic.CheckStateful(program, ae.evalParams)
-}
 
-// InitLedger initializes an appLedger, which satisfies the
-// logic.LedgerForLogic interface.
-func (ae *appTealEvaluator) InitLedger(balances apply.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
-	ledger, err := newAppLedger(balances, appIdx, schemas, ae.AppTealGlobals)
+	// Fetch app creator so we don't have to look it up every time we get/set/del
+	// a key for this app's global state
+	creator, err := al.fetchAppCreator(al.aidx)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	al.creator = creator
 
-	ae.evalParams.Ledger = ledger
-	return nil
-}
-
-func newAppLedger(balances apply.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al *appLedger, err error) {
-	if balances == nil {
-		err = fmt.Errorf("cannot create appLedger with nil balances")
-		return
-	}
-
-	if appIdx == 0 {
-		err = fmt.Errorf("cannot create appLedger for appIdx 0")
-		return
-	}
-
-	al = &appLedger{}
-	al.appIdx = appIdx
-	al.balances = balances
-	al.schemas = schemas
-	al.AppTealGlobals = globals
 	return al, nil
 }
 
-// MakeDebugAppLedger returns logic.LedgerForLogic suitable for debug or dryrun
-func MakeDebugAppLedger(balances apply.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (logic.LedgerForLogic, error) {
-	return newAppLedger(balances, appIdx, schemas, globals)
-}
-
-func (al *appLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
+func (al *logicLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
 	// Fetch record with pending rewards applied
-	record, err := al.balances.Get(addr, true)
+	record, err := al.cow.Get(addr, true)
 	if err != nil {
 		return
 	}
@@ -113,79 +74,9 @@ func (al *appLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err er
 	return record.MicroAlgos, nil
 }
 
-// AppGlobalState returns the global state key/value store for the requested
-// application. The returned map must NOT be modified.
-func (al *appLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	// Allow referring to the current appIdx as 0
-	var params basics.AppParams
-	if appIdx == 0 {
-		appIdx = al.appIdx
-	}
-
-	// Find app creator (and check if app exists)
-	creator, ok, err := al.balances.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure app exists
-	if !ok {
-		return nil, fmt.Errorf("app %d does not exist", appIdx)
-	}
-
-	// Fetch creator's balance record
-	record, err := al.balances.Get(creator, false)
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure creator has expected params
-	params, ok = record.AppParams[appIdx]
-	if !ok {
-		return nil, fmt.Errorf("app %d not found in account %s", appIdx, creator.String())
-	}
-
-	// GlobalState might be nil, so make sure we don't return a nil map
-	keyValue := params.GlobalState
-	if keyValue == nil {
-		keyValue = make(basics.TealKeyValue)
-	}
-	return keyValue, nil
-}
-
-// AppLocalState returns the local state key/value store for this
-// account and application. The returned map must NOT be modified.
-func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	// Allow referring to the current appIdx as 0
-	if appIdx == 0 {
-		appIdx = al.appIdx
-	}
-
-	// Don't fetch with pending rewards here since we are only returning
-	// the LocalState, not the balance
-	record, err := al.balances.Get(addr, false)
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure account is opted in
-	localState, ok := record.AppLocalStates[appIdx]
-	if !ok {
-		return nil, fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), appIdx)
-	}
-
-	// KeyValue might be nil, so make sure we don't return a nil map
-	keyValue := localState.KeyValue
-	if keyValue == nil {
-		keyValue = make(basics.TealKeyValue)
-	}
-
-	return keyValue, nil
-}
-
-func (al *appLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
+func (al *logicLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
 	// Fetch the requested balance record
-	record, err := al.balances.Get(addr, false)
+	record, err := al.cow.Get(addr, false)
 	if err != nil {
 		return basics.AssetHolding{}, err
 	}
@@ -200,9 +91,9 @@ func (al *appLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetInde
 	return holding, nil
 }
 
-func (al *appLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error) {
+func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error) {
 	// Find asset creator
-	creator, ok, err := al.balances.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
+	creator, ok, err := al.cow.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
 	if err != nil {
 		return basics.AssetParams{}, err
 	}
@@ -213,7 +104,7 @@ func (al *appLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams
 	}
 
 	// Fetch the requested balance record
-	record, err := al.balances.Get(creator, false)
+	record, err := al.cow.Get(creator, false)
 	if err != nil {
 		return basics.AssetParams{}, err
 	}
@@ -228,22 +119,72 @@ func (al *appLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams
 	return params, nil
 }
 
-func (al *appLedger) Round() basics.Round {
-	return al.AppTealGlobals.CurrentRound
+func (al *logicLedger) Round() basics.Round {
+	return al.cow.round()
 }
 
-func (al *appLedger) LatestTimestamp() int64 {
-	return al.AppTealGlobals.LatestTimestamp
+func (al *logicLedger) LatestTimestamp() int64 {
+	return al.cow.prevTimestamp()
 }
 
-func (al *appLedger) ApplicationID() basics.AppIndex {
-	return al.appIdx
+func (al *logicLedger) ApplicationID() basics.AppIndex {
+	return al.aidx
 }
 
-func (al *appLedger) LocalSchema() basics.StateSchema {
-	return al.schemas.LocalStateSchema
+func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
+	if appIdx == basics.AppIndex(0) {
+		appIdx = al.aidx
+	}
+	return al.cow.allocated(addr, appIdx, false)
 }
 
-func (al *appLedger) GlobalSchema() basics.StateSchema {
-	return al.schemas.GlobalStateSchema
+func (al *logicLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
+	if appIdx == basics.AppIndex(0) {
+		appIdx = al.aidx
+	}
+	return al.cow.GetKey(addr, appIdx, false, key)
+}
+
+func (al *logicLedger) SetLocal(addr basics.Address, key string, value basics.TealValue) error {
+	return al.cow.SetKey(addr, al.aidx, false, key, value)
+}
+
+func (al *logicLedger) DelLocal(addr basics.Address, key string) error {
+	return al.cow.DelKey(addr, al.aidx, false, key)
+}
+
+func (al *logicLedger) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, error) {
+	// Fetch the application creator
+	addr, ok, err := al.cow.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
+
+	if err != nil {
+		return basics.Address{}, err
+	}
+	if !ok {
+		return basics.Address{}, fmt.Errorf("app %d does not exist", appIdx)
+	}
+	return addr, nil
+}
+
+func (al *logicLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
+	if appIdx == basics.AppIndex(0) {
+		appIdx = al.aidx
+	}
+	addr, err := al.fetchAppCreator(appIdx)
+	if err != nil {
+		return basics.TealValue{}, false, err
+	}
+	return al.cow.GetKey(addr, appIdx, true, key)
+}
+
+func (al *logicLedger) SetGlobal(key string, value basics.TealValue) error {
+	return al.cow.SetKey(al.creator, al.aidx, true, key, value)
+}
+
+func (al *logicLedger) DelGlobal(key string) error {
+	return al.cow.DelKey(al.creator, al.aidx, true, key)
+}
+
+func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+	return al.cow.BuildEvalDelta(al.aidx, txn)
 }

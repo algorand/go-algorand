@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ func TestEmptyEncoding(t *testing.T) {
 
 func TestRewards(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	accountAlgos := []MicroAlgos{MicroAlgos{Raw: 0}, MicroAlgos{Raw: 8000}, MicroAlgos{Raw: 13000}, MicroAlgos{Raw: 83000}}
+	accountAlgos := []MicroAlgos{{Raw: 0}, {Raw: 8000}, {Raw: 13000}, {Raw: 83000}}
 	for _, accountAlgo := range accountAlgos {
 		ad := AccountData{
 			Status:             Online,
@@ -206,16 +206,16 @@ func TestEncodedAccountAllocationBounds(t *testing.T) {
 		if proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
 			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppsCreated > encodedMaxAppParams {
+		if proto.MaxAppsCreated > EncodedMaxAppParams {
 			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppsOptedIn > encodedMaxAppLocalStates {
+		if proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
 			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
 		}
-		if proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries {
+		if proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries {
 			require.Failf(t, "proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
 		}
-		if proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries {
+		if proto.MaxGlobalSchemaEntries > EncodedMaxKeyValueEntries {
 			require.Failf(t, "proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
 		}
 	}

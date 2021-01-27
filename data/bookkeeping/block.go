@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -122,23 +122,10 @@ type (
 		// started being supported).
 		TxnCounter uint64 `codec:"tc"`
 
-		// CompactCertVoters is the root of a Merkle tree containing the
-		// online accounts that will help sign a compact certificate.  The
-		// Merkle root, and the compact certificate, happen on blocks that
-		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
-		// that are not a multiple of ConsensusParams.CompactCertRounds,
-		// this value is zero.
-		CompactCertVoters crypto.Digest `codec:"ccv"`
-
-		// CompactCertVotersTotal is the total number of microalgos held by
-		// the accounts in CompactCertVoters (or zero, if the merkle root is
-		// zero).  This is intended for computing the threshold of votes to
-		// expect from CompactCertVoters.
-		CompactCertVotersTotal basics.MicroAlgos `codec:"ccvt"`
-
-		// CompactCertLastRound is the last round for which we have committed
-		// a CompactCert transaction.
-		CompactCertLastRound basics.Round `codec:"ccl"`
+		// CompactCert tracks the state of compact certs, potentially
+		// for multiple types of certs.
+		//msgp:sort protocol.CompactCertType protocol.SortCompactCertType
+		CompactCert map[protocol.CompactCertType]CompactCertState `codec:"cc,allocbound=protocol.NumCompactCertTypes"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
@@ -197,6 +184,29 @@ type (
 		NextProtocolApprovals  uint64                    `codec:"nextyes"`
 		NextProtocolVoteBefore basics.Round              `codec:"nextbefore"`
 		NextProtocolSwitchOn   basics.Round              `codec:"nextswitch"`
+	}
+
+	// CompactCertState tracks the state of compact certificates.
+	CompactCertState struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+		// CompactCertVoters is the root of a Merkle tree containing the
+		// online accounts that will help sign a compact certificate.  The
+		// Merkle root, and the compact certificate, happen on blocks that
+		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
+		// that are not a multiple of ConsensusParams.CompactCertRounds,
+		// this value is zero.
+		CompactCertVoters crypto.Digest `codec:"v"`
+
+		// CompactCertVotersTotal is the total number of microalgos held by
+		// the accounts in CompactCertVoters (or zero, if the merkle root is
+		// zero).  This is intended for computing the threshold of votes to
+		// expect from CompactCertVoters.
+		CompactCertVotersTotal basics.MicroAlgos `codec:"t"`
+
+		// CompactCertNextRound is the next round for which we will accept
+		// a CompactCert transaction.
+		CompactCertNextRound basics.Round `codec:"n"`
 	}
 
 	// A Block contains the Payset and metadata corresponding to a given Round.

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,7 +63,7 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 			return err
 		}
 
-		closeAmount := rec.AccountData.MicroAlgos
+		closeAmount := rec.MicroAlgos
 		ad.ClosingAmount = closeAmount
 		err = balances.Move(header.Sender, payment.CloseRemainderTo, closeAmount, &ad.SenderRewards, &ad.CloseRewards)
 		if err != nil {
@@ -75,8 +75,8 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		if err != nil {
 			return err
 		}
-		if !rec.AccountData.MicroAlgos.IsZero() {
-			return fmt.Errorf("balance %d still not zero after CloseRemainderTo", rec.AccountData.MicroAlgos.Raw)
+		if !rec.MicroAlgos.IsZero() {
+			return fmt.Errorf("balance %d still not zero after CloseRemainderTo", rec.MicroAlgos.Raw)
 		}
 
 		// Confirm that there is no asset-related state in the account
@@ -102,8 +102,8 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		}
 
 		// Clear out entire account record, to allow the DB to GC it
-		rec.AccountData = basics.AccountData{}
-		err = balances.Put(rec)
+		rec = basics.AccountData{}
+		err = balances.Put(header.Sender, rec)
 		if err != nil {
 			return err
 		}

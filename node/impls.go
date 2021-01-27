@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -49,14 +48,13 @@ func (i blockAuthenticatorImpl) Quit() {
 
 type blockValidatorImpl struct {
 	l                *data.Ledger
-	tp               *pools.TransactionPool
 	verificationPool execpool.BacklogPool
 }
 
 // Validate implements BlockValidator.Validate.
 func (i blockValidatorImpl) Validate(ctx context.Context, e bookkeeping.Block) (agreement.ValidatedBlock, error) {
 	b := &e
-	lvb, err := i.l.Validate(ctx, *b, i.tp, i.verificationPool)
+	lvb, err := i.l.Validate(ctx, *b, i.verificationPool)
 	if err != nil {
 		return nil, err
 	}

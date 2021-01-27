@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ import (
 // Dialer wraps net.Dialer and provides a custom DNSSEC-aware resolver
 type Dialer struct {
 	InnerDialer *net.Dialer
-	Resolver    *Resolver
+	Resolver    ResolverIf
 }
 
 // DialContext connects to the address on the named network using the provided context.

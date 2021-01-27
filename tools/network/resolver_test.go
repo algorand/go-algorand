@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ func TestResolver(t *testing.T) {
 	// specify a specific resolver to work with ( cloudflare DNS server is 1.1.1.1 )
 	cloudFlareIPAddr, _ := net.ResolveIPAddr("ip", "1.1.1.1")
 	resolver = Resolver{
-		DNSAddress: *cloudFlareIPAddr,
+		dnsAddress: *cloudFlareIPAddr,
 	}
 	cname, addrs, err = resolver.LookupSRV(context.Background(), "jabber", "tcp", "gmail.com")
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestResolver(t *testing.T) {
 	// specify an invalid dns resolver ip address and examine the fail case.
 	dummyIPAddr, _ := net.ResolveIPAddr("ip", "255.255.128.1")
 	resolver = Resolver{
-		DNSAddress: *dummyIPAddr,
+		dnsAddress: *dummyIPAddr,
 	}
 	timingOutContext, timingOutContextFunc := context.WithTimeout(context.Background(), time.Duration(100)*time.Millisecond)
 	defer timingOutContextFunc()

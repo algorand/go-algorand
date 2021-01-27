@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -263,13 +263,13 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 
 	// ensure old program is the same as a new one when assembling without version
-	program1, err := AssembleString(sourceTEALv1)
+	ops, err := AssembleString(sourceTEALv1)
 	require.NoError(t, err)
-	require.Equal(t, program, program1)
+	require.Equal(t, program, ops.Program)
 	// ensure the old program is the same as a new one except TEAL version byte
-	program2, err := AssembleStringWithVersion(sourceTEALv1, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(sourceTEALv1, AssemblerMaxVersion)
 	require.NoError(t, err)
-	require.Equal(t, program[1:], program2[1:])
+	require.Equal(t, program[1:], ops.Program[1:])
 
 	sig := c.Sign(Msg{
 		ProgramHash: crypto.HashObj(Program(program)),
@@ -301,14 +301,14 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	cost2, err := Check(program2, ep)
+	cost2, err := Check(ops.Program, ep)
 	require.NoError(t, err)
 
 	// Costs for v2 should be higher because of hash opcode cost changes
 	require.Equal(t, 2308, cost2)
-	pass, err = Eval(program2, ep)
+	pass, err = Eval(ops.Program, ep)
 	if err != nil || !pass {
-		t.Log(hex.EncodeToString(program2))
+		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.NoError(t, err)
@@ -346,22 +346,11 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 	for _, field := range fields {
 		text := fmt.Sprintf("global %s", field)
 		// check V1 assembler fails
-		program, err := AssembleStringWithVersion(text, 0)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "available in version 2")
-		require.Nil(t, program)
+		testLine(t, text, assemblerNoVersion, "...available in version 2. Missed #pragma version?")
+		testLine(t, text, 0, "...available in version 2. Missed #pragma version?")
+		testLine(t, text, 1, "...available in version 2. Missed #pragma version?")
 
-		program, err = AssembleStringWithVersion(text, 1)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "available in version 2")
-		require.Nil(t, program)
-
-		program, err = AssembleString(text)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "available in version 2")
-		require.Nil(t, program)
-
-		program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+		ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 		require.NoError(t, err)
 
 		proto := config.Consensus[protocol.ConsensusV23]
@@ -371,28 +360,28 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		ep.Ledger = ledger
 
 		// check failure with version check
-		_, err = Eval(program, ep)
+		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
-		_, err = Eval(program, ep)
+		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
 		// check opcodes failures
-		program[0] = 1 // set version to 1
-		_, err = Eval(program, ep)
+		ops.Program[0] = 1 // set version to 1
+		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
-		_, err = Eval(program, ep)
+		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
 
 		// check opcodes failures
-		program[0] = 0 // set version to 0
-		_, err = Eval(program, ep)
+		ops.Program[0] = 0 // set version to 0
+		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
-		_, err = Eval(program, ep)
+		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
 	}
@@ -425,29 +414,18 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 		field := fs.field.String()
 		for _, command := range tests {
 			text := fmt.Sprintf(command, field)
-			asmError := "available in version 2"
+			asmError := "...available in version 2..."
 			if _, ok := txnaFieldSpecByField[fs.field]; ok {
 				parts := strings.Split(text, " ")
 				op := parts[0]
 				asmError = fmt.Sprintf("found %sa field %s in %s op", op, field, op)
 			}
 			// check V1 assembler fails
-			program, err := AssembleStringWithVersion(text, 0)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), asmError)
-			require.Nil(t, program)
+			testLine(t, text, assemblerNoVersion, asmError)
+			testLine(t, text, 0, asmError)
+			testLine(t, text, 1, asmError)
 
-			program, err = AssembleStringWithVersion(text, 1)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), asmError)
-			require.Nil(t, program)
-
-			program, err = AssembleString(text)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), asmError)
-			require.Nil(t, program)
-
-			program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+			ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 			if _, ok := txnaFieldSpecByField[fs.field]; ok {
 				// "txn Accounts" is invalid, so skip evaluation
 				require.Error(t, err, asmError)
@@ -464,28 +442,28 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			ep.TxnGroup = txgroup
 
 			// check failure with version check
-			_, err = Eval(program, ep)
+			_, err = Eval(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
-			_, err = Eval(program, ep)
+			_, err = Eval(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
 
 			// check opcodes failures
-			program[0] = 1 // set version to 1
-			_, err = Eval(program, ep)
+			ops.Program[0] = 1 // set version to 1
+			_, err = Eval(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
-			_, err = Eval(program, ep)
+			_, err = Eval(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 
 			// check opcodes failures
-			program[0] = 0 // set version to 0
-			_, err = Eval(program, ep)
+			ops.Program[0] = 0 // set version to 0
+			_, err = Eval(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
-			_, err = Eval(program, ep)
+			_, err = Eval(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 		}
@@ -502,29 +480,23 @@ bnz done
 done:`
 
 	t.Run("v=default", func(t *testing.T) {
-		_, err := AssembleString(source)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), ":4 label done is too far away")
+		testProg(t, source, assemblerNoVersion, expect{4, "label done is too far away"})
 	})
 
-	t.Run("v=0", func(t *testing.T) {
-		_, err := AssembleStringWithVersion(source, 0)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), ":4 label done is too far away")
+	t.Run("v=default", func(t *testing.T) {
+		testProg(t, source, 0, expect{4, "label done is too far away"})
 	})
 
-	t.Run("v=1", func(t *testing.T) {
-		_, err := AssembleStringWithVersion(source, 1)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), ":4 label done is too far away")
+	t.Run("v=default", func(t *testing.T) {
+		testProg(t, source, 1, expect{4, "label done is too far away"})
 	})
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			program, err := AssembleStringWithVersion(source, v)
+			ops, err := AssembleStringWithVersion(source, v)
 			require.NoError(t, err)
 			ep := defaultEvalParams(nil, nil)
-			_, err = Eval(program, ep)
+			_, err = Eval(ops.Program, ep)
 			require.NoError(t, err)
 		})
 	}

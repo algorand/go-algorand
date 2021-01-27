@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,11 +27,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/util"
 )
 
 var errNoLedgerForRound = errors.New("No ledger available for given round")
@@ -39,12 +41,8 @@ var errNoLedgerForRound = errors.New("No ledger available for given round")
 const (
 	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
 	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * basics.MaxEncodedAccountDataSize
-	// maxCatchpointFileDownloadDuration is the maximum time we would wait for download an entire catchpoint file
-	maxCatchpointFileDownloadDuration = 45 * time.Minute
-	// expectedWorstDownloadSpeedBytesPerSecond defines the worst case-scenario download speed we expect to get while downloading a catchpoint file
-	expectedWorstDownloadSpeedBytesPerSecond = 20 * 1024
-	// maxCatchpointFileChunkDownloadDuration is the maximum amount of time we would wait to download a single chunk off a catchpoint file
-	maxCatchpointFileChunkDownloadDuration = 2*time.Minute + maxCatchpointFileChunkSize*time.Second/expectedWorstDownloadSpeedBytesPerSecond
+	// defaultMinCatchpointFileDownloadBytesPerSecond defines the worst-case scenario download speed we expect to get while downloading a catchpoint file
+	defaultMinCatchpointFileDownloadBytesPerSecond = 20 * 1024
 	// catchpointFileStreamReadSize defines the number of bytes we would attempt to read at each itration from the incoming http data stream
 	catchpointFileStreamReadSize = 4096
 )
@@ -62,20 +60,22 @@ type ledgerFetcher struct {
 	log      logging.Logger
 	peers    []network.Peer
 	reporter ledgerFetcherReporter
+	config   config.Local
 }
 
-func makeLedgerFetcher(net network.GossipNode, accessor ledger.CatchpointCatchupAccessor, log logging.Logger, reporter ledgerFetcherReporter) *ledgerFetcher {
+func makeLedgerFetcher(net network.GossipNode, accessor ledger.CatchpointCatchupAccessor, log logging.Logger, reporter ledgerFetcherReporter, cfg config.Local) *ledgerFetcher {
 	return &ledgerFetcher{
 		net:      net,
 		accessor: accessor,
 		log:      log,
 		reporter: reporter,
+		config:   cfg,
 	}
 }
 
 func (lf *ledgerFetcher) downloadLedger(ctx context.Context, round basics.Round) error {
 	if len(lf.peers) == 0 {
-		lf.peers = lf.net.GetPeers(network.PeersPhonebook)
+		lf.peers = lf.net.GetPeers(network.PeersPhonebookRelays)
 		if len(lf.peers) == 0 {
 			return errNoPeersAvailable
 		}
@@ -94,14 +94,15 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 		return err
 	}
 
-	parsedURL.Path = peer.PrepareURL(path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
+	parsedURL.Path = lf.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
 	ledgerURL := parsedURL.String()
 	lf.log.Debugf("ledger GET %#v peer %#v %T", ledgerURL, peer, peer)
 	request, err := http.NewRequest(http.MethodGet, ledgerURL, nil)
 	if err != nil {
 		return err
 	}
-	timeoutContext, timeoutContextCancel := context.WithTimeout(ctx, maxCatchpointFileDownloadDuration)
+
+	timeoutContext, timeoutContextCancel := context.WithTimeout(ctx, lf.config.MaxCatchpointDownloadDuration)
 	defer timeoutContextCancel()
 	request = request.WithContext(timeoutContext)
 	network.SetUserAgentHeader(request.Header)
@@ -133,7 +134,16 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 		err = fmt.Errorf("getPeerLedger : http ledger fetcher response has an invalid content type : %s", contentTypes[0])
 		return err
 	}
-	watchdogReader := makeWatchdogStreamReader(response.Body, catchpointFileStreamReadSize, 2*maxCatchpointFileChunkSize, maxCatchpointFileChunkDownloadDuration)
+
+	// maxCatchpointFileChunkDownloadDuration is the maximum amount of time we would wait to download a single chunk off a catchpoint file
+	maxCatchpointFileChunkDownloadDuration := 2 * time.Minute
+	if lf.config.MinCatchpointFileDownloadBytesPerSecond > 0 {
+		maxCatchpointFileChunkDownloadDuration += maxCatchpointFileChunkSize * time.Second / time.Duration(lf.config.MinCatchpointFileDownloadBytesPerSecond)
+	} else {
+		maxCatchpointFileChunkDownloadDuration += maxCatchpointFileChunkSize * time.Second / defaultMinCatchpointFileDownloadBytesPerSecond
+	}
+
+	watchdogReader := util.MakeWatchdogStreamReader(response.Body, catchpointFileStreamReadSize, 2*maxCatchpointFileChunkSize, maxCatchpointFileChunkDownloadDuration)
 	defer watchdogReader.Close()
 	tarReader := tar.NewReader(watchdogReader)
 	var downloadProgress ledger.CatchpointCatchupAccessorProgress

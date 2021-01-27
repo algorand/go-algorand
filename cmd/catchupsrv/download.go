@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -194,7 +194,7 @@ func download() {
 			}
 
 			var resolver tools_network.Resolver
-			resolver.DNSAddress = *dnsAddr
+			resolver.SetFallbackResolverAddress(*dnsAddr)
 			_, records, err = resolver.LookupSRV(context.Background(), "algobootstrap", "tcp", bootstrapID)
 			if err != nil {
 				panic(err)

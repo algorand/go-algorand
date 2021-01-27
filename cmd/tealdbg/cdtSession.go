@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -243,7 +243,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			case <-cdtUpdatedCh:
 				dbgStateMu.Lock()
 
-				appState := s.debugger.GetStates(&dbgState.AppStateChange)
+				appState := s.debugger.GetStates(&dbgState)
 				state.Update(cdtStateUpdate{
 					dbgState.Stack, dbgState.Scratch,
 					dbgState.PC, dbgState.Line, dbgState.Error,

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -298,7 +298,7 @@ type ConsensusParams struct {
 	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
 
-	// CompactCertRounds defines the frequency with with compact
+	// CompactCertRounds defines the frequency with which compact
 	// certificates are generated.  Every round that is a multiple
 	// of CompactCertRounds, the block header will include a Merkle
 	// commitment to the set of online accounts (that can vote after
@@ -326,16 +326,18 @@ type ConsensusParams struct {
 	// accounts and balances) in the critical path.
 	CompactCertVotersLookback uint64
 
-	// CompactCertWeightThreshold is the percentage of top voters weight
+	// CompactCertWeightThreshold specifies the fraction of top voters weight
 	// that must sign the message (block header) for security.  The compact
 	// certificate ensures this threshold holds; however, forming a valid
 	// compact certificate requires a somewhat higher number of signatures,
 	// and the more signatures are collected, the smaller the compact cert
 	// can be.
 	//
-	// This threshold can be thought of as the maximum percentage of
+	// This threshold can be thought of as the maximum fraction of
 	// malicious weight that compact certificates defend against.
-	CompactCertWeightThreshold uint64
+	//
+	// The threshold is computed as CompactCertWeightThreshold/(1<<32).
+	CompactCertWeightThreshold uint32
 
 	// CompactCertSecKQ is the security parameter (k+q) for the compact
 	// certificate scheme.
@@ -378,6 +380,10 @@ var MaxTxGroupSize int
 // of the consensus protocols. used for decoding purposes.
 var MaxAppProgramLen int
 
+// MaxBytesKeyValueLen is a maximum length of key or value across all protocols.
+// used for decoding purposes.
+var MaxBytesKeyValueLen int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -404,6 +410,9 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(int(p.LogicSigMaxSize), &MaxLogicSigMaxSize)
 	checkSetMax(p.MaxTxnNoteBytes, &MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &MaxTxGroupSize)
+	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
+	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
+	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -810,6 +819,13 @@ func initConsensusProtocols() {
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
+
+	// Enable compact certificates.
+	vFuture.CompactCertRounds = 128
+	vFuture.CompactCertTopVoters = 1024 * 1024
+	vFuture.CompactCertVotersLookback = 16
+	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
+	vFuture.CompactCertSecKQ = 128
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

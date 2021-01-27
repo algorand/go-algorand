@@ -2,8 +2,6 @@
 set err 0
 log_user 1
 
-
-
 if { [catch {
     source algohExpectCommon.exp
 
@@ -11,9 +9,17 @@ if { [catch {
     set TEST_DATA_DIR [lindex $argv 1]
 
     exec mkdir -p $TEST_ALGO_DIR
-    
+
     set TIME_STAMP [clock seconds]
-    set timeout 5
+
+    set archType [exec $TEST_DATA_DIR/../../scripts/archtype.sh]
+    puts "arch type: $archType"
+    if {[regexp "arm64" $archType]} {
+       set timeout 60
+    } else {
+       set timeout 5
+    }
+    puts "set timeout to $timeout"
 
     set TEST_ROOT_DIR $TEST_ALGO_DIR/root
     set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary
@@ -22,66 +28,63 @@ if { [catch {
     set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
     puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
 
-
     ::Algoh::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
 
     ::Algoh::StartNode $TEST_PRIMARY_NODE_DIR
 
+    puts "Successfully started node"
+
     exec cat ./disabled_profiler_config.json > $TEST_NODE_DIR/config.json
     exec cat ./host-config.json > $TEST_NODE_DIR/host-config.json
-    
+
     set PRIMARY_ADDR ""
-    spawn cat $TEST_ROOT_DIR/Primary/algod-listen.net
+    spawn cat $TEST_PRIMARY_NODE_DIR/algod-listen.net
     expect {
-        -regexp {http://[0-9\.]+:[0-9]+} { regexp -- {[0-9.]+:[0-9]+} $expect_out(0,string) PRIMARY_ADDR; close;}
-        timeout {puts "missed our case"; close; exit 1}
+        -re {http:\/\/([0-9\.]+:[0-9]+)} { set PRIMARY_ADDR $expect_out(1,string); exp_continue;}
+        timeout {::Algoh::Abort "timed out listing $TEST_PRIMARY_NODE_DIR/algod-listen.net"}
+    }
+
+    if { $PRIMARY_ADDR == "" } {
+        ::Algoh::Abort "Primary node listening address could not be retrieved."
     }
 
     puts "regex match: $PRIMARY_ADDR"
 
-    #start hosted node in the background
-    spawn $env(GOPATH)/bin/algoh -d $TEST_NODE_DIR -p $PRIMARY_ADDR
+    # start hosted node in the background
+    spawn algoh -d $TEST_NODE_DIR -p $PRIMARY_ADDR
     expect {
         "^Logging to: *" {puts "algoh startup successful"}
-        timeout {puts "algoh failed to start"; close; exit 1}
+        timeout {::Algoh::Abort "algoh failed to start";}
+        eof { ::Algoh::CheckEOF "algoh failed to start" }
     }
 
-    #allow algoh time to put files in Node dir
-    spawn sleep 5
-    set timeout 5
-    expect {
-        timeout {puts "algod should be fully running"; close}
-    }
+    # allow algoh time to put files in Node dir
+    ::Algoh::WaitForFile $TEST_NODE_DIR/algod.pid
 
-    #wait until Node approves blocks to the network
+    # wait until Node approves blocks to the network
     set timeout 60
-    spawn $env(GOPATH)/bin/goal node wait -d $TEST_NODE_DIR -w 61
+    spawn goal node wait -d $TEST_NODE_DIR -w 61
     expect {
         eof {puts "successfully communicating with relay node"}
-        "Timed out waiting for node to make progress" {puts "timed out waiting for connection to relay node"; close; exit 1}
-        timeout {puts "should not reached this case"; close; exit 1}
+        "Timed out waiting for node to make progress" {::Algoh::Abort "timed out waiting for connection to relay node";}
+        timeout {::Algoh::Abort "should not reached this case";}
     }
-
 
     ::Algoh::StopNode $TEST_PRIMARY_NODE_DIR
 
-
     set timeout 201
-    spawn $env(GOPATH)/bin/goal node wait -d $TEST_NODE_DIR -w 200
+    spawn goal node wait -d $TEST_NODE_DIR -w 200
     expect {
-        "^Cannot contact Algorand node: open $TEST_NODE_DIR/algod.net: no such file or directory" {puts "ERROR: node shutdown"; close; exit 1}
+        "^Cannot contact Algorand node: open $TEST_NODE_DIR/algod.net: no such file or directory" {::Algoh::Abort "ERROR: node shutdown";}
         "^Timed out waiting for node to make progress" {puts "node correctly continued running despite relay shutdown"; close}
-        timeout {puts "should not reached this case", close; exit 1}
+        timeout {::Algoh::Abort "should not reached this case";}
     }
-    
+
     ::Algoh::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
 
     exec rm -d -r -f $TEST_ALGO_DIR
     puts "Basic Algoh Test Successful"
-    exit 0
 } EXCEPTION ] } {
-    puts "ERROR in algoh test: $EXCEPTION"
-
-    exec rm -d -r -f $TEST_ALGO_DIR
+    ::Algoh::Abort "ERROR in algoh test: $EXCEPTION"
     exit 1
 }

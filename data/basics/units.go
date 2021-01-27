@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -129,4 +129,9 @@ func (round Round) SubSaturate(x Round) Round {
 	}
 
 	return round - x
+}
+
+// RoundUpToMultipleOf rounds up round to the next multiple of n.
+func (round Round) RoundUpToMultipleOf(n Round) Round {
+	return (round + n - 1) / n * n
 }

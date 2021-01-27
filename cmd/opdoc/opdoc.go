@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -120,12 +120,17 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		}
 		out.Write([]byte("\n"))
 	}
+
 	if op.Returns == nil {
 		fmt.Fprintf(out, "- Pushes: _None_\n")
 	} else {
-		fmt.Fprintf(out, "- Pushes: %s", op.Returns[0].String())
-		for _, rt := range op.Returns[1:] {
-			fmt.Fprintf(out, ", %s", rt.String())
+		if len(op.Returns) == 1 {
+			fmt.Fprintf(out, "- Pushes: %s", op.Returns[0].String())
+		} else {
+			fmt.Fprintf(out, "- Pushes: *... stack*, %s", op.Returns[0].String())
+			for _, rt := range op.Returns[1:] {
+				fmt.Fprintf(out, ", %s", rt.String())
+			}
 		}
 		fmt.Fprintf(out, "\n")
 	}

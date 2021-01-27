@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/node/indexer"
@@ -50,6 +50,7 @@ var cannedStatusReportGolden = node.StatusReport{
 	Catchpoint:                         "",
 	CatchpointCatchupAcquiredBlocks:    0,
 	CatchpointCatchupProcessedAccounts: 0,
+	CatchpointCatchupVerifiedAccounts:  0,
 	CatchpointCatchupTotalAccounts:     0,
 	CatchpointCatchupTotalBlocks:       0,
 	LastCatchpoint:                     "",
@@ -154,7 +155,7 @@ func (m mockNode) IsArchival() bool {
 	return false
 }
 
-func (m mockNode) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {}
+func (m mockNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {}
 
 func (m mockNode) Uint64() uint64 {
 	return 1

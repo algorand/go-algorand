@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,10 +28,21 @@ import (
 // of how many addresses the phonebook actually has. ( with the retry-after logic applied )
 const getAllAddresses = math.MaxInt32
 
+// PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
+// currently, we have two roles : relay role and archiver role, which are mutually exclusive.
+type PhoneBookEntryRoles int
+
+// PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
+// or via a configuration file.
+const PhoneBookEntryRelayRole = 1
+
+// PhoneBookEntryArchiverRole used for all the archivers that are provided via the archive SRV record.
+const PhoneBookEntryArchiverRole = 2
+
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {
 	// GetAddresses(N) returns up to N addresses, but may return fewer
-	GetAddresses(n int) []string
+	GetAddresses(n int, role PhoneBookEntryRoles) []string
 
 	// UpdateRetryAfter updates the retry-after field for the entries matching the given address
 	UpdateRetryAfter(addr string, retryAfter time.Time)
@@ -52,27 +63,34 @@ type Phonebook interface {
 	// new entries in dnsAddresses are being added
 	// existing items that aren't included in dnsAddresses are being removed
 	// matching entries don't change
-	ReplacePeerList(dnsAddresses []string, networkName string)
+	ReplacePeerList(dnsAddresses []string, networkName string, role PhoneBookEntryRoles)
 
 	// ExtendPeerList adds unique addresses to this set of addresses
-	ExtendPeerList(more []string, networkName string)
+	ExtendPeerList(more []string, networkName string, role PhoneBookEntryRoles)
 }
 
 // addressData: holds the information associated with each phonebook address.
-// retryAfter: is the time to wait before retrying to connect to the address.
-// recentConnectionTimes: is the log of connection times used to observe the maximum
-//                        connections to the address in a given time window.
-// networkNames: lists the networks to which the given address belongs.
 type addressData struct {
-	retryAfter            time.Time
+	// retryAfter is the time to wait before retrying to connect to the address.
+	retryAfter time.Time
+
+	// recentConnectionTimes: is the log of connection times used to observe the maximum
+	//                        connections to the address in a given time window.
 	recentConnectionTimes []time.Time
-	networkNames          map[string]bool
+
+	// networkNames: lists the networks to which the given address belongs.
+	networkNames map[string]bool
+
+	// role is the role that this address serves.
+	role PhoneBookEntryRoles
 }
 
-func makePhonebookEntryData(networkName string) addressData {
+// makePhonebookEntryData creates a new addressData entry for provided network name and role.
+func makePhonebookEntryData(networkName string, role PhoneBookEntryRoles) addressData {
 	pbData := addressData{
 		networkNames:          make(map[string]bool),
 		recentConnectionTimes: make([]time.Time, 0),
+		role:                  role,
 	}
 	pbData.networkNames[networkName] = true
 	return pbData
@@ -123,10 +141,10 @@ func (e *phonebookImpl) appendTime(addr string, t time.Time) {
 	e.data[addr] = entry
 }
 
-func (e *phonebookImpl) filterRetryTime(t time.Time) []string {
+func (e *phonebookImpl) filterRetryTime(t time.Time, role PhoneBookEntryRoles) []string {
 	o := make([]string, 0, len(e.data))
 	for addr, entry := range e.data {
-		if t.After(entry.retryAfter) {
+		if t.After(entry.retryAfter) && role == entry.role {
 			o = append(o, addr)
 		}
 	}
@@ -137,14 +155,14 @@ func (e *phonebookImpl) filterRetryTime(t time.Time) []string {
 // new entries in addressesThey are being added
 // existing items that aren't included in addressesThey are being removed
 // matching entries don't change
-func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName string) {
+func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName string, role PhoneBookEntryRoles) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
 	// prepare a map of items we'd like to remove.
 	removeItems := make(map[string]bool, 0)
 	for k, pbd := range e.data {
-		if pbd.networkNames[networkName] {
+		if pbd.networkNames[networkName] && pbd.role == role {
 			removeItems[k] = true
 		}
 	}
@@ -159,7 +177,7 @@ func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName stri
 			delete(removeItems, addr)
 		} else {
 			// we don't have this item. add it.
-			e.data[addr] = makePhonebookEntryData(networkName)
+			e.data[addr] = makePhonebookEntryData(networkName, role)
 		}
 	}
 
@@ -290,14 +308,14 @@ func shuffleSelect(set []string, n int) []string {
 }
 
 // GetAddresses returns up to N shuffled address
-func (e *phonebookImpl) GetAddresses(n int) []string {
+func (e *phonebookImpl) GetAddresses(n int, role PhoneBookEntryRoles) []string {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
-	return shuffleSelect(e.filterRetryTime(time.Now()), n)
+	return shuffleSelect(e.filterRetryTime(time.Now(), role), n)
 }
 
 // ExtendPeerList adds unique addresses to this set of addresses
-func (e *phonebookImpl) ExtendPeerList(more []string, networkName string) {
+func (e *phonebookImpl) ExtendPeerList(more []string, networkName string, role PhoneBookEntryRoles) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	for _, addr := range more {
@@ -305,7 +323,7 @@ func (e *phonebookImpl) ExtendPeerList(more []string, networkName string) {
 			pbEntry.networkNames[networkName] = true
 			continue
 		}
-		e.data[addr] = makePhonebookEntryData(networkName)
+		e.data[addr] = makePhonebookEntryData(networkName, role)
 	}
 }
 

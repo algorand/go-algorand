@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -53,9 +53,12 @@ type PpConfig struct {
 	NumAsset        uint32
 	MinAccountAsset uint64
 	NumApp          uint32
+	NumAppOptIn     uint32
 	AppProgOps      uint32
-	AppProgHashs    uint32
+	AppProgHashes   uint32
 	AppProgHashSize string
+	AppGlobKeys     uint32
+	AppLocalKeys    uint32
 	Rekey           bool
 	MaxRuntime      time.Duration
 }
@@ -81,7 +84,7 @@ var DefaultConfig = PpConfig{
 	MinAccountAsset: 10000000,
 	NumApp:          0,
 	AppProgOps:      0,
-	AppProgHashs:    0,
+	AppProgHashes:   0,
 	AppProgHashSize: "sha256",
 	Rekey:           false,
 	MaxRuntime:      0,

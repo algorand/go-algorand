@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -141,9 +141,6 @@ func (client *mockRPCClient) GetAddress() string {
 func (client *mockRPCClient) GetHTTPClient() *http.Client {
 	return nil
 }
-func (client *mockRPCClient) PrepareURL(x string) string {
-	return strings.Replace(x, "{genesisID}", "test genesisID", -1)
-}
 
 type mockClientAggregator struct {
 	mocks.MockNetwork
@@ -152,6 +149,9 @@ type mockClientAggregator struct {
 
 func (mca *mockClientAggregator) GetPeers(options ...network.PeerOption) []network.Peer {
 	return mca.peers
+}
+func (mca *mockClientAggregator) SubstituteGenesisID(rawURL string) string {
+	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
 }
 
 const numberOfPeers = 10

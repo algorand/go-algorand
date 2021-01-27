@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package main
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql"
@@ -26,12 +27,15 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -91,17 +95,33 @@ var fileCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Unable to create file '%s' : %v", outFileName, err)
 			}
+			defer outFile.Close()
 		}
 
 		err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile)
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
 		}
-
 	},
 }
 
+func printLoadCatchpointProgressLine(progress int, barLength int, dld int64) {
+	if barLength == 0 {
+		fmt.Printf(escapeCursorUp + escapeDeleteLine + "[ Done ] Loaded\n")
+		return
+	}
+
+	outString := "[" + strings.Repeat(escapeSquare, progress) + strings.Repeat(escapeDot, barLength-progress) + "] Loading..."
+	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
+}
+
 func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.CatchpointCatchupAccessor, fileBytes []byte) (fileHeader ledger.CatchpointFileHeader, err error) {
+	fmt.Printf("\n")
+	printLoadCatchpointProgressLine(0, 50, 0)
+	lastProgressUpdate := time.Now()
+	progress := uint64(0)
+	defer printLoadCatchpointProgressLine(0, 0, 0)
+
 	reader := bytes.NewReader(fileBytes)
 	tarReader := tar.NewReader(reader)
 	var downloadProgress ledger.CatchpointCatchupAccessorProgress
@@ -119,6 +139,7 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 		for readComplete < header.Size {
 			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
 			readComplete += int64(bytesRead)
+			progress += uint64(bytesRead)
 			if err != nil {
 				if err == io.EOF {
 					if readComplete == header.Size {
@@ -137,16 +158,40 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 			// we already know it's valid, since we validated that above.
 			protocol.Decode(balancesBlockBytes, &fileHeader)
 		}
+		if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && len(fileBytes) > 0 {
+			lastProgressUpdate = time.Now()
+			printLoadCatchpointProgressLine(int(float64(progress)*50.0/float64(len(fileBytes))), 50, int64(progress))
+		}
 	}
 }
 
+func printDumpingCatchpointProgressLine(progress int, barLength int, dld int64) {
+	if barLength == 0 {
+		fmt.Printf(escapeCursorUp + escapeDeleteLine + "[ Done ] Dumped\n")
+		return
+	}
+
+	outString := "[" + strings.Repeat(escapeSquare, progress) + strings.Repeat(escapeDot, barLength-progress) + "] Dumping..."
+	if dld > 0 {
+		outString = fmt.Sprintf(outString+" %d", dld)
+	}
+	fmt.Printf(escapeCursorUp + escapeDeleteLine + outString + "\n")
+}
+
 func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFileHeader, outFile *os.File) error {
+	lastProgressUpdate := time.Now()
+	progress := uint64(0)
+	defer printDumpingCatchpointProgressLine(0, 0, 0)
+
+	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
+	defer fileWriter.Flush()
+
 	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
 	if err != nil || dbAccessor.Handle == nil {
 		return err
 	}
 	if fileHeader.Version != 0 {
-		fmt.Fprintf(outFile, "Version: %d\nBalances Round: %d\nBlock Round: %d\nBlock Header Digest: %s\nCatchpoint: %s\nTotal Accounts: %d\nTotal Chunks: %d\n",
+		fmt.Fprintf(fileWriter, "Version: %d\nBalances Round: %d\nBlock Round: %d\nBlock Header Digest: %s\nCatchpoint: %s\nTotal Accounts: %d\nTotal Chunks: %d\n",
 			fileHeader.Version,
 			fileHeader.BalancesRound,
 			fileHeader.BlocksRound,
@@ -156,15 +201,18 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			fileHeader.TotalChunks)
 
 		totals := fileHeader.Totals
-		fmt.Fprintf(outFile, "AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n",
+		fmt.Fprintf(fileWriter, "AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n",
 			totals.Online.Money.Raw, totals.Online.RewardUnits,
 			totals.Offline.Money.Raw, totals.Offline.RewardUnits,
 			totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
 			totals.RewardsLevel)
 	}
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		fmt.Printf("\n")
+		printDumpingCatchpointProgressLine(0, 50, 0)
+
 		if fileHeader.Version == 0 {
-			var totals ledger.AccountTotals
+			var totals ledgercore.AccountTotals
 			id := ""
 			row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
 			err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
@@ -174,7 +222,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(outFile, "AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n",
+			fmt.Fprintf(fileWriter, "AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n",
 				totals.Online.Money.Raw, totals.Online.RewardUnits,
 				totals.Offline.Money.Raw, totals.Offline.RewardUnits,
 				totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
@@ -185,6 +233,13 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		if fileHeader.Version != 0 {
 			balancesTable = "catchpointbalances"
 		}
+
+		var rowsCount int64
+		err = tx.QueryRow(fmt.Sprintf("SELECT count(*) from %s", balancesTable)).Scan(&rowsCount)
+		if err != nil {
+			return
+		}
+
 		rows, err := tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
 		if err != nil {
 			return
@@ -216,10 +271,18 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 				return err
 			}
 
-			fmt.Fprintf(outFile, "%v : %s\n", addr, string(jsonData))
+			fmt.Fprintf(fileWriter, "%v : %s\n", addr, string(jsonData))
+
+			if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && rowsCount > 0 {
+				lastProgressUpdate = time.Now()
+				printDumpingCatchpointProgressLine(int(float64(progress)*50.0/float64(rowsCount)), 50, int64(progress))
+			}
+			progress++
 		}
 
 		err = rows.Err()
+		// increase the deadline warning to disable the warning message.
+		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
 		return nil
 	})
 }

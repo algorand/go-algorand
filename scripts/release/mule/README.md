@@ -4,7 +4,6 @@
 - [Build Stages](#build-stages)
 - [Custom Builds](#custom-builds)
 - [Examples](#examples)
-- [Manual Deploy](#manual-deploy)
 
 # Environment Variables
 
@@ -219,25 +218,20 @@ Let's look at some examples.
 
 1. The new rpm packages will be downloaded from staging if the `S3_SOURCE` variable is set. Each package will then be pushed to `s3:algorand-releases:`.
 
+        S3_SOURCE=the-staging-area VERSION=2.1.6 mule -f package-deploy.yaml package-deploy-deb
         S3_SOURCE=the-staging-area VERSION=2.1.6 mule -f package-deploy.yaml package-deploy-rpm
 
 1. Packages are not downloaded from staging but rather are copied from the location on the local filesystem specified by `PACKAGES_DIR` in the `mule` yaml file. Each package will then be pushed to `s3:algorand-releases:`.
 
+        PACKAGES_DIR=/packages_location/foo VERSION=2.1.86615 mule -f package-deploy.yaml package-deploy-deb
         PACKAGES_DIR=/packages_location/foo VERSION=2.1.86615 mule -f package-deploy.yaml package-deploy-rpm
 
 1. `NO_DEPLOY` is set to `true`. Instead of automatically pushing to `s3:algorand-releases:`, this will copy the `rpmrepo` directory that was created in the container to the `WORKDIR` in the host environment (the `WORKDIR` is set in the `mule` yaml file).
 
     This is handy when testing a deployment and not yet ready to deploy.
 
+        NO_DEPLOY=true S3_SOURCE=the-staging-area VERSION=2.1.6 mule -f package-deploy.yaml package-deploy-deb
         NO_DEPLOY=true S3_SOURCE=the-staging-area VERSION=2.1.6 mule -f package-deploy.yaml package-deploy-rpm
-
-# Manual Deploy
-
-> Before any processes are run, make sure that the signing keys have been added to the `gpg-agent`. The `gpg_preset_passphrase.sh` helper script is provided just for this purpose.
-
-Currently, it is still necessary to run two stages manually: sign and deploy. This is for several reasons, though principally because GPG signing of the build assets occurs in both stages.
-
-The processes that make up both stages have been `mule-ified` as much as possible, and all but one can be run as a `mule` task (deploying deb packages, which are done in its own separate docker container).
 
 ### Signing
 

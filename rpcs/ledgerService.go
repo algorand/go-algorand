@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 )
@@ -177,7 +177,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	cs, err := ls.ledger.GetCatchpointStream(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
-		case ledger.ErrNoEntry:
+		case ledgercore.ErrNoEntry:
 			// entry cound not be found.
 			response.WriteHeader(http.StatusNotFound)
 			response.Write([]byte(fmt.Sprintf("catchpoint file for round %d is not available", round)))

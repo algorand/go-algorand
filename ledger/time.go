@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 type timeTracker struct {
@@ -42,9 +43,9 @@ func (tt *timeTracker) loadFromDisk(l ledgerForTracker) error {
 func (tt *timeTracker) close() {
 }
 
-func (tt *timeTracker) newBlock(blk bookkeeping.Block, delta StateDelta) {
+func (tt *timeTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
-	tt.timestamps[rnd] = delta.hdr.TimeStamp
+	tt.timestamps[rnd] = delta.Hdr.TimeStamp
 }
 
 func (tt *timeTracker) committedUpTo(committedRnd basics.Round) basics.Round {

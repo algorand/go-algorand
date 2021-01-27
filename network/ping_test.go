@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ func TestPing(t *testing.T) {
 	require.True(t, postListen)
 	t.Log(addrA)
 	netB.phonebook = MakePhonebook(1, 1*time.Millisecond)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 

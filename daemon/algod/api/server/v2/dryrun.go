@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,8 +24,11 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/apply"
+
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -82,21 +85,21 @@ func DryrunRequestFromGenerated(gdr *generated.DryrunRequest) (dr DryrunRequest,
 // puts into appropriate DryrunRequest.Apps entry
 func (dr *DryrunRequest) ExpandSources() error {
 	for i, s := range dr.Sources {
-		program, err := logic.AssembleString(s.Source)
+		ops, err := logic.AssembleString(s.Source)
 		if err != nil {
 			return fmt.Errorf("Dryrun Source[%d]: %v", i, err)
 		}
 		switch s.FieldName {
 		case "lsig":
-			dr.Txns[s.TxnIndex].Lsig.Logic = program
+			dr.Txns[s.TxnIndex].Lsig.Logic = ops.Program
 		case "approv", "clearp":
 			for ai, app := range dr.Apps {
 				if app.Id == s.AppIndex {
 					switch s.FieldName {
 					case "approv":
-						dr.Apps[ai].Params.ApprovalProgram = program
+						dr.Apps[ai].Params.ApprovalProgram = ops.Program
 					case "clearp":
-						dr.Apps[ai].Params.ClearStateProgram = program
+						dr.Apps[ai].Params.ClearStateProgram = ops.Program
 					}
 				}
 			}
@@ -214,23 +217,18 @@ func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
 type dryrunLedger struct {
 	// inputs:
 
-	dr    *DryrunRequest
-	proto *config.ConsensusParams
+	dr  *DryrunRequest
+	hdr *bookkeeping.BlockHeader
 
 	// intermediate state:
 
 	// index into dr.Accounts[]
 	accountsIn map[basics.Address]int
-
 	// index into dr.Apps[]
 	accountApps map[basics.Address]int
-
-	// accounts that have been Put
-	accounts map[basics.Address]basics.BalanceRecord
 }
 
 func (dl *dryrunLedger) init() error {
-	dl.accounts = make(map[basics.Address]basics.BalanceRecord)
 	dl.accountsIn = make(map[basics.Address]int)
 	dl.accountApps = make(map[basics.Address]int)
 	for i, acct := range dl.dr.Accounts {
@@ -254,36 +252,27 @@ func (dl *dryrunLedger) init() error {
 	return nil
 }
 
-// apply.Balances interface
-func (dl *dryrunLedger) Round() basics.Round {
-	return basics.Round(dl.dr.Round)
+func (dl *dryrunLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
 }
 
-// apply.Balances interface
-func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
-	// first check accounts from a previous Put()
-	br, ok := dl.accounts[addr]
-	if ok {
-		return br, nil
-	}
+func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledger.TxLease) error {
+	return nil
+}
+
+func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	// check accounts from debug records uploaded
 	any := false
-	out := basics.BalanceRecord{
-		Addr: addr,
-	}
+	out := basics.AccountData{}
 	accti, ok := dl.accountsIn[addr]
 	if ok {
 		any = true
 		acct := dl.dr.Accounts[accti]
 		var err error
-		if out.AccountData, err = AccountToAccountData(&acct); err != nil {
-			return basics.BalanceRecord{}, err
+		if out, err = AccountToAccountData(&acct); err != nil {
+			return basics.AccountData{}, 0, err
 		}
-		if withPendingRewards {
-			out.MicroAlgos.Raw = acct.Amount
-		} else {
-			out.MicroAlgos.Raw = acct.AmountWithoutPendingRewards
-		}
+		out.MicroAlgos.Raw = acct.AmountWithoutPendingRewards
 	}
 	appi, ok := dl.accountApps[addr]
 	if ok {
@@ -291,7 +280,7 @@ func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basic
 		app := dl.dr.Apps[appi]
 		params, err := ApplicationParamsToAppParams(&app.Params)
 		if err != nil {
-			return basics.BalanceRecord{}, err
+			return basics.AccountData{}, 0, err
 		}
 		if out.AppParams == nil {
 			out.AppParams = make(map[basics.AppIndex]basics.AppParams)
@@ -307,27 +296,12 @@ func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basic
 		}
 	}
 	if !any {
-		return basics.BalanceRecord{}, fmt.Errorf("no account for addr %s", addr.String())
+		return basics.AccountData{}, 0, fmt.Errorf("no account for addr %s", addr.String())
 	}
-	return out, nil
+	return out, rnd, nil
 }
 
-// apply.Balances interface
-func (dl *dryrunLedger) Put(br basics.BalanceRecord) error {
-	if dl.accounts == nil {
-		dl.accounts = make(map[basics.Address]basics.BalanceRecord)
-	}
-	dl.accounts[br.Addr] = br
-	return nil
-}
-
-// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.
-func (dl *dryrunLedger) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
-	return nil
-}
-
-// GetCreator gets the address of the creator of an app or asset
-func (dl *dryrunLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	switch ctype {
 	case basics.AssetCreatable:
 		for _, acct := range dl.dr.Accounts {
@@ -361,55 +335,76 @@ func (dl *dryrunLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.Crea
 	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
 }
 
-// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
-// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
-func (dl *dryrunLedger) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards *basics.MicroAlgos, dstRewards *basics.MicroAlgos) error {
-	return nil
-}
-
-// Balances correspond to a Round, which mean that they also correspond
-// to a ConsensusParams.  This returns those parameters.
-func (dl *dryrunLedger) ConsensusParams() config.ConsensusParams {
-	return *dl.proto
-}
-
-func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (l logic.LedgerForLogic, err error) {
-	globals := ledger.AppTealGlobals{
-		CurrentRound:    basics.Round(dl.dr.Round),
-		LatestTimestamp: dl.dr.LatestTimestamp,
+func (dl *dryrunLedger) getAppParams(addr basics.Address, aidx basics.AppIndex) (params basics.AppParams, err error) {
+	idx, ok := dl.accountApps[addr]
+	if !ok {
+		err = fmt.Errorf("addr %s is not know to dryrun", addr.String())
+		return
 	}
-	localSchema := basics.StateSchema{NumUint: 16, NumByteSlice: 16}
-	globalSchema := basics.StateSchema{NumUint: 64, NumByteSlice: 64}
-	schemas := basics.StateSchemas{LocalStateSchema: localSchema, GlobalStateSchema: globalSchema}
-	return ledger.MakeDebugAppLedger(dl, appIdx, schemas, globals)
+	if aidx != basics.AppIndex(dl.dr.Apps[idx].Id) {
+		err = fmt.Errorf("creator addr %s does not match to app id %d", addr.String(), aidx)
+		return
+	}
+	if params, err = ApplicationParamsToAppParams(&dl.dr.Apps[idx].Params); err != nil {
+		return
+	}
+	return
+}
+
+func (dl *dryrunLedger) getLocalKV(addr basics.Address, aidx basics.AppIndex) (kv basics.TealKeyValue, err error) {
+	idx, ok := dl.accountsIn[addr]
+	if !ok {
+		err = fmt.Errorf("addr %s is not know to dryrun", addr.String())
+		return
+	}
+	var ad basics.AccountData
+	if ad, err = AccountToAccountData(&dl.dr.Accounts[idx]); err != nil {
+		return
+	}
+	loc, ok := ad.AppLocalStates[aidx]
+	if !ok {
+		err = fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), aidx)
+		return
+	}
+	kv = loc.KeyValue
+	return
+}
+
+func makeBalancesAdapter(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (ba apply.Balances, err error) {
+	ba = ledger.MakeDebugBalances(dl, basics.Round(dl.dr.Round), protocol.ConsensusVersion(dl.dr.ProtocolVersion), dl.dr.LatestTimestamp)
+
+	return ba, nil
 }
 
 // unit-testable core of dryrun handler
 // programs for execution are discovered in the following way:
 // - LogicSig: stxn.Lsig.Logic
 // - Application: Apps[i].ClearStateProgram or Apps[i].ApprovalProgram for matched appIdx
-// if DryrunRequest.Sources is set it overrides appropriate entires in stxn.Lsig.Logic or Apps[i]
-// important: Accounts are not used for program lookup for application execution
-func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response *generated.DryrunResponse) {
+// if dr.Sources is set it overrides appropriate entires in stxn.Lsig.Logic or Apps[i]
+// important: dr.Accounts are not used for program lookup for application execution
+// important: dr.ProtocolVersion is used by underlying ledger implementation so that it must exist in config.Consensus
+func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	err := dr.ExpandSources()
 	if err != nil {
 		response.Error = err.Error()
 		return
 	}
-	dl := dryrunLedger{dr: dr, proto: proto}
+
+	dl := dryrunLedger{dr: dr}
 	err = dl.init()
 	if err != nil {
 		response.Error = err.Error()
 		return
 	}
+	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
+
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		ep := logic.EvalParams{
 			Txn:        &stxn,
-			Proto:      proto,
+			Proto:      &proto,
 			TxnGroup:   dr.Txns,
 			GroupIndex: ti,
-			//Logger: nil, // TODO: capture logs, send them back
 		}
 		var result generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
@@ -438,13 +433,45 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 					appIdx = basics.AppIndex(dr.Apps[0].Id)
 				}
 			}
+			if stxn.Txn.OnCompletion == transactions.OptInOC {
+				if idx, ok := dl.accountsIn[stxn.Txn.Sender]; ok {
+					acct := dl.dr.Accounts[idx]
+					ls := generated.ApplicationLocalState{
+						Id:       uint64(appIdx),
+						KeyValue: new(generated.TealKeyValueStore),
+					}
+					for _, app := range dr.Apps {
+						if basics.AppIndex(app.Id) == appIdx {
+							if app.Params.LocalStateSchema != nil {
+								ls.Schema = *app.Params.LocalStateSchema
+							}
+							break
+						}
+					}
+					if acct.AppsLocalState == nil {
+						lss := []generated.ApplicationLocalState{ls}
+						acct.AppsLocalState = &lss
+					} else {
+						found := false
+						for _, apls := range *acct.AppsLocalState {
+							if apls.Id == uint64(appIdx) {
+								// already opted in
+								found = true
+							}
+						}
+						if !found {
+							(*acct.AppsLocalState) = append(*acct.AppsLocalState, ls)
+						}
+					}
+					dl.dr.Accounts[idx] = acct
+				}
+			}
 
-			l, err := makeAppLedger(&dl, &stxn.Txn, appIdx)
+			ba, err := makeBalancesAdapter(&dl, &stxn.Txn, appIdx)
 			if err != nil {
 				response.Error = err.Error()
 				return
 			}
-			ep.Ledger = l
 			var app basics.AppParams
 			ok := false
 			for _, appt := range dr.Apps {
@@ -474,16 +501,16 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 					program = app.ApprovalProgram
 					messages[0] = "ApprovalProgram"
 				}
-				pass, delta, err := logic.EvalStateful(program, ep)
+				pass, delta, err := ba.StatefulEval(ep, appIdx, program)
 				result.Disassembly = debug.lines
 				result.AppCallTrace = &debug.history
 				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
 				if len(delta.LocalDeltas) > 0 {
 					localDeltas := make([]generated.AccountStateDelta, len(delta.LocalDeltas))
 					for k, v := range delta.LocalDeltas {
-						ldaddr, err := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
-						if err != nil {
-							messages = append(messages, err.Error())
+						ldaddr, err2 := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
+						if err2 != nil {
+							messages = append(messages, err2.Error())
 						}
 						localDeltas = append(localDeltas, generated.AccountStateDelta{
 							Address: ldaddr.String(),
