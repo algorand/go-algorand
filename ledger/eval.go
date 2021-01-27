@@ -20,6 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -62,15 +65,41 @@ type roundCowBase struct {
 
 	// The current protocol consensus params.
 	proto config.ConsensusParams
+
+	// The accounts that we're already accessed during this round evaluation. This is a caching
+	// buffer used to avoid looking up the same account data more than once during a single evaluator
+	// execution. The AccountData is always an historical one, then therefore won't be changing.
+	// The underlying (accountupdates) infrastucture may provide additional cross-round caching which
+	// are beyond the scope of this cache.
+	// The account data store here is always the account data without the rewards.
+	accounts map[basics.Address]basics.AccountData
+
+	// accountsMu is the accounts read-write mutex, used to syncronize the access ot the accounts map.
+	accountsMu deadlock.RWMutex
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
 }
 
-func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData, err error) {
-	acctData, _, err = x.l.LookupWithoutRewards(x.rnd, addr)
-	return acctData, err
+// lookup returns the non-rewarded account data for the provided account address. It uses the internal per-round cache
+// first, and if it cannot find it there, it would defer to the underlaying implementation.
+// note that errors in accounts data retrivals are not cached as these typically cause the transaction evaluation to fail.
+func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
+	x.accountsMu.RLock()
+	if accountData, found := x.accounts[addr]; found {
+		x.accountsMu.RUnlock()
+		return accountData, nil
+	}
+	x.accountsMu.RUnlock()
+
+	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err == nil {
+		x.accountsMu.Lock()
+		x.accounts[addr] = accountData
+		x.accountsMu.Unlock()
+	}
+	return accountData, err
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -362,8 +391,9 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		// the block at this round below, so underflow will be caught.
 		// If we are not validating, we must have previously checked
 		// an agreement.Certificate attesting that hdr is valid.
-		rnd:   hdr.Round - 1,
-		proto: proto,
+		rnd:      hdr.Round - 1,
+		proto:    proto,
+		accounts: make(map[basics.Address]basics.AccountData),
 	}
 
 	eval := &BlockEvaluator{
@@ -1090,13 +1120,26 @@ func (validator *evalTxValidator) run() {
 
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
-// Validate: eval(ctx, l, blk, true, txcache, executionPool)
-// AddBlock: eval(context.Background(), l, blk, false, txcache, nil)
-// tracker:  eval(context.Background(), l, blk, false, txcache, nil)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+// Validate: eval(ctx, l, blk, true, txcache, executionPool, true)
+// AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
+// tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
+func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, usePrefetch bool) (ledgercore.StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
+	}
+
+	validationCtx, validationCancel := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	defer func() {
+		validationCancel()
+		wg.Wait()
+	}()
+
+	// If validationCtx or underlying ctx are Done, end prefetch
+	if usePrefetch {
+		wg.Add(1)
+		go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset, &wg)
 	}
 
 	// Next, transactions
@@ -1105,8 +1148,6 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		return ledgercore.StateDelta{}, err
 	}
 	var txvalidator evalTxValidator
-	validationCtx, validationCancel := context.WithCancel(ctx)
-	defer validationCancel()
 	if validate {
 		_, ok := config.Consensus[blk.CurrentProtocol]
 		if !ok {
@@ -1170,12 +1211,39 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	return eval.state.deltas(), nil
 }
 
+func prefetchThread(ctx context.Context, state roundCowParent, payset []transactions.SignedTxnInBlock, wg *sync.WaitGroup) {
+	defer wg.Done()
+	maybelookup := func(addr basics.Address) {
+		if addr.IsZero() {
+			return
+		}
+		state.lookup(addr)
+	}
+	for _, stxn := range payset {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		state.lookup(stxn.Txn.Sender)
+		maybelookup(stxn.Txn.Receiver)
+		maybelookup(stxn.Txn.CloseRemainderTo)
+		maybelookup(stxn.Txn.AssetSender)
+		maybelookup(stxn.Txn.AssetReceiver)
+		maybelookup(stxn.Txn.AssetCloseTo)
+		maybelookup(stxn.Txn.FreezeAccount)
+		for _, xa := range stxn.Txn.Accounts {
+			maybelookup(xa)
+		}
+	}
+}
+
 // Validate uses the ledger to validate block blk as a candidate next block.
 // It returns an error if blk is not the expected next block, or if blk is
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
+	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool, true)
 	if err != nil {
 		return nil, err
 	}

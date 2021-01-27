@@ -81,14 +81,14 @@ type encodedBalanceRecord struct {
 type CatchpointFileHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Version           uint64               `codec:"version"`
-	BalancesRound     basics.Round         `codec:"balancesRound"`
-	BlocksRound       basics.Round         `codec:"blocksRound"`
+	Version           uint64                   `codec:"version"`
+	BalancesRound     basics.Round             `codec:"balancesRound"`
+	BlocksRound       basics.Round             `codec:"blocksRound"`
 	Totals            ledgercore.AccountTotals `codec:"accountTotals"`
-	TotalAccounts     uint64               `codec:"accountsCount"`
-	TotalChunks       uint64               `codec:"chunksCount"`
-	Catchpoint        string               `codec:"catchpoint"`
-	BlockHeaderDigest crypto.Digest        `codec:"blockHeaderDigest"`
+	TotalAccounts     uint64                   `codec:"accountsCount"`
+	TotalChunks       uint64                   `codec:"chunksCount"`
+	Catchpoint        string                   `codec:"catchpoint"`
+	BlockHeaderDigest crypto.Digest            `codec:"blockHeaderDigest"`
 }
 
 type catchpointFileBalancesChunk struct {
