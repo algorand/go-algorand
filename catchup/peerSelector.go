@@ -27,16 +27,31 @@ import (
 	"github.com/algorand/go-algorand/network"
 )
 
-// peerSelector is a helper struct used to select the next peer to try and connect to
-// for various catchup purposes. Unlike the underlying network GetPeers(), it allows the
-// client to provide feedback regarding the peer's performance, and to have the subsequent
-// query(s) take advantage of that intel.
-type peerSelector struct {
-	deadlock.Mutex
-	net         networkGetPeers
-	peerClasses []peerClass
-	pools       []peerPool
-}
+const (
+	// peerRankInitialFirstPriority is the high-priority peers group ( typically, archivers )
+	peerRankInitialFirstPriority = 0
+	peerRank0LowBlockTime        = 1
+	peerRank0HighBlockTime       = 199
+
+	// peerRankInitialSecondPriority is the second priority peers group ( typically, relays )
+	peerRankInitialSecondPriority = 200
+	peerRank1LowBlockTime         = 201
+	peerRank1HighBlockTime        = 399
+
+	// peerRankDownloadFailed is used for responses which could be temporary, such as missing files, or such that we don't
+	// have clear resolution
+	peerRankDownloadFailed = 900
+	// peerRankInvalidDownload is used for responses which are likely to be invalid - whether it's serving the wrong content
+	// or attempting to serve malicious content
+	peerRankInvalidDownload = 1000
+
+	// once a block is downloaded, the download duration is clamped into the range of [lowBlockDownloadThreshold..highBlockDownloadThreshold] and
+	// then mapped into the a ranking range.
+	lowBlockDownloadThreshold  = 50 * time.Millisecond
+	highBlockDownloadThreshold = 8 * time.Second
+)
+
+var errPeerSelectorNoPeerPoolsAvailable = errors.New("no peer pools available")
 
 // peerClass defines the type of peer we want to have in a particular "class",
 // and define tnet network.PeerOption that would be used to retrieve that type of
@@ -66,32 +81,16 @@ type peerPool struct {
 	peers []peerPoolEntry
 }
 
-const (
-	// peerRankInitialFirstPriority is the high-priority peers group ( typically, archivers )
-	peerRankInitialFirstPriority = 0
-	peerRank0LowBlockTime        = 1
-	peerRank0HighBlockTime       = 199
-
-	// peerRankInitialSecondPriority is the second priority peers group ( typically, relays )
-	peerRankInitialSecondPriority = 200
-	peerRank1LowBlockTime         = 201
-	peerRank1HighBlockTime        = 399
-
-	// peerRankDownloadFailed is used for responses which could be temporary, such as missing files, or such that we don't
-	// have clear resolution
-	peerRankDownloadFailed = 900
-	// peerRankInvalidDownload is used for responses which are likely to be invalid - whether it's serving the wrong content
-	// or attempting to serve malicious content
-	peerRankInvalidDownload = 1000
-
-	// once a block is downloaded, the download duration is clamped into the range of [lowBlockDownloadThreshold..highBlockDownloadThreshold] and
-	// then mapped into the a ranking range.
-	lowBlockDownloadThreshold  = 50 * time.Millisecond
-	highBlockDownloadThreshold = 8 * time.Second
-)
-
-var errPeerSelectorNoPeerPoolsAvailable = errors.New("no peer pools available")
-var errPeerSelectorNoPeersAvailable = errors.New("no peers available")
+// peerSelector is a helper struct used to select the next peer to try and connect to
+// for various catchup purposes. Unlike the underlying network GetPeers(), it allows the
+// client to provide feedback regarding the peer's performance, and to have the subsequent
+// query(s) take advantage of that intel.
+type peerSelector struct {
+	deadlock.Mutex
+	net         networkGetPeers
+	peerClasses []peerClass
+	pools       []peerPool
+}
 
 // makePeerSelector creates a peerSelector, given a networkGetPeers and peerClass array.
 func makePeerSelector(net networkGetPeers, initialPeersClasses []peerClass) *peerSelector {
@@ -110,6 +109,77 @@ func makePeerSelector(net networkGetPeers, initialPeersClasses []peerClass) *pee
 		selector.sort()
 	}
 	return selector
+}
+
+// GetNextPeer returns the next peer. It randomally selects a peer from the lowest
+// rank pool.
+func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
+	ps.Lock()
+	defer ps.Unlock()
+	ps.refreshAvailablePeers()
+	if len(ps.pools) == 0 {
+		return nil, errPeerSelectorNoPeerPoolsAvailable
+	}
+	for _, pool := range ps.pools {
+		if len(pool.peers) == 0 {
+			// this is not really possible due to the previous call to refreshAvailablePeers, but
+			// we should have it just for the sake of completeness.
+			continue
+		}
+		// pick one of the peers at random.
+		peerIdx := crypto.RandUint64() % uint64(len(pool.peers))
+		peer = pool.peers[peerIdx].peer
+		return
+	}
+
+	return nil, errPeerSelectorNoPeerPoolsAvailable
+}
+
+// RankPeer ranks a given peer.
+// return true if the value was updated or false otherwise.
+func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
+	if peer == nil {
+		return false
+	}
+	ps.Lock()
+	defer ps.Unlock()
+
+	poolIdx, peerIdx := ps.findPeer(peer)
+	if poolIdx < 0 || peerIdx < 0 {
+		return false
+	}
+
+	// we need to remove the peer from the pool so we can place it in a different location.
+	pool := ps.pools[poolIdx]
+	class := pool.peers[peerIdx].class
+	if len(pool.peers) > 1 {
+		pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
+		ps.pools[poolIdx] = pool
+	} else {
+		// the last peer was removed from the pool; delete this pool.
+		ps.pools = append(ps.pools[:poolIdx], ps.pools[poolIdx+1:]...)
+	}
+
+	sortNeeded := ps.addToPool(peer, rank, class)
+	if sortNeeded {
+		ps.sort()
+	}
+	return true
+}
+
+// PeerDownloadDurationToRank calculates the rank for a peer given a peer and the block download time.
+func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownloadDuration time.Duration) (rank int) {
+	poolIdx, peerIdx := ps.findPeer(peer)
+	if poolIdx < 0 || peerIdx < 0 {
+		return peerRankInvalidDownload
+	}
+
+	switch ps.pools[poolIdx].peers[peerIdx].class.initialRank {
+	case peerRankInitialFirstPriority:
+		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank0LowBlockTime, peerRank0HighBlockTime)
+	default: // i.e. peerRankInitialSecondPriority
+		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank1LowBlockTime, peerRank1HighBlockTime)
+	}
 }
 
 // addToPool adds a given peer to the correct group. If no group exists for that peer's rank,
@@ -202,84 +272,17 @@ func (ps *peerSelector) refreshAvailablePeers() {
 	}
 }
 
-// GetNextPeer returns the next peer. It randomally selects a peer from the lowest
-// rank pool.
-func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
-	ps.Lock()
-	defer ps.Unlock()
-	ps.refreshAvailablePeers()
-	if len(ps.pools) == 0 {
-		return nil, errPeerSelectorNoPeerPoolsAvailable
-	}
-	for _, pool := range ps.pools {
-		if len(pool.peers) == 0 {
-			continue
-		}
-		// pick one of the peers at random.
-		peerIdx := crypto.RandUint64() % uint64(len(pool.peers))
-		peer = pool.peers[peerIdx].peer
-		return
-	}
-
-	return nil, errPeerSelectorNoPeersAvailable
-}
-
-// RankPeer ranks a given peer.
-func (ps *peerSelector) RankPeer(peer network.Peer, rank int) {
-	if peer == nil {
-		return
-	}
-	ps.Lock()
-	defer ps.Unlock()
-
-	poolIdx, peerIdx := ps.findPeer(peer)
-	if poolIdx < 0 || peerIdx < 0 {
-		return
-	}
-
-	// we need to remove the peer from the pool so we can place it in a different location.
-	pool := ps.pools[poolIdx]
-	class := pool.peers[peerIdx].class
-	if len(pool.peers) > 1 {
-		pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
-		ps.pools[poolIdx] = pool
-	} else {
-		// the last peer was removed from the pool; delete this pool.
-		ps.pools = append(ps.pools[:poolIdx], ps.pools[poolIdx+1:]...)
-	}
-
-	sortNeeded := ps.addToPool(peer, rank, class)
-	if sortNeeded {
-		ps.sort()
-	}
-}
-
 // findPeer look into the peer pool and find the given peer.
 // The method returns the pool and peer indices if a peer was found, or (-1, -1) otherwise.
 func (ps *peerSelector) findPeer(peer network.Peer) (poolIdx, peerIdx int) {
 	for i, pool := range ps.pools {
 		for j, localPeerEntry := range pool.peers {
-			if localPeerEntry.peer == peer {
+			if peerAddress(localPeerEntry.peer) == peerAddress(peer) {
 				return i, j
 			}
 		}
 	}
 	return -1, -1
-}
-
-// PeerDownloadDurationToRank calculates the rank for a peer given a peer and the block download time.
-func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownloadDuration time.Duration) (rank int) {
-	poolIdx, peerIdx := ps.findPeer(peer)
-	if poolIdx < 0 || peerIdx < 0 {
-		return peerRankInvalidDownload
-	}
-
-	switch ps.pools[poolIdx].peers[peerIdx].class.initialRank {
-	case peerRankInitialFirstPriority:
-		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank0LowBlockTime, peerRank0HighBlockTime)
-	default: // i.e. peerRankInitialSecondPriority
-		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank1LowBlockTime, peerRank1HighBlockTime)
-	}
 }
 
 // calculate the duration rank by mapping the range of [minDownloadDuration..maxDownloadDuration] into the rank range of [minRank..maxRank]

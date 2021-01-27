@@ -117,17 +117,92 @@ func TestPeerSelector(t *testing.T) {
 
 	// add another peer
 	peers = []network.Peer{&mockHTTPPeer{address: "54321"}, &mockHTTPPeer{address: "abcde"}}
-	peerSelector.RankPeer(peer, 5)
+	require.True(t, peerSelector.RankPeer(peer, 5))
 
 	peer, err = peerSelector.GetNextPeer()
 	require.NoError(t, err)
 	require.Equal(t, "abcde", peerAddress(peer))
 
-	peerSelector.RankPeer(peer, 10)
+	require.True(t, peerSelector.RankPeer(peer, 10))
 
 	peer, err = peerSelector.GetNextPeer()
 	require.NoError(t, err)
 	require.Equal(t, "54321", peerAddress(peer))
 
+	peers = []network.Peer{t} // include a non-peer object, to test the refreshAvailablePeers handling of empty addresses.
+	peer, err = peerSelector.GetNextPeer()
+	require.Equal(t, errPeerSelectorNoPeerPoolsAvailable, err)
+	require.Nil(t, peer)
+
+	// create an empty entry ( even though the code won't let it happen )
+	peerSelector.pools = []peerPool{{rank: peerRankInitialFirstPriority}}
+	peer, err = peerSelector.GetNextPeer()
+	require.Equal(t, errPeerSelectorNoPeerPoolsAvailable, err)
+	require.Nil(t, peer)
+
+	require.False(t, peerSelector.RankPeer(nil, 10))
+	require.False(t, peerSelector.RankPeer(&mockHTTPPeer{address: "abc123"}, 10))
+
 	return
+}
+
+func TestPeerDownloadRanking(t *testing.T) {
+	peers1 := []network.Peer{&mockHTTPPeer{address: "1234"}, &mockHTTPPeer{address: "5678"}}
+	peers2 := []network.Peer{&mockHTTPPeer{address: "abcd"}, &mockHTTPPeer{address: "efgh"}}
+
+	peerSelector := makePeerSelector(
+		makeNetworkGetPeersStub(func(options ...network.PeerOption) (peers []network.Peer) {
+			for _, opt := range options {
+				if opt == network.PeersPhonebookArchivers {
+					peers = append(peers, peers1...)
+				} else {
+					peers = append(peers, peers2...)
+				}
+			}
+			return
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays}},
+	)
+	archivalPeer, err := peerSelector.GetNextPeer()
+	require.NoError(t, err)
+
+	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank0LowBlockTime, peerRank0HighBlockTime), peerSelector.PeerDownloadDurationToRank(archivalPeer, 500*time.Millisecond))
+
+	peerSelector.RankPeer(archivalPeer, peerRankInvalidDownload)
+
+	archivalPeer, err = peerSelector.GetNextPeer()
+	require.NoError(t, err)
+
+	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank0LowBlockTime, peerRank0HighBlockTime), peerSelector.PeerDownloadDurationToRank(archivalPeer, 500*time.Millisecond))
+
+	peerSelector.RankPeer(archivalPeer, peerRankInvalidDownload)
+
+	// and now test the relay peers
+	relayPeer, err := peerSelector.GetNextPeer()
+	require.NoError(t, err)
+
+	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank1LowBlockTime, peerRank1HighBlockTime), peerSelector.PeerDownloadDurationToRank(relayPeer, 500*time.Millisecond))
+
+	peerSelector.RankPeer(relayPeer, peerRankInvalidDownload)
+
+	relayPeer, err = peerSelector.GetNextPeer()
+	require.NoError(t, err)
+
+	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank1LowBlockTime, peerRank1HighBlockTime), peerSelector.PeerDownloadDurationToRank(relayPeer, 500*time.Millisecond))
+
+	peerSelector.RankPeer(relayPeer, peerRankInvalidDownload)
+
+	require.Equal(t, peerRankInvalidDownload, peerSelector.PeerDownloadDurationToRank(&mockHTTPPeer{address: "abc123"}, time.Millisecond))
+}
+
+func TestFindMissingPeer(t *testing.T) {
+	peerSelector := makePeerSelector(
+		makeNetworkGetPeersStub(func(options ...network.PeerOption) []network.Peer {
+			return []network.Peer{}
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers}},
+	)
+
+	poolIdx, peerIdx := peerSelector.findPeer(&mockHTTPPeer{address: "abcd"})
+	require.Equal(t, -1, poolIdx)
+	require.Equal(t, -1, peerIdx)
 }
