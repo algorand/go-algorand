@@ -33,7 +33,7 @@ import (
 // query(s) take advantage of that intel.
 type peerSelector struct {
 	deadlock.Mutex
-	net         network.GossipNode
+	net         networkGetPeers
 	peerClasses []peerClass
 	pools       []peerPool
 }
@@ -44,6 +44,13 @@ type peerSelector struct {
 type peerClass struct {
 	initialRank int
 	peerClass   network.PeerOption
+}
+
+// the networkGetPeers is a subset of the network.GossipNode used to ensure that we can create an instance of the peerSelector
+// for testing purposes, providing just the above function.
+type networkGetPeers interface {
+	// Get a list of Peers we could potentially send a direct message to.
+	GetPeers(options ...network.PeerOption) []network.Peer
 }
 
 // peerPoolEntry represents a single peer entry in the pool. It contains
@@ -60,10 +67,12 @@ type peerPool struct {
 }
 
 const (
+	// peerRankInitialFirstPriority is the high-priority peers group ( typically, archivers )
 	peerRankInitialFirstPriority = 0
 	peerRank0LowBlockTime        = 1
 	peerRank0HighBlockTime       = 199
 
+	// peerRankInitialSecondPriority is the second priority peers group ( typically, relays )
 	peerRankInitialSecondPriority = 200
 	peerRank1LowBlockTime         = 201
 	peerRank1HighBlockTime        = 399
@@ -84,7 +93,8 @@ const (
 var errPeerSelectorNoPeerPoolsAvailable = errors.New("no peer pools available")
 var errPeerSelectorNoPeersAvailable = errors.New("no peers available")
 
-func makePeerSelector(net network.GossipNode, initialPeersClasses []peerClass) *peerSelector {
+// makePeerSelector creates a peerSelector, given a networkGetPeers and peerClass array.
+func makePeerSelector(net networkGetPeers, initialPeersClasses []peerClass) *peerSelector {
 	selector := &peerSelector{
 		net:         net,
 		peerClasses: initialPeersClasses,
@@ -102,6 +112,9 @@ func makePeerSelector(net network.GossipNode, initialPeersClasses []peerClass) *
 	return selector
 }
 
+// addToPool adds a given peer to the correct group. If no group exists for that peer's rank,
+// a new group is created.
+// The method return true if a new group was created ( suggesting that the pools list would need to be re-ordered ), or false otherwise.
 func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass) bool {
 	// see if we already have a list with that rank:
 	for i, peersList := range ps.pools {
@@ -117,12 +130,16 @@ func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass) 
 	return true
 }
 
+// sort the pools array in an accending order according to the rank of each pool.
 func (ps *peerSelector) sort() {
 	sort.SliceStable(ps.pools, func(i, j int) bool {
 		return ps.pools[i].rank < ps.pools[j].rank
 	})
 }
 
+// peerAddress returns the peer's underlying address. The network.Peer object cannot be compared
+// to itself, since the network package dynamically creating a new instance on every network.GetPeers() call.
+// The method retrun the peer address or an empty string if the peer is not one of HTTPPeer/UnicastPeer
 func peerAddress(peer network.Peer) string {
 	if httpPeer, ok := peer.(network.HTTPPeer); ok {
 		return httpPeer.GetAddress()
@@ -132,6 +149,8 @@ func peerAddress(peer network.Peer) string {
 	return ""
 }
 
+// refreshAvailablePeers reload the available peers from the network package, add new peers along with their
+// corresponding initial rank, and deletes peers that have been dropped by the network package.
 func (ps *peerSelector) refreshAvailablePeers() {
 	evalPeers := make(map[string]network.Peer)
 	for _, pool := range ps.pools {
@@ -183,6 +202,8 @@ func (ps *peerSelector) refreshAvailablePeers() {
 	}
 }
 
+// GetNextPeer returns the next peer. It randomally selects a peer from the lowest
+// rank pool.
 func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
 	ps.Lock()
 	defer ps.Unlock()
@@ -203,6 +224,7 @@ func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
 	return nil, errPeerSelectorNoPeersAvailable
 }
 
+// RankPeer ranks a given peer.
 func (ps *peerSelector) RankPeer(peer network.Peer, rank int) {
 	if peer == nil {
 		return
@@ -232,6 +254,8 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) {
 	}
 }
 
+// findPeer look into the peer pool and find the given peer.
+// The method returns the pool and peer indices if a peer was found, or (-1, -1) otherwise.
 func (ps *peerSelector) findPeer(peer network.Peer) (poolIdx, peerIdx int) {
 	for i, pool := range ps.pools {
 		for j, localPeerEntry := range pool.peers {
@@ -243,6 +267,7 @@ func (ps *peerSelector) findPeer(peer network.Peer) (poolIdx, peerIdx int) {
 	return -1, -1
 }
 
+// PeerDownloadDurationToRank calculates the rank for a peer given a peer and the block download time.
 func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownloadDuration time.Duration) (rank int) {
 	poolIdx, peerIdx := ps.findPeer(peer)
 	if poolIdx < 0 || peerIdx < 0 {
