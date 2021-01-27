@@ -106,8 +106,8 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 		response.Body.Close()
 		return nil, errNoBlockForRound
 	default:
-		hf.log.Warn("http block fetcher response status code : ", response.StatusCode)
 		bodyBytes, err := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
+		hf.log.Warn("HTTPFetcher.GetBlockBytes: response status code %d from '%s'. Response body '%s' ", response.StatusCode, blockURL, string(bodyBytes))
 		if err == nil {
 			err = fmt.Errorf("GetBlockBytes error response status code %d when requesting '%s'. Response body '%s'", response.StatusCode, blockURL, string(bodyBytes))
 		} else {
