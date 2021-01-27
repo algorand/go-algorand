@@ -19,7 +19,6 @@ package agreement
 import (
 	"context"
 	"fmt"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -66,13 +65,22 @@ func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // value returns the proposal-value associated with this proposal.
+// EncodingDigest contains the hash of the compressed proposal
+// since when sending proposals we send the version that is
+// compressed.
 func (p unauthenticatedProposal) value() proposalValue {
 	return proposalValue{
 		OriginalPeriod:   p.OriginalPeriod,
 		OriginalProposer: p.OriginalProposer,
 		BlockDigest:      p.Digest(),
-		EncodingDigest:   crypto.HashObj(p),
+		EncodingDigest:   crypto.HashObj(p.Compressed()),
 	}
+}
+
+func (p unauthenticatedProposal) Compressed() unauthenticatedProposal {
+	up := p
+	up.Block = up.Block.Compressed()
+	return up
 }
 
 // A proposal is an Block along with everything needed to validate it.
@@ -239,12 +247,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 
 	ve = ve.WithSeed(newSeed)
 	proposal := makeProposal(ve, seedProof, period, address)
-	value := proposalValue{
-		OriginalPeriod:   period,
-		OriginalProposer: address,
-		BlockDigest:      proposal.Block.Digest(),
-		EncodingDigest:   crypto.HashObj(proposal),
-	}
+	value := proposal.value()
 	return proposal, value, nil
 }
 

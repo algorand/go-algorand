@@ -620,47 +620,39 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *rou
 // Transaction tentatively adds a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
-	return eval.transactionGroup([]transactions.SignedTxnWithAD{
-		{
-			SignedTxn: txn,
-			ApplyData: ad,
-		},
-	})
+func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn) error {
+	return eval.transactionGroup([]transactions.SignedTxn{txn})
 }
 
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads)
+func (eval *BlockEvaluator) TransactionGroup(txns []transactions.SignedTxn) error {
+	return eval.transactionGroup(txns)
 }
 
 // prepareEvalParams creates a logic.EvalParams for each ApplicationCall
 // transaction in the group
-func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) (res []*logic.EvalParams) {
-	var groupNoAD []transactions.SignedTxn
+func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxn) (res []*logic.EvalParams) {
 	var minTealVersion uint64
+	var tealVersionComputed bool
 	res = make([]*logic.EvalParams, len(txgroup))
 	for i, txn := range txgroup {
 		// Ignore any non-ApplicationCall transactions
-		if txn.SignedTxn.Txn.Type != protocol.ApplicationCallTx {
+		if txn.Txn.Type != protocol.ApplicationCallTx {
 			continue
 		}
 
-		// Initialize group without ApplyData lazily
-		if groupNoAD == nil {
-			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
-			for j := range txgroup {
-				groupNoAD[j] = txgroup[j].SignedTxn
-			}
-			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
+		// Initialize minTealVersion lazily
+		if !tealVersionComputed {
+			minTealVersion = logic.ComputeMinTealVersion(txgroup)
+			tealVersionComputed = true
 		}
 
 		res[i] = &logic.EvalParams{
-			Txn:            &groupNoAD[i],
+			Txn:            &txgroup[i],
 			Proto:          &eval.proto,
-			TxnGroup:       groupNoAD,
+			TxnGroup:       txgroup,
 			GroupIndex:     i,
 			MinTealVersion: &minTealVersion,
 		}
@@ -671,7 +663,7 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWithAD) error {
+func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxn) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -692,10 +684,10 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
-	for gi, txad := range txgroup {
+	for gi, tx := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
+		err := eval.transaction(tx, evalParams[gi], cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -710,13 +702,13 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		}
 
 		// Make sure all transactions in group have the same group value
-		if txad.SignedTxn.Txn.Group != txgroup[0].SignedTxn.Txn.Group {
+		if tx.Txn.Group != txgroup[0].Txn.Group {
 			return fmt.Errorf("transactionGroup: inconsistent group values: %v != %v",
-				txad.SignedTxn.Txn.Group, txgroup[0].SignedTxn.Txn.Group)
+				tx.Txn.Group, txgroup[0].Txn.Group)
 		}
 
-		if !txad.SignedTxn.Txn.Group.IsZero() {
-			txWithoutGroup := txad.SignedTxn.Txn
+		if !tx.Txn.Group.IsZero() {
+			txWithoutGroup := tx.Txn
 			txWithoutGroup.Group = crypto.Digest{}
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
@@ -727,9 +719,9 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	// If we had a non-zero Group value, check that all group members are present.
 	if group.TxGroupHashes != nil {
-		if txgroup[0].SignedTxn.Txn.Group != crypto.HashObj(group) {
+		if txgroup[0].Txn.Group != crypto.HashObj(group) {
 			return fmt.Errorf("transactionGroup: incomplete group: %v != %v (%v)",
-				txgroup[0].SignedTxn.Txn.Group, crypto.HashObj(group), group)
+				txgroup[0].Txn.Group, crypto.HashObj(group), group)
 		}
 	}
 
@@ -743,7 +735,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	// Only compute the TxID once
@@ -785,20 +777,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	applyData, err := applyTransaction(txn.Txn, cow, evalParams, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
-	}
-
-	// Validate applyData if we are validating an existing block.
-	// If we are validating and generating, we have no ApplyData yet.
-	if eval.validate && !eval.generate {
-		if eval.proto.ApplyData {
-			if !ad.Equal(applyData) {
-				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txid, ad, applyData)
-			}
-		} else {
-			if !ad.Equal(transactions.ApplyData{}) {
-				return fmt.Errorf("transaction %v: applyData not supported", txid)
-			}
-		}
 	}
 
 	// Check if the transaction fits in the block, now that we can encode it.
@@ -1054,7 +1032,7 @@ type evalTxValidator struct {
 	verificationPool execpool.BacklogPool
 
 	ctx      context.Context
-	txgroups [][]transactions.SignedTxnWithAD
+	txgroups [][]transactions.SignedTxn
 	done     chan error
 }
 
@@ -1068,16 +1046,14 @@ func (validator *evalTxValidator) run() {
 	var unverifiedTxnGroups [][]transactions.SignedTxn
 	unverifiedTxnGroups = make([][]transactions.SignedTxn, 0, len(validator.txgroups))
 	for _, group := range validator.txgroups {
-		signedTxnGroup := make([]transactions.SignedTxn, len(group))
-		for j, txn := range group {
-			signedTxnGroup[j] = txn.SignedTxn
-			err := txn.SignedTxn.Txn.Alive(validator.block)
+		for _, txn := range group {
+			err := txn.Txn.Alive(validator.block)
 			if err != nil {
 				validator.done <- err
 				return
 			}
 		}
-		unverifiedTxnGroups = append(unverifiedTxnGroups, signedTxnGroup)
+		unverifiedTxnGroups = append(unverifiedTxnGroups, group)
 	}
 
 	unverifiedTxnGroups = validator.txcache.GetUnverifiedTranscationGroups(unverifiedTxnGroups, specialAddresses, validator.block.BlockHeader.CurrentProtocol)
@@ -1093,7 +1069,7 @@ func (validator *evalTxValidator) run() {
 // Validate: eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  eval(context.Background(), l, blk, false, txcache, nil)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func eval(ctx context.Context, l ledgerForEvaluator, blk *bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
@@ -1113,7 +1089,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 			return ledgercore.StateDelta{}, protocol.Error(blk.CurrentProtocol)
 		}
 		txvalidator.txcache = txcache
-		txvalidator.block = blk
+		txvalidator.block = *blk
 		txvalidator.verificationPool = executionPool
 
 		txvalidator.ctx = validationCtx
@@ -1167,6 +1143,8 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		}
 	}
 
+	blk.Payset = eval.block.Payset
+
 	return eval.state.deltas(), nil
 }
 
@@ -1175,7 +1153,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
+	delta, err := eval(ctx, l, &blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
 		return nil, err
 	}

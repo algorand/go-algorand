@@ -256,7 +256,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 				var stxn transactions.SignedTxn
 				stxn.Txn = tx
 				stxn.Sig = crypto.Signature{1}
-				err = eval.Transaction(stxn, transactions.ApplyData{})
+				err = eval.Transaction(stxn)
 
 			}
 
@@ -287,7 +287,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 					var stxn transactions.SignedTxn
 					stxn.Txn = tx
 					stxn.Sig = crypto.Signature{1}
-					err = eval.Transaction(stxn, transactions.ApplyData{})
+					err = eval.Transaction(stxn)
 				}
 				break
 			}
@@ -319,7 +319,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = eval(context.Background(), l1, blk, true, vc, nil)
+		_, err = eval(context.Background(), l1, &blk, true, vc, nil)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)
