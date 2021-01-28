@@ -52,7 +52,7 @@ func MakeLimitedReaderSlurper(baseAllocation, maxAllocation uint64) *LimitedRead
 // Returns a nil error if the underlying io.Reader returned io.EOF.
 func (s *LimitedReaderSlurper) Read(reader io.Reader) error {
 	if s.baseBuffer == nil {
-		s.baseBuffer = make([]byte, s.baseAllocation)
+		s.baseBuffer = make([]byte, 0, s.baseAllocation)
 	}
 
 	var readBuffer *[]byte
@@ -85,7 +85,7 @@ func (s *LimitedReaderSlurper) Read(reader io.Reader) error {
 			readBuffer = &s.baseBuffer
 		}
 
-		n, err := reader.Read((*readBuffer)[len(*readBuffer):])
+		n, err := reader.Read(((*readBuffer)[:cap(*readBuffer)])[len(*readBuffer):])
 		if err != nil {
 			if err == io.EOF {
 				*readBuffer = (*readBuffer)[:len(*readBuffer)+n]
