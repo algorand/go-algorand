@@ -37,8 +37,6 @@ type config struct {
 	RoundOffset uint64
 	// Fee is the amount of algos that would be specified in the transaction fee field.
 	Fee uint64
-	// Repeat determines if the process should loop forever. If false, the process will terminate after first invocation.
-	Repeat bool
 }
 
 type fileConfig struct {

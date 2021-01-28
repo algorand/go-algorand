@@ -4,6 +4,5 @@
     "APIToken":"",
     "RoundModulator": 140111,
     "RoundOffset": 0,
-    "Fee": 1000,
-    "Repeat": true
+    "Fee": 1000
 }

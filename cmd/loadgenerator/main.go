@@ -17,6 +17,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"runtime"
@@ -35,6 +36,12 @@ import (
 )
 
 const transactionBlockSize = 800
+
+var runOnce = flag.Bool("once", false, "Terminate after first spend loop")
+
+func init() {
+	flag.Parse()
+}
 
 var nroutines = runtime.NumCPU() * 2
 
@@ -92,8 +99,8 @@ func spendLoop(cfg config, privateKey *crypto.SignatureSecrets, publicKey basics
 		queueFull := generateTransactions(restClient, cfg, privateKey, publicKey)
 		if queueFull {
 			waitForRound(restClient, cfg, false)
-			if !cfg.Repeat {
-				fmt.Fprintf(os.Stdout, "Repeat configuration flag set to false, terminating.\n")
+			if *runOnce {
+				fmt.Fprintf(os.Stdout, "Once flag set, terminating.\n")
 				break
 			}
 		}
