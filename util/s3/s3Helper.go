@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -257,9 +259,6 @@ func (helper *Helper) GetPackageVersion(channel string, pkg string, specificVers
 	return helper.GetPackageFilesVersion(channel, prefix, specificVersion)
 }
 
-func (helper *Helper) tryNewSchemaGetPackageFilesVersion(svc *s3.S3) (maxVersion uint64, maxVersionName string, err error) {
-}
-
 // GetPackageFilesVersion return the package version
 func (helper *Helper) GetPackageFilesVersion(channel string, pkgFiles string, specificVersion uint64) (maxVersion uint64, maxVersionName string, err error) {
 	maxVersion = 0
@@ -267,7 +266,8 @@ func (helper *Helper) GetPackageFilesVersion(channel string, pkgFiles string, sp
 
 	svc := s3.New(helper.session)
 
-	// new path schema
+	// New path schema, try these first
+	// In the case of specificVersion == 0, this is much faster than the old schema.
 	// latest/{stable,beta,nightly,dev}/{RTIME}_{version}/{node,install,tools}_{channel}_{os}_{cpu_arch}_{version}.tar.gz
 	prefix := fmt.Sprintf("latest/%s", channel)
 	input := s3.ListObjectsInput{
@@ -275,8 +275,34 @@ func (helper *Helper) GetPackageFilesVersion(channel string, pkgFiles string, sp
 		Prefix:  &prefix,
 		MaxKeys: aws.Int64(50),
 	}
+	if specificVersion != 0 {
+		input.MaxKeys = aws.Int64(1000)
+	}
+	result, err := svc.ListObjects(&input)
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			err = awsErr
+		}
+		return
+	}
 
-	// old path schema
+	for _, item := range result.Contents {
+		var version uint64
+		name := string(*item.Key)
+		version, err = GetVersionFromName(name)
+		if err != nil {
+			return
+		}
+		fname := path.Base(name)
+		if !strings.HasPrefix(fname, pkgFiles) {
+			continue
+		}
+		if (specificVersion == 0) || (version == specificVersion) {
+			return version, name, nil
+		}
+	}
+
+	// Old path schema
 	// channel/{stable,beta,nightly,dev}/{node,install,tools}_{channel}_{os}_{cpu_arch}_{version}.tar.gz
 	prefix = fmt.Sprintf("channel/%s/%s", channel, pkgFiles)
 	input = s3.ListObjectsInput{
@@ -287,7 +313,7 @@ func (helper *Helper) GetPackageFilesVersion(channel string, pkgFiles string, sp
 
 	fmt.Fprintf(os.Stdout, "Checking for files matching: '%s' in bucket %s\n", prefix, helper.bucket)
 
-	result, err := svc.ListObjects(&input)
+	result, err = svc.ListObjects(&input)
 	if err != nil {
 		if awsErr, ok := err.(awserr.Error); ok {
 			err = awsErr
