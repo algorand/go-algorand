@@ -62,7 +62,7 @@ func ResponseBytes(response *http.Response, log logging.Logger, limit uint64) (d
 		_, err = io.ReadFull(response.Body, data)
 		return
 	}
-	slurper := network.LimitedReaderSlurper{Limit: limit}
+	slurper := network.MakeLimitedReaderSlurper(0, limit)
 	err = slurper.Read(response.Body)
 	if err == network.ErrIncomingMsgTooLarge {
 		log.Errorf("response too large: %d > %d", slurper.Size(), limit)

@@ -359,7 +359,7 @@ func (wp *wsPeer) readLoop() {
 		wp.readLoopCleanup(cleanupCloseError)
 	}()
 	wp.conn.SetReadLimit(maxMessageLength)
-	slurper := LimitedReaderSlurper{Limit: maxMessageLength}
+	slurper := MakeLimitedReaderSlurper(0, maxMessageLength)
 	for {
 		msg := IncomingMessage{}
 		mtype, reader, err := wp.conn.NextReader()
