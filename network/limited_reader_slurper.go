@@ -38,6 +38,9 @@ type LimitedReaderSlurper struct {
 
 // MakeLimitedReaderSlurper creates a LimitedReaderSlurper instance with the provided base and max memory allocations.
 func MakeLimitedReaderSlurper(baseAllocation, maxAllocation uint64) *LimitedReaderSlurper {
+	if baseAllocation > maxAllocation {
+		baseAllocation = maxAllocation
+	}
 	return &LimitedReaderSlurper{
 		baseAllocation:            baseAllocation,
 		maxExpandBufferAllocation: maxAllocation - baseAllocation,

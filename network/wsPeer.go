@@ -39,6 +39,7 @@ import (
 )
 
 const maxMessageLength = 4 * 1024 * 1024 // Currently the biggest message is VB vote bundles. TODO: per message type size limit?
+const avarageMessageLength = 2 * 1024    // Most of the messages are smaller than this size, which makes it into a good base allocation.
 
 // This parameter controls how many messages from a single peer can be
 // queued up in the global wsNetwork.readBuffer at a time.  Making this
@@ -359,7 +360,7 @@ func (wp *wsPeer) readLoop() {
 		wp.readLoopCleanup(cleanupCloseError)
 	}()
 	wp.conn.SetReadLimit(maxMessageLength)
-	slurper := MakeLimitedReaderSlurper(0, maxMessageLength)
+	slurper := MakeLimitedReaderSlurper(avarageMessageLength, maxMessageLength)
 	for {
 		msg := IncomingMessage{}
 		mtype, reader, err := wp.conn.NextReader()
