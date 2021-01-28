@@ -117,19 +117,16 @@ func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
 	ps.Lock()
 	defer ps.Unlock()
 	ps.refreshAvailablePeers()
-	if len(ps.pools) == 0 {
-		return nil, errPeerSelectorNoPeerPoolsAvailable
-	}
 	for _, pool := range ps.pools {
-		if len(pool.peers) == 0 {
-			// this is not really possible due to the previous call to refreshAvailablePeers, but
-			// we should have it just for the sake of completeness.
-			continue
+		if len(pool.peers) > 0 {
+			// the previous call to refreshAvailablePeers ensure that this would always be the case;
+			// however, if we do have a zero length pool, we don't want to divide by zero, so this would
+			// provide the needed test.
+			// pick one of the peers from this pool at random
+			peerIdx := crypto.RandUint64() % uint64(len(pool.peers))
+			peer = pool.peers[peerIdx].peer
+			return
 		}
-		// pick one of the peers at random.
-		peerIdx := crypto.RandUint64() % uint64(len(pool.peers))
-		peer = pool.peers[peerIdx].peer
-		return
 	}
 
 	return nil, errPeerSelectorNoPeerPoolsAvailable
