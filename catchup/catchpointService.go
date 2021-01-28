@@ -94,14 +94,19 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 		stats: CatchpointCatchupStats{
 			StartTime: time.Now(),
 		},
-		node:                       node,
-		ledgerAccessor:             ledger.MakeCatchpointCatchupAccessor(l, log),
-		log:                        log,
-		newService:                 false,
-		net:                        net,
-		ledger:                     l,
-		config:                     cfg,
-		blocksDownloadPeerSelector: makePeerSelector(net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers}, {initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays}}),
+		node:           node,
+		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(l, log),
+		log:            log,
+		newService:     false,
+		net:            net,
+		ledger:         l,
+		config:         cfg,
+		blocksDownloadPeerSelector: makePeerSelector(
+			net,
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			}),
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
@@ -125,15 +130,20 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 			CatchpointLabel: catchpoint,
 			StartTime:       time.Now(),
 		},
-		node:                       node,
-		ledgerAccessor:             ledger.MakeCatchpointCatchupAccessor(l, log),
-		stage:                      ledger.CatchpointCatchupStateInactive,
-		log:                        log,
-		newService:                 true,
-		net:                        net,
-		ledger:                     l,
-		config:                     cfg,
-		blocksDownloadPeerSelector: makePeerSelector(net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers}, {initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays}}),
+		node:           node,
+		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(l, log),
+		stage:          ledger.CatchpointCatchupStateInactive,
+		log:            log,
+		newService:     true,
+		net:            net,
+		ledger:         l,
+		config:         cfg,
+		blocksDownloadPeerSelector: makePeerSelector(
+			net,
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			}),
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {

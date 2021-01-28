@@ -179,7 +179,7 @@ func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass) 
 	for i, pool := range ps.pools {
 		if pool.rank == rank {
 			// we found an existing group, add this peer to the list.
-			ps.pools[i] = peerPool{rank: rank, peers: append(pool.peers, peerPoolEntry{peer: peer, class: class})}
+			ps.pools[i].peers = append(pool.peers, peerPoolEntry{peer: peer, class: class})
 			return false
 		}
 	}
@@ -209,11 +209,11 @@ func peerAddress(peer network.Peer) string {
 // refreshAvailablePeers reload the available peers from the network package, add new peers along with their
 // corresponding initial rank, and deletes peers that have been dropped by the network package.
 func (ps *peerSelector) refreshAvailablePeers() {
-	evalPeers := make(map[string]network.Peer)
+	existingPeers := make(map[string]network.Peer)
 	for _, pool := range ps.pools {
 		for _, localPeer := range pool.peers {
 			if peerAddress := peerAddress(localPeer.peer); peerAddress != "" {
-				evalPeers[peerAddress] = localPeer.peer
+				existingPeers[peerAddress] = localPeer.peer
 			}
 		}
 	}
@@ -225,8 +225,8 @@ func (ps *peerSelector) refreshAvailablePeers() {
 			if peerAddress == "" {
 				continue
 			}
-			if _, has := evalPeers[peerAddress]; has {
-				delete(evalPeers, peerAddress)
+			if _, has := existingPeers[peerAddress]; has {
+				delete(existingPeers, peerAddress)
 				continue
 			}
 			// it's an entry which we did not had before.
@@ -234,13 +234,13 @@ func (ps *peerSelector) refreshAvailablePeers() {
 		}
 	}
 
-	// delete the "old" entries.
+	// delete from the pools array the peers that do not exist on the network anymore.
 	for poolIdx := len(ps.pools) - 1; poolIdx >= 0; poolIdx-- {
 		pool := ps.pools[poolIdx]
 		for peerIdx := len(pool.peers) - 1; peerIdx >= 0; peerIdx-- {
 			peer := pool.peers[peerIdx].peer
 			if peerAddress := peerAddress(peer); peerAddress != "" {
-				if _, has := evalPeers[peerAddress]; has {
+				if _, has := existingPeers[peerAddress]; has {
 					// need to be removed.
 					pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
 				}
