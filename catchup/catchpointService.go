@@ -357,40 +357,13 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		peer := network.Peer(0)
 		blockDownloadDuration := time.Duration(0)
 		if blk == nil {
-			peer, err = cs.blocksDownloadPeerSelector.GetNextPeer()
-			if err != nil {
-				err = fmt.Errorf("processStageLastestBlockDownload: unable to obtain a list of peers to retrieve the latest block from")
-				return cs.abort(err)
+			var stop bool
+			blk, blockDownloadDuration, peer, stop, err = cs.fetchBlock(blockRound, uint64(attemptsCount))
+			if stop {
+				return err
+			} else if blk == nil {
+				continue
 			}
-			httpPeer, validPeer := peer.(network.HTTPPeer)
-			if !validPeer {
-				cs.log.Warnf("processStageLastestBlockDownload: non-HTTP peer was provided by the peer selector")
-
-				if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
-					// try again.
-					continue
-				}
-				return cs.abort(fmt.Errorf("processStageLastestBlockDownload: recurring non-HTTP peer was provided by the peer selector"))
-			}
-			fetcher := makeHTTPFetcher(cs.log, httpPeer, cs.net, &cs.config)
-			blockDownloadStartTime := time.Now()
-			blk, _, err = fetcher.FetchBlock(cs.ctx, blockRound)
-			if err != nil {
-				if cs.ctx.Err() != nil {
-					return cs.stopOrAbort()
-				}
-				if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
-					// try again.
-					blk = nil
-					cs.log.Infof("processStageLastestBlockDownload: block %d download failed, another attempt will be made; err = %v", blockRound, err)
-					cs.blocksDownloadPeerSelector.RankPeer(peer, peerRankDownloadFailed)
-					continue
-				}
-				return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to get block %d : %v", blockRound, err))
-			}
-			// success
-			fetcher.Close()
-			blockDownloadDuration = time.Now().Sub(blockDownloadStartTime)
 		}
 
 		// check block protocol version support.
@@ -522,40 +495,14 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		peer := network.Peer(0)
 		blockDownloadDuration := time.Duration(0)
 		if blk == nil {
-			peer, err = cs.blocksDownloadPeerSelector.GetNextPeer()
-			if err != nil {
-				err = fmt.Errorf("processStageBlocksDownload: unable to obtain a list of peers to retrieve the latest block from")
-				return cs.abort(err)
+			var stop bool
+			blk, blockDownloadDuration, peer, stop, err = cs.fetchBlock(topBlock.Round()-basics.Round(blocksFetched), retryCount)
+			if stop {
+				return err
+			} else if blk == nil {
+				retryCount++
+				continue
 			}
-			httpPeer, validPeer := peer.(network.HTTPPeer)
-			if !validPeer {
-				cs.log.Warnf("processStageBlocksDownload: non-HTTP peer was provided by the peer selector")
-				if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
-					// try again.
-					retryCount++
-					continue
-				}
-				return cs.abort(fmt.Errorf("processStageBlocksDownload: recurring non-HTTP peer was provided by the peer selector"))
-			}
-			fetcher := makeHTTPFetcher(cs.log, httpPeer, cs.net, &cs.config)
-			blockDownloadStartTime := time.Now()
-			blk, _, err = fetcher.FetchBlock(cs.ctx, topBlock.Round()-basics.Round(blocksFetched))
-			if err != nil {
-				if cs.ctx.Err() != nil {
-					return cs.stopOrAbort()
-				}
-				if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
-					// try again.
-					cs.log.Infof("Failed to download block %d on attempt %d out of %d. %v", topBlock.Round()-basics.Round(blocksFetched), retryCount, cs.config.CatchupBlockDownloadRetryAttempts, err)
-					retryCount++
-					cs.blocksDownloadPeerSelector.RankPeer(peer, peerRankDownloadFailed)
-					continue
-				}
-				return cs.abort(fmt.Errorf("processStageBlocksDownload failed after multiple blocks download attempts"))
-			}
-			// success
-			fetcher.Close()
-			blockDownloadDuration = time.Now().Sub(blockDownloadStartTime)
 		}
 
 		cs.updateBlockRetrievalStatistics(1, 0)
@@ -626,6 +573,47 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		return cs.abort(fmt.Errorf("processStageBlocksDownload failed to update stage : %v", err))
 	}
 	return nil
+}
+
+// fetchBlock uses the internal peer selector blocksDownloadPeerSelector to pick a peer and then attempt to fetch the block requested from that peer.
+// The method return stop=true if the caller should exit the current operation
+// If the method return a nil block, the caller is expected to retry the operation, increasing the retry counter as needed.
+func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount uint64) (blk *bookkeeping.Block, downloadDuration time.Duration, peer network.Peer, stop bool, err error) {
+	peer, err = cs.blocksDownloadPeerSelector.GetNextPeer()
+	if err != nil {
+		err = fmt.Errorf("fetchBlock: unable to obtain a list of peers to retrieve the latest block from")
+		return nil, time.Duration(0), peer, true, cs.abort(err)
+	}
+
+	httpPeer, validPeer := peer.(network.HTTPPeer)
+	if !validPeer {
+		cs.log.Warnf("fetchBlock: non-HTTP peer was provided by the peer selector")
+		cs.blocksDownloadPeerSelector.RankPeer(peer, peerRankInvalidDownload)
+		if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+			// try again.
+			return nil, time.Duration(0), peer, false, nil
+		}
+		return nil, time.Duration(0), peer, true, cs.abort(fmt.Errorf("fetchBlock: recurring non-HTTP peer was provided by the peer selector"))
+	}
+	fetcher := makeHTTPFetcher(cs.log, httpPeer, cs.net, &cs.config)
+	blockDownloadStartTime := time.Now()
+	blk, _, err = fetcher.FetchBlock(cs.ctx, round)
+	if err != nil {
+		if cs.ctx.Err() != nil {
+			return nil, time.Duration(0), peer, true, cs.stopOrAbort()
+		}
+		if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+			// try again.
+			cs.log.Infof("Failed to download block %d on attempt %d out of %d. %v", round, retryCount, cs.config.CatchupBlockDownloadRetryAttempts, err)
+			cs.blocksDownloadPeerSelector.RankPeer(peer, peerRankDownloadFailed)
+			return nil, time.Duration(0), peer, false, nil
+		}
+		return nil, time.Duration(0), peer, true, cs.abort(fmt.Errorf("fetchBlock failed after multiple blocks download attempts"))
+	}
+	// success
+	fetcher.Close()
+	downloadDuration = time.Now().Sub(blockDownloadStartTime)
+	return blk, downloadDuration, peer, false, nil
 }
 
 // processStageLedgerDownload is the fifth catchpoint catchup stage. It completes the catchup process, swap the new tables and restart the node functionality.
