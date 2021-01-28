@@ -98,16 +98,6 @@ func makePeerSelector(net networkGetPeers, initialPeersClasses []peerClass) *pee
 		net:         net,
 		peerClasses: initialPeersClasses,
 	}
-	sortNeeded := false
-	for _, initClass := range initialPeersClasses {
-		peers := net.GetPeers(initClass.peerClass)
-		for _, peer := range peers {
-			sortNeeded = sortNeeded || selector.addToPool(peer, initClass.initialRank, initClass)
-		}
-	}
-	if sortNeeded {
-		selector.sort()
-	}
 	return selector
 }
 
