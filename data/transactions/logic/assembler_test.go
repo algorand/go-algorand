@@ -284,7 +284,7 @@ func testMatch(t *testing.T, actual, expected string) {
 	}
 }
 
-func testProg(t *testing.T, source string, ver uint64, expected ...expect) {
+func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpStream {
 	ops, err := AssembleStringWithVersion(source, ver)
 	if len(expected) == 0 {
 		require.NoError(t, err)
@@ -308,6 +308,7 @@ func testProg(t *testing.T, source string, ver uint64, expected ...expect) {
 		}
 		require.Nil(t, ops.Program)
 	}
+	return ops
 }
 
 func testLine(t *testing.T, line string, ver uint64, expected string) {
@@ -1325,114 +1326,63 @@ func TestStringLiteralParsing(t *testing.T) {
 	require.Nil(t, result)
 }
 
-func TestPragmaStream(t *testing.T) {
+func TestPragmas(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		text := fmt.Sprintf("#pragma version %d", v)
-		sr := strings.NewReader(text)
-		ps := PragmaStream{}
-		err := ps.Process(sr)
-		require.NoError(t, err)
-		require.Equal(t, v, ps.Version)
+		ops := testProg(t, text, v)
+		require.Equal(t, v, ops.Version)
 	}
 
-	text := `#pragma version 100`
-	sr := strings.NewReader(text)
-	ps := PragmaStream{}
-	err := ps.Process(sr)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "1: unsupported version: 100")
-	require.Equal(t, uint64(0), ps.Version)
+	testProg(t, `#pragma version 100`, assemblerNoVersion,
+		expect{1, "unsupported version: 100"})
 
-	text = `#pragma version 0`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "1: unsupported version: 0")
-	require.Equal(t, uint64(0), ps.Version)
+	testProg(t, `#pragma version 0`, assemblerNoVersion,
+		expect{1, "unsupported version: 0"})
 
-	text = `#pragma version a`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "1: strconv.ParseUint")
-	require.Equal(t, uint64(0), ps.Version)
+	testProg(t, `#pragma version a`, assemblerNoVersion,
+		expect{1, "strconv..."})
 
-	text = `#pragmas version 1`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "1: invalid syntax")
-	require.Equal(t, uint64(0), ps.Version)
+	// will default to 1
+	ops := testProg(t, "int 3", assemblerNoVersion)
+	require.Equal(t, uint64(1), ops.Version)
 
-	text = `
-#pragma version a`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "2: #pragma version is only allowed on 1st line")
-	require.Equal(t, uint64(0), ps.Version)
+	ops = testProg(t, "\n#pragma version 2", assemblerNoVersion)
+	require.Equal(t, uint64(2), ops.Version)
 
-	text = `#pragma version 1
-#pragma version 2`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "2: #pragma version is only allowed on 1st line")
-	require.Equal(t, uint64(1), ps.Version)
+	ops = testProg(t, "\n//comment\n#pragma version 2", assemblerNoVersion)
+	require.Equal(t, uint64(2), ops.Version)
 
-	text = `#pragma version 1
-#pragma run-mode 2`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "2: unsupported pragma directive: run-mode")
-	require.Equal(t, uint64(1), ps.Version)
+	// changing version is not allowed
+	testProg(t, "#pragma version 1", 2, expect{1, "version mismatch..."})
+	testProg(t, "#pragma version 2", 1, expect{1, "version mismatch..."})
 
-	text = `#pragma versions`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "1: unsupported pragma directive: versions")
-	require.Equal(t, uint64(0), ps.Version)
+	ops = testProg(t, "#pragma version 2\n#pragma version 1", assemblerNoVersion,
+		expect{2, "version mismatch..."})
 
-	text = `# pragmas version 1`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.NoError(t, err)
-	require.Equal(t, uint64(0), ps.Version)
+	// repetitive, but fine
+	ops = testProg(t, "#pragma version 2\n#pragma version 2", assemblerNoVersion)
+	require.Equal(t, uint64(2), ops.Version)
 
-	text = `
-# pragmas version 1`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.NoError(t, err)
-	require.Equal(t, uint64(0), ps.Version)
+	testProg(t, "\nint 1\n#pragma version 2", assemblerNoVersion,
+		expect{3, "#pragma version is only allowed before instructions"})
 
-	text = `#pragma`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "1: empty pragma")
-	require.Equal(t, uint64(0), ps.Version)
+	testProg(t, "#pragma run-mode 2", assemblerNoVersion,
+		expect{1, "unsupported pragma directive: run-mode"})
 
-	text = `#pragma version`
-	sr = strings.NewReader(text)
-	ps = PragmaStream{}
-	err = ps.Process(sr)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "1: no version")
-	require.Equal(t, uint64(0), ps.Version)
+	testProg(t, "#pragma versions", assemblerNoVersion,
+		expect{1, "unsupported pragma directive: versions"})
+
+	ops = testProg(t, "#pragma version 1", assemblerNoVersion)
+	require.Equal(t, uint64(1), ops.Version)
+
+	ops = testProg(t, "\n#pragma version 1", assemblerNoVersion)
+	require.Equal(t, uint64(1), ops.Version)
+
+	testProg(t, "#pragma", assemblerNoVersion, expect{1, "empty pragma"})
+
+	testProg(t, "#pragma version", assemblerNoVersion,
+		expect{1, "no version value"})
 }
 
 func TestAssemblePragmaVersion(t *testing.T) {
@@ -1446,16 +1396,11 @@ int 1
 	require.NoError(t, err)
 	require.Equal(t, ops1.Program, ops.Program)
 
-	_, err = AssembleStringWithVersion(text, 0)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "version mismatch")
-
-	_, err = AssembleStringWithVersion(text, 2)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "version mismatch")
+	testProg(t, text, 0, expect{1, "version mismatch..."})
+	testProg(t, text, 2, expect{1, "version mismatch..."})
+	testProg(t, text, assemblerNoVersion)
 
 	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
-	require.NoError(t, err)
 	require.Equal(t, ops1.Program, ops.Program)
 
 	text = `#pragma version 2
@@ -1467,13 +1412,8 @@ int 1
 	require.NoError(t, err)
 	require.Equal(t, ops2.Program, ops.Program)
 
-	_, err = AssembleStringWithVersion(text, 0)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "version mismatch")
-
-	_, err = AssembleStringWithVersion(text, 1)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "version mismatch")
+	testProg(t, text, 0, expect{1, "version mismatch..."})
+	testProg(t, text, 1, expect{1, "version mismatch..."})
 
 	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
 	require.NoError(t, err)
@@ -1492,10 +1432,7 @@ len
 	require.NoError(t, err)
 	require.Equal(t, ops2.Program, ops.Program)
 
-	_, err = AssembleString("#pragma unk")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "1: unsupported pragma directive: unk")
-
+	testProg(t, "#pragma unk", assemblerNoVersion, expect{1, "unsupported..."})
 }
 
 func TestAssembleConstants(t *testing.T) {
