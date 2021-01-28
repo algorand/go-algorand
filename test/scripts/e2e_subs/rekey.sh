@@ -122,3 +122,14 @@ if [ "$BALANCEB" -ne 400000 ]; then
     date "+e2e_subs/rekey.sh FAIL wanted balance=400000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
+
+# Close ACCOUNTD. This txn provides test data for Indexer to ensure that "signer" isn't left behind for a closed account.
+${gcmd} clerk send -a 1 -f "${ACCOUNTD}" -t "${ACCOUNT}" --close-to "${ACCOUNT}" -o "${TEMPDIR}/ctx.tx"
+${gcmd} clerk sign -S "${ACCOUNT}" -i "${TEMPDIR}/ctx.tx" -o "${TEMPDIR}/ctx.stxn"
+${gcmd} clerk rawsend -f "${TEMPDIR}/ctx.stxn"
+
+BALANCED=$(${gcmd} account balance -a "${ACCOUNTD}" | awk '{ print $1 }')
+if [ "$BALANCED" -ne 0 ]; then
+    date "+e2e_subs/rekey.sh FAIL wanted balance=0 but got ${BALANCED} %Y%m%d_%H%M%S"
+    false
+fi

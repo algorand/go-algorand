@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // AcceptableCompactCertWeight computes the acceptable signed weight
@@ -35,7 +36,7 @@ import (
 func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round) uint64 {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 	certRound := votersHdr.Round + basics.Round(proto.CompactCertRounds)
-	total := votersHdr.CompactCertVotersTotal
+	total := votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal
 
 	// The acceptable weight depends on the elapsed time (in rounds)
 	// from the block we are trying to construct a certificate for.
@@ -120,7 +121,7 @@ func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockH
 		return
 	}
 
-	totalWeight := votersHdr.CompactCertVotersTotal.ToUint64()
+	totalWeight := votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal.ToUint64()
 	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.CompactCertWeightThreshold), 1<<32)
 	if overflowed {
 		err = fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
@@ -171,6 +172,6 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 		return err
 	}
 
-	verif := compactcert.MkVerifier(ccParams, votersHdr.CompactCertVoters)
+	verif := compactcert.MkVerifier(ccParams, votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters)
 	return verif.Verify(&cert)
 }

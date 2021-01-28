@@ -76,14 +76,19 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	hdr := bookkeeping.BlockHeader{}
 	hdr.Round = s.latest
 	hdr.CurrentProtocol = protocol.ConsensusFuture
-	hdr.CompactCertVotersTotal.Raw = uint64(s.totalWeight)
+
+	var ccBasic bookkeeping.CompactCertState
+	ccBasic.CompactCertVotersTotal.Raw = uint64(s.totalWeight)
 
 	if hdr.Round > 0 {
 		// Just so it's not zero, since the signer logic checks for all-zeroes
-		hdr.CompactCertVoters[1] = 0x12
+		ccBasic.CompactCertVoters[1] = 0x12
 	}
 
-	hdr.CompactCertNextRound = ccNextRound
+	ccBasic.CompactCertNextRound = ccNextRound
+	hdr.CompactCert = map[protocol.CompactCertType]bookkeeping.CompactCertState{
+		protocol.CompactCertBasic: ccBasic,
+	}
 
 	s.blocks[s.latest] = hdr
 	if s.waiters[s.latest] != nil {
@@ -178,7 +183,7 @@ func (s *testWorkerStubs) advanceLatest(delta uint64) {
 	defer s.mu.Unlock()
 
 	for r := uint64(0); r < delta; r++ {
-		s.addBlock(s.blocks[s.latest].CompactCertNextRound)
+		s.addBlock(s.blocks[s.latest].CompactCert[protocol.CompactCertBasic].CompactCertNextRound)
 	}
 }
 
