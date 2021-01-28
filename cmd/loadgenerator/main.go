@@ -39,11 +39,11 @@ const transactionBlockSize = 800
 
 var runOnce = flag.Bool("once", false, "Terminate after first spend loop")
 
+var nroutines = runtime.NumCPU() * 2
+
 func init() {
 	flag.Parse()
 }
-
-var nroutines = runtime.NumCPU() * 2
 
 func loadMnemonic(mnemonic string) crypto.Seed {
 	seedbytes, err := passphrase.MnemonicToKey(mnemonic)
