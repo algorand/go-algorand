@@ -176,13 +176,11 @@ func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownl
 // The method return true if a new group was created ( suggesting that the pools list would need to be re-ordered ), or false otherwise.
 func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass) bool {
 	// see if we already have a list with that rank:
-	for i, peersList := range ps.pools {
-		if peersList.rank == rank {
+	for i, pool := range ps.pools {
+		if pool.rank == rank {
 			// we found an existing group, add this peer to the list.
-			ps.pools[i] = peerPool{rank: rank, peers: append(peersList.peers, peerPoolEntry{peer: peer, class: class})}
+			ps.pools[i] = peerPool{rank: rank, peers: append(pool.peers, peerPoolEntry{peer: peer, class: class})}
 			return false
-		} else if peersList.rank > rank {
-			break
 		}
 	}
 	ps.pools = append(ps.pools, peerPool{rank: rank, peers: []peerPoolEntry{{peer: peer, class: class}}})
@@ -232,7 +230,7 @@ func (ps *peerSelector) refreshAvailablePeers() {
 				continue
 			}
 			// it's an entry which we did not had before.
-			sortNeeded = sortNeeded || ps.addToPool(peer, initClass.initialRank, initClass)
+			sortNeeded = ps.addToPool(peer, initClass.initialRank, initClass) || sortNeeded
 		}
 	}
 
