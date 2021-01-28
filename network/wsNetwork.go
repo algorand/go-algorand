@@ -2034,7 +2034,7 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	defer wn.peersLock.Unlock()
 	for _, p := range wn.peers {
 		if p == peer {
-			wn.log.Error("dup peer added %#v", peer)
+			wn.log.Errorf("dup peer added %#v", peer)
 			return
 		}
 	}
