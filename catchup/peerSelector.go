@@ -275,10 +275,13 @@ func (ps *peerSelector) refreshAvailablePeers() {
 // findPeer look into the peer pool and find the given peer.
 // The method returns the pool and peer indices if a peer was found, or (-1, -1) otherwise.
 func (ps *peerSelector) findPeer(peer network.Peer) (poolIdx, peerIdx int) {
-	for i, pool := range ps.pools {
-		for j, localPeerEntry := range pool.peers {
-			if peerAddress(localPeerEntry.peer) == peerAddress(peer) {
-				return i, j
+	peerAddr := peerAddress(peer)
+	if peerAddr != "" {
+		for i, pool := range ps.pools {
+			for j, localPeerEntry := range pool.peers {
+				if peerAddress(localPeerEntry.peer) == peerAddr {
+					return i, j
+				}
 			}
 		}
 	}

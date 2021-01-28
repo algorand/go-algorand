@@ -284,7 +284,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		}
 		peer, err := peerSelector.GetNextPeer()
 		if err != nil {
-			err = fmt.Errorf("catchpoint catchup was unable to obtain a list of peers to retrieve the catchpoint file from")
+			err = fmt.Errorf("processStageLedgerDownload: catchpoint catchup was unable to obtain a list of peers to retrieve the catchpoint file from")
 			return cs.abort(err)
 		}
 		err = ledgerFetcher.downloadLedger(cs.ctx, peer, round)
@@ -307,7 +307,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		}
 
 		if attemptsCount >= cs.config.CatchupLedgerDownloadRetryAttempts {
-			err = fmt.Errorf("catchpoint catchup exceeded number of attempts to retrieve ledger")
+			err = fmt.Errorf("processStageLedgerDownload: catchpoint catchup exceeded number of attempts to retrieve ledger")
 			return cs.abort(err)
 		}
 		cs.log.Warnf("unable to download ledger : %v", err)
