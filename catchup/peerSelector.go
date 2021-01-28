@@ -86,7 +86,7 @@ type peerPool struct {
 // client to provide feedback regarding the peer's performance, and to have the subsequent
 // query(s) take advantage of that intel.
 type peerSelector struct {
-	deadlock.Mutex
+	mu          deadlock.Mutex
 	net         networkGetPeers
 	peerClasses []peerClass
 	pools       []peerPool
@@ -104,8 +104,8 @@ func makePeerSelector(net networkGetPeers, initialPeersClasses []peerClass) *pee
 // GetNextPeer returns the next peer. It randomally selects a peer from the lowest
 // rank pool.
 func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
-	ps.Lock()
-	defer ps.Unlock()
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
 	ps.refreshAvailablePeers()
 	for _, pool := range ps.pools {
 		if len(pool.peers) > 0 {
@@ -128,8 +128,8 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 	if peer == nil {
 		return false
 	}
-	ps.Lock()
-	defer ps.Unlock()
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
 
 	poolIdx, peerIdx := ps.findPeer(peer)
 	if poolIdx < 0 || peerIdx < 0 {
@@ -156,6 +156,8 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 
 // PeerDownloadDurationToRank calculates the rank for a peer given a peer and the block download time.
 func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownloadDuration time.Duration) (rank int) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
 	poolIdx, peerIdx := ps.findPeer(peer)
 	if poolIdx < 0 || peerIdx < 0 {
 		return peerRankInvalidDownload
