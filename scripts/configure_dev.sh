@@ -69,8 +69,10 @@ function install_windows_shellcheck() {
 }
 
 if [ "${OS}" = "linux" ]; then
-    DISTRIB=$("$SCRIPTPATH"/distribtype.sh)
-    if ! which sudo > /dev/null; then
+    . /etc/os-release
+    DISTRIB=$ID
+
+    if ! which sudo > /dev/null; then    
         if [ "${DISTRIB}" = "ubuntu" ]; then
             apt-get update
             apt-get -y install sudo
