@@ -86,6 +86,10 @@ type CatchpointCatchupService struct {
 	abortCtxFunc context.CancelFunc
 	// blocksDownloadPeerSelector is the peer selector used for downloading blocks.
 	blocksDownloadPeerSelector *peerSelector
+	// maxBlockDownloadDuration is the maximum time we're willing to wait for downloading a single block.
+	// this variable is a moving target, designed to optimize the overall download speed by early timing out on
+	// slow blocks downloads.
+	maxBlockDownloadDuration time.Duration
 }
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
@@ -410,6 +414,9 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		// give a rank to the download, as the download was successfull.
 		peerRank := cs.blocksDownloadPeerSelector.PeerDownloadDurationToRank(peer, blockDownloadDuration)
 		cs.blocksDownloadPeerSelector.RankPeer(peer, peerRank)
+		if (cs.maxBlockDownloadDuration > blockDownloadDuration*2 || cs.maxBlockDownloadDuration == 0) && (blockDownloadDuration > lowBlockDownloadThreshold) {
+			cs.maxBlockDownloadDuration = blockDownloadDuration * 2
+		}
 
 		err = cs.ledgerAccessor.StoreBalancesRound(cs.ctx, blk)
 		if err != nil {
@@ -551,6 +558,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		cs.updateBlockRetrievalStatistics(0, 1)
 		peerRank := cs.blocksDownloadPeerSelector.PeerDownloadDurationToRank(peer, blockDownloadDuration)
 		cs.blocksDownloadPeerSelector.RankPeer(peer, peerRank)
+		if (cs.maxBlockDownloadDuration > blockDownloadDuration*2 || cs.maxBlockDownloadDuration == 0) && (blockDownloadDuration > lowBlockDownloadThreshold) {
+			cs.maxBlockDownloadDuration = blockDownloadDuration * 2
+		}
 
 		// all good, persist and move on.
 		err = cs.ledgerAccessor.StoreBlock(cs.ctx, blk)
@@ -597,15 +607,30 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 	}
 	fetcher := makeHTTPFetcher(cs.log, httpPeer, cs.net, &cs.config)
 	blockDownloadStartTime := time.Now()
-	blk, _, err = fetcher.FetchBlock(cs.ctx, round)
+	fetchContext := cs.ctx
+	if cs.maxBlockDownloadDuration > 0 {
+		var cancelFunc context.CancelFunc
+		fetchContext, cancelFunc = context.WithTimeout(cs.ctx, cs.maxBlockDownloadDuration)
+		defer cancelFunc()
+	}
+	blk, _, err = fetcher.FetchBlock(fetchContext, round)
 	if err != nil {
 		if cs.ctx.Err() != nil {
 			return nil, time.Duration(0), peer, true, cs.stopOrAbort()
 		}
 		if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 			// try again.
-			cs.log.Infof("Failed to download block %d on attempt %d out of %d. %v", round, retryCount, cs.config.CatchupBlockDownloadRetryAttempts, err)
-			cs.blocksDownloadPeerSelector.RankPeer(peer, peerRankDownloadFailed)
+			if fetchContext.Err() == context.DeadlineExceeded {
+				// the block took too long to download.
+				cs.log.Infof("Downloading block %d from peer '%s' took more than %dms, and was skipped", round, httpPeer.GetAddress(), cs.maxBlockDownloadDuration.Milliseconds())
+				rank := cs.blocksDownloadPeerSelector.PeerDownloadDurationToRank(peer, cs.maxBlockDownloadDuration)
+				cs.blocksDownloadPeerSelector.RankPeer(peer, rank)
+				// double the (max) wait time for the next iteration
+				cs.maxBlockDownloadDuration *= 2
+			} else {
+				cs.log.Infof("Failed to download block %d on attempt %d out of %d. %v", round, retryCount, cs.config.CatchupBlockDownloadRetryAttempts, err)
+				cs.blocksDownloadPeerSelector.RankPeer(peer, peerRankDownloadFailed)
+			}
 			return nil, time.Duration(0), peer, false, nil
 		}
 		return nil, time.Duration(0), peer, true, cs.abort(fmt.Errorf("fetchBlock failed after multiple blocks download attempts"))
