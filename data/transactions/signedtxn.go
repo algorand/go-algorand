@@ -44,6 +44,8 @@ type SignedTxnInBlock struct {
 
 	SignedTxnWithAD
 
+	Digest crypto.Digest
+
 	HasGenesisID   bool `codec:"hgi"`
 	HasGenesisHash bool `codec:"hgh"`
 }
@@ -59,6 +61,11 @@ type SignedTxnWithAD struct {
 // ID returns the Txid (i.e., hash) of the underlying transaction.
 func (s SignedTxn) ID() Txid {
 	return s.Txn.ID()
+}
+
+// ToBeHashed implements the crypto.Hashable interface.
+func (s SignedTxn) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.SignedTxn, protocol.Encode(&s)
 }
 
 // ID on SignedTxnInBlock should never be called, because the ID depends

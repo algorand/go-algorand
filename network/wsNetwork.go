@@ -200,6 +200,12 @@ type GossipNode interface {
 
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
+
+	// StoreKV stores an entry in the corresponding peer's key-value store
+	StoreKV(peerIndex int, key interface{}, value interface{})
+
+	// LoadKV retrieves an entry from the corresponding peer's key-value store
+	LoadKV(peerIndex int, key interface{}) interface{}
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -2098,4 +2104,16 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
 // SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
 	return strings.Replace(rawURL, "{genesisID}", wn.GenesisID, -1)
+}
+
+// StoreKV stores an entry in the corresponding peer's key-value store
+func (wn *WebsocketNetwork) StoreKV(peerIndex int, key interface{}, value interface{}) {
+	// TODO: add locking potentially
+	wn.peers[peerIndex].kvStore[key] = value
+}
+
+// LoadKV retrieves an entry from the corresponding peer's key-value store
+func (wn *WebsocketNetwork) LoadKV(peerIndex int, key interface{}) interface{} {
+	// TODO: add locking potentially
+	return wn.peers[peerIndex].kvStore[key]
 }

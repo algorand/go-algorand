@@ -205,6 +205,8 @@ type wsPeer struct {
 	// throttledOutgoingConnection determines if this outgoing connection will be throttled bassed on it's
 	// performance or not. Throttled connections are more likely to be short-lived connections.
 	throttledOutgoingConnection bool
+
+	kvStore map[interface{}]interface{}
 }
 
 // HTTPPeer is what the opaque Peer might be.

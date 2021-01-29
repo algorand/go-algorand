@@ -48,6 +48,7 @@ const (
 	ProgramData       HashID = "ProgData"
 	ProposerSeed      HashID = "PS"
 	Seed              HashID = "SD"
+	SignedTxn         HashID = "STX"
 	SpecialAddr       HashID = "SpecialAddr"
 	TestHashable      HashID = "TE"
 	TxGroup           HashID = "TG"
