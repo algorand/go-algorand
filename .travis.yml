@@ -14,7 +14,7 @@ stages:
   - name: build_release
     if: branch =~ /^rel\// AND type != pull_request
   - name: deploy
-    if: type = pull_request
+    if: branch =~ /^rel\// AND type != pull_request
   - name: post_deploy
     if: branch =~ /^rel\// AND type != pull_request
 
