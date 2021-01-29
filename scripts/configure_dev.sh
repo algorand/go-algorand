@@ -73,21 +73,21 @@ if [ "${OS}" = "linux" ]; then
     DISTRIB=$ID
 
     if ! which sudo > /dev/null; then    
-        if [ "${DISTRIB}" = "ubuntu" ]; then
+        if [ "${DISTRIB}" = "arch" ]; then
+            pacman -Syy
+            pacman -S sudo
+        else
             apt-get update
             apt-get -y install sudo
-        elif [ "${DISTRIB}" = "arch" ]; then
-            pacman -Syy 
-            pacman -S sudo
         fi
     fi
     
-    if [ "${DISTRIB}" = "ubuntu" ]; then
-        sudo apt-get update
-        sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3 python3-venv
-    elif [ "${DISTRIB}" = "arch" ]; then
+    if [ "${DISTRIB}" = "arch" ]; then
         pacman -Syy
         pacman -S boost boost-libs expect jq autoconf shellcheck sqlite python-virtualenv
+    else
+        sudo apt-get update
+        sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3 python3-venv
     fi
 elif [ "${OS}" = "darwin" ]; then
     brew update
