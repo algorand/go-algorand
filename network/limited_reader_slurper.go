@@ -101,6 +101,7 @@ func (s *LimitedReaderSlurper) Size() (size uint64) {
 // Reset clears the buffered data
 func (s *LimitedReaderSlurper) Reset() {
 	for i := 1; i <= s.lastBuffer; i++ {
+		s.remainedUnallocatedSpace += uint64(cap(s.buffers[i]))
 		s.buffers[i] = nil
 	}
 	s.buffers[0] = s.buffers[0][:0]
