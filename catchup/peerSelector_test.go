@@ -95,16 +95,16 @@ func TestDownloadDurationToRank(t *testing.T) {
 	require.Equal(t, 0, downloadDurationToRank(205*time.Millisecond, 100*time.Millisecond, 200*time.Millisecond, 0, 0))
 }
 
-type networkGetPeersStub struct {
+type peersRetrieverStub struct {
 	getPeersStub func(options ...network.PeerOption) []network.Peer
 }
 
-func (n *networkGetPeersStub) GetPeers(options ...network.PeerOption) []network.Peer {
+func (n *peersRetrieverStub) GetPeers(options ...network.PeerOption) []network.Peer {
 	return n.getPeersStub(options...)
 }
 
-func makeNetworkGetPeersStub(fnc func(options ...network.PeerOption) []network.Peer) *networkGetPeersStub {
-	return &networkGetPeersStub{
+func makePeersRetrieverStub(fnc func(options ...network.PeerOption) []network.Peer) *peersRetrieverStub {
+	return &peersRetrieverStub{
 		getPeersStub: fnc,
 	}
 }
@@ -112,7 +112,7 @@ func TestPeerSelector(t *testing.T) {
 	peers := []network.Peer{&mockHTTPPeer{address: "12345"}}
 
 	peerSelector := makePeerSelector(
-		makeNetworkGetPeersStub(func(options ...network.PeerOption) []network.Peer {
+		makePeersRetrieverStub(func(options ...network.PeerOption) []network.Peer {
 			return peers
 		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers}},
 	)
@@ -163,7 +163,7 @@ func TestPeerDownloadRanking(t *testing.T) {
 	peers2 := []network.Peer{&mockHTTPPeer{address: "abcd"}, &mockHTTPPeer{address: "efgh"}}
 
 	peerSelector := makePeerSelector(
-		makeNetworkGetPeersStub(func(options ...network.PeerOption) (peers []network.Peer) {
+		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivers {
 					peers = append(peers, peers1...)
@@ -209,7 +209,7 @@ func TestPeerDownloadRanking(t *testing.T) {
 
 func TestFindMissingPeer(t *testing.T) {
 	peerSelector := makePeerSelector(
-		makeNetworkGetPeersStub(func(options ...network.PeerOption) []network.Peer {
+		makePeersRetrieverStub(func(options ...network.PeerOption) []network.Peer {
 			return []network.Peer{}
 		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers}},
 	)

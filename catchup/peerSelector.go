@@ -54,16 +54,16 @@ const (
 var errPeerSelectorNoPeerPoolsAvailable = errors.New("no peer pools available")
 
 // peerClass defines the type of peer we want to have in a particular "class",
-// and define tnet network.PeerOption that would be used to retrieve that type of
+// and define the network.PeerOption that would be used to retrieve that type of
 // peer
 type peerClass struct {
 	initialRank int
 	peerClass   network.PeerOption
 }
 
-// the networkGetPeers is a subset of the network.GossipNode used to ensure that we can create an instance of the peerSelector
+// the peersRetriever is a subset of the network.GossipNode used to ensure that we can create an instance of the peerSelector
 // for testing purposes, providing just the above function.
-type networkGetPeers interface {
+type peersRetriever interface {
 	// Get a list of Peers we could potentially send a direct message to.
 	GetPeers(options ...network.PeerOption) []network.Peer
 }
@@ -87,13 +87,13 @@ type peerPool struct {
 // query(s) take advantage of that intel.
 type peerSelector struct {
 	mu          deadlock.Mutex
-	net         networkGetPeers
+	net         peersRetriever
 	peerClasses []peerClass
 	pools       []peerPool
 }
 
-// makePeerSelector creates a peerSelector, given a networkGetPeers and peerClass array.
-func makePeerSelector(net networkGetPeers, initialPeersClasses []peerClass) *peerSelector {
+// makePeerSelector creates a peerSelector, given a peersRetriever and peerClass array.
+func makePeerSelector(net peersRetriever, initialPeersClasses []peerClass) *peerSelector {
 	selector := &peerSelector{
 		net:         net,
 		peerClasses: initialPeersClasses,
@@ -101,8 +101,9 @@ func makePeerSelector(net networkGetPeers, initialPeersClasses []peerClass) *pee
 	return selector
 }
 
-// GetNextPeer returns the next peer. It randomally selects a peer from the lowest
-// rank pool.
+// GetNextPeer returns the next peer. It randomally selects a peer from a pool that has
+// the lowest rank value. Given that the peers are grouped by their ranks, allow us to
+// prioritize peers based on their class and/or performance.
 func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
@@ -138,19 +139,22 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 
 	// we need to remove the peer from the pool so we can place it in a different location.
 	pool := ps.pools[poolIdx]
-	class := pool.peers[peerIdx].class
-	if len(pool.peers) > 1 {
-		pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
-		ps.pools[poolIdx] = pool
-	} else {
-		// the last peer was removed from the pool; delete this pool.
-		ps.pools = append(ps.pools[:poolIdx], ps.pools[poolIdx+1:]...)
+	if pool.rank != rank {
+		class := pool.peers[peerIdx].class
+		if len(pool.peers) > 1 {
+			pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
+			ps.pools[poolIdx] = pool
+		} else {
+			// the last peer was removed from the pool; delete this pool.
+			ps.pools = append(ps.pools[:poolIdx], ps.pools[poolIdx+1:]...)
+		}
+
+		sortNeeded := ps.addToPool(peer, rank, class)
+		if sortNeeded {
+			ps.sort()
+		}
 	}
 
-	sortNeeded := ps.addToPool(peer, rank, class)
-	if sortNeeded {
-		ps.sort()
-	}
 	return true
 }
 
@@ -277,11 +281,13 @@ func (ps *peerSelector) findPeer(peer network.Peer) (poolIdx, peerIdx int) {
 
 // calculate the duration rank by mapping the range of [minDownloadDuration..maxDownloadDuration] into the rank range of [minRank..maxRank]
 func downloadDurationToRank(downloadDuration, minDownloadDuration, maxDownloadDuration time.Duration, minRank, maxRank int) (rank int) {
+	// clamp the downloadDuration into the range of [minDownloadDuration .. maxDownloadDuration]
 	if downloadDuration < minDownloadDuration {
 		downloadDuration = minDownloadDuration
 	} else if downloadDuration > maxDownloadDuration {
 		downloadDuration = maxDownloadDuration
 	}
+	// the formula below maps an element in the range of [minDownloadDuration .. maxDownloadDuration] onto the range of [minRank .. maxRank]
 	rank = minRank + int((downloadDuration-minDownloadDuration).Nanoseconds()*int64(maxRank-minRank)/(maxDownloadDuration-minDownloadDuration).Nanoseconds())
 	return
 }
