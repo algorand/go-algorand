@@ -18,6 +18,7 @@ package network
 
 import (
 	"bytes"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -44,6 +45,50 @@ func TestLimitedReaderSlurper(t *testing.T) {
 				bytes := reader.Bytes()
 				require.Equal(t, bytesBlob, bytes)
 			}
+		}
+	}
+}
+
+type fuzzReader struct {
+	pos int
+	buf []byte
+}
+
+func (f *fuzzReader) Read(b []byte) (n int, err error) {
+	s := int(crypto.RandUint64() % 19)
+	if s > len(b) {
+		s = len(b)
+	}
+	if f.pos >= len(f.buf) {
+		return 0, io.EOF
+	}
+	if f.pos+s >= len(f.buf) {
+		// we want a chunk that ends at ( or after ) the end of the data.
+		n = len(f.buf) - f.pos
+		err = io.EOF
+	} else {
+		n = s
+	}
+	copy(b, f.buf[f.pos:f.pos+n])
+	f.pos += n
+	return
+}
+
+func TestLimitedReaderSlurper_FuzzedBlippedSource(t *testing.T) {
+	arraySize := uint64(300000)
+	bytesBlob := make([]byte, arraySize)
+	crypto.RandBytes(bytesBlob[:])
+	for i := 0; i < 50; i++ {
+		for _, maxSize := range []uint64{arraySize - 10000, arraySize, arraySize + 10000} {
+			reader := MakeLimitedReaderSlurper(512, maxSize)
+			err := reader.Read(&fuzzReader{buf: bytesBlob})
+			if maxSize < uint64(len(bytesBlob)) {
+				require.Equal(t, ErrIncomingMsgTooLarge, err, "i: %d\nmaxSize: %d", i, maxSize)
+				continue
+			}
+			require.NoError(t, err)
+			bytes := reader.Bytes()
+			require.Equal(t, bytesBlob, bytes)
 		}
 	}
 }
