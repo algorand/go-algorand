@@ -47,3 +47,65 @@ func TestLimitedReaderSlurper(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkLimitedReaderSlurper(b *testing.B) {
+	b.Run("200bytes_message", func(b *testing.B) {
+		arraySize := 200
+		bytesBlob := make([]byte, arraySize)
+		crypto.RandBytes(bytesBlob[:])
+		readers := make([]*LimitedReaderSlurper, b.N)
+		buffers := make([]*bytes.Buffer, b.N)
+		for i := 0; i < b.N; i++ {
+			buffers[i] = bytes.NewBuffer(bytesBlob)
+			readers[i] = MakeLimitedReaderSlurper(1024, 500*1024)
+		}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			reader := readers[i]
+			err := reader.Read(buffers[i])
+			require.NoError(b, err)
+			reader.Bytes()
+			reader.Reset()
+		}
+	})
+
+	b.Run("2048bytes_message", func(b *testing.B) {
+		arraySize := 2048
+		bytesBlob := make([]byte, arraySize)
+		crypto.RandBytes(bytesBlob[:])
+		readers := make([]*LimitedReaderSlurper, b.N)
+		buffers := make([]*bytes.Buffer, b.N)
+		for i := 0; i < b.N; i++ {
+			buffers[i] = bytes.NewBuffer(bytesBlob)
+			readers[i] = MakeLimitedReaderSlurper(1024, 500*1024)
+		}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			reader := readers[i]
+			err := reader.Read(buffers[i])
+			require.NoError(b, err)
+			reader.Bytes()
+			reader.Reset()
+		}
+	})
+
+	b.Run("300000bytes_message", func(b *testing.B) {
+		arraySize := 300000
+		bytesBlob := make([]byte, arraySize)
+		crypto.RandBytes(bytesBlob[:])
+		readers := make([]*LimitedReaderSlurper, b.N)
+		buffers := make([]*bytes.Buffer, b.N)
+		for i := 0; i < b.N; i++ {
+			buffers[i] = bytes.NewBuffer(bytesBlob)
+			readers[i] = MakeLimitedReaderSlurper(1024, 500*1024)
+		}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			reader := readers[i]
+			err := reader.Read(buffers[i])
+			require.NoError(b, err)
+			reader.Bytes()
+			reader.Reset()
+		}
+	})
+}
