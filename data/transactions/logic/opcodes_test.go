@@ -84,7 +84,7 @@ func TestOpcodesByVersion(t *testing.T) {
 		OpSpecs2[idx] = cp
 	}
 
-	opSpecs := make([][]OpSpec, 2)
+	opSpecs := make([][]OpSpec, LogicVersion)
 	for v := uint64(1); v <= LogicVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			opSpecs[v-1] = OpcodesByVersion(v)
@@ -117,8 +117,8 @@ func TestOpcodesByVersion(t *testing.T) {
 func TestOpcodesVersioningV2(t *testing.T) {
 	t.Parallel()
 
-	require.Equal(t, 3, len(opsByOpcode))
-	require.Equal(t, 3, len(opsByName))
+	require.Equal(t, 4, len(opsByOpcode))
+	require.Equal(t, 4, len(opsByName))
 
 	// ensure v0 has only v0 opcodes
 	cntv0 := 0
@@ -177,7 +177,6 @@ func TestOpcodesVersioningV2(t *testing.T) {
 	}
 
 	// ensure v2 has v1 and v2 opcodes
-	require.Equal(t, len(opsByName[2]), len(opsByName[2]))
 	cntv2 := 0
 	cntAdded := 0
 	for _, spec := range opsByOpcode[2] {
@@ -202,4 +201,29 @@ func TestOpcodesVersioningV2(t *testing.T) {
 	require.Equal(t, newOpcodes+overwritten, cntAdded)
 
 	require.Equal(t, cntv2, cntv1+newOpcodes)
+
+	// ensure v3 has v1, v2, v3 opcodes
+	cntv3 := 0
+	cntAdded = 0
+	for _, spec := range opsByOpcode[3] {
+		if spec.op != nil {
+			require.True(t, spec.Version == 1 || spec.Version == 2 || spec.Version == 3)
+			if spec.Version == 3 {
+				cntAdded++
+			}
+			cntv3++
+		}
+	}
+	for _, spec := range opsByName[3] {
+		if spec.op != nil {
+			require.True(t, spec.Version == 1 || spec.Version == 2 || spec.Version == 3)
+		}
+	}
+	require.Equal(t, cntv3, len(opsByName[3]))
+
+	// hardcode and ensure amount of new v2 opcodes
+	newOpcodes = 1  // assert
+	overwritten = 0 // ? none yet
+	require.Equal(t, newOpcodes+overwritten, cntAdded)
+
 }

@@ -21,7 +21,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 2
+const LogicVersion = 3
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -164,6 +164,8 @@ var OpSpecs = []OpSpec{
 
 	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, opSize{1, 2, nil}},
 	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, opSize{1, 2, nil}},
+
+	{0x72, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opSizeDefault},
 }
 
 type sortByOpcode []OpSpec
@@ -173,7 +175,7 @@ func (a sortByOpcode) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a sortByOpcode) Less(i, j int) bool { return a[i].Opcode < a[j].Opcode }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
-// by copying v1 opcodes to v2 to create a full list.
+// by copying v1 opcodes to v2, and then on to v3 to create a full list
 func OpcodesByVersion(version uint64) []OpSpec {
 	// for updated opcodes use the lowest version opcode was introduced in
 	maxOpcode := 0

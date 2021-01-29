@@ -674,6 +674,15 @@ func opReturn(cx *evalContext) {
 	cx.nextpc = len(cx.program)
 }
 
+func opAssert(cx *evalContext) {
+	last := len(cx.stack) - 1
+	if cx.stack[last].Uint != 0 {
+		cx.stack = cx.stack[:last]
+		return
+	}
+	cx.err = errors.New("assert failed")
+}
+
 func opSHA256(cx *evalContext) {
 	last := len(cx.stack) - 1
 	hash := sha256.Sum256(cx.stack[last].Bytes)

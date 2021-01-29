@@ -111,6 +111,7 @@ var opDocList = []stringString{
 	{"app_global_del", "delete key A from a global state of the current application"},
 	{"asset_holding_get", "read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}"},
 	{"asset_params_get", "read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value}"},
+	{"assert", "immediately fail unless value X is not zero"},
 }
 
 var opDocByName map[string]string
@@ -201,7 +202,7 @@ type OpGroup struct {
 var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
-	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2"}},
+	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "assert"}},
 	{"State Access", []string{"balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 
