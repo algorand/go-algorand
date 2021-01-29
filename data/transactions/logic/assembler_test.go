@@ -1337,14 +1337,17 @@ func TestPragmas(t *testing.T) {
 	testProg(t, `#pragma version 100`, assemblerNoVersion,
 		expect{1, "unsupported version: 100"})
 
+	ops, err := AssembleStringWithVersion(`int 1`, 99)
+	require.Error(t, err)
+
 	testProg(t, `#pragma version 0`, assemblerNoVersion,
 		expect{1, "unsupported version: 0"})
 
 	testProg(t, `#pragma version a`, assemblerNoVersion,
-		expect{1, "strconv..."})
+		expect{1, `bad #pragma version: "a"`})
 
 	// will default to 1
-	ops := testProg(t, "int 3", assemblerNoVersion)
+	ops = testProg(t, "int 3", assemblerNoVersion)
 	require.Equal(t, uint64(1), ops.Version)
 
 	ops = testProg(t, "\n#pragma version 2", assemblerNoVersion)
@@ -1368,10 +1371,10 @@ func TestPragmas(t *testing.T) {
 		expect{3, "#pragma version is only allowed before instructions"})
 
 	testProg(t, "#pragma run-mode 2", assemblerNoVersion,
-		expect{1, "unsupported pragma directive: run-mode"})
+		expect{1, `unsupported pragma directive: "run-mode"`})
 
 	testProg(t, "#pragma versions", assemblerNoVersion,
-		expect{1, "unsupported pragma directive: versions"})
+		expect{1, `unsupported pragma directive: "versions"`})
 
 	ops = testProg(t, "#pragma version 1", assemblerNoVersion)
 	require.Equal(t, uint64(1), ops.Version)
@@ -1401,6 +1404,7 @@ int 1
 	testProg(t, text, assemblerNoVersion)
 
 	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
+	require.NoError(t, err)
 	require.Equal(t, ops1.Program, ops.Program)
 
 	text = `#pragma version 2
@@ -1432,7 +1436,8 @@ len
 	require.NoError(t, err)
 	require.Equal(t, ops2.Program, ops.Program)
 
-	testProg(t, "#pragma unk", assemblerNoVersion, expect{1, "unsupported..."})
+	testProg(t, "#pragma unk", assemblerNoVersion,
+		expect{1, `unsupported pragma directive: "unk"`})
 }
 
 func TestAssembleConstants(t *testing.T) {

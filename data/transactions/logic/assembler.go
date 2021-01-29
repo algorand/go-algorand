@@ -1068,6 +1068,9 @@ func (ops *OpStream) checkArgs(spec OpSpec) {
 
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(fin io.Reader) error {
+	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
+		return ops.errorf("Can not assemble version %d", ops.Version)
+	}
 	scanner := bufio.NewScanner(fin)
 	ops.sourceLine = 0
 	for scanner.Scan() {
@@ -1164,7 +1167,7 @@ func (ops *OpStream) pragma(line string) error {
 		}
 		ver, err := strconv.ParseUint(value, 0, 64)
 		if err != nil {
-			return ops.error(err)
+			return ops.errorf("bad #pragma version: %#v", value)
 		}
 		if ver < 1 || ver > AssemblerMaxVersion {
 			return ops.errorf("unsupported version: %d", ver)
@@ -1182,7 +1185,7 @@ func (ops *OpStream) pragma(line string) error {
 		}
 		return nil
 	default:
-		return ops.errorf("unsupported pragma directive: %s", key)
+		return ops.errorf("unsupported pragma directive: %#v", key)
 	}
 }
 
