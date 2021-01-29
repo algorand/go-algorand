@@ -7,16 +7,16 @@ language: go
 if: tag IS blank
 
 stages:
-  - name: build_commit
-    if: NOT (branch =~ /^rel\//) AND type != pull_request
-  - name: build_pr
-    if: type = pull_request
-  - name: build_release
-    if: branch =~ /^rel\// AND type != pull_request
+  # - name: build_commit
+  #   if: NOT (branch =~ /^rel\//) AND type != pull_request
+  # - name: build_pr
+  #   if: type = pull_request
+  # - name: build_release
+  #   if: branch =~ /^rel\// AND type != pull_request
   - name: deploy
-    if: branch =~ /^rel\// AND type != pull_request
-  - name: post_deploy
-    if: branch =~ /^rel\// AND type != pull_request
+    if: type = pull_request
+  # - name: post_deploy
+  #   if: branch =~ /^rel\// AND type != pull_request
 
 jobs:
   allow_failures:
