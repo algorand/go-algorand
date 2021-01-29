@@ -27,7 +27,7 @@ import (
 )
 
 // used by TestAssemble and others, see UPDATE PROCEDURE in TestAssemble()
-const bigTestAssembleNonsenseProgram = `err
+const v1Nonsense = `err
 global MinTxnFee
 global MinBalance
 global MaxTxnLife
@@ -130,6 +130,9 @@ store 2
 intc 0
 intc 1
 mulw
+`
+
+const v2Nonsense = `
 dup2
 pop
 pop
@@ -214,6 +217,10 @@ txn FreezeAssetAccount
 txn FreezeAssetFrozen
 `
 
+const v3Nonsense = `
+assert
+`
+
 // Check that assembly output is stable across time.
 func TestAssemble(t *testing.T) {
 	// UPDATE PROCEDURE:
@@ -228,17 +235,35 @@ func TestAssemble(t *testing.T) {
 		// Ensure that we have some basic check of all the ops, except
 		// we don't test every combination of
 		// intcblock,bytecblock,intc*,bytec*,arg* here.
-		if !strings.Contains(bigTestAssembleNonsenseProgram, spec.Name) &&
+		if !strings.Contains(v1Nonsense+v2Nonsense, spec.Name) &&
 			!strings.HasPrefix(spec.Name, "int") &&
 			!strings.HasPrefix(spec.Name, "byte") &&
-			!strings.HasPrefix(spec.Name, "arg") {
+			!strings.HasPrefix(spec.Name, "arg") &&
+			spec.Version <= 2 {
 			t.Errorf("test should contain op %v", spec.Name)
 		}
 	}
-	ops, err := AssembleStringWithVersion(bigTestAssembleNonsenseProgram, AssemblerMaxVersion)
+	// First, we test v2, not AssemblerMaxVersion. A higher version is
+	// allowed to differ (and must, in the first byte).
+	ops, err := AssembleStringWithVersion(v1Nonsense+v2Nonsense, 2)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
 	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f")
+	if bytes.Compare(expectedBytes, ops.Program) != 0 {
+		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
+		t.Log(hex.EncodeToString(ops.Program))
+	}
+	require.Equal(t, expectedBytes, ops.Program)
+
+	// We test v3 here, and compare to AssemblerMaxVersion, with
+	// the intention that the test breaks the next time
+	// AssemblerMaxVersion is increased.  At that point, we would
+	// add a new test for v4, and leave behind this test for v3.
+
+	ops, err = AssembleStringWithVersion(v1Nonsense+v2Nonsense+v3Nonsense, AssemblerMaxVersion)
+	require.NoError(t, err)
+	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
+	expectedBytes, _ = hex.DecodeString("032008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f72")
 	if bytes.Compare(expectedBytes, ops.Program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(ops.Program))
@@ -284,9 +309,10 @@ func testMatch(t *testing.T, actual, expected string) {
 	}
 }
 
-func testProg(t *testing.T, source string, ver uint64, expected ...expect) {
+func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpStream {
 	ops, err := AssembleStringWithVersion(source, ver)
 	if len(expected) == 0 {
+		require.Empty(t, ops.Errors)
 		require.NoError(t, err)
 		require.NotNil(t, ops)
 		require.Empty(t, ops.Errors)
@@ -308,6 +334,7 @@ func testProg(t *testing.T, source string, ver uint64, expected ...expect) {
 		}
 		require.Nil(t, ops.Program)
 	}
+	return ops
 }
 
 func testLine(t *testing.T, line string, ver uint64, expected string) {
@@ -765,7 +792,7 @@ func TestAssembleDisassemble(t *testing.T) {
 	// Specifically constructed program text that should be recreated by Disassemble()
 	// TODO: disassemble to int/byte psuedo-ops instead of raw intcblock/bytecblock/intc/bytec
 	t.Parallel()
-	text := `// version 2
+	text := fmt.Sprintf(`// version %d
 intcblock 0 1 2 3 4 5
 bytecblock 0xcafed00d 0x1337 0x2001 0xdeadbeef 0x70077007
 intc_1
@@ -845,7 +872,7 @@ txn FreezeAsset
 txn FreezeAssetAccount
 txn FreezeAssetFrozen
 gtxn 12 Fee
-`
+`, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
 		if !strings.Contains(text, globalField) {
 			t.Errorf("TestAssembleDisassemble missing field global %v", globalField)
@@ -869,21 +896,26 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	t.Parallel()
 
 	tests := map[uint64]string{
-		2: bigTestAssembleNonsenseProgram,
-		1: bigTestAssembleNonsenseProgram[:strings.Index(bigTestAssembleNonsenseProgram, "dup2")],
+		1: v1Nonsense,
+		2: v1Nonsense + v2Nonsense,
+		3: v1Nonsense + v2Nonsense + v3Nonsense,
 	}
 
+	// This confirms that each program compiles to the same bytes
+	// (except the leading version indicator), when compiled under
+	// oriringal and max versions. That doesn't *have* to be true,
+	// as we can introduce optimizations in later versions that
+	// change the bytecode emitted. But currently it is, so we
+	// test it for now to catch any suprises.
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(source, v)
-			require.NoError(t, err)
+			ops := testProg(t, source, v)
 			t2, err := Disassemble(ops.Program)
 			require.NoError(t, err)
-			ops2, err := AssembleStringWithVersion(t2, 2)
+			ops2 := testProg(t, t2, AssemblerMaxVersion)
 			if err != nil {
 				t.Log(t2)
 			}
-			require.NoError(t, err)
 			require.Equal(t, ops.Program[1:], ops2.Program[1:])
 		})
 	}
@@ -1004,7 +1036,7 @@ func TestAssembleVersions(t *testing.T) {
 	t.Parallel()
 	testLine(t, "txna Accounts 0", AssemblerMaxVersion, "")
 	testLine(t, "txna Accounts 0", 2, "")
-	testLine(t, "txna Accounts 0", 1, "unknown opcode: txna")
+	testLine(t, "txna Accounts 0", 1, "txna opcode was introduced in TEAL v2")
 }
 
 func TestAssembleBalance(t *testing.T) {
@@ -1029,7 +1061,7 @@ func TestAssembleAsset(t *testing.T) {
 func TestDisassembleSingleOp(t *testing.T) {
 	t.Parallel()
 	// test ensures no double arg_0 entries in disassembly listing
-	sample := "// version 2\narg_0\n"
+	sample := fmt.Sprintf("// version %d\narg_0\n", AssemblerMaxVersion)
 	ops, err := AssembleStringWithVersion(sample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(ops.Program))
@@ -1041,21 +1073,21 @@ func TestDisassembleSingleOp(t *testing.T) {
 func TestDisassembleTxna(t *testing.T) {
 	t.Parallel()
 	// check txn and txna are properly disassembled
-	txnSample := "// version 2\ntxn Sender\n"
+	txnSample := fmt.Sprintf("// version %d\ntxn Sender\n", AssemblerMaxVersion)
 	ops, err := AssembleStringWithVersion(txnSample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err := Disassemble(ops.Program)
 	require.NoError(t, err)
 	require.Equal(t, txnSample, disassembled)
 
-	txnaSample := "// version 2\ntxna Accounts 0\n"
+	txnaSample := fmt.Sprintf("// version %d\ntxna Accounts 0\n", AssemblerMaxVersion)
 	ops, err = AssembleStringWithVersion(txnaSample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)
 	require.NoError(t, err)
 	require.Equal(t, txnaSample, disassembled)
 
-	txnSample2 := "// version 2\ntxn Accounts 0\n"
+	txnSample2 := fmt.Sprintf("// version %d\ntxn Accounts 0\n", AssemblerMaxVersion)
 	ops, err = AssembleStringWithVersion(txnSample2, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)
@@ -1067,21 +1099,21 @@ func TestDisassembleTxna(t *testing.T) {
 func TestDisassembleGtxna(t *testing.T) {
 	t.Parallel()
 	// check gtxn and gtxna are properly disassembled
-	gtxnSample := "// version 2\ngtxn 0 Sender\n"
+	gtxnSample := fmt.Sprintf("// version %d\ngtxn 0 Sender\n", AssemblerMaxVersion)
 	ops, err := AssembleStringWithVersion(gtxnSample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err := Disassemble(ops.Program)
 	require.NoError(t, err)
 	require.Equal(t, gtxnSample, disassembled)
 
-	gtxnaSample := "// version 2\ngtxna 0 Accounts 0\n"
+	gtxnaSample := fmt.Sprintf("// version %d\ngtxna 0 Accounts 0\n", AssemblerMaxVersion)
 	ops, err = AssembleStringWithVersion(gtxnaSample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)
 	require.NoError(t, err)
 	require.Equal(t, gtxnaSample, disassembled)
 
-	gtxnSample2 := "// version 2\ngtxn 0 Accounts 0\n"
+	gtxnSample2 := fmt.Sprintf("// version %d\ngtxn 0 Accounts 0\n", AssemblerMaxVersion)
 	ops, err = AssembleStringWithVersion(gtxnSample2, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)

@@ -1270,8 +1270,8 @@ int 1
 `
 
 const globalV2TestProgram = `global LogicSigVersion
-int 2
-==
+int 1
+>
 &&
 global Round
 int 0
@@ -1300,11 +1300,12 @@ func TestGlobal(t *testing.T) {
 		1: {GroupSize, globalV1TestProgram, Eval, Check},
 		2: {
 			CurrentApplicationID, globalV1TestProgram + globalV2TestProgram,
-			func(p []byte, ep EvalParams) (bool, error) {
-				pass, err := EvalStateful(p, ep)
-				return pass, err
-			},
-			func(program []byte, ep EvalParams) (int, error) { return CheckStateful(program, ep) },
+			EvalStateful, CheckStateful,
+		},
+		3: {
+			// TODO: Change CurrentApplicationID for new globals in v3
+			CurrentApplicationID, globalV1TestProgram + globalV2TestProgram,
+			EvalStateful, CheckStateful,
 		},
 	}
 	ledger := makeTestLedger(nil)
@@ -3912,7 +3913,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 
 	cnt := 0
 	for _, spec := range OpSpecs {
-		if spec.Version > 1 && !excluded[spec.Name] {
+		if spec.Version == 2 && !excluded[spec.Name] {
 			source, ok := tests[spec.Name]
 			require.True(t, ok, fmt.Sprintf("Missed opcode in the test: %s", spec.Name))
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)

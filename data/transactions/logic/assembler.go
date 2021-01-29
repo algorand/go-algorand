@@ -1117,7 +1117,13 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			ops.createLabel(opstring[:len(opstring)-1])
 			continue
 		}
-		ops.errorf("unknown opcode: %v", opstring)
+		// unknown opcode, let's report a good error if version problem
+		spec, ok = opsByName[AssemblerMaxVersion][opstring]
+		if ok {
+			ops.errorf("%v opcode was introduced in TEAL v%d", opstring, spec.Version)
+		} else {
+			ops.errorf("unknown opcode: %v", opstring)
+		}
 	}
 
 	// backward compatibility: do not allow jumps behind last instruction in TEAL v1
