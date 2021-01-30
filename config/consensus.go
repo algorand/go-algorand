@@ -345,6 +345,11 @@ type ConsensusParams struct {
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
 	EnableAssetCloseAmount bool
+
+	// TxnMerkle indicates whether the block header includes the
+	// root of a Merkle tree covering all of the transactions in the
+	// block.
+	TxnMerkle bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -359,6 +364,9 @@ const (
 
 	// PaysetCommitFlat hashes the entire payset array.
 	PaysetCommitFlat
+
+	// PaysetCommitMerkle uses merklearray to commit to the payset.
+	PaysetCommitMerkle
 )
 
 // ConsensusProtocols defines a set of supported protocol versions and their
@@ -846,6 +854,9 @@ func initConsensusProtocols() {
 
 	// Enable AssetCloseAmount field
 	vFuture.EnableAssetCloseAmount = true
+
+	// Enable transaction Merkle tree.
+	vFuture.PaysetCommit = PaysetCommitMerkle
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
