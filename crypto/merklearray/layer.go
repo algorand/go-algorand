@@ -39,6 +39,16 @@ func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.MerkleArrayNode, buf[:]
 }
 
+// Hash implements an optimized version of crypto.HashObj(p).
+func (p *pair) Hash() crypto.Digest {
+	var buf [len(protocol.MerkleArrayNode) + 2 * crypto.DigestSize]byte
+	s := buf[:0]
+	s = append(s, protocol.MerkleArrayNode...)
+	s = append(s, p.l[:]...)
+	s = append(s, p.r[:]...)
+	return crypto.Hash(s)
+}
+
 // up takes a layer representing some level in the tree,
 // and returns the next-higher level in the tree,
 // represented as a layer.
@@ -50,7 +60,7 @@ func (l layer) up() layer {
 		if i+1 < len(l) {
 			p.r = l[i+1]
 		}
-		res[i/2] = crypto.HashObj(&p)
+		res[i/2] = p.Hash()
 	}
 	return res
 }
