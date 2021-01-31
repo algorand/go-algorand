@@ -331,8 +331,8 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		_, bypassFreeze := dst.AssetParams[ct.XferAsset]
 
 		// Move the balance out.
-		closeAmount := snd.MicroAlgos
-		ad.ClosingAmount = closeAmount
+		closeAmount := sndHolding.Amount
+		ad.ClosingAmount = basics.MicroAlgos{Raw: closeAmount}
 		err = takeOut(balances, source, ct.XferAsset, sndHolding.Amount, bypassFreeze)
 		if err != nil {
 			return err
