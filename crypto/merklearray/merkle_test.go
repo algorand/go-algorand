@@ -36,6 +36,12 @@ func (d TestData) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, d[:]
 }
 
+type TestBuf []byte
+
+func (b TestBuf) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.Message, b
+}
+
 type TestArray []TestData
 
 func (a TestArray) Length() uint64 {
@@ -160,17 +166,26 @@ func TestMerkle(t *testing.T) {
 }
 
 func BenchmarkMerkleCommit(b *testing.B) {
-	msg := TestMessage("Hello world")
+	for sz := 10; sz <= 100000; sz *= 100 {
+		msg := make(TestBuf, sz)
+		crypto.RandBytes(msg[:])
 
-	var a TestRepeatingArray
-	a.item = msg
-	a.count = uint64(b.N)
+		for cnt := 10; cnt <= 10000000; cnt *= 10 {
+			var a TestRepeatingArray
+			a.item = msg
+			a.count = uint64(cnt)
 
-	tree, err := Build(a)
-	if err != nil {
-		b.Error(err)
+			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					tree, err := Build(a)
+					if err != nil {
+						b.Error(err)
+					}
+					tree.Root()
+				}
+			})
+		}
 	}
-	tree.Root()
 }
 
 func BenchmarkMerkleProve1M(b *testing.B) {
