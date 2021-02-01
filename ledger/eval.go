@@ -733,7 +733,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		txibs = append(txibs, txib)
 
 		if eval.validate {
-			groupTxBytes += len(protocol.Encode(&txib))
+			groupTxBytes += txib.GetEncodedLength()
 			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
 				return ErrNoSpace
 			}

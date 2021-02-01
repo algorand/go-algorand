@@ -241,3 +241,25 @@ func NewJSONDecoder(r io.Reader) Decoder {
 func NewDecoderBytes(b []byte) Decoder {
 	return codec.NewDecoderBytes(b, CodecHandle)
 }
+
+// encodingPool holds temporary byte slice buffers used for encoding messages.
+var encodingPool = sync.Pool{
+	New: func() interface{} {
+		return []byte{}
+	},
+}
+
+// GetEncodingBuf returns a byte slice that can be used for encoding a
+// temporary message.  The byte slice has zero length but potentially
+// non-zero capacity.  The caller gets full ownership of the byte slice,
+// but is encouraged to return it using PutEncodingBuf().
+func GetEncodingBuf() []byte {
+	return encodingPool.Get().([]byte)[:0]
+}
+
+// PutEncodingBuf places a byte slice into the pool of temporary buffers
+// for encoding.  The caller gives up ownership of the byte slice when
+// passing it to PutEncodingBuf().
+func PutEncodingBuf(s []byte) {
+	encodingPool.Put(s)
+}
