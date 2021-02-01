@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // The votersTracker maintains the Merkle tree for the most recent
@@ -67,6 +67,10 @@ type votersTracker struct {
 
 	l  ledgerForTracker
 	au *accountUpdates
+
+	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
+	// shutdown the tracker without leaving any running go-routines.
+	loadWaitGroup sync.WaitGroup
 }
 
 // VotersForRound tracks the top online voting accounts as of a particular
@@ -107,6 +111,16 @@ type VotersForRound struct {
 	TotalWeight basics.MicroAlgos
 }
 
+// votersRoundForCertRound computes the round number whose voting participants
+// will be used to sign the compact cert for certRnd.
+func votersRoundForCertRound(certRnd basics.Round, proto config.ConsensusParams) basics.Round {
+	// To form a compact certificate for round certRnd,
+	// we need a commitment to the voters CompactCertRounds
+	// before that, and the voters information from
+	// CompactCertVotersLookback before that.
+	return certRnd.SubSaturate(basics.Round(proto.CompactCertRounds)).SubSaturate(basics.Round(proto.CompactCertVotersLookback))
+}
+
 func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) error {
 	vt.l = l
 	vt.au = au
@@ -119,65 +133,44 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) er
 	}
 	proto := config.Consensus[hdr.CurrentProtocol]
 
-	if proto.CompactCertRounds == 0 {
+	if proto.CompactCertRounds == 0 || hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
 		// Disabled, nothing to load.
 		return nil
 	}
 
-	// Walk backwards to find blocks R such that R+CompactCertVotersLookback
-	// is a multiple of CompactCertRounds, and where we do not have a complete
-	// compact cert yet (hdr.CompactCertLastRound).
-	rPlusLookback := basics.Round(((uint64(latest) + proto.CompactCertVotersLookback) / proto.CompactCertRounds) * proto.CompactCertRounds)
-	minRound := basics.Round(proto.CompactCertVotersLookback)
-	if hdr.CompactCertLastRound >= minRound {
-		minRound = hdr.CompactCertLastRound
+	startR := votersRoundForCertRound(hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto)
+
+	// Sanity check: we should never underflow or even reach 0.
+	if startR == 0 {
+		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
+			hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto.CompactCertRounds, proto.CompactCertVotersLookback, startR)
 	}
-	for rPlusLookback >= minRound {
-		r := rPlusLookback.SubSaturate(basics.Round(proto.CompactCertVotersLookback))
+
+	for r := startR; r <= latest; r += basics.Round(proto.CompactCertRounds) {
 		hdr, err = l.BlockHdr(r)
-		if err != nil {
-			switch err.(type) {
-			case ledgercore.ErrNoEntry:
-				// If we cannot retrieve a block to construct the tree
-				// then we must have already evicted that block, which
-				// must have been because compact certs weren't enabled
-				// when that block was being considered for eviction.
-				// OK to stop.
-				return nil
-			default:
-				return err
-			}
-		}
-
-		if config.Consensus[hdr.CurrentProtocol].CompactCertRounds == 0 {
-			// Walked backwards past a protocol upgrade, no more compact certs.
-			return nil
-		}
-
-		err = vt.loadTree(hdr)
 		if err != nil {
 			return err
 		}
 
-		rPlusLookback = rPlusLookback.SubSaturate(basics.Round(proto.CompactCertRounds))
+		vt.loadTree(hdr)
 	}
 
 	return nil
 }
 
-func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) error {
+func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) {
 	r := hdr.Round
 
 	_, ok := vt.round[r]
 	if ok {
 		// Already loaded.
-		return nil
+		return
 	}
 
 	proto := config.Consensus[hdr.CurrentProtocol]
 	if proto.CompactCertRounds == 0 {
 		// No compact certs.
-		return nil
+		return
 	}
 
 	tr := &VotersForRound{
@@ -186,7 +179,9 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) error {
 	tr.cond = sync.NewCond(&tr.mu)
 	vt.round[r] = tr
 
+	vt.loadWaitGroup.Add(1)
 	go func() {
+		defer vt.loadWaitGroup.Done()
 		err := tr.loadTree(vt.l, vt.au, hdr)
 		if err != nil {
 			vt.au.log.Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
@@ -197,7 +192,13 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) error {
 			tr.mu.Unlock()
 		}
 	}()
-	return nil
+	return
+}
+
+// close waits until all the internal spawned go-rouines are done before returning, allowing clean
+// shutdown.
+func (vt *votersTracker) close() {
+	vt.loadWaitGroup.Wait()
 }
 
 func (tr *VotersForRound) loadTree(l ledgerForTracker, au *accountUpdates, hdr bookkeeping.BlockHeader) error {
@@ -275,7 +276,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	for r, tr := range vt.round {
 		commitRound := r + basics.Round(tr.Proto.CompactCertVotersLookback)
 		certRound := commitRound + basics.Round(tr.Proto.CompactCertRounds)
-		if certRound <= hdr.CompactCertLastRound {
+		if certRound < hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound {
 			delete(vt.round, r)
 		}
 	}
@@ -289,10 +290,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 		if ok {
 			vt.au.log.Errorf("votersTracker.newBlock: round %d already present", r)
 		} else {
-			err := vt.loadTree(hdr)
-			if err != nil {
-				vt.au.log.Warnf("votersTracker.newBlock: loadTree: %v", err)
-			}
+			vt.loadTree(hdr)
 		}
 	}
 }
@@ -343,10 +341,10 @@ func (a participantsArray) Length() uint64 {
 	return uint64(len(a))
 }
 
-func (a participantsArray) Get(pos uint64) (crypto.Hashable, error) {
+func (a participantsArray) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= uint64(len(a)) {
-		return nil, fmt.Errorf("participantsArray.Get(%d) out of bounds %d", pos, len(a))
+		return crypto.Digest{}, fmt.Errorf("participantsArray.Get(%d) out of bounds %d", pos, len(a))
 	}
 
-	return a[pos], nil
+	return crypto.HashObj(a[pos]), nil
 }

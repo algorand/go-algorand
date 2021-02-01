@@ -138,6 +138,24 @@ func (l *Ledger) appendUnvalidatedTx(t *testing.T, initAccounts map[basics.Addre
 	return l.appendUnvalidatedSignedTx(t, initAccounts, stx, ad)
 }
 
+func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookkeeping.Block, proto config.ConsensusParams) {
+	if proto.TxnCounter {
+		correctHeader.TxnCounter = lastBlock.TxnCounter
+	}
+
+	if proto.CompactCertRounds > 0 {
+		var ccBasic bookkeeping.CompactCertState
+		if lastBlock.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
+			ccBasic.CompactCertNextRound = (correctHeader.Round + basics.Round(proto.CompactCertVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.CompactCertRounds)) + basics.Round(proto.CompactCertRounds)
+		} else {
+			ccBasic.CompactCertNextRound = lastBlock.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
+		}
+		correctHeader.CompactCert = map[protocol.CompactCertType]bookkeeping.CompactCertState{
+			protocol.CompactCertBasic: ccBasic,
+		}
+	}
+}
+
 func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
 	a := require.New(t)
 
@@ -171,9 +189,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		correctBlkHeader.GenesisHash = crypto.Hash([]byte(GenesisID))
 	}
 
-	if proto.TxnCounter {
-		correctBlkHeader.TxnCounter = lastBlock.TxnCounter
-	}
+	initNextBlockHeader(&correctBlkHeader, lastBlock, proto)
 
 	blk.BlockHeader = correctBlkHeader
 	blk.RewardsPool = testPoolAddr
@@ -250,6 +266,8 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	if proto.SupportGenesisHash {
 		correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 	}
+
+	initNextBlockHeader(&correctHeader, lastBlock, proto)
 
 	var badBlock bookkeeping.Block
 
@@ -1215,9 +1233,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 			}
 
-			if proto.TxnCounter {
-				correctHeader.TxnCounter = lastBlock.TxnCounter
-			}
+			initNextBlockHeader(&correctHeader, lastBlock, proto)
 
 			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
 			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")

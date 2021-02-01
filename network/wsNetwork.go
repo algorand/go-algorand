@@ -142,8 +142,10 @@ const (
 	PeersConnectedOut PeerOption = iota
 	// PeersConnectedIn specifies all peers with inbound connections
 	PeersConnectedIn PeerOption = iota
-	// PeersPhonebook specifies all peers in the phonebook
-	PeersPhonebook PeerOption = iota
+	// PeersPhonebookRelays specifies all relays in the phonebook
+	PeersPhonebookRelays PeerOption = iota
+	// PeersPhonebookArchivers specifies all archivers in the phonebook
+	PeersPhonebookArchivers PeerOption = iota
 )
 
 // GossipNode represents a node in the gossip network
@@ -566,10 +568,18 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 				}
 			}
 			wn.peersLock.RUnlock()
-		case PeersPhonebook:
+		case PeersPhonebookRelays:
 			// return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
 			var addrs []string
-			addrs = wn.phonebook.GetAddresses(1000)
+			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
+			for _, addr := range addrs {
+				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
+				outPeers = append(outPeers, &peerCore)
+			}
+		case PeersPhonebookArchivers:
+			// return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
+			var addrs []string
+			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryArchiverRole)
 			for _, addr := range addrs {
 				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
@@ -657,6 +667,10 @@ func (wn *WebsocketNetwork) setup() {
 
 	if wn.config.NetworkProtocolVersion != "" {
 		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
+	}
+
+	if wn.relayMessages {
+		wn.RegisterMessageInterest(protocol.CompactCertSigTag)
 	}
 }
 
@@ -1356,12 +1370,15 @@ func (wn *WebsocketNetwork) meshThread() {
 		// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
 		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
 		for _, dnsBootstrap := range dnsBootstrapArray {
-			dnsAddrs := wn.getDNSAddrs(dnsBootstrap)
-			if len(dnsAddrs) > 0 {
-				wn.log.Debugf("got %d dns addrs, %#v", len(dnsAddrs), dnsAddrs[:imin(5, len(dnsAddrs))])
-				wn.phonebook.ReplacePeerList(dnsAddrs, dnsBootstrap)
+			relayAddrs, archiveAddrs := wn.getDNSAddrs(dnsBootstrap)
+			if len(relayAddrs) > 0 {
+				wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:imin(5, len(relayAddrs))])
+				wn.phonebook.ReplacePeerList(relayAddrs, dnsBootstrap, PhoneBookEntryRelayRole)
 			} else {
-				wn.log.Infof("got no DNS addrs for network %s", wn.NetworkID)
+				wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)
+			}
+			if len(archiveAddrs) > 0 {
+				wn.phonebook.ReplacePeerList(archiveAddrs, dnsBootstrap, PhoneBookEntryArchiverRole)
 			}
 		}
 
@@ -1402,7 +1419,7 @@ func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
 		return false
 	}
 	// get more than we need so that we can ignore duplicates
-	newAddrs := wn.phonebook.GetAddresses(desired + numOutgoingTotal)
+	newAddrs := wn.phonebook.GetAddresses(desired+numOutgoingTotal, PhoneBookEntryRelayRole)
 	for _, na := range newAddrs {
 		if na == wn.config.PublicAddress {
 			// filter out self-public address, so we won't try to connect to outselves.
@@ -1648,16 +1665,27 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 	return out
 }
 
-func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
-	srvPhonebook, err := tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
+func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []string, archiverAddresses []string) {
+	var err error
+	relaysAddresses, err = tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
-			wn.log.Warnf("Cannot lookup SRV record for %s: %v", dnsBootstrap, err)
+			wn.log.Warnf("Cannot lookup algobootstrap SRV record for %s: %v", dnsBootstrap, err)
 		}
-		return nil
+		relaysAddresses = nil
 	}
-	return srvPhonebook
+	if wn.config.EnableCatchupFromArchiveServers {
+		archiverAddresses, err = tools_network.ReadFromSRV("archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
+		if err != nil {
+			// only log this warning on testnet or devnet
+			if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
+				wn.log.Warnf("Cannot lookup archive SRV record for %s: %v", dnsBootstrap, err)
+			}
+			archiverAddresses = nil
+		}
+	}
+	return
 }
 
 // ProtocolVersionHeader HTTP header for protocol version.
@@ -1923,7 +1951,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (wn *WebsocketNetwork, err error) {
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
-	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID)
+	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID, PhoneBookEntryRelayRole)
 	wn = &WebsocketNetwork{
 		log:       log,
 		config:    config,
@@ -2015,7 +2043,7 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	defer wn.peersLock.Unlock()
 	for _, p := range wn.peers {
 		if p == peer {
-			wn.log.Error("dup peer added %#v", peer)
+			wn.log.Errorf("dup peer added %#v", peer)
 			return
 		}
 	}

@@ -92,6 +92,8 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 		res = assetFreezeTxEncode(tx, ad)
 	case protocol.ApplicationCallTx:
 		res = applicationCallTxEncode(tx, ad)
+	case protocol.CompactCertTx:
+		res = compactCertTxEncode(tx, ad)
 	default:
 		return res, errors.New(errUnknownTransactionType)
 	}
@@ -330,6 +332,17 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
+func compactCertTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	cc := v1.CompactCertTransactionType{
+		CertRound: uint64(tx.CompactCertTxnFields.CertRound),
+		Cert:      protocol.Encode(&tx.CompactCertTxnFields.Cert),
+	}
+
+	return v1.Transaction{
+		CompactCert: &cc,
+	}
+}
+
 func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
 	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
 	if err != nil {
@@ -454,6 +467,13 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			UpgradePropose: string(b.UpgradePropose),
 			UpgradeApprove: b.UpgradeApprove,
 		},
+		CompactCertVotersTotal: b.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal.ToUint64(),
+		CompactCertNextRound:   uint64(b.CompactCert[protocol.CompactCertBasic].CompactCertNextRound),
+	}
+
+	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsZero() {
+		voters := b.CompactCert[protocol.CompactCertBasic].CompactCertVoters
+		block.CompactCertVoters = voters[:]
 	}
 
 	// Transactions
