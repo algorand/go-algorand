@@ -106,7 +106,6 @@ func (i *networkImpl) processVoteMessage(raw network.IncomingMessage) network.Ou
 }
 
 func (i *networkImpl) processProposalMessage(raw network.IncomingMessage) network.OutgoingMessage {
-	// TODO: fetch txns from i.net.LoadKV()
 	if i.trace != nil {
 		i.trace.HashTrace(messagetracer.Proposal, raw.Data)
 	}

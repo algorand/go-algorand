@@ -150,8 +150,6 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	case protocol.VoteBundleTag:
 		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
-		// TODO: send txns first
-		// s.Network.Relay(a.h, protocol.TransactionTag, protocol.Encode(&tx))
 		msg := a.CompoundMessage
 		for _, txib := range msg.Proposal.Payset {
 			txnData = append(txnData, protocol.Encode(&txib.SignedTxn))

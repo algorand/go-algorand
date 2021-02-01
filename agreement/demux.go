@@ -137,7 +137,6 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
 				case protocol.ProposalPayloadTag:
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
-					// TODO: populate txns in Proposal call the node from here
 					var err error
 					for _, txn := range msg.CompoundMessage.Proposal.Payset {
 						var txnBytes []byte

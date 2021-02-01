@@ -207,6 +207,8 @@ type wsPeer struct {
 	throttledOutgoingConnection bool
 
 	kvStore map[interface{}]interface{}
+
+	kvStoreMutex deadlock.RWMutex
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -316,6 +318,7 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
+	wp.kvStore = make(map[interface{}]interface{})
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue
