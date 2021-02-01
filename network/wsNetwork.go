@@ -202,10 +202,10 @@ type GossipNode interface {
 	SubstituteGenesisID(rawURL string) string
 
 	// StoreKV stores an entry in the corresponding peer's key-value store
-	StoreKV(peerIndex int, key interface{}, value interface{})
+	StoreKV(node Peer, key interface{}, value interface{})
 
 	// LoadKV retrieves an entry from the corresponding peer's key-value store
-	LoadKV(peerIndex int, key interface{}) interface{}
+	LoadKV(node Peer, key interface{}) interface{}
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -1082,6 +1082,8 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 			start := time.Now()
 
 			// now, send to global handlers
+			// TODO store kv pair of hash(data) -> (data)
+			wn.StoreKV(msg.Sender, crypto.Hash(msg.Data), msg.Data)
 			outmsg := wn.handlers.Handle(msg)
 			handled := time.Now()
 			bufferNanos := start.UnixNano() - msg.Received
@@ -2107,13 +2109,15 @@ func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
 }
 
 // StoreKV stores an entry in the corresponding peer's key-value store
-func (wn *WebsocketNetwork) StoreKV(peerIndex int, key interface{}, value interface{}) {
+func (wn *WebsocketNetwork) StoreKV(node Peer, key interface{}, value interface{}) {
 	// TODO: add locking potentially
-	wn.peers[peerIndex].kvStore[key] = value
+	peer := node.(*wsPeer)
+	peer.kvStore[key] = value
 }
 
 // LoadKV retrieves an entry from the corresponding peer's key-value store
-func (wn *WebsocketNetwork) LoadKV(peerIndex int, key interface{}) interface{} {
+func (wn *WebsocketNetwork) LoadKV(node Peer, key interface{}) interface{} {
 	// TODO: add locking potentially
-	return wn.peers[peerIndex].kvStore[key]
+	peer := node.(*wsPeer)
+	return peer.kvStore[key]
 }

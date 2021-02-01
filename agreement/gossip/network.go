@@ -184,6 +184,28 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 	i.net.Disconnect(metadata.raw.Sender)
 }
 
+func (i *networkImpl) StoreKV(h agreement.MessageHandle, key interface{}, value interface{}) {
+	metadata := messageMetadataFromHandle(h)
+
+	if metadata == nil { // synthentic loopback
+		// TODO warn
+		return
+	}
+
+	i.net.StoreKV(metadata.raw.Sender, key, value)
+}
+
+func (i *networkImpl) LoadKV(h agreement.MessageHandle, key interface{}) interface{} {
+	metadata := messageMetadataFromHandle(h)
+
+	if metadata == nil { // synthentic loopback
+		// TODO warn
+		return nil
+	}
+
+	return i.net.LoadKV(metadata.raw.Sender, key)
+}
+
 // broadcastTimeout is currently only used by test code.
 // In test code we want to queue up a bunch of outbound packets and then see that they got through, so we need to wait at least a little bit for them to all go out.
 // Normal agreement state machine code uses GossipNode.Broadcast non-blocking and may drop outbound packets.

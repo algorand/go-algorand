@@ -285,6 +285,12 @@ type Network interface {
 	// Start notifies the network that the agreement service is ready
 	// to start receiving messages.
 	Start()
+
+	// StoreKV stores an entry in the corresponding peer's key-value store
+	StoreKV(MessageHandle, interface{}, interface{})
+
+	// LoadKV retrieves an entry from the corresponding peer's key-value store
+	LoadKV(MessageHandle, interface{}) interface{}
 }
 
 // RandomSource is an abstraction over the random number generator.

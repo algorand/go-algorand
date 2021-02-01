@@ -143,13 +143,19 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	}
 
 	var data []byte
+	var txnData [][]byte
 	switch a.Tag {
 	case protocol.AgreementVoteTag:
 		data = protocol.Encode(&a.UnauthenticatedVote)
 	case protocol.VoteBundleTag:
 		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
+		// TODO: send txns first
+		// s.Network.Relay(a.h, protocol.TransactionTag, protocol.Encode(&tx))
 		msg := a.CompoundMessage
+		for _, txib := range msg.Proposal.Payset {
+			txnData = append(txnData, protocol.Encode(&txib.SignedTxn))
+		}
 		payload := transmittedPayload{
 			unauthenticatedProposal: msg.Proposal.Compressed(),
 			PriorVote:               msg.Vote,
@@ -159,8 +165,14 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 
 	switch a.T {
 	case broadcast:
+		for _, txn := range txnData {
+			s.Network.Broadcast(a.Tag, txn)
+		}
 		s.Network.Broadcast(a.Tag, data)
 	case relay:
+		for _, txn := range txnData {
+			s.Network.Relay(a.h, a.Tag, txn)
+		}
 		s.Network.Relay(a.h, a.Tag, data)
 	case disconnect:
 		s.Network.Disconnect(a.h)

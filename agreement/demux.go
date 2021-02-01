@@ -137,6 +137,22 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
 				case protocol.ProposalPayloadTag:
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
+					// TODO: populate txns in Proposal call the node from here
+					var err error
+					for _, txn := range msg.CompoundMessage.Proposal.Payset {
+						var txnBytes []byte
+						txnBytes = net.LoadKV(msg.MessageHandle, txn.Digest).([]byte)
+						dec := protocol.NewDecoderBytes(txnBytes)
+						err = dec.Decode(&txn.SignedTxn)
+						if err != nil {
+							logging.Base().Warnf("Received a non-decodable txn: %v", err)
+							//net.Disconnect(raw.MessageHandle)
+							break
+						}
+					}
+					if err != nil {
+						continue
+					}
 				default:
 					err := fmt.Errorf("bad message tag: %v", tag)
 					d.UpdateEventsQueue(fmt.Sprintf("Tokenizing-%s", tag), 0)
