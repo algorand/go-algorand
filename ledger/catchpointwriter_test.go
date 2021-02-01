@@ -133,19 +133,17 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 		ad.AppLocalStates[basics.AppIndex(aidx)] = basics.AppLocalState{KeyValue: lkv}
 	}
 
-	encodedAd, err := ad.MarshalMsg(nil)
-	require.NoError(t, err)
+	encodedAd := ad.MarshalMsg(nil)
 	er.AccountData = encodedAd
 	return er
 }
 
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	er := makeTestEncodedBalanceRecord(t)
-	encodedBr, err := er.MarshalMsg(nil)
-	require.NoError(t, err)
+	encodedBr := er.MarshalMsg(nil)
 
 	var er2 encodedBalanceRecord
-	_, err = er2.UnmarshalMsg(encodedBr)
+	_, err := er2.UnmarshalMsg(encodedBr)
 	require.NoError(t, err)
 
 	require.Equal(t, er, er2)
@@ -156,11 +154,10 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	for i := 0; i < 512; i++ {
 		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecord(t))
 	}
-	encodedFbc, err := fbc.MarshalMsg(nil)
-	require.NoError(t, err)
+	encodedFbc := fbc.MarshalMsg(nil)
 
 	var fbc2 catchpointFileBalancesChunk
-	_, err = fbc2.UnmarshalMsg(encodedFbc)
+	_, err := fbc2.UnmarshalMsg(encodedFbc)
 	require.NoError(t, err)
 
 	require.Equal(t, fbc, fbc2)

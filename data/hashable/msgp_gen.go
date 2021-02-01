@@ -17,7 +17,7 @@ import (
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Message) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *Message) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(1)

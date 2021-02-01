@@ -156,7 +156,9 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 
 // ID returns the Txid (i.e., hash) of the transaction.
 func (tx Transaction) ID() Txid {
-	return Txid(crypto.HashObj(tx))
+	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
+	defer protocol.PutEncodingBuf(enc)
+	return Txid(crypto.Hash(enc))
 }
 
 // Sign signs a transaction using a given Account's secrets.
