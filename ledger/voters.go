@@ -341,10 +341,10 @@ func (a participantsArray) Length() uint64 {
 	return uint64(len(a))
 }
 
-func (a participantsArray) Get(pos uint64) (crypto.Hashable, error) {
+func (a participantsArray) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= uint64(len(a)) {
-		return nil, fmt.Errorf("participantsArray.Get(%d) out of bounds %d", pos, len(a))
+		return crypto.Digest{}, fmt.Errorf("participantsArray.Get(%d) out of bounds %d", pos, len(a))
 	}
 
-	return a[pos], nil
+	return crypto.HashObj(a[pos]), nil
 }
