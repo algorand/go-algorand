@@ -36,7 +36,7 @@ func TestLimitedReaderSlurper(t *testing.T) {
 				buffer := bytes.NewBuffer(bytesBlob)
 				reader := MakeLimitedReaderSlurper(baseBufferSize, maxSize)
 				err := reader.Read(buffer)
-				if maxSize <= uint64(len(bytesBlob)) {
+				if maxSize < uint64(len(bytesBlob)) {
 					require.Equal(t, ErrIncomingMsgTooLarge, err)
 					continue
 				}
