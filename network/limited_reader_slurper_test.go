@@ -128,3 +128,20 @@ func TestLimitedReaderSlurperMemoryConsumption(t *testing.T) {
 		require.True(t, uint64(result.AllocedBytesPerOp()) < 2*arraySize+allocationStep, "AllocedBytesPerOp:%d\nmessage size:%d", result.AllocedBytesPerOp(), arraySize)
 	}
 }
+
+func TestLimitedReaderSlurperBufferAllocations(t *testing.T) {
+	for baseAllocation := uint64(512); baseAllocation < 100000; baseAllocation += 2048 {
+		for maxAllocation := uint64(512); maxAllocation < 100000; maxAllocation += 512 {
+			lrs := MakeLimitedReaderSlurper(baseAllocation, maxAllocation)
+			// check to see if the allocated buffers count is exactly what needed to match the allocation needs.
+			allocationNeeds := 1
+			remainingBytes := int64(maxAllocation - baseAllocation)
+			for remainingBytes > 0 {
+				allocationNeeds++
+				remainingBytes -= int64(allocationStep)
+			}
+			require.Equal(t, allocationNeeds, len(lrs.buffers))
+
+		}
+	}
+}

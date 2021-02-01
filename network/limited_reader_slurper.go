@@ -48,7 +48,7 @@ func MakeLimitedReaderSlurper(baseAllocation, maxAllocation uint64) *LimitedRead
 	lrs := &LimitedReaderSlurper{
 		remainedUnallocatedSpace: maxAllocation - baseAllocation,
 		lastBuffer:               0,
-		buffers:                  make([][]byte, 1+(maxAllocation-baseAllocation+allocationStep)/allocationStep),
+		buffers:                  make([][]byte, 1+(maxAllocation-baseAllocation+allocationStep-1)/allocationStep),
 	}
 	lrs.buffers[0] = make([]byte, 0, baseAllocation)
 	return lrs
@@ -87,7 +87,10 @@ func (s *LimitedReaderSlurper) Read(reader io.Reader) error {
 		}
 
 		readBuffer = s.buffers[s.lastBuffer]
-		n, err := reader.Read((readBuffer[:cap(readBuffer)])[len(readBuffer):])
+		// the entireBuffer is the same underlying buffer as readBuffer, but the length was moved to the maximum buffer capacity.
+		entireBuffer := readBuffer[:cap(readBuffer)]
+		// read the data into the unused area of the read buffer.
+		n, err := reader.Read(entireBuffer[len(readBuffer):])
 		if err != nil {
 			if err == io.EOF {
 				s.buffers[s.lastBuffer] = readBuffer[:len(readBuffer)+n]
