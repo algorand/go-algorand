@@ -29,11 +29,11 @@ const allocationStep = uint64(64 * 1024)
 
 // LimitedReaderSlurper collects bytes from an io.Reader, but stops if a limit is reached.
 type LimitedReaderSlurper struct {
-	// remainedUnallocatedSpace is how much more memory we are allowed to allocate for this reader.
+	// remainedUnallocatedSpace is how much more memory we are allowed to allocate for this reader beyond the base allocation.
 	remainedUnallocatedSpace uint64
 
 	// the buffers array contain the memory buffers used to store the data. The first level array is preallocated
-	// dependening on the max desired allocation.
+	// dependening on the desired base allocation. The rest of the levels are dynamically allocated on demand.
 	buffers [][]byte
 
 	// lastBuffer is the index of the last filled buffer, or the first one if no buffer was ever filled.
@@ -64,17 +64,26 @@ func (s *LimitedReaderSlurper) Read(reader io.Reader) error {
 		if len(s.buffers[s.lastBuffer]) == cap(s.buffers[s.lastBuffer]) {
 			// current buffer is full, try to expand buffers
 			if s.remainedUnallocatedSpace == 0 {
-				// we ran out of memory
-				return ErrIncomingMsgTooLarge
+				// we ran out of memory, but is there any more data ?
+				n, err := reader.Read(make([]byte, 1))
+				switch {
+				case n > 0:
+					// yes, there was at least one extra byte - return ErrIncomingMsgTooLarge
+					return ErrIncomingMsgTooLarge
+				case err == io.EOF:
+					// no, no more data. just return nil
+					return nil
+				case err == nil:
+					// if we received err == nil and n == 0, we should retry calling the Read function.
+					continue
+				default:
+					// if we recieved a non-io.EOF error, return it.
+					return err
+				}
 			}
+
 			// make another buffer
-			s.lastBuffer++
-			allocationSize := allocationStep
-			if allocationSize > s.remainedUnallocatedSpace {
-				allocationSize = s.remainedUnallocatedSpace
-			}
-			s.buffers[s.lastBuffer] = make([]byte, 0, allocationSize)
-			s.remainedUnallocatedSpace -= allocationSize
+			s.allocateNextBuffer()
 		}
 
 		readBuffer = s.buffers[s.lastBuffer]
@@ -117,4 +126,15 @@ func (s *LimitedReaderSlurper) Bytes() []byte {
 		offset += len(s.buffers[i])
 	}
 	return out
+}
+
+// allocateNextBuffer allocates the next buffer and places it in the buffers array.
+func (s *LimitedReaderSlurper) allocateNextBuffer() {
+	s.lastBuffer++
+	allocationSize := allocationStep
+	if allocationSize > s.remainedUnallocatedSpace {
+		allocationSize = s.remainedUnallocatedSpace
+	}
+	s.buffers[s.lastBuffer] = make([]byte, 0, allocationSize)
+	s.remainedUnallocatedSpace -= allocationSize
 }
