@@ -48,12 +48,12 @@ func (a TestArray) Length() uint64 {
 	return uint64(len(a))
 }
 
-func (a TestArray) Get(pos uint64) (crypto.Hashable, error) {
+func (a TestArray) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= uint64(len(a)) {
-		return nil, fmt.Errorf("pos %d larger than length %d", pos, len(a))
+		return crypto.Digest{}, fmt.Errorf("pos %d larger than length %d", pos, len(a))
 	}
 
-	return a[pos], nil
+	return crypto.HashObj(a[pos]), nil
 }
 
 type TestRepeatingArray struct {
@@ -65,12 +65,12 @@ func (a TestRepeatingArray) Length() uint64 {
 	return a.count
 }
 
-func (a TestRepeatingArray) Get(pos uint64) (crypto.Hashable, error) {
+func (a TestRepeatingArray) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= a.count {
-		return nil, fmt.Errorf("pos %d larger than length %d", pos, a.count)
+		return crypto.Digest{}, fmt.Errorf("pos %d larger than length %d", pos, a.count)
 	}
 
-	return a.item, nil
+	return crypto.HashObj(a.item), nil
 }
 
 func TestMerkle(t *testing.T) {

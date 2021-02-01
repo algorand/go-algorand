@@ -41,12 +41,12 @@ func Build(array Array) (*Tree, error) {
 	var leaves layer
 	arraylen := array.Length()
 	for i := uint64(0); i < arraylen; i++ {
-		data, err := array.Get(i)
+		hash, err := array.GetHash(i)
 		if err != nil {
 			return nil, err
 		}
 
-		leaves = append(leaves, crypto.HashObj(data))
+		leaves = append(leaves, hash)
 	}
 
 	if arraylen > 0 {
