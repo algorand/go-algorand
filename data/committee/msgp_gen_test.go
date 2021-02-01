@@ -13,10 +13,7 @@ import (
 
 func TestMarshalUnmarshalCredential(t *testing.T) {
 	v := Credential{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -50,18 +47,18 @@ func BenchmarkMarshalMsgCredential(b *testing.B) {
 func BenchmarkAppendMsgCredential(b *testing.B) {
 	v := Credential{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalCredential(b *testing.B) {
 	v := Credential{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -75,10 +72,7 @@ func BenchmarkUnmarshalCredential(b *testing.B) {
 
 func TestMarshalUnmarshalSeed(t *testing.T) {
 	v := Seed{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -112,18 +106,18 @@ func BenchmarkMarshalMsgSeed(b *testing.B) {
 func BenchmarkAppendMsgSeed(b *testing.B) {
 	v := Seed{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalSeed(b *testing.B) {
 	v := Seed{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -137,10 +131,7 @@ func BenchmarkUnmarshalSeed(b *testing.B) {
 
 func TestMarshalUnmarshalUnauthenticatedCredential(t *testing.T) {
 	v := UnauthenticatedCredential{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -174,18 +165,18 @@ func BenchmarkMarshalMsgUnauthenticatedCredential(b *testing.B) {
 func BenchmarkAppendMsgUnauthenticatedCredential(b *testing.B) {
 	v := UnauthenticatedCredential{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalUnauthenticatedCredential(b *testing.B) {
 	v := UnauthenticatedCredential{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -199,10 +190,7 @@ func BenchmarkUnmarshalUnauthenticatedCredential(b *testing.B) {
 
 func TestMarshalUnmarshalhashableCredential(t *testing.T) {
 	v := hashableCredential{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -236,18 +224,18 @@ func BenchmarkMarshalMsghashableCredential(b *testing.B) {
 func BenchmarkAppendMsghashableCredential(b *testing.B) {
 	v := hashableCredential{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalhashableCredential(b *testing.B) {
 	v := hashableCredential{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()

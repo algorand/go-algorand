@@ -114,12 +114,7 @@ func EncodeReflect(obj interface{}) []byte {
 // EncodeMsgp returns a msgpack-encoded byte buffer, requiring
 // that we pre-generated the code for doing so using msgp.
 func EncodeMsgp(obj msgp.Marshaler) []byte {
-	res, err := obj.MarshalMsg(nil)
-	if err != nil {
-		panic(err)
-	}
-
-	return res
+	return obj.MarshalMsg(nil)
 }
 
 // Encode returns a msgpack-encoded byte buffer for a given object.

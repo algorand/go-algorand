@@ -41,7 +41,7 @@ import (
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *Credential) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(5)
@@ -77,29 +77,17 @@ func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "h"
 			o = append(o, 0xa1, 0x68)
-			o, err = (*z).VrfOut.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "VrfOut")
-				return
-			}
+			o = (*z).VrfOut.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "hc"
 			o = append(o, 0xa2, 0x68, 0x63)
-			o, err = (*z).Hashable.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Hashable")
-				return
-			}
+			o = (*z).Hashable.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "pf"
 			o = append(o, 0xa2, 0x70, 0x66)
-			o, err = (*z).UnauthenticatedCredential.Proof.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Proof")
-				return
-			}
+			o = (*z).UnauthenticatedCredential.Proof.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "wt"
@@ -251,7 +239,7 @@ func (z *Credential) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Seed) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *Seed) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -290,7 +278,7 @@ func (z *Seed) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *UnauthenticatedCredential) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *UnauthenticatedCredential) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(1)
@@ -305,11 +293,7 @@ func (z *UnauthenticatedCredential) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "pf"
 			o = append(o, 0xa2, 0x70, 0x66)
-			o, err = (*z).Proof.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Proof")
-				return
-			}
+			o = (*z).Proof.MarshalMsg(o)
 		}
 	}
 	return
@@ -400,7 +384,7 @@ func (z *UnauthenticatedCredential) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *hashableCredential) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *hashableCredential) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
@@ -428,20 +412,12 @@ func (z *hashableCredential) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "m"
 			o = append(o, 0xa1, 0x6d)
-			o, err = (*z).Member.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Member")
-				return
-			}
+			o = (*z).Member.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "v"
 			o = append(o, 0xa1, 0x76)
-			o, err = (*z).RawOut.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "RawOut")
-				return
-			}
+			o = (*z).RawOut.MarshalMsg(o)
 		}
 	}
 	return
