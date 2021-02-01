@@ -42,12 +42,12 @@ func (pc PartCommit) Length() uint64 {
 	return uint64(len(pc.participants))
 }
 
-func (pc PartCommit) Get(pos uint64) (crypto.Hashable, error) {
+func (pc PartCommit) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= uint64(len(pc.participants)) {
-		return nil, fmt.Errorf("pos %d >= len %d", pos, len(pc.participants))
+		return crypto.Digest{}, fmt.Errorf("pos %d >= len %d", pos, len(pc.participants))
 	}
 
-	return pc.participants[pos], nil
+	return crypto.HashObj(pc.participants[pos]), nil
 }
 
 func TestBuildVerify(t *testing.T) {
