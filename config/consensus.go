@@ -145,9 +145,8 @@ type ConsensusParams struct {
 	FastRecoveryLambda    time.Duration // time between fast recovery attempts
 	FastPartitionRecovery bool          // set when fast partition recovery is enabled
 
-	// commit to payset using a hash of entire payset,
-	// instead of txid merkle tree
-	PaysetCommitFlat bool
+	// how to commit to the payset: flat or merkle tree
+	PaysetCommit PaysetCommitType
 
 	MaxTimestampIncrement int64 // maximum time between timestamps on successive blocks
 
@@ -343,6 +342,19 @@ type ConsensusParams struct {
 	// certificate scheme.
 	CompactCertSecKQ uint64
 }
+
+// PaysetCommitType enumerates possible ways for the block header to commit to
+// the set of transactions in the block.
+type PaysetCommitType int
+const (
+	// PaysetCommitUnsupported is the zero value, reflecting the fact
+	// that some early protocols used a Merkle tree to commit to the
+	// transactions in a way that we no longer support.
+	PaysetCommitUnsupported PaysetCommitType = iota
+
+	// PaysetCommitFlat hashes the entire payset array.
+	PaysetCommitFlat
+)
 
 // ConsensusProtocols defines a set of supported protocol versions and their
 // corresponding parameters.
@@ -618,7 +630,7 @@ func initConsensusProtocols() {
 	// v11 introduces SignedTxnInBlock.
 	v11 := v10
 	v11.SupportSignedTxnInBlock = true
-	v11.PaysetCommitFlat = true
+	v11.PaysetCommit = PaysetCommitFlat
 	v11.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV11] = v11
 

@@ -93,7 +93,6 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
-	var emptyPayset transactions.Payset
 
 	initBlock := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
@@ -107,9 +106,13 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 			UpgradeState: bookkeeping.UpgradeState{
 				CurrentProtocol: proto,
 			},
-			TxnRoot: emptyPayset.Commit(params.PaysetCommitFlat),
 		},
 	}
+
+	var err error
+	initBlock.TxnRoot, err = initBlock.PaysetCommit()
+	require.NoError(tb, err)
+
 	if params.SupportGenesisHash {
 		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(tb.Name()))
 	}
@@ -162,8 +165,6 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	lastBlock, err := l.Block(l.Latest())
 	a.NoError(err, "could not get last block")
 
-	var emptyPayset transactions.Payset
-
 	proto := config.Consensus[lastBlock.CurrentProtocol]
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
@@ -173,11 +174,10 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	poolBal, err := l.Lookup(l.Latest(), poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
 
-	correctBlkHeader := bookkeeping.BlockHeader{
+	blk.BlockHeader = bookkeeping.BlockHeader{
 		GenesisID:    GenesisID,
 		Round:        l.Latest() + 1,
 		Branch:       lastBlock.Hash(),
-		TxnRoot:      emptyPayset.Commit(proto.PaysetCommitFlat),
 		TimeStamp:    0,
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
 		UpgradeState: lastBlock.UpgradeState,
@@ -185,13 +185,15 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		// UpgradeVote: empty,
 	}
 
+	blk.TxnRoot, err = blk.PaysetCommit()
+	require.NoError(t, err)
+
 	if proto.SupportGenesisHash {
-		correctBlkHeader.GenesisHash = crypto.Hash([]byte(GenesisID))
+		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(GenesisID))
 	}
 
-	initNextBlockHeader(&correctBlkHeader, lastBlock, proto)
+	initNextBlockHeader(&blk.BlockHeader, lastBlock, proto)
 
-	blk.BlockHeader = correctBlkHeader
 	blk.RewardsPool = testPoolAddr
 	blk.FeeSink = testSinkAddr
 	blk.CurrentProtocol = lastBlock.CurrentProtocol
@@ -209,7 +211,8 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
 	blk.Payset = append(blk.Payset, txib)
-	blk.TxnRoot = blk.Payset.Commit(proto.PaysetCommitFlat)
+	blk.TxnRoot, err = blk.PaysetCommit()
+	require.NoError(t, err)
 	return l.appendUnvalidated(blk)
 }
 
@@ -238,8 +241,6 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	lastBlock, err := l.Block(l.Latest())
 	a.NoError(err, "could not get last block")
 
-	var emptyPayset transactions.Payset
-
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
@@ -253,13 +254,19 @@ func TestLedgerBlockHeaders(t *testing.T) {
 		GenesisID:    t.Name(),
 		Round:        l.Latest() + 1,
 		Branch:       lastBlock.Hash(),
-		TxnRoot:      emptyPayset.Commit(proto.PaysetCommitFlat),
 		TimeStamp:    0,
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
 		UpgradeState: lastBlock.UpgradeState,
 		// Seed:       does not matter,
 		// UpgradeVote: empty,
 	}
+
+	emptyBlock := bookkeeping.Block{
+		BlockHeader: correctHeader,
+	}
+	correctHeader.TxnRoot, err = emptyBlock.PaysetCommit()
+	require.NoError(t, err)
+
 	correctHeader.RewardsPool = testPoolAddr
 	correctHeader.FeeSink = testSinkAddr
 
@@ -364,7 +371,10 @@ func TestLedgerBlockHeaders(t *testing.T) {
 func TestLedgerSingleTx(t *testing.T) {
 	a := require.New(t)
 
-	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
+	// V15 is the earliest protocol version in active use.
+	// The genesis for betanet and testnet is at V15
+	// The genesis for mainnet is at V17
+	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV15)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -1000,7 +1010,8 @@ int 1                   // [1]
 			a.NoError(err)
 			blk.TxnCounter = blk.TxnCounter + 2
 			blk.Payset = append(blk.Payset, txib1, txib2)
-			blk.TxnRoot = blk.Payset.Commit(proto.PaysetCommitFlat)
+			blk.TxnRoot, err = blk.PaysetCommit()
+			a.NoError(err)
 			err = l.appendUnvalidated(blk)
 			a.NoError(err)
 
@@ -1211,7 +1222,6 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			}
 			poolBal, err := l.Lookup(l.Latest(), testPoolAddr)
 			a.NoError(err, "could not get incentive pool balance")
-			var emptyPayset transactions.Payset
 			lastBlock, err := l.Block(l.Latest())
 			a.NoError(err, "could not get last block")
 
@@ -1219,7 +1229,6 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				GenesisID:    t.Name(),
 				Round:        l.Latest() + 1,
 				Branch:       lastBlock.Hash(),
-				TxnRoot:      emptyPayset.Commit(proto.PaysetCommitFlat),
 				TimeStamp:    0,
 				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
 				UpgradeState: lastBlock.UpgradeState,
@@ -1236,6 +1245,9 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			initNextBlockHeader(&correctHeader, lastBlock, proto)
 
 			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
+			correctBlock.TxnRoot, err = correctBlock.PaysetCommit()
+			a.NoError(err)
+
 			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
 		}
 
