@@ -49,14 +49,12 @@ func TestAccountTotalsMarshalMsg(t *testing.T) {
 		RewardsLevel: 0x1234123412340007,
 	}
 	inBuffer := make([]byte, 0, 128)
-	outBuffer, err := at.MarshalMsg(inBuffer)
-	require.NoError(t, err)
+	outBuffer := at.MarshalMsg(inBuffer)
 	require.True(t, len(outBuffer) < cap(inBuffer))
 
 	// allocate a buffer that is just the right size.
 	inBuffer = make([]byte, len(outBuffer))
-	outBuffer, err = at.MarshalMsg(inBuffer)
-	require.NoError(t, err)
+	outBuffer = at.MarshalMsg(inBuffer)
 	require.True(t, len(outBuffer) > 0)
 }
 
@@ -66,14 +64,12 @@ func TestAlgoCountMarshalMsg(t *testing.T) {
 		RewardUnits: 0x1234123412341234,
 	}
 	inBuffer := make([]byte, 0, 128)
-	outBuffer, err := ac.MarshalMsg(inBuffer)
-	require.NoError(t, err)
+	outBuffer := ac.MarshalMsg(inBuffer)
 	require.Truef(t, len(outBuffer) > len(inBuffer), "len(outBuffer) : %d\nlen(inBuffer): %d\n", len(outBuffer), len(inBuffer))
 
 	// allocate a buffer that is just the right size.
 	inBuffer = make([]byte, len(outBuffer))
-	outBuffer, err = ac.MarshalMsg(inBuffer)
-	require.NoError(t, err)
+	outBuffer = ac.MarshalMsg(inBuffer)
 	require.True(t, len(outBuffer) > 0)
 }
 
@@ -204,8 +200,7 @@ func TestAccountTotalsMarshalMsgUnique(t *testing.T) {
 	uniqueAt := make(map[crypto.Digest]bool, 0)
 	for _, at := range uniqueAccountTotals {
 		inBuffer := make([]byte, 0, 128)
-		outBuffer, err := at.MarshalMsg(inBuffer)
-		require.NoError(t, err)
+		outBuffer := at.MarshalMsg(inBuffer)
 		outBufDigest := crypto.Hash(outBuffer)
 		require.False(t, uniqueAt[outBufDigest])
 		uniqueAt[outBufDigest] = true
@@ -215,10 +210,9 @@ func TestAccountTotalsMarshalMsgUnique(t *testing.T) {
 func TestAccountTotalsMarshalUnMarshal(t *testing.T) {
 	for _, at := range uniqueAccountTotals {
 		inBuffer := make([]byte, 0, 128)
-		outBuffer, err := at.MarshalMsg(inBuffer)
-		require.NoError(t, err)
+		outBuffer := at.MarshalMsg(inBuffer)
 		var at2 AccountTotals
-		_, err = at2.UnmarshalMsg(outBuffer)
+		_, err := at2.UnmarshalMsg(outBuffer)
 		require.NoError(t, err)
 		require.Equal(t, at, at2)
 	}
