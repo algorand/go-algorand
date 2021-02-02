@@ -3974,12 +3974,22 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 	}
 }
 
-func testAccepts(t *testing.T, program string, introduced uint64) {
+func obfuscate(program string) string {
+	// Put a prefix on the program that does nothing interesting,
+	// but prevents assembly from detecting type errors.  Allows
+	// evaluation testing of a program that would be rejected by
+	// assembler.
+	return "int 0;bnz label;label:;" + program
+}
+
+type evalTester func(t *testing.T, pass bool, err error)
+
+func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) {
 	program = strings.ReplaceAll(program, ";", "\n")
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			if v < introduced {
-				testProg(t, program, v, expect{0, "unknown..."})
+				testProg(t, program, v, expect{0, "...opcode was introduced..."})
 				return
 			}
 			ops := testProg(t, program, v)
@@ -3989,14 +3999,35 @@ func testAccepts(t *testing.T, program string, introduced uint64) {
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			pass, err := Eval(ops.Program, defaultEvalParams(nil, &txn))
-			require.True(t, pass)
-			require.NoError(t, err)
+			tester(t, pass, err)
 		})
 	}
 }
 
+func testAccepts(t *testing.T, program string, introduced uint64) {
+	testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) {
+		require.True(t, pass)
+		require.NoError(t, err)
+	})
+}
+func testRejects(t *testing.T, program string, introduced uint64) {
+	testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) {
+		require.False(t, pass)
+		require.NoError(t, err) // Returned False, but didn't panic
+	})
+}
+func testPanics(t *testing.T, program string, introduced uint64) {
+	testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) {
+		require.False(t, pass)
+		require.Error(t, err) // PANIC! not just reject
+	})
+}
+
 func TestAssert(t *testing.T) {
 	t.Parallel()
-	testAccepts(t, "int 0;assert;int 1", 3)
 	testAccepts(t, "int 1;assert;int 1", 3)
+	testRejects(t, "int 1;assert;int 0", 3)
+	testPanics(t, "int 0;assert;int 1", 3)
+	testPanics(t, obfuscate("assert;int 1"), 3)
+	testPanics(t, obfuscate(`byte "john";assert;int 1`), 3)
 }
