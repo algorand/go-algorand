@@ -80,7 +80,7 @@ func (MicroAlgos) CanMarshalMsg(z interface{}) bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (a MicroAlgos) MarshalMsg(b []byte) (o []byte, err error) {
+func (a MicroAlgos) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, msgp.Uint64Size)
 	o = msgp.AppendUint64(o, a.Raw)
 	return
