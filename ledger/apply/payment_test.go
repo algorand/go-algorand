@@ -17,6 +17,7 @@
 package apply
 
 import (
+	"errors"
 	"math/rand"
 	"testing"
 
@@ -79,6 +80,8 @@ func TestAlgosEncoding(t *testing.T) {
 
 type mockBalances struct {
 	protocol.ConsensusVersion
+
+	b map[basics.Address]basics.AccountData
 }
 
 func (balances mockBalances) Round() basics.Round {
@@ -101,16 +104,32 @@ func (balances mockBalances) PutWithCreatable(basics.Address, basics.AccountData
 	return nil
 }
 
-func (balances mockBalances) Get(basics.Address, bool) (basics.AccountData, error) {
-	return basics.AccountData{}, nil
+func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+	if balances.b == nil {
+		return basics.AccountData{}, nil
+	}
+
+	if ad, ok := balances.b[addr]; ok {
+		return ad, nil
+	}
+	return basics.AccountData{}, errors.New("can't find address")
+
 }
 
 func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return basics.Address{}, true, nil
 }
 
-func (balances mockBalances) Put(basics.Address, basics.AccountData) error {
-	return nil
+func (balances mockBalances) Put(addr basics.Address, ad basics.AccountData) error {
+	if balances.b == nil {
+		return nil
+	}
+
+	if _, ok := balances.b[addr]; ok {
+		balances.b[addr] = ad
+		return nil
+	}
+	return errors.New("can't find address")
 }
 
 func (balances mockBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
@@ -122,7 +141,7 @@ func (balances mockBalances) ConsensusParams() config.ConsensusParams {
 }
 
 func TestPaymentApply(t *testing.T) {
-	mockBalV0 := mockBalances{protocol.ConsensusCurrentVersion}
+	mockBalV0 := mockBalances{protocol.ConsensusCurrentVersion, nil}
 
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
@@ -149,8 +168,8 @@ func TestPaymentApply(t *testing.T) {
 }
 
 func TestCheckSpender(t *testing.T) {
-	mockBalV0 := mockBalances{protocol.ConsensusCurrentVersion}
-	mockBalV7 := mockBalances{protocol.ConsensusV7}
+	mockBalV0 := mockBalances{protocol.ConsensusCurrentVersion, nil}
+	mockBalV7 := mockBalances{protocol.ConsensusV7, nil}
 
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)

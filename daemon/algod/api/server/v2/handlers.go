@@ -443,7 +443,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
 		AssetIndex         *uint64                        `codec:"asset-index,omitempty"`
-		AssetClosingAmount *uint64                        `codec:"asset-closing-amount, omitempty"`
+		AssetClosingAmount *uint64                        `codec:"asset-closing-amount,omitempty"`
 		ApplicationIndex   *uint64                        `codec:"application-index,omitempty"`
 		CloseRewards       *uint64                        `codec:"close-rewards,omitempty"`
 		ClosingAmount      *uint64                        `codec:"closing-amount,omitempty"`
