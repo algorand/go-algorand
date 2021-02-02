@@ -2142,7 +2142,7 @@ func (wn *WebsocketNetwork) StoreKV(node Peer, key interface{}, value interface{
 	peer.kvStoreMutex.Lock()
 	defer peer.kvStoreMutex.Unlock()
 	peer.kvStore[key] = value
-	logging.Base().Infof("storekv: %v %v %v", node, key, value)
+	logging.Base().Infof("storekv: %v %v", peer.peerIndex, key)
 }
 
 // LoadKV retrieves an entry from the corresponding peer's key-value store
@@ -2150,6 +2150,6 @@ func (wn *WebsocketNetwork) LoadKV(node Peer, key interface{}) interface{} {
 	peer := node.(*wsPeer)
 	peer.kvStoreMutex.RLock()
 	defer peer.kvStoreMutex.RUnlock()
-	logging.Base().Infof("loadkv: %v %v %v", node, key, peer.kvStore[key])
+	logging.Base().Infof("loadkv: %v %v", peer.peerIndex, key)
 	return peer.kvStore[key]
 }

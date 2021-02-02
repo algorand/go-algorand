@@ -271,6 +271,7 @@ func (block *Block) Compressed() Block {
 	for _, stb := range block.Payset {
 		var newstb transactions.SignedTxnInBlock
 		newstb.Digest = crypto.Hash(protocol.Encode(&stb.SignedTxn))
+		logging.Base().Infof("digest, %v", newstb.Digest)
 		newstb.HasGenesisID = stb.HasGenesisID
 		newstb.HasGenesisHash = stb.HasGenesisHash
 		c.Payset = append(c.Payset, newstb)

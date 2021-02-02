@@ -140,6 +140,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 					var err error
 					for _, txn := range msg.CompoundMessage.Proposal.Payset {
 						var txnBytes []byte
+						logging.Base().Infof("check, %v", txn.Digest)
 						txnBytes = net.LoadKV(msg.MessageHandle, txn.Digest).([]byte)
 						dec := protocol.NewDecoderBytes(txnBytes)
 						err = dec.Decode(&txn.SignedTxn)
