@@ -468,7 +468,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.ConfirmedRound = &r
 
 		response.ClosingAmount = &txn.ApplyData.ClosingAmount.Raw
-		response.AssetClosingAmount = &txn.ApplyData.ClosingAmount.Raw
+		response.AssetClosingAmount = &txn.ApplyData.AssetClosingAmount
 		response.SenderRewards = &txn.ApplyData.SenderRewards.Raw
 		response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
 		response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
