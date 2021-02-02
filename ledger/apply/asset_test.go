@@ -19,21 +19,26 @@ func TestAssetTransfer(t *testing.T) {
 	secretCls := keypair()
 	cls := basics.Address(secretCls.SignatureVerifier)
 
+	var total, toSend, dstAmount uint64
+	total = 1000000
+	dstAmount = 500
+	toSend = 200
+
 	// prepare data
 	var addrs = map[basics.Address]basics.AccountData{
 		src: {
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000},
 			AssetParams: map[basics.AssetIndex]basics.AssetParams{
-				1: {Total: 1000000},
+				1: {Total: total},
 			},
 			Assets: map[basics.AssetIndex]basics.AssetHolding{
-				1: {Amount: 999500},
+				1: {Amount: total - dstAmount},
 			},
 		},
 		dst: {
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000},
 			Assets: map[basics.AssetIndex]basics.AssetHolding{
-				1: {Amount: 500},
+				1: {Amount: dstAmount},
 			},
 		},
 		cls: {
@@ -56,7 +61,7 @@ func TestAssetTransfer(t *testing.T) {
 		},
 		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
 			XferAsset:     1,
-			AssetAmount:   200,
+			AssetAmount:   toSend,
 			AssetReceiver: src,
 			AssetCloseTo:  cls,
 		},
@@ -64,7 +69,8 @@ func TestAssetTransfer(t *testing.T) {
 	var ad transactions.ApplyData
 	err := AssetTransfer(tx.AssetTransferTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, &ad)
 	require.NoError(t, err)
-
-	require.Equal(t, uint64(300), ad.AssetClosingAmount)
-	require.Equal(t, uint64(300), addrs[cls].Assets[1].Amount)
+	require.Equal(t, uint64(0), addrs[dst].Assets[1].Amount)
+	require.Equal(t, dstAmount-toSend, ad.AssetClosingAmount)
+	require.Equal(t, total-dstAmount+toSend, addrs[src].Assets[1].Amount)
+	require.Equal(t, dstAmount-toSend, addrs[cls].Assets[1].Amount)
 }
