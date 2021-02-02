@@ -721,7 +721,7 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 		var length int
 		switch logic.TxnField(fieldIdx) {
 		case logic.Accounts:
-			length = len(txn.Accounts)
+			length = len(txn.Accounts) + 1
 		case logic.ApplicationArgs:
 			length = len(txn.ApplicationArgs)
 		}
@@ -765,7 +765,7 @@ func makeTxnArrayField(s *cdtState, groupIndex int, fieldIdx int) (desc []cdt.Ru
 		var length int
 		switch logic.TxnField(fieldIdx) {
 		case logic.Accounts:
-			length = len(txn.Accounts)
+			length = len(txn.Accounts) + 1
 		case logic.ApplicationArgs:
 			length = len(txn.ApplicationArgs)
 		}

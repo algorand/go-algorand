@@ -17,13 +17,16 @@
 package merklearray
 
 import (
+	"testing"
+
 	"github.com/algorand/go-algorand/crypto"
 )
 
-// An Array represents a dense array of leaf elements that are
-// combined into a Merkle tree.  The GetHash method returns the
-// hash of a particular element in the array.
-type Array interface {
-	Length() uint64
-	GetHash(pos uint64) (crypto.Digest, error)
+func TestLayerHash(t *testing.T) {
+	var p pair
+	crypto.RandBytes(p.l[:])
+	crypto.RandBytes(p.r[:])
+	if crypto.HashObj(&p) != p.Hash() {
+		t.Error("hash mismatch")
+	}
 }

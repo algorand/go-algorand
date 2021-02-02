@@ -11,10 +11,7 @@ import (
 
 func TestMarshalUnmarshalApplicationCallTxnFields(t *testing.T) {
 	v := ApplicationCallTxnFields{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -48,18 +45,18 @@ func BenchmarkMarshalMsgApplicationCallTxnFields(b *testing.B) {
 func BenchmarkAppendMsgApplicationCallTxnFields(b *testing.B) {
 	v := ApplicationCallTxnFields{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalApplicationCallTxnFields(b *testing.B) {
 	v := ApplicationCallTxnFields{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -73,10 +70,7 @@ func BenchmarkUnmarshalApplicationCallTxnFields(b *testing.B) {
 
 func TestMarshalUnmarshalApplyData(t *testing.T) {
 	v := ApplyData{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -110,18 +104,18 @@ func BenchmarkMarshalMsgApplyData(b *testing.B) {
 func BenchmarkAppendMsgApplyData(b *testing.B) {
 	v := ApplyData{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalApplyData(b *testing.B) {
 	v := ApplyData{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -135,10 +129,7 @@ func BenchmarkUnmarshalApplyData(b *testing.B) {
 
 func TestMarshalUnmarshalAssetConfigTxnFields(t *testing.T) {
 	v := AssetConfigTxnFields{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -172,18 +163,18 @@ func BenchmarkMarshalMsgAssetConfigTxnFields(b *testing.B) {
 func BenchmarkAppendMsgAssetConfigTxnFields(b *testing.B) {
 	v := AssetConfigTxnFields{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalAssetConfigTxnFields(b *testing.B) {
 	v := AssetConfigTxnFields{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -197,10 +188,7 @@ func BenchmarkUnmarshalAssetConfigTxnFields(b *testing.B) {
 
 func TestMarshalUnmarshalAssetFreezeTxnFields(t *testing.T) {
 	v := AssetFreezeTxnFields{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -234,18 +222,18 @@ func BenchmarkMarshalMsgAssetFreezeTxnFields(b *testing.B) {
 func BenchmarkAppendMsgAssetFreezeTxnFields(b *testing.B) {
 	v := AssetFreezeTxnFields{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalAssetFreezeTxnFields(b *testing.B) {
 	v := AssetFreezeTxnFields{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -259,10 +247,7 @@ func BenchmarkUnmarshalAssetFreezeTxnFields(b *testing.B) {
 
 func TestMarshalUnmarshalAssetTransferTxnFields(t *testing.T) {
 	v := AssetTransferTxnFields{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -296,18 +281,18 @@ func BenchmarkMarshalMsgAssetTransferTxnFields(b *testing.B) {
 func BenchmarkAppendMsgAssetTransferTxnFields(b *testing.B) {
 	v := AssetTransferTxnFields{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalAssetTransferTxnFields(b *testing.B) {
 	v := AssetTransferTxnFields{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -321,10 +306,7 @@ func BenchmarkUnmarshalAssetTransferTxnFields(b *testing.B) {
 
 func TestMarshalUnmarshalCompactCertTxnFields(t *testing.T) {
 	v := CompactCertTxnFields{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -358,18 +340,18 @@ func BenchmarkMarshalMsgCompactCertTxnFields(b *testing.B) {
 func BenchmarkAppendMsgCompactCertTxnFields(b *testing.B) {
 	v := CompactCertTxnFields{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalCompactCertTxnFields(b *testing.B) {
 	v := CompactCertTxnFields{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -383,10 +365,7 @@ func BenchmarkUnmarshalCompactCertTxnFields(b *testing.B) {
 
 func TestMarshalUnmarshalHeader(t *testing.T) {
 	v := Header{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -420,18 +399,18 @@ func BenchmarkMarshalMsgHeader(b *testing.B) {
 func BenchmarkAppendMsgHeader(b *testing.B) {
 	v := Header{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalHeader(b *testing.B) {
 	v := Header{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -445,10 +424,7 @@ func BenchmarkUnmarshalHeader(b *testing.B) {
 
 func TestMarshalUnmarshalKeyregTxnFields(t *testing.T) {
 	v := KeyregTxnFields{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -482,18 +458,18 @@ func BenchmarkMarshalMsgKeyregTxnFields(b *testing.B) {
 func BenchmarkAppendMsgKeyregTxnFields(b *testing.B) {
 	v := KeyregTxnFields{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalKeyregTxnFields(b *testing.B) {
 	v := KeyregTxnFields{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -507,10 +483,7 @@ func BenchmarkUnmarshalKeyregTxnFields(b *testing.B) {
 
 func TestMarshalUnmarshalLogicSig(t *testing.T) {
 	v := LogicSig{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -544,18 +517,18 @@ func BenchmarkMarshalMsgLogicSig(b *testing.B) {
 func BenchmarkAppendMsgLogicSig(b *testing.B) {
 	v := LogicSig{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalLogicSig(b *testing.B) {
 	v := LogicSig{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -569,10 +542,7 @@ func BenchmarkUnmarshalLogicSig(b *testing.B) {
 
 func TestMarshalUnmarshalPaymentTxnFields(t *testing.T) {
 	v := PaymentTxnFields{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -606,18 +576,18 @@ func BenchmarkMarshalMsgPaymentTxnFields(b *testing.B) {
 func BenchmarkAppendMsgPaymentTxnFields(b *testing.B) {
 	v := PaymentTxnFields{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalPaymentTxnFields(b *testing.B) {
 	v := PaymentTxnFields{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -631,10 +601,7 @@ func BenchmarkUnmarshalPaymentTxnFields(b *testing.B) {
 
 func TestMarshalUnmarshalPayset(t *testing.T) {
 	v := Payset{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -668,18 +635,18 @@ func BenchmarkMarshalMsgPayset(b *testing.B) {
 func BenchmarkAppendMsgPayset(b *testing.B) {
 	v := Payset{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalPayset(b *testing.B) {
 	v := Payset{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -693,10 +660,7 @@ func BenchmarkUnmarshalPayset(b *testing.B) {
 
 func TestMarshalUnmarshalSignedTxn(t *testing.T) {
 	v := SignedTxn{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -730,18 +694,18 @@ func BenchmarkMarshalMsgSignedTxn(b *testing.B) {
 func BenchmarkAppendMsgSignedTxn(b *testing.B) {
 	v := SignedTxn{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalSignedTxn(b *testing.B) {
 	v := SignedTxn{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -755,10 +719,7 @@ func BenchmarkUnmarshalSignedTxn(b *testing.B) {
 
 func TestMarshalUnmarshalSignedTxnInBlock(t *testing.T) {
 	v := SignedTxnInBlock{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -792,18 +753,18 @@ func BenchmarkMarshalMsgSignedTxnInBlock(b *testing.B) {
 func BenchmarkAppendMsgSignedTxnInBlock(b *testing.B) {
 	v := SignedTxnInBlock{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalSignedTxnInBlock(b *testing.B) {
 	v := SignedTxnInBlock{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -817,10 +778,7 @@ func BenchmarkUnmarshalSignedTxnInBlock(b *testing.B) {
 
 func TestMarshalUnmarshalSignedTxnWithAD(t *testing.T) {
 	v := SignedTxnWithAD{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -854,18 +812,18 @@ func BenchmarkMarshalMsgSignedTxnWithAD(b *testing.B) {
 func BenchmarkAppendMsgSignedTxnWithAD(b *testing.B) {
 	v := SignedTxnWithAD{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalSignedTxnWithAD(b *testing.B) {
 	v := SignedTxnWithAD{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -879,10 +837,7 @@ func BenchmarkUnmarshalSignedTxnWithAD(b *testing.B) {
 
 func TestMarshalUnmarshalTransaction(t *testing.T) {
 	v := Transaction{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -916,18 +871,18 @@ func BenchmarkMarshalMsgTransaction(b *testing.B) {
 func BenchmarkAppendMsgTransaction(b *testing.B) {
 	v := Transaction{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalTransaction(b *testing.B) {
 	v := Transaction{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -941,10 +896,7 @@ func BenchmarkUnmarshalTransaction(b *testing.B) {
 
 func TestMarshalUnmarshalTxGroup(t *testing.T) {
 	v := TxGroup{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -978,18 +930,18 @@ func BenchmarkMarshalMsgTxGroup(b *testing.B) {
 func BenchmarkAppendMsgTxGroup(b *testing.B) {
 	v := TxGroup{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalTxGroup(b *testing.B) {
 	v := TxGroup{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()

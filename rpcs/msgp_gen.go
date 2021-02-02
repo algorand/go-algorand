@@ -7,23 +7,15 @@ import (
 )
 
 // MarshalMsg implements msgp.Marshaler
-func (z *EncodedBlockCert) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *EncodedBlockCert) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "block"
 	o = append(o, 0x82, 0xa5, 0x62, 0x6c, 0x6f, 0x63, 0x6b)
-	o, err = (*z).Block.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Block")
-		return
-	}
+	o = (*z).Block.MarshalMsg(o)
 	// string "cert"
 	o = append(o, 0xa4, 0x63, 0x65, 0x72, 0x74)
-	o, err = (*z).Certificate.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Certificate")
-		return
-	}
+	o = (*z).Certificate.MarshalMsg(o)
 	return
 }
 
