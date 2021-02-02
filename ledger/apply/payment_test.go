@@ -104,10 +104,7 @@ func (balances mockBalances) PutWithCreatable(basics.Address, basics.AccountData
 }
 
 func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
-	if ad, ok := balances.b[addr]; ok {
-		return ad, nil
-	}
-	return basics.AccountData{}, nil
+	return balances.b[addr], nil
 }
 
 func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -115,11 +112,7 @@ func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.
 }
 
 func (balances mockBalances) Put(addr basics.Address, ad basics.AccountData) error {
-	if _, ok := balances.b[addr]; ok {
-		balances.b[addr] = ad
-		return nil
-	}
-	balances.b[addr] = basics.AccountData{}
+	balances.b[addr] = ad
 	return nil
 }
 
