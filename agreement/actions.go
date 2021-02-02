@@ -152,7 +152,8 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	case protocol.ProposalPayloadTag:
 		msg := a.CompoundMessage
 		for _, txib := range msg.Proposal.Payset {
-			txnData = append(txnData, protocol.Encode(&txib.SignedTxn))
+			stxn := txib.SignedTxn
+			txnData = append(txnData, protocol.Encode(&stxn))
 		}
 		payload := transmittedPayload{
 			unauthenticatedProposal: msg.Proposal.Compressed(),
@@ -164,12 +165,12 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	switch a.T {
 	case broadcast:
 		for _, txn := range txnData {
-			s.Network.Broadcast(a.Tag, txn)
+			s.Network.Broadcast(protocol.TxnTag, txn)
 		}
 		s.Network.Broadcast(a.Tag, data)
 	case relay:
 		for _, txn := range txnData {
-			s.Network.Relay(a.h, a.Tag, txn)
+			s.Network.Relay(a.h, protocol.TxnTag, txn)
 		}
 		s.Network.Relay(a.h, a.Tag, data)
 	case disconnect:

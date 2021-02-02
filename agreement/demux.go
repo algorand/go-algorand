@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -138,12 +139,17 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 				case protocol.ProposalPayloadTag:
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
 					var err error
-					for _, txn := range msg.CompoundMessage.Proposal.Payset {
-						var txnBytes []byte
-						logging.Base().Infof("check, %v", txn.Digest)
-						txnBytes = net.LoadKV(msg.MessageHandle, txn.Digest).([]byte)
-						dec := protocol.NewDecoderBytes(txnBytes)
-						err = dec.Decode(&txn.SignedTxn)
+					for i, stib := range msg.CompoundMessage.Proposal.Payset {
+						var stxnBytes []byte
+						logging.Base().Infof("check, %v", stib.Digest)
+						stxnData := net.LoadKV(msg.MessageHandle, stib.Digest)
+						stxnBytes = stxnData.([]byte)
+						var stxn transactions.SignedTxn
+						dec := protocol.NewDecoderBytes(stxnBytes)
+						err = dec.Decode(&stxn)
+						logging.Base().Infof("check same %v", stxn.ID() == stib.SignedTxn.ID())
+						msg.CompoundMessage.Proposal.Payset[i].SignedTxn = stxn
+						logging.Base().Infof("check same %v", stxn.ID() == msg.CompoundMessage.Proposal.Payset[i].SignedTxn.ID())
 						if err != nil {
 							logging.Base().Warnf("Received a non-decodable txn: %v", err)
 							//net.Disconnect(raw.MessageHandle)

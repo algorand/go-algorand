@@ -1096,7 +1096,6 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 			start := time.Now()
 
 			// now, send to global handlers
-			wn.StoreKV(msg.Sender, crypto.Hash(msg.Data), msg.Data)
 			outmsg := wn.handlers.Handle(msg)
 			handled := time.Now()
 			bufferNanos := start.UnixNano() - msg.Received
@@ -2139,17 +2138,11 @@ func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
 func (wn *WebsocketNetwork) StoreKV(node Peer, key interface{}, value interface{}) {
 	// TODO: add cache size limit
 	peer := node.(*wsPeer)
-	peer.kvStoreMutex.Lock()
-	defer peer.kvStoreMutex.Unlock()
-	peer.kvStore[key] = value
-	logging.Base().Infof("storekv: %v %v", peer.peerIndex, key)
+	peer.StoreKV(key, value)
 }
 
 // LoadKV retrieves an entry from the corresponding peer's key-value store
 func (wn *WebsocketNetwork) LoadKV(node Peer, key interface{}) interface{} {
 	peer := node.(*wsPeer)
-	peer.kvStoreMutex.RLock()
-	defer peer.kvStoreMutex.RUnlock()
-	logging.Base().Infof("loadkv: %v %v", peer.peerIndex, key)
-	return peer.kvStore[key]
+	return peer.LoadKV(key)
 }

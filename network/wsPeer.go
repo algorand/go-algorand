@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/algorand/go-algorand/logging"
 	"io"
 	"net"
 	"net/http"
@@ -408,6 +409,9 @@ func (wp *wsPeer) readLoop() {
 		networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		msg.Sender = wp
+		if msg.Tag == protocol.TxnTag {
+			wp.StoreKV(crypto.Hash(msg.Data), msg.Data)
+		}
 
 		// for outgoing connections, we want to notify the connection monitor that we've received
 		// a message. The connection monitor would update it's statistics accordingly.
@@ -788,4 +792,21 @@ func (wp *wsPeer) getAndRemoveResponseChannel(key uint64) (respChan chan *Respon
 	delete(wp.responseChannels, key)
 
 	return
+}
+
+// StoreKV stores an entry in the corresponding peer's key-value store
+func (wp *wsPeer) StoreKV(key interface{}, value interface{}) {
+	// TODO: add cache size limit
+	wp.kvStoreMutex.Lock()
+	defer wp.kvStoreMutex.Unlock()
+	wp.kvStore[key] = value
+	logging.Base().Infof("storekv: %v %v", wp.peerIndex, key)
+}
+
+// LoadKV retrieves an entry from the corresponding peer's key-value store
+func (wp *wsPeer) LoadKV(key interface{}) interface{} {
+	wp.kvStoreMutex.Lock()
+	defer wp.kvStoreMutex.Unlock()
+	logging.Base().Infof("loadkv: %v %v %v", wp.peerIndex, key, wp.kvStore[key])
+	return wp.kvStore[key]
 }
