@@ -7,7 +7,7 @@ import (
 )
 
 // MarshalMsg implements msgp.Marshaler
-func (z CatchpointCatchupState) MarshalMsg(b []byte) (o []byte) {
+func (z CatchpointCatchupState) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendInt32(o, int32(z))
 	return
@@ -53,7 +53,7 @@ func (z CatchpointCatchupState) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte) {
+func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(8)
@@ -96,7 +96,11 @@ func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "accountTotals"
 			o = append(o, 0xad, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73)
-			o = (*z).Totals.MarshalMsg(o)
+			o, err = (*z).Totals.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Totals")
+				return
+			}
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "accountsCount"
@@ -106,17 +110,29 @@ func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "balancesRound"
 			o = append(o, 0xad, 0x62, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x52, 0x6f, 0x75, 0x6e, 0x64)
-			o = (*z).BalancesRound.MarshalMsg(o)
+			o, err = (*z).BalancesRound.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "BalancesRound")
+				return
+			}
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "blockHeaderDigest"
 			o = append(o, 0xb1, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x48, 0x65, 0x61, 0x64, 0x65, 0x72, 0x44, 0x69, 0x67, 0x65, 0x73, 0x74)
-			o = (*z).BlockHeaderDigest.MarshalMsg(o)
+			o, err = (*z).BlockHeaderDigest.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "BlockHeaderDigest")
+				return
+			}
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "blocksRound"
 			o = append(o, 0xab, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x73, 0x52, 0x6f, 0x75, 0x6e, 0x64)
-			o = (*z).BlocksRound.MarshalMsg(o)
+			o, err = (*z).BlocksRound.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "BlocksRound")
+				return
+			}
 		}
 		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "catchpoint"
@@ -320,7 +336,7 @@ func (z *CatchpointFileHeader) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *catchpointFileBalancesChunk) MarshalMsg(b []byte) (o []byte) {
+func (z *catchpointFileBalancesChunk) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(1)
@@ -357,12 +373,20 @@ func (z *catchpointFileBalancesChunk) MarshalMsg(b []byte) (o []byte) {
 				if (zb0003Mask & 0x2) == 0 { // if not empty
 					// string "ad"
 					o = append(o, 0xa2, 0x61, 0x64)
-					o = (*z).Balances[zb0001].AccountData.MarshalMsg(o)
+					o, err = (*z).Balances[zb0001].AccountData.MarshalMsg(o)
+					if err != nil {
+						err = msgp.WrapError(err, "Balances", zb0001, "AccountData")
+						return
+					}
 				}
 				if (zb0003Mask & 0x4) == 0 { // if not empty
 					// string "pk"
 					o = append(o, 0xa2, 0x70, 0x6b)
-					o = (*z).Balances[zb0001].Address.MarshalMsg(o)
+					o, err = (*z).Balances[zb0001].Address.MarshalMsg(o)
+					if err != nil {
+						err = msgp.WrapError(err, "Balances", zb0001, "Address")
+						return
+					}
 				}
 			}
 		}
@@ -628,7 +652,7 @@ func (z *catchpointFileBalancesChunk) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z catchpointState) MarshalMsg(b []byte) (o []byte) {
+func (z catchpointState) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendString(o, string(z))
 	return
@@ -674,7 +698,7 @@ func (z catchpointState) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *encodedBalanceRecord) MarshalMsg(b []byte) (o []byte) {
+func (z *encodedBalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
@@ -693,12 +717,20 @@ func (z *encodedBalanceRecord) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "ad"
 			o = append(o, 0xa2, 0x61, 0x64)
-			o = (*z).AccountData.MarshalMsg(o)
+			o, err = (*z).AccountData.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "AccountData")
+				return
+			}
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "pk"
 			o = append(o, 0xa2, 0x70, 0x6b)
-			o = (*z).Address.MarshalMsg(o)
+			o, err = (*z).Address.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Address")
+				return
+			}
 		}
 	}
 	return
@@ -803,7 +835,7 @@ func (z *encodedBalanceRecord) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z storageAction) MarshalMsg(b []byte) (o []byte) {
+func (z storageAction) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return

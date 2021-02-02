@@ -11,7 +11,10 @@ import (
 
 func TestMarshalUnmarshalBlock(t *testing.T) {
 	v := Block{}
-	bts := v.MarshalMsg(nil)
+	bts, err := v.MarshalMsg(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -45,18 +48,18 @@ func BenchmarkMarshalMsgBlock(b *testing.B) {
 func BenchmarkAppendMsgBlock(b *testing.B) {
 	v := Block{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
+	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
+		bts, _ = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalBlock(b *testing.B) {
 	v := Block{}
-	bts := v.MarshalMsg(nil)
+	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -70,7 +73,10 @@ func BenchmarkUnmarshalBlock(b *testing.B) {
 
 func TestMarshalUnmarshalBlockHeader(t *testing.T) {
 	v := BlockHeader{}
-	bts := v.MarshalMsg(nil)
+	bts, err := v.MarshalMsg(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -104,18 +110,18 @@ func BenchmarkMarshalMsgBlockHeader(b *testing.B) {
 func BenchmarkAppendMsgBlockHeader(b *testing.B) {
 	v := BlockHeader{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
+	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
+		bts, _ = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalBlockHeader(b *testing.B) {
 	v := BlockHeader{}
-	bts := v.MarshalMsg(nil)
+	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -129,7 +135,10 @@ func BenchmarkUnmarshalBlockHeader(b *testing.B) {
 
 func TestMarshalUnmarshalCompactCertState(t *testing.T) {
 	v := CompactCertState{}
-	bts := v.MarshalMsg(nil)
+	bts, err := v.MarshalMsg(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -163,18 +172,18 @@ func BenchmarkMarshalMsgCompactCertState(b *testing.B) {
 func BenchmarkAppendMsgCompactCertState(b *testing.B) {
 	v := CompactCertState{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
+	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
+		bts, _ = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalCompactCertState(b *testing.B) {
 	v := CompactCertState{}
-	bts := v.MarshalMsg(nil)
+	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -188,7 +197,10 @@ func BenchmarkUnmarshalCompactCertState(b *testing.B) {
 
 func TestMarshalUnmarshalGenesis(t *testing.T) {
 	v := Genesis{}
-	bts := v.MarshalMsg(nil)
+	bts, err := v.MarshalMsg(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -222,18 +234,18 @@ func BenchmarkMarshalMsgGenesis(b *testing.B) {
 func BenchmarkAppendMsgGenesis(b *testing.B) {
 	v := Genesis{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
+	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
+		bts, _ = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalGenesis(b *testing.B) {
 	v := Genesis{}
-	bts := v.MarshalMsg(nil)
+	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -247,7 +259,10 @@ func BenchmarkUnmarshalGenesis(b *testing.B) {
 
 func TestMarshalUnmarshalGenesisAllocation(t *testing.T) {
 	v := GenesisAllocation{}
-	bts := v.MarshalMsg(nil)
+	bts, err := v.MarshalMsg(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -281,18 +296,18 @@ func BenchmarkMarshalMsgGenesisAllocation(b *testing.B) {
 func BenchmarkAppendMsgGenesisAllocation(b *testing.B) {
 	v := GenesisAllocation{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
+	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
+		bts, _ = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalGenesisAllocation(b *testing.B) {
 	v := GenesisAllocation{}
-	bts := v.MarshalMsg(nil)
+	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -306,7 +321,10 @@ func BenchmarkUnmarshalGenesisAllocation(b *testing.B) {
 
 func TestMarshalUnmarshalRewardsState(t *testing.T) {
 	v := RewardsState{}
-	bts := v.MarshalMsg(nil)
+	bts, err := v.MarshalMsg(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -340,18 +358,18 @@ func BenchmarkMarshalMsgRewardsState(b *testing.B) {
 func BenchmarkAppendMsgRewardsState(b *testing.B) {
 	v := RewardsState{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
+	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
+		bts, _ = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalRewardsState(b *testing.B) {
 	v := RewardsState{}
-	bts := v.MarshalMsg(nil)
+	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -365,7 +383,10 @@ func BenchmarkUnmarshalRewardsState(b *testing.B) {
 
 func TestMarshalUnmarshalUpgradeVote(t *testing.T) {
 	v := UpgradeVote{}
-	bts := v.MarshalMsg(nil)
+	bts, err := v.MarshalMsg(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -399,18 +420,18 @@ func BenchmarkMarshalMsgUpgradeVote(b *testing.B) {
 func BenchmarkAppendMsgUpgradeVote(b *testing.B) {
 	v := UpgradeVote{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
+	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
+		bts, _ = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalUpgradeVote(b *testing.B) {
 	v := UpgradeVote{}
-	bts := v.MarshalMsg(nil)
+	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()

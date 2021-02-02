@@ -10,7 +10,7 @@ import (
 )
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Digest) MarshalMsg(b []byte) (o []byte) {
+func (z *Digest) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -49,7 +49,7 @@ func (z *Digest) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *MasterDerivationKey) MarshalMsg(b []byte) (o []byte) {
+func (z *MasterDerivationKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -88,7 +88,7 @@ func (z *MasterDerivationKey) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *MultisigSig) MarshalMsg(b []byte) (o []byte) {
+func (z *MultisigSig) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(3)
@@ -117,7 +117,11 @@ func (z *MultisigSig) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Subsigs)))
 			}
 			for zb0001 := range (*z).Subsigs {
-				o = (*z).Subsigs[zb0001].MarshalMsg(o)
+				o, err = (*z).Subsigs[zb0001].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Subsigs", zb0001)
+					return
+				}
 			}
 		}
 		if (zb0002Mask & 0x4) == 0 { // if not empty
@@ -292,7 +296,7 @@ func (z *MultisigSig) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *MultisigSubsig) MarshalMsg(b []byte) (o []byte) {
+func (z *MultisigSubsig) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(2)
@@ -421,7 +425,7 @@ func (z *MultisigSubsig) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *OneTimeSignature) MarshalMsg(b []byte) (o []byte) {
+func (z *OneTimeSignature) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 6
 	// string "p"
@@ -600,7 +604,7 @@ func (z *OneTimeSignature) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte) {
+func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0006Len := uint32(7)
@@ -655,7 +659,11 @@ func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Batches)))
 			}
 			for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
-				o = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].MarshalMsg(o)
+				o, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Batches", zb0002)
+					return
+				}
 			}
 		}
 		if (zb0006Mask & 0x20) == 0 { // if not empty
@@ -672,7 +680,11 @@ func (z *OneTimeSignatureSecrets) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).OneTimeSignatureSecretsPersistent.Offsets)))
 			}
 			for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
-				o = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].MarshalMsg(o)
+				o, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Offsets", zb0003)
+					return
+				}
 			}
 		}
 		if (zb0006Mask & 0x100) == 0 { // if not empty
@@ -930,7 +942,7 @@ func (z *OneTimeSignatureSecrets) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *OneTimeSignatureSecretsPersistent) MarshalMsg(b []byte) (o []byte) {
+func (z *OneTimeSignatureSecretsPersistent) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0006Len := uint32(7)
@@ -985,7 +997,11 @@ func (z *OneTimeSignatureSecretsPersistent) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Batches)))
 			}
 			for zb0002 := range (*z).Batches {
-				o = (*z).Batches[zb0002].MarshalMsg(o)
+				o, err = (*z).Batches[zb0002].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Batches", zb0002)
+					return
+				}
 			}
 		}
 		if (zb0006Mask & 0x10) == 0 { // if not empty
@@ -1002,7 +1018,11 @@ func (z *OneTimeSignatureSecretsPersistent) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Offsets)))
 			}
 			for zb0003 := range (*z).Offsets {
-				o = (*z).Offsets[zb0003].MarshalMsg(o)
+				o, err = (*z).Offsets[zb0003].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Offsets", zb0003)
+					return
+				}
 			}
 		}
 		if (zb0006Mask & 0x40) == 0 { // if not empty
@@ -1260,7 +1280,7 @@ func (z *OneTimeSignatureSecretsPersistent) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *OneTimeSignatureSubkeyBatchID) MarshalMsg(b []byte) (o []byte) {
+func (z *OneTimeSignatureSubkeyBatchID) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "batch"
@@ -1371,7 +1391,7 @@ func (z *OneTimeSignatureSubkeyBatchID) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *OneTimeSignatureSubkeyOffsetID) MarshalMsg(b []byte) (o []byte) {
+func (z *OneTimeSignatureSubkeyOffsetID) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 3
 	// string "batch"
@@ -1499,7 +1519,7 @@ func (z *OneTimeSignatureSubkeyOffsetID) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *OneTimeSignatureVerifier) MarshalMsg(b []byte) (o []byte) {
+func (z *OneTimeSignatureVerifier) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -1538,7 +1558,7 @@ func (z *OneTimeSignatureVerifier) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *PrivateKey) MarshalMsg(b []byte) (o []byte) {
+func (z *PrivateKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -1577,7 +1597,7 @@ func (z *PrivateKey) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *PublicKey) MarshalMsg(b []byte) (o []byte) {
+func (z *PublicKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -1616,7 +1636,7 @@ func (z *PublicKey) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Seed) MarshalMsg(b []byte) (o []byte) {
+func (z *Seed) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -1655,7 +1675,7 @@ func (z *Seed) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Signature) MarshalMsg(b []byte) (o []byte) {
+func (z *Signature) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -1694,7 +1714,7 @@ func (z *Signature) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *SignatureSecrets) MarshalMsg(b []byte) (o []byte) {
+func (z *SignatureSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "SK"
@@ -1702,7 +1722,11 @@ func (z *SignatureSecrets) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.AppendBytes(o, ((*z).SK)[:])
 	// string "SignatureVerifier"
 	o = append(o, 0xb1, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-	o = (*z).SignatureVerifier.MarshalMsg(o)
+	o, err = (*z).SignatureVerifier.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "SignatureVerifier")
+		return
+	}
 	return
 }
 
@@ -1805,7 +1829,7 @@ func (z *SignatureSecrets) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *VRFSecrets) MarshalMsg(b []byte) (o []byte) {
+func (z *VRFSecrets) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "PK"
@@ -1916,7 +1940,7 @@ func (z *VRFSecrets) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *VrfOutput) MarshalMsg(b []byte) (o []byte) {
+func (z *VrfOutput) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -1955,7 +1979,7 @@ func (z *VrfOutput) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *VrfPrivkey) MarshalMsg(b []byte) (o []byte) {
+func (z *VrfPrivkey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -1994,7 +2018,7 @@ func (z *VrfPrivkey) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *VrfProof) MarshalMsg(b []byte) (o []byte) {
+func (z *VrfProof) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -2033,7 +2057,7 @@ func (z *VrfProof) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *VrfPubkey) MarshalMsg(b []byte) (o []byte) {
+func (z *VrfPubkey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -2072,7 +2096,7 @@ func (z *VrfPubkey) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *ed25519PrivateKey) MarshalMsg(b []byte) (o []byte) {
+func (z *ed25519PrivateKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -2111,7 +2135,7 @@ func (z *ed25519PrivateKey) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *ed25519PublicKey) MarshalMsg(b []byte) (o []byte) {
+func (z *ed25519PublicKey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -2150,7 +2174,7 @@ func (z *ed25519PublicKey) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *ed25519Seed) MarshalMsg(b []byte) (o []byte) {
+func (z *ed25519Seed) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -2189,7 +2213,7 @@ func (z *ed25519Seed) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *ed25519Signature) MarshalMsg(b []byte) (o []byte) {
+func (z *ed25519Signature) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
 	return
@@ -2228,7 +2252,7 @@ func (z *ed25519Signature) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *ephemeralSubkey) MarshalMsg(b []byte) (o []byte) {
+func (z *ephemeralSubkey) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 4
 	// string "PK"

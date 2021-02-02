@@ -7,7 +7,7 @@ import (
 )
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AccountTotals) MarshalMsg(b []byte) (o []byte) {
+func (z *AccountTotals) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
@@ -50,7 +50,11 @@ func (z *AccountTotals) MarshalMsg(b []byte) (o []byte) {
 			if (zb0002Mask & 0x2) == 0 { // if not empty
 				// string "mon"
 				o = append(o, 0xa3, 0x6d, 0x6f, 0x6e)
-				o = (*z).NotParticipating.Money.MarshalMsg(o)
+				o, err = (*z).NotParticipating.Money.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "NotParticipating", "Money")
+					return
+				}
 			}
 			if (zb0002Mask & 0x4) == 0 { // if not empty
 				// string "rwd"
@@ -77,7 +81,11 @@ func (z *AccountTotals) MarshalMsg(b []byte) (o []byte) {
 			if (zb0003Mask & 0x2) == 0 { // if not empty
 				// string "mon"
 				o = append(o, 0xa3, 0x6d, 0x6f, 0x6e)
-				o = (*z).Offline.Money.MarshalMsg(o)
+				o, err = (*z).Offline.Money.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Offline", "Money")
+					return
+				}
 			}
 			if (zb0003Mask & 0x4) == 0 { // if not empty
 				// string "rwd"
@@ -104,7 +112,11 @@ func (z *AccountTotals) MarshalMsg(b []byte) (o []byte) {
 			if (zb0004Mask & 0x2) == 0 { // if not empty
 				// string "mon"
 				o = append(o, 0xa3, 0x6d, 0x6f, 0x6e)
-				o = (*z).Online.Money.MarshalMsg(o)
+				o, err = (*z).Online.Money.MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "Online", "Money")
+					return
+				}
 			}
 			if (zb0004Mask & 0x4) == 0 { // if not empty
 				// string "rwd"
@@ -632,7 +644,7 @@ func (z *AccountTotals) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AlgoCount) MarshalMsg(b []byte) (o []byte) {
+func (z *AlgoCount) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
@@ -651,7 +663,11 @@ func (z *AlgoCount) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "mon"
 			o = append(o, 0xa3, 0x6d, 0x6f, 0x6e)
-			o = (*z).Money.MarshalMsg(o)
+			o, err = (*z).Money.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Money")
+				return
+			}
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "rwd"

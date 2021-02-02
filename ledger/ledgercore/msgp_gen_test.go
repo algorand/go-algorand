@@ -11,7 +11,10 @@ import (
 
 func TestMarshalUnmarshalAccountTotals(t *testing.T) {
 	v := AccountTotals{}
-	bts := v.MarshalMsg(nil)
+	bts, err := v.MarshalMsg(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -45,18 +48,18 @@ func BenchmarkMarshalMsgAccountTotals(b *testing.B) {
 func BenchmarkAppendMsgAccountTotals(b *testing.B) {
 	v := AccountTotals{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
+	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
+		bts, _ = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalAccountTotals(b *testing.B) {
 	v := AccountTotals{}
-	bts := v.MarshalMsg(nil)
+	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -70,7 +73,10 @@ func BenchmarkUnmarshalAccountTotals(b *testing.B) {
 
 func TestMarshalUnmarshalAlgoCount(t *testing.T) {
 	v := AlgoCount{}
-	bts := v.MarshalMsg(nil)
+	bts, err := v.MarshalMsg(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -104,18 +110,18 @@ func BenchmarkMarshalMsgAlgoCount(b *testing.B) {
 func BenchmarkAppendMsgAlgoCount(b *testing.B) {
 	v := AlgoCount{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
+	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
+		bts, _ = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalAlgoCount(b *testing.B) {
 	v := AlgoCount{}
-	bts := v.MarshalMsg(nil)
+	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()

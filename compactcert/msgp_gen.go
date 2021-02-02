@@ -7,7 +7,7 @@ import (
 )
 
 // MarshalMsg implements msgp.Marshaler
-func (z *sigFromAddr) MarshalMsg(b []byte) (o []byte) {
+func (z *sigFromAddr) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
@@ -30,17 +30,29 @@ func (z *sigFromAddr) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o = (*z).Round.MarshalMsg(o)
+			o, err = (*z).Round.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Round")
+				return
+			}
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o = (*z).Sig.MarshalMsg(o)
+			o, err = (*z).Sig.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Sig")
+				return
+			}
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "signer"
 			o = append(o, 0xa6, 0x73, 0x69, 0x67, 0x6e, 0x65, 0x72)
-			o = (*z).Signer.MarshalMsg(o)
+			o, err = (*z).Signer.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Signer")
+				return
+			}
 		}
 	}
 	return

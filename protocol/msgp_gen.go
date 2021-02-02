@@ -7,7 +7,7 @@ import (
 )
 
 // MarshalMsg implements msgp.Marshaler
-func (z CompactCertType) MarshalMsg(b []byte) (o []byte) {
+func (z CompactCertType) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -53,7 +53,7 @@ func (z CompactCertType) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z ConsensusVersion) MarshalMsg(b []byte) (o []byte) {
+func (z ConsensusVersion) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendString(o, string(z))
 	return
@@ -99,7 +99,7 @@ func (z ConsensusVersion) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z Error) MarshalMsg(b []byte) (o []byte) {
+func (z Error) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendString(o, string(z))
 	return
@@ -145,7 +145,7 @@ func (z Error) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z HashID) MarshalMsg(b []byte) (o []byte) {
+func (z HashID) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendString(o, string(z))
 	return
@@ -191,7 +191,7 @@ func (z HashID) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z NetworkID) MarshalMsg(b []byte) (o []byte) {
+func (z NetworkID) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendString(o, string(z))
 	return
@@ -237,7 +237,7 @@ func (z NetworkID) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z Tag) MarshalMsg(b []byte) (o []byte) {
+func (z Tag) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendString(o, string(z))
 	return
@@ -283,7 +283,7 @@ func (z Tag) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z TxType) MarshalMsg(b []byte) (o []byte) {
+func (z TxType) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendString(o, string(z))
 	return
