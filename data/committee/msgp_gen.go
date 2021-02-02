@@ -6,40 +6,6 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-// The following msgp objects are implemented in this file:
-// Credential
-//      |-----> (*) MarshalMsg
-//      |-----> (*) CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> (*) Msgsize
-//      |-----> (*) MsgIsZero
-//
-// Seed
-//   |-----> (*) MarshalMsg
-//   |-----> (*) CanMarshalMsg
-//   |-----> (*) UnmarshalMsg
-//   |-----> (*) CanUnmarshalMsg
-//   |-----> (*) Msgsize
-//   |-----> (*) MsgIsZero
-//
-// UnauthenticatedCredential
-//             |-----> (*) MarshalMsg
-//             |-----> (*) CanMarshalMsg
-//             |-----> (*) UnmarshalMsg
-//             |-----> (*) CanUnmarshalMsg
-//             |-----> (*) Msgsize
-//             |-----> (*) MsgIsZero
-//
-// hashableCredential
-//          |-----> (*) MarshalMsg
-//          |-----> (*) CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> (*) Msgsize
-//          |-----> (*) MsgIsZero
-//
-
 // MarshalMsg implements msgp.Marshaler
 func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())

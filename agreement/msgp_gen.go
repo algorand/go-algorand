@@ -6,172 +6,9 @@ import (
 	"sort"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
-
-// The following msgp objects are implemented in this file:
-// Certificate
-//      |-----> (*) MarshalMsg
-//      |-----> (*) CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> (*) Msgsize
-//      |-----> (*) MsgIsZero
-//
-// bundle
-//    |-----> (*) MarshalMsg
-//    |-----> (*) CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> (*) Msgsize
-//    |-----> (*) MsgIsZero
-//
-// equivocationVote
-//         |-----> (*) MarshalMsg
-//         |-----> (*) CanMarshalMsg
-//         |-----> (*) UnmarshalMsg
-//         |-----> (*) CanUnmarshalMsg
-//         |-----> (*) Msgsize
-//         |-----> (*) MsgIsZero
-//
-// equivocationVoteAuthenticator
-//               |-----> (*) MarshalMsg
-//               |-----> (*) CanMarshalMsg
-//               |-----> (*) UnmarshalMsg
-//               |-----> (*) CanUnmarshalMsg
-//               |-----> (*) Msgsize
-//               |-----> (*) MsgIsZero
-//
-// period
-//    |-----> MarshalMsg
-//    |-----> CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> Msgsize
-//    |-----> MsgIsZero
-//
-// proposal
-//     |-----> (*) MarshalMsg
-//     |-----> (*) CanMarshalMsg
-//     |-----> (*) UnmarshalMsg
-//     |-----> (*) CanUnmarshalMsg
-//     |-----> (*) Msgsize
-//     |-----> (*) MsgIsZero
-//
-// proposalValue
-//       |-----> (*) MarshalMsg
-//       |-----> (*) CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> (*) Msgsize
-//       |-----> (*) MsgIsZero
-//
-// proposerSeed
-//       |-----> (*) MarshalMsg
-//       |-----> (*) CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> (*) Msgsize
-//       |-----> (*) MsgIsZero
-//
-// rawVote
-//    |-----> (*) MarshalMsg
-//    |-----> (*) CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> (*) Msgsize
-//    |-----> (*) MsgIsZero
-//
-// seedInput
-//     |-----> (*) MarshalMsg
-//     |-----> (*) CanMarshalMsg
-//     |-----> (*) UnmarshalMsg
-//     |-----> (*) CanUnmarshalMsg
-//     |-----> (*) Msgsize
-//     |-----> (*) MsgIsZero
-//
-// selector
-//     |-----> (*) MarshalMsg
-//     |-----> (*) CanMarshalMsg
-//     |-----> (*) UnmarshalMsg
-//     |-----> (*) CanUnmarshalMsg
-//     |-----> (*) Msgsize
-//     |-----> (*) MsgIsZero
-//
-// serializableErrorUnderlying
-//              |-----> MarshalMsg
-//              |-----> CanMarshalMsg
-//              |-----> (*) UnmarshalMsg
-//              |-----> (*) CanUnmarshalMsg
-//              |-----> Msgsize
-//              |-----> MsgIsZero
-//
-// step
-//   |-----> MarshalMsg
-//   |-----> CanMarshalMsg
-//   |-----> (*) UnmarshalMsg
-//   |-----> (*) CanUnmarshalMsg
-//   |-----> Msgsize
-//   |-----> MsgIsZero
-//
-// transmittedPayload
-//          |-----> (*) MarshalMsg
-//          |-----> (*) CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> (*) Msgsize
-//          |-----> (*) MsgIsZero
-//
-// unauthenticatedBundle
-//           |-----> (*) MarshalMsg
-//           |-----> (*) CanMarshalMsg
-//           |-----> (*) UnmarshalMsg
-//           |-----> (*) CanUnmarshalMsg
-//           |-----> (*) Msgsize
-//           |-----> (*) MsgIsZero
-//
-// unauthenticatedEquivocationVote
-//                |-----> (*) MarshalMsg
-//                |-----> (*) CanMarshalMsg
-//                |-----> (*) UnmarshalMsg
-//                |-----> (*) CanUnmarshalMsg
-//                |-----> (*) Msgsize
-//                |-----> (*) MsgIsZero
-//
-// unauthenticatedProposal
-//            |-----> (*) MarshalMsg
-//            |-----> (*) CanMarshalMsg
-//            |-----> (*) UnmarshalMsg
-//            |-----> (*) CanUnmarshalMsg
-//            |-----> (*) Msgsize
-//            |-----> (*) MsgIsZero
-//
-// unauthenticatedVote
-//          |-----> (*) MarshalMsg
-//          |-----> (*) CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> (*) Msgsize
-//          |-----> (*) MsgIsZero
-//
-// vote
-//   |-----> (*) MarshalMsg
-//   |-----> (*) CanMarshalMsg
-//   |-----> (*) UnmarshalMsg
-//   |-----> (*) CanUnmarshalMsg
-//   |-----> (*) Msgsize
-//   |-----> (*) MsgIsZero
-//
-// voteAuthenticator
-//         |-----> (*) MarshalMsg
-//         |-----> (*) CanMarshalMsg
-//         |-----> (*) UnmarshalMsg
-//         |-----> (*) CanUnmarshalMsg
-//         |-----> (*) Msgsize
-//         |-----> (*) MsgIsZero
-//
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Certificate) MarshalMsg(b []byte) (o []byte, err error) {
@@ -1972,11 +1809,11 @@ func (z *proposal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			if zb0006 {
 				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
 			} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0005)
+				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0005)
 			}
 			for zb0005 > 0 {
 				var zb0001 protocol.CompactCertType
-				var zb0002 bookkeeping.CompactCertState
+				var zb0002 CompactCertState
 				zb0005--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
@@ -2198,11 +2035,11 @@ func (z *proposal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if zb0009 {
 					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
 				} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0008)
+					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0008)
 				}
 				for zb0008 > 0 {
 					var zb0001 protocol.CompactCertType
-					var zb0002 bookkeeping.CompactCertState
+					var zb0002 CompactCertState
 					zb0008--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
@@ -3772,11 +3609,11 @@ func (z *transmittedPayload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			if zb0006 {
 				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
 			} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0005)
+				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0005)
 			}
 			for zb0005 > 0 {
 				var zb0001 protocol.CompactCertType
-				var zb0002 bookkeeping.CompactCertState
+				var zb0002 CompactCertState
 				zb0005--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
@@ -4006,11 +3843,11 @@ func (z *transmittedPayload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if zb0009 {
 					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
 				} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0008)
+					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0008)
 				}
 				for zb0008 > 0 {
 					var zb0001 protocol.CompactCertType
-					var zb0002 bookkeeping.CompactCertState
+					var zb0002 CompactCertState
 					zb0008--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
@@ -5352,11 +5189,11 @@ func (z *unauthenticatedProposal) UnmarshalMsg(bts []byte) (o []byte, err error)
 			if zb0006 {
 				(*z).Block.BlockHeader.CompactCert = nil
 			} else if (*z).Block.BlockHeader.CompactCert == nil {
-				(*z).Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0005)
+				(*z).Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0005)
 			}
 			for zb0005 > 0 {
 				var zb0001 protocol.CompactCertType
-				var zb0002 bookkeeping.CompactCertState
+				var zb0002 CompactCertState
 				zb0005--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
@@ -5578,11 +5415,11 @@ func (z *unauthenticatedProposal) UnmarshalMsg(bts []byte) (o []byte, err error)
 				if zb0009 {
 					(*z).Block.BlockHeader.CompactCert = nil
 				} else if (*z).Block.BlockHeader.CompactCert == nil {
-					(*z).Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0008)
+					(*z).Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0008)
 				}
 				for zb0008 > 0 {
 					var zb0001 protocol.CompactCertType
-					var zb0002 bookkeeping.CompactCertState
+					var zb0002 CompactCertState
 					zb0008--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {

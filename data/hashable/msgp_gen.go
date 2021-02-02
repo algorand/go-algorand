@@ -6,16 +6,6 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-// The following msgp objects are implemented in this file:
-// Message
-//    |-----> (*) MarshalMsg
-//    |-----> (*) CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> (*) Msgsize
-//    |-----> (*) MsgIsZero
-//
-
 // MarshalMsg implements msgp.Marshaler
 func (z *Message) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())

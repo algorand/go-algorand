@@ -9,56 +9,6 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-// The following msgp objects are implemented in this file:
-// Cert
-//   |-----> (*) MarshalMsg
-//   |-----> (*) CanMarshalMsg
-//   |-----> (*) UnmarshalMsg
-//   |-----> (*) CanUnmarshalMsg
-//   |-----> (*) Msgsize
-//   |-----> (*) MsgIsZero
-//
-// CompactOneTimeSignature
-//            |-----> (*) MarshalMsg
-//            |-----> (*) CanMarshalMsg
-//            |-----> (*) UnmarshalMsg
-//            |-----> (*) CanUnmarshalMsg
-//            |-----> (*) Msgsize
-//            |-----> (*) MsgIsZero
-//
-// Participant
-//      |-----> (*) MarshalMsg
-//      |-----> (*) CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> (*) Msgsize
-//      |-----> (*) MsgIsZero
-//
-// Reveal
-//    |-----> (*) MarshalMsg
-//    |-----> (*) CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> (*) Msgsize
-//    |-----> (*) MsgIsZero
-//
-// coinChoice
-//      |-----> (*) MarshalMsg
-//      |-----> (*) CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> (*) Msgsize
-//      |-----> (*) MsgIsZero
-//
-// sigslotCommit
-//       |-----> (*) MarshalMsg
-//       |-----> (*) CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> (*) Msgsize
-//       |-----> (*) MsgIsZero
-//
-
 // MarshalMsg implements msgp.Marshaler
 func (z *Cert) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())

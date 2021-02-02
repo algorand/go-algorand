@@ -6,56 +6,6 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-// The following msgp objects are implemented in this file:
-// CatchpointCatchupState
-//            |-----> MarshalMsg
-//            |-----> CanMarshalMsg
-//            |-----> (*) UnmarshalMsg
-//            |-----> (*) CanUnmarshalMsg
-//            |-----> Msgsize
-//            |-----> MsgIsZero
-//
-// CatchpointFileHeader
-//           |-----> (*) MarshalMsg
-//           |-----> (*) CanMarshalMsg
-//           |-----> (*) UnmarshalMsg
-//           |-----> (*) CanUnmarshalMsg
-//           |-----> (*) Msgsize
-//           |-----> (*) MsgIsZero
-//
-// catchpointFileBalancesChunk
-//              |-----> (*) MarshalMsg
-//              |-----> (*) CanMarshalMsg
-//              |-----> (*) UnmarshalMsg
-//              |-----> (*) CanUnmarshalMsg
-//              |-----> (*) Msgsize
-//              |-----> (*) MsgIsZero
-//
-// catchpointState
-//        |-----> MarshalMsg
-//        |-----> CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> Msgsize
-//        |-----> MsgIsZero
-//
-// encodedBalanceRecord
-//           |-----> (*) MarshalMsg
-//           |-----> (*) CanMarshalMsg
-//           |-----> (*) UnmarshalMsg
-//           |-----> (*) CanUnmarshalMsg
-//           |-----> (*) Msgsize
-//           |-----> (*) MsgIsZero
-//
-// storageAction
-//       |-----> MarshalMsg
-//       |-----> CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> Msgsize
-//       |-----> MsgIsZero
-//
-
 // MarshalMsg implements msgp.Marshaler
 func (z CatchpointCatchupState) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())

@@ -6,64 +6,6 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-// The following msgp objects are implemented in this file:
-// CompactCertType
-//        |-----> MarshalMsg
-//        |-----> CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> Msgsize
-//        |-----> MsgIsZero
-//
-// ConsensusVersion
-//         |-----> MarshalMsg
-//         |-----> CanMarshalMsg
-//         |-----> (*) UnmarshalMsg
-//         |-----> (*) CanUnmarshalMsg
-//         |-----> Msgsize
-//         |-----> MsgIsZero
-//
-// Error
-//   |-----> MarshalMsg
-//   |-----> CanMarshalMsg
-//   |-----> (*) UnmarshalMsg
-//   |-----> (*) CanUnmarshalMsg
-//   |-----> Msgsize
-//   |-----> MsgIsZero
-//
-// HashID
-//    |-----> MarshalMsg
-//    |-----> CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> Msgsize
-//    |-----> MsgIsZero
-//
-// NetworkID
-//     |-----> MarshalMsg
-//     |-----> CanMarshalMsg
-//     |-----> (*) UnmarshalMsg
-//     |-----> (*) CanUnmarshalMsg
-//     |-----> Msgsize
-//     |-----> MsgIsZero
-//
-// Tag
-//  |-----> MarshalMsg
-//  |-----> CanMarshalMsg
-//  |-----> (*) UnmarshalMsg
-//  |-----> (*) CanUnmarshalMsg
-//  |-----> Msgsize
-//  |-----> MsgIsZero
-//
-// TxType
-//    |-----> MarshalMsg
-//    |-----> CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> Msgsize
-//    |-----> MsgIsZero
-//
-
 // MarshalMsg implements msgp.Marshaler
 func (z CompactCertType) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
