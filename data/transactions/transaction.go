@@ -104,6 +104,9 @@ type ApplyData struct {
 	// Closing amount for transaction.
 	ClosingAmount basics.MicroAlgos `codec:"ca"`
 
+	// Closing amount for asset transaction.
+	AssetClosingAmount uint64 `codec:"aca"`
+
 	// Rewards applied to the Sender, Receiver, and CloseRemainderTo accounts.
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
@@ -115,6 +118,9 @@ type ApplyData struct {
 // EvalDelta's internal deltas (see EvalDelta.Equal for more information)
 func (ad ApplyData) Equal(o ApplyData) bool {
 	if ad.ClosingAmount != o.ClosingAmount {
+		return false
+	}
+	if ad.AssetClosingAmount != o.AssetClosingAmount {
 		return false
 	}
 	if ad.SenderRewards != o.SenderRewards {
