@@ -53,5 +53,5 @@ func TestDeadlockLogging(t *testing.T) {
 	mu.RLock()
 	mu.RLock()
 
-	_ = <- deadlockCh
+	_ = <-deadlockCh
 }

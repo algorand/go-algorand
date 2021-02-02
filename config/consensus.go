@@ -346,6 +346,7 @@ type ConsensusParams struct {
 // PaysetCommitType enumerates possible ways for the block header to commit to
 // the set of transactions in the block.
 type PaysetCommitType int
+
 const (
 	// PaysetCommitUnsupported is the zero value, reflecting the fact
 	// that some early protocols used a Merkle tree to commit to the
