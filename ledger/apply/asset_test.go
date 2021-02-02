@@ -17,11 +17,14 @@
 package apply
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestAssetTransfer(t *testing.T) {
@@ -66,7 +69,6 @@ func TestAssetTransfer(t *testing.T) {
 	}
 
 	mockBal := mockBalances{protocol.ConsensusCurrentVersion, addrs}
-
 	tx := transactions.Transaction{
 		Type: protocol.AssetTransferTx,
 		Header: transactions.Header{
@@ -82,11 +84,15 @@ func TestAssetTransfer(t *testing.T) {
 			AssetCloseTo:  cls,
 		},
 	}
+
 	var ad transactions.ApplyData
 	err := AssetTransfer(tx.AssetTransferTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, &ad)
 	require.NoError(t, err)
-	require.Equal(t, uint64(0), addrs[dst].Assets[1].Amount)
-	require.Equal(t, dstAmount-toSend, ad.AssetClosingAmount)
-	require.Equal(t, total-dstAmount+toSend, addrs[src].Assets[1].Amount)
-	require.Equal(t, dstAmount-toSend, addrs[cls].Assets[1].Amount)
+
+	if config.Consensus[protocol.ConsensusCurrentVersion].EnableAssetCloseAmount {
+		require.Equal(t, uint64(0), addrs[dst].Assets[1].Amount)
+		require.Equal(t, dstAmount-toSend, ad.AssetClosingAmount)
+		require.Equal(t, total-dstAmount+toSend, addrs[src].Assets[1].Amount)
+		require.Equal(t, dstAmount-toSend, addrs[cls].Assets[1].Amount)
+	}
 }

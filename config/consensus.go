@@ -342,6 +342,10 @@ type ConsensusParams struct {
 	// CompactCertSecKQ is the security parameter (k+q) for the compact
 	// certificate scheme.
 	CompactCertSecKQ uint64
+
+	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
+	// asset that were sent to the close-to address.
+	EnableAssetCloseAmount bool
 }
 
 // ConsensusProtocols defines a set of supported protocol versions and their
@@ -826,6 +830,9 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
+
+	// Enable AssetCloseAmount field
+	vFuture.EnableAssetCloseAmount = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

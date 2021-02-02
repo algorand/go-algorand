@@ -17,7 +17,6 @@
 package apply
 
 import (
-	"errors"
 	"math/rand"
 	"testing"
 
@@ -105,15 +104,10 @@ func (balances mockBalances) PutWithCreatable(basics.Address, basics.AccountData
 }
 
 func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
-	if balances.b == nil {
-		return basics.AccountData{}, nil
-	}
-
 	if ad, ok := balances.b[addr]; ok {
 		return ad, nil
 	}
-	return basics.AccountData{}, errors.New("can't find address")
-
+	return basics.AccountData{}, nil
 }
 
 func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -121,15 +115,12 @@ func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.
 }
 
 func (balances mockBalances) Put(addr basics.Address, ad basics.AccountData) error {
-	if balances.b == nil {
-		return nil
-	}
-
 	if _, ok := balances.b[addr]; ok {
 		balances.b[addr] = ad
 		return nil
 	}
-	return errors.New("can't find address")
+	balances.b[addr] = basics.AccountData{}
+	return nil
 }
 
 func (balances mockBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
