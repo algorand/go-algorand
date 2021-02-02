@@ -478,7 +478,7 @@ func MakeBlock(prev BlockHeader) Block {
 	return blk
 }
 
-// Commit computes the commitment to the payset, using the appropriate
+// PaysetCommit computes the commitment to the payset, using the appropriate
 // commitment plan based on the block's protocol.
 func (block Block) PaysetCommit() (crypto.Digest, error) {
 	params, ok := config.Consensus[block.CurrentProtocol]
