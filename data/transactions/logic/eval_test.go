@@ -3973,3 +3973,30 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 		})
 	}
 }
+
+func testAccepts(t *testing.T, program string, introduced uint64) {
+	program = strings.ReplaceAll(program, ";", "\n")
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			if v < introduced {
+				testProg(t, program, v, expect{0, "unknown..."})
+				return
+			}
+			ops := testProg(t, program, v)
+			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			require.NoError(t, err)
+			require.True(t, cost < 1000)
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = ops.Program
+			pass, err := Eval(ops.Program, defaultEvalParams(nil, &txn))
+			require.True(t, pass)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestAssert(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 0;assert;int 1", 3)
+	testAccepts(t, "int 1;assert;int 1", 3)
+}

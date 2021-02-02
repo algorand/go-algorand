@@ -315,7 +315,6 @@ func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpSt
 		require.Empty(t, ops.Errors)
 		require.NoError(t, err)
 		require.NotNil(t, ops)
-		require.Empty(t, ops.Errors)
 		require.NotNil(t, ops.Program)
 	} else {
 		require.Error(t, err)
@@ -323,9 +322,15 @@ func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpSt
 		require.Len(t, errors, len(expected))
 		for _, exp := range expected {
 			var found *lineError
-			for _, err := range errors {
-				if err.Line == exp.l {
-					found = err
+			if exp.l == 0 {
+				// Allow a single error to ignore line number
+				require.Len(t, expected, 1)
+				found = errors[0]
+			} else {
+				for _, err := range errors {
+					if err.Line == exp.l {
+						found = err
+					}
 				}
 			}
 			require.NotNil(t, found)
