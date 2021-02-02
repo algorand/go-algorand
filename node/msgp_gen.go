@@ -6,8 +6,26 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
+// The following msgp objects are implemented in this file:
+// netPrioResponse
+//        |-----> (*) MarshalMsg
+//        |-----> (*) CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> (*) Msgsize
+//        |-----> (*) MsgIsZero
+//
+// netPrioResponseSigned
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//
+
 // MarshalMsg implements msgp.Marshaler
-func (z *netPrioResponse) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *netPrioResponse) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(1)
@@ -113,7 +131,7 @@ func (z *netPrioResponse) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *netPrioResponseSigned) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *netPrioResponseSigned) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
@@ -158,29 +176,17 @@ func (z *netPrioResponseSigned) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "Round"
 			o = append(o, 0xa5, 0x52, 0x6f, 0x75, 0x6e, 0x64)
-			o, err = (*z).Round.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
+			o = (*z).Round.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "Sender"
 			o = append(o, 0xa6, 0x53, 0x65, 0x6e, 0x64, 0x65, 0x72)
-			o, err = (*z).Sender.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sender")
-				return
-			}
+			o = (*z).Sender.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "Sig"
 			o = append(o, 0xa3, 0x53, 0x69, 0x67)
-			o, err = (*z).Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sig")
-				return
-			}
+			o = (*z).Sig.MarshalMsg(o)
 		}
 	}
 	return

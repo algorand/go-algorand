@@ -6,12 +6,175 @@ import (
 	"sort"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
 
+// The following msgp objects are implemented in this file:
+// Certificate
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// bundle
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
+// equivocationVote
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//
+// equivocationVoteAuthenticator
+//               |-----> (*) MarshalMsg
+//               |-----> (*) CanMarshalMsg
+//               |-----> (*) UnmarshalMsg
+//               |-----> (*) CanUnmarshalMsg
+//               |-----> (*) Msgsize
+//               |-----> (*) MsgIsZero
+//
+// period
+//    |-----> MarshalMsg
+//    |-----> CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> Msgsize
+//    |-----> MsgIsZero
+//
+// proposal
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// proposalValue
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// proposerSeed
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// rawVote
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
+// seedInput
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// selector
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// serializableErrorUnderlying
+//              |-----> MarshalMsg
+//              |-----> CanMarshalMsg
+//              |-----> (*) UnmarshalMsg
+//              |-----> (*) CanUnmarshalMsg
+//              |-----> Msgsize
+//              |-----> MsgIsZero
+//
+// step
+//   |-----> MarshalMsg
+//   |-----> CanMarshalMsg
+//   |-----> (*) UnmarshalMsg
+//   |-----> (*) CanUnmarshalMsg
+//   |-----> Msgsize
+//   |-----> MsgIsZero
+//
+// transmittedPayload
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//
+// unauthenticatedBundle
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//
+// unauthenticatedEquivocationVote
+//                |-----> (*) MarshalMsg
+//                |-----> (*) CanMarshalMsg
+//                |-----> (*) UnmarshalMsg
+//                |-----> (*) CanUnmarshalMsg
+//                |-----> (*) Msgsize
+//                |-----> (*) MsgIsZero
+//
+// unauthenticatedProposal
+//            |-----> (*) MarshalMsg
+//            |-----> (*) CanMarshalMsg
+//            |-----> (*) UnmarshalMsg
+//            |-----> (*) CanUnmarshalMsg
+//            |-----> (*) Msgsize
+//            |-----> (*) MsgIsZero
+//
+// unauthenticatedVote
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//
+// vote
+//   |-----> (*) MarshalMsg
+//   |-----> (*) CanMarshalMsg
+//   |-----> (*) UnmarshalMsg
+//   |-----> (*) CanUnmarshalMsg
+//   |-----> (*) Msgsize
+//   |-----> (*) MsgIsZero
+//
+// voteAuthenticator
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//
+
 // MarshalMsg implements msgp.Marshaler
-func (z *Certificate) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *Certificate) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(6)
@@ -52,11 +215,7 @@ func (z *Certificate) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).EquivocationVotes)))
 			}
 			for zb0002 := range (*z).EquivocationVotes {
-				o, err = (*z).EquivocationVotes[zb0002].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "EquivocationVotes", zb0002)
-					return
-				}
+				o = (*z).EquivocationVotes[zb0002].MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x4) == 0 { // if not empty
@@ -67,20 +226,12 @@ func (z *Certificate) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x8) == 0 { // if not empty
 			// string "prop"
 			o = append(o, 0xa4, 0x70, 0x72, 0x6f, 0x70)
-			o, err = (*z).Proposal.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Proposal")
-				return
-			}
+			o = (*z).Proposal.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x10) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o, err = (*z).Round.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
+			o = (*z).Round.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
 			// string "step"
@@ -96,11 +247,7 @@ func (z *Certificate) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Votes)))
 			}
 			for zb0001 := range (*z).Votes {
-				o, err = (*z).Votes[zb0001].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Votes", zb0001)
-					return
-				}
+				o = (*z).Votes[zb0001].MarshalMsg(o)
 			}
 		}
 	}
@@ -369,7 +516,7 @@ func (z *Certificate) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *bundle) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *bundle) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(3)
@@ -398,21 +545,13 @@ func (z *bundle) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).EquivocationVotes)))
 			}
 			for zb0002 := range (*z).EquivocationVotes {
-				o, err = (*z).EquivocationVotes[zb0002].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "EquivocationVotes", zb0002)
-					return
-				}
+				o = (*z).EquivocationVotes[zb0002].MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x4) == 0 { // if not empty
 			// string "u"
 			o = append(o, 0xa1, 0x75)
-			o, err = (*z).U.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "U")
-				return
-			}
+			o = (*z).U.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x8) == 0 { // if not empty
 			// string "vote"
@@ -423,11 +562,7 @@ func (z *bundle) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Votes)))
 			}
 			for zb0001 := range (*z).Votes {
-				o, err = (*z).Votes[zb0001].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Votes", zb0001)
-					return
-				}
+				o = (*z).Votes[zb0001].MarshalMsg(o)
 			}
 		}
 	}
@@ -638,7 +773,7 @@ func (z *bundle) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *equivocationVote) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *equivocationVote) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(7)
@@ -677,11 +812,7 @@ func (z *equivocationVote) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x2) == 0 { // if not empty
 			// string "cred"
 			o = append(o, 0xa4, 0x63, 0x72, 0x65, 0x64)
-			o, err = (*z).Cred.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Cred")
-				return
-			}
+			o = (*z).Cred.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x4) == 0 { // if not empty
 			// string "per"
@@ -693,42 +824,26 @@ func (z *equivocationVote) MarshalMsg(b []byte) (o []byte, err error) {
 			o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x70, 0x73)
 			o = msgp.AppendArrayHeader(o, 2)
 			for zb0001 := range (*z).Proposals {
-				o, err = (*z).Proposals[zb0001].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposals", zb0001)
-					return
-				}
+				o = (*z).Proposals[zb0001].MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x10) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o, err = (*z).Round.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
+			o = (*z).Round.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
 			// string "sigs"
 			o = append(o, 0xa4, 0x73, 0x69, 0x67, 0x73)
 			o = msgp.AppendArrayHeader(o, 2)
 			for zb0002 := range (*z).Sigs {
-				o, err = (*z).Sigs[zb0002].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Sigs", zb0002)
-					return
-				}
+				o = (*z).Sigs[zb0002].MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x40) == 0 { // if not empty
 			// string "snd"
 			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
-			o, err = (*z).Sender.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sender")
-				return
-			}
+			o = (*z).Sender.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x80) == 0 { // if not empty
 			// string "step"
@@ -979,7 +1094,7 @@ func (z *equivocationVote) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *equivocationVoteAuthenticator) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *equivocationVoteAuthenticator) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(4)
@@ -988,38 +1103,22 @@ func (z *equivocationVoteAuthenticator) MarshalMsg(b []byte) (o []byte, err erro
 	if zb0003Len != 0 {
 		// string "cred"
 		o = append(o, 0xa4, 0x63, 0x72, 0x65, 0x64)
-		o, err = (*z).Cred.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Cred")
-			return
-		}
+		o = (*z).Cred.MarshalMsg(o)
 		// string "props"
 		o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x70, 0x73)
 		o = msgp.AppendArrayHeader(o, 2)
 		for zb0002 := range (*z).Proposals {
-			o, err = (*z).Proposals[zb0002].MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Proposals", zb0002)
-				return
-			}
+			o = (*z).Proposals[zb0002].MarshalMsg(o)
 		}
 		// string "sig"
 		o = append(o, 0xa3, 0x73, 0x69, 0x67)
 		o = msgp.AppendArrayHeader(o, 2)
 		for zb0001 := range (*z).Sigs {
-			o, err = (*z).Sigs[zb0001].MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sigs", zb0001)
-				return
-			}
+			o = (*z).Sigs[zb0001].MarshalMsg(o)
 		}
 		// string "snd"
 		o = append(o, 0xa3, 0x73, 0x6e, 0x64)
-		o, err = (*z).Sender.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Sender")
-			return
-		}
+		o = (*z).Sender.MarshalMsg(o)
 	}
 	return
 }
@@ -1206,7 +1305,7 @@ func (z *equivocationVoteAuthenticator) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z period) MarshalMsg(b []byte) (o []byte, err error) {
+func (z period) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -1252,7 +1351,7 @@ func (z period) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *proposal) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(27)
@@ -1384,16 +1483,8 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert[zb0001]
 				_ = zb0002
-				o, err = zb0001.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "CompactCert", zb0001)
-					return
-				}
-				o, err = zb0002.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "CompactCert", zb0001)
-					return
-				}
+				o = zb0001.MarshalMsg(o)
+				o = zb0002.MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
@@ -1404,11 +1495,7 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x40) == 0 { // if not empty
 			// string "fees"
 			o = append(o, 0xa4, 0x66, 0x65, 0x65, 0x73)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "FeeSink")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x80) == 0 { // if not empty
 			// string "frac"
@@ -1423,38 +1510,22 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x200) == 0 { // if not empty
 			// string "gh"
 			o = append(o, 0xa2, 0x67, 0x68)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "GenesisHash")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x400) == 0 { // if not empty
 			// string "nextbefore"
 			o = append(o, 0xaa, 0x6e, 0x65, 0x78, 0x74, 0x62, 0x65, 0x66, 0x6f, 0x72, 0x65)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolVoteBefore")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x800) == 0 { // if not empty
 			// string "nextproto"
 			o = append(o, 0xa9, 0x6e, 0x65, 0x78, 0x74, 0x70, 0x72, 0x6f, 0x74, 0x6f)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocol")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x1000) == 0 { // if not empty
 			// string "nextswitch"
 			o = append(o, 0xaa, 0x6e, 0x65, 0x78, 0x74, 0x73, 0x77, 0x69, 0x74, 0x63, 0x68)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolSwitchOn")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x2000) == 0 { // if not empty
 			// string "nextyes"
@@ -1469,29 +1540,17 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x8000) == 0 { // if not empty
 			// string "oprop"
 			o = append(o, 0xa5, 0x6f, 0x70, 0x72, 0x6f, 0x70)
-			o, err = (*z).unauthenticatedProposal.OriginalProposer.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "OriginalProposer")
-				return
-			}
+			o = (*z).unauthenticatedProposal.OriginalProposer.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x10000) == 0 { // if not empty
 			// string "prev"
 			o = append(o, 0xa4, 0x70, 0x72, 0x65, 0x76)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.Branch.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Branch")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.Branch.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20000) == 0 { // if not empty
 			// string "proto"
 			o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x74, 0x6f)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "CurrentProtocol")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x40000) == 0 { // if not empty
 			// string "rate"
@@ -1501,47 +1560,27 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x80000) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.Round.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.Round.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x100000) == 0 { // if not empty
 			// string "rwcalr"
 			o = append(o, 0xa6, 0x72, 0x77, 0x63, 0x61, 0x6c, 0x72)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsRecalculationRound")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x200000) == 0 { // if not empty
 			// string "rwd"
 			o = append(o, 0xa3, 0x72, 0x77, 0x64)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsPool")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x400000) == 0 { // if not empty
 			// string "sdpf"
 			o = append(o, 0xa4, 0x73, 0x64, 0x70, 0x66)
-			o, err = (*z).unauthenticatedProposal.SeedProof.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SeedProof")
-				return
-			}
+			o = (*z).unauthenticatedProposal.SeedProof.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x800000) == 0 { // if not empty
 			// string "seed"
 			o = append(o, 0xa4, 0x73, 0x65, 0x65, 0x64)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.Seed.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Seed")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.Seed.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x1000000) == 0 { // if not empty
 			// string "tc"
@@ -1556,38 +1595,22 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x4000000) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnRoot.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "TxnRoot")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.TxnRoot.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x8000000) == 0 { // if not empty
 			// string "txns"
 			o = append(o, 0xa4, 0x74, 0x78, 0x6e, 0x73)
-			o, err = (*z).unauthenticatedProposal.Block.Payset.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Payset")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.Payset.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x10000000) == 0 { // if not empty
 			// string "upgradedelay"
 			o = append(o, 0xac, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x64, 0x65, 0x6c, 0x61, 0x79)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradeDelay")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20000000) == 0 { // if not empty
 			// string "upgradeprop"
 			o = append(o, 0xab, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x70, 0x72, 0x6f, 0x70)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradePropose")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x40000000) == 0 { // if not empty
 			// string "upgradeyes"
@@ -1809,11 +1832,11 @@ func (z *proposal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			if zb0006 {
 				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
 			} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0005)
+				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0005)
 			}
 			for zb0005 > 0 {
 				var zb0001 protocol.CompactCertType
-				var zb0002 CompactCertState
+				var zb0002 bookkeeping.CompactCertState
 				zb0005--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
@@ -2035,11 +2058,11 @@ func (z *proposal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if zb0009 {
 					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
 				} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0008)
+					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0008)
 				}
 				for zb0008 > 0 {
 					var zb0001 protocol.CompactCertType
-					var zb0002 CompactCertState
+					var zb0002 bookkeeping.CompactCertState
 					zb0008--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
@@ -2119,7 +2142,7 @@ func (z *proposal) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *proposalValue) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *proposalValue) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
@@ -2146,20 +2169,12 @@ func (z *proposalValue) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "dig"
 			o = append(o, 0xa3, 0x64, 0x69, 0x67)
-			o, err = (*z).BlockDigest.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "BlockDigest")
-				return
-			}
+			o = (*z).BlockDigest.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "encdig"
 			o = append(o, 0xa6, 0x65, 0x6e, 0x63, 0x64, 0x69, 0x67)
-			o, err = (*z).EncodingDigest.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "EncodingDigest")
-				return
-			}
+			o = (*z).EncodingDigest.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "oper"
@@ -2169,11 +2184,7 @@ func (z *proposalValue) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "oprop"
 			o = append(o, 0xa5, 0x6f, 0x70, 0x72, 0x6f, 0x70)
-			o, err = (*z).OriginalProposer.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "OriginalProposer")
-				return
-			}
+			o = (*z).OriginalProposer.MarshalMsg(o)
 		}
 	}
 	return
@@ -2314,23 +2325,15 @@ func (z *proposalValue) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *proposerSeed) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *proposerSeed) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "addr"
 	o = append(o, 0x82, 0xa4, 0x61, 0x64, 0x64, 0x72)
-	o, err = (*z).Addr.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Addr")
-		return
-	}
+	o = (*z).Addr.MarshalMsg(o)
 	// string "vrf"
 	o = append(o, 0xa3, 0x76, 0x72, 0x66)
-	o, err = (*z).VRF.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "VRF")
-		return
-	}
+	o = (*z).VRF.MarshalMsg(o)
 	return
 }
 
@@ -2433,7 +2436,7 @@ func (z *proposerSeed) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *rawVote) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *rawVote) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(5)
@@ -2469,29 +2472,17 @@ func (z *rawVote) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "prop"
 			o = append(o, 0xa4, 0x70, 0x72, 0x6f, 0x70)
-			o, err = (*z).Proposal.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Proposal")
-				return
-			}
+			o = (*z).Proposal.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o, err = (*z).Round.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
+			o = (*z).Round.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "snd"
 			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
-			o, err = (*z).Sender.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sender")
-				return
-			}
+			o = (*z).Sender.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "step"
@@ -2659,23 +2650,15 @@ func (z *rawVote) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *seedInput) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *seedInput) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "alpha"
 	o = append(o, 0x82, 0xa5, 0x61, 0x6c, 0x70, 0x68, 0x61)
-	o, err = (*z).Alpha.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Alpha")
-		return
-	}
+	o = (*z).Alpha.MarshalMsg(o)
 	// string "hist"
 	o = append(o, 0xa4, 0x68, 0x69, 0x73, 0x74)
-	o, err = (*z).History.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "History")
-		return
-	}
+	o = (*z).History.MarshalMsg(o)
 	return
 }
 
@@ -2778,7 +2761,7 @@ func (z *seedInput) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *selector) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *selector) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 4
 	// string "per"
@@ -2786,18 +2769,10 @@ func (z *selector) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendUint64(o, uint64((*z).Period))
 	// string "rnd"
 	o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-	o, err = (*z).Round.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Round")
-		return
-	}
+	o = (*z).Round.MarshalMsg(o)
 	// string "seed"
 	o = append(o, 0xa4, 0x73, 0x65, 0x65, 0x64)
-	o, err = (*z).Seed.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Seed")
-		return
-	}
+	o = (*z).Seed.MarshalMsg(o)
 	// string "step"
 	o = append(o, 0xa4, 0x73, 0x74, 0x65, 0x70)
 	o = msgp.AppendUint64(o, uint64((*z).Step))
@@ -2947,7 +2922,7 @@ func (z *selector) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z serializableErrorUnderlying) MarshalMsg(b []byte) (o []byte, err error) {
+func (z serializableErrorUnderlying) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendString(o, string(z))
 	return
@@ -2993,7 +2968,7 @@ func (z serializableErrorUnderlying) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z step) MarshalMsg(b []byte) (o []byte, err error) {
+func (z step) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -3039,7 +3014,7 @@ func (z step) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(28)
@@ -3175,16 +3150,8 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert[zb0001]
 				_ = zb0002
-				o, err = zb0001.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "CompactCert", zb0001)
-					return
-				}
-				o, err = zb0002.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "CompactCert", zb0001)
-					return
-				}
+				o = zb0001.MarshalMsg(o)
+				o = zb0002.MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x40) == 0 { // if not empty
@@ -3195,11 +3162,7 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x80) == 0 { // if not empty
 			// string "fees"
 			o = append(o, 0xa4, 0x66, 0x65, 0x65, 0x73)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "FeeSink")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x100) == 0 { // if not empty
 			// string "frac"
@@ -3214,38 +3177,22 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x400) == 0 { // if not empty
 			// string "gh"
 			o = append(o, 0xa2, 0x67, 0x68)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "GenesisHash")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x800) == 0 { // if not empty
 			// string "nextbefore"
 			o = append(o, 0xaa, 0x6e, 0x65, 0x78, 0x74, 0x62, 0x65, 0x66, 0x6f, 0x72, 0x65)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolVoteBefore")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x1000) == 0 { // if not empty
 			// string "nextproto"
 			o = append(o, 0xa9, 0x6e, 0x65, 0x78, 0x74, 0x70, 0x72, 0x6f, 0x74, 0x6f)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocol")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x2000) == 0 { // if not empty
 			// string "nextswitch"
 			o = append(o, 0xaa, 0x6e, 0x65, 0x78, 0x74, 0x73, 0x77, 0x69, 0x74, 0x63, 0x68)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolSwitchOn")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x4000) == 0 { // if not empty
 			// string "nextyes"
@@ -3260,38 +3207,22 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x10000) == 0 { // if not empty
 			// string "oprop"
 			o = append(o, 0xa5, 0x6f, 0x70, 0x72, 0x6f, 0x70)
-			o, err = (*z).unauthenticatedProposal.OriginalProposer.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "OriginalProposer")
-				return
-			}
+			o = (*z).unauthenticatedProposal.OriginalProposer.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20000) == 0 { // if not empty
 			// string "prev"
 			o = append(o, 0xa4, 0x70, 0x72, 0x65, 0x76)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.Branch.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Branch")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.Branch.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x40000) == 0 { // if not empty
 			// string "proto"
 			o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x74, 0x6f)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "CurrentProtocol")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x80000) == 0 { // if not empty
 			// string "pv"
 			o = append(o, 0xa2, 0x70, 0x76)
-			o, err = (*z).PriorVote.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "PriorVote")
-				return
-			}
+			o = (*z).PriorVote.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x100000) == 0 { // if not empty
 			// string "rate"
@@ -3301,47 +3232,27 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x200000) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.Round.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.Round.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x400000) == 0 { // if not empty
 			// string "rwcalr"
 			o = append(o, 0xa6, 0x72, 0x77, 0x63, 0x61, 0x6c, 0x72)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsRecalculationRound")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x800000) == 0 { // if not empty
 			// string "rwd"
 			o = append(o, 0xa3, 0x72, 0x77, 0x64)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsPool")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x1000000) == 0 { // if not empty
 			// string "sdpf"
 			o = append(o, 0xa4, 0x73, 0x64, 0x70, 0x66)
-			o, err = (*z).unauthenticatedProposal.SeedProof.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SeedProof")
-				return
-			}
+			o = (*z).unauthenticatedProposal.SeedProof.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x2000000) == 0 { // if not empty
 			// string "seed"
 			o = append(o, 0xa4, 0x73, 0x65, 0x65, 0x64)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.Seed.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Seed")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.Seed.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x4000000) == 0 { // if not empty
 			// string "tc"
@@ -3356,38 +3267,22 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x10000000) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.TxnRoot.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "TxnRoot")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.TxnRoot.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20000000) == 0 { // if not empty
 			// string "txns"
 			o = append(o, 0xa4, 0x74, 0x78, 0x6e, 0x73)
-			o, err = (*z).unauthenticatedProposal.Block.Payset.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Payset")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.Payset.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x40000000) == 0 { // if not empty
 			// string "upgradedelay"
 			o = append(o, 0xac, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x64, 0x65, 0x6c, 0x61, 0x79)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradeDelay")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x80000000) == 0 { // if not empty
 			// string "upgradeprop"
 			o = append(o, 0xab, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x70, 0x72, 0x6f, 0x70)
-			o, err = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradePropose")
-				return
-			}
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x100000000) == 0 { // if not empty
 			// string "upgradeyes"
@@ -3609,11 +3504,11 @@ func (z *transmittedPayload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			if zb0006 {
 				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
 			} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0005)
+				(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0005)
 			}
 			for zb0005 > 0 {
 				var zb0001 protocol.CompactCertType
-				var zb0002 CompactCertState
+				var zb0002 bookkeeping.CompactCertState
 				zb0005--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
@@ -3843,11 +3738,11 @@ func (z *transmittedPayload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if zb0009 {
 					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = nil
 				} else if (*z).unauthenticatedProposal.Block.BlockHeader.CompactCert == nil {
-					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0008)
+					(*z).unauthenticatedProposal.Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0008)
 				}
 				for zb0008 > 0 {
 					var zb0001 protocol.CompactCertType
-					var zb0002 CompactCertState
+					var zb0002 bookkeeping.CompactCertState
 					zb0008--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
@@ -3933,7 +3828,7 @@ func (z *transmittedPayload) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *unauthenticatedBundle) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *unauthenticatedBundle) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(6)
@@ -3974,11 +3869,7 @@ func (z *unauthenticatedBundle) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).EquivocationVotes)))
 			}
 			for zb0002 := range (*z).EquivocationVotes {
-				o, err = (*z).EquivocationVotes[zb0002].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "EquivocationVotes", zb0002)
-					return
-				}
+				o = (*z).EquivocationVotes[zb0002].MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x4) == 0 { // if not empty
@@ -3989,20 +3880,12 @@ func (z *unauthenticatedBundle) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x8) == 0 { // if not empty
 			// string "prop"
 			o = append(o, 0xa4, 0x70, 0x72, 0x6f, 0x70)
-			o, err = (*z).Proposal.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Proposal")
-				return
-			}
+			o = (*z).Proposal.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x10) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o, err = (*z).Round.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
+			o = (*z).Round.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
 			// string "step"
@@ -4018,11 +3901,7 @@ func (z *unauthenticatedBundle) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Votes)))
 			}
 			for zb0001 := range (*z).Votes {
-				o, err = (*z).Votes[zb0001].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Votes", zb0001)
-					return
-				}
+				o = (*z).Votes[zb0001].MarshalMsg(o)
 			}
 		}
 	}
@@ -4291,7 +4170,7 @@ func (z *unauthenticatedBundle) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *unauthenticatedEquivocationVote) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *unauthenticatedEquivocationVote) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(7)
@@ -4330,11 +4209,7 @@ func (z *unauthenticatedEquivocationVote) MarshalMsg(b []byte) (o []byte, err er
 		if (zb0003Mask & 0x2) == 0 { // if not empty
 			// string "cred"
 			o = append(o, 0xa4, 0x63, 0x72, 0x65, 0x64)
-			o, err = (*z).Cred.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Cred")
-				return
-			}
+			o = (*z).Cred.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x4) == 0 { // if not empty
 			// string "per"
@@ -4346,42 +4221,26 @@ func (z *unauthenticatedEquivocationVote) MarshalMsg(b []byte) (o []byte, err er
 			o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x70, 0x73)
 			o = msgp.AppendArrayHeader(o, 2)
 			for zb0001 := range (*z).Proposals {
-				o, err = (*z).Proposals[zb0001].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Proposals", zb0001)
-					return
-				}
+				o = (*z).Proposals[zb0001].MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x10) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o, err = (*z).Round.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
+			o = (*z).Round.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
 			// string "sigs"
 			o = append(o, 0xa4, 0x73, 0x69, 0x67, 0x73)
 			o = msgp.AppendArrayHeader(o, 2)
 			for zb0002 := range (*z).Sigs {
-				o, err = (*z).Sigs[zb0002].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Sigs", zb0002)
-					return
-				}
+				o = (*z).Sigs[zb0002].MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x40) == 0 { // if not empty
 			// string "snd"
 			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
-			o, err = (*z).Sender.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sender")
-				return
-			}
+			o = (*z).Sender.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x80) == 0 { // if not empty
 			// string "step"
@@ -4632,7 +4491,7 @@ func (z *unauthenticatedEquivocationVote) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(27)
@@ -4764,16 +4623,8 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).Block.BlockHeader.CompactCert[zb0001]
 				_ = zb0002
-				o, err = zb0001.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "CompactCert", zb0001)
-					return
-				}
-				o, err = zb0002.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "CompactCert", zb0001)
-					return
-				}
+				o = zb0001.MarshalMsg(o)
+				o = zb0002.MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
@@ -4784,11 +4635,7 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x40) == 0 { // if not empty
 			// string "fees"
 			o = append(o, 0xa4, 0x66, 0x65, 0x65, 0x73)
-			o, err = (*z).Block.BlockHeader.RewardsState.FeeSink.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "FeeSink")
-				return
-			}
+			o = (*z).Block.BlockHeader.RewardsState.FeeSink.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x80) == 0 { // if not empty
 			// string "frac"
@@ -4803,38 +4650,22 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x200) == 0 { // if not empty
 			// string "gh"
 			o = append(o, 0xa2, 0x67, 0x68)
-			o, err = (*z).Block.BlockHeader.GenesisHash.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "GenesisHash")
-				return
-			}
+			o = (*z).Block.BlockHeader.GenesisHash.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x400) == 0 { // if not empty
 			// string "nextbefore"
 			o = append(o, 0xaa, 0x6e, 0x65, 0x78, 0x74, 0x62, 0x65, 0x66, 0x6f, 0x72, 0x65)
-			o, err = (*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolVoteBefore")
-				return
-			}
+			o = (*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x800) == 0 { // if not empty
 			// string "nextproto"
 			o = append(o, 0xa9, 0x6e, 0x65, 0x78, 0x74, 0x70, 0x72, 0x6f, 0x74, 0x6f)
-			o, err = (*z).Block.BlockHeader.UpgradeState.NextProtocol.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocol")
-				return
-			}
+			o = (*z).Block.BlockHeader.UpgradeState.NextProtocol.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x1000) == 0 { // if not empty
 			// string "nextswitch"
 			o = append(o, 0xaa, 0x6e, 0x65, 0x78, 0x74, 0x73, 0x77, 0x69, 0x74, 0x63, 0x68)
-			o, err = (*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "NextProtocolSwitchOn")
-				return
-			}
+			o = (*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x2000) == 0 { // if not empty
 			// string "nextyes"
@@ -4849,29 +4680,17 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x8000) == 0 { // if not empty
 			// string "oprop"
 			o = append(o, 0xa5, 0x6f, 0x70, 0x72, 0x6f, 0x70)
-			o, err = (*z).OriginalProposer.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "OriginalProposer")
-				return
-			}
+			o = (*z).OriginalProposer.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x10000) == 0 { // if not empty
 			// string "prev"
 			o = append(o, 0xa4, 0x70, 0x72, 0x65, 0x76)
-			o, err = (*z).Block.BlockHeader.Branch.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Branch")
-				return
-			}
+			o = (*z).Block.BlockHeader.Branch.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20000) == 0 { // if not empty
 			// string "proto"
 			o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x74, 0x6f)
-			o, err = (*z).Block.BlockHeader.UpgradeState.CurrentProtocol.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "CurrentProtocol")
-				return
-			}
+			o = (*z).Block.BlockHeader.UpgradeState.CurrentProtocol.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x40000) == 0 { // if not empty
 			// string "rate"
@@ -4881,47 +4700,27 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x80000) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o, err = (*z).Block.BlockHeader.Round.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
+			o = (*z).Block.BlockHeader.Round.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x100000) == 0 { // if not empty
 			// string "rwcalr"
 			o = append(o, 0xa6, 0x72, 0x77, 0x63, 0x61, 0x6c, 0x72)
-			o, err = (*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsRecalculationRound")
-				return
-			}
+			o = (*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x200000) == 0 { // if not empty
 			// string "rwd"
 			o = append(o, 0xa3, 0x72, 0x77, 0x64)
-			o, err = (*z).Block.BlockHeader.RewardsState.RewardsPool.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardsPool")
-				return
-			}
+			o = (*z).Block.BlockHeader.RewardsState.RewardsPool.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x400000) == 0 { // if not empty
 			// string "sdpf"
 			o = append(o, 0xa4, 0x73, 0x64, 0x70, 0x66)
-			o, err = (*z).SeedProof.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SeedProof")
-				return
-			}
+			o = (*z).SeedProof.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x800000) == 0 { // if not empty
 			// string "seed"
 			o = append(o, 0xa4, 0x73, 0x65, 0x65, 0x64)
-			o, err = (*z).Block.BlockHeader.Seed.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Seed")
-				return
-			}
+			o = (*z).Block.BlockHeader.Seed.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x1000000) == 0 { // if not empty
 			// string "tc"
@@ -4936,38 +4735,22 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0003Mask & 0x4000000) == 0 { // if not empty
 			// string "txn"
 			o = append(o, 0xa3, 0x74, 0x78, 0x6e)
-			o, err = (*z).Block.BlockHeader.TxnRoot.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "TxnRoot")
-				return
-			}
+			o = (*z).Block.BlockHeader.TxnRoot.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x8000000) == 0 { // if not empty
 			// string "txns"
 			o = append(o, 0xa4, 0x74, 0x78, 0x6e, 0x73)
-			o, err = (*z).Block.Payset.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Payset")
-				return
-			}
+			o = (*z).Block.Payset.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x10000000) == 0 { // if not empty
 			// string "upgradedelay"
 			o = append(o, 0xac, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x64, 0x65, 0x6c, 0x61, 0x79)
-			o, err = (*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradeDelay")
-				return
-			}
+			o = (*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x20000000) == 0 { // if not empty
 			// string "upgradeprop"
 			o = append(o, 0xab, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x70, 0x72, 0x6f, 0x70)
-			o, err = (*z).Block.BlockHeader.UpgradeVote.UpgradePropose.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "UpgradePropose")
-				return
-			}
+			o = (*z).Block.BlockHeader.UpgradeVote.UpgradePropose.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x40000000) == 0 { // if not empty
 			// string "upgradeyes"
@@ -5189,11 +4972,11 @@ func (z *unauthenticatedProposal) UnmarshalMsg(bts []byte) (o []byte, err error)
 			if zb0006 {
 				(*z).Block.BlockHeader.CompactCert = nil
 			} else if (*z).Block.BlockHeader.CompactCert == nil {
-				(*z).Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0005)
+				(*z).Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0005)
 			}
 			for zb0005 > 0 {
 				var zb0001 protocol.CompactCertType
-				var zb0002 CompactCertState
+				var zb0002 bookkeeping.CompactCertState
 				zb0005--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
@@ -5415,11 +5198,11 @@ func (z *unauthenticatedProposal) UnmarshalMsg(bts []byte) (o []byte, err error)
 				if zb0009 {
 					(*z).Block.BlockHeader.CompactCert = nil
 				} else if (*z).Block.BlockHeader.CompactCert == nil {
-					(*z).Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]CompactCertState, zb0008)
+					(*z).Block.BlockHeader.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState, zb0008)
 				}
 				for zb0008 > 0 {
 					var zb0001 protocol.CompactCertType
-					var zb0002 CompactCertState
+					var zb0002 bookkeeping.CompactCertState
 					zb0008--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
@@ -5499,7 +5282,7 @@ func (z *unauthenticatedProposal) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *unauthenticatedVote) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *unauthenticatedVote) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
@@ -5522,29 +5305,17 @@ func (z *unauthenticatedVote) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "cred"
 			o = append(o, 0xa4, 0x63, 0x72, 0x65, 0x64)
-			o, err = (*z).Cred.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Cred")
-				return
-			}
+			o = (*z).Cred.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
-			o, err = (*z).R.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "R")
-				return
-			}
+			o = (*z).R.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = (*z).Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sig")
-				return
-			}
+			o = (*z).Sig.MarshalMsg(o)
 		}
 	}
 	return
@@ -5663,7 +5434,7 @@ func (z *unauthenticatedVote) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *vote) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *vote) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
@@ -5686,29 +5457,17 @@ func (z *vote) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "cred"
 			o = append(o, 0xa4, 0x63, 0x72, 0x65, 0x64)
-			o, err = (*z).Cred.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Cred")
-				return
-			}
+			o = (*z).Cred.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
-			o, err = (*z).R.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "R")
-				return
-			}
+			o = (*z).R.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = (*z).Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sig")
-				return
-			}
+			o = (*z).Sig.MarshalMsg(o)
 		}
 	}
 	return
@@ -5827,7 +5586,7 @@ func (z *vote) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *voteAuthenticator) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *voteAuthenticator) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
@@ -5841,27 +5600,15 @@ func (z *voteAuthenticator) MarshalMsg(b []byte) (o []byte, err error) {
 	if zb0001Len != 0 {
 		// string "cred"
 		o = append(o, 0xa4, 0x63, 0x72, 0x65, 0x64)
-		o, err = (*z).Cred.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Cred")
-			return
-		}
+		o = (*z).Cred.MarshalMsg(o)
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = (*z).Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sig")
-				return
-			}
+			o = (*z).Sig.MarshalMsg(o)
 		}
 		// string "snd"
 		o = append(o, 0xa3, 0x73, 0x6e, 0x64)
-		o, err = (*z).Sender.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Sender")
-			return
-		}
+		o = (*z).Sender.MarshalMsg(o)
 	}
 	return
 }

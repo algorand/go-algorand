@@ -10,8 +10,194 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
+// The following msgp objects are implemented in this file:
+// AccountData
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// Address
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
+// AppIndex
+//     |-----> MarshalMsg
+//     |-----> CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> Msgsize
+//     |-----> MsgIsZero
+//
+// AppLocalState
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// AppParams
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// AssetHolding
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// AssetIndex
+//      |-----> MarshalMsg
+//      |-----> CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> Msgsize
+//      |-----> MsgIsZero
+//
+// AssetParams
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// BalanceRecord
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// CreatableIndex
+//        |-----> MarshalMsg
+//        |-----> CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> Msgsize
+//        |-----> MsgIsZero
+//
+// CreatableType
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
+// DeltaAction
+//      |-----> MarshalMsg
+//      |-----> CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> Msgsize
+//      |-----> MsgIsZero
+//
+// EvalDelta
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// Round
+//   |-----> MarshalMsg
+//   |-----> CanMarshalMsg
+//   |-----> (*) UnmarshalMsg
+//   |-----> (*) CanUnmarshalMsg
+//   |-----> Msgsize
+//   |-----> MsgIsZero
+//
+// RoundInterval
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
+// StateDelta
+//      |-----> MarshalMsg
+//      |-----> CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> Msgsize
+//      |-----> MsgIsZero
+//
+// StateSchema
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// StateSchemas
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// Status
+//    |-----> MarshalMsg
+//    |-----> CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> Msgsize
+//    |-----> MsgIsZero
+//
+// TealKeyValue
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
+// TealType
+//     |-----> MarshalMsg
+//     |-----> CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> Msgsize
+//     |-----> MsgIsZero
+//
+// TealValue
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// ValueDelta
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+
 // MarshalMsg implements msgp.Marshaler
-func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0009Len := uint32(15)
@@ -82,11 +268,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0009Mask & 0x2) == 0 { // if not empty
 			// string "algo"
 			o = append(o, 0xa4, 0x61, 0x6c, 0x67, 0x6f)
-			o, err = (*z).MicroAlgos.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "MicroAlgos")
-				return
-			}
+			o = (*z).MicroAlgos.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x4) == 0 { // if not empty
 			// string "apar"
@@ -104,16 +286,8 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).AssetParams[zb0001]
 				_ = zb0002
-				o, err = zb0001.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AssetParams", zb0001)
-					return
-				}
-				o, err = zb0002.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AssetParams", zb0001)
-					return
-				}
+				o = zb0001.MarshalMsg(o)
+				o = zb0002.MarshalMsg(o)
 			}
 		}
 		if (zb0009Mask & 0x8) == 0 { // if not empty
@@ -132,16 +306,8 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0005 := range zb0005_keys {
 				zb0006 := (*z).AppLocalStates[zb0005]
 				_ = zb0006
-				o, err = zb0005.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AppLocalStates", zb0005)
-					return
-				}
-				o, err = zb0006.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AppLocalStates", zb0005)
-					return
-				}
+				o = zb0005.MarshalMsg(o)
+				o = zb0006.MarshalMsg(o)
 			}
 		}
 		if (zb0009Mask & 0x10) == 0 { // if not empty
@@ -160,16 +326,8 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0007 := range zb0007_keys {
 				zb0008 := (*z).AppParams[zb0007]
 				_ = zb0008
-				o, err = zb0007.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AppParams", zb0007)
-					return
-				}
-				o, err = zb0008.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AppParams", zb0007)
-					return
-				}
+				o = zb0007.MarshalMsg(o)
+				o = zb0008.MarshalMsg(o)
 			}
 		}
 		if (zb0009Mask & 0x20) == 0 { // if not empty
@@ -188,11 +346,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0003 := range zb0003_keys {
 				zb0004 := (*z).Assets[zb0003]
 				_ = zb0004
-				o, err = zb0003.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Assets", zb0003)
-					return
-				}
+				o = zb0003.MarshalMsg(o)
 				// omitempty: check for empty values
 				zb0010Len := uint32(2)
 				var zb0010Mask uint8 /* 3 bits */
@@ -228,11 +382,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0009Mask & 0x80) == 0 { // if not empty
 			// string "ern"
 			o = append(o, 0xa3, 0x65, 0x72, 0x6e)
-			o, err = (*z).RewardedMicroAlgos.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardedMicroAlgos")
-				return
-			}
+			o = (*z).RewardedMicroAlgos.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x100) == 0 { // if not empty
 			// string "onl"
@@ -242,20 +392,12 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0009Mask & 0x200) == 0 { // if not empty
 			// string "sel"
 			o = append(o, 0xa3, 0x73, 0x65, 0x6c)
-			o, err = (*z).SelectionID.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SelectionID")
-				return
-			}
+			o = (*z).SelectionID.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x400) == 0 { // if not empty
 			// string "spend"
 			o = append(o, 0xa5, 0x73, 0x70, 0x65, 0x6e, 0x64)
-			o, err = (*z).AuthAddr.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "AuthAddr")
-				return
-			}
+			o = (*z).AuthAddr.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x800) == 0 { // if not empty
 			// string "tsch"
@@ -287,11 +429,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0009Mask & 0x1000) == 0 { // if not empty
 			// string "vote"
 			o = append(o, 0xa4, 0x76, 0x6f, 0x74, 0x65)
-			o, err = (*z).VoteID.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "VoteID")
-				return
-			}
+			o = (*z).VoteID.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x2000) == 0 { // if not empty
 			// string "voteFst"
@@ -1129,7 +1267,7 @@ func (z *AccountData) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Address) MarshalMsg(b []byte) ([]byte, error) {
+func (z *Address) MarshalMsg(b []byte) []byte {
 	return ((*(crypto.Digest))(z)).MarshalMsg(b)
 }
 func (_ *Address) CanMarshalMsg(z interface{}) bool {
@@ -1157,7 +1295,7 @@ func (z *Address) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z AppIndex) MarshalMsg(b []byte) (o []byte, err error) {
+func (z AppIndex) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -1203,7 +1341,7 @@ func (z AppIndex) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AppLocalState) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *AppLocalState) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(2)
@@ -1263,11 +1401,7 @@ func (z *AppLocalState) MarshalMsg(b []byte) (o []byte, err error) {
 				zb0002 := (*z).KeyValue[zb0001]
 				_ = zb0002
 				o = msgp.AppendString(o, zb0001)
-				o, err = zb0002.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "KeyValue", zb0001)
-					return
-				}
+				o = zb0002.MarshalMsg(o)
 			}
 		}
 	}
@@ -1564,7 +1698,7 @@ func (z *AppLocalState) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *AppParams) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0003Len := uint32(5)
@@ -1619,11 +1753,7 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte, err error) {
 				zb0002 := (*z).GlobalState[zb0001]
 				_ = zb0002
 				o = msgp.AppendString(o, zb0001)
-				o, err = zb0002.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "GlobalState", zb0001)
-					return
-				}
+				o = zb0002.MarshalMsg(o)
 			}
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
@@ -1704,6 +1834,16 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
+			var zb0005 int
+			zb0005, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
+				return
+			}
+			if zb0005 > config.MaxAppProgramLen {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(config.MaxAppProgramLen))
+				return
+			}
 			(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
@@ -1712,6 +1852,16 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
+			var zb0006 int
+			zb0006, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
+				return
+			}
+			if zb0006 > config.MaxAppProgramLen {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(config.MaxAppProgramLen))
+				return
+			}
 			(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
@@ -1720,27 +1870,27 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			var zb0005 int
-			var zb0006 bool
-			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0007 int
+			var zb0008 bool
+			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalState")
 				return
 			}
-			if zb0005 > EncodedMaxKeyValueEntries {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(EncodedMaxKeyValueEntries))
+			if zb0007 > EncodedMaxKeyValueEntries {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(EncodedMaxKeyValueEntries))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalState")
 				return
 			}
-			if zb0006 {
+			if zb0008 {
 				(*z).GlobalState = nil
 			} else if (*z).GlobalState == nil {
-				(*z).GlobalState = make(TealKeyValue, zb0005)
+				(*z).GlobalState = make(TealKeyValue, zb0007)
 			}
-			for zb0005 > 0 {
+			for zb0007 > 0 {
 				var zb0001 string
 				var zb0002 TealValue
-				zb0005--
+				zb0007--
 				zb0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "GlobalState")
@@ -1756,33 +1906,33 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			var zb0007 int
-			var zb0008 bool
-			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0009 int
+			var zb0010 bool
+			zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if _, ok := err.(msgp.TypeError); ok {
-				zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema")
 					return
 				}
-				if zb0007 > 0 {
-					zb0007--
+				if zb0009 > 0 {
+					zb0009--
 					(*z).StateSchemas.LocalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema", "struct-from-array", "NumUint")
 						return
 					}
 				}
-				if zb0007 > 0 {
-					zb0007--
+				if zb0009 > 0 {
+					zb0009--
 					(*z).StateSchemas.LocalStateSchema.NumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema", "struct-from-array", "NumByteSlice")
 						return
 					}
 				}
-				if zb0007 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0007)
+				if zb0009 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0009)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema", "struct-from-array")
 						return
@@ -1793,11 +1943,11 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema")
 					return
 				}
-				if zb0008 {
+				if zb0010 {
 					(*z).StateSchemas.LocalStateSchema = StateSchema{}
 				}
-				for zb0007 > 0 {
-					zb0007--
+				for zb0009 > 0 {
+					zb0009--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema")
@@ -1828,33 +1978,33 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			var zb0009 int
-			var zb0010 bool
-			zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0011 int
+			var zb0012 bool
+			zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if _, ok := err.(msgp.TypeError); ok {
-				zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema")
 					return
 				}
-				if zb0009 > 0 {
-					zb0009--
+				if zb0011 > 0 {
+					zb0011--
 					(*z).StateSchemas.GlobalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema", "struct-from-array", "NumUint")
 						return
 					}
 				}
-				if zb0009 > 0 {
-					zb0009--
+				if zb0011 > 0 {
+					zb0011--
 					(*z).StateSchemas.GlobalStateSchema.NumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema", "struct-from-array", "NumByteSlice")
 						return
 					}
 				}
-				if zb0009 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0009)
+				if zb0011 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0011)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema", "struct-from-array")
 						return
@@ -1865,11 +2015,11 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema")
 					return
 				}
-				if zb0010 {
+				if zb0012 {
 					(*z).StateSchemas.GlobalStateSchema = StateSchema{}
 				}
-				for zb0009 > 0 {
-					zb0009--
+				for zb0011 > 0 {
+					zb0011--
 					field, bts, err = msgp.ReadMapKeyZC(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema")
@@ -1922,39 +2072,59 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "approv":
+				var zb0013 int
+				zb0013, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ApprovalProgram")
+					return
+				}
+				if zb0013 > config.MaxAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxAppProgramLen))
+					return
+				}
 				(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
 			case "clearp":
+				var zb0014 int
+				zb0014, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ClearStateProgram")
+					return
+				}
+				if zb0014 > config.MaxAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0014), uint64(config.MaxAppProgramLen))
+					return
+				}
 				(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
 			case "gs":
-				var zb0011 int
-				var zb0012 bool
-				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0015 int
+				var zb0016 bool
+				zb0015, zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "GlobalState")
 					return
 				}
-				if zb0011 > EncodedMaxKeyValueEntries {
-					err = msgp.ErrOverflow(uint64(zb0011), uint64(EncodedMaxKeyValueEntries))
+				if zb0015 > EncodedMaxKeyValueEntries {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(EncodedMaxKeyValueEntries))
 					err = msgp.WrapError(err, "GlobalState")
 					return
 				}
-				if zb0012 {
+				if zb0016 {
 					(*z).GlobalState = nil
 				} else if (*z).GlobalState == nil {
-					(*z).GlobalState = make(TealKeyValue, zb0011)
+					(*z).GlobalState = make(TealKeyValue, zb0015)
 				}
-				for zb0011 > 0 {
+				for zb0015 > 0 {
 					var zb0001 string
 					var zb0002 TealValue
-					zb0011--
+					zb0015--
 					zb0001, bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "GlobalState")
@@ -1968,33 +2138,33 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).GlobalState[zb0001] = zb0002
 				}
 			case "lsch":
-				var zb0013 int
-				var zb0014 bool
-				zb0013, zb0014, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0017 int
+				var zb0018 bool
+				zb0017, zb0018, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "LocalStateSchema")
 						return
 					}
-					if zb0013 > 0 {
-						zb0013--
+					if zb0017 > 0 {
+						zb0017--
 						(*z).StateSchemas.LocalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "LocalStateSchema", "struct-from-array", "NumUint")
 							return
 						}
 					}
-					if zb0013 > 0 {
-						zb0013--
+					if zb0017 > 0 {
+						zb0017--
 						(*z).StateSchemas.LocalStateSchema.NumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "LocalStateSchema", "struct-from-array", "NumByteSlice")
 							return
 						}
 					}
-					if zb0013 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0013)
+					if zb0017 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0017)
 						if err != nil {
 							err = msgp.WrapError(err, "LocalStateSchema", "struct-from-array")
 							return
@@ -2005,11 +2175,11 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "LocalStateSchema")
 						return
 					}
-					if zb0014 {
+					if zb0018 {
 						(*z).StateSchemas.LocalStateSchema = StateSchema{}
 					}
-					for zb0013 > 0 {
-						zb0013--
+					for zb0017 > 0 {
+						zb0017--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "LocalStateSchema")
@@ -2038,33 +2208,33 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "gsch":
-				var zb0015 int
-				var zb0016 bool
-				zb0015, zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0019 int
+				var zb0020 bool
+				zb0019, zb0020, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "GlobalStateSchema")
 						return
 					}
-					if zb0015 > 0 {
-						zb0015--
+					if zb0019 > 0 {
+						zb0019--
 						(*z).StateSchemas.GlobalStateSchema.NumUint, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "GlobalStateSchema", "struct-from-array", "NumUint")
 							return
 						}
 					}
-					if zb0015 > 0 {
-						zb0015--
+					if zb0019 > 0 {
+						zb0019--
 						(*z).StateSchemas.GlobalStateSchema.NumByteSlice, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "GlobalStateSchema", "struct-from-array", "NumByteSlice")
 							return
 						}
 					}
-					if zb0015 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0015)
+					if zb0019 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0019)
 						if err != nil {
 							err = msgp.WrapError(err, "GlobalStateSchema", "struct-from-array")
 							return
@@ -2075,11 +2245,11 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "GlobalStateSchema")
 						return
 					}
-					if zb0016 {
+					if zb0020 {
 						(*z).StateSchemas.GlobalStateSchema = StateSchema{}
 					}
-					for zb0015 > 0 {
-						zb0015--
+					for zb0019 > 0 {
+						zb0019--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "GlobalStateSchema")
@@ -2145,7 +2315,7 @@ func (z *AppParams) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AssetHolding) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *AssetHolding) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
@@ -2274,7 +2444,7 @@ func (z *AssetHolding) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z AssetIndex) MarshalMsg(b []byte) (o []byte, err error) {
+func (z AssetIndex) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -2320,7 +2490,7 @@ func (z AssetIndex) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AssetParams) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *AssetParams) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(11)
@@ -2390,11 +2560,7 @@ func (z *AssetParams) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0002Mask & 0x10) == 0 { // if not empty
 			// string "c"
 			o = append(o, 0xa1, 0x63)
-			o, err = (*z).Clawback.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Clawback")
-				return
-			}
+			o = (*z).Clawback.MarshalMsg(o)
 		}
 		if (zb0002Mask & 0x20) == 0 { // if not empty
 			// string "dc"
@@ -2409,29 +2575,17 @@ func (z *AssetParams) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0002Mask & 0x80) == 0 { // if not empty
 			// string "f"
 			o = append(o, 0xa1, 0x66)
-			o, err = (*z).Freeze.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Freeze")
-				return
-			}
+			o = (*z).Freeze.MarshalMsg(o)
 		}
 		if (zb0002Mask & 0x100) == 0 { // if not empty
 			// string "m"
 			o = append(o, 0xa1, 0x6d)
-			o, err = (*z).Manager.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Manager")
-				return
-			}
+			o = (*z).Manager.MarshalMsg(o)
 		}
 		if (zb0002Mask & 0x200) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
-			o, err = (*z).Reserve.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Reserve")
-				return
-			}
+			o = (*z).Reserve.MarshalMsg(o)
 		}
 		if (zb0002Mask & 0x400) == 0 { // if not empty
 			// string "t"
@@ -2672,7 +2826,7 @@ func (z *AssetParams) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0009Len := uint32(16)
@@ -2747,20 +2901,12 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0009Mask & 0x4) == 0 { // if not empty
 			// string "addr"
 			o = append(o, 0xa4, 0x61, 0x64, 0x64, 0x72)
-			o, err = (*z).Addr.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Addr")
-				return
-			}
+			o = (*z).Addr.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x8) == 0 { // if not empty
 			// string "algo"
 			o = append(o, 0xa4, 0x61, 0x6c, 0x67, 0x6f)
-			o, err = (*z).AccountData.MicroAlgos.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "MicroAlgos")
-				return
-			}
+			o = (*z).AccountData.MicroAlgos.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x10) == 0 { // if not empty
 			// string "apar"
@@ -2778,16 +2924,8 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).AccountData.AssetParams[zb0001]
 				_ = zb0002
-				o, err = zb0001.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AssetParams", zb0001)
-					return
-				}
-				o, err = zb0002.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AssetParams", zb0001)
-					return
-				}
+				o = zb0001.MarshalMsg(o)
+				o = zb0002.MarshalMsg(o)
 			}
 		}
 		if (zb0009Mask & 0x20) == 0 { // if not empty
@@ -2806,16 +2944,8 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0005 := range zb0005_keys {
 				zb0006 := (*z).AccountData.AppLocalStates[zb0005]
 				_ = zb0006
-				o, err = zb0005.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AppLocalStates", zb0005)
-					return
-				}
-				o, err = zb0006.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AppLocalStates", zb0005)
-					return
-				}
+				o = zb0005.MarshalMsg(o)
+				o = zb0006.MarshalMsg(o)
 			}
 		}
 		if (zb0009Mask & 0x40) == 0 { // if not empty
@@ -2834,16 +2964,8 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0007 := range zb0007_keys {
 				zb0008 := (*z).AccountData.AppParams[zb0007]
 				_ = zb0008
-				o, err = zb0007.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AppParams", zb0007)
-					return
-				}
-				o, err = zb0008.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "AppParams", zb0007)
-					return
-				}
+				o = zb0007.MarshalMsg(o)
+				o = zb0008.MarshalMsg(o)
 			}
 		}
 		if (zb0009Mask & 0x80) == 0 { // if not empty
@@ -2862,11 +2984,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 			for _, zb0003 := range zb0003_keys {
 				zb0004 := (*z).AccountData.Assets[zb0003]
 				_ = zb0004
-				o, err = zb0003.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Assets", zb0003)
-					return
-				}
+				o = zb0003.MarshalMsg(o)
 				// omitempty: check for empty values
 				zb0010Len := uint32(2)
 				var zb0010Mask uint8 /* 3 bits */
@@ -2902,11 +3020,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0009Mask & 0x200) == 0 { // if not empty
 			// string "ern"
 			o = append(o, 0xa3, 0x65, 0x72, 0x6e)
-			o, err = (*z).AccountData.RewardedMicroAlgos.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "RewardedMicroAlgos")
-				return
-			}
+			o = (*z).AccountData.RewardedMicroAlgos.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x400) == 0 { // if not empty
 			// string "onl"
@@ -2916,20 +3030,12 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0009Mask & 0x800) == 0 { // if not empty
 			// string "sel"
 			o = append(o, 0xa3, 0x73, 0x65, 0x6c)
-			o, err = (*z).AccountData.SelectionID.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SelectionID")
-				return
-			}
+			o = (*z).AccountData.SelectionID.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x1000) == 0 { // if not empty
 			// string "spend"
 			o = append(o, 0xa5, 0x73, 0x70, 0x65, 0x6e, 0x64)
-			o, err = (*z).AccountData.AuthAddr.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "AuthAddr")
-				return
-			}
+			o = (*z).AccountData.AuthAddr.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x2000) == 0 { // if not empty
 			// string "tsch"
@@ -2961,11 +3067,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0009Mask & 0x4000) == 0 { // if not empty
 			// string "vote"
 			o = append(o, 0xa4, 0x76, 0x6f, 0x74, 0x65)
-			o, err = (*z).AccountData.VoteID.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "VoteID")
-				return
-			}
+			o = (*z).AccountData.VoteID.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x8000) == 0 { // if not empty
 			// string "voteFst"
@@ -3817,7 +3919,7 @@ func (z *BalanceRecord) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z CreatableIndex) MarshalMsg(b []byte) (o []byte, err error) {
+func (z CreatableIndex) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -3863,7 +3965,7 @@ func (z CreatableIndex) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z CreatableType) MarshalMsg(b []byte) (o []byte, err error) {
+func (z CreatableType) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -3909,7 +4011,7 @@ func (z CreatableType) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z DeltaAction) MarshalMsg(b []byte) (o []byte, err error) {
+func (z DeltaAction) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -3955,7 +4057,7 @@ func (z DeltaAction) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *EvalDelta) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0007Len := uint32(2)
@@ -3988,11 +4090,7 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte, err error) {
 				zb0002 := (*z).GlobalDelta[zb0001]
 				_ = zb0002
 				o = msgp.AppendString(o, zb0001)
-				o, err = zb0002.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "GlobalDelta", zb0001)
-					return
-				}
+				o = zb0002.MarshalMsg(o)
 			}
 		}
 		if (zb0007Mask & 0x4) == 0 { // if not empty
@@ -4026,11 +4124,7 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte, err error) {
 					zb0006 := zb0004[zb0005]
 					_ = zb0006
 					o = msgp.AppendString(o, zb0005)
-					o, err = zb0006.MarshalMsg(o)
-					if err != nil {
-						err = msgp.WrapError(err, "LocalDeltas", zb0003, zb0005)
-						return
-					}
+					o = zb0006.MarshalMsg(o)
 				}
 			}
 		}
@@ -4327,7 +4421,7 @@ func (z *EvalDelta) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z Round) MarshalMsg(b []byte) (o []byte, err error) {
+func (z Round) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -4373,7 +4467,7 @@ func (z Round) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z RoundInterval) MarshalMsg(b []byte) (o []byte, err error) {
+func (z RoundInterval) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -4419,7 +4513,7 @@ func (z RoundInterval) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z StateDelta) MarshalMsg(b []byte) (o []byte, err error) {
+func (z StateDelta) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	if z == nil {
 		o = msgp.AppendNil(o)
@@ -4435,11 +4529,7 @@ func (z StateDelta) MarshalMsg(b []byte) (o []byte, err error) {
 		za0002 := z[za0001]
 		_ = za0002
 		o = msgp.AppendString(o, za0001)
-		o, err = za0002.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, za0001)
-			return
-		}
+		o = za0002.MarshalMsg(o)
 	}
 	return
 }
@@ -4515,7 +4605,7 @@ func (z StateDelta) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *StateSchema) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *StateSchema) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
@@ -4644,7 +4734,7 @@ func (z *StateSchema) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *StateSchemas) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *StateSchemas) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
@@ -5073,7 +5163,7 @@ func (z *StateSchemas) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z Status) MarshalMsg(b []byte) (o []byte, err error) {
+func (z Status) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendByte(o, byte(z))
 	return
@@ -5119,7 +5209,7 @@ func (z Status) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z TealKeyValue) MarshalMsg(b []byte) (o []byte, err error) {
+func (z TealKeyValue) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	if z == nil {
 		o = msgp.AppendNil(o)
@@ -5135,11 +5225,7 @@ func (z TealKeyValue) MarshalMsg(b []byte) (o []byte, err error) {
 		za0002 := z[za0001]
 		_ = za0002
 		o = msgp.AppendString(o, za0001)
-		o, err = za0002.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, za0001)
-			return
-		}
+		o = za0002.MarshalMsg(o)
 	}
 	return
 }
@@ -5215,7 +5301,7 @@ func (z TealKeyValue) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z TealType) MarshalMsg(b []byte) (o []byte, err error) {
+func (z TealType) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendUint64(o, uint64(z))
 	return
@@ -5261,7 +5347,7 @@ func (z TealType) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *TealValue) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *TealValue) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
@@ -5421,7 +5507,7 @@ func (z *TealValue) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *ValueDelta) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *ValueDelta) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)

@@ -6,8 +6,18 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
+// The following msgp objects are implemented in this file:
+// sigFromAddr
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+
 // MarshalMsg implements msgp.Marshaler
-func (z *sigFromAddr) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *sigFromAddr) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
@@ -30,29 +40,17 @@ func (z *sigFromAddr) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o, err = (*z).Round.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Round")
-				return
-			}
+			o = (*z).Round.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
-			o, err = (*z).Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sig")
-				return
-			}
+			o = (*z).Sig.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "signer"
 			o = append(o, 0xa6, 0x73, 0x69, 0x67, 0x6e, 0x65, 0x72)
-			o, err = (*z).Signer.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Signer")
-				return
-			}
+			o = (*z).Signer.MarshalMsg(o)
 		}
 	}
 	return
