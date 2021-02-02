@@ -13,10 +13,7 @@ import (
 
 func TestMarshalUnmarshalnetPrioResponse(t *testing.T) {
 	v := netPrioResponse{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -50,18 +47,18 @@ func BenchmarkMarshalMsgnetPrioResponse(b *testing.B) {
 func BenchmarkAppendMsgnetPrioResponse(b *testing.B) {
 	v := netPrioResponse{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalnetPrioResponse(b *testing.B) {
 	v := netPrioResponse{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()
@@ -75,10 +72,7 @@ func BenchmarkUnmarshalnetPrioResponse(b *testing.B) {
 
 func TestMarshalUnmarshalnetPrioResponseSigned(t *testing.T) {
 	v := netPrioResponseSigned{}
-	bts, err := v.MarshalMsg(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
 		t.Fatal(err)
@@ -112,18 +106,18 @@ func BenchmarkMarshalMsgnetPrioResponseSigned(b *testing.B) {
 func BenchmarkAppendMsgnetPrioResponseSigned(b *testing.B) {
 	v := netPrioResponseSigned{}
 	bts := make([]byte, 0, v.Msgsize())
-	bts, _ = v.MarshalMsg(bts[0:0])
+	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bts, _ = v.MarshalMsg(bts[0:0])
+		bts = v.MarshalMsg(bts[0:0])
 	}
 }
 
 func BenchmarkUnmarshalnetPrioResponseSigned(b *testing.B) {
 	v := netPrioResponseSigned{}
-	bts, _ := v.MarshalMsg(nil)
+	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
 	b.ResetTimer()

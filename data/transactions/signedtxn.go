@@ -70,7 +70,16 @@ func (s SignedTxnInBlock) ID() {
 
 // GetEncodedLength returns the length in bytes of the encoded transaction
 func (s SignedTxn) GetEncodedLength() int {
-	return len(protocol.Encode(&s))
+	enc := s.MarshalMsg(protocol.GetEncodingBuf())
+	defer protocol.PutEncodingBuf(enc)
+	return len(enc)
+}
+
+// GetEncodedLength returns the length in bytes of the encoded transaction
+func (s SignedTxnInBlock) GetEncodedLength() int {
+	enc := s.MarshalMsg(protocol.GetEncodingBuf())
+	defer protocol.PutEncodingBuf(enc)
+	return len(enc)
 }
 
 // Authorizer returns the address against which the signature/msig/lsig should be checked,
