@@ -908,7 +908,7 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 
 	// This confirms that each program compiles to the same bytes
 	// (except the leading version indicator), when compiled under
-	// oriringal and max versions. That doesn't *have* to be true,
+	// original and max versions. That doesn't *have* to be true,
 	// as we can introduce optimizations in later versions that
 	// change the bytecode emitted. But currently it is, so we
 	// test it for now to catch any suprises.

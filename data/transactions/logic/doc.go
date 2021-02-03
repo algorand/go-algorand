@@ -111,7 +111,7 @@ var opDocList = []stringString{
 	{"app_global_del", "delete key A from a global state of the current application"},
 	{"asset_holding_get", "read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}"},
 	{"asset_params_get", "read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value}"},
-	{"assert", "immediately fail unless value X is not zero"},
+	{"assert", "immediately fail unless value X is a non-zero number"},
 }
 
 var opDocByName map[string]string
