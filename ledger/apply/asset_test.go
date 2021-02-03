@@ -68,7 +68,8 @@ func TestAssetTransfer(t *testing.T) {
 		},
 	}
 
-	mockBal := mockBalances{protocol.ConsensusCurrentVersion, addrs}
+	mockBal := MakeMockBalancesWithAccounts(protocol.ConsensusCurrentVersion, addrs)
+
 	tx := transactions.Transaction{
 		Type: protocol.AssetTransferTx,
 		Header: transactions.Header{
