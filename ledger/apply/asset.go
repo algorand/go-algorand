@@ -330,6 +330,13 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		// and putIn will short circuit (so bypassFreeze doesn't matter)
 		_, bypassFreeze := dst.AssetParams[ct.XferAsset]
 
+		// AssetCloseAmount was a late addition, checking that the current protocol version supports it.
+		if balances.ConsensusParams().EnableAssetCloseAmount {
+			// Add the close amount to ApplyData.
+			closeAmount := sndHolding.Amount
+			ad.AssetClosingAmount = closeAmount
+		}
+
 		// Move the balance out.
 		err = takeOut(balances, source, ct.XferAsset, sndHolding.Amount, bypassFreeze)
 		if err != nil {
