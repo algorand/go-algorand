@@ -1120,9 +1120,9 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		// unknown opcode, let's report a good error if version problem
 		spec, ok = opsByName[AssemblerMaxVersion][opstring]
 		if ok {
-			ops.errorf("%v opcode was introduced in TEAL v%d", opstring, spec.Version)
+			ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
 		} else {
-			ops.errorf("unknown opcode: %v", opstring)
+			ops.errorf("unknown opcode: %s", opstring)
 		}
 	}
 
