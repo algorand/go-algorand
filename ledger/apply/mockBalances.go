@@ -28,14 +28,14 @@ type mockBalances struct {
 	b map[basics.Address]basics.AccountData
 }
 
-func MakeMockBalances(cv protocol.ConsensusVersion) *mockBalances {
+func makeMockBalances(cv protocol.ConsensusVersion) *mockBalances {
 	return &mockBalances{
 		ConsensusVersion: cv,
 		b:                map[basics.Address]basics.AccountData{},
 	}
 }
 
-func MakeMockBalancesWithAccounts(cv protocol.ConsensusVersion, b map[basics.Address]basics.AccountData) *mockBalances {
+func makeMockBalancesWithAccounts(cv protocol.ConsensusVersion, b map[basics.Address]basics.AccountData) *mockBalances {
 	return &mockBalances{
 		ConsensusVersion: cv,
 		b:                b,

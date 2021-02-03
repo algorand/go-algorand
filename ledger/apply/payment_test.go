@@ -77,7 +77,7 @@ func TestAlgosEncoding(t *testing.T) {
 }
 
 func TestPaymentApply(t *testing.T) {
-	mockBalV0 := MakeMockBalances(protocol.ConsensusCurrentVersion)
+	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
 
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
@@ -104,8 +104,8 @@ func TestPaymentApply(t *testing.T) {
 }
 
 func TestCheckSpender(t *testing.T) {
-	mockBalV0 := MakeMockBalances(protocol.ConsensusCurrentVersion)
-	mockBalV7 := MakeMockBalances(protocol.ConsensusV7)
+	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
+	mockBalV7 := makeMockBalances(protocol.ConsensusV7)
 
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)

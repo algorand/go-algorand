@@ -95,11 +95,11 @@ func TestKeyregApply(t *testing.T) {
 			SelectionPK: vrfSecrets.PK,
 		},
 	}
-	err := Keyreg(tx.KeyregTxnFields, tx.Header, MakeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 	require.NoError(t, err)
 
 	tx.Sender = feeSink
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, MakeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 	require.Error(t, err)
 
 	tx.Sender = src
