@@ -679,7 +679,7 @@ type AssetTransferTransactionType struct {
 	// CloseToAmount is amount of the remaining funds that were transferred to the close to address (if closing).
 	//
 	// required: false
-	CloseToAmount uint64 `json:"closetoamount"`
+	CloseToAmount uint64 `json:"closetoamount,omitempty"`
 }
 
 // AssetFreezeTransactionType contains the additional fields for an asset freeze transaction
