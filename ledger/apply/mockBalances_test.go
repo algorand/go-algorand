@@ -28,6 +28,7 @@ type mockBalances struct {
 	b map[basics.Address]basics.AccountData
 }
 
+// makeMockBalances takes a ConsensusVersion and returns a mocked balances with an Address to AccountData map
 func makeMockBalances(cv protocol.ConsensusVersion) *mockBalances {
 	return &mockBalances{
 		ConsensusVersion: cv,
@@ -35,6 +36,8 @@ func makeMockBalances(cv protocol.ConsensusVersion) *mockBalances {
 	}
 }
 
+// makeMockBalancesWithAccounts takes a ConsensusVersion and a map of Address to AccountData and returns a mocked
+// balances.
 func makeMockBalancesWithAccounts(cv protocol.ConsensusVersion, b map[basics.Address]basics.AccountData) *mockBalances {
 	return &mockBalances{
 		ConsensusVersion: cv,
