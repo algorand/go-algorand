@@ -396,11 +396,12 @@ func TestLedgerSingleTx(t *testing.T) {
 	}
 
 	correctTxHeader := transactions.Header{
-		Sender:     addrList[0],
-		Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-		FirstValid: l.Latest() + 1,
-		LastValid:  l.Latest() + 10,
-		GenesisID:  t.Name(),
+		Sender:      addrList[0],
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   t.Name(),
+		GenesisHash: genesisInitState.GenesisHash,
 	}
 
 	correctPayFields := transactions.PaymentTxnFields{
@@ -549,8 +550,15 @@ func TestLedgerSingleTx(t *testing.T) {
 	badTx.Fee = fee
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "overspent with (amount + fee)")
 
+	adClose := ad
+	adClose.ClosingAmount = initAccounts[correctClose.Sender].MicroAlgos
+	adClose.ClosingAmount, _ = basics.OSubA(adClose.ClosingAmount, correctPay.Amount)
+	adClose.ClosingAmount, _ = basics.OSubA(adClose.ClosingAmount, correctPay.Fee)
+	adClose.ClosingAmount, _ = basics.OSubA(adClose.ClosingAmount, correctClose.Amount)
+	adClose.ClosingAmount, _ = basics.OSubA(adClose.ClosingAmount, correctClose.Fee)
+
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPay, ad), "could not add payment transaction")
-	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, ad), "could not add close transaction")
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adClose), "could not add close transaction")
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "could not add key registration")
 
 	correctPay.Sender = sinkAddr
