@@ -135,7 +135,7 @@ const ConsensusV24 = ConsensusVersion(
 
 // ConsensusV25 adds support for AssetCloseAmount in the ApplyData
 const ConsensusV25 = ConsensusVersion(
-	"todo",
+	"https://github.com/algorandfoundation/specs/tree/bea19289bf41217d2c0af30522fa222ef1366466",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
