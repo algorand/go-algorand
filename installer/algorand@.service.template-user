@@ -1,0 +1,30 @@
+## This file should be installed as:
+##
+##   /home/$USER/.config/systemd/user/algorand@.service
+##
+## and then running "systemctl --user daemon-reload".
+##
+## To enable and start algod for a particular directory, run:
+##
+##   systemctl --user enable algorand@$(systemd-escape /home/algorand/node/data)
+##   systemctl --user start  algorand@$(systemd-escape /home/algorand/node/data)
+##
+## This assumes a directory layout where the algod binary lives at
+## /home/algorand/node/algod and the data lives under /home/algorand/node/data.
+##
+## Note that not all distros currently support the user service feature.
+## Run `systemctl --user status` to determine if it's supported.
+
+[Unit]
+Description=Algorand daemon under %I
+After=network.target
+AssertPathExists=%I
+
+[Service]
+ExecStart=@@BINDIR@@/algod -d %I
+Restart=always
+RestartSec=5s
+ProtectSystem=false
+
+[Install]
+WantedBy=multi-user.target
