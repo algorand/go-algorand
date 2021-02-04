@@ -1323,6 +1323,22 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		}
 	case NumAccounts:
 		sv.Uint = uint64(len(txn.Accounts))
+	case Assets:
+		if arrayFieldIdx > uint64(len(txn.ForeignAssets)) {
+			err = fmt.Errorf("invalid Assets index %d", arrayFieldIdx)
+			return
+		}
+		sv.Uint = uint64(txn.ForeignAssets[arrayFieldIdx])
+	case NumAssets:
+		sv.Uint = uint64(len(txn.ForeignAssets))
+	case Apps:
+		if arrayFieldIdx > uint64(len(txn.ForeignApps)) {
+			err = fmt.Errorf("invalid Apps index %d", arrayFieldIdx)
+			return
+		}
+		sv.Uint = uint64(txn.ForeignApps[arrayFieldIdx])
+	case NumApps:
+		sv.Uint = uint64(len(txn.ForeignApps))
 	case ApprovalProgram:
 		sv.Bytes = nilToEmpty(txn.ApprovalProgram)
 	case ClearStateProgram:

@@ -414,16 +414,17 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 		field := fs.field.String()
 		for _, command := range tests {
 			text := fmt.Sprintf(command, field)
-			asmError := "...available in version 2..."
+			asmError := "...available in version ..."
 			if _, ok := txnaFieldSpecByField[fs.field]; ok {
 				parts := strings.Split(text, " ")
 				op := parts[0]
 				asmError = fmt.Sprintf("found %sa field %s in %s op", op, field, op)
 			}
-			// check V1 assembler fails
+			// check assembler fails if version before introduction
 			testLine(t, text, assemblerNoVersion, asmError)
-			testLine(t, text, 0, asmError)
-			testLine(t, text, 1, asmError)
+			for v := uint64(0); v < fs.version; v++ {
+				testLine(t, text, v, asmError)
+			}
 
 			ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 			if _, ok := txnaFieldSpecByField[fs.field]; ok {

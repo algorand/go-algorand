@@ -1552,7 +1552,7 @@ arg 8
 &&
 `
 
-var testTxnProgramText = testTxnProgramTextV1 + `txn ApplicationID
+const testTxnProgramTextV2 = testTxnProgramTextV1 + `txn ApplicationID
 int 123
 ==
 &&
@@ -1656,6 +1656,25 @@ int 1
 &&
 `
 
+const testTxnProgramTextV3 = testTxnProgramTextV2 + `
+assert
+txn NumAssets
+int 2
+==
+assert
+txna Assets 0
+int 55
+==
+assert
+txn NumApps
+int 3
+==
+assert
+txn Apps 2			// Assembler will use 'txna'
+int 111
+==
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1717,6 +1736,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	copy(txn.Txn.FreezeAccount[:], freezeAccAddr)
 	txn.Txn.AssetFrozen = true
 	txn.Txn.ForeignAssets = []basics.AssetIndex{55, 77}
+	txn.Txn.ForeignApps = []basics.AppIndex{56, 78, 111}
 	return txn
 }
 
@@ -1735,7 +1755,7 @@ func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
 func TestTxn(t *testing.T) {
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramText, txnField) {
+		if !strings.Contains(testTxnProgramTextV3, txnField) {
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
@@ -1744,7 +1764,8 @@ func TestTxn(t *testing.T) {
 
 	tests := map[uint64]string{
 		1: testTxnProgramTextV1,
-		2: testTxnProgramText,
+		2: testTxnProgramTextV2,
+		3: testTxnProgramTextV3,
 	}
 
 	clearOps, err := AssembleStringWithVersion("int 1", 1)
@@ -1752,8 +1773,7 @@ func TestTxn(t *testing.T) {
 
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(source, v)
-			require.NoError(t, err)
+			ops := testProg(t, source, v)
 			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
@@ -3536,7 +3556,7 @@ ed25519verify`, pkStr), AssemblerMaxVersion)
 func BenchmarkCheckx5(b *testing.B) {
 	sourcePrograms := []string{
 		tlhcProgramText,
-		testTxnProgramText,
+		testTxnProgramTextV3,
 		testCompareProgramText,
 		addBenchmarkSource,
 		addBenchmark2Source,
