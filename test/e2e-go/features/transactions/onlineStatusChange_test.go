@@ -33,10 +33,6 @@ func TestAccountsCanChangeOnlineState(t *testing.T) {
 	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOffline.json"))
 }
 
-func TestAccountsCanChangeOnlineStateV7(t *testing.T) {
-	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineV7.json"))
-}
-
 func TestAccountsCanChangeOnlineStateInTheFuture(t *testing.T) {
 	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineVFuture.json"))
 }
