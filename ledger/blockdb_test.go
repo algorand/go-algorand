@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -187,17 +186,14 @@ func TestFixGenesisPaysetHash(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	// Fetch some consensus params
-	params := config.Consensus[protocol.ConsensusCurrentVersion]
-
 	// Make a genesis block with a good payset hash
 	goodGenesis := randomBlock(basics.Round(0))
-	goodGenesis.block.BlockHeader.TxnRoot = transactions.Payset{}.CommitGenesis(params.PaysetCommitFlat)
+	goodGenesis.block.BlockHeader.TxnRoot = transactions.Payset{}.CommitGenesis()
 	require.NoError(t, err)
 
 	// Copy the genesis block and replace its payset hash with the buggy value
 	badGenesis := goodGenesis
-	badGenesis.block.BlockHeader.TxnRoot = transactions.Payset{}.Commit(params.PaysetCommitFlat)
+	badGenesis.block.BlockHeader.TxnRoot = transactions.Payset{}.CommitFlat()
 
 	// Assert that the buggy value is different from the good value
 	require.NotEqual(t, goodGenesis.block.BlockHeader.TxnRoot, badGenesis.block.BlockHeader.TxnRoot)

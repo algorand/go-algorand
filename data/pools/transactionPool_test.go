@@ -57,7 +57,6 @@ var minBalance = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
 func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) *ledger.Ledger {
 	var hash crypto.Digest
 	crypto.RandBytes(hash[:])
-	params := config.Consensus[proto]
 
 	var pool basics.Address
 	crypto.RandBytes(pool[:])
@@ -67,7 +66,6 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 
 	initBlock := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
-			TxnRoot:     transactions.Payset{}.Commit(params.PaysetCommitFlat),
 			GenesisID:   "pooltest",
 			GenesisHash: hash,
 			UpgradeState: bookkeeping.UpgradeState{
@@ -79,6 +77,11 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 			},
 		},
 	}
+
+	var err error
+	initBlock.TxnRoot, err = initBlock.PaysetCommit()
+	require.NoError(t, err)
+
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	const inMem = true
 	genesisInitState := ledger.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
