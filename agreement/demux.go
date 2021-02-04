@@ -141,15 +141,12 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 					var err error
 					for i, stib := range msg.CompoundMessage.Proposal.Payset {
 						var stxnBytes []byte
-						logging.Base().Infof("check, %v", stib.Digest)
 						stxnData := net.LoadKV(msg.MessageHandle, stib.Digest)
 						stxnBytes = stxnData.([]byte)
 						var stxn transactions.SignedTxn
 						dec := protocol.NewDecoderBytes(stxnBytes)
 						err = dec.Decode(&stxn)
-						logging.Base().Infof("check same %v", stxn.ID() == stib.SignedTxn.ID())
 						msg.CompoundMessage.Proposal.Payset[i].SignedTxn = stxn
-						logging.Base().Infof("check same %v", stxn.ID() == msg.CompoundMessage.Proposal.Payset[i].SignedTxn.ID())
 						if err != nil {
 							logging.Base().Warnf("Received a non-decodable txn: %v", err)
 							//net.Disconnect(raw.MessageHandle)

@@ -17,10 +17,10 @@
 package network
 
 import (
+	"container/list"
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/algorand/go-algorand/logging"
 	"io"
 	"net"
 	"net/http"
@@ -209,6 +209,7 @@ type wsPeer struct {
 	throttledOutgoingConnection bool
 
 	kvStore map[interface{}]interface{}
+	keysList *list.List
 
 	kvStoreMutex deadlock.RWMutex
 }
@@ -321,6 +322,7 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
 	wp.kvStore = make(map[interface{}]interface{})
+	wp.keysList = list.New()
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue
@@ -801,13 +803,17 @@ func (wp *wsPeer) StoreKV(key interface{}, value interface{}) {
 	wp.kvStoreMutex.Lock()
 	defer wp.kvStoreMutex.Unlock()
 	wp.kvStore[key] = value
-	logging.Base().Infof("storekv: %v %v", wp.peerIndex, key)
+	wp.keysList.PushBack(key)
+	for wp.keysList.Len() > 100000 {
+		key := wp.keysList.Front()
+		wp.keysList.Remove(key)
+		delete(wp.kvStore, key)
+	}
 }
 
 // LoadKV retrieves an entry from the corresponding peer's key-value store
 func (wp *wsPeer) LoadKV(key interface{}) interface{} {
 	wp.kvStoreMutex.Lock()
 	defer wp.kvStoreMutex.Unlock()
-	logging.Base().Infof("loadkv: %v %v %v", wp.peerIndex, key, wp.kvStore[key])
 	return wp.kvStore[key]
 }
