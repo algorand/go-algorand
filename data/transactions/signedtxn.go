@@ -109,13 +109,13 @@ func AssembleSignedTxn(txn Transaction, sig crypto.Signature, msig crypto.Multis
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
-func (stib *SignedTxnInBlock) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.SignedTxnInBlock, protocol.Encode(stib)
+func (s *SignedTxnInBlock) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.SignedTxnInBlock, protocol.Encode(s)
 }
 
-// Hash implements an optimized version of crypto.HashObj(stib).
-func (stib *SignedTxnInBlock) Hash() crypto.Digest {
-	enc := stib.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.SignedTxnInBlock)...))
+// Hash implements an optimized version of crypto.HashObj(s).
+func (s *SignedTxnInBlock) Hash() crypto.Digest {
+	enc := s.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.SignedTxnInBlock)...))
 	defer protocol.PutEncodingBuf(enc)
 	return crypto.Hash(enc)
 }
