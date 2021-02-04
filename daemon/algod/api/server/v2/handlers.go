@@ -442,17 +442,18 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
-		AssetIndex       *uint64                        `codec:"asset-index,omitempty"`
-		ApplicationIndex *uint64                        `codec:"application-index,omitempty"`
-		CloseRewards     *uint64                        `codec:"close-rewards,omitempty"`
-		ClosingAmount    *uint64                        `codec:"closing-amount,omitempty"`
-		ConfirmedRound   *uint64                        `codec:"confirmed-round,omitempty"`
-		GlobalStateDelta *generated.StateDelta          `codec:"global-state-delta,omitempty"`
-		LocalStateDelta  *[]generated.AccountStateDelta `codec:"local-state-delta,omitempty"`
-		PoolError        string                         `codec:"pool-error"`
-		ReceiverRewards  *uint64                        `codec:"receiver-rewards,omitempty"`
-		SenderRewards    *uint64                        `codec:"sender-rewards,omitempty"`
-		Txn              transactions.SignedTxn         `codec:"txn"`
+		AssetIndex         *uint64                        `codec:"asset-index,omitempty"`
+		AssetClosingAmount *uint64                        `codec:"asset-closing-amount,omitempty"`
+		ApplicationIndex   *uint64                        `codec:"application-index,omitempty"`
+		CloseRewards       *uint64                        `codec:"close-rewards,omitempty"`
+		ClosingAmount      *uint64                        `codec:"closing-amount,omitempty"`
+		ConfirmedRound     *uint64                        `codec:"confirmed-round,omitempty"`
+		GlobalStateDelta   *generated.StateDelta          `codec:"global-state-delta,omitempty"`
+		LocalStateDelta    *[]generated.AccountStateDelta `codec:"local-state-delta,omitempty"`
+		PoolError          string                         `codec:"pool-error"`
+		ReceiverRewards    *uint64                        `codec:"receiver-rewards,omitempty"`
+		SenderRewards      *uint64                        `codec:"sender-rewards,omitempty"`
+		Txn                transactions.SignedTxn         `codec:"txn"`
 	}{
 		Txn: txn.Txn,
 	}
@@ -467,6 +468,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.ConfirmedRound = &r
 
 		response.ClosingAmount = &txn.ApplyData.ClosingAmount.Raw
+		response.AssetClosingAmount = &txn.ApplyData.AssetClosingAmount
 		response.SenderRewards = &txn.ApplyData.SenderRewards.Raw
 		response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
 		response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
