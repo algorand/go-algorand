@@ -82,7 +82,6 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
-	var emptyPayset transactions.Payset
 
 	initBlock := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
@@ -96,9 +95,11 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 			UpgradeState: bookkeeping.UpgradeState{
 				CurrentProtocol: proto,
 			},
-			TxnRoot: emptyPayset.Commit(params.PaysetCommitFlat),
 		},
 	}
+	var err error
+	initBlock.TxnRoot, err = initBlock.PaysetCommit()
+	require.NoError(tb, err)
 	if params.SupportGenesisHash {
 		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(tb.Name()))
 	}

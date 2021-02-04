@@ -18,7 +18,6 @@ package transactions
 
 import (
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merkle"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -28,26 +27,19 @@ type (
 	Payset []SignedTxnInBlock
 )
 
-// Commit returns a commitment to the Payset.
-//
-// If the flat argument is true, the commitment is a hash of the entire payset.
-//
-// If the flat argument is false, the commitment is the root of a merkle tree
-// whose leaves are the Txids in the Payset.  Note that the transaction root
-// depends on the order in which the Txids appear, and that Txids do NOT cover
-// transaction signatures.
-func (payset Payset) Commit(flat bool) crypto.Digest {
-	return payset.commit(flat, false)
+// CommitFlat returns a commitment to the Payset, as a flat array.
+func (payset Payset) CommitFlat() crypto.Digest {
+	return payset.commit(false)
 }
 
 // CommitGenesis is like Commit, but with special handling for zero-length
 // but non-nil paysets.
-func (payset Payset) CommitGenesis(flat bool) crypto.Digest {
-	return payset.commit(flat, true)
+func (payset Payset) CommitGenesis() crypto.Digest {
+	return payset.commit(true)
 }
 
 // commit handles the logic for both Commit and CommitGenesis
-func (payset Payset) commit(flat bool, genesis bool) crypto.Digest {
+func (payset Payset) commit(genesis bool) crypto.Digest {
 	// We used to build up Paysets from a nil slice with `append` during
 	// block evaluation, meaning zero-length paysets would remain nil.
 	// After we started allocating them up front, we started calling Commit
@@ -61,19 +53,7 @@ func (payset Payset) commit(flat bool, genesis bool) crypto.Digest {
 		payset = nil
 	}
 
-	if flat {
-		return crypto.HashObj(payset)
-	}
-
-	// Merkle (non-flat) mode is used only without SupportSignedTxnInBlock,
-	// so it's fine to reach inside the SignedTxnInBlock.
-	paysetTxids := make([][]byte, len(payset))
-	for i := 0; i < len(payset); i++ {
-		txid := payset[i].SignedTxn.ID()
-		paysetTxids[i] = append([]byte{}, txid[:]...)
-	}
-
-	return merkle.Root(paysetTxids)
+	return crypto.HashObj(payset)
 }
 
 // ToBeHashed implements the crypto.Hashable interface
