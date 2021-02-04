@@ -123,14 +123,23 @@ const (
 	FreezeAssetAccount
 	// FreezeAssetFrozen bool
 	FreezeAssetFrozen
-	// Assets []basics.AssetIndex
-	Assets
-	// NumAssets len(Assets)
-	NumAssets
-	// Apps []basics.AppIndex
-	Apps
-	// NumApps len(Apps)
-	NumApps
+	// ForeignAssets []basics.AssetIndex
+	ForeignAssets
+	// NumForeignAssets len(ForeignAssets)
+	NumForeignAssets
+	// ForeignApps []basics.AppIndex
+	ForeignApps
+	// NumForeignApps len(ForeignApps)
+	NumForeignApps
+
+	// GlobalStateInts uint64
+	GlobalStateInts
+	// GlobalStateByteslices uint64
+	GlobalStateByteslices
+	// LocalStateInts uint64
+	LocalStateInts
+	// LocalStateByteslices uint64
+	LocalStateByteslices
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -209,10 +218,14 @@ var txnFieldSpecs = []txnFieldSpec{
 	{FreezeAsset, StackUint64, 2},
 	{FreezeAssetAccount, StackBytes, 2},
 	{FreezeAssetFrozen, StackUint64, 2},
-	{Assets, StackUint64, 3},
-	{NumAssets, StackUint64, 3},
-	{Apps, StackUint64, 3},
-	{NumApps, StackUint64, 3},
+	{ForeignAssets, StackUint64, 3},
+	{NumForeignAssets, StackUint64, 3},
+	{ForeignApps, StackUint64, 3},
+	{NumForeignApps, StackUint64, 3},
+	{GlobalStateInts, StackUint64, 3},
+	{GlobalStateByteslices, StackUint64, 3},
+	{LocalStateInts, StackUint64, 3},
+	{LocalStateByteslices, StackUint64, 3},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
@@ -223,15 +236,15 @@ var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String()}
 var TxnaFieldTypes = []StackType{
 	txnaFieldSpecByField[ApplicationArgs].ftype,
 	txnaFieldSpecByField[Accounts].ftype,
-	txnaFieldSpecByField[Assets].ftype,
-	txnaFieldSpecByField[Apps].ftype,
+	txnaFieldSpecByField[ForeignAssets].ftype,
+	txnaFieldSpecByField[ForeignApps].ftype,
 }
 
 var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
 	ApplicationArgs: {ApplicationArgs, StackBytes, 2},
 	Accounts:        {Accounts, StackBytes, 2},
-	Assets:          {Assets, StackUint64, 3},
-	Apps:            {Apps, StackUint64, 3},
+	ForeignAssets:   {ForeignAssets, StackUint64, 3},
+	ForeignApps:     {ForeignApps, StackUint64, 3},
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order

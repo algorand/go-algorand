@@ -1658,21 +1658,42 @@ int 1
 
 const testTxnProgramTextV3 = testTxnProgramTextV2 + `
 assert
-txn NumAssets
+txn NumForeignAssets
 int 2
 ==
 assert
-txna Assets 0
+txna ForeignAssets 0
 int 55
 ==
 assert
-txn NumApps
+txn NumForeignApps
 int 3
 ==
 assert
-txn Apps 2			// Assembler will use 'txna'
+txn ForeignApps 2			// Assembler will use 'txna'
 int 111
 ==
+assert
+
+txn GlobalStateInts
+int 3
+==
+assert
+txn GlobalStateByteslices
+int 0
+==
+assert
+txn LocalStateInts
+int 1
+==
+assert
+txn LocalStateByteslices
+int 2
+==
+assert
+
+
+int 1
 `
 
 func makeSampleTxn() transactions.SignedTxn {
@@ -1737,6 +1758,8 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetFrozen = true
 	txn.Txn.ForeignAssets = []basics.AssetIndex{55, 77}
 	txn.Txn.ForeignApps = []basics.AppIndex{56, 78, 111}
+	txn.Txn.GlobalStateSchema = basics.StateSchema{NumUint: 3, NumByteSlice: 0}
+	txn.Txn.LocalStateSchema = basics.StateSchema{NumUint: 1, NumByteSlice: 2}
 	return txn
 }
 

@@ -1323,22 +1323,30 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		}
 	case NumAccounts:
 		sv.Uint = uint64(len(txn.Accounts))
-	case Assets:
-		if arrayFieldIdx > uint64(len(txn.ForeignAssets)) {
+	case ForeignAssets:
+		if arrayFieldIdx >= uint64(len(txn.ForeignAssets)) {
 			err = fmt.Errorf("invalid Assets index %d", arrayFieldIdx)
 			return
 		}
 		sv.Uint = uint64(txn.ForeignAssets[arrayFieldIdx])
-	case NumAssets:
+	case NumForeignAssets:
 		sv.Uint = uint64(len(txn.ForeignAssets))
-	case Apps:
-		if arrayFieldIdx > uint64(len(txn.ForeignApps)) {
+	case ForeignApps:
+		if arrayFieldIdx >= uint64(len(txn.ForeignApps)) {
 			err = fmt.Errorf("invalid Apps index %d", arrayFieldIdx)
 			return
 		}
 		sv.Uint = uint64(txn.ForeignApps[arrayFieldIdx])
-	case NumApps:
+	case NumForeignApps:
 		sv.Uint = uint64(len(txn.ForeignApps))
+	case GlobalStateInts:
+		sv.Uint = uint64(txn.GlobalStateSchema.NumUint)
+	case GlobalStateByteslices:
+		sv.Uint = uint64(txn.GlobalStateSchema.NumByteSlice)
+	case LocalStateInts:
+		sv.Uint = uint64(txn.LocalStateSchema.NumUint)
+	case LocalStateByteslices:
+		sv.Uint = uint64(txn.LocalStateSchema.NumByteSlice)
 	case ApprovalProgram:
 		sv.Bytes = nilToEmpty(txn.ApprovalProgram)
 	case ClearStateProgram:
