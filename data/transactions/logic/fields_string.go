@@ -56,16 +56,20 @@ func _() {
 	_ = x[FreezeAsset-45]
 	_ = x[FreezeAssetAccount-46]
 	_ = x[FreezeAssetFrozen-47]
-	_ = x[Assets-48]
-	_ = x[NumAssets-49]
-	_ = x[Apps-50]
-	_ = x[NumApps-51]
-	_ = x[invalidTxnField-52]
+	_ = x[ForeignAssets-48]
+	_ = x[NumForeignAssets-49]
+	_ = x[ForeignApps-50]
+	_ = x[NumForeignApps-51]
+	_ = x[GlobalStateInts-52]
+	_ = x[GlobalStateByteslices-53]
+	_ = x[LocalStateInts-54]
+	_ = x[LocalStateByteslices-55]
+	_ = x[invalidTxnField-56]
 }
 
-const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseReceiverAmountCloseRemainderToVotePKSelectionPKVoteFirstVoteLastVoteKeyDilutionTypeTypeEnumXferAssetAssetAmountAssetSenderAssetReceiverAssetCloseToGroupIndexTxIDApplicationIDOnCompletionApplicationArgsNumAppArgsAccountsNumAccountsApprovalProgramClearStateProgramRekeyToConfigAssetConfigAssetTotalConfigAssetDecimalsConfigAssetDefaultFrozenConfigAssetUnitNameConfigAssetNameConfigAssetURLConfigAssetMetadataHashConfigAssetManagerConfigAssetReserveConfigAssetFreezeConfigAssetClawbackFreezeAssetFreezeAssetAccountFreezeAssetFrozenAssetsNumAssetsAppsNumAppsinvalidTxnField"
+const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseReceiverAmountCloseRemainderToVotePKSelectionPKVoteFirstVoteLastVoteKeyDilutionTypeTypeEnumXferAssetAssetAmountAssetSenderAssetReceiverAssetCloseToGroupIndexTxIDApplicationIDOnCompletionApplicationArgsNumAppArgsAccountsNumAccountsApprovalProgramClearStateProgramRekeyToConfigAssetConfigAssetTotalConfigAssetDecimalsConfigAssetDefaultFrozenConfigAssetUnitNameConfigAssetNameConfigAssetURLConfigAssetMetadataHashConfigAssetManagerConfigAssetReserveConfigAssetFreezeConfigAssetClawbackFreezeAssetFreezeAssetAccountFreezeAssetFrozenForeignAssetsNumForeignAssetsForeignAppsNumForeignAppsGlobalStateIntsGlobalStateByteslicesLocalStateIntsLocalStateByteslicesinvalidTxnField"
 
-var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 225, 237, 252, 262, 270, 281, 296, 313, 320, 331, 347, 366, 390, 409, 424, 438, 461, 479, 497, 514, 533, 544, 562, 579, 585, 594, 598, 605, 620}
+var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 225, 237, 252, 262, 270, 281, 296, 313, 320, 331, 347, 366, 390, 409, 424, 438, 461, 479, 497, 514, 533, 544, 562, 579, 592, 608, 619, 633, 648, 669, 683, 703, 718}
 
 func (i TxnField) String() string {
 	if i < 0 || i >= TxnField(len(_TxnField_index)-1) {

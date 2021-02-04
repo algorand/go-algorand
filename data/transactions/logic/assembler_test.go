@@ -876,10 +876,14 @@ txn ConfigAssetClawback
 txn FreezeAsset
 txn FreezeAssetAccount
 txn FreezeAssetFrozen
-txna Assets 0
-txn NumAssets
-txna Apps 0
-txn NumApps
+txna ForeignAssets 0
+txn NumForeignAssets
+txna ForeignApps 0
+txn NumForeignApps
+txn GlobalStateInts
+txn GlobalStateByteslices
+txn LocalStateInts
+txn LocalStateByteslices
 gtxn 12 Fee
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
