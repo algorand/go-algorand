@@ -43,6 +43,7 @@ type testLedger struct {
 	applications map[basics.AppIndex]map[string]basics.TealValue
 	assets       map[basics.AssetIndex]basics.AssetParams
 	appID        uint64
+	creatorAddr  basics.Address
 	mods         map[basics.AppIndex]map[string]basics.ValueDelta
 }
 
@@ -314,6 +315,10 @@ func (l *testLedger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams,
 
 func (l *testLedger) ApplicationID() basics.AppIndex {
 	return basics.AppIndex(l.appID)
+}
+
+func (l *testLedger) CreatorAddress() basics.Address {
+	return l.creatorAddr
 }
 
 func (l *testLedger) LocalSchema() basics.StateSchema {

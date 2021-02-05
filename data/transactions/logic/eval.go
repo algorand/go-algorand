@@ -130,6 +130,7 @@ type LedgerForLogic interface {
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, error)
 	ApplicationID() basics.AppIndex
+	CreatorAddress() basics.Address
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error)
@@ -1536,6 +1537,14 @@ func (cx *evalContext) getApplicationID() (rnd uint64, err error) {
 	return uint64(cx.Ledger.ApplicationID()), nil
 }
 
+func (cx *evalContext) getCreatorAddress() ([]byte, error) {
+	if cx.Ledger == nil {
+		return nil, fmt.Errorf("ledger not available")
+	}
+	addr := cx.Ledger.CreatorAddress()
+	return addr[:], nil
+}
+
 var zeroAddress basics.Address
 
 func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err error) {
@@ -1558,6 +1567,8 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 		sv.Uint, err = cx.getLatestTimestamp()
 	case CurrentApplicationID:
 		sv.Uint, err = cx.getApplicationID()
+	case CreatorAddress:
+		sv.Bytes, err = cx.getCreatorAddress()
 	default:
 		err = fmt.Errorf("invalid global[%d]", field)
 	}
