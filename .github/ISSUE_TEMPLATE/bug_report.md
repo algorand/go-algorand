@@ -7,13 +7,6 @@ assignees: ''
 
 ---
 
-<!--
-NOTE: If this issue relates to security, please use the vulnerability disclosure form here:
-https://www.algorand.com/resources/blog/security
-
-General, developer or support questions concerning Algorand should be directed to the Algorand Forums https://forum.algorand.org/.
--->
-
 ### Subject of the issue
 Describe your issue here.
 
