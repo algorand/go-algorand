@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/config"
 )
 
 func TestSaveNetworkCfg(t *testing.T) {
@@ -41,4 +43,54 @@ func TestSaveNetworkCfg(t *testing.T) {
 	a.Nil(err)
 	cfg1, err := loadNetworkCfg(cfgFile)
 	a.Equal(cfg, cfg1)
+}
+
+func TestSaveConsensus(t *testing.T) {
+	a := require.New(t)
+
+	tmpFolder, _ := ioutil.TempDir("", "tmp")
+	defer os.RemoveAll(tmpFolder)
+	relayDir := filepath.Join(tmpFolder, "testRelayDir")
+	err := os.MkdirAll(relayDir, 0744)
+	a.NoError(err)
+	nodeDir := filepath.Join(tmpFolder, "testNodeDir")
+	err = os.MkdirAll(nodeDir, 0744)
+	a.NoError(err)
+
+	net := Network{
+		cfg: NetworkCfg{
+			Name:         "testName",
+			RelayDirs:    []string{relayDir},
+			TemplateFile: "testTemplate",
+		},
+		nodeDirs: map[string]string{
+			"node1": nodeDir,
+		},
+	}
+
+	consensusRelayFilePath := filepath.Join(relayDir, config.ConfigurableConsensusProtocolsFilename)
+	consensusNodeFilePath := filepath.Join(relayDir, config.ConfigurableConsensusProtocolsFilename)
+	err = net.SetConsensus(tmpFolder, nil)
+	a.NoError(err)
+	_, err = os.Open(consensusRelayFilePath)
+	a.True(os.IsNotExist(err), "%s should not have been created", config.ConfigurableConsensusProtocolsFilename)
+	_, err = os.Open(consensusNodeFilePath)
+	a.True(os.IsNotExist(err), "%s should not have been created", config.ConfigurableConsensusProtocolsFilename)
+
+	err = net.SetConsensus(tmpFolder, config.Consensus)
+	a.NoError(err)
+	f, err := os.Open(consensusRelayFilePath)
+	a.False(os.IsNotExist(err), "%s should have been created", config.ConfigurableConsensusProtocolsFilename)
+	f.Close()
+	f, err = os.Open(consensusNodeFilePath)
+	a.False(os.IsNotExist(err), "%s should have been created", config.ConfigurableConsensusProtocolsFilename)
+	f.Close()
+
+	// now that the file exists, try to see if another call to SetConsensus would delete it.
+	err = net.SetConsensus(tmpFolder, nil)
+	a.NoError(err)
+	_, err = os.Open(consensusRelayFilePath)
+	a.True(os.IsNotExist(err), "%s should have been deleted", config.ConfigurableConsensusProtocolsFilename)
+	_, err = os.Open(consensusNodeFilePath)
+	a.True(os.IsNotExist(err), "%s should have been deleted", config.ConfigurableConsensusProtocolsFilename)
 }
