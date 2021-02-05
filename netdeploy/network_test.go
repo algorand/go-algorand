@@ -85,4 +85,12 @@ func TestSaveConsensus(t *testing.T) {
 	f, err = os.Open(consensusNodeFilePath)
 	a.False(os.IsNotExist(err), "%s should have been created", config.ConfigurableConsensusProtocolsFilename)
 	f.Close()
+
+	// now that the file exists, try to see if another call to SetConsensus would delete it.
+	err = net.SetConsensus(tmpFolder, nil)
+	a.NoError(err)
+	_, err = os.Open(consensusRelayFilePath)
+	a.True(os.IsNotExist(err), "%s should have been deleted", config.ConfigurableConsensusProtocolsFilename)
+	_, err = os.Open(consensusNodeFilePath)
+	a.True(os.IsNotExist(err), "%s should have been deleted", config.ConfigurableConsensusProtocolsFilename)
 }

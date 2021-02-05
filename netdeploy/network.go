@@ -446,22 +446,20 @@ func (n Network) Delete(binDir string) error {
 // SetConsensus applies a new consensus settings which would get deployed before
 // any of the nodes starts
 func (n Network) SetConsensus(binDir string, consensus config.ConsensusProtocols) error {
-	if len(consensus) > 0 {
-		for _, relayDir := range n.cfg.RelayDirs {
-			relayFulllPath := n.getNodeFullPath(relayDir)
-			nc := nodecontrol.MakeNodeController(binDir, relayFulllPath)
-			err := nc.SetConsensus(consensus)
-			if err != nil {
-				return err
-			}
+	for _, relayDir := range n.cfg.RelayDirs {
+		relayFulllPath := n.getNodeFullPath(relayDir)
+		nc := nodecontrol.MakeNodeController(binDir, relayFulllPath)
+		err := nc.SetConsensus(consensus)
+		if err != nil {
+			return err
 		}
-		for _, nodeDir := range n.nodeDirs {
-			nodeFulllPath := n.getNodeFullPath(nodeDir)
-			nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
-			err := nc.SetConsensus(consensus)
-			if err != nil {
-				return err
-			}
+	}
+	for _, nodeDir := range n.nodeDirs {
+		nodeFulllPath := n.getNodeFullPath(nodeDir)
+		nc := nodecontrol.MakeNodeController(binDir, nodeFulllPath)
+		err := nc.SetConsensus(consensus)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
