@@ -33,6 +33,7 @@ const (
 	PingTag            Tag = "pi"
 	PingReplyTag       Tag = "pj"
 	ProposalPayloadTag Tag = "PP"
+	ProposalTransactionTag Tag = "PT"
 	TopicMsgRespTag    Tag = "TS"
 	TxnTag             Tag = "TX"
 	UniCatchupReqTag   Tag = "UC"

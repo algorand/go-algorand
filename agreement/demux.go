@@ -139,6 +139,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 				case protocol.ProposalPayloadTag:
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
 					var err error
+					logging.Base().Infof("len %v", len(msg.CompoundMessage.Proposal.Payset))
 					for i, stib := range msg.CompoundMessage.Proposal.Payset {
 						var stxnBytes []byte
 						stxnData := net.LoadKV(msg.MessageHandle, stib.Digest)

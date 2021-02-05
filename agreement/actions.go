@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/logging"
 
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -164,13 +165,15 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 
 	switch a.T {
 	case broadcast:
+		logging.Base().Infof("txncount, %v", len(txnData))
 		for _, txn := range txnData {
-			s.Network.Broadcast(protocol.TxnTag, txn)
+			s.Network.Broadcast(protocol.ProposalTransactionTag, txn)
 		}
 		s.Network.Broadcast(a.Tag, data)
 	case relay:
+		logging.Base().Infof("txncount, %v", len(txnData))
 		for _, txn := range txnData {
-			s.Network.Relay(a.h, protocol.TxnTag, txn)
+			s.Network.Relay(a.h, protocol.ProposalTransactionTag, txn)
 		}
 		s.Network.Relay(a.h, a.Tag, data)
 	case disconnect:

@@ -232,7 +232,7 @@ type IncomingMessage struct {
 type Tag = protocol.Tag
 
 func highPriorityTag(tag protocol.Tag) bool {
-	return tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag
+	return tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag || tag == protocol.ProposalTransactionTag
 }
 
 // OutgoingMessage represents a message we want to send.
@@ -1181,6 +1181,7 @@ func (wn *WebsocketNetwork) broadcastThread() {
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
 			wn.innerBroadcast(request, true, &peers)
+			logging.Base().Infof("broadcasting: %v, %v", 1, request.tag)
 			continue
 		default:
 		}
@@ -1188,11 +1189,13 @@ func (wn *WebsocketNetwork) broadcastThread() {
 		// if nothing high prio, broadcast anything
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
+			logging.Base().Infof("broadcasting: %v, %v", 2, request.tag)
 			wn.innerBroadcast(request, true, &peers)
 		case <-slowWritingPeerCheckTicker.C:
 			wn.checkSlowWritingPeers()
 			continue
 		case request := <-wn.broadcastQueueBulk:
+			logging.Base().Infof("broadcasting: %v, %v", 3, request.tag)
 			wn.innerBroadcast(request, false, &peers)
 		case <-wn.ctx.Done():
 			return
@@ -1214,6 +1217,7 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) []*wsPeer {
 
 // prio is set if the broadcast is a high-priority broadcast.
 func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, ppeers *[]*wsPeer) {
+	logging.Base().Infof("broadcasting: %v, %v", crypto.Hash(request.data), request.tag)
 	if request.done != nil {
 		defer close(request.done)
 	}
