@@ -829,9 +829,20 @@ func initConsensusProtocols() {
 	// v23 can be upgraded to v24, with an update delay of 7 days ( see calculation above )
 	v23.ApprovedUpgrades[protocol.ConsensusV24] = 140000
 
+	// v25 enables AssetCloseAmount in the ApplyData
+	v25 := v24
+	v25.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable AssetCloseAmount field
+	v25.EnableAssetCloseAmount = true
+	Consensus[protocol.ConsensusV25] = v25
+
+	// v24 can be upgraded to v25, with an update delay of 7 days ( see calculation above )
+	v24.ApprovedUpgrades[protocol.ConsensusV25] = 140000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v24
+	vFuture := v25
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -843,9 +854,6 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
-
-	// Enable AssetCloseAmount field
-	vFuture.EnableAssetCloseAmount = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
