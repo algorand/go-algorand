@@ -433,9 +433,19 @@ func checkSetAllocBounds(p ConsensusParams) {
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
+// if the params contains zero protocols, the existing consensus.json file will be removed if exists.
 func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
 
+	if len(params) == 0 {
+		// we have no consensus params to write. In this case, just delete the existing file
+		// ( if any )
+		err := os.Remove(consensusProtocolPath)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
 	encodedConsensusParams, err := json.Marshal(params)
 	if err != nil {
 		return err
