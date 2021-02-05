@@ -1248,7 +1248,8 @@ int 9
 	}
 }
 
-const globalV1TestProgram = `global MinTxnFee
+const globalV1TestProgram = `
+global MinTxnFee
 int 123
 ==
 global MinBalance
@@ -1269,7 +1270,10 @@ int 1
 &&
 `
 
-const globalV2TestProgram = `global LogicSigVersion
+const TEST_ADDR = "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU"
+
+const globalV2TestProgram = globalV1TestProgram + `
+global LogicSigVersion
 int 1
 >
 &&
@@ -1286,6 +1290,12 @@ int 42
 ==
 &&
 `
+const globalV3TestProgram = globalV2TestProgram + `
+global CreatorAddress
+addr ` + TEST_ADDR + `
+==
+&&
+`
 
 func TestGlobal(t *testing.T) {
 	t.Parallel()
@@ -1299,17 +1309,19 @@ func TestGlobal(t *testing.T) {
 		0: {GroupSize, globalV1TestProgram, Eval, Check},
 		1: {GroupSize, globalV1TestProgram, Eval, Check},
 		2: {
-			CurrentApplicationID, globalV1TestProgram + globalV2TestProgram,
+			CurrentApplicationID, globalV2TestProgram,
 			EvalStateful, CheckStateful,
 		},
 		3: {
-			// TODO: Change CurrentApplicationID for new globals in v3
-			CurrentApplicationID, globalV1TestProgram + globalV2TestProgram,
+			CreatorAddress, globalV3TestProgram,
 			EvalStateful, CheckStateful,
 		},
 	}
 	ledger := makeTestLedger(nil)
 	ledger.appID = 42
+	addr, err := basics.UnmarshalChecksumAddress(TEST_ADDR)
+	require.NoError(t, err)
+	ledger.creatorAddr = addr
 	for v := uint64(0); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			last := tests[v].lastField
@@ -1321,8 +1333,7 @@ func TestGlobal(t *testing.T) {
 					t.Errorf("TestGlobal missing field %v", globalField)
 				}
 			}
-			ops, err := AssembleStringWithVersion(testProgram, v)
-			require.NoError(t, err)
+			ops := testProg(t, testProgram, v)
 			cost, err := check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			require.True(t, cost < 1000)

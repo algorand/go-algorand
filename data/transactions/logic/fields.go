@@ -304,6 +304,8 @@ const (
 	ZeroAddress
 	// GroupSize len(txn group)
 	GroupSize
+
+	// v2
 	// LogicSigVersion ConsensusParams.LogicSigVersion
 	LogicSigVersion
 	// Round basics.Round
@@ -312,6 +314,10 @@ const (
 	LatestTimestamp
 	// CurrentApplicationID uint64
 	CurrentApplicationID
+
+	// v3
+	// CreatorAddress [32]byte
+	CreatorAddress
 
 	invalidGlobalField
 )
@@ -339,6 +345,7 @@ var globalFieldSpecs = []globalFieldSpec{
 	{Round, StackUint64, runModeApplication, 2},
 	{LatestTimestamp, StackUint64, runModeApplication, 2},
 	{CurrentApplicationID, StackUint64, runModeApplication, 2},
+	{CreatorAddress, StackBytes, runModeApplication, 3},
 }
 
 // GlobalFieldSpecByField maps GlobalField to spec

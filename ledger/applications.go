@@ -131,6 +131,10 @@ func (al *logicLedger) ApplicationID() basics.AppIndex {
 	return al.aidx
 }
 
+func (al *logicLedger) CreatorAddress() basics.Address {
+	return al.creator
+}
+
 func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
 	if appIdx == basics.AppIndex(0) {
 		appIdx = al.aidx

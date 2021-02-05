@@ -826,6 +826,7 @@ global LogicSigVersion
 global Round
 global LatestTimestamp
 global CurrentApplicationID
+global CreatorAddress
 txn Sender
 txn Fee
 bnz label1
