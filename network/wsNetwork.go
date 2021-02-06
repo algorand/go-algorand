@@ -1235,6 +1235,9 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 	copy(mbytes, tbytes)
 	copy(mbytes[len(tbytes):], request.data)
 
+	msgs := make([][]byte, 1, 1)
+	msgs[0] = mbytes
+
 	var digest crypto.Digest
 	if request.tag != protocol.MsgDigestSkipTag && len(request.data) >= messageFilterSize {
 		digest = crypto.Hash(mbytes)
@@ -1253,7 +1256,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 			peers[pi] = nil
 			continue
 		}
-		ok := peer.writeNonBlock(mbytes, prio, digest, request.enqueueTime)
+		ok := peer.writeNonBlock(msgs, prio, digest, request.enqueueTime)
 		if ok {
 			peers[pi] = nil
 			sentMessageCount++
@@ -1941,7 +1944,9 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(mbytes, true, crypto.Digest{}, time.Now())
+				msgs := make([][]byte, 1, 1)
+				msgs[0] = mbytes
+				sent := peer.writeNonBlock(msgs, true, crypto.Digest{}, time.Now())
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}

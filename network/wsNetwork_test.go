@@ -621,8 +621,8 @@ func TestSlowOutboundPeer(t *testing.T) {
 	for i := range destPeers {
 		destPeers[i].closing = make(chan struct{})
 		destPeers[i].net = node
-		destPeers[i].sendBufferHighPrio = make(chan sendMessage, sendBufferLength)
-		destPeers[i].sendBufferBulk = make(chan sendMessage, sendBufferLength)
+		destPeers[i].sendBufferHighPrio = make(chan []sendMessage, sendBufferLength)
+		destPeers[i].sendBufferBulk = make(chan []sendMessage, sendBufferLength)
 		destPeers[i].conn = &nopConnSingleton
 		destPeers[i].rootURL = fmt.Sprintf("fake %d", i)
 		node.addPeer(&destPeers[i])
