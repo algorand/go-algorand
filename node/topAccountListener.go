@@ -21,7 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -61,7 +61,7 @@ func (t *topAccountListener) init(balances basics.BalanceDetail) {
 }
 
 // BlockListener event, triggered when the ledger writes a new block.
-func (t *topAccountListener) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
+func (t *topAccountListener) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	// XXX revise for new ledger API
 	// t.update(block, balances)
 

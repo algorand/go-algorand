@@ -129,12 +129,12 @@ func (sc sigsToCommit) Length() uint64 {
 	return uint64(len(sc))
 }
 
-func (sc sigsToCommit) Get(pos uint64) (crypto.Hashable, error) {
+func (sc sigsToCommit) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= uint64(len(sc)) {
-		return nil, fmt.Errorf("pos %d past end %d", pos, len(sc))
+		return crypto.Digest{}, fmt.Errorf("pos %d past end %d", pos, len(sc))
 	}
 
-	return &sc[pos].sigslotCommit, nil
+	return crypto.HashObj(&sc[pos].sigslotCommit), nil
 }
 
 // coinIndex returns the position pos in the sigs array such that the sum

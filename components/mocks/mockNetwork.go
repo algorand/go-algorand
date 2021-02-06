@@ -105,3 +105,8 @@ func (network *MockNetwork) OnNetworkAdvance() {}
 func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) {
 	return nil
 }
+
+// SubstituteGenesisID - empty implementation
+func (network *MockNetwork) SubstituteGenesisID(rawURL string) string {
+	return rawURL
+}

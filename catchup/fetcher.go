@@ -90,7 +90,7 @@ func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, fs *rpcs.W
 
 // BuildFetcherClients returns a set of clients we can fetch blocks from
 func (factory NetworkFetcherFactory) BuildFetcherClients() []FetcherClient {
-	peers := factory.net.GetPeers(network.PeersPhonebook)
+	peers := factory.net.GetPeers(network.PeersPhonebookRelays)
 	factory.log.Debugf("%d outgoing peers", len(peers))
 	if len(peers) == 0 {
 		factory.log.Warn("no outgoing peers for BuildFetcherClients")

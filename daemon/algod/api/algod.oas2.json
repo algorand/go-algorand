@@ -2148,6 +2148,10 @@
             "description": "Closing amount for the transaction.",
             "type": "integer"
           },
+          "asset-closing-amount": {
+            "description": "The number of the asset's unit that were transferred to the close-to address.",
+            "type": "integer"
+          },
           "confirmed-round": {
             "description": "The round where this transaction was confirmed, if present.",
             "type": "integer"

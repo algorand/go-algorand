@@ -48,7 +48,7 @@ type ValueDelta struct {
 }
 
 // ToTealValue converts a ValueDelta into a TealValue if possible, and returns
-// ok = false with a value of 0 TealUint if the conversion is not possible.
+// ok = false if the conversion is not possible.
 func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 	switch vd.Action {
 	case SetBytesAction:
@@ -60,10 +60,8 @@ func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 		value.Uint = vd.Uint
 		ok = true
 	case DeleteAction:
-		value.Type = TealUintType
 		ok = false
 	default:
-		value.Type = TealUintType
 		ok = false
 	}
 	return value, ok
@@ -270,7 +268,7 @@ func (tv *TealValue) String() string {
 
 // TealKeyValue represents a key/value store for use in an application's
 // LocalState or GlobalState
-//msgp:allocbound TealKeyValue encodedMaxKeyValueEntries
+//msgp:allocbound TealKeyValue EncodedMaxKeyValueEntries
 type TealKeyValue map[string]TealValue
 
 // Clone returns a copy of a TealKeyValue that may be modified without
@@ -301,24 +299,4 @@ func (tk TealKeyValue) ToStateSchema() (schema StateSchema, err error) {
 		}
 	}
 	return schema, nil
-}
-
-// SatisfiesSchema returns an error indicating whether or not a particular
-// TealKeyValue store meets the requirements set by a StateSchema on how
-// many values of each type are allowed
-func (tk TealKeyValue) SatisfiesSchema(schema StateSchema) error {
-	calc, err := tk.ToStateSchema()
-	if err != nil {
-		return err
-	}
-
-	// Check against the schema
-	if calc.NumUint > schema.NumUint {
-		return fmt.Errorf("store integer count %d exceeds schema integer count %d", calc.NumUint, schema.NumUint)
-	}
-	if calc.NumByteSlice > schema.NumByteSlice {
-		return fmt.Errorf("store bytes count %d exceeds schema bytes count %d", calc.NumByteSlice, schema.NumByteSlice)
-	}
-
-	return nil
 }

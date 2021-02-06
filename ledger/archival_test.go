@@ -40,8 +40,10 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 type wrappedLedger struct {
@@ -65,7 +67,7 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
 	return wl.l.trackerEvalVerified(blk, accUpdatesLedger)
 }
 
@@ -73,11 +75,11 @@ func (wl *wrappedLedger) Latest() basics.Round {
 	return wl.l.Latest()
 }
 
-func (wl *wrappedLedger) trackerDB() dbPair {
+func (wl *wrappedLedger) trackerDB() db.Pair {
 	return wl.l.trackerDB()
 }
 
-func (wl *wrappedLedger) blockDB() dbPair {
+func (wl *wrappedLedger) blockDB() db.Pair {
 	return wl.l.blockDB()
 }
 
@@ -206,7 +208,7 @@ func TestArchivalRestart(t *testing.T) {
 	l.WaitForCommit(blk.Round())
 
 	var latest, earliest basics.Round
-	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
@@ -223,7 +225,7 @@ func TestArchivalRestart(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
@@ -737,7 +739,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	l.WaitForCommit(blk.Round())
 
 	var latest, earliest basics.Round
-	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
@@ -757,7 +759,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 

@@ -219,7 +219,7 @@ var homepage string = `
 
                     type.innerText = values[i].tt == TealUintType ? "u": "b";
                     if (values[i].tt === TealUintType) {
-                        value.innerText = values[i].ui || 0;
+                        value.innerText = values[i].ui || "0";
                     } else {
                         value.innerText = values[i].tb || "";
                     }
@@ -231,7 +231,7 @@ var homepage string = `
 
                 // Update stack and scratch
                 var stacktable = exec.querySelector(".stack");
-                updateMemory(stacktable, state["stack"])
+                updateMemory(stacktable, state["stack"] || [])
 
                 var scratchtable = exec.querySelector(".scratch");
                 updateMemory(scratchtable, state["scratch"])
@@ -333,7 +333,10 @@ var homepage string = `
             });
 
             socket.addEventListener('message', function (event) {
-                var msg = JSON.parse(event.data);
+                const preparedData = event.data.replace(/"ui": ([0-9]+)/g, function (match, value) {
+                    return '"ui": "' + value + '"'; // replace teal uint64s with strings to maintain precision
+                });
+                var msg = JSON.parse(preparedData);
 
                 if (msg["event"] !== "connected") {
                     document.getElementById("loading").style.display = "none";
