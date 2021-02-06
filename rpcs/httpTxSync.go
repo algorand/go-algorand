@@ -47,6 +47,7 @@ type HTTPTxSync struct {
 }
 
 const requestContentType = "application/x-www-form-urlencoded"
+const baseResponseReadingBufferSize = uint64(1024)
 
 // ResponseBytes reads the content of the response object and return the body content
 // while obeying the read size limits
@@ -62,7 +63,7 @@ func ResponseBytes(response *http.Response, log logging.Logger, limit uint64) (d
 		_, err = io.ReadFull(response.Body, data)
 		return
 	}
-	slurper := network.LimitedReaderSlurper{Limit: limit}
+	slurper := network.MakeLimitedReaderSlurper(baseResponseReadingBufferSize, limit)
 	err = slurper.Read(response.Body)
 	if err == network.ErrIncomingMsgTooLarge {
 		log.Errorf("response too large: %d > %d", slurper.Size(), limit)
@@ -93,7 +94,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	}
 	bloomParam := base64.URLEncoding.EncodeToString(bloomBytes)
 
-	peers := hts.peers.GetPeers(network.PeersPhonebook)
+	peers := hts.peers.GetPeers(network.PeersPhonebookRelays)
 	if len(peers) == 0 {
 		return nil, nil //errors.New("no peers to tx sync from")
 	}
@@ -113,7 +114,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		hts.log.Warnf("txSync bad url %v: %s", hts.rootURL, err)
 		return nil, err
 	}
-	parsedURL.Path = hpeer.PrepareURL(path.Join(parsedURL.Path, TxServiceHTTPPath))
+	parsedURL.Path = hts.peers.SubstituteGenesisID(path.Join(parsedURL.Path, TxServiceHTTPPath))
 	syncURL := parsedURL.String()
 	hts.log.Infof("http sync from %s", syncURL)
 	params := url.Values{}

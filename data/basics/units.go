@@ -80,7 +80,7 @@ func (MicroAlgos) CanMarshalMsg(z interface{}) bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (a MicroAlgos) MarshalMsg(b []byte) (o []byte, err error) {
+func (a MicroAlgos) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, msgp.Uint64Size)
 	o = msgp.AppendUint64(o, a.Raw)
 	return
@@ -129,4 +129,9 @@ func (round Round) SubSaturate(x Round) Round {
 	}
 
 	return round - x
+}
+
+// RoundUpToMultipleOf rounds up round to the next multiple of n.
+func (round Round) RoundUpToMultipleOf(n Round) Round {
+	return (round + n - 1) / n * n
 }

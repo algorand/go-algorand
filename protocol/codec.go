@@ -114,12 +114,7 @@ func EncodeReflect(obj interface{}) []byte {
 // EncodeMsgp returns a msgpack-encoded byte buffer, requiring
 // that we pre-generated the code for doing so using msgp.
 func EncodeMsgp(obj msgp.Marshaler) []byte {
-	res, err := obj.MarshalMsg(nil)
-	if err != nil {
-		panic(err)
-	}
-
-	return res
+	return obj.MarshalMsg(nil)
 }
 
 // Encode returns a msgpack-encoded byte buffer for a given object.
@@ -245,4 +240,26 @@ func NewJSONDecoder(r io.Reader) Decoder {
 // NewDecoderBytes returns a decoder object reading bytes from [b].
 func NewDecoderBytes(b []byte) Decoder {
 	return codec.NewDecoderBytes(b, CodecHandle)
+}
+
+// encodingPool holds temporary byte slice buffers used for encoding messages.
+var encodingPool = sync.Pool{
+	New: func() interface{} {
+		return []byte{}
+	},
+}
+
+// GetEncodingBuf returns a byte slice that can be used for encoding a
+// temporary message.  The byte slice has zero length but potentially
+// non-zero capacity.  The caller gets full ownership of the byte slice,
+// but is encouraged to return it using PutEncodingBuf().
+func GetEncodingBuf() []byte {
+	return encodingPool.Get().([]byte)[:0]
+}
+
+// PutEncodingBuf places a byte slice into the pool of temporary buffers
+// for encoding.  The caller gives up ownership of the byte slice when
+// passing it to PutEncodingBuf().
+func PutEncodingBuf(s []byte) {
+	encodingPool.Put(s)
 }

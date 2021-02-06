@@ -32,7 +32,7 @@ import (
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/nodecontrol"
@@ -132,7 +132,7 @@ var catchupCmd = &cobra.Command{
 func catchpointCmdArgument(cmd *cobra.Command, args []string) error {
 	catchpointsCount := 0
 	for _, arg := range args {
-		_, _, err := ledger.ParseCatchpointLabel(arg)
+		_, _, err := ledgercore.ParseCatchpointLabel(arg)
 		switch err {
 		case nil:
 			if catchpointsCount > 0 {
@@ -140,7 +140,7 @@ func catchpointCmdArgument(cmd *cobra.Command, args []string) error {
 			}
 			catchpointsCount++
 			continue
-		case ledger.ErrCatchpointParsingFailed:
+		case ledgercore.ErrCatchpointParsingFailed:
 			// this isn't a valid catchpoint label.
 			// return a nice formatted error
 			return errors.New(errorCatchpointLabelParsingFailed)

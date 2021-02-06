@@ -122,23 +122,10 @@ type (
 		// started being supported).
 		TxnCounter uint64 `codec:"tc"`
 
-		// CompactCertVoters is the root of a Merkle tree containing the
-		// online accounts that will help sign a compact certificate.  The
-		// Merkle root, and the compact certificate, happen on blocks that
-		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
-		// that are not a multiple of ConsensusParams.CompactCertRounds,
-		// this value is zero.
-		CompactCertVoters crypto.Digest `codec:"ccv"`
-
-		// CompactCertVotersTotal is the total number of microalgos held by
-		// the accounts in CompactCertVoters (or zero, if the merkle root is
-		// zero).  This is intended for computing the threshold of votes to
-		// expect from CompactCertVoters.
-		CompactCertVotersTotal basics.MicroAlgos `codec:"ccvt"`
-
-		// CompactCertLastRound is the last round for which we have committed
-		// a CompactCert transaction.
-		CompactCertLastRound basics.Round `codec:"ccl"`
+		// CompactCert tracks the state of compact certs, potentially
+		// for multiple types of certs.
+		//msgp:sort protocol.CompactCertType protocol.SortCompactCertType
+		CompactCert map[protocol.CompactCertType]CompactCertState `codec:"cc,allocbound=protocol.NumCompactCertTypes"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
@@ -197,6 +184,29 @@ type (
 		NextProtocolApprovals  uint64                    `codec:"nextyes"`
 		NextProtocolVoteBefore basics.Round              `codec:"nextbefore"`
 		NextProtocolSwitchOn   basics.Round              `codec:"nextswitch"`
+	}
+
+	// CompactCertState tracks the state of compact certificates.
+	CompactCertState struct {
+		_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+		// CompactCertVoters is the root of a Merkle tree containing the
+		// online accounts that will help sign a compact certificate.  The
+		// Merkle root, and the compact certificate, happen on blocks that
+		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
+		// that are not a multiple of ConsensusParams.CompactCertRounds,
+		// this value is zero.
+		CompactCertVoters crypto.Digest `codec:"v"`
+
+		// CompactCertVotersTotal is the total number of microalgos held by
+		// the accounts in CompactCertVoters (or zero, if the merkle root is
+		// zero).  This is intended for computing the threshold of votes to
+		// expect from CompactCertVoters.
+		CompactCertVotersTotal basics.MicroAlgos `codec:"t"`
+
+		// CompactCertNextRound is the next round for which we will accept
+		// a CompactCert transaction.
+		CompactCertNextRound basics.Round `codec:"n"`
 	}
 
 	// A Block contains the Payset and metadata corresponding to a given Round.
@@ -440,8 +450,6 @@ func MakeBlock(prev BlockHeader) Block {
 		logging.Base().Panicf("MakeBlock: next protocol %v not supported", upgradeState.CurrentProtocol)
 	}
 
-	var emptyPayset transactions.Payset
-
 	timestamp := time.Now().Unix()
 	if prev.TimeStamp > 0 {
 		if timestamp < prev.TimeStamp {
@@ -452,17 +460,37 @@ func MakeBlock(prev BlockHeader) Block {
 	}
 
 	// the merkle root of TXs will update when fillpayset is called
-	return Block{
+	blk := Block{
 		BlockHeader: BlockHeader{
 			Round:        prev.Round + 1,
 			Branch:       prev.Hash(),
-			TxnRoot:      emptyPayset.Commit(params.PaysetCommitFlat),
 			UpgradeVote:  upgradeVote,
 			UpgradeState: upgradeState,
 			TimeStamp:    timestamp,
 			GenesisID:    prev.GenesisID,
 			GenesisHash:  prev.GenesisHash,
 		},
+	}
+	blk.TxnRoot, err = blk.PaysetCommit()
+	if err != nil {
+		logging.Base().Warnf("MakeBlock: computing empty TxnRoot: %v", err)
+	}
+	return blk
+}
+
+// PaysetCommit computes the commitment to the payset, using the appropriate
+// commitment plan based on the block's protocol.
+func (block Block) PaysetCommit() (crypto.Digest, error) {
+	params, ok := config.Consensus[block.CurrentProtocol]
+	if !ok {
+		return crypto.Digest{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
+	}
+
+	switch params.PaysetCommit {
+	case config.PaysetCommitFlat:
+		return block.Payset.CommitFlat(), nil
+	default:
+		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", params.PaysetCommit)
 	}
 }
 
@@ -537,8 +565,13 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 // If we're given an untrusted block and a known-good hash, we can't trust the
 // block's transactions unless we validate this.
 func (block Block) ContentsMatchHeader() bool {
-	proto := config.Consensus[block.BlockHeader.CurrentProtocol]
-	return block.Payset.Commit(proto.PaysetCommitFlat) == block.TxnRoot
+	expected, err := block.PaysetCommit()
+	if err != nil {
+		logging.Base().Warnf("ContentsMatchHeader: cannot compute commitment: %v", err)
+		return false
+	}
+
+	return expected == block.TxnRoot
 }
 
 // DecodePaysetGroups decodes block.Payset using DecodeSignedTxn, and returns

@@ -29,3 +29,16 @@ func TestSubSaturate(t *testing.T) {
 	require.Equal(t, a.SubSaturate(a), Round(0))
 	require.Equal(t, b.SubSaturate(a), Round(1))
 }
+
+func TestRoundUpToMultipleOf(t *testing.T) {
+	r := Round(24)
+	for n := Round(1); n < Round(100); n++ {
+		nextMul := r.RoundUpToMultipleOf(n)
+		require.True(t, r <= nextMul)
+		require.Equal(t, nextMul%n, Round(0))
+		if n < r {
+			prevMul := nextMul - n
+			require.True(t, prevMul < r)
+		}
+	}
+}

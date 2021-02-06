@@ -31,6 +31,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -46,7 +47,7 @@ const (
 // catchpointWriter is the struct managing the persistance of accounts data into the catchpoint file.
 // it's designed to work in a step fashion : a caller will call the WriteStep method in a loop until
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
-// has the option of throtteling the CPU utilization in between the calls.
+// has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
 	ctx               context.Context
 	hasher            hash.Hash
@@ -80,14 +81,14 @@ type encodedBalanceRecord struct {
 type CatchpointFileHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Version           uint64        `codec:"version"`
-	BalancesRound     basics.Round  `codec:"balancesRound"`
-	BlocksRound       basics.Round  `codec:"blocksRound"`
-	Totals            AccountTotals `codec:"accountTotals"`
-	TotalAccounts     uint64        `codec:"accountsCount"`
-	TotalChunks       uint64        `codec:"chunksCount"`
-	Catchpoint        string        `codec:"catchpoint"`
-	BlockHeaderDigest crypto.Digest `codec:"blockHeaderDigest"`
+	Version           uint64                   `codec:"version"`
+	BalancesRound     basics.Round             `codec:"balancesRound"`
+	BlocksRound       basics.Round             `codec:"blocksRound"`
+	Totals            ledgercore.AccountTotals `codec:"accountTotals"`
+	TotalAccounts     uint64                   `codec:"accountsCount"`
+	TotalChunks       uint64                   `codec:"chunksCount"`
+	Catchpoint        string                   `codec:"catchpoint"`
+	BlockHeaderDigest crypto.Digest            `codec:"blockHeaderDigest"`
 }
 
 type catchpointFileBalancesChunk struct {

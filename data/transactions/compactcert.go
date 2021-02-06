@@ -27,8 +27,9 @@ import (
 type CompactCertTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	CertRound basics.Round     `codec:"certrnd"`
-	Cert      compactcert.Cert `codec:"cert"`
+	CertRound basics.Round             `codec:"certrnd"`
+	CertType  protocol.CompactCertType `codec:"certtype"`
+	Cert      compactcert.Cert         `codec:"cert"`
 }
 
 // Empty returns whether the CompactCertTxnFields are all zero,
