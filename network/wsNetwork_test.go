@@ -759,7 +759,7 @@ func TestDupFilter(t *testing.T) {
 	rand.Read(msg)
 	t.Log("A send, C non-dup-send")
 	netA.Broadcast(context.Background(), debugTag2, msg, true, nil)
-	// B should broadcast its non-desire to recieve the message again
+	// B should broadcast its non-desire to receive the message again
 	time.Sleep(500 * time.Millisecond)
 
 	// C should now not send these
@@ -774,6 +774,7 @@ func TestDupFilter(t *testing.T) {
 	assert.Equal(t, 1, counter2.count)
 
 	debugMetrics(t)
+
 }
 
 func TestGetPeers(t *testing.T) {

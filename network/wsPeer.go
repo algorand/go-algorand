@@ -276,9 +276,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 		digest = crypto.Hash(mbytes)
 	}
 
-	data := make([][]byte, 1, 1)
-	data[0] = msg
-	ok := wp.writeNonBlock(data, false, digest, time.Now())
+	ok := wp.writeNonBlock(msg, false, digest, time.Now())
 	if !ok {
 		networkBroadcastsDropped.Inc(nil)
 		err = fmt.Errorf("wsPeer failed to unicast: %v", wp.GetAddress())
@@ -548,7 +546,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 	}
 	var digest crypto.Digest
 	copy(digest[:], msg.Data)
-	//wp.net.log.Debugf("add filter %v", digest)
+	wp.net.log.Debugf("add filter %v", digest)
 	wp.outgoingMsgFilter.CheckDigest(digest, true, true)
 }
 
@@ -643,22 +641,43 @@ func (wp *wsPeer) writeLoopCleanup(reason disconnectReason) {
 	wp.wg.Done()
 }
 
+func (wp *wsPeer) writeNonBlock(data []byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time) bool {
+	msgs := make([][]byte, 1, 1)
+	msgs[0] = data
+	digests := make([]crypto.Digest, 1, 1)
+	digests[0] = digest
+	return wp.writeNonBlockMsgs(msgs, highPrio, digests, msgEnqueueTime)
+}
+
 // return true if enqueued/sent
-func (wp *wsPeer) writeNonBlock(data [][]byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time) bool {
-	if wp.outgoingMsgFilter != nil && len(data) > messageFilterSize && wp.outgoingMsgFilter.CheckDigest(digest, false, false) {
-		//wp.net.log.Debugf("msg drop as outbound dup %s(%d) %v", string(data[:2]), len(data)-2, digest)
-		// peer has notified us it doesn't need this message
-		outgoingNetworkMessageFilteredOutTotal.Inc(nil)
-		outgoingNetworkMessageFilteredOutBytesTotal.AddUint64(uint64(len(data)), nil)
+func (wp *wsPeer) writeNonBlockMsgs(data [][]byte, highPrio bool, digest []crypto.Digest, msgEnqueueTime time.Time) bool {
+	filtered := 0
+	for i := range data {
+		if wp.outgoingMsgFilter != nil && len(data[i]) > messageFilterSize && wp.outgoingMsgFilter.CheckDigest(digest[i], false, false) {
+			//wp.net.log.Debugf("msg drop as outbound dup %s(%d) %v", string(data[:2]), len(data)-2, digest)
+			// peer has notified us it doesn't need this message
+			outgoingNetworkMessageFilteredOutTotal.Inc(nil)
+			outgoingNetworkMessageFilteredOutBytesTotal.AddUint64(uint64(len(data)), nil)
+
+			data[i] = nil
+			filtered++
+		}
+	}
+	if filtered == len(data) {
 		// returning true because it is as good as sent, the peer already has it.
 		return true
 	}
+
 	var outchan chan []sendMessage
 
-	msgs := make([]sendMessage, len(data), len(data))
+	msgs := make([]sendMessage, len(data) - filtered, len(data) - filtered)
 	enqueueTime := time.Now()
-	for i, d := range data {
-		msgs[i] = sendMessage{data: d, enqueued: msgEnqueueTime, peerEnqueued: enqueueTime}
+	i := 0
+	for _, d := range data {
+		if d != nil {
+			msgs[i] = sendMessage{data: d, enqueued: msgEnqueueTime, peerEnqueued: enqueueTime}
+			i++
+		}
 	}
 
 	if highPrio {
@@ -692,9 +711,7 @@ func (wp *wsPeer) sendPing() bool {
 	copy(mbytes, tagBytes)
 	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]
-	msgs := make([][]byte, 1, 1)
-	msgs[0] = mbytes
-	sent := wp.writeNonBlock(msgs, false, crypto.Digest{}, time.Now())
+	sent := wp.writeNonBlock(mbytes, false, crypto.Digest{}, time.Now())
 
 	if sent {
 		wp.pingInFlight = true
