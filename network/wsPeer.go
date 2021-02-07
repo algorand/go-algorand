@@ -276,7 +276,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 		digest = crypto.Hash(mbytes)
 	}
 
-	ok := wp.writeNonBlock(msg, false, digest, time.Now())
+	ok := wp.writeNonBlock(mbytes, false, digest, time.Now())
 	if !ok {
 		networkBroadcastsDropped.Inc(nil)
 		err = fmt.Errorf("wsPeer failed to unicast: %v", wp.GetAddress())
@@ -643,8 +643,8 @@ func (wp *wsPeer) writeLoopCleanup(reason disconnectReason) {
 
 func (wp *wsPeer) writeNonBlock(data []byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time) bool {
 	msgs := make([][]byte, 1, 1)
-	msgs[0] = data
 	digests := make([]crypto.Digest, 1, 1)
+	msgs[0] = data
 	digests[0] = digest
 	return wp.writeNonBlockMsgs(msgs, highPrio, digests, msgEnqueueTime)
 }
