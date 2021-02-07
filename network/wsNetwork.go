@@ -1166,7 +1166,6 @@ func (wn *WebsocketNetwork) broadcastThread() {
 
 	slowWritingPeerCheckTicker := time.NewTicker(wn.slowWritingPeerMonitorInterval)
 	defer slowWritingPeerCheckTicker.Stop()
-	lastPeersChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter)
 	peers, lastPeersChangeCounter := wn.peerSnapshot([]*wsPeer{})
 	// updatePeers update the peers list if their peer change counter has changed.
 	updatePeers := func() {
