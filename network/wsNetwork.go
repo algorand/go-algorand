@@ -1163,59 +1163,93 @@ func (wn *WebsocketNetwork) sendFilterMessage(msg IncomingMessage) {
 
 func (wn *WebsocketNetwork) broadcastThread() {
 	defer wn.wg.Done()
-	var peers []*wsPeer
+
 	slowWritingPeerCheckTicker := time.NewTicker(wn.slowWritingPeerMonitorInterval)
 	defer slowWritingPeerCheckTicker.Stop()
 	lastPeersChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter)
-	for {
+	peers, lastPeersChangeCounter := wn.peerSnapshot([]*wsPeer{})
+	// updatePeers update the peers list if their peer change counter has changed.
+	updatePeers := func() {
+		if curPeersChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter); curPeersChangeCounter != lastPeersChangeCounter {
+			peers, lastPeersChangeCounter = wn.peerSnapshot(peers)
+		}
+	}
+
+	// waitForPeers waits until there is at least a single peer connected.
+	// it return true if there is at least one peer, or false if the network context has expired.
+	waitForPeers := func() bool {
 		// wait until the we have at least a single peer connected.
-		peers = wn.peerSnapshot(peers)
 		for len(peers) == 0 {
 			select {
 			case <-time.After(5 * time.Millisecond):
-				if curPeersChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter); curPeersChangeCounter != lastPeersChangeCounter {
-					peers = wn.peerSnapshot(peers)
-					lastPeersChangeCounter = curPeersChangeCounter
-				}
+				updatePeers()
 				continue
 			case <-wn.ctx.Done():
-				return
+				return false
 			}
 		}
+		return true
+	}
 
-		for {
-			// broadcast from high prio channel as long as we can
-			// we want to try and keep this as a single case select with a default, since go compiles a single-case
-			// select with a default into a more efficient non-blocking receive, instead of compiling it to the general-purpose selectgo
-			select {
-			case request := <-wn.broadcastQueueHighPrio:
-				wn.innerBroadcast(request, true, peers)
-				continue
-			default:
-			}
+	// load the peers list
+	updatePeers()
 
-			// if nothing high prio, broadcast anything
-			select {
-			case request := <-wn.broadcastQueueHighPrio:
-				wn.innerBroadcast(request, true, peers)
-			case <-slowWritingPeerCheckTicker.C:
-				wn.checkSlowWritingPeers()
-				continue
-			case request := <-wn.broadcastQueueBulk:
-				wn.innerBroadcast(request, false, peers)
-			case <-wn.ctx.Done():
+	// wait until the we have at least a single peer connected.
+	if !waitForPeers() {
+		return
+	}
+
+	for {
+		// broadcast from high prio channel as long as we can
+		// we want to try and keep this as a single case select with a default, since go compiles a single-case
+		// select with a default into a more efficient non-blocking receive, instead of compiling it to the general-purpose selectgo
+		select {
+		case request := <-wn.broadcastQueueHighPrio:
+			wn.innerBroadcast(request, true, peers)
+			continue
+		default:
+		}
+
+		// if nothing high prio, try to sample from either queques in a non-blocking fashion.
+		select {
+		case request := <-wn.broadcastQueueHighPrio:
+			wn.innerBroadcast(request, true, peers)
+			continue
+		case request := <-wn.broadcastQueueBulk:
+			wn.innerBroadcast(request, false, peers)
+			continue
+		case <-wn.ctx.Done():
+			return
+		default:
+		}
+
+		// block until we have some request that need to be sent.
+		select {
+		case request := <-wn.broadcastQueueHighPrio:
+			// check if peers need to be updated, since we've been waiting a while.
+			updatePeers()
+			if !waitForPeers() {
 				return
 			}
-
-			if curPeersChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter); curPeersChangeCounter != lastPeersChangeCounter {
-				lastPeersChangeCounter = curPeersChangeCounter
-				break
+			wn.innerBroadcast(request, true, peers)
+		case <-slowWritingPeerCheckTicker.C:
+			wn.checkSlowWritingPeers()
+			continue
+		case request := <-wn.broadcastQueueBulk:
+			// check if peers need to be updated, since we've been waiting a while.
+			updatePeers()
+			if !waitForPeers() {
+				return
 			}
+			wn.innerBroadcast(request, false, peers)
+		case <-wn.ctx.Done():
+			return
 		}
 	}
 }
 
-func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) []*wsPeer {
+// peerSnapshot returns the currently connected peers as well as the current value of the peersChangeCounter
+func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 	wn.peersLock.RLock()
 	defer wn.peersLock.RUnlock()
 	if cap(dest) >= len(wn.peers) {
@@ -1224,7 +1258,8 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) []*wsPeer {
 		dest = make([]*wsPeer, len(wn.peers))
 	}
 	copy(dest, wn.peers)
-	return dest
+	peerChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter)
+	return dest, peerChangeCounter
 }
 
 // prio is set if the broadcast is a high-priority broadcast.
@@ -1543,7 +1578,7 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 	}
 	wn.lastPeerConnectionsSent = now
 	var peers []*wsPeer
-	peers = wn.peerSnapshot(peers)
+	peers, _ = wn.peerSnapshot(peers)
 	var connectionDetails telemetryspec.PeersConnectionDetails
 	for _, peer := range peers {
 		connDetail := telemetryspec.PeerConnectionDetails{
@@ -1582,7 +1617,7 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 			return
 		}
 
-		peers = wn.peerSnapshot(peers)
+		peers, _ = wn.peerSnapshot(peers)
 		for _, peer := range peers {
 			wn.peersLock.RLock()
 			addr := peer.prioAddress
