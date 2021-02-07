@@ -222,7 +222,7 @@ gtxn 0 TxID
 ==
 &&
 pop
-// check global
+// check global (these are set equal in defaultEvalProto())
 global MinTxnFee
 global MinBalance
 ==

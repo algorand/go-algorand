@@ -53,6 +53,14 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		LogicSigMaxCost:     20000,
 		MaxAppKeyLen:        64,
 		MaxAppBytesValueLen: 64,
+		// These must be identical to keep an old backward compat test working
+		MinTxnFee:  1001,
+		MinBalance: 1001,
+		// Strange choices below so that we test against conflating them
+		AppFlatParamsMinBalance:  1002,
+		SchemaMinBalancePerEntry: 1003,
+		SchemaUintMinBalance:     1004,
+		SchemaBytesMinBalance:    1005,
 	}
 }
 
@@ -3693,18 +3701,66 @@ func TestAllowedOpcodesV2(t *testing.T) {
 	for _, spec := range OpSpecs {
 		if spec.Version == 2 && !excluded[spec.Name] {
 			source, ok := tests[spec.Name]
-			require.True(t, ok, fmt.Sprintf("Missed opcode in the test: %s", spec.Name))
-			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-			require.NoError(t, err, source)
+			require.True(t, ok, "Missed opcode in the test: %s", spec.Name)
+			require.Contains(t, source, spec.Name)
+			ops := testProg(t, source, AssemblerMaxVersion)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalStateful
-			_, err = CheckStateful(ops.Program, ep)
+			_, err := CheckStateful(ops.Program, ep)
 			require.NoError(t, err, source)
 			_, err = EvalStateful(ops.Program, ep)
 			if spec.Name != "return" {
-				// "return" opcode is always succeed so ignore it
+				// "return" opcode always succeeds so ignore it
 				require.Error(t, err, source)
 				require.NotContains(t, err.Error(), "illegal opcode")
 			}
+
+			for v := byte(0); v <= 1; v++ {
+				ops.Program[0] = v
+				_, err = Check(ops.Program, ep)
+				require.Error(t, err, source)
+				require.Contains(t, err.Error(), "illegal opcode")
+				_, err = CheckStateful(ops.Program, ep)
+				require.Error(t, err, source)
+				require.Contains(t, err.Error(), "illegal opcode")
+				_, err = Eval(ops.Program, ep)
+				require.Error(t, err, source)
+				require.Contains(t, err.Error(), "illegal opcode")
+				_, err = EvalStateful(ops.Program, ep)
+				require.Error(t, err, source)
+				require.Contains(t, err.Error(), "illegal opcode")
+			}
+			cnt++
+		}
+	}
+	require.Equal(t, len(tests), cnt)
+}
+
+// check all v3 opcodes: allowed in v3 and not allowed before
+func TestAllowedOpcodesV3(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]string{
+		"assert":      "int 1\nassert",
+		"min_balance": "int 1\nmin_balance",
+	}
+
+	excluded := map[string]bool{}
+
+	ep := defaultEvalParams(nil, nil)
+
+	cnt := 0
+	for _, spec := range OpSpecs {
+		if spec.Version == 3 && !excluded[spec.Name] {
+			source, ok := tests[spec.Name]
+			require.True(t, ok, "Missed opcode in the test: %s", spec.Name)
+			require.Contains(t, source, spec.Name)
+			ops := testProg(t, source, AssemblerMaxVersion)
+			// all opcodes allowed in stateful mode so use CheckStateful/EvalStateful
+			_, err := CheckStateful(ops.Program, ep)
+			require.NoError(t, err, source)
+			_, err = EvalStateful(ops.Program, ep)
+			require.Error(t, err, source)
+			require.NotContains(t, err.Error(), "illegal opcode")
 
 			for v := byte(0); v <= 1; v++ {
 				ops.Program[0] = v

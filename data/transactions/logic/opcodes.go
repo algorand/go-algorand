@@ -166,6 +166,7 @@ var OpSpecs = []OpSpec{
 	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, opSize{1, 2, nil}},
 
 	{0x72, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opSizeDefault},
+	{0x73, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opSizeDefault},
 }
 
 type sortByOpcode []OpSpec

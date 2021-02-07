@@ -293,6 +293,7 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | Op | Description |
 | --- | --- |
 | `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender |
+| `min_balance` | get minimum balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender |
 | `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
 | `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the current application key B => value |
 | `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value} |

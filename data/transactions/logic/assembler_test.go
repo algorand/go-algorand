@@ -219,7 +219,17 @@ txn FreezeAssetFrozen
 
 const v3Nonsense = `
 assert
+min_balance
 `
+
+func pseudoOp(opcode string) bool {
+	// We don't test every combination of
+	// intcblock,bytecblock,intc*,bytec*,arg* here.  Not all of
+	// these are truly pseudops, but it seems a good name.
+	return strings.HasPrefix(opcode, "int") ||
+		strings.HasPrefix(opcode, "byte") ||
+		strings.HasPrefix(opcode, "arg")
+}
 
 // Check that assembly output is stable across time.
 func TestAssemble(t *testing.T) {
@@ -233,14 +243,9 @@ func TestAssemble(t *testing.T) {
 	// This doesn't have to be a sensible program to run, it just has to compile.
 	for _, spec := range OpSpecs {
 		// Ensure that we have some basic check of all the ops, except
-		// we don't test every combination of
-		// intcblock,bytecblock,intc*,bytec*,arg* here.
 		if !strings.Contains(v1Nonsense+v2Nonsense, spec.Name) &&
-			!strings.HasPrefix(spec.Name, "int") &&
-			!strings.HasPrefix(spec.Name, "byte") &&
-			!strings.HasPrefix(spec.Name, "arg") &&
-			spec.Version <= 2 {
-			t.Errorf("test should contain op %v", spec.Name)
+			!pseudoOp(spec.Name) && spec.Version <= 2 {
+			t.Errorf("v2 nonsense test should contain op %v", spec.Name)
 		}
 	}
 	// First, we test v2, not AssemblerMaxVersion. A higher version is
@@ -260,10 +265,17 @@ func TestAssemble(t *testing.T) {
 	// AssemblerMaxVersion is increased.  At that point, we would
 	// add a new test for v4, and leave behind this test for v3.
 
+	for _, spec := range OpSpecs {
+		// Ensure that we have some basic check of all the ops, except
+		if !strings.Contains(v1Nonsense+v2Nonsense+v3Nonsense, spec.Name) &&
+			!pseudoOp(spec.Name) && spec.Version <= 3 {
+			t.Errorf("v3 nonsense test should contain op %v", spec.Name)
+		}
+	}
 	ops, err = AssembleStringWithVersion(v1Nonsense+v2Nonsense+v3Nonsense, AssemblerMaxVersion)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ = hex.DecodeString("032008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f72")
+	expectedBytes, _ = hex.DecodeString("032008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f7273")
 	if bytes.Compare(expectedBytes, ops.Program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(ops.Program))

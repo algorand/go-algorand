@@ -124,6 +124,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (basics.MicroAlgos, error)
+	MinBalance(addr basics.Address, proto *config.ConsensusParams) (basics.MicroAlgos, error)
 	Round() basics.Round
 	LatestTimestamp() int64
 
@@ -327,7 +328,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 				}
 			}
 			err = PanicError{x, errstr}
-			cx.EvalParams.log().Errorf("recovered panic in Eval: %s", err)
+			cx.EvalParams.log().Errorf("recovered panic in Eval: %w", err)
 		}
 	}()
 
@@ -1740,7 +1741,32 @@ func opBalance(cx *evalContext) {
 
 	microAlgos, err := cx.Ledger.Balance(addr)
 	if err != nil {
-		cx.err = fmt.Errorf("failed to fetch balance of %v: %s", addr, err.Error())
+		cx.err = fmt.Errorf("failed to fetch balance of %v: %w", addr, err)
+		return
+	}
+
+	cx.stack[last].Uint = microAlgos.Raw
+}
+
+func opMinBalance(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+
+	accountIdx := cx.stack[last].Uint
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	microAlgos, err := cx.Ledger.MinBalance(addr, cx.Proto)
+	if err != nil {
+		cx.err = fmt.Errorf("failed to fetch minimum balance of %v: %w", addr, err)
 		return
 	}
 
