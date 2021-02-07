@@ -910,6 +910,9 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 type assembleFunc func(*OpStream, *OpSpec, []string) error
 
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 0 {
+		ops.errorf("%s expects no arguments", spec.Name)
+	}
 	ops.checkArgs(*spec)
 	if len(spec.Returns) > 0 {
 		ops.tpusha(spec.Returns)

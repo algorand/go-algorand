@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -33,25 +34,39 @@ import (
 type balanceRecord struct {
 	addr     basics.Address
 	balance  uint64
-	apps     map[basics.AppIndex]map[string]basics.TealValue
+	locals   map[basics.AppIndex]basics.TealKeyValue
 	holdings map[uint64]basics.AssetHolding
 	mods     map[basics.AppIndex]map[string]basics.ValueDelta
 }
 
+// In our test ledger, we don't store the AppParams with its creator,
+// so we need to carry the creator arround with the params,
+type appParams struct {
+	basics.AppParams
+	Creator basics.Address
+}
+
 type testLedger struct {
 	balances     map[basics.Address]balanceRecord
-	applications map[basics.AppIndex]map[string]basics.TealValue
+	applications map[basics.AppIndex]appParams
 	assets       map[basics.AssetIndex]basics.AssetParams
-	appID        uint64
+	appID        basics.AppIndex
 	creatorAddr  basics.Address
 	mods         map[basics.AppIndex]map[string]basics.ValueDelta
+}
+
+func makeSchemas(li uint64, lb uint64, gi uint64, gb uint64) basics.StateSchemas {
+	return basics.StateSchemas{
+		LocalStateSchema:  basics.StateSchema{NumUint: li, NumByteSlice: lb},
+		GlobalStateSchema: basics.StateSchema{NumUint: gi, NumByteSlice: gb},
+	}
 }
 
 func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
 	br := balanceRecord{
 		addr:     addr,
 		balance:  balance,
-		apps:     make(map[basics.AppIndex]map[string]basics.TealValue),
+		locals:   make(map[basics.AppIndex]basics.TealKeyValue),
 		holdings: make(map[uint64]basics.AssetHolding),
 		mods:     make(map[basics.AppIndex]map[string]basics.ValueDelta),
 	}
@@ -64,7 +79,7 @@ func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 	for addr, balance := range balances {
 		l.balances[addr] = makeBalanceRecord(addr, balance)
 	}
-	l.applications = make(map[basics.AppIndex]map[string]basics.TealValue)
+	l.applications = make(map[basics.AppIndex]appParams)
 	l.assets = make(map[basics.AssetIndex]basics.AssetParams)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
 	return l
@@ -78,15 +93,21 @@ func (l *testLedger) reset() {
 	}
 }
 
-func (l *testLedger) newApp(addr basics.Address, appID uint64) {
+func (l *testLedger) newApp(addr basics.Address, appID basics.AppIndex, schemas basics.StateSchemas) {
 	l.appID = appID
-	appIdx := basics.AppIndex(appID)
-	l.applications[appIdx] = make(map[string]basics.TealValue)
+	appIdx := appID
+	l.applications[appIdx] = appParams{
+		Creator: addr,
+		AppParams: basics.AppParams{
+			StateSchemas: schemas,
+			GlobalState:  make(basics.TealKeyValue),
+		},
+	}
 	br, ok := l.balances[addr]
 	if !ok {
 		br = makeBalanceRecord(addr, 0)
 	}
-	br.apps[appIdx] = make(map[string]basics.TealValue)
+	br.locals[appIdx] = make(map[string]basics.TealValue)
 	l.balances[addr] = br
 }
 
@@ -124,16 +145,53 @@ func (l *testLedger) Balance(addr basics.Address) (amount basics.MicroAlgos, err
 	return basics.MicroAlgos{Raw: br.balance}, nil
 }
 
+func (l *testLedger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (amount basics.MicroAlgos, err error) {
+	if l.balances == nil {
+		err = fmt.Errorf("empty ledger")
+		return
+	}
+	br, ok := l.balances[addr]
+	if !ok {
+		err = fmt.Errorf("no such address")
+		return
+	}
+
+	var min uint64
+
+	// First, base MinBalance
+	min = proto.MinBalance
+
+	// MinBalance for each Asset
+	assetCost := basics.MulSaturate(proto.MinBalance, uint64(len(br.holdings)))
+	min = basics.AddSaturate(min, assetCost)
+
+	// Base MinBalance + GlobalStateSchema.MinBalance for each created application
+	for _, params := range l.applications {
+		if params.Creator == addr {
+			min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
+			min = basics.AddSaturate(min, params.GlobalStateSchema.MinBalance(proto).Raw)
+		}
+	}
+
+	// Base MinBalance + LocalStateSchema.MinBalance for each opted in application
+	for idx := range br.locals {
+		min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
+		min = basics.AddSaturate(min, l.applications[idx].LocalStateSchema.MinBalance(proto).Raw)
+	}
+
+	return basics.MicroAlgos{Raw: min}, nil
+}
+
 func (l *testLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
 	if appIdx == basics.AppIndex(0) {
-		appIdx = basics.AppIndex(l.appID)
+		appIdx = l.appID
 	}
-	tkvd, ok := l.applications[appIdx]
+	params, ok := l.applications[appIdx]
 	if !ok {
 		return basics.TealValue{}, false, fmt.Errorf("no such app")
 	}
 
-	// return most recent value if avialiable
+	// return most recent value if available
 	tkvm, ok := l.mods[appIdx]
 	if ok {
 		val, ok := tkvm[key]
@@ -144,20 +202,20 @@ func (l *testLedger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealV
 	}
 
 	// otherwise return original one
-	val, ok := tkvd[key]
+	val, ok := params.GlobalState[key]
 	return val, ok, nil
 }
 
 func (l *testLedger) SetGlobal(key string, value basics.TealValue) error {
-	appIdx := basics.AppIndex(l.appID)
-	tkv, ok := l.applications[appIdx]
+	appIdx := l.appID
+	params, ok := l.applications[appIdx]
 	if !ok {
 		return fmt.Errorf("no such app")
 	}
 
 	// if writing the same value, return
 	// this simulates real ledger behavior for tests
-	val, ok := tkv[key]
+	val, ok := params.GlobalState[key]
 	if ok && val == value {
 		return nil
 	}
@@ -172,14 +230,14 @@ func (l *testLedger) SetGlobal(key string, value basics.TealValue) error {
 }
 
 func (l *testLedger) DelGlobal(key string) error {
-	appIdx := basics.AppIndex(l.appID)
-	tkv, ok := l.applications[appIdx]
+	appIdx := l.appID
+	params, ok := l.applications[appIdx]
 	if !ok {
 		return fmt.Errorf("no such app")
 	}
 
 	exist := false
-	if _, ok := tkv[key]; ok {
+	if _, ok := params.GlobalState[key]; ok {
 		exist = true
 	}
 
@@ -200,13 +258,13 @@ func (l *testLedger) DelGlobal(key string) error {
 
 func (l *testLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
 	if appIdx == 0 {
-		appIdx = basics.AppIndex(l.appID)
+		appIdx = l.appID
 	}
 	br, ok := l.balances[addr]
 	if !ok {
 		return basics.TealValue{}, false, fmt.Errorf("no such address")
 	}
-	tkvd, ok := br.apps[appIdx]
+	tkvd, ok := br.locals[appIdx]
 	if !ok {
 		return basics.TealValue{}, false, fmt.Errorf("no app for account")
 	}
@@ -226,13 +284,13 @@ func (l *testLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key s
 }
 
 func (l *testLedger) SetLocal(addr basics.Address, key string, value basics.TealValue) error {
-	appIdx := basics.AppIndex(l.appID)
+	appIdx := l.appID
 
 	br, ok := l.balances[addr]
 	if !ok {
 		return fmt.Errorf("no such address")
 	}
-	tkv, ok := br.apps[appIdx]
+	tkv, ok := br.locals[appIdx]
 	if !ok {
 		return fmt.Errorf("no app for account")
 	}
@@ -254,13 +312,13 @@ func (l *testLedger) SetLocal(addr basics.Address, key string, value basics.Teal
 }
 
 func (l *testLedger) DelLocal(addr basics.Address, key string) error {
-	appIdx := basics.AppIndex(l.appID)
+	appIdx := l.appID
 
 	br, ok := l.balances[addr]
 	if !ok {
 		return fmt.Errorf("no such address")
 	}
-	tkv, ok := br.apps[appIdx]
+	tkv, ok := br.locals[appIdx]
 	if !ok {
 		return fmt.Errorf("no app for account")
 	}
@@ -286,13 +344,13 @@ func (l *testLedger) DelLocal(addr basics.Address, key string) error {
 
 func (l *testLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
 	if appIdx == 0 {
-		appIdx = basics.AppIndex(l.appID)
+		appIdx = l.appID
 	}
 	br, ok := l.balances[addr]
 	if !ok {
 		return false, fmt.Errorf("no such address")
 	}
-	_, ok = br.apps[appIdx]
+	_, ok = br.locals[appIdx]
 	return ok, nil
 }
 
@@ -314,7 +372,7 @@ func (l *testLedger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams,
 }
 
 func (l *testLedger) ApplicationID() basics.AppIndex {
-	return basics.AppIndex(l.appID)
+	return l.appID
 }
 
 func (l *testLedger) CreatorAddress() basics.Address {
@@ -336,7 +394,7 @@ func (l *testLedger) GlobalSchema() basics.StateSchema {
 }
 
 func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
-	if tkv, ok := l.mods[basics.AppIndex(l.appID)]; ok {
+	if tkv, ok := l.mods[l.appID]; ok {
 		evalDelta.GlobalDelta = tkv
 	}
 	if len(txn.Accounts) > 0 {
@@ -348,7 +406,7 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 		evalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
 		for addr, br := range l.balances {
 			if idx, ok := accounts[addr]; ok {
-				if delta, ok := br.mods[basics.AppIndex(l.appID)]; ok {
+				if delta, ok := br.mods[l.appID]; ok {
 					evalDelta.LocalDeltas[uint64(idx)] = delta
 				}
 			}
@@ -438,6 +496,9 @@ arg 4
 	opcodesRunModeApplication := `int 0
 balance
 &&
+int 0
+min_balance
+&&
 intc_0
 intc 6  // 100
 app_opted_in
@@ -525,21 +586,20 @@ pop
 			txn.Txn.Sender: 1,
 		},
 	)
-	ledger.newApp(txn.Txn.Sender, 100)
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
 	ledger.newAsset(5, params)
 	ledger.setHolding(txn.Txn.Sender, 5, basics.AssetHolding{Amount: 123, Frozen: true})
 
 	for mode, test := range tests {
 		t.Run(fmt.Sprintf("opcodes_mode=%d", mode), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(test.source, AssemblerMaxVersion)
-			require.NoError(t, err)
+			ops := testProg(t, test.source, AssemblerMaxVersion)
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
 			ep.TxnGroup = txgroup
 			ep.Ledger = ledger
 			ep.Txn.Txn.ApplicationID = 100
-			_, err = test.check(ops.Program, ep)
+			_, err := test.check(ops.Program, ep)
 			require.NoError(t, err)
 			_, err = test.eval(ops.Program, ep)
 			if err != nil {
@@ -586,9 +646,10 @@ pop
 		require.Contains(t, err.Error(), "not allowed in current mode")
 	}
 
-	// check new opcodes are not allowed in stateless mode
-	newOpcodeCalls := []string{
+	// check stateful opcodes are not allowed in stateless mode
+	statefulOpcodeCalls := []string{
 		"int 0\nbalance",
+		"int 0\nmin_balance",
 		"int 0\nint 0\napp_opted_in",
 		"int 0\nint 0\nbyte 0x01\napp_local_get_ex",
 		"byte 0x01\napp_global_get",
@@ -601,11 +662,10 @@ pop
 		"int 0\nint 0\nasset_params_get AssetManager",
 	}
 
-	for _, source := range newOpcodeCalls {
-		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-		require.NoError(t, err)
+	for _, source := range statefulOpcodeCalls {
+		ops := testProg(t, source, AssemblerMaxVersion)
 		ep := defaultEvalParams(nil, nil)
-		_, err = Check(ops.Program, ep)
+		_, err := Check(ops.Program, ep)
 		require.Error(t, err)
 		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
@@ -623,7 +683,7 @@ func TestBalance(t *testing.T) {
 
 	text := `int 2
 balance
-int 1
+int 177
 ==`
 	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -639,7 +699,7 @@ int 1
 
 	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
-			txn.Txn.Receiver: 1,
+			txn.Txn.Receiver: 177,
 		},
 	)
 	_, err = EvalStateful(ops.Program, ep)
@@ -648,7 +708,7 @@ int 1
 
 	text = `int 1
 balance
-int 1
+int 177
 ==`
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -661,7 +721,7 @@ int 1
 
 	text = `int 0
 balance
-int 1
+int 13
 ==`
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -669,7 +729,7 @@ int 1
 	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
 	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
-			addr: 1,
+			addr: 13,
 		},
 	)
 	pass, err = EvalStateful(ops.Program, ep)
@@ -679,7 +739,7 @@ int 1
 
 	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
+			txn.Txn.Sender: 13,
 		},
 	)
 	cost, err = CheckStateful(ops.Program, ep)
@@ -688,6 +748,50 @@ int 1
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
+}
+
+func testApp(t *testing.T, program string, ep EvalParams, problems ...string) {
+	program = strings.ReplaceAll(program, ";", "\n")
+	ops := testProg(t, program, AssemblerMaxVersion)
+	sb := &strings.Builder{}
+	ep.Trace = sb
+	cost, err := CheckStateful(ops.Program, ep)
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	pass, err := EvalStateful(ops.Program, ep)
+	if len(problems) == 0 {
+		require.NoError(t, err, sb.String())
+		require.True(t, pass, sb.String())
+	} else {
+		require.Error(t, err, sb.String())
+		for _, problem := range problems {
+			require.Contains(t, err.Error(), problem)
+		}
+	}
+}
+
+func TestMinBalance(t *testing.T) {
+	t.Parallel()
+
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	ep := defaultEvalParams(nil, nil)
+	ep.Txn = &txn
+	ep.TxnGroup = txgroup
+
+	testApp(t, "int 0; min_balance; int 1001; ==", ep, "ledger not available")
+
+	ep.Ledger = makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender:   234, // min_balance 0 is Sender
+			txn.Txn.Receiver: 123, // Accounts[0] has been packed with the Receiver
+		},
+	)
+
+	testApp(t, "int 0; min_balance; int 1001; ==", ep)
+	testApp(t, "int 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
+	testApp(t, "int 2; min_balance; int 1001; ==", ep, "cannot load account")
+
 }
 
 func TestAppCheckOptedIn(t *testing.T) {
@@ -761,7 +865,7 @@ int 100  // app idx
 app_opted_in
 int 1
 ==`
-	ledger.newApp(txn.Txn.Receiver, 100)
+	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0))
 
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -775,7 +879,7 @@ int 100  // app idx
 app_opted_in
 int 1
 ==`
-	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -851,14 +955,14 @@ int 1`
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Receiver, 9999)
+	ledger.newApp(txn.Txn.Receiver, 9999, makeSchemas(0, 0, 0, 0))
 
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no app for account")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
-	ledger.newApp(txn.Txn.Receiver, 100)
+	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0))
 
 	pass, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
@@ -873,7 +977,7 @@ err
 exist:
 byte 0x414c474f
 ==`
-	ledger.balances[txn.Txn.Receiver].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	ledger.balances[txn.Txn.Receiver].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -887,7 +991,7 @@ byte 0x414c474f
 	require.True(t, pass)
 
 	// check special case account idx == 0 => sender
-	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 	text = `int 0  // account idx
 int 100 // app id
 txn ApplicationArgs 0
@@ -901,14 +1005,14 @@ byte 0x414c474f
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
-	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
 	// check reading state of other app
-	ledger.newApp(txn.Txn.Sender, 101)
-	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.newApp(txn.Txn.Sender, 101, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 	text = `int 0  // account idx
 int 101 // app id
 txn ApplicationArgs 0
@@ -922,7 +1026,7 @@ byte 0x414c474f
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
-	ledger.balances[txn.Txn.Sender].apps[101][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	ledger.balances[txn.Txn.Sender].locals[101][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -937,7 +1041,7 @@ byte 0x414c474f
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
-	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -952,7 +1056,7 @@ int 0
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
-	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1013,13 +1117,13 @@ byte 0x414c474f
 	require.Contains(t, err.Error(), "no such app")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
-	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 1))
 
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "err opcode")
 
-	ledger.applications[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	ledger.applications[100].GlobalState[string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 
 	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
@@ -1049,7 +1153,7 @@ int 0
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
-	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1480,7 +1584,7 @@ int 100
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no app for account")
 
-			ledger.newApp(txn.Txn.Sender, 100)
+			ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 
 			if name == "read" {
 				_, err = EvalStateful(ops.Program, ep)
@@ -1488,8 +1592,8 @@ int 100
 				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
 
-			ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-			ledger.balances[txn.Txn.Sender].apps[100]["ALGOA"] = basics.TealValue{Type: basics.TealUintType, Uint: 1}
+			ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+			ledger.balances[txn.Txn.Sender].locals[100]["ALGOA"] = basics.TealValue{Type: basics.TealUintType, Uint: 1}
 
 			ledger.reset()
 			pass, err := EvalStateful(ops.Program, ep)
@@ -1520,7 +1624,7 @@ func TestAppLocalStateReadWrite(t *testing.T) {
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 
 	// write int and bytes values
 	source := `int 0 // account
@@ -1589,11 +1693,11 @@ int 0x77
 ==
 `
 	ledger.reset()
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGO")
 
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1630,8 +1734,8 @@ exist2:
 ==
 `
 	ledger.reset()
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1651,8 +1755,8 @@ app_local_put
 int 1
 `
 	ledger.reset()
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1684,8 +1788,8 @@ int 0x78
 ==
 `
 	ledger.reset()
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1715,8 +1819,8 @@ int 0x78             // value
 app_local_put
 `
 	ledger.reset()
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1752,11 +1856,11 @@ app_local_put
 int 1
 `
 	ledger.reset()
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
 
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 500)
-	ledger.balances[txn.Txn.Receiver].apps[100] = make(map[string]basics.TealValue)
+	ledger.balances[txn.Txn.Receiver].locals[100] = make(map[string]basics.TealValue)
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1842,7 +1946,7 @@ int 1
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no such app")
 
-			ledger.newApp(txn.Txn.Sender, 100)
+			ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 1, 0))
 
 			// a special test for read
 			if name == "read" {
@@ -1850,7 +1954,7 @@ int 1
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
-			ledger.applications[100]["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
+			ledger.applications[100].GlobalState["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 
 			ledger.reset()
 			pass, err := EvalStateful(ops.Program, ep)
@@ -1937,7 +2041,7 @@ int 0x77
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1971,11 +2075,11 @@ int 0x77
 ==
 `
 	ledger.reset()
-	delete(ledger.applications[100], "ALGOA")
-	delete(ledger.applications[100], "ALGO")
+	delete(ledger.applications[100].GlobalState, "ALGOA")
+	delete(ledger.applications[100].GlobalState, "ALGO")
 
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger.applications[100]["ALGO"] = algoValue
+	ledger.applications[100].GlobalState["ALGO"] = algoValue
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -2005,8 +2109,8 @@ int 0x77
 ==
 `
 	ledger.reset()
-	delete(ledger.applications[100], "ALGOA")
-	ledger.applications[100]["ALGO"] = algoValue
+	delete(ledger.applications[100].GlobalState, "ALGOA")
+	ledger.applications[100].GlobalState["ALGO"] = algoValue
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -2051,8 +2155,8 @@ byte 0x414c474f
 &&
 `
 	ledger.reset()
-	delete(ledger.applications[100], "ALGOA")
-	ledger.applications[100]["ALGO"] = algoValue
+	delete(ledger.applications[100].GlobalState, "ALGOA")
+	ledger.applications[100].GlobalState["ALGO"] = algoValue
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -2112,7 +2216,7 @@ byte "myval"
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -2128,10 +2232,10 @@ byte "myval"
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 0, len(delta.LocalDeltas))
 
-	ledger.newApp(txn.Txn.Receiver, 101)
-	ledger.newApp(txn.Txn.Receiver, 100) // this keeps current app id = 100
+	ledger.newApp(txn.Txn.Receiver, 101, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0)) // this keeps current app id = 100
 	algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
-	ledger.applications[101]["mykey"] = algoValue
+	ledger.applications[101].GlobalState["mykey"] = algoValue
 
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
@@ -2180,7 +2284,7 @@ int 1
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 	sb := strings.Builder{}
 	ep.Trace = &sb
 
@@ -2202,11 +2306,11 @@ int 1
 	require.Equal(t, 0, len(delta.LocalDeltas))
 
 	ledger.reset()
-	delete(ledger.applications[100], "ALGOA")
-	delete(ledger.applications[100], "ALGO")
+	delete(ledger.applications[100].GlobalState, "ALGOA")
+	delete(ledger.applications[100].GlobalState, "ALGO")
 
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger.applications[100]["ALGO"] = algoValue
+	ledger.applications[100].GlobalState["ALGO"] = algoValue
 
 	// check delete existing
 	source = `byte 0x414c474f   // key "ALGO"
@@ -2233,10 +2337,10 @@ app_global_get_ex
 	require.Equal(t, 0, len(delta.LocalDeltas))
 
 	ledger.reset()
-	delete(ledger.applications[100], "ALGOA")
-	delete(ledger.applications[100], "ALGO")
+	delete(ledger.applications[100].GlobalState, "ALGOA")
+	delete(ledger.applications[100].GlobalState, "ALGO")
 
-	ledger.applications[100]["ALGO"] = algoValue
+	ledger.applications[100].GlobalState["ALGO"] = algoValue
 
 	// check delete and write non-existing
 	source = `byte 0x414c474f41   // key "ALGOA"
@@ -2265,10 +2369,10 @@ app_global_put
 	require.Equal(t, 0, len(delta.LocalDeltas))
 
 	ledger.reset()
-	delete(ledger.applications[100], "ALGOA")
-	delete(ledger.applications[100], "ALGO")
+	delete(ledger.applications[100].GlobalState, "ALGOA")
+	delete(ledger.applications[100].GlobalState, "ALGO")
 
-	ledger.applications[100]["ALGO"] = algoValue
+	ledger.applications[100].GlobalState["ALGO"] = algoValue
 
 	// check delete and write existing
 	source = `byte 0x414c474f   // key "ALGO"
@@ -2292,10 +2396,10 @@ int 1
 	require.Equal(t, 0, len(delta.LocalDeltas))
 
 	ledger.reset()
-	delete(ledger.applications[100], "ALGOA")
-	delete(ledger.applications[100], "ALGO")
+	delete(ledger.applications[100].GlobalState, "ALGOA")
+	delete(ledger.applications[100].GlobalState, "ALGO")
 
-	ledger.applications[100]["ALGO"] = algoValue
+	ledger.applications[100].GlobalState["ALGO"] = algoValue
 
 	// check delete,write,delete existing
 	source = `byte 0x414c474f   // key "ALGO"
@@ -2324,10 +2428,10 @@ int 1
 	require.Equal(t, 0, len(delta.LocalDeltas))
 
 	ledger.reset()
-	delete(ledger.applications[100], "ALGOA")
-	delete(ledger.applications[100], "ALGO")
+	delete(ledger.applications[100].GlobalState, "ALGOA")
+	delete(ledger.applications[100].GlobalState, "ALGO")
 
-	ledger.applications[100]["ALGO"] = algoValue
+	ledger.applications[100].GlobalState["ALGO"] = algoValue
 
 	// check delete, write, delete non-existing
 	source = `byte 0x414c474f41   // key "ALGOA"
@@ -2398,9 +2502,9 @@ int 1
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100)
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
-	ledger.balances[txn.Txn.Receiver].apps[100] = make(basics.TealKeyValue)
+	ledger.balances[txn.Txn.Receiver].locals[100] = make(basics.TealKeyValue)
 
 	sb := strings.Builder{}
 	ep.Trace = &sb
@@ -2423,13 +2527,13 @@ int 1
 	require.Equal(t, 2, len(delta.LocalDeltas))
 
 	ledger.reset()
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
-	delete(ledger.balances[txn.Txn.Receiver].apps[100], "ALGOA")
-	delete(ledger.balances[txn.Txn.Receiver].apps[100], "ALGO")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGO")
+	delete(ledger.balances[txn.Txn.Receiver].locals[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Receiver].locals[100], "ALGO")
 
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
 
 	// check delete existing
 	source = `int 0  // account
@@ -2460,10 +2564,10 @@ app_local_get_ex
 	require.Equal(t, "", vd.Bytes)
 
 	ledger.reset()
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGO")
 
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
 
 	// check delete and write non-existing
 	source = `int 0  // account
@@ -2497,10 +2601,10 @@ app_local_put
 	require.Equal(t, "", vd.Bytes)
 
 	ledger.reset()
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGO")
 
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
 
 	// check delete and write existing
 	source = `int 0   // account
@@ -2530,10 +2634,10 @@ int 1
 	require.Equal(t, "", vd.Bytes)
 
 	ledger.reset()
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGO")
 
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
 
 	// check delete,write,delete existing
 	source = `int 0  // account
@@ -2566,10 +2670,10 @@ int 1
 	require.Equal(t, "", vd.Bytes)
 
 	ledger.reset()
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
-	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGO")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
+	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGO")
 
-	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
+	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
 
 	// check delete, write, delete non-existing
 	source = `int 0  // account
@@ -2733,13 +2837,13 @@ func TestReturnTypes(t *testing.T) {
 	}
 	ledger.newAsset(1, params)
 	ledger.setHolding(txn.Txn.Sender, 1, basics.AssetHolding{Amount: 123, Frozen: true})
-	ledger.newApp(txn.Txn.Sender, 1)
+	ledger.newApp(txn.Txn.Sender, 1, makeSchemas(0, 0, 0, 0))
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
-	ledger.balances[txn.Txn.Receiver].apps[1] = make(basics.TealKeyValue)
+	ledger.balances[txn.Txn.Receiver].locals[1] = make(basics.TealKeyValue)
 	key, err := hex.DecodeString("33343536")
 	require.NoError(t, err)
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-	ledger.balances[txn.Txn.Receiver].apps[1][string(key)] = algoValue
+	ledger.balances[txn.Txn.Receiver].locals[1][string(key)] = algoValue
 
 	ep.Ledger = ledger
 
@@ -2880,7 +2984,7 @@ int 42
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{},
 	)
-	ledger.appID = 42
+	ledger.appID = basics.AppIndex(42)
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 
