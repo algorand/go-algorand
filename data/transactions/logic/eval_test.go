@@ -3741,12 +3741,14 @@ func TestAllowedOpcodesV3(t *testing.T) {
 
 	// all tests are expected to fail in evaluation
 	tests := map[string]string{
-		"assert":      "int 1\nassert",
-		"min_balance": "int 1\nmin_balance",
-		"getbit":      "int 15\nint 64\ngetbit",
-		"setbit":      "int 15\nint 64\nint 0\nsetbit",
-		"getbyte":     "byte \"john\"\nint 5\ngetbyte",
-		"setbyte":     "byte \"john\"\nint 5\nint 66\nsetbyte",
+		"assert":      "int 1; assert",
+		"min_balance": "int 1; min_balance",
+		"getbit":      "int 15; int 64; getbit",
+		"setbit":      "int 15; int 64; int 0; setbit",
+		"getbyte":     "byte \"john\"; int 5; getbyte",
+		"setbyte":     "byte \"john\"; int 5; int 66; setbyte",
+		"swap":        "int 1; byte \"x\"; swap",
+		"select":      "int 1; byte \"x\"; int 1; select",
 	}
 
 	excluded := map[string]bool{}
@@ -3824,7 +3826,6 @@ func obfuscate(program string) string {
 type evalTester func(pass bool, err error) bool
 
 func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) {
-	program = strings.ReplaceAll(program, ";", "\n")
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			if v < introduced {
@@ -3897,4 +3898,19 @@ func TestBytes(t *testing.T) {
 	testAccepts(t, `byte "john"; int 2; getbyte; int 104; ==`, 3) // 104 is ascii h
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
+}
+
+func TestSwap(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 1; byte 0x1234; swap; int 1; ==; assert; byte 0x1234; ==", 3)
+}
+
+func TestSelect(t *testing.T) {
+	t.Parallel()
+
+	testAccepts(t, "int 1; byte 0x1231; int 0; select", 3) // selects the 1
+	testRejects(t, "int 0; byte 0x1232; int 0; select", 3) // selects the 0
+
+	testAccepts(t, "int 0; int 1; int 1; select", 3)      // selects the 1
+	testPanics(t, "int 1; byte 0x1233; int 1; select", 3) // selects the bytes
 }

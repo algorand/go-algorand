@@ -685,6 +685,23 @@ func opAssert(cx *evalContext) {
 	cx.err = errors.New("assert failed")
 }
 
+func opSwap(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	cx.stack[last], cx.stack[prev] = cx.stack[prev], cx.stack[last]
+}
+
+func opSelect(cx *evalContext) {
+	last := len(cx.stack) - 1 // condition on top
+	prev := last - 1          // true is one down
+	pprev := prev - 1         // false below that
+
+	if cx.stack[last].Uint != 0 {
+		cx.stack[pprev] = cx.stack[prev]
+	}
+	cx.stack = cx.stack[:prev]
+}
+
 func opSHA256(cx *evalContext) {
 	last := len(cx.stack) - 1
 	hash := sha256.Sum256(cx.stack[last].Bytes)

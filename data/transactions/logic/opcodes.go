@@ -174,6 +174,8 @@ var OpSpecs = []OpSpec{
 	{0x75, "setbit", opSetBit, asmDefault, disDefault, threeInts, oneInt, 3, modeAny, opSizeDefault},
 	{0x76, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opSizeDefault},
 	{0x77, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opSizeDefault},
+	{0x78, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, opSizeDefault},
+	{0x79, "select", opSelect, asmDefault, disDefault, twoAny.plus(oneInt), oneAny, 3, modeAny, opSizeDefault},
 }
 
 type sortByOpcode []OpSpec

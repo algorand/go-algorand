@@ -233,6 +233,8 @@ int 1
 +
 int 2
 setbyte
+swap
+select
 `
 
 func pseudoOp(opcode string) bool {
@@ -288,7 +290,7 @@ func TestAssemble(t *testing.T) {
 	ops, err = AssembleStringWithVersion(v1Nonsense+v2Nonsense+v3Nonsense, AssemblerMaxVersion)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ = hex.DecodeString("032008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f727322210574142105752704210676210508210677")
+	expectedBytes, _ = hex.DecodeString("032008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f7273222105741421057527042106762105082106777879")
 	if bytes.Compare(expectedBytes, ops.Program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(ops.Program))
@@ -335,8 +337,12 @@ func testMatch(t *testing.T, actual, expected string) {
 }
 
 func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpStream {
-	ops, err := AssembleStringWithVersion(source, ver)
+	program := strings.ReplaceAll(source, ";", "\n")
+	ops, err := AssembleStringWithVersion(program, ver)
 	if len(expected) == 0 {
+		if len(ops.Errors) > 0 || err != nil || ops == nil || ops.Program == nil {
+			t.Log(program)
+		}
 		require.Empty(t, ops.Errors)
 		require.NoError(t, err)
 		require.NotNil(t, ops)
@@ -344,23 +350,26 @@ func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpSt
 	} else {
 		require.Error(t, err)
 		errors := ops.Errors
-		require.Len(t, errors, len(expected))
 		for _, exp := range expected {
-			var found *lineError
 			if exp.l == 0 {
-				// Allow a single error to ignore line number
+				// line 0 means: "must match all"
 				require.Len(t, expected, 1)
-				found = errors[0]
+				for _, err := range errors {
+					msg := err.Unwrap().Error()
+					testMatch(t, msg, exp.s)
+				}
 			} else {
+				var found *lineError
 				for _, err := range errors {
 					if err.Line == exp.l {
 						found = err
+						break
 					}
 				}
+				require.NotNil(t, found)
+				msg := found.Unwrap().Error()
+				testMatch(t, msg, exp.s)
 			}
-			require.NotNil(t, found)
-			msg := found.Unwrap().Error()
-			testMatch(t, msg, exp.s)
 		}
 		require.Nil(t, ops.Program)
 	}

@@ -752,7 +752,6 @@ int 13
 }
 
 func testApp(t *testing.T, program string, ep EvalParams, problems ...string) basics.EvalDelta {
-	program = strings.ReplaceAll(program, ";", "\n")
 	ops := testProg(t, program, AssemblerMaxVersion)
 	sb := &strings.Builder{}
 	ep.Trace = sb
