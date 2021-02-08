@@ -78,6 +78,7 @@ type oneEntryPhonebook struct {
 	retryAfter time.Time
 }
 
+
 func (e *oneEntryPhonebook) GetAddresses(n int) []string {
 	return []string{e.addr}
 }
@@ -1144,7 +1145,9 @@ func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
 }
 
 func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte, when time.Time) error {
-	request := broadcastRequest{tag: tag, data: data, enqueueTime: when}
+	msgArr := make([][]byte, 1, 1)
+	msgArr[0] = data
+	request := broadcastRequest{tag: tag, data: msgArr, enqueueTime: when}
 
 	broadcastQueue := wn.broadcastQueueBulk
 	if highPriorityTag(tag) {

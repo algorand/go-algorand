@@ -54,4 +54,6 @@ const (
 	TxGroup           HashID = "TG"
 	Transaction       HashID = "TX"
 	Vote              HashID = "VO"
+
+	Info			  HashID = "in"
 )

@@ -262,6 +262,8 @@ type Network interface {
 	// otherwise, a nil is returned.
 	Broadcast(protocol.Tag, []byte) error
 
+	BroadcastArray(protocol.Tag, [][]byte) error
+
 	// Relay attempts to send a slice of bytes under some protocol.Tag to
 	// all neighbors, except for the neighbor associated with the given
 	// MessageHandle.
@@ -277,6 +279,8 @@ type Network interface {
 	// method returns a non-nil error describing the underlaying error.
 	// otherwise, a nil is returned.
 	Relay(MessageHandle, protocol.Tag, []byte) error
+
+	RelayArray(MessageHandle, protocol.Tag, [][]byte) error
 
 	// Disconnect sends the Network a hint to disconnect to the peer
 	// associated with the given MessageHandle.

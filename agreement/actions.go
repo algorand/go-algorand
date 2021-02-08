@@ -152,30 +152,36 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
 		msg := a.CompoundMessage
-		for _, txib := range msg.Proposal.Payset {
+
+		numtxns := len(msg.Proposal.Payset)
+		txnData = make([][]byte, numtxns + 1, numtxns + 1)
+		for i, txib := range msg.Proposal.Payset {
 			stxn := txib.SignedTxn
-			txnData = append(txnData, protocol.Encode(&stxn))
+			txnData[i] = protocol.Encode(&stxn)
 		}
 		payload := transmittedPayload{
 			unauthenticatedProposal: msg.Proposal.Compressed(),
 			PriorVote:               msg.Vote,
 		}
-		data = protocol.Encode(&payload)
+		txnData[len(txnData) - 1] = protocol.Encode(&payload)
 	}
 
 	switch a.T {
 	case broadcast:
 		logging.Base().Infof("txncount, %v", len(txnData))
-		for _, txn := range txnData {
-			s.Network.Broadcast(protocol.ProposalTransactionTag, txn)
+		if txnData != nil {
+			//protocol.TxnTag
+			s.Network.BroadcastArray(a.Tag, txnData)
+		} else if data != nil{
+			s.Network.Broadcast(a.Tag, data)
 		}
-		s.Network.Broadcast(a.Tag, data)
 	case relay:
 		logging.Base().Infof("txncount, %v", len(txnData))
-		for _, txn := range txnData {
-			s.Network.Relay(a.h, protocol.ProposalTransactionTag, txn)
+		if txnData != nil {
+			s.Network.RelayArray(a.h, a.Tag, txnData)
+		} else if data != nil{
+			s.Network.Relay(a.h, a.Tag, data)
 		}
-		s.Network.Relay(a.h, a.Tag, data)
 	case disconnect:
 		s.Network.Disconnect(a.h)
 	case ignore:

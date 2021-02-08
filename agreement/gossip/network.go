@@ -156,6 +156,15 @@ func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) (err error) {
 	return
 }
 
+func (i *networkImpl) BroadcastArray(t protocol.Tag, data []byte) (err error) {
+	err = i.net.BroadcastArray(context.Background(), t, data, t == protocol.ProposalTransactionTag, nil)
+	if err != nil {
+		i.log.Infof("agreement: could not broadcast message with tag %v: %v", t, err)
+	}
+	return
+}
+
+
 func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
 	if metadata == nil { // synthentic loopback
