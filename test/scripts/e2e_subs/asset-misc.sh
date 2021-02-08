@@ -16,7 +16,9 @@ ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTC=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTD=$(${gcmd} account new|awk '{ print $6 }')
 
-${gcmd} asset create --creator ${ACCOUNT} --name asset-misc --unitname amisc --total 1000000000000
+ASSET_NAME='Birlot : décollage'
+
+${gcmd} asset create --creator ${ACCOUNT} --name "${ASSET_NAME}" --unitname amisc --total 1000000000000
 
 ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --unitname amisc|grep 'Asset ID'|awk '{ print $3 }')
 
@@ -35,7 +37,7 @@ ${gcmd} asset send --assetid ${ASSET_ID} -f ${ACCOUNT} -t ${ACCOUNTB} -a 1000
 # asset send some and close the rest
 ${gcmd} asset send --assetid ${ASSET_ID} -f ${ACCOUNTB} -t ${ACCOUNTC} -a 100 --close-to ${ACCOUNTD}
 
-if ${gcmd} account info -a ${ACCOUNTC} |grep asset-misc|grep -c -q 'balance 100 '; then
+if ${gcmd} account info -a ${ACCOUNTC} |grep "${ASSET_NAME}"|grep -c -q 'balance 100 '; then
     echo ok
 else
     date '+asset-misc asset balance error %Y%m%d_%H%M%S'
