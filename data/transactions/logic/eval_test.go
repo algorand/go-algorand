@@ -3739,9 +3739,14 @@ func TestAllowedOpcodesV2(t *testing.T) {
 func TestAllowedOpcodesV3(t *testing.T) {
 	t.Parallel()
 
+	// all tests are expected to fail in evaluation
 	tests := map[string]string{
 		"assert":      "int 1\nassert",
 		"min_balance": "int 1\nmin_balance",
+		"getbit":      "int 15\nint 64\ngetbit",
+		"setbit":      "int 15\nint 64\nint 0\nsetbit",
+		"getbyte":     "byte \"john\"\nint 5\ngetbyte",
+		"setbyte":     "byte \"john\"\nint 5\nint 66\nsetbyte",
 	}
 
 	excluded := map[string]bool{}
@@ -3870,4 +3875,26 @@ func TestAssert(t *testing.T) {
 	testPanics(t, "int 0;assert;int 1", 3)
 	testPanics(t, obfuscate("assert;int 1"), 3)
 	testPanics(t, obfuscate(`byte "john";assert;int 1`), 3)
+}
+
+func TestBits(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 1; int 0; getbit; int 1; ==", 3)
+	testAccepts(t, "int 1; int 1; getbit; int 0; ==", 3)
+
+	testAccepts(t, "int 1; int 63; getbit; int 0; ==", 3)
+	testPanics(t, "int 1; int 64; getbit; int 0; ==", 3)
+
+	testAccepts(t, "int 0; int 3; int 1; setbit; int 8; ==", 3)
+	testAccepts(t, "int 8; int 3; getbit; int 1; ==", 3)
+
+	testAccepts(t, "int 15; int 3; int 0; setbit; int 7; ==", 3)
+}
+
+func TestBytes(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "byte 0x12345678; int 2; getbyte; int 0x56; ==", 3)
+	testAccepts(t, `byte "john"; int 2; getbyte; int 104; ==`, 3) // 104 is ascii h
+
+	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
 }

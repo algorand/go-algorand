@@ -1723,6 +1723,67 @@ func opSubstring3(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+func opGetBit(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	if cx.stack[last].Uint > 63 {
+		cx.err = errors.New("getbit index > 63")
+		return
+	}
+	mask := uint64(1) << cx.stack[last].Uint
+	cx.stack[prev].Uint = (cx.stack[prev].Uint & mask) >> cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
+}
+
+func opSetBit(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	pprev := prev - 1
+	if cx.stack[last].Uint > 1 {
+		cx.err = errors.New("setbit value > 1")
+		return
+	}
+	if cx.stack[prev].Uint > 63 {
+		cx.err = errors.New("setbit index > 63")
+		return
+	}
+	onmask := uint64(1) << cx.stack[prev].Uint
+	if cx.stack[last].Uint == uint64(1) {
+		cx.stack[pprev].Uint |= onmask
+	} else {
+		cx.stack[pprev].Uint &^= onmask
+	}
+	cx.stack = cx.stack[:prev]
+}
+
+func opGetByte(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	if cx.stack[last].Uint > uint64(len(cx.stack[prev].Bytes)) {
+		cx.err = errors.New("getbyte index > byte length")
+		return
+	}
+	cx.stack[prev].Uint = uint64(cx.stack[prev].Bytes[cx.stack[last].Uint])
+	cx.stack[prev].Bytes = nil
+	cx.stack = cx.stack[:last]
+}
+
+func opSetByte(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	pprev := prev - 1
+	if cx.stack[last].Uint > 255 {
+		cx.err = errors.New("setbyte value > 255")
+		return
+	}
+	if cx.stack[prev].Uint > uint64(len(cx.stack[pprev].Bytes)) {
+		cx.err = errors.New("setbyte index > byte length")
+		return
+	}
+	cx.stack[pprev].Bytes[cx.stack[prev].Uint] = byte(cx.stack[last].Uint)
+	cx.stack = cx.stack[:prev]
+}
+
 func opBalance(cx *evalContext) {
 	last := len(cx.stack) - 1 // account offset
 

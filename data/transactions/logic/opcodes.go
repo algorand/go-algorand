@@ -59,9 +59,11 @@ type OpSpec struct {
 var oneBytes = StackTypes{StackBytes}
 var twoBytes = StackTypes{StackBytes, StackBytes}
 var threeBytes = StackTypes{StackBytes, StackBytes, StackBytes}
+var byteInt = StackTypes{StackBytes, StackUint64}
 var byteIntInt = StackTypes{StackBytes, StackUint64, StackUint64}
 var oneInt = StackTypes{StackUint64}
 var twoInts = StackTypes{StackUint64, StackUint64}
+var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
 var oneAny = StackTypes{StackAny}
 var twoAny = StackTypes{StackAny, StackAny}
 
@@ -167,6 +169,11 @@ var OpSpecs = []OpSpec{
 
 	{0x72, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opSizeDefault},
 	{0x73, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opSizeDefault},
+
+	{0x74, "getbit", opGetBit, asmDefault, disDefault, twoInts, oneInt, 3, modeAny, opSizeDefault},
+	{0x75, "setbit", opSetBit, asmDefault, disDefault, threeInts, oneInt, 3, modeAny, opSizeDefault},
+	{0x76, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opSizeDefault},
+	{0x77, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opSizeDefault},
 }
 
 type sortByOpcode []OpSpec
