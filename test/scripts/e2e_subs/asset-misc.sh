@@ -16,7 +16,7 @@ ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTC=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTD=$(${gcmd} account new|awk '{ print $6 }')
 
-ASSET_NAME='Birlot : décollage'
+ASSET_NAME='Birlot : décollage vs. ࠶🦪'
 
 ${gcmd} asset create --creator ${ACCOUNT} --name "${ASSET_NAME}" --unitname amisc --total 1000000000000
 
