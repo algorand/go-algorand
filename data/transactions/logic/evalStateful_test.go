@@ -780,6 +780,13 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 		for _, problem := range problems {
 			require.Contains(t, err.Error(), problem)
 		}
+		if ep.Ledger != nil {
+			delta, err := ep.Ledger.GetDelta(&ep.Txn.Txn)
+			require.NoError(t, err)
+			require.Empty(t, delta.GlobalDelta)
+			require.Empty(t, delta.LocalDeltas)
+			return delta
+		}
 		return basics.EvalDelta{}
 	}
 }
@@ -1524,12 +1531,12 @@ int 100
 			require.True(t, pass)
 			delta, err := ledger.GetDelta(&ep.Txn.Txn)
 			require.NoError(t, err)
-			require.Equal(t, 0, len(delta.GlobalDelta))
+			require.Empty(t, delta.GlobalDelta)
 			expLocal := 1
 			if name == "read" {
 				expLocal = 0
 			}
-			require.Equal(t, expLocal, len(delta.LocalDeltas))
+			require.Len(t, delta.LocalDeltas, expLocal)
 		})
 	}
 }
@@ -1588,10 +1595,10 @@ int 0x77
 	require.True(t, pass)
 	delta, err := ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 1, len(delta.LocalDeltas))
+	require.Empty(t, 0, delta.GlobalDelta)
+	require.Len(t, delta.LocalDeltas, 1)
 
-	require.Equal(t, 2, len(delta.LocalDeltas[0]))
+	require.Len(t, delta.LocalDeltas[0], 2)
 	vd := delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x77), vd.Uint)
@@ -1632,8 +1639,8 @@ int 0x77
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Empty(t, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
 
 	// write same value after reading, expect no local delta
 	source = `int 0  // account
@@ -1667,8 +1674,8 @@ exist2:
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Empty(t, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
 
 	// write a value and expect local delta change
 	source = `int 0  // account
@@ -1688,9 +1695,9 @@ int 1
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 1, len(delta.LocalDeltas))
-	require.Equal(t, 1, len(delta.LocalDeltas[0]))
+	require.Empty(t, delta.GlobalDelta)
+	require.Len(t, delta.LocalDeltas, 1)
+	require.Len(t, delta.LocalDeltas[0], 1)
 	vd = delta.LocalDeltas[0]["ALGOA"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
@@ -1721,9 +1728,9 @@ int 0x78
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 1, len(delta.LocalDeltas))
-	require.Equal(t, 1, len(delta.LocalDeltas[0]))
+	require.Empty(t, delta.GlobalDelta)
+	require.Len(t, delta.LocalDeltas, 1)
+	require.Len(t, delta.LocalDeltas[0], 1)
 	vd = delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
@@ -1752,9 +1759,9 @@ app_local_put
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 1, len(delta.LocalDeltas))
-	require.Equal(t, 1, len(delta.LocalDeltas[0]))
+	require.Empty(t, delta.GlobalDelta)
+	require.Len(t, delta.LocalDeltas, 1)
+	require.Len(t, delta.LocalDeltas[0], 1)
 	vd = delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
@@ -1795,10 +1802,10 @@ int 1
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 2, len(delta.LocalDeltas))
-	require.Equal(t, 2, len(delta.LocalDeltas[0]))
-	require.Equal(t, 1, len(delta.LocalDeltas[1]))
+	require.Empty(t, delta.GlobalDelta)
+	require.Len(t, delta.LocalDeltas, 2)
+	require.Len(t, delta.LocalDeltas[0], 2)
+	require.Len(t, delta.LocalDeltas[1], 1)
 	vd = delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
@@ -1886,7 +1893,7 @@ int 1
 			delta, err := ledger.GetDelta(&ep.Txn.Txn)
 			require.NoError(t, err)
 
-			require.Equal(t, 0, len(delta.LocalDeltas))
+			require.Empty(t, delta.LocalDeltas)
 		})
 	}
 }
@@ -1977,8 +1984,8 @@ int 0x77
 	delta, err := ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
 
-	require.Equal(t, 2, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Len(t, delta.GlobalDelta, 2)
+	require.Empty(t, delta.LocalDeltas)
 
 	vd := delta.GlobalDelta["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
@@ -2012,8 +2019,8 @@ int 0x77
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
 
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Empty(t, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
 
 	// write existing value after read
 	source = `int 0
@@ -2042,8 +2049,8 @@ int 0x77
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Empty(t, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
 
 	// write new values after and before read
 	source = `int 0
@@ -2098,8 +2105,8 @@ byte 0x414c474f
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
 
-	require.Equal(t, 2, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Len(t, delta.GlobalDelta, 2)
+	require.Empty(t, delta.LocalDeltas)
 
 	vd = delta.GlobalDelta["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
@@ -2142,8 +2149,8 @@ byte "myval"
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 
 	delta := testApp(t, source, ep, "no such app")
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Empty(t, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
 
 	ledger.newApp(txn.Txn.Receiver, 101, makeSchemas(0, 0, 0, 0))
 	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0)) // this keeps current app id = 100
@@ -2151,8 +2158,8 @@ byte "myval"
 	ledger.applications[101].GlobalState["mykey"] = algoValue
 
 	delta = testApp(t, source, ep)
-	require.Equal(t, 0, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Empty(t, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
 }
 
 func TestAppGlobalDelete(t *testing.T) {
@@ -2197,8 +2204,8 @@ int 1
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 
 	delta := testApp(t, source, ep)
-	require.Equal(t, 2, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Len(t, delta.GlobalDelta, 2)
+	require.Empty(t, delta.LocalDeltas)
 
 	ledger.reset()
 	delete(ledger.applications[100].GlobalState, "ALGOA")
@@ -2217,7 +2224,7 @@ app_global_get_ex
 `
 	ep.Txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
 	delta = testApp(t, source, ep)
-	require.Equal(t, 1, len(delta.GlobalDelta))
+	require.Len(t, delta.GlobalDelta, 1)
 	vd := delta.GlobalDelta["ALGO"]
 	require.Equal(t, basics.DeleteAction, vd.Action)
 	require.Equal(t, uint64(0), vd.Uint)
@@ -2242,12 +2249,12 @@ int 0x78
 app_global_put
 `
 	delta = testApp(t, source, ep)
-	require.Equal(t, 1, len(delta.GlobalDelta))
+	require.Len(t, delta.GlobalDelta, 1)
 	vd = delta.GlobalDelta["ALGOA"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
 	require.Equal(t, "", vd.Bytes)
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Empty(t, delta.LocalDeltas)
 
 	ledger.reset()
 	delete(ledger.applications[100].GlobalState, "ALGOA")
@@ -2264,10 +2271,10 @@ app_global_put
 int 1
 `
 	delta = testApp(t, source, ep)
-	require.Equal(t, 1, len(delta.GlobalDelta))
+	require.Len(t, delta.GlobalDelta, 1)
 	vd = delta.GlobalDelta["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Empty(t, delta.LocalDeltas)
 
 	ledger.reset()
 	delete(ledger.applications[100].GlobalState, "ALGOA")
@@ -2286,10 +2293,10 @@ app_global_del
 int 1
 `
 	delta = testApp(t, source, ep)
-	require.Equal(t, 1, len(delta.GlobalDelta))
+	require.Len(t, delta.GlobalDelta, 1)
 	vd = delta.GlobalDelta["ALGO"]
 	require.Equal(t, basics.DeleteAction, vd.Action)
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Empty(t, delta.LocalDeltas)
 
 	ledger.reset()
 	delete(ledger.applications[100].GlobalState, "ALGOA")
@@ -2308,8 +2315,8 @@ app_global_del
 int 1
 `
 	delta = testApp(t, source, ep)
-	require.Equal(t, 1, len(delta.GlobalDelta))
-	require.Equal(t, 0, len(delta.LocalDeltas))
+	require.Len(t, delta.GlobalDelta, 1)
+	require.Len(t, delta.LocalDeltas, 0)
 }
 
 func TestAppLocalDelete(t *testing.T) {
