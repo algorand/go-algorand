@@ -1172,8 +1172,12 @@ func (wn *WebsocketNetwork) broadcastThread() {
 		if curPeersChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter); curPeersChangeCounter != lastPeersChangeCounter {
 			peers, lastPeersChangeCounter = wn.peerSnapshot(peers[:0])
 			// clear out the unused portion of the peers array to allow the GC to cleanup unused peers.
-			for i := len(peers); i < cap(peers) && peers[i] != nil; i++ {
-				peers[i] = nil
+			remainderPeers := peers[len(peers):cap(peers)]
+			for i := range remainderPeers {
+				if remainderPeers[i] == nil {
+					break
+				}
+				remainderPeers[i] = nil
 			}
 		}
 	}
