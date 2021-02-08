@@ -491,6 +491,11 @@ func (e *testingNetworkEndpoint) Broadcast(tag protocol.Tag, data []byte) error 
 	return nil
 }
 
+func (e *testingNetworkEndpoint) BroadcastArray(tag protocol.Tag, data [][]byte) error {
+	e.parent.multicast(tag, data, e.id, e.id)
+	return nil
+}
+
 func (e *testingNetworkEndpoint) Relay(h MessageHandle, t protocol.Tag, data []byte) error {
 	sourceID := e.id
 	if _, isMsg := h.(*int); isMsg {
