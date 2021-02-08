@@ -1174,13 +1174,42 @@ func (wn *WebsocketNetwork) broadcastThread() {
 		}
 	}
 
-	// waitForPeers waits until there is at least a single peer connected.
-	// it return true if there is at least one peer, or false if the network context has expired.
-	waitForPeers := func() bool {
+	// waitForPeers waits until there is at least a single peer connected or pending request expires.
+	// in any of the above two cases, it returns true.
+	// otherwise, false is returned ( the network context has expired )
+	waitForPeers := func(request *broadcastRequest) bool {
+		// waitSleepTime defines how long we'd like to sleep between consecutive tests that the peers list have been updated.
+		const waitSleepTime = 5 * time.Millisecond
+		// requestDeadline is the request deadline. If we surpass that deadline, the function returns true.
+		var requestDeadline time.Time
+		// sleepDuration is the current iteration sleep time.
+		var sleepDuration time.Duration
+		// initialize the requestDeadline if we have a request.
+		if request != nil {
+			requestDeadline = request.enqueueTime.Add(maxMessageQueueDuration)
+		} else {
+			sleepDuration = waitSleepTime
+		}
+
 		// wait until the we have at least a single peer connected.
 		for len(peers) == 0 {
+			// adjust the sleep time in case we have a request
+			if request != nil {
+				// we want to clamp the sleep time so that we won't sleep beyond the expiration of the request.
+				now := time.Now()
+				sleepDuration = requestDeadline.Sub(now)
+				if sleepDuration > waitSleepTime {
+					sleepDuration = waitSleepTime
+				} else if sleepDuration < 0 {
+					return true
+				}
+			}
 			select {
-			case <-time.After(5 * time.Millisecond):
+			case <-time.After(sleepDuration):
+				if (request != nil) && time.Now().After(requestDeadline) {
+					// message time have elapsed.
+					return true
+				}
 				updatePeers()
 				continue
 			case <-wn.ctx.Done():
@@ -1194,7 +1223,7 @@ func (wn *WebsocketNetwork) broadcastThread() {
 	updatePeers()
 
 	// wait until the we have at least a single peer connected.
-	if !waitForPeers() {
+	if !waitForPeers(nil) {
 		return
 	}
 
@@ -1227,7 +1256,7 @@ func (wn *WebsocketNetwork) broadcastThread() {
 		case request := <-wn.broadcastQueueHighPrio:
 			// check if peers need to be updated, since we've been waiting a while.
 			updatePeers()
-			if !waitForPeers() {
+			if !waitForPeers(&request) {
 				return
 			}
 			wn.innerBroadcast(request, true, peers)
@@ -1237,7 +1266,7 @@ func (wn *WebsocketNetwork) broadcastThread() {
 		case request := <-wn.broadcastQueueBulk:
 			// check if peers need to be updated, since we've been waiting a while.
 			updatePeers()
-			if !waitForPeers() {
+			if !waitForPeers(&request) {
 				return
 			}
 			wn.innerBroadcast(request, false, peers)
