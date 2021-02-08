@@ -111,16 +111,18 @@ func (l *testLedger) newApp(addr basics.Address, appID basics.AppIndex, schemas 
 	l.balances[addr] = br
 }
 
-func (l *testLedger) newAsset(assetID uint64, params basics.AssetParams) {
+func (l *testLedger) newAsset(creator basics.Address, assetID uint64, params basics.AssetParams) {
 	l.assets[basics.AssetIndex(assetID)] = params
+	// We're not simulating details of ReserveAddress yet.
+	l.setHolding(creator, assetID, params.Total, params.DefaultFrozen)
 }
 
-func (l *testLedger) setHolding(addr basics.Address, assetID uint64, holding basics.AssetHolding) {
+func (l *testLedger) setHolding(addr basics.Address, assetID uint64, amount uint64, frozen bool) {
 	br, ok := l.balances[addr]
 	if !ok {
 		br = makeBalanceRecord(addr, 0)
 	}
-	br.holdings[assetID] = holding
+	br.holdings[assetID] = basics.AssetHolding{Amount: amount, Frozen: frozen}
 	l.balances[addr] = br
 }
 
@@ -588,8 +590,7 @@ pop
 	)
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
-	ledger.newAsset(5, params)
-	ledger.setHolding(txn.Txn.Sender, 5, basics.AssetHolding{Amount: 123, Frozen: true})
+	ledger.newAsset(txn.Txn.Sender, 5, params)
 
 	for mode, test := range tests {
 		t.Run(fmt.Sprintf("opcodes_mode=%d", mode), func(t *testing.T) {
@@ -758,7 +759,16 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) {
 	cost, err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err := EvalStateful(ops.Program, ep)
+
+	// we only use this to test stateful apps.  While, I suppose
+	// it's *legal* to have an app with no stateful ops, this
+	// convenience routine can assume it, and check it.
+	pass, err := Eval(ops.Program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not allowed in current mode")
+	require.False(t, pass)
+
+	pass, err = EvalStateful(ops.Program, ep)
 	if len(problems) == 0 {
 		require.NoError(t, err, sb.String())
 		require.True(t, pass, sb.String())
@@ -781,15 +791,30 @@ func TestMinBalance(t *testing.T) {
 
 	testApp(t, "int 0; min_balance; int 1001; ==", ep, "ledger not available")
 
-	ep.Ledger = makeTestLedger(
+	ledger := makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender:   234, // min_balance 0 is Sender
 			txn.Txn.Receiver: 123, // Accounts[0] has been packed with the Receiver
 		},
 	)
+	ep.Ledger = ledger
 
 	testApp(t, "int 0; min_balance; int 1001; ==", ep)
+	// Sender makes an asset, min blance goes up
+	ledger.newAsset(txn.Txn.Sender, 7, basics.AssetParams{Total: 1000})
+	testApp(t, "int 0; min_balance; int 2002; ==", ep)
+	schemas := makeSchemas(1, 2, 3, 4)
+	ledger.newApp(txn.Txn.Sender, 77, schemas)
+	// create + optin + 10 schema base + 4 ints + 6 bytes (local
+	// and global count b/c newApp opts the creator in)
+	minb := 2*1002 + 10*1003 + 4*1004 + 6*1005
+	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
+
 	testApp(t, "int 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
+	// Receiver opts in
+	ledger.setHolding(txn.Txn.Receiver, 7, 1, true)
+	testApp(t, "int 1; min_balance; int 2002; ==", ep) // 1 == Accounts[0]
+
 	testApp(t, "int 2; min_balance; int 1001; ==", ep, "cannot load account")
 
 }
@@ -797,96 +822,35 @@ func TestMinBalance(t *testing.T) {
 func TestAppCheckOptedIn(t *testing.T) {
 	t.Parallel()
 
-	text := `int 2  // account idx
-int 100  // app idx
-app_opted_in
-int 1
-==`
-	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-
 	txn := makeSampleTxn()
 	txgroup := makeSampleTxnGroup(txn)
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
+	testApp(t, "int 2; int 100; app_opted_in; int 1; ==", ep, "ledger not available")
 
-	ep.Ledger = makeTestLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Receiver: 1,
-		},
-	)
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot load account")
-
-	// Receiver is not opted in
-	text = `int 1  // account idx
-int 100  // app idx
-app_opted_in
-int 0
-==`
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	cost, err := CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, cost < 1000)
-	pass, err := EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-
-	// Sender is not opted in
-	text = `int 0  // account idx
-int 100  // app idx
-app_opted_in
-int 0
-==`
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
+			txn.Txn.Receiver: 1,
+			txn.Txn.Sender:   1,
 		},
 	)
 	ep.Ledger = ledger
-	cost, err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, cost < 1000)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, "int 2; int 100; app_opted_in; int 1; ==", ep, "cannot load account")
+
+	// Receiver is not opted in
+	testApp(t, "int 1; int 100; app_opted_in; int 0; ==", ep)
+
+	// Sender is not opted in
+	testApp(t, "int 0; int 100; app_opted_in; int 0; ==", ep)
 
 	// Receiver opted in
-	text = `int 1  // account idx
-int 100  // app idx
-app_opted_in
-int 1
-==`
 	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0))
-
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, "int 1; int 100; app_opted_in; int 1; ==", ep)
 
 	// Sender opted in
-	text = `int 0  // account idx
-int 100  // app idx
-app_opted_in
-int 1
-==`
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
-
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-
+	testApp(t, "int 0; int 100; app_opted_in; int 1; ==", ep)
 }
 
 func TestAppReadLocalState(t *testing.T) {
@@ -1357,8 +1321,8 @@ func TestAssets(t *testing.T) {
 		Freeze:        txn.Txn.Receiver,
 		Clawback:      txn.Txn.Receiver,
 	}
-	ledger.newAsset(55, params)
-	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: true})
+	ledger.newAsset(txn.Txn.Sender, 55, params)
+	ledger.setHolding(txn.Txn.Sender, 55, 123, true)
 
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Ledger = ledger
@@ -1389,7 +1353,7 @@ int 1
 `
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: false})
+	ledger.setHolding(txn.Txn.Sender, 55, 123, false)
 	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
@@ -1420,7 +1384,7 @@ int 1
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.DefaultFrozen = true
-	ledger.newAsset(55, params)
+	ledger.newAsset(txn.Txn.Sender, 55, params)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1448,7 +1412,7 @@ int 1
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.URL = ""
-	ledger.newAsset(55, params)
+	ledger.newAsset(txn.Txn.Sender, 55, params)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1469,7 +1433,7 @@ int 1
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.URL = "foobarbaz"
-	ledger.newAsset(77, params)
+	ledger.newAsset(txn.Txn.Sender, 77, params)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1489,7 +1453,7 @@ int 1
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.URL = ""
-	ledger.newAsset(55, params)
+	ledger.newAsset(txn.Txn.Sender, 55, params)
 	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
@@ -2756,8 +2720,7 @@ func TestEnumFieldErrors(t *testing.T) {
 		Freeze:        txn.Txn.Receiver,
 		Clawback:      txn.Txn.Receiver,
 	}
-	ledger.newAsset(55, params)
-	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: true})
+	ledger.newAsset(txn.Txn.Sender, 55, params)
 
 	ep.Txn = &txn
 	ep.Ledger = ledger
@@ -2835,8 +2798,7 @@ func TestReturnTypes(t *testing.T) {
 		Freeze:        txn.Txn.Receiver,
 		Clawback:      txn.Txn.Receiver,
 	}
-	ledger.newAsset(1, params)
-	ledger.setHolding(txn.Txn.Sender, 1, basics.AssetHolding{Amount: 123, Frozen: true})
+	ledger.newAsset(txn.Txn.Sender, 1, params)
 	ledger.newApp(txn.Txn.Sender, 1, makeSchemas(0, 0, 0, 0))
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
 	ledger.balances[txn.Txn.Receiver].locals[1] = make(basics.TealKeyValue)
