@@ -211,10 +211,23 @@ type multicastParams struct {
 }
 
 func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID, exclude nodeID) {
-	// fmt.Println("mc", source, "x", exclude)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	n.multicastInner(tag, data, source, exclude)
+}
+
+func (n *testingNetwork) multicastArray(tag protocol.Tag, data [][]byte, source nodeID, exclude nodeID) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	for _, d := range data {
+		n.multicastInner(tag, d, source, exclude)
+	}
+}
+
+func (n *testingNetwork) multicastInner(tag protocol.Tag, data []byte, source nodeID, exclude nodeID) {
+	// fmt.Println("mc", source, "x", exclude)
 	if n.interceptFn != nil {
 		out := n.interceptFn(multicastParams{tag, data, source, exclude})
 		tag, data, source, exclude = out.tag, out.data, out.source, out.exclude
@@ -492,7 +505,7 @@ func (e *testingNetworkEndpoint) Broadcast(tag protocol.Tag, data []byte) error 
 }
 
 func (e *testingNetworkEndpoint) BroadcastArray(tag protocol.Tag, data [][]byte) error {
-	e.parent.multicast(tag, data, e.id, e.id)
+	e.parent.multicastArray(tag, data, e.id, e.id)
 	return nil
 }
 
@@ -503,6 +516,16 @@ func (e *testingNetworkEndpoint) Relay(h MessageHandle, t protocol.Tag, data []b
 	}
 
 	e.parent.multicast(t, data, e.id, sourceID)
+	return nil
+}
+
+func (e *testingNetworkEndpoint) RelayArray(h MessageHandle, t protocol.Tag, data [][]byte) error {
+	sourceID := e.id
+	if _, isMsg := h.(*int); isMsg {
+		sourceID = e.parent.sourceOf(h)
+	}
+
+	e.parent.multicastArray(t, data, e.id, sourceID)
 	return nil
 }
 
