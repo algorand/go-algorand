@@ -145,6 +145,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 
 	var data []byte
 	var txnData [][]byte
+	var tags []protocol.Tag
 	switch a.Tag {
 	case protocol.AgreementVoteTag:
 		data = protocol.Encode(&a.UnauthenticatedVote)
@@ -155,15 +156,18 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 
 		numtxns := len(msg.Proposal.Payset)
 		txnData = make([][]byte, numtxns + 1, numtxns + 1)
+		tags = make([]protocol.Tag, numtxns + 1)
 		for i, txib := range msg.Proposal.Payset {
 			stxn := txib.SignedTxn
 			txnData[i] = protocol.Encode(&stxn)
+			tags[i] = protocol.TxnTag
 		}
 		payload := transmittedPayload{
 			unauthenticatedProposal: msg.Proposal.Compressed(),
 			PriorVote:               msg.Vote,
 		}
 		txnData[len(txnData) - 1] = protocol.Encode(&payload)
+		tags[len(txnData) - 1] = protocol.ProposalPayloadTag
 	}
 
 	switch a.T {
@@ -171,14 +175,14 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		logging.Base().Infof("txncount, %v", len(txnData))
 		if txnData != nil {
 			//protocol.TxnTag
-			s.Network.BroadcastArray(a.Tag, txnData)
+			s.Network.BroadcastArray(tags, txnData)
 		} else if data != nil{
 			s.Network.Broadcast(a.Tag, data)
 		}
 	case relay:
 		logging.Base().Infof("txncount, %v", len(txnData))
 		if txnData != nil {
-			s.Network.RelayArray(a.h, a.Tag, txnData)
+			s.Network.RelayArray(a.h, tags, txnData)
 		} else if data != nil{
 			s.Network.Relay(a.h, a.Tag, data)
 		}

@@ -149,15 +149,15 @@ func (i *networkImpl) Messages(t protocol.Tag) <-chan agreement.Message {
 }
 
 func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) (err error) {
-	err = i.net.Broadcast(context.Background(), t, data, t == protocol.ProposalTransactionTag, nil)
+	err = i.net.Broadcast(context.Background(), t, data, false, nil)
 	if err != nil {
 		i.log.Infof("agreement: could not broadcast message with tag %v: %v", t, err)
 	}
 	return
 }
 
-func (i *networkImpl) BroadcastArray(t protocol.Tag, data [][]byte) (err error) {
-	err = i.net.BroadcastArray(context.Background(), t, data, t == protocol.ProposalTransactionTag, nil)
+func (i *networkImpl) BroadcastArray(t []protocol.Tag, data [][]byte) (err error) {
+	err = i.net.BroadcastArray(context.Background(), t, data, false, nil)
 	if err != nil {
 		i.log.Infof("agreement: could not broadcast message with tag %v: %v", t, err)
 	}
@@ -168,7 +168,7 @@ func (i *networkImpl) BroadcastArray(t protocol.Tag, data [][]byte) (err error) 
 func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
 	if metadata == nil { // synthentic loopback
-		err = i.net.Broadcast(context.Background(), t, data, t == protocol.ProposalTransactionTag, nil)
+		err = i.net.Broadcast(context.Background(), t, data, false, nil)
 		if err != nil {
 			i.log.Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
 		}
@@ -181,15 +181,15 @@ func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []by
 	return
 }
 
-func (i *networkImpl) RelayArray(h agreement.MessageHandle, t protocol.Tag, data [][]byte) (err error) {
+func (i *networkImpl) RelayArray(h agreement.MessageHandle, t []protocol.Tag, data [][]byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
 	if metadata == nil { // synthentic loopback
-		err = i.net.BroadcastArray(context.Background(), t, data, t == protocol.ProposalTransactionTag, nil)
+		err = i.net.BroadcastArray(context.Background(), t, data, false, nil)
 		if err != nil {
 			i.log.Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
 		}
 	} else {
-		err = i.net.RelayArray(context.Background(), t, data, t == protocol.ProposalTransactionTag, metadata.raw.Sender)
+		err = i.net.RelayArray(context.Background(), t, data, false, metadata.raw.Sender)
 		if err != nil {
 			i.log.Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
 		}

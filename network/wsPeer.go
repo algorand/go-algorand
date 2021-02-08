@@ -844,7 +844,6 @@ func (wp *wsPeer) getAndRemoveResponseChannel(key uint64) (respChan chan *Respon
 
 // StoreKV stores an entry in the corresponding peer's key-value store
 func (wp *wsPeer) StoreKV(key interface{}, value interface{}) {
-	// TODO: add cache size limit
 	wp.kvStoreMutex.Lock()
 	defer wp.kvStoreMutex.Unlock()
 	wp.kvStore[key] = value
