@@ -1170,7 +1170,11 @@ func (wn *WebsocketNetwork) broadcastThread() {
 	// updatePeers update the peers list if their peer change counter has changed.
 	updatePeers := func() {
 		if curPeersChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter); curPeersChangeCounter != lastPeersChangeCounter {
-			peers, lastPeersChangeCounter = wn.peerSnapshot(peers)
+			peers, lastPeersChangeCounter = wn.peerSnapshot(peers[:0])
+			// clear out the unused portion of the peers array to allow the GC to cleanup unused peers.
+			for i := len(peers); i < cap(peers) && peers[i] != nil; i++ {
+				peers[i] = nil
+			}
 		}
 	}
 
