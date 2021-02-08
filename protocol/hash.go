@@ -55,5 +55,5 @@ const (
 	Transaction       HashID = "TX"
 	Vote              HashID = "VO"
 
-	Info			  HashID = "in"
+	Info HashID = "in"
 )

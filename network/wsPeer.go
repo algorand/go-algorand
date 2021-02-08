@@ -71,7 +71,6 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 	protocol.PingTag:            true,
 	protocol.PingReplyTag:       true,
 	protocol.ProposalPayloadTag: true,
-	protocol.ProposalTransactionTag: true,
 	protocol.TopicMsgRespTag:    true,
 	protocol.MsgOfInterestTag:   true,
 	protocol.TxnTag:             true,
@@ -210,7 +209,7 @@ type wsPeer struct {
 	// performance or not. Throttled connections are more likely to be short-lived connections.
 	throttledOutgoingConnection bool
 
-	kvStore map[interface{}]interface{}
+	kvStore  map[interface{}]interface{}
 	keysList *list.List
 
 	kvStoreMutex deadlock.RWMutex
@@ -417,7 +416,7 @@ func (wp *wsPeer) readLoop() {
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		msg.Sender = wp
 		logging.Base().Infof("mayberead, %v %v", msg.Tag, crypto.Hash(msg.Data))
-		if msg.Tag == protocol.ProposalTransactionTag {
+		if msg.Tag == protocol.TxnTag {
 			wp.StoreKV(crypto.Hash(msg.Data), msg.Data)
 		}
 
@@ -670,7 +669,7 @@ func (wp *wsPeer) writeNonBlockMsgs(data [][]byte, highPrio bool, digest []crypt
 
 	var outchan chan []sendMessage
 
-	msgs := make([]sendMessage, len(data) - filtered, len(data) - filtered)
+	msgs := make([]sendMessage, len(data)-filtered, len(data)-filtered)
 	enqueueTime := time.Now()
 	i := 0
 	for _, d := range data {

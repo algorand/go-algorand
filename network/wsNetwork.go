@@ -235,7 +235,7 @@ type Tag = protocol.Tag
 
 func highPriorityTag(tags []protocol.Tag) bool {
 	for _, tag := range tags {
-		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag || tag == protocol.ProposalTransactionTag {
+		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
 			return true
 		}
 	}
@@ -404,7 +404,7 @@ type WebsocketNetwork struct {
 }
 
 type broadcastRequest struct {
-	tags         []Tag
+	tags        []Tag
 	data        [][]byte
 	except      *wsPeer
 	done        chan struct{}
@@ -445,6 +445,9 @@ func (wn *WebsocketNetwork) PublicAddress() string {
 	return localAddr
 }
 
+// Broadcast sends a message.
+// If except is not nil then we will not send it to that neighboring Peer.
+// if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
 	dataArray := make([][]byte, 1, 1)
 	dataArray[0] = data
@@ -453,7 +456,7 @@ func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 	return wn.BroadcastArray(ctx, tagArray, dataArray, wait, except)
 }
 
-// Broadcast sends a message.
+// BroadcastArray sends an array of messages.
 // If except is not nil then we will not send it to that neighboring Peer.
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 // TODO: add `priority` argument so that we don't have to guess it based on tag
@@ -508,13 +511,14 @@ func (wn *WebsocketNetwork) Relay(ctx context.Context, tag protocol.Tag, data []
 	}
 	return nil
 }
+
+// RelayArray relays array of messages
 func (wn *WebsocketNetwork) RelayArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
 	if wn.relayMessages {
 		return wn.BroadcastArray(ctx, tags, data, wait, except)
 	}
 	return nil
 }
-
 
 func (wn *WebsocketNetwork) disconnectThread(badnode Peer, reason disconnectReason) {
 	defer wn.wg.Done()
