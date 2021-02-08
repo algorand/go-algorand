@@ -751,7 +751,7 @@ int 13
 	require.True(t, pass)
 }
 
-func testApp(t *testing.T, program string, ep EvalParams, problems ...string) {
+func testApp(t *testing.T, program string, ep EvalParams, problems ...string) basics.EvalDelta {
 	program = strings.ReplaceAll(program, ";", "\n")
 	ops := testProg(t, program, AssemblerMaxVersion)
 	sb := &strings.Builder{}
@@ -772,11 +772,15 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) {
 	if len(problems) == 0 {
 		require.NoError(t, err, sb.String())
 		require.True(t, pass, sb.String())
+		delta, err := ep.Ledger.GetDelta(&ep.Txn.Txn)
+		require.NoError(t, err)
+		return delta
 	} else {
 		require.Error(t, err, sb.String())
 		for _, problem := range problems {
 			require.Contains(t, err.Error(), problem)
 		}
+		return basics.EvalDelta{}
 	}
 }
 
@@ -869,8 +873,6 @@ err
 exit:
 int 1
 ==`
-	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
 
 	txn := makeSampleTxn()
 	txgroup := makeSampleTxnGroup(txn)
@@ -878,12 +880,8 @@ int 1
 	ep.Txn = &txn
 	ep.Txn.Txn.ApplicationID = 100
 	ep.TxnGroup = txgroup
-	cost, err := CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, cost < 1000)
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
+
+	testApp(t, text, ep, "ledger not available")
 
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{
@@ -891,9 +889,7 @@ int 1
 		},
 	)
 	ep.Ledger = ledger
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot load account")
+	testApp(t, text, ep, "cannot load account")
 
 	text = `int 1  // account idx
 int 100 // app id
@@ -907,11 +903,8 @@ exist:
 err
 exit:
 int 1`
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no app for account")
+
+	testApp(t, text, ep, "no app for account")
 
 	ledger = makeTestLedger(
 		map[basics.Address]uint64{
@@ -921,16 +914,11 @@ int 1`
 	ep.Ledger = ledger
 	ledger.newApp(txn.Txn.Receiver, 9999, makeSchemas(0, 0, 0, 0))
 
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no app for account")
+	testApp(t, text, ep, "no app for account")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0))
-
-	pass, err := EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, text, ep)
 
 	text = `int 1  // account idx
 int 100 // app id
@@ -943,16 +931,7 @@ byte 0x414c474f
 ==`
 	ledger.balances[txn.Txn.Receiver].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-
-	cost, err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, cost < 1000)
-
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, text, ep)
 
 	// check special case account idx == 0 => sender
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
@@ -966,13 +945,8 @@ exist:
 byte 0x414c474f
 ==`
 
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-
 	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, text, ep)
 
 	// check reading state of other app
 	ledger.newApp(txn.Txn.Sender, 101, makeSchemas(0, 0, 0, 0))
@@ -987,13 +961,8 @@ exist:
 byte 0x414c474f
 ==`
 
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-
 	ledger.balances[txn.Txn.Sender].locals[101][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, text, ep)
 
 	// check app_local_get
 	text = `int 0  // account idx
@@ -1002,13 +971,8 @@ app_local_get
 byte 0x414c474f
 ==`
 
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-
 	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, text, ep)
 
 	// check app_local_get default value
 	text = `int 0  // account idx
@@ -1017,13 +981,8 @@ app_local_get
 int 0
 ==`
 
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-
 	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, text, ep)
 }
 
 func TestAppReadGlobalState(t *testing.T) {
@@ -1824,7 +1783,7 @@ int 1
 	delete(ledger.balances[txn.Txn.Sender].locals[100], "ALGOA")
 
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 500)
-	ledger.balances[txn.Txn.Receiver].locals[100] = make(map[string]basics.TealValue)
+	ledger.balances[txn.Txn.Receiver].locals[100] = make(basics.TealKeyValue)
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -2182,17 +2141,7 @@ byte "myval"
 	ep.Ledger = ledger
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	cost, err := CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, cost < 1000)
-	pass, err := EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no such app")
-	require.False(t, pass)
-	delta, err := ledger.GetDelta(&ep.Txn.Txn)
-	require.NoError(t, err)
+	delta := testApp(t, source, ep, "no such app")
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 0, len(delta.LocalDeltas))
 
@@ -2201,14 +2150,11 @@ byte "myval"
 	algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
 	ledger.applications[101].GlobalState["mykey"] = algoValue
 
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	delta, err = ledger.GetDelta(&ep.Txn.Txn)
-	require.NoError(t, err)
+	delta = testApp(t, source, ep)
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 0, len(delta.LocalDeltas))
 }
+
 func TestAppGlobalDelete(t *testing.T) {
 	t.Parallel()
 
@@ -2249,23 +2195,8 @@ int 1
 	)
 	ep.Ledger = ledger
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
-	sb := strings.Builder{}
-	ep.Trace = &sb
 
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	cost, err := CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, cost < 1000)
-	pass, err := EvalStateful(ops.Program, ep)
-	if !pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.NoError(t, err)
-	require.True(t, pass)
-	delta, err := ledger.GetDelta(&ep.Txn.Txn)
-	require.NoError(t, err)
+	delta := testApp(t, source, ep)
 	require.Equal(t, 2, len(delta.GlobalDelta))
 	require.Equal(t, 0, len(delta.LocalDeltas))
 
@@ -2285,14 +2216,7 @@ app_global_get_ex
 ==  // two zeros
 `
 	ep.Txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	delta, err = ledger.GetDelta(&ep.Txn.Txn)
-	require.NoError(t, err)
-
+	delta = testApp(t, source, ep)
 	require.Equal(t, 1, len(delta.GlobalDelta))
 	vd := delta.GlobalDelta["ALGO"]
 	require.Equal(t, basics.DeleteAction, vd.Action)
@@ -2317,14 +2241,7 @@ byte 0x414c474f41
 int 0x78
 app_global_put
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	delta, err = ledger.GetDelta(&ep.Txn.Txn)
-	require.NoError(t, err)
-
+	delta = testApp(t, source, ep)
 	require.Equal(t, 1, len(delta.GlobalDelta))
 	vd = delta.GlobalDelta["ALGOA"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
@@ -2346,14 +2263,7 @@ int 0x78
 app_global_put
 int 1
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	delta, err = ledger.GetDelta(&ep.Txn.Txn)
-	require.NoError(t, err)
-
+	delta = testApp(t, source, ep)
 	require.Equal(t, 1, len(delta.GlobalDelta))
 	vd = delta.GlobalDelta["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
@@ -2375,17 +2285,7 @@ byte 0x414c474f
 app_global_del
 int 1
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	cost, err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, cost < 1000)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	delta, err = ledger.GetDelta(&ep.Txn.Txn)
-	require.NoError(t, err)
-
+	delta = testApp(t, source, ep)
 	require.Equal(t, 1, len(delta.GlobalDelta))
 	vd = delta.GlobalDelta["ALGO"]
 	require.Equal(t, basics.DeleteAction, vd.Action)
@@ -2407,16 +2307,7 @@ byte 0x414c474f41
 app_global_del
 int 1
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	cost, err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, cost < 1000)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-	delta, err = ledger.GetDelta(&ep.Txn.Txn)
-	require.NoError(t, err)
+	delta = testApp(t, source, ep)
 	require.Equal(t, 1, len(delta.GlobalDelta))
 	require.Equal(t, 0, len(delta.LocalDeltas))
 }
