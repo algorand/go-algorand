@@ -2715,20 +2715,22 @@ func TestReturnTypes(t *testing.T) {
 		"load":              "load 0",
 		"store":             "store 0",
 		"dig":               "dig 0",
-		"intc":              "intcblock 0\nintc 0",
-		"intc_0":            "intcblock 0\nintc_0",
-		"intc_1":            "intcblock 0 0\nintc_1",
-		"intc_2":            "intcblock 0 0 0\nintc_2",
-		"intc_3":            "intcblock 0 0 0 0\nintc_3",
-		"bytec":             "bytecblock 0x32\nbytec 0",
-		"bytec_0":           "bytecblock 0x32\nbytec_0",
-		"bytec_1":           "bytecblock 0x32 0x33\nbytec_1",
-		"bytec_2":           "bytecblock 0x32 0x33 0x34\nbytec_2",
-		"bytec_3":           "bytecblock 0x32 0x33 0x34 0x35\nbytec_3",
+		"intc":              "intcblock 0; intc 0",
+		"intc_0":            "intcblock 0; intc_0",
+		"intc_1":            "intcblock 0 0; intc_1",
+		"intc_2":            "intcblock 0 0 0; intc_2",
+		"intc_3":            "intcblock 0 0 0 0; intc_3",
+		"bytec":             "bytecblock 0x32; bytec 0",
+		"bytec_0":           "bytecblock 0x32; bytec_0",
+		"bytec_1":           "bytecblock 0x32 0x33; bytec_1",
+		"bytec_2":           "bytecblock 0x32 0x33 0x34; bytec_2",
+		"bytec_3":           "bytecblock 0x32 0x33 0x34 0x35; bytec_3",
 		"substring":         "substring 0 2",
-		"ed25519verify":     "pop\npop\npop\nint 1", // ignore
+		"ed25519verify":     "pop; pop; pop; int 1", // ignore
 		"asset_params_get":  "asset_params_get AssetTotal",
 		"asset_holding_get": "asset_holding_get AssetBalance",
+		"stxn":              "stxn Sender",
+		"stxna":             "stxna ApplicationArgs 0",
 	}
 
 	byName := opsByName[LogicVersion]

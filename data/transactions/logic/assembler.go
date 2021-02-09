@@ -301,6 +301,32 @@ func (ops *OpStream) Gtxna(gid, fieldNum uint64, arrayFieldIdx uint64) {
 	ops.tpush(TxnFieldTypes[fieldNum])
 }
 
+// Gtxn writes opcodes for loading a field from the current transaction
+func (ops *OpStream) Stxn(fieldNum uint64) {
+	if fieldNum >= uint64(len(TxnFieldNames)) {
+		ops.errorf("invalid stxn field: %d", fieldNum)
+		fieldNum = 0 // avoid further error in tpush as we forge ahead
+	}
+	ops.pending.WriteByte(0x81)
+	ops.pending.WriteByte(uint8(fieldNum))
+	ops.tpush(TxnFieldTypes[fieldNum])
+}
+
+// Gtxna writes opcodes for loading an array field from the current transaction
+func (ops *OpStream) Stxna(fieldNum uint64, arrayFieldIdx uint64) {
+	if fieldNum >= uint64(len(TxnFieldNames)) {
+		ops.errorf("invalid stxna field: %d", fieldNum)
+		fieldNum = 0 // avoid further error in tpush as we forge ahead
+	}
+	if arrayFieldIdx > 255 {
+		ops.errorf("gtxna array index beyond 255: %d", arrayFieldIdx)
+	}
+	ops.pending.WriteByte(0x82)
+	ops.pending.WriteByte(uint8(fieldNum))
+	ops.pending.WriteByte(uint8(arrayFieldIdx))
+	ops.tpush(TxnFieldTypes[fieldNum])
+}
+
 // Global writes opcodes for loading an evaluator-global field
 func (ops *OpStream) Global(val GlobalField) {
 	ops.pending.WriteByte(0x32)
@@ -695,7 +721,7 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("txn unknown arg: %v", args[0])
+		return ops.errorf("txn unknown field: %v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
@@ -726,11 +752,11 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("txna unknown arg: %v", args[0])
+		return ops.errorf("txna unknown field: %v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("txna unknown arg: %v", args[0])
+		return ops.errorf("txna unknown field: %v", args[0])
 	}
 	if fs.version > ops.Version {
 		return ops.errorf("txna %s available in version %d. Missed #pragma version?", args[0], fs.version)
@@ -754,7 +780,7 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
-		return ops.errorf("gtxn unknown arg: %v", args[1])
+		return ops.errorf("gtxn unknown field: %v", args[1])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
@@ -788,11 +814,11 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
-		return ops.errorf("gtxna unknown arg: %v", args[1])
+		return ops.errorf("gtxna unknown field: %v", args[1])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("gtxna unknown arg: %v", args[1])
+		return ops.errorf("gtxna unknown field: %v", args[1])
 	}
 	if fs.version > ops.Version {
 		return ops.errorf("gtxna %s available in version %d. Missed #pragma version?", args[1], fs.version)
@@ -806,6 +832,53 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+func assembleStxn(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) == 2 {
+		return assembleStxna(ops, spec, args)
+	}
+	if len(args) != 1 {
+		return ops.error("stxn expects one or two immediate arguments")
+	}
+	fs, ok := txnFieldSpecByName[args[0]]
+	if !ok {
+		return ops.errorf("stxn unknown field: %v", args[0])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if ok {
+		return ops.errorf("found gtxna field %v in gtxn op", args[0])
+	}
+	if fs.version > ops.Version {
+		return ops.errorf("gtxn %s available in version %d. Missed #pragma version?", args[0], fs.version)
+	}
+	val := fs.field
+	ops.Stxn(uint64(val))
+	return nil
+}
+
+func assembleStxna(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 2 {
+		return ops.error("stxna expects two immediate arguments")
+	}
+	fs, ok := txnFieldSpecByName[args[0]]
+	if !ok {
+		return ops.errorf("stxna unknown field: %v", args[0])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if !ok {
+		return ops.errorf("stxna unknown field: %v", args[0])
+	}
+	if fs.version > ops.Version {
+		return ops.errorf("stxna %s available in version %d. Missed #pragma version?", args[0], fs.version)
+	}
+	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
+	if err != nil {
+		return ops.error(err)
+	}
+	fieldNum := fs.field
+	ops.Stxna(uint64(fieldNum), uint64(arrayFieldIdx))
+	return nil
+}
+
 func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		ops.error("global expects one argument")
@@ -813,7 +886,7 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := globalFieldSpecByName[args[0]]
 	if !ok {
-		ops.errorf("global unknown arg: %v", args[0])
+		ops.errorf("global unknown field: %v", args[0])
 		fs, _ = globalFieldSpecByName[GlobalFieldNames[0]]
 	}
 	if fs.version > ops.Version {
@@ -1556,6 +1629,7 @@ func disBytecblock(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = dis.out.Write([]byte("\n"))
 }
 
+// This is also used to disassemble stxn
 func disTxn(dis *disassembleState, spec *OpSpec) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
@@ -1569,9 +1643,10 @@ func disTxn(dis *disassembleState, spec *OpSpec) {
 		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
 		return
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "txn %s\n", TxnFieldNames[txarg])
+	_, dis.err = fmt.Fprintf(dis.out, "%s %s\n", spec.Name, TxnFieldNames[txarg])
 }
 
+// This is also used to disassemble stxna
 func disTxna(dis *disassembleState, spec *OpSpec) {
 	lastIdx := dis.pc + 2
 	if len(dis.program) <= lastIdx {
@@ -1586,7 +1661,7 @@ func disTxna(dis *disassembleState, spec *OpSpec) {
 		return
 	}
 	arrayFieldIdx := dis.program[dis.pc+2]
-	_, dis.err = fmt.Fprintf(dis.out, "txna %s %d\n", TxnFieldNames[txarg], arrayFieldIdx)
+	_, dis.err = fmt.Fprintf(dis.out, "%s %s %d\n", spec.Name, TxnFieldNames[txarg], arrayFieldIdx)
 }
 
 func disGtxn(dis *disassembleState, spec *OpSpec) {

@@ -1733,22 +1733,11 @@ int 1
 
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(source, v)
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			cost, err := Check(ops.Program, defaultEvalParams(&sb, nil))
-			if err != nil {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			txn := makeSampleTxn()
 			// RekeyTo not allowed in TEAL v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
 			}
-			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{
 				txn.Txn.Sender[:],
 				txn.Txn.Receiver[:],
@@ -1757,18 +1746,43 @@ int 1
 				txn.Txn.SelectionPK[:],
 				txn.Txn.Note,
 			}
-			txgroup := makeSampleTxnGroup(txn)
-			sb = strings.Builder{}
-			ep := defaultEvalParams(&sb, &txn)
-			ep.TxnGroup = txgroup
-			pass, err := Eval(ops.Program, ep)
-			if !pass || err != nil {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
+			ep := defaultEvalParams(nil, &txn)
+			ep.TxnGroup = makeSampleTxnGroup(txn)
+			testLogic(t, source, v, ep)
+			if v >= 3 {
+				stxnProg := strings.ReplaceAll(source, "gtxn 0", "int 0; stxn")
+				stxnProg = strings.ReplaceAll(stxnProg, "gtxn 1", "int 1; stxn")
+				stxnProg = strings.ReplaceAll(stxnProg, "gtxna 0", "int 0; stxna")
+				stxnProg = strings.ReplaceAll(stxnProg, "gtxna 1", "int 1; stxna")
+				require.False(t, strings.Contains(stxnProg, "gtxn")) // Got 'em all
+				testLogic(t, stxnProg, v, ep)
 			}
-			require.NoError(t, err)
-			require.True(t, pass)
 		})
+	}
+}
+
+func testLogic(t *testing.T, program string, v uint64, ep EvalParams, problems ...string) {
+	ops := testProg(t, program, v)
+	sb := &strings.Builder{}
+	ep.Trace = sb
+	ep.Txn.Lsig.Logic = ops.Program
+	cost, err := Check(ops.Program, ep)
+	if err != nil {
+		t.Log(hex.EncodeToString(ops.Program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+
+	pass, err := Eval(ops.Program, ep)
+	if len(problems) == 0 {
+		require.NoError(t, err, sb.String())
+		require.True(t, pass, sb.String())
+	} else {
+		require.Error(t, err, sb.String())
+		for _, problem := range problems {
+			require.Contains(t, err.Error(), problem)
+		}
 	}
 }
 
@@ -3723,6 +3737,8 @@ func TestAllowedOpcodesV3(t *testing.T) {
 		"swap":        "int 1; byte \"x\"; swap",
 		"select":      "int 1; byte \"x\"; int 1; select",
 		"dig":         "int 1; int 1; dig 1",
+		"stxn":        "int 0; stxn FirstValid",
+		"stxna":       "int 0; stxna Accounts 0",
 	}
 
 	excluded := map[string]bool{}

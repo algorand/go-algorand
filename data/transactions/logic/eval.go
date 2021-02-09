@@ -1531,6 +1531,70 @@ func opGtxna(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
+func opStxn(cx *evalContext) {
+	last := len(cx.stack) - 1
+	gtxid := int(cx.stack[last].Uint)
+	if gtxid >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("stxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	}
+	tx := &cx.TxnGroup[gtxid].Txn
+	field := TxnField(uint64(cx.program[cx.pc+1]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	var sv stackValue
+	var err error
+	if TxnField(field) == GroupIndex {
+		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
+		sv.Uint = uint64(gtxid)
+	} else {
+		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
+		if err != nil {
+			cx.err = err
+			return
+		}
+	}
+	cx.stack[last] = sv
+}
+
+func opStxna(cx *evalContext) {
+	last := len(cx.stack) - 1
+	gtxid := int(cx.stack[last].Uint)
+	if gtxid >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("stxna lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	}
+	tx := &cx.TxnGroup[gtxid].Txn
+	field := TxnField(uint64(cx.program[cx.pc+1]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
+		return
+	}
+	var sv stackValue
+	var err error
+	arrayFieldIdx := uint64(cx.program[cx.pc+2])
+	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[last] = sv
+}
+
 func (cx *evalContext) getRound() (rnd uint64, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")

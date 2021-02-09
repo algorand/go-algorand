@@ -180,6 +180,10 @@ var OpSpecs = []OpSpec{
 	// There must be at least one thing on the stack for dig, but
 	// it would be nice if we did better checking than that.
 	{0x80, "dig", opDig, asmImmByte, disDefault, oneAny, twoAny, 3, modeAny, opSize{1, 2, nil}},
+
+	// Like gtxn, but gets txn index from stack, rather than immediate arg
+	{0x81, "stxn", opStxn, assembleStxn, disTxn, oneInt, oneAny, 3, modeAny, opSize{1, 2, nil}},
+	{0x82, "stxna", opStxna, assembleStxna, disTxna, oneInt, oneAny, 3, modeAny, opSize{1, 3, nil}},
 }
 
 type sortByOpcode []OpSpec

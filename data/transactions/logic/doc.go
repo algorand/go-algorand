@@ -84,8 +84,10 @@ var opDocList = []stringString{
 	{"arg_3", "push Args[3] to stack"},
 	{"txn", "push field from current transaction to stack"},
 	{"gtxn", "push field to the stack from a transaction in the current transaction group"},
-	{"txna", "push value of an array field from current transaction to stack"},
-	{"gtxna", "push value of a field to the stack from a transaction in the current transaction group"},
+	{"stxn", "push field to the stack from transaction A in the current group"},
+	{"txna", "push value from an array field from current transaction to stack"},
+	{"gtxna", "push value from an array field from a transaction in the current transaction group"},
+	{"stxna", "pusha value from an array field from transaction A in the current group"},
 	{"global", "push value from globals to stack"},
 	{"load", "copy a value from scratch space to the stack"},
 	{"store", "pop a value from the stack and store to scratch space"},
@@ -141,8 +143,10 @@ var opcodeImmediateNoteList = []stringString{
 	{"arg", "{uint8 arg index N}"},
 	{"txn", "{uint8 transaction field index}"},
 	{"gtxn", "{uint8 transaction group index}{uint8 transaction field index}"},
+	{"stxn", "{uint8 transaction field index}"},
 	{"txna", "{uint8 transaction field index}{uint8 transaction field array index}"},
 	{"gtxna", "{uint8 transaction group index}{uint8 transaction field index}{uint8 transaction field array index}"},
+	{"stxna", "{uint8 transaction field index}{uint8 transaction field array index}"},
 	{"global", "{uint8 global field index}"},
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 	{"bz", "{0..0x7fff forward branch offset, big endian}"},
@@ -150,6 +154,7 @@ var opcodeImmediateNoteList = []stringString{
 	{"load", "{uint8 position in scratch space to load from}"},
 	{"store", "{uint8 position in scratch space to store to}"},
 	{"substring", "{uint8 start position}{uint8 end position}"},
+	{"dig", "{uint8 depth}"},
 	{"asset_holding_get", "{uint8 asset holding field index}"},
 	{"asset_params_get", "{uint8 asset params field index}"},
 }
@@ -175,6 +180,7 @@ var opDocExtraList = []stringString{
 	{"+", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`."},
 	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
 	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`."},
+	{"stxn", "for notes on transaction fields available, see `txn`. If top of stack is _i_, `stxn field` is equivalent to `gtxn _i_ field`."},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes."},
 	{"concat", "`concat` panics if the result would be greater than 4096 bytes."},
 	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise."},
@@ -209,7 +215,7 @@ type OpGroup struct {
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"}},
-	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
+	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "stxn", "stxna", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert"}},
 	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
