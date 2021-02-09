@@ -179,11 +179,15 @@ type (
 	// (instead of materializing it separately, like balances).
 	//msgp:ignore UpgradeState
 	UpgradeState struct {
-		CurrentProtocol        protocol.ConsensusVersion `codec:"proto"`
-		NextProtocol           protocol.ConsensusVersion `codec:"nextproto"`
-		NextProtocolApprovals  uint64                    `codec:"nextyes"`
-		NextProtocolVoteBefore basics.Round              `codec:"nextbefore"`
-		NextProtocolSwitchOn   basics.Round              `codec:"nextswitch"`
+		CurrentProtocol       protocol.ConsensusVersion `codec:"proto"`
+		NextProtocol          protocol.ConsensusVersion `codec:"nextproto"`
+		NextProtocolApprovals uint64                    `codec:"nextyes"`
+		// NextProtocolVoteBefore specify the last voting round for the next protocol proposal. If there is no voting for
+		// an upgrade taking place, this would be zero.
+		NextProtocolVoteBefore basics.Round `codec:"nextbefore"`
+		// NextProtocolSwitchOn specify the round number at which the next protocol would be adopted. If there is no upgrade taking place,
+		// nor a wait for the next protocol, this would be zero.
+		NextProtocolSwitchOn basics.Round `codec:"nextswitch"`
 	}
 
 	// CompactCertState tracks the state of compact certificates.
