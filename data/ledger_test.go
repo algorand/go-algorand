@@ -359,15 +359,17 @@ func TestConsensusVersion(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, previousProtocol, ver)
 	}
-	// the next round can also be known to have the previous version.
-	ver, err := l.ConsensusVersion(basics.Round(consensusParams.MaxTxnLife + 5))
-	require.NoError(t, err)
-	require.Equal(t, previousProtocol, ver)
+	// the next UpgradeVoteRounds can also be known to have the previous version.
+	for rnd := basics.Round(consensusParams.MaxTxnLife + 5); rnd < basics.Round(consensusParams.MaxTxnLife+5+consensusParams.UpgradeVoteRounds); rnd++ {
+		ver, err := l.ConsensusVersion(rnd)
+		require.NoError(t, err)
+		require.Equal(t, previousProtocol, ver)
+	}
 
 	// but two rounds ahead is not known.
-	ver, err = l.ConsensusVersion(basics.Round(consensusParams.MaxTxnLife + 6))
+	ver, err := l.ConsensusVersion(basics.Round(consensusParams.MaxTxnLife + 6 + consensusParams.UpgradeVoteRounds))
 	require.Equal(t, protocol.ConsensusVersion(""), ver)
-	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(consensusParams.MaxTxnLife + 6), Latest: basics.Round(consensusParams.MaxTxnLife + 4), Committed: basics.Round(consensusParams.MaxTxnLife + 4)}, err)
+	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(consensusParams.MaxTxnLife + 6 + consensusParams.UpgradeVoteRounds), Latest: basics.Round(consensusParams.MaxTxnLife + 4), Committed: basics.Round(consensusParams.MaxTxnLife + 4)}, err)
 
 	// check round #1 which was already dropped.
 	ver, err = l.ConsensusVersion(basics.Round(1))

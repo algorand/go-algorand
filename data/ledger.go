@@ -329,8 +329,13 @@ func (l *Ledger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, er
 	if err == nil {
 		// check to see if we have a protocol upgrade.
 		if latestBlockhdr.NextProtocolSwitchOn == 0 {
-			// no protocol upgrade taking place, which implies the next round has the same version as the current one.
-			if r == (latestBlockhdr.Round + 1) {
+			// no protocol upgrade taking place, we have *at least* UpgradeVoteRounds before the protocol version would get changed.
+			// it's safe to ignore the error case here since we know that we couldn't reached to this "known" round
+			// without having the binary supporting this protocol version.
+			currentConsensusParams, _ := config.Consensus[latestBlockhdr.CurrentProtocol]
+			// we're using <= here since there is no current upgrade on this round, and if there will be one on the subsequent round
+			// it would still be correct until (latestBlockhdr.Round + currentConsensusParams.UpgradeVoteRounds)
+			if r <= latestBlockhdr.Round+basics.Round(currentConsensusParams.UpgradeVoteRounds) {
 				return latestBlockhdr.CurrentProtocol, nil
 			}
 			// otherwise, we can't really tell.
