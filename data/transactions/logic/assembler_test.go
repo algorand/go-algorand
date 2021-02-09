@@ -769,6 +769,7 @@ byte base64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
 ==
 int 1 //sometext
 && //somemoretext
+int 1
 ==
 byte b64 //GWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz+8=
 byte b64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
@@ -776,10 +777,9 @@ byte b64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
 ||`
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(text, v)
-			require.NoError(t, err)
+			ops := testProg(t, text, v)
 			s := hex.EncodeToString(ops.Program)
-			require.Equal(t, mutateProgVersion(v, "01200101260320fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfed206af19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfff20fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfef2829122210122a291211"), s)
+			require.Equal(t, mutateProgVersion(v, "01200101260320fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfed206af19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfff20fff19644cfb2cb70426af0435cefc5613359ea8d896a2e5e76c30205d0c4cfef282912221022122a291211"), s)
 		})
 	}
 }
@@ -1194,8 +1194,7 @@ label1:
 func TestAssembleOffsets(t *testing.T) {
 	t.Parallel()
 	source := "err"
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 2, len(ops.Program))
 	require.Equal(t, 1, len(ops.OffsetToLine))
 	// vlen
@@ -1211,8 +1210,7 @@ func TestAssembleOffsets(t *testing.T) {
 // comment
 err
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 3, len(ops.Program))
 	require.Equal(t, 2, len(ops.OffsetToLine))
 	// vlen
@@ -1229,13 +1227,12 @@ err
 	require.Equal(t, 2, line)
 
 	source = `err
-bnz label1
+b label1
 err
 label1:
 err
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 7, len(ops.Program))
 	require.Equal(t, 4, len(ops.OffsetToLine))
 	// vlen
@@ -1246,15 +1243,15 @@ err
 	line, ok = ops.OffsetToLine[1]
 	require.True(t, ok)
 	require.Equal(t, 0, line)
-	// bnz
+	// b
 	line, ok = ops.OffsetToLine[2]
 	require.True(t, ok)
 	require.Equal(t, 1, line)
-	// bnz byte 1
+	// b byte 1
 	line, ok = ops.OffsetToLine[3]
 	require.False(t, ok)
 	require.Equal(t, 0, line)
-	// bnz byte 2
+	// b byte 2
 	line, ok = ops.OffsetToLine[4]
 	require.False(t, ok)
 	require.Equal(t, 0, line)
@@ -1271,8 +1268,7 @@ err
 // comment
 !
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 6, len(ops.Program))
 	require.Equal(t, 2, len(ops.OffsetToLine))
 	// vlen

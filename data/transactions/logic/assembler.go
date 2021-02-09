@@ -157,7 +157,6 @@ func (ops *OpStream) Intc(constIndex uint) {
 	} else {
 		ops.trace("intc %d %d", constIndex, ops.intc[constIndex])
 	}
-	ops.tpush(StackUint64)
 }
 
 // Uint writes opcodes for loading a uint literal
@@ -201,7 +200,6 @@ func (ops *OpStream) Bytec(constIndex uint) {
 	} else {
 		ops.trace("bytec %d %s", constIndex, hex.EncodeToString(ops.bytec[constIndex]))
 	}
-	ops.tpush(StackBytes)
 }
 
 // ByteLiteral writes opcodes and data for loading a []byte literal
@@ -241,7 +239,6 @@ func (ops *OpStream) Arg(val uint64) error {
 		ops.pending.WriteByte(0x2c)
 		ops.pending.WriteByte(uint8(val))
 	}
-	ops.tpush(StackBytes)
 	return nil
 }
 
@@ -337,9 +334,9 @@ func (ops *OpStream) AssetParams(val uint64) {
 }
 
 func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.checkArgs(*spec)
 	if len(args) != 1 {
-		ops.error("int needs one argument")
-		args = []string{"0"} // By continuing, Uint will maintain type stack.
+		return ops.error("int needs one argument")
 	}
 	// check friendly TypeEnum constants
 	te, isTypeEnum := txnTypeConstToUint64[args[0]]
@@ -361,8 +358,7 @@ func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		ops.error(err)
-		val = 0 // By continuing, Uint will maintain type stack.
+		return ops.error(err)
 	}
 	ops.Uint(val)
 	return nil
@@ -370,27 +366,25 @@ func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
 
 // Explicit invocation of const lookup and push
 func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.checkArgs(*spec)
 	if len(args) != 1 {
-		ops.error("intc operation needs one argument")
-		args = []string{"0"} // By continuing, Intc will maintain type stack.
+		return ops.error("intc operation needs one argument")
 	}
 	constIndex, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		ops.error(err)
-		constIndex = 0 // By continuing, Intc will maintain type stack.
+		return ops.error(err)
 	}
 	ops.Intc(uint(constIndex))
 	return nil
 }
 func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.checkArgs(*spec)
 	if len(args) != 1 {
 		ops.error("bytec operation needs one argument")
-		args = []string{"0"} // By continuing, Bytec will maintain type stack.
 	}
 	constIndex, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		ops.error(err)
-		constIndex = 0 // By continuing, Bytec will maintain type stack.
 	}
 	ops.Bytec(uint(constIndex))
 	return nil
@@ -544,16 +538,13 @@ func parseStringLiteral(input string) (result []byte, err error) {
 // byte 0x....
 // byte "this is a string\n"
 func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
-	var val []byte
-	var err error
+	ops.checkArgs(*spec)
 	if len(args) == 0 {
-		ops.error("byte operation needs byte literal argument")
-		args = []string{"0x00"} // By continuing, ByteLiteral will maintain type stack.
+		return ops.error("byte operation needs byte literal argument")
 	}
-	val, _, err = parseBinaryArgs(args)
+	val, _, err := parseBinaryArgs(args)
 	if err != nil {
-		ops.error(err)
-		val = []byte{} // By continuing, ByteLiteral will maintain type stack.
+		return ops.error(err)
 	}
 	ops.ByteLiteral(val)
 	return nil
@@ -611,41 +602,38 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 // addr A1EU...
 // parses base32-with-checksum account address strings into a byte literal
 func assembleAddr(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.checkArgs(*spec)
 	if len(args) != 1 {
-		ops.error("addr operation needs one argument")
-		// By continuing, ByteLiteral will maintain type stack.
-		args = []string{"7777777777777777777777777777777777777777777777777774MSJUVU"}
+		return ops.error("addr operation needs one argument")
 	}
 	addr, err := basics.UnmarshalChecksumAddress(args[0])
 	if err != nil {
-		ops.error(err)
-		addr = basics.Address{} // By continuing, ByteLiteral will maintain type stack.
+		return ops.error(err)
 	}
 	ops.ByteLiteral(addr[:])
 	return nil
 }
 
 func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.checkArgs(*spec)
 	if len(args) != 1 {
-		ops.error("arg operation needs one argument")
-		args = []string{"0"}
+		return ops.error("arg operation needs one argument")
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		ops.error(err)
-		val = 0 // Let ops.Arg maintain type stack
+		return ops.error(err)
 	}
 	ops.Arg(val)
 	return nil
 }
 
 func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.checkArgs(*spec)
 	if len(args) != 1 {
-		ops.error("branch operation needs label argument") // proceeding so checkArgs runs
+		return ops.error("branch operation needs label argument")
 	} else {
 		ops.ReferToLabel(ops.pending.Len(), args[0])
 	}
-	ops.checkArgs(*spec)
 	ops.pending.WriteByte(spec.Opcode)
 	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.pending.WriteByte(0)
@@ -653,82 +641,51 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func assembleLoad(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) != 1 {
-		ops.error("load operation needs one argument")
-		args = []string{"0"} // By continuing, tpush will maintain type stack.
-	}
-	val, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		ops.error(err)
-		val = 0
-	}
-	if val > EvalMaxScratchSize {
-		ops.errorf("load outside 0..255: %d", val)
-		val = 0
-	}
-	ops.pending.WriteByte(0x34)
-	ops.pending.WriteByte(byte(val))
-	ops.tpush(StackAny)
-	return nil
-}
-
-func assembleStore(ops *OpStream, spec *OpSpec, args []string) error {
-	if len(args) != 1 {
-		ops.error("store operation needs one argument")
-		args = []string{"0"} // By continuing, checkArgs, tpush will maintain type stack.
-	}
-	val, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		ops.error(err)
-		val = 0
-	}
-	if val > EvalMaxScratchSize {
-		ops.errorf("store outside 0..255: %d", val)
-		val = 0
-	}
+func asmLoadStore(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.checkArgs(*spec)
+	if len(args) != 1 {
+		return ops.errorf("%s needs one immediate argument", spec.Name)
+	}
+	val, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return ops.error(err)
+	}
+	if val > EvalMaxScratchSize {
+		return ops.errorf("%s outside 0..255: %d", spec.Name, val)
+	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(byte(val))
 	return nil
 }
 
 func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.checkArgs(*spec)
 	if len(args) != 2 {
-		ops.error("substring expects 2 args")
-		args = []string{"0", "0"} // By continuing, checkArgs, tpush will maintain type stack.
+		return ops.error("substring expects 2 args")
 	}
 	start, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		ops.error(err)
-		start = 0
+		return ops.error(err)
 	}
 	if start > EvalMaxScratchSize {
-		ops.error("substring limited to 0..255")
-		start = 0
+		return ops.error("substring limited to 0..255")
 	}
 
 	end, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
-		ops.error(err)
-		end = start
+		return ops.error(err)
 	}
 	if end > EvalMaxScratchSize {
-		ops.error("substring limited to 0..255")
-		end = start
+		return ops.error("substring limited to 0..255")
 	}
 
 	if end < start {
-		ops.error("substring end is before start")
-		end = start
+		return ops.error("substring end is before start")
 	}
 	opcode := byte(0x51)
-	ops.checkArgs(*spec)
 	ops.pending.WriteByte(opcode)
 	ops.pending.WriteByte(byte(start))
 	ops.pending.WriteByte(byte(end))
-	ops.trace(" pushes([]byte)")
-	ops.tpush(StackBytes)
 	return nil
 }
 
@@ -910,34 +867,21 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 type assembleFunc func(*OpStream, *OpSpec, []string) error
 
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.checkArgs(*spec)
 	if len(args) != 0 {
 		ops.errorf("%s expects no arguments", spec.Name)
-	}
-	ops.checkArgs(*spec)
-	if len(spec.Returns) > 0 {
-		ops.tpusha(spec.Returns)
-		ops.trace(" pushes(%s", spec.Returns[0].String())
-		if len(spec.Returns) > 1 {
-			for _, rt := range spec.Returns[1:] {
-				ops.trace(", %s", rt.String())
-			}
-		}
-		ops.trace(")")
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	return nil
 }
 
 // keywords handle parsing and assembling special asm language constructs like 'addr'
-var keywords map[string]assembleFunc
-
-func init() {
-	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
-	keywords = make(map[string]assembleFunc)
-	keywords["int"] = assembleInt
-	keywords["byte"] = assembleByte
-	keywords["addr"] = assembleAddr // parse basics.Address, actually just another []byte constant
-	// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
+// We use OpSpec here, but somewhat degenerate, since they don't have opcodes or eval functions
+var keywords = map[string]OpSpec{
+	"int":  {0, "int", nil, assembleInt, nil, nil, oneInt, 1, modeAny, opSize{1, 2, nil}},
+	"byte": {0, "byte", nil, assembleByte, nil, nil, oneBytes, 1, modeAny, opSize{1, 2, nil}},
+	// parse basics.Address, actually just another []byte constant
+	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opSize{1, 2, nil}},
 }
 
 type lineError struct {
@@ -960,6 +904,9 @@ func (le *lineError) Unwrap() error {
 func typecheck(expected, got StackType) bool {
 	// Some ops push 'any' and we wait for run time to see what it is.
 	// Some of those 'any' are based on fields that we _could_ know now but haven't written a more detailed system of typecheck for (yet).
+	if expected == StackAny && got == StackNone { // Any is lenient, but stack can't be empty
+		return false
+	}
 	if (expected == StackAny) || (got == StackAny) {
 		return true
 	}
@@ -1071,6 +1018,17 @@ func (ops *OpStream) checkArgs(spec OpSpec) {
 	if !firstPop {
 		ops.trace(")")
 	}
+
+	if len(spec.Returns) > 0 {
+		ops.tpusha(spec.Returns)
+		ops.trace(" pushes(%s", spec.Returns[0].String())
+		if len(spec.Returns) > 1 {
+			for _, rt := range spec.Returns[1:] {
+				ops.trace(", %s", rt.String())
+			}
+		}
+		ops.trace(")")
+	}
 }
 
 // assemble reads text from an input and accumulates the program
@@ -1100,19 +1058,13 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		}
 		opstring := fields[0]
 		spec, ok := opsByName[ops.Version][opstring]
-		var asmFunc assembleFunc
-		if ok {
-			asmFunc = spec.asm
-		} else {
-			kwFunc, ok := keywords[opstring]
-			if ok {
-				asmFunc = kwFunc
-			}
+		if !ok {
+			spec, ok = keywords[opstring]
 		}
-		if asmFunc != nil {
+		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			ops.RecordSourceLine()
-			asmFunc(ops, &spec, fields[1:])
+			spec.asm(ops, &spec, fields[1:])
 			ops.trace("\n")
 			continue
 		}
@@ -1580,17 +1532,6 @@ func disIntcblock(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = dis.out.Write([]byte("\n"))
 }
 
-func disIntc(dis *disassembleState, spec *OpSpec) {
-	lastIdx := dis.pc + 1
-	if len(dis.program) <= lastIdx {
-		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
-	}
-	dis.nextpc = dis.pc + 2
-	_, dis.err = fmt.Fprintf(dis.out, "intc %d\n", dis.program[dis.pc+1])
-}
-
 func disBytecblock(dis *disassembleState, spec *OpSpec) {
 	var bytec [][]byte
 	bytec, dis.nextpc, dis.err = parseBytecBlock(dis.program, dis.pc)
@@ -1608,28 +1549,6 @@ func disBytecblock(dis *disassembleState, spec *OpSpec) {
 		}
 	}
 	_, dis.err = dis.out.Write([]byte("\n"))
-}
-
-func disBytec(dis *disassembleState, spec *OpSpec) {
-	lastIdx := dis.pc + 1
-	if len(dis.program) <= lastIdx {
-		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
-	}
-	dis.nextpc = dis.pc + 2
-	_, dis.err = fmt.Fprintf(dis.out, "bytec %d\n", dis.program[dis.pc+1])
-}
-
-func disArg(dis *disassembleState, spec *OpSpec) {
-	lastIdx := dis.pc + 1
-	if len(dis.program) <= lastIdx {
-		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
-	}
-	dis.nextpc = dis.pc + 2
-	_, dis.err = fmt.Fprintf(dis.out, "arg %d\n", dis.program[dis.pc+1])
 }
 
 func disTxn(dis *disassembleState, spec *OpSpec) {
@@ -1736,7 +1655,8 @@ func disBranch(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "%s %s\n", spec.Name, label)
 }
 
-func disLoad(dis *disassembleState, spec *OpSpec) {
+// Disassemble an opcode that takes a single byte immediate arg
+func disImmByte(dis *disassembleState, spec *OpSpec) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
@@ -1745,19 +1665,7 @@ func disLoad(dis *disassembleState, spec *OpSpec) {
 	}
 	n := uint(dis.program[dis.pc+1])
 	dis.nextpc = dis.pc + 2
-	_, dis.err = fmt.Fprintf(dis.out, "load %d\n", n)
-}
-
-func disStore(dis *disassembleState, spec *OpSpec) {
-	lastIdx := dis.pc + 1
-	if len(dis.program) <= lastIdx {
-		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
-	}
-	n := uint(dis.program[dis.pc+1])
-	dis.nextpc = dis.pc + 2
-	_, dis.err = fmt.Fprintf(dis.out, "store %d\n", n)
+	_, dis.err = fmt.Fprintf(dis.out, "%s %d\n", spec.Name, n)
 }
 
 func disAssetHolding(dis *disassembleState, spec *OpSpec) {

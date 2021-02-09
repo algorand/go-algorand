@@ -1982,7 +1982,7 @@ int 0x310
 
 func TestStringOps(t *testing.T) {
 	t.Parallel()
-	program, err := assembleStringWithTrace(t, `byte 0x123456789abc
+	ops := testProg(t, `byte 0x123456789abc
 substring 1 3
 byte 0x3456
 ==
@@ -2009,14 +2009,13 @@ len
 int 0
 ==
 &&`, 2)
-	require.NoError(t, err)
-	cost, err := Check(program, defaultEvalParams(nil, nil))
+	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
-	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 	if !pass {
-		t.Log(hex.EncodeToString(program))
+		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.NoError(t, err)
@@ -2025,7 +2024,7 @@ int 0
 
 func TestConsOverflow(t *testing.T) {
 	t.Parallel()
-	program, err := assembleStringWithTrace(t, `byte 0xf000000000000000
+	ops := testProg(t, `byte 0xf000000000000000
 dup
 concat
 dup
@@ -2063,14 +2062,13 @@ concat
 dup
 concat
 len`, 2)
-	require.NoError(t, err)
-	cost, err := Check(program, defaultEvalParams(nil, nil))
+	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
-	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 	if pass {
-		t.Log(hex.EncodeToString(program))
+		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
@@ -2081,26 +2079,23 @@ len`, 2)
 func TestSubstringFlop(t *testing.T) {
 	t.Parallel()
 	// fails in compiler
-	program, err := assembleStringWithTrace(t, `byte 0xf000000000000000
+	ops := testProg(t, `byte 0xf000000000000000
 substring 4 2
-len`, 2)
-	require.Error(t, err)
-	require.Nil(t, program)
+len`, 2, expect{2, "substring end is before start"})
 
 	// fails at runtime
-	program, err = assembleStringWithTrace(t, `byte 0xf000000000000000
+	ops = testProg(t, `byte 0xf000000000000000
 int 4
 int 2
 substring3
 len`, 2)
-	require.NoError(t, err)
-	cost, err := Check(program, defaultEvalParams(nil, nil))
+	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
-	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 	if pass {
-		t.Log(hex.EncodeToString(program))
+		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
@@ -2108,16 +2103,15 @@ len`, 2)
 	isNotPanic(t, err)
 
 	// fails at runtime
-	program, err = assembleStringWithTrace(t, `byte 0xf000000000000000
+	ops = testProg(t, `byte 0xf000000000000000
 int 4
 int 0xFFFFFFFFFFFFFFFE
 substring3
 len`, 2)
-	require.NoError(t, err)
-	cost, err = Check(program, defaultEvalParams(nil, nil))
+	cost, err = Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = Eval(program, defaultEvalParams(nil, nil))
+	pass, err = Eval(ops.Program, defaultEvalParams(nil, nil))
 	require.False(t, pass)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "substring range beyond length of string")
@@ -2125,17 +2119,16 @@ len`, 2)
 
 func TestSubstringRange(t *testing.T) {
 	t.Parallel()
-	program, err := assembleStringWithTrace(t, `byte 0xf000000000000000
+	ops := testProg(t, `byte 0xf000000000000000
 substring 2 99
 len`, 2)
-	require.NoError(t, err)
-	cost, err := Check(program, defaultEvalParams(nil, nil))
+	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
-	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 	if pass {
-		t.Log(hex.EncodeToString(program))
+		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.False(t, pass)
@@ -2147,7 +2140,7 @@ func TestLoadStore(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 37
+			ops := testProg(t, `int 37
 int 37
 store 1
 byte 0xabbacafe
@@ -2162,7 +2155,6 @@ load 0
 load 1
 +
 &&`, v)
-			require.NoError(t, err)
 			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
@@ -2176,18 +2168,6 @@ load 1
 			require.True(t, pass)
 		})
 	}
-}
-
-func assembleStringWithTrace(t testing.TB, text string, version uint64) ([]byte, error) {
-	sr := strings.NewReader(text)
-	sb := strings.Builder{}
-	ops := OpStream{Trace: &sb, Version: version}
-	err := ops.assemble(sr)
-	if err != nil {
-		t.Log(sb.String())
-		return nil, err
-	}
-	return ops.Program, nil
 }
 
 func TestLoadStore2(t *testing.T) {
@@ -2205,15 +2185,14 @@ int 5
 ==`
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			program, err := assembleStringWithTrace(t, progText, v)
-			require.NoError(t, err)
-			cost, err := Check(program, defaultEvalParams(nil, nil))
+			ops := testProg(t, progText, v)
+			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
-			pass, err := Eval(program, defaultEvalParams(&sb, nil))
+			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if !pass {
-				t.Log(hex.EncodeToString(program))
+				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(sb.String())
 			}
 			require.NoError(t, err)
@@ -2547,17 +2526,16 @@ int 1
 
 func TestShortProgramTrue(t *testing.T) {
 	t.Parallel()
-	program, err := assembleStringWithTrace(t, `intcblock 1
+	ops := testProg(t, `intcblock 1
 intc 0
 intc 0
 bnz done
 done:`, 2)
-	require.NoError(t, err)
-	cost, err := Check(program, defaultEvalParams(nil, nil))
+	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
-	pass, err := Eval(program, defaultEvalParams(&sb, nil))
+	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -3452,24 +3430,19 @@ int 1
 `
 	ep := defaultEvalParams(nil, nil)
 
-	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, text, AssemblerMaxVersion)
 	pass, err := Eval(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	text = `dup2`
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
+	text = `int 1; int 2; dup2; pop; pop; pop`
+	ops = testProg(t, text, AssemblerMaxVersion)
 	pass, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.False(t, pass)
-
-	text = `int 1
-dup2
-`
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
+	require.True(t, pass)
+
+	text = `int 1; int 2; dup2; pop; pop`
+	ops = testProg(t, text, AssemblerMaxVersion)
 	pass, err = Eval(ops.Program, ep)
 	require.Error(t, err)
 	require.False(t, pass)
@@ -3665,24 +3638,24 @@ func TestAllowedOpcodesV2(t *testing.T) {
 	tests := map[string]string{
 		"txna":              "txna Accounts 0",
 		"gtxna":             "gtxna 0 ApplicationArgs 0",
-		"bz":                "bz l\nl:",
-		"b":                 "b l\nl:",
-		"return":            "int 1\nreturn",
-		"addw":              "int 0\nint 1\naddw",
-		"dup2":              "dup2",
-		"concat":            "byte 0x41\ndup\nconcat",
-		"substring":         "byte 0x41\nsubstring 0 1",
-		"substring3":        "byte 0x41\ndup\ndup\nsubstring3",
-		"balance":           "int 1\nbalance",
-		"app_opted_in":      "int 0\ndup\napp_opted_in",
-		"app_local_get":     "int 0\nbyte 0x41\napp_local_get",
-		"app_local_get_ex":  "int 0\ndup\nbyte 0x41\napp_local_get_ex",
-		"app_global_get":    "int 0\nbyte 0x41\napp_global_get",
-		"app_global_get_ex": "int 0\nbyte 0x41\napp_global_get_ex",
-		"app_local_put":     "int 0\ndup\nbyte 0x41\napp_local_put",
-		"app_global_put":    "byte 0x41\ndup\napp_global_put",
-		"app_local_del":     "int 0\nbyte 0x41\napp_local_del",
-		"app_global_del":    "byte 0x41\napp_global_del",
+		"bz":                "int 0; bz l; l:",
+		"b":                 "b l; l:",
+		"return":            "int 1; return",
+		"addw":              "int 0; int 1; addw",
+		"dup2":              "int 1; int 2; dup2",
+		"concat":            "byte 0x41; dup; concat",
+		"substring":         "byte 0x41; substring 0 1",
+		"substring3":        "byte 0x41; dup; dup; substring3",
+		"balance":           "int 1; balance",
+		"app_opted_in":      "int 0; dup; app_opted_in",
+		"app_local_get":     "int 0; byte 0x41; app_local_get",
+		"app_local_get_ex":  "int 0; dup; byte 0x41; app_local_get_ex",
+		"app_global_get":    "int 0; byte 0x41; app_global_get",
+		"app_global_get_ex": "int 0; byte 0x41; app_global_get_ex",
+		"app_local_put":     "int 0; dup; byte 0x41; app_local_put",
+		"app_global_put":    "byte 0x41; dup; app_global_put",
+		"app_local_del":     "int 0; byte 0x41; app_local_del",
+		"app_global_del":    "byte 0x41; app_global_del",
 		"asset_holding_get": "asset_holding_get AssetBalance",
 		"asset_params_get":  "asset_params_get AssetTotal",
 	}
@@ -3898,6 +3871,8 @@ func TestBytes(t *testing.T) {
 	testAccepts(t, `byte "john"; int 2; getbyte; int 104; ==`, 3) // 104 is ascii h
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
+	// dup makes copies, modifying one does not change the other
+	testAccepts(t, `byte "john"; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
 }
 
 func TestSwap(t *testing.T) {
