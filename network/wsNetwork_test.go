@@ -1236,7 +1236,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	var peers []*wsPeer
-	peers = netA.peerSnapshot(peers)
+	peers, _ = netA.peerSnapshot(peers)
 	require.Equalf(t, len(peers), 1, "Expected number of peers should be 1")
 	peer := peers[0]
 	// modify the peer on netA and
@@ -1245,7 +1245,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	// wait up to 10 seconds for the monitor to figure out it needs to disconnect.
 	expire := beforeLoopTime.Add(2 * slowWritingPeerMonitorInterval)
 	for {
-		peers = netA.peerSnapshot(peers)
+		peers, _ = netA.peerSnapshot(peers)
 		if len(peers) == 0 || peers[0] != peer {
 			// make sure it took more than 1 second, and less than 5 seconds.
 			waitTime := time.Now().Sub(beforeLoopTime)

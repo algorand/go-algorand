@@ -433,9 +433,19 @@ func checkSetAllocBounds(p ConsensusParams) {
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
+// if the params contains zero protocols, the existing consensus.json file will be removed if exists.
 func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
 
+	if len(params) == 0 {
+		// we have no consensus params to write. In this case, just delete the existing file
+		// ( if any )
+		err := os.Remove(consensusProtocolPath)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
 	encodedConsensusParams, err := json.Marshal(params)
 	if err != nil {
 		return err
@@ -829,9 +839,20 @@ func initConsensusProtocols() {
 	// v23 can be upgraded to v24, with an update delay of 7 days ( see calculation above )
 	v23.ApprovedUpgrades[protocol.ConsensusV24] = 140000
 
+	// v25 enables AssetCloseAmount in the ApplyData
+	v25 := v24
+	v25.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable AssetCloseAmount field
+	v25.EnableAssetCloseAmount = true
+	Consensus[protocol.ConsensusV25] = v25
+
+	// v24 can be upgraded to v25, with an update delay of 7 days ( see calculation above )
+	v24.ApprovedUpgrades[protocol.ConsensusV25] = 140000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v24
+	vFuture := v25
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -843,9 +864,6 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
-
-	// Enable AssetCloseAmount field
-	vFuture.EnableAssetCloseAmount = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

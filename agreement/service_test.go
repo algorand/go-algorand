@@ -2367,3 +2367,50 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 		}
 	}
 }
+
+func TestAgreementServiceStartDeadline(t *testing.T) {
+	accessor, err := db.MakeAccessor(t.Name()+"_crash.db", false, true)
+	require.NoError(t, err)
+
+	_, balances := createTestAccountsAndBalances(t, 1, (&[32]byte{})[:])
+	baseLedger := makeTestLedger(balances).(*testLedger)
+
+	testConsensusProtocolVersion := protocol.ConsensusVersion("TestAgreementServiceStartDeadline-testversion")
+	testConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	testConsensusParams.AgreementFilterTimeoutPeriod0 *= 100
+	config.Consensus[testConsensusProtocolVersion] = testConsensusParams
+	defer func() {
+		delete(config.Consensus, testConsensusProtocolVersion)
+	}()
+
+	baseLedger.consensusVersion = func(basics.Round) (protocol.ConsensusVersion, error) {
+		return testConsensusProtocolVersion, nil
+	}
+
+	s := Service{
+		log: serviceLogger{Logger: logging.TestingLog(t)},
+		parameters: parameters{
+			Accessor: accessor,
+			Ledger:   baseLedger,
+		},
+	}
+	s.log.Logger.SetLevel(logging.Error)
+
+	inputCh := make(chan externalEvent, 1)
+	close(inputCh)
+	output := make(chan []action, 10)
+	ready := make(chan externalDemuxSignals, 1)
+	s.mainLoop(inputCh, output, ready)
+
+	// check the ready channel:
+	var demuxSignal externalDemuxSignals
+	var ok bool
+	select {
+	case demuxSignal, ok = <-ready:
+		require.True(t, ok)
+	default:
+		require.Fail(t, "ready channel was empty while it should have contained a single entry")
+	}
+	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.Deadline)
+	require.Equal(t, baseLedger.NextRound(), demuxSignal.CurrentRound)
+}
