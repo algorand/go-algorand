@@ -65,20 +65,21 @@ var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.Ou
 // defaultSendMessageTags is the default list of messages which a peer would
 // allow to be sent without receiving any explicit request.
 var defaultSendMessageTags = map[protocol.Tag]bool{
-	protocol.AgreementVoteTag:   true,
-	protocol.MsgDigestSkipTag:   true,
-	protocol.NetPrioResponseTag: true,
-	protocol.PingTag:            true,
-	protocol.PingReplyTag:       true,
-	protocol.ProposalPayloadTag: true,
-	protocol.TopicMsgRespTag:    true,
-	protocol.MsgOfInterestTag:   true,
-	protocol.TxnTag:             true,
-	protocol.UniCatchupReqTag:   true,
-	protocol.UniEnsBlockReqTag:  true,
-	protocol.UniEnsBlockResTag:  true,
-	protocol.UniCatchupResTag:   true,
-	protocol.VoteBundleTag:      true,
+	protocol.AgreementVoteTag:       true,
+	protocol.MsgDigestSkipTag:       true,
+	protocol.NetPrioResponseTag:     true,
+	protocol.PingTag:                true,
+	protocol.PingReplyTag:           true,
+	protocol.ProposalPayloadTag:     true,
+	protocol.ProposalTransactionTag: true,
+	protocol.TopicMsgRespTag:        true,
+	protocol.MsgOfInterestTag:       true,
+	protocol.TxnTag:                 true,
+	protocol.UniCatchupReqTag:       true,
+	protocol.UniEnsBlockReqTag:      true,
+	protocol.UniEnsBlockResTag:      true,
+	protocol.UniCatchupResTag:       true,
+	protocol.VoteBundleTag:          true,
 }
 
 // interface allows substituting debug implementation for *websocket.Conn
@@ -416,7 +417,7 @@ func (wp *wsPeer) readLoop() {
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		msg.Sender = wp
 		logging.Base().Infof("mayberead, %v %v", msg.Tag, crypto.Hash(msg.Data))
-		if msg.Tag == protocol.TxnTag {
+		if msg.Tag == protocol.TxnTag || msg.Tag == protocol.ProposalTransactionTag {
 			wp.StoreKV(crypto.Hash(msg.Data), msg.Data)
 		}
 
