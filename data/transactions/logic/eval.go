@@ -610,7 +610,7 @@ func (cx *evalContext) step() {
 		cx.pc = cx.nextpc
 		cx.nextpc = 0
 	} else {
-		cx.pc++
+		cx.pc += oz.size
 	}
 }
 
@@ -1037,7 +1037,6 @@ func opIntConstN(cx *evalContext, n uint) {
 func opIntConstLoad(cx *evalContext) {
 	n := uint(cx.program[cx.pc+1])
 	opIntConstN(cx, n)
-	cx.nextpc = cx.pc + 2
 }
 func opIntConst0(cx *evalContext) {
 	opIntConstN(cx, 0)
@@ -1066,7 +1065,6 @@ func opByteConstN(cx *evalContext, n uint) {
 func opByteConstLoad(cx *evalContext) {
 	n := uint(cx.program[cx.pc+1])
 	opByteConstN(cx, n)
-	cx.nextpc = cx.pc + 2
 }
 func opByteConst0(cx *evalContext) {
 	opByteConstN(cx, 0)
@@ -1093,7 +1091,6 @@ func opArgN(cx *evalContext, n uint64) {
 func opArg(cx *evalContext) {
 	n := uint64(cx.program[cx.pc+1])
 	opArgN(cx, n)
-	cx.nextpc = cx.pc + 2
 }
 func opArg0(cx *evalContext) {
 	opArgN(cx, 0)
@@ -1186,6 +1183,18 @@ func opDup2(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cx.stack = append(cx.stack, cx.stack[prev:]...)
+}
+
+func opDig(cx *evalContext) {
+	depth := int(uint(cx.program[cx.pc+1]))
+	idx := len(cx.stack) - 1 - depth
+	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
+	if idx < 0 {
+		cx.err = fmt.Errorf("dig %d with stack size = %d", depth, len(cx.stack))
+		return
+	}
+	sv := cx.stack[idx]
+	cx.stack = append(cx.stack, sv)
 }
 
 func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
@@ -1435,7 +1444,6 @@ func opTxn(cx *evalContext) {
 		return
 	}
 	cx.stack = append(cx.stack, sv)
-	cx.nextpc = cx.pc + 2
 }
 
 func opTxna(cx *evalContext) {
@@ -1459,7 +1467,6 @@ func opTxna(cx *evalContext) {
 		return
 	}
 	cx.stack = append(cx.stack, sv)
-	cx.nextpc = cx.pc + 3
 }
 
 func opGtxn(cx *evalContext) {
@@ -1493,7 +1500,6 @@ func opGtxn(cx *evalContext) {
 		}
 	}
 	cx.stack = append(cx.stack, sv)
-	cx.nextpc = cx.pc + 3
 }
 
 func opGtxna(cx *evalContext) {
@@ -1523,7 +1529,6 @@ func opGtxna(cx *evalContext) {
 		return
 	}
 	cx.stack = append(cx.stack, sv)
-	cx.nextpc = cx.pc + 4
 }
 
 func (cx *evalContext) getRound() (rnd uint64, err error) {
@@ -1619,7 +1624,6 @@ func opGlobal(cx *evalContext) {
 	}
 
 	cx.stack = append(cx.stack, sv)
-	cx.nextpc = cx.pc + 2
 }
 
 // Msg is data meant to be signed and then verified with the
@@ -1675,7 +1679,6 @@ func opEd25519verify(cx *evalContext) {
 func opLoad(cx *evalContext) {
 	gindex := int(uint(cx.program[cx.pc+1]))
 	cx.stack = append(cx.stack, cx.scratch[gindex])
-	cx.nextpc = cx.pc + 2
 }
 
 func opStore(cx *evalContext) {
@@ -1683,7 +1686,6 @@ func opStore(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.scratch[gindex] = cx.stack[last]
 	cx.stack = cx.stack[:last]
-	cx.nextpc = cx.pc + 2
 }
 
 func opConcat(cx *evalContext) {
@@ -1723,7 +1725,6 @@ func opSubstring(cx *evalContext) {
 	start := cx.program[cx.pc+1]
 	end := cx.program[cx.pc+2]
 	cx.stack[last].Bytes, cx.err = substring(cx.stack[last].Bytes, int(start), int(end))
-	cx.nextpc = cx.pc + 3
 }
 
 func opSubstring3(cx *evalContext) {
@@ -2166,8 +2167,6 @@ func opAssetHoldingGet(cx *evalContext) {
 
 	cx.stack[prev] = value
 	cx.stack[last].Uint = exist
-
-	cx.nextpc = cx.pc + 2
 }
 
 func opAssetParamsGet(cx *evalContext) {
@@ -2201,6 +2200,4 @@ func opAssetParamsGet(cx *evalContext) {
 
 	cx.stack[last] = value
 	cx.stack = append(cx.stack, stackValue{Uint: exist})
-
-	cx.nextpc = cx.pc + 2
 }

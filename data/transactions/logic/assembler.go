@@ -641,16 +641,16 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func asmLoadStore(ops *OpStream, spec *OpSpec, args []string) error {
+func asmImmByte(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.checkArgs(*spec)
 	if len(args) != 1 {
-		return ops.errorf("%s needs one immediate argument", spec.Name)
+		return ops.errorf("%s expects one immediate argument", spec.Name)
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
-	if val > EvalMaxScratchSize {
+	if val > 255 {
 		return ops.errorf("%s outside 0..255: %d", spec.Name, val)
 	}
 	ops.pending.WriteByte(spec.Opcode)
@@ -661,7 +661,7 @@ func asmLoadStore(ops *OpStream, spec *OpSpec, args []string) error {
 func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.checkArgs(*spec)
 	if len(args) != 2 {
-		return ops.error("substring expects 2 args")
+		return ops.error("substring expects 2 immediate args")
 	}
 	start, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
@@ -682,24 +682,11 @@ func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	if end < start {
 		return ops.error("substring end is before start")
 	}
-	opcode := byte(0x51)
+	opcode := byte(spec.Opcode)
 	ops.pending.WriteByte(opcode)
 	ops.pending.WriteByte(byte(start))
 	ops.pending.WriteByte(byte(end))
 	return nil
-}
-
-func disSubstring(dis *disassembleState, spec *OpSpec) {
-	lastIdx := dis.pc + 2
-	if len(dis.program) <= lastIdx {
-		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
-	}
-	start := uint(dis.program[dis.pc+1])
-	end := uint(dis.program[dis.pc+2])
-	dis.nextpc = dis.pc + 3
-	_, dis.err = fmt.Fprintf(dis.out, "substring %d %d\n", start, end)
 }
 
 func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
@@ -1364,9 +1351,27 @@ func (dis *disassembleState) outputLabelIfNeeded() (err error) {
 
 type disassembleFunc func(dis *disassembleState, spec *OpSpec)
 
+// Basic disasemble, and extra bytes of opcode are decoded as bytes integers.
 func disDefault(dis *disassembleState, spec *OpSpec) {
-	dis.nextpc = dis.pc + 1
-	_, dis.err = fmt.Fprintf(dis.out, "%s\n", spec.Name)
+	lastIdx := dis.pc + spec.opSize.size - 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
+	dis.nextpc = dis.pc + spec.opSize.size
+	_, dis.err = fmt.Fprintf(dis.out, "%s", spec.Name)
+	if dis.err != nil {
+		return
+	}
+	for s := 1; s < spec.opSize.size; s++ {
+		b := uint(dis.program[dis.pc+s])
+		_, dis.err = fmt.Fprintf(dis.out, " %d", b)
+		if dis.err != nil {
+			return
+		}
+	}
+	_, dis.err = fmt.Fprintf(dis.out, "\n")
 }
 
 var errShortIntcblock = errors.New("intcblock ran past end of program")
@@ -1653,19 +1658,6 @@ func disBranch(dis *disassembleState, spec *OpSpec) {
 		dis.putLabel(label, target)
 	}
 	_, dis.err = fmt.Fprintf(dis.out, "%s %s\n", spec.Name, label)
-}
-
-// Disassemble an opcode that takes a single byte immediate arg
-func disImmByte(dis *disassembleState, spec *OpSpec) {
-	lastIdx := dis.pc + 1
-	if len(dis.program) <= lastIdx {
-		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
-	}
-	n := uint(dis.program[dis.pc+1])
-	dis.nextpc = dis.pc + 2
-	_, dis.err = fmt.Fprintf(dis.out, "%s %d\n", spec.Name, n)
 }
 
 func disAssetHolding(dis *disassembleState, spec *OpSpec) {

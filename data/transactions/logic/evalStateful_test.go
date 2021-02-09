@@ -2714,6 +2714,7 @@ func TestReturnTypes(t *testing.T) {
 		"arg":               "arg 0",
 		"load":              "load 0",
 		"store":             "store 0",
+		"dig":               "dig 0",
 		"intc":              "intcblock 0\nintc 0",
 		"intc_0":            "intcblock 0\nintc_0",
 		"intc_1":            "intcblock 0 0\nintc_1",
@@ -2748,8 +2749,7 @@ func TestReturnTypes(t *testing.T) {
 					sb.WriteString(name + "\n")
 				}
 				source := sb.String()
-				ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-				require.NoError(t, err)
+				ops := testProg(t, source, AssemblerMaxVersion)
 
 				var cx evalContext
 				cx.EvalParams = ep

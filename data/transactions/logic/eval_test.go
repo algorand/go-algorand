@@ -3722,6 +3722,7 @@ func TestAllowedOpcodesV3(t *testing.T) {
 		"setbyte":     "byte \"john\"; int 5; int 66; setbyte",
 		"swap":        "int 1; byte \"x\"; swap",
 		"select":      "int 1; byte \"x\"; int 1; select",
+		"dig":         "int 1; int 1; dig 1",
 	}
 
 	excluded := map[string]bool{}
@@ -3888,4 +3889,10 @@ func TestSelect(t *testing.T) {
 
 	testAccepts(t, "int 0; int 1; int 1; select", 3)      // selects the 1
 	testPanics(t, "int 1; byte 0x1233; int 1; select", 3) // selects the bytes
+}
+
+func TestDig(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 3; int 2; int 1; dig 1; int 2; ==; return", 3)
+	testPanics(t, "int 3; int 2; int 1; dig 11; int 2; ==; return", 3)
 }
