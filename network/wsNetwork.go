@@ -1273,7 +1273,6 @@ func (wn *WebsocketNetwork) broadcastThread() {
 		// select with a default into a more efficient non-blocking receive, instead of compiling it to the general-purpose selectgo
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
-			logging.Base().Infof("broadcasting: %v, %v", 1, request.tags)
 			wn.innerBroadcast(request, true, peers)
 			continue
 		default:
@@ -1295,7 +1294,6 @@ func (wn *WebsocketNetwork) broadcastThread() {
 		// block until we have some request that need to be sent.
 		select {
 		case request := <-wn.broadcastQueueHighPrio:
-			logging.Base().Infof("broadcasting: %v, %v", 2, request.tags)
 			// check if peers need to be updated, since we've been waiting a while.
 			updatePeers()
 			if !waitForPeers(&request) {
@@ -1306,7 +1304,6 @@ func (wn *WebsocketNetwork) broadcastThread() {
 			wn.checkSlowWritingPeers()
 			continue
 		case request := <-wn.broadcastQueueBulk:
-			logging.Base().Infof("broadcasting: %v, %v", 3, request.tags)
 			// check if peers need to be updated, since we've been waiting a while.
 			updatePeers()
 			if !waitForPeers(&request) {
@@ -1345,6 +1342,7 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 
 // prio is set if the broadcast is a high-priority broadcast.
 func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, peers []*wsPeer) {
+	logging.Base().Infof("broadcasting: %v, %v", len(request.data), request.tags)
 	if request.done != nil {
 		defer close(request.done)
 	}
