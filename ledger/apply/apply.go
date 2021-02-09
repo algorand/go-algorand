@@ -31,6 +31,9 @@ type Balances interface {
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
 	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
 
+	// GetWithHolding is like Get, but also loads specific creatable
+	GetWithHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error)
+
 	Put(basics.Address, basics.AccountData) error
 
 	// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.

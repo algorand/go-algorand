@@ -301,6 +301,11 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 	return out, rnd, nil
 }
 
+func (dl *dryrunLedger) LookupWithHolding(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	out, _, err := dl.LookupWithoutRewards(rnd, addr)
+	return out, err
+}
+
 func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	switch ctype {
 	case basics.AssetCreatable:

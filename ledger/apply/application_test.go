@@ -127,6 +127,14 @@ func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (basics
 	return ad, nil
 }
 
+func (b *testBalances) GetWithHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	ad, ok := b.balances[addr]
+	if !ok {
+		return basics.AccountData{}, fmt.Errorf("mock balance not found")
+	}
+	return ad, nil
+}
+
 func (b *testBalances) Put(addr basics.Address, ad basics.AccountData) error {
 	b.put++
 	if b.putBalances == nil {

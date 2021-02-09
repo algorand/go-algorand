@@ -166,7 +166,7 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 		return nil
 	}
 
-	snd, err := balances.Get(addr, false)
+	snd, err := balances.GetWithHolding(addr, basics.CreatableIndex(asset), basics.AssetCreatable)
 	if err != nil {
 		return err
 	}
@@ -247,7 +247,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 	// Allocate a slot for asset (self-transfer of zero amount).
 	if ct.AssetAmount == 0 && ct.AssetReceiver == source && !clawback {
-		snd, err := balances.Get(source, false)
+		snd, err := balances.GetWithHolding(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable)
 		if err != nil {
 			return err
 		}

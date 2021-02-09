@@ -45,6 +45,10 @@ func (ml *emptyLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 	return basics.AccountData{}, nil
 }
 
+func (ml *emptyLedger) lookupWithHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	return basics.AccountData{}, nil
+}
+
 func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
 	return nil
 }

@@ -461,6 +461,36 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	return data, nil
 }
 
+// LookupFull uses the accounts tracker to return the account state for a
+// given account in a particular round.  The account values reflect
+// the changes of all blocks up to and including rnd.
+func (l *Ledger) LookupFull(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	// Intentionally apply (pending) rewards up to rnd.
+	data, err := l.accts.LookupFullWithRewards(rnd, addr)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+
+	return data, nil
+}
+
+// LookupWithHolding is like Lookup but does not apply pending rewards up
+// to the requested round rnd.
+func (l *Ledger) LookupWithHolding(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	data, err := l.accts.LookupWithHolding(rnd, addr, cidx, ctype)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+
+	return data, nil
+}
+
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
 func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {

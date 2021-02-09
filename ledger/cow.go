@@ -37,6 +37,7 @@ import (
 
 type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
+	lookupWithHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (data basics.AccountData, err error)
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
@@ -133,6 +134,22 @@ func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, e
 	}
 
 	return cb.lookupParent.lookup(addr)
+}
+
+// lookupWithHolding is gets account data but also fetches asset holding or app local data for a specified creatable
+func (cb *roundCowState) lookupWithHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (data basics.AccountData, err error) {
+	d, ok := cb.mods.Accts.Get(addr)
+	if ok {
+		if d.HoldingExists(cidx, ctype) {
+			return d, nil
+		}
+	}
+
+	d, err = cb.lookupParent.lookupWithHolding(addr, cidx, ctype)
+	if err != nil {
+		cb.mods.Accts.Upsert(addr, d)
+	}
+	return d, err
 }
 
 func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {

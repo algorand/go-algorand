@@ -105,6 +105,10 @@ func (balances mockBalances) Get(basics.Address, bool) (basics.AccountData, erro
 	return basics.AccountData{}, nil
 }
 
+func (balances mockBalances) GetWithHolding(basics.Address, basics.CreatableIndex, basics.CreatableType) (basics.AccountData, error) {
+	return basics.AccountData{}, nil
+}
+
 func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return basics.Address{}, true, nil
 }

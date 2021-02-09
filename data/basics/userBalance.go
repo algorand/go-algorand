@@ -514,6 +514,16 @@ func (u AccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint6
 	return norm
 }
 
+// HoldingExists returns true if asset holding or app local state for a specified creatable exists
+func (u AccountData) HoldingExists(cidx CreatableIndex, ctype CreatableType) (exist bool) {
+	if ctype == AssetCreatable {
+		_, exist = u.Assets[AssetIndex(cidx)]
+	} else {
+		_, exist = u.AppLocalStates[AppIndex(cidx)]
+	}
+	return
+}
+
 // BalanceRecord pairs an account's address with its associated data.
 type BalanceRecord struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`

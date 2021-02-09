@@ -282,6 +282,10 @@ func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address
 	return l.balances[addr], rnd, nil
 }
 
+func (l *localLedger) LookupWithHolding(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	return l.balances[addr], nil
+}
+
 func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	switch ctype {
 	case basics.AssetCreatable:

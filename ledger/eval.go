@@ -73,6 +73,10 @@ func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData,
 	return acctData, err
 }
 
+func (x *roundCowBase) lookupWithHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (acctData basics.AccountData, err error) {
+	return x.l.LookupWithHolding(x.rnd, addr, cidx, ctype)
+}
+
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, TxLease{txl})
 }
@@ -214,6 +218,15 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 	return acct, nil
 }
 
+// wrappers for roundCowState to satisfy the (current) apply.Balances interface
+func (cs *roundCowState) GetWithHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	acct, err := cs.lookupWithHolding(addr, cidx, ctype)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+	return acct, nil
+}
+
 func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return cs.getCreator(cidx, ctype)
 }
@@ -335,6 +348,7 @@ type ledgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
+	LookupWithHolding(basics.Round, basics.Address, basics.CreatableIndex, basics.CreatableType) (basics.AccountData, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
