@@ -1170,15 +1170,7 @@ func (wn *WebsocketNetwork) broadcastThread() {
 	// updatePeers update the peers list if their peer change counter has changed.
 	updatePeers := func() {
 		if curPeersChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter); curPeersChangeCounter != lastPeersChangeCounter {
-			peers, lastPeersChangeCounter = wn.peerSnapshot(peers[:0])
-			// clear out the unused portion of the peers array to allow the GC to cleanup unused peers.
-			remainderPeers := peers[len(peers):cap(peers)]
-			for i := range remainderPeers {
-				if remainderPeers[i] == nil {
-					break
-				}
-				remainderPeers[i] = nil
-			}
+			peers, lastPeersChangeCounter = wn.peerSnapshot(peers)
 		}
 	}
 
@@ -1289,6 +1281,16 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 	wn.peersLock.RLock()
 	defer wn.peersLock.RUnlock()
 	if cap(dest) >= len(wn.peers) {
+		// clear out the unused portion of the peers array to allow the GC to cleanup unused peers.
+		remainderPeers := dest[len(wn.peers):cap(dest)]
+		for i := range remainderPeers {
+			// we want to delete only up to the first nil peer, since we're always writing to this array from the begining to the end
+			if remainderPeers[i] == nil {
+				break
+			}
+			remainderPeers[i] = nil
+		}
+		// adjust array size
 		dest = dest[:len(wn.peers)]
 	} else {
 		dest = make([]*wsPeer, len(wn.peers))
@@ -1646,6 +1648,9 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 	ticker := time.NewTicker(prioWeightRefreshTime)
 	defer ticker.Stop()
 	var peers []*wsPeer
+	// the lastPeersChangeCounter is initialized with -1 in order to force the peers to be loaded on the first iteration.
+	// then, it would get reloaded on per-need basis.
+	lastPeersChangeCounter := int32(-1)
 	for {
 		select {
 		case <-ticker.C:
@@ -1653,7 +1658,10 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 			return
 		}
 
-		peers, _ = wn.peerSnapshot(peers)
+		if curPeersChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter); curPeersChangeCounter != lastPeersChangeCounter {
+			peers, lastPeersChangeCounter = wn.peerSnapshot(peers)
+		}
+
 		for _, peer := range peers {
 			wn.peersLock.RLock()
 			addr := peer.prioAddress
