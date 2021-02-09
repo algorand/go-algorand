@@ -1224,3 +1224,335 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr2, address)
 	a.Equal(sample2, data)
 }
+
+func TestAssetHoldingConvertToGroups(t *testing.T) {
+	a := require.New(t)
+
+	var e ExtendedAssetHolding
+
+	e.convertToGroups(nil)
+	a.Equal(uint32(0), e.Count)
+	a.Equal(0, len(e.Groups))
+	a.False(e.loaded)
+
+	e.convertToGroups(map[basics.AssetIndex]basics.AssetHolding{})
+	a.Equal(uint32(0), e.Count)
+	a.Equal(0, len(e.Groups))
+	a.False(e.loaded)
+
+	var tests = []struct {
+		size        int
+		numGroups   int
+		minAssets   []basics.AssetIndex
+		deltaAssets []uint64
+	}{
+		{10, 1, []basics.AssetIndex{1}, []uint64{9}},
+		{255, 1, []basics.AssetIndex{1}, []uint64{254}},
+		{256, 1, []basics.AssetIndex{1}, []uint64{255}},
+		{257, 2, []basics.AssetIndex{1, 257}, []uint64{255, 0}},
+		{1024, 4, []basics.AssetIndex{1, 257, 513, 769}, []uint64{255, 255, 255, 255}},
+		{1028, 5, []basics.AssetIndex{1, 257, 513, 769, 1025}, []uint64{255, 255, 255, 255, 3}},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%d-assets-convert", test.size), func(t *testing.T) {
+			a := require.New(t)
+			assets := make(map[basics.AssetIndex]basics.AssetHolding, test.size)
+			for i := 0; i < test.size; i++ {
+				assets[basics.AssetIndex(i+1)] = basics.AssetHolding{Amount: uint64(i), Frozen: i%2 != 0}
+			}
+
+			var e ExtendedAssetHolding
+			e.convertToGroups(assets)
+			a.Equal(uint32(test.size), e.Count)
+			a.True(e.loaded)
+			a.Equal(test.numGroups, len(e.Groups))
+			total := 0
+			for i := 0; i < len(e.Groups); i++ {
+				total += int(e.Groups[i].Count)
+				a.Equal(test.minAssets[i], e.Groups[i].MinAssetIndex)
+				a.Equal(test.deltaAssets[i], e.Groups[i].DeltaMaxAssetIndex)
+				a.Equal(uint64(0), e.Groups[i].AssetGroupKey)
+				a.True(e.Groups[i].loaded)
+
+				a.Equal(int(e.Groups[i].Count), len(e.Groups[i].groupData.Amounts))
+				a.Equal(len(e.Groups[i].groupData.Amounts), len(e.Groups[i].groupData.Frozens))
+				a.Equal(len(e.Groups[i].groupData.Amounts), len(e.Groups[i].groupData.AssetOffsets))
+				aidx := e.Groups[i].MinAssetIndex
+				a.Equal(0, int(e.Groups[i].groupData.AssetOffsets[0]))
+				for j := 0; j < len(e.Groups[i].groupData.AssetOffsets); j++ {
+					aidx += e.Groups[i].groupData.AssetOffsets[j]
+					a.Contains(assets, aidx)
+					a.Equal(uint64(aidx)-1, e.Groups[i].groupData.Amounts[j])
+				}
+				a.Equal(e.Groups[i].MinAssetIndex+basics.AssetIndex(e.Groups[i].DeltaMaxAssetIndex), aidx)
+			}
+			a.Equal(int(e.Count), total)
+		})
+	}
+}
+
+func TestAssetHoldingFindAsset(t *testing.T) {
+	a := require.New(t)
+
+	var e ExtendedAssetHolding
+	for aidx := 0; aidx < 2; aidx++ {
+		for startIdx := 0; startIdx < 2; startIdx++ {
+			gi, ai := e.findAsset(basics.AssetIndex(aidx), startIdx)
+			a.Equal(-1, gi)
+			a.Equal(-1, ai)
+		}
+	}
+
+	var tests = []struct {
+		size      int
+		numGroups int
+		samples   []basics.AssetIndex
+		groups    []int
+		assets    []int
+	}{
+		{10, 1, []basics.AssetIndex{1, 5, 10, 12}, []int{0, 0, 0, -1}, []int{0, 4, 9, -1}},
+		{255, 1, []basics.AssetIndex{1, 255, 256, 257, 258}, []int{0, 0, -1, -1, -1}, []int{0, 254, -1, -1, -1}},
+		{256, 1, []basics.AssetIndex{1, 255, 256, 257, 258}, []int{0, 0, 0, -1, -1}, []int{0, 254, 255, -1, -1}},
+		{257, 2, []basics.AssetIndex{1, 255, 256, 257, 258}, []int{0, 0, 0, 1, -1}, []int{0, 254, 255, 0, -1}},
+		{1024, 4, []basics.AssetIndex{1, 255, 1024, 1025}, []int{0, 0, 3, -1}, []int{0, 254, 255, -1}},
+		{1028, 5, []basics.AssetIndex{1, 255, 1024, 1025}, []int{0, 0, 3, 4}, []int{0, 254, 255, 0}},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%d-find-asset", test.size), func(t *testing.T) {
+			a := require.New(t)
+			assets := make(map[basics.AssetIndex]basics.AssetHolding, test.size)
+			for i := 0; i < test.size; i++ {
+				assets[basics.AssetIndex(i+1)] = basics.AssetHolding{Amount: uint64(i), Frozen: i%2 != 0}
+			}
+
+			var e ExtendedAssetHolding
+			e.convertToGroups(assets)
+
+			for i := 0; i < len(test.samples); i++ {
+				gi, ai := e.findAsset(test.samples[i], 0)
+				a.Equal(test.groups[i], gi)
+				a.Equal(test.assets[i], ai)
+			}
+
+			goodIdx := 0
+			for i := 0; i < len(test.samples); i++ {
+				gi, ai := e.findAsset(test.samples[i], goodIdx)
+				expgi := test.groups[i]
+				expai := test.assets[i]
+				a.Equal(expgi, gi)
+				a.Equal(expai, ai)
+				if gi > 0 {
+					goodIdx = gi
+				}
+			}
+			if test.numGroups > 1 {
+				a.Greater(goodIdx, 0)
+			}
+		})
+	}
+}
+
+func TestAssetHoldingFindGroup(t *testing.T) {
+	a := require.New(t)
+
+	type groupSpec struct {
+		start basics.AssetIndex
+		end   basics.AssetIndex
+		count int
+	}
+
+	spec1 := []groupSpec{
+		{10, 700, maxHoldingGroupSize},
+		{1001, 1060, 20},
+		{2001, 3000, maxHoldingGroupSize},
+		{4001, 5000, maxHoldingGroupSize},
+	}
+
+	gen := func(spec []groupSpec) (count uint32, gs []AssetsHoldingGroup) {
+		gs = make([]AssetsHoldingGroup, len(spec))
+		for i, s := range spec {
+			gs[i].Count = uint32(s.count)
+			gs[i].MinAssetIndex = s.start
+			gs[i].DeltaMaxAssetIndex = uint64(s.end - s.start)
+			ao := make([]basics.AssetIndex, s.count)
+			ao[0] = 0
+			gap := (s.end + 1 - s.start) / basics.AssetIndex(s.count)
+			aidx := s.start
+			for j := 1; j < s.count; j++ {
+				ao[j] = gap
+				aidx += gap
+			}
+			if aidx != s.end {
+				ao[s.count-1] = s.end - aidx + gap
+			}
+			gs[i].groupData = AssetsHoldingGroupData{AssetOffsets: ao}
+			count += uint32(s.count)
+		}
+		return count, gs
+	}
+
+	check := func(spec []groupSpec, e ExtendedAssetHolding) {
+		for _, s := range spec {
+			gi, ai := e.findAsset(s.start, 0)
+			a.NotEqual(-1, gi)
+			a.NotEqual(-1, ai)
+			gi, ai = e.findAsset(s.end, 0)
+			a.NotEqual(-1, gi)
+			a.NotEqual(-1, ai)
+		}
+	}
+
+	var e ExtendedAssetHolding
+	e.Count, e.Groups = gen(spec1)
+	check(spec1, e)
+
+	// new group at the beginning
+	aidx := basics.AssetIndex(1)
+	res := e.findGroup(aidx, 0)
+	a.False(res.found)
+	a.False(res.split)
+	a.Equal(-1, res.gi)
+
+	// split group 0
+	aidx = basics.AssetIndex(spec1[0].start + 1)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.True(res.split)
+	a.Equal(0, res.gi)
+
+	// insert into group 1 if skipping 0
+	res = e.findGroup(aidx, 1)
+	a.True(res.found)
+	a.False(res.split)
+	a.Equal(1, res.gi)
+
+	// prepend into group 1
+	aidx = basics.AssetIndex(spec1[0].end + 10)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.False(res.split)
+	a.Equal(1, res.gi)
+
+	// append into group 1
+	aidx = basics.AssetIndex(spec1[1].end + 10)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.False(res.split)
+	a.Equal(1, res.gi)
+
+	// insert into group 1
+	aidx = basics.AssetIndex(spec1[1].start + 1)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.False(res.split)
+	a.Equal(1, res.gi)
+
+	// split group 2
+	aidx = basics.AssetIndex(spec1[2].start + 1)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.True(res.split)
+	a.Equal(2, res.gi)
+
+	// new group after group 2
+	aidx = basics.AssetIndex(spec1[2].end + 100)
+	res = e.findGroup(aidx, 0)
+	a.False(res.found)
+	a.False(res.split)
+	a.Equal(2, res.gi)
+
+	// new group after group 3
+	aidx = basics.AssetIndex(spec1[3].end + 100)
+	res = e.findGroup(aidx, 0)
+	a.False(res.found)
+	a.False(res.split)
+	a.Equal(3, res.gi)
+
+	spec2 := []groupSpec{
+		{1001, 1060, 20},
+		{2001, 3000, maxHoldingGroupSize},
+	}
+
+	e.Count, e.Groups = gen(spec2)
+	check(spec2, e)
+
+	// insert into group 0
+	aidx = basics.AssetIndex(1)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.False(res.split)
+	a.Equal(0, res.gi)
+
+	// insert into group 0
+	aidx = basics.AssetIndex(spec2[0].start + 1)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.False(res.split)
+	a.Equal(0, res.gi)
+
+	// insert into group 0
+	aidx = basics.AssetIndex(spec2[0].end + 1)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.False(res.split)
+	a.Equal(0, res.gi)
+
+	// split group 1
+	aidx = basics.AssetIndex(spec2[1].start + 1)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.True(res.split)
+	a.Equal(1, res.gi)
+
+	// new group after group 1
+	aidx = basics.AssetIndex(spec2[1].end + 1)
+	res = e.findGroup(aidx, 0)
+	a.False(res.found)
+	a.False(res.split)
+	a.Equal(1, res.gi)
+
+	spec3 := []groupSpec{
+		{2001, 3000, maxHoldingGroupSize},
+		{3002, 3062, 20},
+	}
+
+	e.Count, e.Groups = gen(spec3)
+	check(spec3, e)
+
+	// split group 0
+	aidx = basics.AssetIndex(spec3[0].start + 1)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.True(res.split)
+	a.Equal(0, res.gi)
+
+	// insert into group 1
+	aidx = basics.AssetIndex(spec3[1].start - 1)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.False(res.split)
+	a.Equal(1, res.gi)
+
+	// insert into group 1
+	aidx = basics.AssetIndex(spec3[1].end + 1)
+	res = e.findGroup(aidx, 0)
+	a.True(res.found)
+	a.False(res.split)
+	a.Equal(1, res.gi)
+
+	spec4 := []groupSpec{
+		{2001, 3000, maxHoldingGroupSize},
+		{3002, 4000, maxHoldingGroupSize},
+	}
+
+	e.Count, e.Groups = gen(spec4)
+	check(spec4, e)
+
+	// new group after 0
+	aidx = basics.AssetIndex(spec4[0].end + 1)
+	res = e.findGroup(aidx, 0)
+	a.False(res.found)
+	a.False(res.split)
+	a.Equal(0, res.gi)
+}

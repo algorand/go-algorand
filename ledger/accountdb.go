@@ -1230,18 +1230,6 @@ func (gd *AssetsHoldingGroupData) delete(ai int) {
 	}
 }
 
-func (gd *AssetsHoldingGroupData) find(aidx basics.AssetIndex, minIndex basics.AssetIndex) int {
-	// TODO: bin search
-	cur := minIndex
-	for j, d := range gd.AssetOffsets {
-		cur = d + cur
-		if aidx == cur {
-			return j
-		}
-	}
-	return -1
-}
-
 func (g *AssetsHoldingGroup) delete(ai int) {
 	if ai == 0 {
 		// when deleting the first element, update MinAssetIndex
@@ -1407,8 +1395,7 @@ type fgres struct {
 }
 
 // findGroup looks up for an appropriate group or position for insertion a new asset holdings entry
-// TODO: move to tests
-// example:
+// Examples:
 //   groups of size 4
 //   [2, 3, 5], [7, 10, 12, 15]
 //   aidx = 0 -> group 0
@@ -1430,11 +1417,11 @@ type fgres struct {
 
 func (e ExtendedAssetHolding) findGroup(aidx basics.AssetIndex, startIdx int) fgres {
 	if e.Count == 0 {
-		return fgres{}
+		return fgres{false, -1, false}
 	}
 	for i, g := range e.Groups[startIdx:] {
 		// check exact boundaries
-		if aidx >= g.MinAssetIndex && aidx < g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
+		if aidx >= g.MinAssetIndex && aidx <= g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
 			// found a group that is a right place for the asset
 			// if it has space, insert into it
 			if g.Count < maxHoldingGroupSize {
@@ -1444,11 +1431,11 @@ func (e ExtendedAssetHolding) findGroup(aidx basics.AssetIndex, startIdx int) fg
 			return fgres{found: true, gi: i + startIdx, split: true}
 		}
 		// check upper bound
-		if aidx >= g.MinAssetIndex && aidx >= g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
+		if aidx >= g.MinAssetIndex && aidx > g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
 			// the asset still might fit into a group if it has space and does not break groups order
 			if g.Count < maxHoldingGroupSize {
-				// ensure next group starts with the asset less than current one
-				if i+startIdx < len(e.Groups) && aidx < e.Groups[i+startIdx+1].MinAssetIndex {
+				// ensure next group starts with the asset greater than current one
+				if i+startIdx < len(e.Groups)-1 && aidx < e.Groups[i+startIdx+1].MinAssetIndex {
 					return fgres{found: true, gi: i + startIdx, split: false}
 				}
 				// the last group, ok to add more
@@ -1479,11 +1466,15 @@ func (e ExtendedAssetHolding) findAsset(aidx basics.AssetIndex, startIdx int) (i
 		return -1, -1
 	}
 
-	for i, g := range e.Groups[startIdx:] {
-		if aidx >= g.MinAssetIndex && aidx < g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
-			j := g.groupData.find(aidx, g.MinAssetIndex)
-			if j != -1 {
-				return startIdx + i, j
+	for gi, g := range e.Groups[startIdx:] {
+		if aidx >= g.MinAssetIndex && aidx <= g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
+			// TODO: bin search
+			cur := g.MinAssetIndex
+			for ai, d := range g.groupData.AssetOffsets {
+				cur = d + cur
+				if aidx == cur {
+					return gi + startIdx, ai
+				}
 			}
 		}
 	}
@@ -1499,7 +1490,7 @@ func (pad PersistedAccountData) NumAssetHoldings() int {
 	return len(pad.AccountData.Assets)
 }
 
-func (e *ExtendedAssetHolding) splitToGroups(assets map[basics.AssetIndex]basics.AssetHolding) {
+func (e *ExtendedAssetHolding) convertToGroups(assets map[basics.AssetIndex]basics.AssetHolding) {
 	if len(assets) == 0 {
 		return
 	}
@@ -1508,7 +1499,7 @@ func (e *ExtendedAssetHolding) splitToGroups(assets map[basics.AssetIndex]basics
 		aidx     basics.AssetIndex
 		holdings basics.AssetHolding
 	}
-	flatten := make([]asset, 0, len(assets))
+	flatten := make([]asset, len(assets), len(assets))
 	i := 0
 	for k, v := range assets {
 		flatten[i] = asset{k, v}
@@ -1527,38 +1518,46 @@ func (e *ExtendedAssetHolding) splitToGroups(assets map[basics.AssetIndex]basics
 		return b
 	}
 
-	currentGroup := 0
 	e.Count = uint32(len(assets))
 	e.Groups = make([]AssetsHoldingGroup, numGroups)
+	e.loaded = true
+
+	size := min(maxHoldingGroupSize, len(assets))
+	currentGroup := 0
 	e.Groups[currentGroup] = AssetsHoldingGroup{
+		Count:         uint32(size),
 		MinAssetIndex: flatten[0].aidx,
 		groupData: AssetsHoldingGroupData{
-			AssetOffsets: make([]basics.AssetIndex, 0, min(maxHoldingGroupSize, len(assets))),
-			Amounts:      make([]uint64, 0, min(maxHoldingGroupSize, len(assets))),
-			Frozens:      make([]bool, 0, min(maxHoldingGroupSize, len(assets))),
+			AssetOffsets: make([]basics.AssetIndex, size, size),
+			Amounts:      make([]uint64, size, size),
+			Frozens:      make([]bool, size, size),
 		},
+		loaded: true,
 	}
-	prev := e.Groups[currentGroup].MinAssetIndex
+	prevAssetIndex := e.Groups[currentGroup].MinAssetIndex
+	prevGroupIndex := currentGroup
 	for i, a := range flatten {
-		currentGroup := i / maxHoldingGroupSize
-		if i%maxHoldingGroupSize == 0 && i != 0 {
-			e.Groups[currentGroup].DeltaMaxAssetIndex = uint64(flatten[i-1].aidx - e.Groups[currentGroup].MinAssetIndex)
-			currentGroup++
+		currentGroup = i / maxHoldingGroupSize
+		if currentGroup != prevGroupIndex {
+			e.Groups[prevGroupIndex].DeltaMaxAssetIndex = uint64(flatten[i-1].aidx - e.Groups[prevGroupIndex].MinAssetIndex)
+			size := min(maxHoldingGroupSize, len(assets)-i)
 			e.Groups[currentGroup] = AssetsHoldingGroup{
+				Count:         uint32(size),
 				MinAssetIndex: flatten[i].aidx,
 				groupData: AssetsHoldingGroupData{
-					AssetOffsets: make([]basics.AssetIndex, 0, min(maxHoldingGroupSize, len(assets)-i)),
-					Amounts:      make([]uint64, 0, min(maxHoldingGroupSize, len(assets)-i)),
-					Frozens:      make([]bool, 0, min(maxHoldingGroupSize, len(assets)-i)),
+					AssetOffsets: make([]basics.AssetIndex, size, size),
+					Amounts:      make([]uint64, size, size),
+					Frozens:      make([]bool, size, size),
 				},
+				loaded: true,
 			}
-			prev = e.Groups[currentGroup].MinAssetIndex
+			prevAssetIndex = e.Groups[currentGroup].MinAssetIndex
+			prevGroupIndex = currentGroup
 		}
-		e.Groups[currentGroup].Count++
-		e.Groups[currentGroup].groupData.AssetOffsets[i%maxHoldingGroupSize] = a.aidx - prev
+		e.Groups[currentGroup].groupData.AssetOffsets[i%maxHoldingGroupSize] = a.aidx - prevAssetIndex
 		e.Groups[currentGroup].groupData.Amounts[i%maxHoldingGroupSize] = a.holdings.Amount
 		e.Groups[currentGroup].groupData.Frozens[i%maxHoldingGroupSize] = a.holdings.Frozen
-		prev = a.aidx
+		prevAssetIndex = a.aidx
 	}
 	e.Groups[currentGroup].DeltaMaxAssetIndex = uint64(flatten[len(flatten)-1].aidx - e.Groups[currentGroup].MinAssetIndex)
 }
@@ -1569,7 +1568,7 @@ func accountsNewCreate(basei *sql.Stmt, exti *sql.Stmt, addr basics.Address, ad 
 	if len(ad.Assets) <= assetsThreshold {
 		pad.AccountData = ad
 	} else {
-		pad.ExtendedAssetHolding.splitToGroups(ad.Assets)
+		pad.ExtendedAssetHolding.convertToGroups(ad.Assets)
 		pad.AccountData = ad
 		pad.AccountData.Assets = nil
 	}
@@ -1635,7 +1634,7 @@ func accountsNewUpdate(baseu, extq, extu, exti, extd *sql.Stmt, addr basics.Addr
 	if delta.old.pad.NumAssetHoldings() <= assetsThreshold && len(delta.new.Assets) <= assetsThreshold {
 		pad.AccountData = delta.new
 	} else if delta.old.pad.NumAssetHoldings() <= assetsThreshold && len(delta.new.Assets) > assetsThreshold {
-		pad.ExtendedAssetHolding.splitToGroups(delta.new.Assets)
+		pad.ExtendedAssetHolding.convertToGroups(delta.new.Assets)
 		pad.AccountData = delta.new
 		pad.AccountData.Assets = nil
 	} else if delta.old.pad.NumAssetHoldings() > assetsThreshold {
