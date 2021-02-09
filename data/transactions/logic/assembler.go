@@ -667,51 +667,14 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-func asmImmByte(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
-	if len(args) != 1 {
-		return ops.errorf("%s expects one immediate argument", spec.Name)
-	}
-	val, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		return ops.error(err)
-	}
-	if val > 255 {
-		return ops.errorf("%s outside 0..255: %d", spec.Name, val)
-	}
-	ops.pending.WriteByte(spec.Opcode)
-	ops.pending.WriteByte(byte(val))
-	return nil
-}
-
 func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
-	if len(args) != 2 {
-		return ops.error("substring expects 2 immediate args")
-	}
-	start, err := strconv.ParseUint(args[0], 0, 64)
-	if err != nil {
-		return ops.error(err)
-	}
-	if start > EvalMaxScratchSize {
-		return ops.error("substring limited to 0..255")
-	}
-
-	end, err := strconv.ParseUint(args[1], 0, 64)
-	if err != nil {
-		return ops.error(err)
-	}
-	if end > EvalMaxScratchSize {
-		return ops.error("substring limited to 0..255")
-	}
-
+	asmDefault(ops, spec, args)
+	// Having run asmDefault, only need to check extra constraints.
+	start, _ := strconv.ParseUint(args[0], 0, 64)
+	end, _ := strconv.ParseUint(args[1], 0, 64)
 	if end < start {
 		return ops.error("substring end is before start")
 	}
-	opcode := byte(spec.Opcode)
-	ops.pending.WriteByte(opcode)
-	ops.pending.WriteByte(byte(start))
-	ops.pending.WriteByte(byte(end))
 	return nil
 }
 
@@ -926,12 +889,23 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 
 type assembleFunc func(*OpStream, *OpSpec, []string) error
 
+// Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.checkArgs(*spec)
-	if len(args) != 0 {
-		ops.errorf("%s expects no arguments", spec.Name)
+	if len(args) != spec.opSize.size-1 {
+		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.opSize.size)
 	}
 	ops.pending.WriteByte(spec.Opcode)
+	for i := 0; i < spec.opSize.size-1; i++ {
+		val, err := strconv.ParseUint(args[i], 0, 64)
+		if err != nil {
+			return ops.error(err)
+		}
+		if val > 255 {
+			return ops.errorf("%s outside 0..255: %d", spec.Name, val)
+		}
+		ops.pending.WriteByte(byte(val))
+	}
 	return nil
 }
 

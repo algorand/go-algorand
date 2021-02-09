@@ -136,8 +136,8 @@ var OpSpecs = []OpSpec{
 	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
 	{0x33, "gtxn", opGtxn, assembleGtxn, disGtxn, nil, oneAny, 1, modeAny, opSize{1, 3, nil}},
 	{0x33, "gtxn", opGtxn, assembleGtxn2, disGtxn, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},
-	{0x34, "load", opLoad, asmImmByte, disDefault, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
-	{0x35, "store", opStore, asmImmByte, disDefault, oneAny, nil, 1, modeAny, opSize{1, 2, nil}},
+	{0x34, "load", opLoad, asmDefault, disDefault, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
+	{0x35, "store", opStore, asmDefault, disDefault, oneAny, nil, 1, modeAny, opSize{1, 2, nil}},
 	{0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},
 	{0x37, "gtxna", opGtxna, assembleGtxna, disGtxna, nil, oneAny, 2, modeAny, opSize{1, 4, nil}},
 
@@ -179,7 +179,7 @@ var OpSpecs = []OpSpec{
 
 	// There must be at least one thing on the stack for dig, but
 	// it would be nice if we did better checking than that.
-	{0x80, "dig", opDig, asmImmByte, disDefault, oneAny, twoAny, 3, modeAny, opSize{1, 2, nil}},
+	{0x80, "dig", opDig, asmDefault, disDefault, oneAny, twoAny, 3, modeAny, opSize{1, 2, nil}},
 
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
 	{0x81, "stxn", opStxn, assembleStxn, disTxn, oneInt, oneAny, 3, modeAny, opSize{1, 2, nil}},
