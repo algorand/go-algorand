@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=2009,2093,2164
 
 FILENAME=$(basename -- "$0")
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
@@ -20,6 +21,12 @@ GENESIS_NETWORK_DIR=""
 GENESIS_NETWORK_DIR_SPEC=""
 SKIP_UPDATE=0
 TOOLS_OUTPUT_DIR=""
+DRYRUN=false
+IS_ROOT=false
+if [ $EUID -eq 0 ]; then
+    IS_ROOT=true
+fi
+
 
 set -o pipefail
 
@@ -55,8 +62,8 @@ while [ "$1" != "" ]; do
         -d)
             shift
             THISDIR=$1
-            mkdir -p ${THISDIR} >/dev/null
-            pushd ${THISDIR} >/dev/null
+            mkdir -p "${THISDIR}" >/dev/null
+            pushd "${THISDIR}" >/dev/null
             THISDIR=$(pwd -P)
             popd >/dev/null
             DATADIRS+=(${THISDIR})
@@ -93,6 +100,9 @@ while [ "$1" != "" ]; do
             shift
             TOOLS_OUTPUT_DIR=$1
             ;;
+        -z)
+            DRYRUN=true
+            ;;
         *)
             echo "Unknown option" "$1"
             UNKNOWNARGS+=("$1")
@@ -103,7 +113,7 @@ done
 
 # If this is an update, we'll validate that before doing anything else.
 # If this is an install, we'll create it.
-if [ ${RESUME_INSTALL} -eq 0 ]; then
+if [ ${RESUME_INSTALL} -eq 0 ] && ! $DRYRUN; then
     if [ "${BINDIR}" = "" ]; then
         BINDIR="${SCRIPTPATH}"
     fi
@@ -111,7 +121,7 @@ fi
 
 # If -d not specified, don't default any more
 if [ "${#DATADIRS[@]}" -eq 0 ]; then
-    echo "You must specify at least one data directory with `-d`"
+    echo "You must specify at least one data directory with \`-d\`"
     exit 1
 fi
 
@@ -302,8 +312,9 @@ function download_update() {
 }
 
 function check_and_download_update() {
-    check_for_update
-    if [ $? -ne 0 ]; then return 1; fi
+    if ! check_for_update; then
+        return 1
+    fi
 
     download_update
 }
@@ -316,10 +327,9 @@ function download_update_for_current_version() {
 
 function expand_update() {
     echo Expanding update...
-
-    tar -zxof ${TARFILE} -C ${UPDATESRCDIR}
-    if [ $? -ne 0 ]; then return 1; fi
-
+    if ! tar -zxof "${TARFILE}" -C "${UPDATESRCDIR}"; then
+        return 1
+    fi
     validate_update
 }
 
@@ -330,20 +340,67 @@ function validate_update() {
     return 0
 }
 
+function check_service() {
+    local service_type="$1"
+    local dd="$2"
+    local path
+
+    if [ "$service_type" = "user" ]; then
+        path=$(awk -F= '{ print $2 }' <(systemctl --user show -p FragmentPath "algorand@$(systemd-escape "$dd")"))
+    else
+        path=$(awk -F= '{ print $2 }' <(systemctl show -p FragmentPath "algorand@$(systemd-escape "$dd")"))
+    fi
+
+    if [ "$path" != "" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+function run_systemd_action() {
+    if [ "$(uname)" = "Darwin" ]; then
+        return 1
+    fi
+
+    local action=$1
+    local data_dir=$2
+    local process_owner
+
+    if check_service system "$data_dir"; then
+        process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
+        if $IS_ROOT || grep sudo <(groups "$process_owner" &> /dev/null); then
+            if systemctl "$action" "algorand@$(systemd-escape "$data_dir")"; then
+                echo "systemd system service: $action"
+                return 0
+            fi
+        fi
+    fi
+
+    if check_service user "$data_dir"; then
+        if systemctl --user "$action" "algorand@$(systemd-escape "${data_dir}")"; then
+            echo "systemd user service: $action"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 function shutdown_node() {
     echo Stopping node...
     if [ "$(pgrep -x algod)" != "" ] || [ "$(pgrep -x kmd)" != "" ] ; then
-        if [ -f ${BINDIR}/goal ]; then
-            for DD in ${DATADIRS[@]}; do
-                if [ -f ${DD}/algod.pid ] || [ -f ${DD}/**/kmd.pid ] ; then
-                    echo Stopping node and waiting...
-                    sudo -n systemctl stop algorand@$(systemd-escape ${DD})
-                    ${BINDIR}/goal node stop -d ${DD}
+        if [ -f "${BINDIR}/goal" ]; then
+            for DD in "${DATADIRS[@]}"; do
+                if [ -f "${DD}/algod.pid" ] || [ -f "${DD}"/**/kmd.pid ] ; then
+                    echo "Stopping node with data directory ${DD} and waiting..."
+                    run_systemd_action stop "${DD}"
+                    "${BINDIR}/goal" node stop -d "${DD}"
                     sleep 5
                 else
                     echo "Node is running but not in ${DD} - not stopping"
                     # Clean up zombie (algod|kmd).net files
-                    rm -f ${DD}/algod.net ${DD}/**/kmd.net
+                    rm -f "${DD}/algod.net" "${DD}"/**/kmd.net
                 fi
             done
         fi
@@ -356,11 +413,11 @@ function shutdown_node() {
 
 function backup_binaries() {
     echo Backing up current binary files...
-    mkdir -p ${BINDIR}/backup
+    mkdir -p "${BINDIR}/backup"
     BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
-    [ -f ${BINDIR}/node_exporter ] && BACKUPFILES="${BACKUPFILES} node_exporter"
-    tar -zcf ${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz -C ${BINDIR} ${BACKUPFILES} >/dev/null 2>&1
+    [ -f "${BINDIR}/node_exporter" ] && BACKUPFILES="${BACKUPFILES} node_exporter"
+    tar -zcf "${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz" -C "${BINDIR}" "${BACKUPFILES}" >/dev/null 2>&1
 }
 
 function backup_data() {
@@ -368,15 +425,15 @@ function backup_data() {
     BACKUPDIR="${CURDATADIR}/backup"
 
     echo "Backing up current data files from ${CURDATADIR}..."
-    mkdir -p ${BACKUPDIR}
+    mkdir -p "${BACKUPDIR}"
     BACKUPFILES="genesis.json wallet-genesis.id"
-    tar --no-recursion --exclude='*.log' --exclude='*.log.archive' --exclude='*.tar.gz' -zcf ${BACKUPDIR}/data-v${CURRENTVER}.tar.gz -C ${CURDATADIR} ${BACKUPFILES} >/dev/null 2>&1
+    tar --no-recursion --exclude='*.log' --exclude='*.log.archive' --exclude='*.tar.gz' -zcf "${BACKUPDIR}/data-v${CURRENTVER}.tar.gz" -C "${CURDATADIR}" "${BACKUPFILES}" >/dev/null 2>&1
 }
 
 function backup_current_version() {
     backup_binaries
-    for DD in ${DATADIRS[@]}; do
-        backup_data ${DD}
+    for DD in "${DATADIRS[@]}"; do
+        backup_data "${DD}"
     done
 }
 
@@ -437,7 +494,7 @@ function install_new_data() {
         CURDATADIR=$1
         echo "Installing new data files into ${CURDATADIR}..."
         ROLLBACKDATA+=(${CURDATADIR})
-        cp ${UPDATESRCDIR}/data/* ${CURDATADIR}
+        cp "${UPDATESRCDIR}/data/"* "${CURDATADIR}"
     fi
 }
 
@@ -512,9 +569,9 @@ function startup_node() {
         fail_and_exit "Installation does not appear to be valid"
     fi
 
-    sudo -n systemctl start algorand@$(systemd-escape ${CURDATADIR})
-    if [ $? -ne 0 ]; then
-        ${BINDIR}/goal node start -d ${CURDATADIR} ${HOSTEDFLAG}
+    if ! run_systemd_action start "${CURDATADIR}"; then
+        echo "No systemd services, starting node with goal."
+        ${BINDIR}/goal node start -d "${CURDATADIR}" ${HOSTEDFLAG}
     fi
 }
 
@@ -552,13 +609,13 @@ function apply_fixups() {
     echo "Applying migration fixups..."
 
     # Delete obsolete algorand binary - renamed to 'goal'
-    rm ${BINDIR}/algorand >/dev/null 2>&1
+    rm "${BINDIR}/algorand" >/dev/null 2>&1
 
-    for DD in ${DATADIRS[@]}; do
-        clean_legacy_logs ${DD}
+    for DD in "${DATADIRS[@]}"; do
+        clean_legacy_logs "${DD}"
 
         # Purge obsolete cadaver files (now agreement.cdv[.archive])
-        rm -f ${DD}/service*.cadaver
+        rm -f "${DD}"/service*.cadaver
     done
 }
 
@@ -570,15 +627,14 @@ function apply_fixups() {
 # Unless it's an install
 if [ ! -d "${BINDIR}" ]; then
     if [ "${UPDATETYPE}" = "install" ]; then
-        mkdir -p ${BINDIR}
+        mkdir -p "${BINDIR}"
     else
         fail_and_exit "Missing or invalid binaries path specified '${BINDIR}'"
     fi
 fi
 
 if [ "${UPDATETYPE}" != "install" ]; then
-    check_install_valid
-    if [ $? -ne 0 ]; then
+    if ! check_install_valid; then
         echo "Unable to perform an update - installation does not appear valid"
         exit 1
     fi
@@ -586,7 +642,7 @@ fi
 
 # If we're initiating an update/install, check for an update and if we have a new one,
 # expand it and invoke the new update.sh script.
-if [ ${RESUME_INSTALL} -eq 0 ]; then
+if [ ${RESUME_INSTALL} -eq 0 ] && ! $DRYRUN; then
     validate_channel_specified
 
     if [ "${UPDATETYPE}" = "migrate" ]; then
@@ -600,8 +656,7 @@ if [ ${RESUME_INSTALL} -eq 0 ]; then
         exit $?
     fi
 
-    expand_update
-    if [ $? -ne 0 ]; then
+    if ! expand_update; then
         fail_and_exit "Error expanding update"
     fi
 
@@ -609,7 +664,7 @@ if [ ${RESUME_INSTALL} -eq 0 ]; then
     # Note that the SCRIPTPATH we're passing in should be our binaries directory, which is what we expect to be
     # passed as the last argument (if any)
     echo "Starting the new update script to complete the installation..."
-    exec "${UPDATESRCDIR}/bin/${FILENAME}" ${INSTALLOPT} -r -c ${CHANNEL} ${DATADIRSPEC} ${NOSTART} ${BINDIRSPEC} ${HOSTEDSPEC} ${GENESIS_NETWORK_DIR_SPEC} "${UNKNOWNARGS[@]}"
+    exec "${UPDATESRCDIR}/bin/${FILENAME}" ${INSTALLOPT} -r -c ${CHANNEL} ${DATADIRSPEC} ${NOSTART} ${BINDIRSPEC} ${HOSTEDSPEC} ${GENESIS_NETWORK_DIR_SPEC} ${UNKNOWNARGS[@]}
 
     # If we're still here, exec failed.
     fail_and_exit "Error executing the new update script - unable to continue"
@@ -627,40 +682,39 @@ fi
 # Shutdown node before backing up so data is consistent and files aren't locked / in-use.
 shutdown_node
 
-if [ ${SKIP_UPDATE} -eq 0 ]; then
-    backup_current_version
-fi
-
-# We don't care about return code - doesn't matter if we failed to archive
-
-ROLLBACK=1
-
-install_new_binaries
-if [ $? -ne 0 ]; then
-    fail_and_exit "Error installing new files"
-fi
-
-for DD in ${DATADIRS[@]}; do
-    install_new_data ${DD}
-    if [ $? -ne 0 ]; then
-        fail_and_exit "Error installing data files into ${DD}"
+if ! $DRYRUN; then
+    if [ ${SKIP_UPDATE} -eq 0 ]; then
+        backup_current_version
     fi
-done
 
-copy_genesis_files
+    # We don't care about return code - doesn't matter if we failed to archive
 
-for DD in ${DATADIRS[@]}; do
-    check_for_new_ledger ${DD}
-    if [ $? -ne 0 ]; then
-        fail_and_exit "Error updating ledger in ${DD}"
+    ROLLBACK=1
+
+    if ! install_new_binaries; then
+        fail_and_exit "Error installing new files"
     fi
-done
 
-if [ "${TESTROLLBACK}" != "" ]; then
-    fail_and_exit "Simulating update failure - rolling back"
+    for DD in "${DATADIRS[@]}"; do
+        if ! install_new_data "${DD}"; then
+            fail_and_exit "Error installing data files into ${DD}"
+        fi
+    done
+
+    copy_genesis_files
+
+    for DD in "${DATADIRS[@]}"; do
+        if ! check_for_new_ledger "${DD}"; then
+            fail_and_exit "Error updating ledger in ${DD}"
+        fi
+    done
+
+    if [ "${TESTROLLBACK}" != "" ]; then
+        fail_and_exit "Simulating update failure - rolling back"
+    fi
+
+    apply_fixups
 fi
-
-apply_fixups
 
 if [ "${NOSTART}" != "" ]; then
     echo "Install complete - restart node manually"

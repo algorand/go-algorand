@@ -121,7 +121,7 @@ func OneTimeIDForRound(round Round, keyDilution uint64) crypto.OneTimeSignatureI
 	}
 }
 
-// SubSaturate subtracts two rounds with saturation arithmetic that does not
+// SubSaturate subtracts x rounds with saturation arithmetic that does not
 // wrap around past zero, and instead returns 0 on underflow.
 func (round Round) SubSaturate(x Round) Round {
 	if round < x {
