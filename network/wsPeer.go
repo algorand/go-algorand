@@ -553,6 +553,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 	for _, msg := range msgs {
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
+			logging.Base().Infof("bad msg: %v", msg)
 			return err
 		}
 	}
@@ -606,6 +607,7 @@ func (wp *wsPeer) writeLoop() {
 	// the cleanupCloseError sets the default error to disconnectWriteError; depending on the exit reason, the error might get changed.
 	cleanupCloseError := disconnectWriteError
 	defer func() {
+		logging.Base().Info("cleanup")
 		wp.writeLoopCleanup(cleanupCloseError)
 	}()
 	for {
@@ -622,6 +624,7 @@ func (wp *wsPeer) writeLoop() {
 		// if nothing high prio, send anything
 		select {
 		case <-wp.closing:
+			logging.Base().Info("wp.closing")
 			return
 		case data := <-wp.sendBufferHighPrio:
 			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
@@ -651,7 +654,8 @@ func (wp *wsPeer) writeNonBlock(data []byte, highPrio bool, digest crypto.Digest
 
 // return true if enqueued/sent
 func (wp *wsPeer) writeNonBlockMsgs(data [][]byte, highPrio bool, digest []crypto.Digest, msgEnqueueTime time.Time) bool {
-	filtered := 0
+	filteredCount := 0
+	filtered := make([]bool, len(data), len(data))
 	for i := range data {
 		if wp.outgoingMsgFilter != nil && len(data[i]) > messageFilterSize && wp.outgoingMsgFilter.CheckDigest(digest[i], false, false) {
 			//wp.net.log.Debugf("msg drop as outbound dup %s(%d) %v", string(data[:2]), len(data)-2, digest)
@@ -659,24 +663,24 @@ func (wp *wsPeer) writeNonBlockMsgs(data [][]byte, highPrio bool, digest []crypt
 			outgoingNetworkMessageFilteredOutTotal.Inc(nil)
 			outgoingNetworkMessageFilteredOutBytesTotal.AddUint64(uint64(len(data)), nil)
 
-			data[i] = nil
-			filtered++
+			filtered[i] = true
+			filteredCount++
 		}
 	}
-	if filtered == len(data) {
+	if filteredCount == len(data) {
 		// returning true because it is as good as sent, the peer already has it.
 		return true
 	}
 
 	var outchan chan []sendMessage
 
-	msgs := make([]sendMessage, len(data)-filtered, len(data)-filtered)
+	msgs := make([]sendMessage, len(data)-filteredCount, len(data)-filteredCount)
 	enqueueTime := time.Now()
-	i := 0
-	for _, d := range data {
-		if d != nil {
-			msgs[i] = sendMessage{data: d, enqueued: msgEnqueueTime, peerEnqueued: enqueueTime}
-			i++
+	index := 0
+	for i, d := range data {
+		if !filtered[i] {
+			msgs[index] = sendMessage{data: d, enqueued: msgEnqueueTime, peerEnqueued: enqueueTime}
+			index++
 		}
 	}
 
