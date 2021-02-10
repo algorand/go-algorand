@@ -286,7 +286,7 @@ func TestApplicationsUpgradeOverGossip(t *testing.T) {
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes100SecondTestUnupgradedProtocol.json"))
 
 	// for the primary node, we want to have a different consensus which always enables applications.
-	primaryNodeUnupgradedProtocol := consensus[consensusTestFastUpgrade(protocol.ConsensusFuture)]
+	primaryNodeUnupgradedProtocol := consensus[consensusTestFastUpgrade(protocol.ConsensusCurrentVersion)]
 	primaryNodeUnupgradedProtocol.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
 	primaryNodeUnupgradedProtocol.ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusFuture)] = 0
 	consensus[consensusTestUnupgradedProtocol] = primaryNodeUnupgradedProtocol
