@@ -184,6 +184,10 @@ var OpSpecs = []OpSpec{
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
 	{0x81, "stxn", opStxn, assembleStxn, disTxn, oneInt, oneAny, 3, modeAny, opSize{1, 2, nil}},
 	{0x82, "stxna", opStxna, assembleStxna, disTxna, oneInt, oneAny, 3, modeAny, opSize{1, 3, nil}},
+
+	// Immediate bytes and ints. Smaller code size for single use of constant.
+	{0x83, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, opSize{1, 0, checkPushBytes}},
+	{0x84, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, opSize{1, 0, checkPushInt}},
 }
 
 type sortByOpcode []OpSpec

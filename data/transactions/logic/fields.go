@@ -79,7 +79,7 @@ const (
 	ApplicationID
 	// OnCompletion OnCompletion
 	OnCompletion
-	// ApplicationArgs []basics.TealValue
+	// ApplicationArgs  [][]byte
 	ApplicationArgs
 	// NumAppArgs len(ApplicationArgs)
 	NumAppArgs
@@ -140,6 +140,11 @@ const (
 	LocalStateInts
 	// LocalStateByteslices uint64
 	LocalStateByteslices
+
+	// LogicArgs [][]byte
+	LogicArgs
+	// NumLogicArgs len(LogicArgs)
+	NumLogicArgs
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -226,6 +231,8 @@ var txnFieldSpecs = []txnFieldSpec{
 	{GlobalStateByteslices, StackUint64, 3},
 	{LocalStateInts, StackUint64, 3},
 	{LocalStateByteslices, StackUint64, 3},
+	{LogicArgs, StackBytes, 3},
+	{NumLogicArgs, StackUint64, 3},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
@@ -245,6 +252,7 @@ var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
 	Accounts:        {Accounts, StackBytes, 2},
 	ForeignAssets:   {ForeignAssets, StackUint64, 3},
 	ForeignApps:     {ForeignApps, StackUint64, 3},
+	LogicArgs:       {LogicArgs, StackBytes, 3},
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order

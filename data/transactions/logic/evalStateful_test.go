@@ -2731,6 +2731,8 @@ func TestReturnTypes(t *testing.T) {
 		"asset_holding_get": "asset_holding_get AssetBalance",
 		"stxn":              "stxn Sender",
 		"stxna":             "stxna ApplicationArgs 0",
+		"pushint":           "pushint 7272",
+		"pushbytes":         `pushbytes "jojogoodgorilla"`,
 	}
 
 	byName := opsByName[LogicVersion]

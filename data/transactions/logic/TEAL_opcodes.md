@@ -414,6 +414,8 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 53 | GlobalStateByteslices | uint64 | Number of global byteslices requested in ApplicationCall. LogicSigVersion >= 3. |
 | 54 | LocalStateInts | uint64 | Number of local integers requested in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalStateByteslices | uint64 | Number of local byteslices requested in ApplicationCall. LogicSigVersion >= 3. |
+| 56 | LogicArgs | uint64 | Arguments given to the LogicSig. LogicSigVersion >= 3. |
+| 57 | NumLogicArgs | uint64 | Number of arguments given to the LogicSig. LogicSigVersion >= 3. |
 
 
 TypeEnum mapping:

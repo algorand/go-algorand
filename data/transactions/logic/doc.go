@@ -71,12 +71,14 @@ var opDocList = []stringString{
 	{"intc_1", "push constant 1 from intcblock to stack"},
 	{"intc_2", "push constant 2 from intcblock to stack"},
 	{"intc_3", "push constant 3 from intcblock to stack"},
+	{"pushint", "push the following varuint encoded bytes to the stack as an integer"},
 	{"bytecblock", "load block of byte-array constants"},
 	{"bytec", "push bytes constant to stack by index into constants"},
 	{"bytec_0", "push constant 0 from bytecblock to stack"},
 	{"bytec_1", "push constant 1 from bytecblock to stack"},
 	{"bytec_2", "push constant 2 from bytecblock to stack"},
 	{"bytec_3", "push constant 3 from bytecblock to stack"},
+	{"pushbytes", "push the following program bytes to the stack"},
 	{"arg", "push Args[N] value to stack by index"},
 	{"arg_0", "push Args[0] to stack"},
 	{"arg_1", "push Args[1] to stack"},
@@ -215,7 +217,7 @@ type OpGroup struct {
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"}},
-	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "stxn", "stxna", "global", "load", "store"}},
+	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "stxn", "stxna", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert"}},
 	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
@@ -320,6 +322,8 @@ var txnFieldDocList = []stringString{
 	{"OnCompletion", "ApplicationCall transaction on completion action"},
 	{"ApplicationArgs", "Arguments passed to the application in the ApplicationCall transaction"},
 	{"NumAppArgs", "Number of ApplicationArgs"},
+	{"LogicArgs", "Arguments to the LogicSig of the transaction"},
+	{"NumLogicArgs", "Number of arguments to the LogicSig of the transaction"},
 	{"Accounts", "Accounts listed in the ApplicationCall transaction"},
 	{"NumAccounts", "Number of Accounts"},
 	{"ForeignAssets", "Foreign Assets listed in the ApplicationCall transaction"},

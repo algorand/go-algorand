@@ -219,10 +219,10 @@ func TestOpcodesVersioningV2(t *testing.T) {
 			require.True(t, spec.Version == 1 || spec.Version == 2 || spec.Version == 3)
 		}
 	}
-	require.Equal(t, cntv3, len(opsByName[3]))
+	require.Len(t, opsByName[3], cntv3)
 
-	// hardcode and ensure amount of new v2 opcodes
-	newOpcodes = 11 // assert, min_balance, {get,set}{bit,byte}, swap, select, dig, stxn, stxna
+	// assert, min_balance, {get,set}{bit,byte}, swap, select, dig, stxn, stxna, push{int,bytes}
+	newOpcodes = 13
 	overwritten = 0 // ? none yet
 	require.Equal(t, newOpcodes+overwritten, cntAdded)
 

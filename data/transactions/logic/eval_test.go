@@ -1434,6 +1434,14 @@ txn LocalStateByteslices
 int 2
 ==
 assert
+txn NumLogicArgs
+int 8
+==
+assert
+txn LogicArgs 0
+byte "pay"
+==
+assert
 
 
 int 1
@@ -3739,6 +3747,8 @@ func TestAllowedOpcodesV3(t *testing.T) {
 		"dig":         "int 1; int 1; dig 1",
 		"stxn":        "int 0; stxn FirstValid",
 		"stxna":       "int 0; stxna Accounts 0",
+		"pushint":     "pushint 7; pushint 4",
+		"pushbytes":   `pushbytes "stringsfail?"`,
 	}
 
 	excluded := map[string]bool{}
@@ -3810,7 +3820,10 @@ func obfuscate(program string) string {
 	// but prevents assembly from detecting type errors.  Allows
 	// evaluation testing of a program that would be rejected by
 	// assembler.
-	return "int 0;bnz label;label:;" + program
+	if strings.Contains(program, "obfuscate") {
+		return program // Already done.  Tests sometimes use at multiple levels
+	}
+	return "int 0;bnz obfuscate;obfuscate:;" + program
 }
 
 type evalTester func(pass bool, err error) bool
@@ -3819,7 +3832,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			if v < introduced {
-				testProg(t, program, v, expect{0, "...opcode was introduced..."})
+				testProg(t, obfuscate(program), v, expect{0, "...opcode was introduced..."})
 				return
 			}
 			ops := testProg(t, program, v)
@@ -3911,4 +3924,31 @@ func TestDig(t *testing.T) {
 	t.Parallel()
 	testAccepts(t, "int 3; int 2; int 1; dig 1; int 2; ==; return", 3)
 	testPanics(t, "int 3; int 2; int 1; dig 11; int 2; ==; return", 3)
+}
+
+func TestPush(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 2; pushint 2; ==", 3)
+	testAccepts(t, "pushbytes 0x1234; byte 0x1234; ==", 3)
+
+	// There's a savings to be had if the intcblock is entirely avoided
+	ops1 := testProg(t, "int 1", 3)
+	ops2 := testProg(t, "pushint 1", 3)
+	require.Less(t, len(ops2.Program), len(ops1.Program))
+
+	// There's no savings to be had if the pushint replaces a
+	// reference to one of the arg{0-3} opcodes, since they only
+	// use one byte. And the intcblock only grows by the varuint
+	// encoding size of the pushedint. Which is the same either
+	// way.
+
+	ops1 = testProg(t, "int 2; int 1", 3)
+	ops2 = testProg(t, "int 2; pushint 1", 3)
+	require.Equal(t, len(ops2.Program), len(ops1.Program))
+
+	// There's a savings to be had when intcblock > 4 elements,
+	// because references beyong arg 3 require two byte.
+	ops1 = testProg(t, "int 2; int 3; int 5; int 6; int 1", 3)
+	ops2 = testProg(t, "int 2; int 3; int 5; int 6; pushint 1", 3)
+	require.Less(t, len(ops2.Program), len(ops1.Program))
 }

@@ -416,6 +416,38 @@ func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.checkArgs(*spec)
+	if len(args) != 1 {
+		ops.errorf("%s needs one argument", spec.Name)
+	}
+	val, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		ops.error(err)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	var scratch [binary.MaxVarintLen64]byte
+	vlen := binary.PutUvarint(scratch[:], val)
+	ops.pending.Write(scratch[:vlen])
+	return nil
+}
+func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
+	ops.checkArgs(*spec)
+	if len(args) != 1 {
+		ops.errorf("%s needs one argument", spec.Name)
+	}
+	val, _, err := parseBinaryArgs(args)
+	if err != nil {
+		return ops.error(err)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	var scratch [binary.MaxVarintLen64]byte
+	vlen := binary.PutUvarint(scratch[:], uint64(len(val)))
+	ops.pending.Write(scratch[:vlen])
+	ops.pending.Write(val)
+	return nil
+}
+
 func base32DecdodeAnyPadding(x string) (val []byte, err error) {
 	val, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(x)
 	if err != nil {
@@ -1601,6 +1633,44 @@ func disBytecblock(dis *disassembleState, spec *OpSpec) {
 		}
 	}
 	_, dis.err = dis.out.Write([]byte("\n"))
+}
+
+func disPushInt(dis *disassembleState, spec *OpSpec) {
+	pos := dis.pc + 1
+	val, bytesUsed := binary.Uvarint(dis.program[pos:])
+	if bytesUsed <= 0 {
+		dis.err = fmt.Errorf("could not decode int at pc=%d", pos)
+		return
+	}
+	pos += bytesUsed
+	_, dis.err = fmt.Fprintf(dis.out, "%s %d\n", spec.Name, val)
+	dis.nextpc = pos
+}
+func checkPushInt(cx *evalContext) int {
+	opPushInt(cx)
+	return 1
+}
+
+func disPushBytes(dis *disassembleState, spec *OpSpec) {
+	pos := dis.pc + 1
+	length, bytesUsed := binary.Uvarint(dis.program[pos:])
+	if bytesUsed <= 0 {
+		dis.err = fmt.Errorf("could not decode bytes length at pc=%d", pos)
+		return
+	}
+	pos += bytesUsed
+	end := uint64(pos) + length
+	if end > uint64(len(dis.program)) || end < uint64(pos) {
+		dis.err = fmt.Errorf("pushbytes too long %d %d", end, pos)
+		return
+	}
+	bytes := dis.program[pos:end]
+	_, dis.err = fmt.Fprintf(dis.out, "%s 0x%s", spec.Name, hex.EncodeToString(bytes))
+	dis.nextpc = int(end)
+}
+func checkPushBytes(cx *evalContext) int {
+	opPushBytes(cx)
+	return 1
 }
 
 // This is also used to disassemble stxn
