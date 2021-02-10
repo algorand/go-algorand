@@ -571,6 +571,39 @@
         },
         "description": "Transaction ID of the submission."
       },
+      "ProofResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "idx": {
+                  "description": "Index of the transaction in the block's payset.",
+                  "type": "integer"
+                },
+                "proof": {
+                  "description": "Merkle proof of transaction membership.",
+                  "format": "byte",
+                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "type": "string"
+                },
+                "stibhash": {
+                  "description": "Hash of SignedTxnInBlock for verifying proof.",
+                  "format": "byte",
+                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "idx",
+                "proof",
+                "stibhash"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Proof of transaction in a block."
+      },
       "SupplyResponse": {
         "content": {
           "application/json": {
@@ -2011,6 +2044,124 @@
           }
         },
         "summary": "Get the block for the given round."
+      }
+    },
+    "/v2/blocks/{round}/transactions/{txid}/proof": {
+      "get": {
+        "operationId": "GetProof",
+        "parameters": [
+          {
+            "description": "The round in which the transaction appears.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The transaction ID for which to generate a proof.",
+            "in": "path",
+            "name": "txid",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]+",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "idx": {
+                      "description": "Index of the transaction in the block's payset.",
+                      "type": "integer"
+                    },
+                    "proof": {
+                      "description": "Merkle proof of transaction membership.",
+                      "format": "byte",
+                      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                      "type": "string"
+                    },
+                    "stibhash": {
+                      "description": "Hash of SignedTxnInBlock for verifying proof.",
+                      "format": "byte",
+                      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "idx",
+                    "proof",
+                    "stibhash"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Proof of transaction in a block."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed round number or transaction ID"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non-existent block or transaction"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal error, including protocol not supporting Merkle proofs."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown error"
+          }
+        },
+        "summary": "Get a Merkle proof for a transaction in a block."
       }
     },
     "/v2/catchup/{catchpoint}": {
