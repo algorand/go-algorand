@@ -76,8 +76,8 @@ func TestTxnMerkle(t *testing.T) {
 			proof, err := tree.Prove([]uint64{i})
 			require.NoError(t, err)
 
-			elemVerif := make(map[uint64]crypto.Hashable)
-			elemVerif[i] = &elems[i]
+			elemVerif := make(map[uint64]crypto.Digest)
+			elemVerif[i] = elems[i].Hash()
 			err = merklearray.Verify(root, elemVerif, proof)
 			require.NoError(t, err)
 		}
