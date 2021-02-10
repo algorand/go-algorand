@@ -17,7 +17,6 @@
 package transactions
 
 import (
-	"fmt"
 	"path/filepath"
 	"testing"
 
