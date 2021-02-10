@@ -417,9 +417,9 @@ func (wp *wsPeer) readLoop() {
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		msg.Sender = wp
 		logging.Base().Infof("mayberead, %v %v", msg.Tag, crypto.Hash(msg.Data))
-		if msg.Tag == protocol.TxnTag || msg.Tag == protocol.ProposalTransactionTag {
-			wp.StoreKV(crypto.Hash(msg.Data), msg.Data)
-		}
+		//if msg.Tag == protocol.TxnTag || msg.Tag == protocol.ProposalTransactionTag {
+		//	wp.StoreKV(crypto.Hash(msg.Data), msg.Data)
+		//}
 
 		// for outgoing connections, we want to notify the connection monitor that we've received
 		// a message. The connection monitor would update it's statistics accordingly.
@@ -553,7 +553,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 	for _, msg := range msgs {
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
-			logging.Base().Infof("bad msg: %v", msg)
+			logging.Base().Infof("bad msg: %v", len(msg.data))
 			return err
 		}
 	}
