@@ -36,27 +36,31 @@ import (
 // test-fast-upgrade-future
 const consensusTestUnupgradedProtocol = protocol.ConsensusVersion("test-unupgraded-protocol")
 
+// given that consensus version are constant and only growing forward, we can safely refer to them here:
+const lastProtocolBeforeApplicationSupport = protocol.ConsensusV23
+const firstProtocolWithApplicationSupport = protocol.ConsensusV24
+
 func makeApplicationUpgradeConsensus(t *testing.T) (appConsensus config.ConsensusProtocols) {
 	appConsensus = generateFastUpgradeConsensus()
 	// make sure that the "current" version does not support application and that the "future" version *does* support applications.
-	currentProtocolParams, ok := appConsensus[consensusTestFastUpgrade(protocol.ConsensusCurrentVersion)]
+	currentProtocolParams, ok := appConsensus[consensusTestFastUpgrade(lastProtocolBeforeApplicationSupport)]
 	require.True(t, ok)
-	futureProtocolParams, ok := appConsensus[consensusTestFastUpgrade(protocol.ConsensusFuture)]
+	futureProtocolParams, ok := appConsensus[consensusTestFastUpgrade(firstProtocolWithApplicationSupport)]
 	require.True(t, ok)
 
 	// ensure it's disabled.
-	currentProtocolParams.Application = false
-	currentProtocolParams.SupportRekeying = false
+	require.False(t, currentProtocolParams.Application)
+	require.False(t, currentProtocolParams.SupportRekeying)
 
 	// verify that the future protocol supports applications.
 	require.True(t, futureProtocolParams.Application)
 
 	// add an upgrade path from current to future.
 	currentProtocolParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
-	currentProtocolParams.ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusFuture)] = 0
+	currentProtocolParams.ApprovedUpgrades[consensusTestFastUpgrade(firstProtocolWithApplicationSupport)] = 0
 
 	appConsensus[consensusTestUnupgradedProtocol] = currentProtocolParams
-	appConsensus[consensusTestFastUpgrade(protocol.ConsensusFuture)] = futureProtocolParams
+	appConsensus[consensusTestFastUpgrade(firstProtocolWithApplicationSupport)] = futureProtocolParams
 
 	return
 }
@@ -286,9 +290,9 @@ func TestApplicationsUpgradeOverGossip(t *testing.T) {
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes100SecondTestUnupgradedProtocol.json"))
 
 	// for the primary node, we want to have a different consensus which always enables applications.
-	primaryNodeUnupgradedProtocol := consensus[consensusTestFastUpgrade(protocol.ConsensusFuture)]
+	primaryNodeUnupgradedProtocol := consensus[consensusTestFastUpgrade(firstProtocolWithApplicationSupport)]
 	primaryNodeUnupgradedProtocol.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
-	primaryNodeUnupgradedProtocol.ApprovedUpgrades[consensusTestFastUpgrade(protocol.ConsensusFuture)] = 0
+	primaryNodeUnupgradedProtocol.ApprovedUpgrades[consensusTestFastUpgrade(firstProtocolWithApplicationSupport)] = 0
 	consensus[consensusTestUnupgradedProtocol] = primaryNodeUnupgradedProtocol
 
 	client := fixture.GetLibGoalClientForNamedNode("Primary")
