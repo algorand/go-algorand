@@ -529,6 +529,9 @@ type PendingTransactionResponse struct {
 	// The application index if the transaction was found and it created an application.
 	ApplicationIndex *uint64 `json:"application-index,omitempty"`
 
+	// The number of the asset's unit that were transferred to the close-to address.
+	AssetClosingAmount *uint64 `json:"asset-closing-amount,omitempty"`
+
 	// The asset index if the transaction was found and it created an asset.
 	AssetIndex *uint64 `json:"asset-index,omitempty"`
 

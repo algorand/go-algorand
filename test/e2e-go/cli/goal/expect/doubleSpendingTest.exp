@@ -27,7 +27,7 @@ if { [catch {
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # Start network
-    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
 
     # Create a new wallet
     set WALLET_1_NAME Wallet_1_$TIME_STAMP
@@ -146,7 +146,7 @@ if { [catch {
     puts "SUCCESS: Double spending test successful"
 
     # Shutdown the network
-    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
 
     exit 0
 

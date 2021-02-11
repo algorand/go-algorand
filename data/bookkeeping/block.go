@@ -179,11 +179,15 @@ type (
 	// (instead of materializing it separately, like balances).
 	//msgp:ignore UpgradeState
 	UpgradeState struct {
-		CurrentProtocol        protocol.ConsensusVersion `codec:"proto"`
-		NextProtocol           protocol.ConsensusVersion `codec:"nextproto"`
-		NextProtocolApprovals  uint64                    `codec:"nextyes"`
-		NextProtocolVoteBefore basics.Round              `codec:"nextbefore"`
-		NextProtocolSwitchOn   basics.Round              `codec:"nextswitch"`
+		CurrentProtocol       protocol.ConsensusVersion `codec:"proto"`
+		NextProtocol          protocol.ConsensusVersion `codec:"nextproto"`
+		NextProtocolApprovals uint64                    `codec:"nextyes"`
+		// NextProtocolVoteBefore specify the last voting round for the next protocol proposal. If there is no voting for
+		// an upgrade taking place, this would be zero.
+		NextProtocolVoteBefore basics.Round `codec:"nextbefore"`
+		// NextProtocolSwitchOn specify the round number at which the next protocol would be adopted. If there is no upgrade taking place,
+		// nor a wait for the next protocol, this would be zero.
+		NextProtocolSwitchOn basics.Round `codec:"nextswitch"`
 	}
 
 	// CompactCertState tracks the state of compact certificates.
@@ -450,8 +454,6 @@ func MakeBlock(prev BlockHeader) Block {
 		logging.Base().Panicf("MakeBlock: next protocol %v not supported", upgradeState.CurrentProtocol)
 	}
 
-	var emptyPayset transactions.Payset
-
 	timestamp := time.Now().Unix()
 	if prev.TimeStamp > 0 {
 		if timestamp < prev.TimeStamp {
@@ -462,17 +464,37 @@ func MakeBlock(prev BlockHeader) Block {
 	}
 
 	// the merkle root of TXs will update when fillpayset is called
-	return Block{
+	blk := Block{
 		BlockHeader: BlockHeader{
 			Round:        prev.Round + 1,
 			Branch:       prev.Hash(),
-			TxnRoot:      emptyPayset.Commit(params.PaysetCommitFlat),
 			UpgradeVote:  upgradeVote,
 			UpgradeState: upgradeState,
 			TimeStamp:    timestamp,
 			GenesisID:    prev.GenesisID,
 			GenesisHash:  prev.GenesisHash,
 		},
+	}
+	blk.TxnRoot, err = blk.PaysetCommit()
+	if err != nil {
+		logging.Base().Warnf("MakeBlock: computing empty TxnRoot: %v", err)
+	}
+	return blk
+}
+
+// PaysetCommit computes the commitment to the payset, using the appropriate
+// commitment plan based on the block's protocol.
+func (block Block) PaysetCommit() (crypto.Digest, error) {
+	params, ok := config.Consensus[block.CurrentProtocol]
+	if !ok {
+		return crypto.Digest{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
+	}
+
+	switch params.PaysetCommit {
+	case config.PaysetCommitFlat:
+		return block.Payset.CommitFlat(), nil
+	default:
+		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", params.PaysetCommit)
 	}
 }
 
@@ -547,8 +569,13 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 // If we're given an untrusted block and a known-good hash, we can't trust the
 // block's transactions unless we validate this.
 func (block Block) ContentsMatchHeader() bool {
-	proto := config.Consensus[block.BlockHeader.CurrentProtocol]
-	return block.Payset.Commit(proto.PaysetCommitFlat) == block.TxnRoot
+	expected, err := block.PaysetCommit()
+	if err != nil {
+		logging.Base().Warnf("ContentsMatchHeader: cannot compute commitment: %v", err)
+		return false
+	}
+
+	return expected == block.TxnRoot
 }
 
 // DecodePaysetGroups decodes block.Payset using DecodeSignedTxn, and returns

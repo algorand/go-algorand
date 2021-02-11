@@ -36,18 +36,24 @@ func (d TestData) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, d[:]
 }
 
+type TestBuf []byte
+
+func (b TestBuf) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.Message, b
+}
+
 type TestArray []TestData
 
 func (a TestArray) Length() uint64 {
 	return uint64(len(a))
 }
 
-func (a TestArray) Get(pos uint64) (crypto.Hashable, error) {
+func (a TestArray) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= uint64(len(a)) {
-		return nil, fmt.Errorf("pos %d larger than length %d", pos, len(a))
+		return crypto.Digest{}, fmt.Errorf("pos %d larger than length %d", pos, len(a))
 	}
 
-	return a[pos], nil
+	return crypto.HashObj(a[pos]), nil
 }
 
 type TestRepeatingArray struct {
@@ -59,12 +65,12 @@ func (a TestRepeatingArray) Length() uint64 {
 	return a.count
 }
 
-func (a TestRepeatingArray) Get(pos uint64) (crypto.Hashable, error) {
+func (a TestRepeatingArray) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= a.count {
-		return nil, fmt.Errorf("pos %d larger than length %d", pos, a.count)
+		return crypto.Digest{}, fmt.Errorf("pos %d larger than length %d", pos, a.count)
 	}
 
-	return a.item, nil
+	return crypto.HashObj(a.item), nil
 }
 
 func TestMerkle(t *testing.T) {
@@ -160,17 +166,26 @@ func TestMerkle(t *testing.T) {
 }
 
 func BenchmarkMerkleCommit(b *testing.B) {
-	msg := TestMessage("Hello world")
+	for sz := 10; sz <= 100000; sz *= 100 {
+		msg := make(TestBuf, sz)
+		crypto.RandBytes(msg[:])
 
-	var a TestRepeatingArray
-	a.item = msg
-	a.count = uint64(b.N)
+		for cnt := 10; cnt <= 10000000; cnt *= 10 {
+			var a TestRepeatingArray
+			a.item = msg
+			a.count = uint64(cnt)
 
-	tree, err := Build(a)
-	if err != nil {
-		b.Error(err)
+			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					tree, err := Build(a)
+					if err != nil {
+						b.Error(err)
+					}
+					tree.Root()
+				}
+			})
+		}
 	}
-	tree.Root()
 }
 
 func BenchmarkMerkleProve1M(b *testing.B) {

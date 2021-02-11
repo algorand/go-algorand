@@ -133,6 +133,11 @@ const ConsensusV24 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/3a83c4c743f8b17adfd73944b4319c25722a6782",
 )
 
+// ConsensusV25 adds support for AssetCloseAmount in the ApplyData
+const ConsensusV25 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/bea19289bf41217d2c0af30522fa222ef1366466",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -145,7 +150,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV24
+const ConsensusCurrentVersion = ConsensusV25
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

@@ -733,7 +733,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		txibs = append(txibs, txib)
 
 		if eval.validate {
-			groupTxBytes += len(protocol.Encode(&txib))
+			groupTxBytes += txib.GetEncodedLength()
 			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
 				return ErrNoSpace
 			}
@@ -978,7 +978,12 @@ func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.Digest, tot
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
 func (eval *BlockEvaluator) endOfBlock() error {
 	if eval.generate {
-		eval.block.TxnRoot = eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
+		var err error
+		eval.block.TxnRoot, err = eval.block.PaysetCommit()
+		if err != nil {
+			return err
+		}
+
 		if eval.proto.TxnCounter {
 			eval.block.TxnCounter = eval.state.txnCounter()
 		} else {
@@ -987,7 +992,6 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 		if eval.proto.CompactCertRounds > 0 {
 			var basicCompactCert bookkeeping.CompactCertState
-			var err error
 			basicCompactCert.CompactCertVoters, basicCompactCert.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
 			if err != nil {
 				return err
@@ -1007,7 +1011,10 @@ func (eval *BlockEvaluator) endOfBlock() error {
 func (eval *BlockEvaluator) finalValidation() error {
 	if eval.validate {
 		// check commitments
-		txnRoot := eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
+		txnRoot, err := eval.block.PaysetCommit()
+		if err != nil {
+			return err
+		}
 		if txnRoot != eval.block.TxnRoot {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
 		}

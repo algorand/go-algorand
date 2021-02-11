@@ -463,6 +463,10 @@
                   "description": "The application index if the transaction was found and it created an application.",
                   "type": "integer"
                 },
+                "asset-closing-amount": {
+                  "description": "The number of the asset's unit that were transferred to the close-to address.",
+                  "type": "integer"
+                },
                 "asset-index": {
                   "description": "The asset index if the transaction was found and it created an asset.",
                   "type": "integer"
@@ -3129,6 +3133,10 @@
                       "description": "The application index if the transaction was found and it created an application.",
                       "type": "integer"
                     },
+                    "asset-closing-amount": {
+                      "description": "The number of the asset's unit that were transferred to the close-to address.",
+                      "type": "integer"
+                    },
                     "asset-index": {
                       "description": "The asset index if the transaction was found and it created an asset.",
                       "type": "integer"
@@ -3187,6 +3195,10 @@
                   "properties": {
                     "application-index": {
                       "description": "The application index if the transaction was found and it created an application.",
+                      "type": "integer"
+                    },
+                    "asset-closing-amount": {
+                      "description": "The number of the asset's unit that were transferred to the close-to address.",
                       "type": "integer"
                     },
                     "asset-index": {
