@@ -108,6 +108,8 @@ func (d *demux) UpdateEventsQueue(queueName string, queueLength int) {
 
 func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandle) error {
 	logging.Base().Infof("len %v", len(payset))
+	net.RLockKV(h)
+	defer net.RUnlockKV(h)
 	for i, stib := range payset {
 		var stxnBytes []byte
 		stxnData := net.LoadKV(h, stib.Digest)
@@ -122,6 +124,7 @@ func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandl
 			return err
 		}
 	}
+	logging.Base().Infof("done %v", len(payset))
 	return nil
 }
 

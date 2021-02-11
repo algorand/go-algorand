@@ -160,7 +160,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		for i, txib := range msg.Proposal.Payset {
 			stxn := txib.SignedTxn
 			txnData[i] = protocol.Encode(&stxn)
-			tags[i] = protocol.ProposalTransactionTag
+			tags[i] = protocol.TxnTag
 		}
 		payload := transmittedPayload{
 			unauthenticatedProposal: msg.Proposal.Compressed(),

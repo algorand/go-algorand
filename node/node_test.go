@@ -564,6 +564,7 @@ func BenchmarkReconstructBlock(b *testing.B) {
 		//fmt.Println(net.LoadKV(h, block.Payset[i].Digest))
 	}
 	block.Payset = block.Payset[:5000]
+
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

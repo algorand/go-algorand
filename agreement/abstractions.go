@@ -295,6 +295,10 @@ type Network interface {
 
 	// LoadKV retrieves an entry from the corresponding peer's key-value store
 	LoadKV(MessageHandle, interface{}) interface{}
+
+	RLockKV(MessageHandle)
+
+	RUnlockKV(MessageHandle)
 }
 
 // RandomSource is an abstraction over the random number generator.

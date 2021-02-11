@@ -416,7 +416,7 @@ func (wp *wsPeer) readLoop() {
 		networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		msg.Sender = wp
-		logging.Base().Infof("mayberead, %v %v", msg.Tag, crypto.Hash(msg.Data))
+		//logging.Base().Infof("mayberead, %v %v", msg.Tag, crypto.Hash(msg.Data))
 		if msg.Tag == protocol.TxnTag || msg.Tag == protocol.ProposalTransactionTag {
 			wp.StoreKV(crypto.Hash(msg.Data), msg.Data)
 		}
@@ -852,19 +852,25 @@ func (wp *wsPeer) StoreKV(key interface{}, value interface{}) {
 	defer wp.kvStoreMutex.Unlock()
 	wp.kvStore[key] = value
 	wp.keysList.PushBack(key)
-	logging.Base().Infof("storekv, %v %v", key, wp.peerIndex)
+	//logging.Base().Infof("storekv, %v %v", key, wp.peerIndex)
 	for wp.keysList.Len() > 100000 {
 		key := wp.keysList.Front()
 		wp.keysList.Remove(key)
 		delete(wp.kvStore, key)
-		logging.Base().Infof("deletekv, %v %v", key, wp.peerIndex)
+		//logging.Base().Infof("deletekv, %v %v", key, wp.peerIndex)
 	}
 }
 
 // LoadKV retrieves an entry from the corresponding peer's key-value store
 func (wp *wsPeer) LoadKV(key interface{}) interface{} {
-	wp.kvStoreMutex.Lock()
-	defer wp.kvStoreMutex.Unlock()
-	logging.Base().Infof("loadkv, %v %v", key, wp.peerIndex)
+	//logging.Base().Infof("loadkv, %v %v", key, wp.peerIndex)
 	return wp.kvStore[key]
+}
+
+func (wp *wsPeer) RLockKV() {
+	wp.kvStoreMutex.RLock()
+}
+
+func (wp *wsPeer) RUnlockKV() {
+	wp.kvStoreMutex.RUnlock()
 }

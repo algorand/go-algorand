@@ -210,6 +210,10 @@ type GossipNode interface {
 
 	// LoadKV retrieves an entry from the corresponding peer's key-value store
 	LoadKV(node Peer, key interface{}) interface{}
+
+	RLockKV(node Peer)
+
+	RUnlockKV(node Peer)
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -1343,7 +1347,7 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 
 // prio is set if the broadcast is a high-priority broadcast.
 func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, peers []*wsPeer) {
-	logging.Base().Infof("broadcasting: %v, %v", len(request.data), request.tags)
+	//logging.Base().Infof("broadcasting: %v, %v", len(request.data), request.tags)
 	if request.done != nil {
 		defer close(request.done)
 	}
@@ -2283,6 +2287,16 @@ func (wn *WebsocketNetwork) StoreKV(node Peer, key interface{}, value interface{
 func (wn *WebsocketNetwork) LoadKV(node Peer, key interface{}) interface{} {
 	peer := node.(*wsPeer)
 	return peer.LoadKV(key)
+}
+
+func (wn *WebsocketNetwork) RLockKV(node Peer) {
+	peer := node.(*wsPeer)
+	peer.RLockKV()
+}
+
+func (wn *WebsocketNetwork) RUnlockKV(node Peer) {
+	peer := node.(*wsPeer)
+	peer.RUnlockKV()
 }
 
 func (wn *WebsocketNetwork) TestPeer() wsPeer {

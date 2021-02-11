@@ -229,6 +229,26 @@ func (i *networkImpl) LoadKV(h agreement.MessageHandle, key interface{}) interfa
 	return i.net.LoadKV(metadata.raw.Sender, key)
 }
 
+func (i *networkImpl) RLockKV(h agreement.MessageHandle) {
+	metadata := messageMetadataFromHandle(h)
+
+	if metadata == nil { // synthentic loopback
+		// TODO warn
+		return
+	}
+	i.net.RLockKV(metadata.raw.Sender)
+}
+
+func (i *networkImpl) RUnlockKV(h agreement.MessageHandle) {
+	metadata := messageMetadataFromHandle(h)
+
+	if metadata == nil { // synthentic loopback
+		// TODO warn
+		return
+	}
+	i.net.RUnlockKV(metadata.raw.Sender)
+}
+
 func Metadata(raw network.IncomingMessage) *messageMetadata {
 	return &messageMetadata{raw: raw}
 }
