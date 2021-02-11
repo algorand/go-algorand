@@ -49,7 +49,7 @@ if { [catch {
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # Start network
-    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
 
     # use goal node status command to wait for round 0
     ::AlgorandGoal::WaitForRound 0 $TEST_PRIMARY_NODE_DIR
@@ -88,7 +88,7 @@ if { [catch {
     TestLastValidInTx "goal account changeonlinestatus --validrounds 1000 --firstvalid 2 --address $PRIMARY_ACCOUNT_ADDRESS --online -d $TEST_PRIMARY_NODE_DIR -t $TX_FILE" $TX_FILE $LV_EXPECTED
 
     # Shutdown the network
-    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
     exit 0
 
 } EXCEPTION ] } {
