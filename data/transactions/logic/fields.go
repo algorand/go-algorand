@@ -17,6 +17,8 @@
 package logic
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -163,7 +165,7 @@ type tfNameSpecMap map[string]txnFieldSpec
 
 func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
 	if s[name].version > 1 {
-		extra = "LogicSigVersion >= 2."
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
 	return
 }
@@ -365,7 +367,7 @@ type gfNameSpecMap map[string]globalFieldSpec
 
 func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
 	if s[name].version > 1 {
-		extra = "LogicSigVersion >= 2."
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
 	return
 }

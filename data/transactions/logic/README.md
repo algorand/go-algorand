@@ -131,6 +131,10 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `~` | bitwise invert value X |
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 | `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
+| `getbit` | pop an integer A (between 0..63) and integer B. Extract the Ath bit of B and push it. A==0 is lowest order bit. |
+| `setbit` | pop a bit A, integer B (between 0..63), and integer C. Set the Bth bit of C to A, and push the result |
+| `getbyte` | pop an integer A and string B. Extract the Ath byte of B and push it as an integer |
+| `setbyte` | pop a small integer A (between (0..255), and integer B, and string C. Set the Bth byte of C to A, and push the result |
 | `concat` | pop two byte strings A and B and join them, push the result |
 | `substring` | pop a byte string X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the string length, the program fails |
 | `substring3` | pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the string length, the program fails |
@@ -149,12 +153,14 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `intc_1` | push constant 1 from intcblock to stack |
 | `intc_2` | push constant 2 from intcblock to stack |
 | `intc_3` | push constant 3 from intcblock to stack |
+| `pushint` | push the following varuint encoded bytes to the stack as an integer |
 | `bytecblock` | load block of byte-array constants |
 | `bytec` | push bytes constant to stack by index into constants |
 | `bytec_0` | push constant 0 from bytecblock to stack |
 | `bytec_1` | push constant 1 from bytecblock to stack |
 | `bytec_2` | push constant 2 from bytecblock to stack |
 | `bytec_3` | push constant 3 from bytecblock to stack |
+| `pushbytes` | push the following program bytes to the stack |
 | `arg` | push Args[N] value to stack by index |
 | `arg_0` | push Args[0] to stack |
 | `arg_1` | push Args[1] to stack |
@@ -162,8 +168,10 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `arg_3` | push Args[3] to stack |
 | `txn` | push field from current transaction to stack |
 | `gtxn` | push field to the stack from a transaction in the current transaction group |
-| `txna` | push value of an array field from current transaction to stack |
-| `gtxna` | push value of a field to the stack from a transaction in the current transaction group |
+| `txna` | push value from an array field from current transaction to stack |
+| `gtxna` | push value from an array field from a transaction in the current transaction group |
+| `stxn` | push field to the stack from transaction A in the current group |
+| `stxna` | pusha value from an array field from transaction A in the current group |
 | `global` | push value from globals to stack |
 | `load` | copy a value from scratch space to the stack |
 | `store` | pop a value from the stack and store to scratch space |
@@ -223,13 +231,13 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 48 | ForeignAssets | uint64 | Foreign Assets listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
 | 49 | NumForeignAssets | uint64 | Number of Assets. LogicSigVersion >= 3. |
 | 50 | ForeignApps | uint64 | Foreign Apps listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
-| 51 | NumForeignApps | uint64 | Number of Apps. LogicSigVersion >= 3. |
-| 52 | GlobalStateInts | uint64 | Number of global integers requested in ApplicationCall. LogicSigVersion >= 3. |
-| 53 | GlobalStateByteslices | uint64 | Number of global byteslices requested in ApplicationCall. LogicSigVersion >= 3. |
-| 54 | LocalStateInts | uint64 | Number of local integers requested in ApplicationCall. LogicSigVersion >= 3. |
-| 55 | LocalStateByteslices | uint64 | Number of local byteslices requested in ApplicationCall. LogicSigVersion >= 3. |
-| 56 | LogicArgs | uint64 | Arguments given to the LogicSig. LogicSigVersion >= 3. |
-| 57 | NumLogicArgs | uint64 | Number of arguments given to the LogicSig. LogicSigVersion >= 3. |
+| 51 | NumForeignApps | uint64 | Number of Applications. LogicSigVersion >= 3. |
+| 52 | GlobalStateInts | uint64 | Number of global state integers in ApplicationCall. LogicSigVersion >= 3. |
+| 53 | GlobalStateByteslices | uint64 | Number of global state byteslices in ApplicationCall. LogicSigVersion >= 3. |
+| 54 | LocalStateInts | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
+| 55 | LocalStateByteslices | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
+| 56 | LogicArgs | []byte | Arguments to the LogicSig of the transaction. LogicSigVersion >= 3. |
+| 57 | NumLogicArgs | uint64 | Number of arguments to the LogicSig of the transaction. LogicSigVersion >= 3. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -289,6 +297,10 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | `pop` | discard value X from stack |
 | `dup` | duplicate last value on stack |
 | `dup2` | duplicate two last values on stack: A, B -> A, B, A, B |
+| `dig` | duplicate value N from the top of stack |
+| `swap` | swaps two last values on stack: A, B -> B, A |
+| `select` | selects one of two values to retain: A, B, C -> A ? B : C |
+| `assert` | immediately fail unless value X is a non-zero number |
 
 ### State Access
 
