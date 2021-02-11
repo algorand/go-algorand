@@ -18,6 +18,7 @@ package network
 
 import (
 	"container/heap"
+	"container/list"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -2282,4 +2283,11 @@ func (wn *WebsocketNetwork) StoreKV(node Peer, key interface{}, value interface{
 func (wn *WebsocketNetwork) LoadKV(node Peer, key interface{}) interface{} {
 	peer := node.(*wsPeer)
 	return peer.LoadKV(key)
+}
+
+func (wn *WebsocketNetwork) TestPeer() wsPeer {
+	var wp wsPeer
+	wp.kvStore = make(map[interface{}]interface{})
+	wp.keysList = list.New()
+	return wp
 }

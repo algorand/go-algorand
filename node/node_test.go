@@ -18,6 +18,10 @@ package node
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/agreement/gossip"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/network"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -495,4 +499,74 @@ func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 
 	require.NoError(t, os.Chmod(testDirectroy, 1700))
 	require.NoError(t, os.RemoveAll(testDirectroy))
+}
+
+func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+	txs := make([]transactions.Transaction, numTxs)
+	signed := make([]transactions.SignedTxn, numTxs)
+	secrets := make([]*crypto.SignatureSecrets, numAccs)
+	addresses := make([]basics.Address, numAccs)
+
+	for i := 0; i < numAccs; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+	var iss, exp int
+	u := uint64(0)
+	for i := 0; i < numTxs; i++ {
+		s := rand.Intn(numAccs)
+		r := rand.Intn(numAccs)
+		a := rand.Intn(1000)
+		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10)) + u
+		if blockRound == 0 {
+			iss = 50 + rand.Intn(30)
+			exp = iss + 10
+		} else {
+			iss = int(blockRound) / 2
+			exp = int(blockRound) + rand.Intn(30)
+		}
+
+		txs[i] = transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addresses[s],
+				Fee:         basics.MicroAlgos{Raw: f},
+				FirstValid:  basics.Round(iss),
+				LastValid:   basics.Round(exp),
+				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addresses[r],
+				Amount:   basics.MicroAlgos{Raw: uint64(a)},
+			},
+		}
+		signed[i] = txs[i].Sign(secrets[s])
+		u += 100
+	}
+
+	return txs, signed, secrets, addresses
+}
+
+func BenchmarkReconstructBlock(b *testing.B) {
+	var wn *network.WebsocketNetwork
+	net := gossip.WrapNetwork(wn, nil)
+	wp := wn.TestPeer()
+	h := gossip.Metadata(network.IncomingMessage{Sender: &wp})
+
+	_, signed, _, _ := generateTestObjects(100000, 100, 1)
+	var block bookkeeping.Block
+	block.Payset = make(transactions.Payset, len(signed), len(signed))
+	for i, stx := range signed {
+		block.Payset[i].Digest = crypto.HashObj(stx)
+		net.StoreKV(h, block.Payset[i].Digest, protocol.Encode(&stx))
+		//fmt.Println(net.LoadKV(h, block.Payset[i].Digest))
+	}
+	block.Payset = block.Payset[:5000]
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		agreement.ReconstructProposal(net, block.Payset, h)
+	}
 }

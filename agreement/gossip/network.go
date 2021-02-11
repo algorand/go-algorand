@@ -229,6 +229,10 @@ func (i *networkImpl) LoadKV(h agreement.MessageHandle, key interface{}) interfa
 	return i.net.LoadKV(metadata.raw.Sender, key)
 }
 
+func Metadata(raw network.IncomingMessage) *messageMetadata {
+	return &messageMetadata{raw: raw}
+}
+
 // broadcastTimeout is currently only used by test code.
 // In test code we want to queue up a bunch of outbound packets and then see that they got through, so we need to wait at least a little bit for them to all go out.
 // Normal agreement state machine code uses GossipNode.Broadcast non-blocking and may drop outbound packets.
