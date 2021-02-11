@@ -1231,15 +1231,19 @@ func (gd *AssetsHoldingGroupData) delete(ai int) {
 }
 
 func (g *AssetsHoldingGroup) delete(ai int) {
+	// although a group with only one element is handled by a caller
+	// add a safety check here
+	if g.Count == 1 {
+		*g = AssetsHoldingGroup{}
+		return
+	}
+
 	if ai == 0 {
 		// when deleting the first element, update MinAssetIndex
 		g.MinAssetIndex += g.groupData.AssetOffsets[1]
-	} else if uint32(ai) == g.Count {
+	} else if uint32(ai) == g.Count-1 {
 		// when deleting the last element, update DeltaMaxAssetIndex
-		prev := g.MinAssetIndex
-		for _, d := range g.groupData.AssetOffsets {
-			g.DeltaMaxAssetIndex = uint64(d + prev)
-		}
+		g.DeltaMaxAssetIndex -= uint64(g.groupData.AssetOffsets[len(g.groupData.AssetOffsets)-1])
 	}
 	g.groupData.delete(ai)
 	g.Count--
@@ -1272,6 +1276,15 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 				prev := cur - d
 				g.groupData.AssetOffsets[ai] = aidx - prev
 				g.groupData.AssetOffsets[ai+1] = cur - aidx
+
+				g.groupData.Amounts = append(g.groupData.Amounts, 0)
+				copy(g.groupData.Amounts[ai:], g.groupData.Amounts[ai-1:])
+				g.groupData.Amounts[ai] = holding.Amount
+
+				g.groupData.Frozens = append(g.groupData.Frozens, false)
+				copy(g.groupData.Frozens[ai:], g.groupData.Frozens[ai-1:])
+				g.groupData.Frozens[ai] = holding.Frozen
+
 				break
 			}
 		}
@@ -1283,6 +1296,7 @@ func (e *ExtendedAssetHolding) delete(gi int, ai int) bool {
 	if e.Groups[gi].Count == 1 {
 		copy(e.Groups[gi:], e.Groups[gi+1:])
 		e.Groups = e.Groups[:len(e.Groups)-1]
+		e.Count--
 		return true
 	}
 	e.Groups[gi].delete(ai)
