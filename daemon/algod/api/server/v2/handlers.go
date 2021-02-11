@@ -199,12 +199,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 
 	proto := config.Consensus[block.CurrentProtocol]
 	if proto.PaysetCommit != config.PaysetCommitMerkle {
-		return internalError(ctx, err, "protocol does not support Merkle proofs", v2.Log)
-	}
-
-	tree, err := block.TxnMerkleTree()
-	if err != nil {
-		return internalError(ctx, err, "building Merkle tree", v2.Log)
+		return notFound(ctx, err, "protocol does not support Merkle proofs", v2.Log)
 	}
 
 	txns, err := block.DecodePaysetFlat()
@@ -214,6 +209,11 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 
 	for idx := range txns {
 		if txns[idx].Txn.ID() == txID {
+			tree, err := block.TxnMerkleTree()
+			if err != nil {
+				return internalError(ctx, err, "building Merkle tree", v2.Log)
+			}
+
 			proof, err := tree.Prove([]uint64{uint64(idx)})
 			if err != nil {
 				return internalError(ctx, err, "generating proof", v2.Log)
