@@ -1268,7 +1268,7 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 			cur = d + cur
 			if aidx < cur {
 				g.groupData.AssetOffsets = append(g.groupData.AssetOffsets, 0)
-				g.groupData.AssetOffsets = append(g.groupData.AssetOffsets[ai:], g.groupData.AssetOffsets[ai-1:]...)
+				copy(g.groupData.AssetOffsets[ai:], g.groupData.AssetOffsets[ai-1:])
 				prev := cur - d
 				g.groupData.AssetOffsets[ai] = aidx - prev
 				g.groupData.AssetOffsets[ai+1] = cur - aidx
@@ -1290,60 +1290,75 @@ func (e *ExtendedAssetHolding) delete(gi int, ai int) bool {
 	return false
 }
 
-func (e *ExtendedAssetHolding) split(gi int, aidx basics.AssetIndex, holding basics.AssetHolding) {
+// splitInsert splits the group identified by gi
+// and inserts a new asset into appropriate left or right part of the split
+func (e *ExtendedAssetHolding) splitInsert(gi int, aidx basics.AssetIndex, holding basics.AssetHolding) {
 	g := e.Groups[gi]
 	pos := g.Count / 2
 	asset := g.MinAssetIndex
 	for i := 0; i < int(pos); i++ {
 		asset += g.groupData.AssetOffsets[i]
 	}
-	rightCount := g.Count - g.Count/2
-	rightMinAssetIndex := asset + g.groupData.AssetOffsets[pos]
-	rightDeltaMaxIndex := g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex) - rightMinAssetIndex
-	leftMinAssetIndex := g.MinAssetIndex
-	leftCount := g.Count - rightCount
-	leftDeltaMaxIndex := asset - g.MinAssetIndex
+	rgCount := g.Count - g.Count/2
+	rgMinAssetIndex := asset + g.groupData.AssetOffsets[pos]
+	rgDeltaMaxIndex := g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex) - rgMinAssetIndex
+	lgMinAssetIndex := g.MinAssetIndex
+	lgCount := g.Count - rgCount
+	lgDeltaMaxIndex := asset - g.MinAssetIndex
 
+	rgCap := rgCount
+	if aidx >= lgMinAssetIndex+lgDeltaMaxIndex {
+		// if new asset goes into right group, reserve space
+		rgCap++
+	}
+	rgd := AssetsHoldingGroupData{
+		Amounts:      make([]uint64, rgCount, rgCap),
+		Frozens:      make([]bool, rgCount, rgCap),
+		AssetOffsets: make([]basics.AssetIndex, rgCount, rgCap),
+	}
+	copy(rgd.Amounts, g.groupData.Amounts[pos:])
+	copy(rgd.Frozens, g.groupData.Frozens[pos:])
+	copy(rgd.AssetOffsets, g.groupData.AssetOffsets[pos:])
 	rightGroup := AssetsHoldingGroup{
-		Count:              rightCount,
-		MinAssetIndex:      rightMinAssetIndex,
-		DeltaMaxAssetIndex: uint64(rightDeltaMaxIndex),
-		groupData: AssetsHoldingGroupData{
-			Amounts:      g.groupData.Amounts[pos:],
-			Frozens:      g.groupData.Frozens[pos:],
-			AssetOffsets: g.groupData.AssetOffsets[pos:],
-		},
-		loaded: true,
+		Count:              rgCount,
+		MinAssetIndex:      rgMinAssetIndex,
+		DeltaMaxAssetIndex: uint64(rgDeltaMaxIndex),
+		groupData:          rgd,
+		loaded:             true,
 	}
 	rightGroup.groupData.AssetOffsets[0] = 0
 
-	e.Groups[gi].Count = leftCount
-	e.Groups[gi].DeltaMaxAssetIndex = uint64(leftDeltaMaxIndex)
+	e.Groups[gi].Count = lgCount
+	e.Groups[gi].DeltaMaxAssetIndex = uint64(lgDeltaMaxIndex)
 	e.Groups[gi].groupData = AssetsHoldingGroupData{
 		Amounts:      g.groupData.Amounts[:pos],
 		Frozens:      g.groupData.Frozens[:pos],
 		AssetOffsets: g.groupData.AssetOffsets[:pos],
 	}
-	if aidx < leftMinAssetIndex+leftDeltaMaxIndex {
+	if aidx < lgMinAssetIndex+lgDeltaMaxIndex {
 		e.Groups[gi].insert(aidx, holding)
 	} else {
 		rightGroup.insert(aidx, holding)
 	}
+
 	e.Count++
 	e.Groups = append(e.Groups, AssetsHoldingGroup{})
-	e.Groups = append(e.Groups[gi+1:], e.Groups[gi:]...)
-	e.Groups[gi] = rightGroup
+	copy(e.Groups[gi+1:], e.Groups[gi:])
+	e.Groups[gi+1] = rightGroup
 }
 
+// insert a series of assets into ExtendedAssetHolding.
+// The input sequence must be sorted.
 func (e *ExtendedAssetHolding) insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetHolding) {
 	gi := 0
 	for _, aidx := range input {
 		result := e.findGroup(aidx, gi)
 		if result.found {
 			if result.split {
-				e.split(result.gi, aidx, data[aidx])
+				e.splitInsert(result.gi, aidx, data[aidx])
 			} else {
 				e.Groups[result.gi].insert(aidx, data[aidx])
+				e.Count++
 			}
 			gi = result.gi // advance group search offset (input is ordered, it is safe to search from the last match)
 		} else {
@@ -1370,13 +1385,13 @@ func (e *ExtendedAssetHolding) insert(input []basics.AssetIndex, data map[basics
 			} else {
 				// insert after result.gi
 				e.Groups = append(e.Groups, AssetsHoldingGroup{})
-				e.Groups = append(e.Groups[result.gi+1:], e.Groups[result.gi:]...)
-				e.Groups[result.gi] = g
+				copy(e.Groups[result.gi+1:], e.Groups[result.gi:])
+				e.Groups[result.gi+1] = g
 			}
+			e.Count++
 			gi = result.gi + 1
 		}
 	}
-	e.Count += uint32(len(input))
 	return
 }
 
