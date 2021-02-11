@@ -140,7 +140,7 @@ type AssetsHoldingGroup struct {
 
 	// A foreign key to the accountext table to the appropriate AssetsHoldingGroupData entry
 	// AssetGroupKey is 0 for newly created entries and filled after persisting to DB
-	AssetGroupKey uint64 `codec:"k"`
+	AssetGroupKey int64 `codec:"k"`
 
 	// groupData is an actual group data
 	//msgp:ignore groupData
@@ -1116,8 +1116,8 @@ func loadHoldingGroup(stmt *sql.Stmt, g AssetsHoldingGroup, holdings map[basics.
 	return holdings, nil
 }
 
-func loadAssetHoldingGroupData(stmt *sql.Stmt, idx uint64) (group AssetsHoldingGroupData, err error) {
-	rows, err := stmt.Query(idx)
+func loadAssetHoldingGroupData(stmt *sql.Stmt, key int64) (group AssetsHoldingGroupData, err error) {
+	rows, err := stmt.Query(key)
 	if err != nil {
 		return AssetsHoldingGroupData{}, err
 	}
@@ -1604,19 +1604,24 @@ func accountsNewCreate(basei *sql.Stmt, exti *sql.Stmt, addr basics.Address, ad 
 
 	var result sql.Result
 	var err error
-	for _, g := range pad.ExtendedAssetHolding.Groups {
-		gd := g.groupData
-		result, err = exti.Exec(g.AssetGroupKey, protocol.Encode(&gd))
+	for i := 0; i < len(pad.ExtendedAssetHolding.Groups); i++ {
+		result, err = exti.Exec(protocol.Encode(&pad.ExtendedAssetHolding.Groups[i].groupData))
+		if err != nil {
+			break
+		}
+		pad.ExtendedAssetHolding.Groups[i].AssetGroupKey, err = result.LastInsertId()
 		if err != nil {
 			break
 		}
 	}
-	// TODO: cleanup on error
-	normBalance := ad.NormalizedOnlineBalance(proto)
-	result, err = basei.Exec(addr[:], normBalance, protocol.Encode(&pad))
+
 	if err == nil {
-		updatedAccounts[updateIdx].rowid, err = result.LastInsertId()
-		updatedAccounts[updateIdx].pad = pad
+		normBalance := ad.NormalizedOnlineBalance(proto)
+		result, err = basei.Exec(addr[:], normBalance, protocol.Encode(&pad))
+		if err == nil {
+			updatedAccounts[updateIdx].rowid, err = result.LastInsertId()
+			updatedAccounts[updateIdx].pad = pad
+		}
 	}
 	return updatedAccounts, err
 }
@@ -1746,41 +1751,42 @@ func accountsNewUpdate(baseu, extq, extu, exti, extd *sql.Stmt, addr basics.Addr
 
 			// update DB
 			var result sql.Result
-			for _, g := range pad.ExtendedAssetHolding.Groups {
-				if g.loaded {
-					if g.AssetGroupKey != 0 { // existing entry, update
-						_, err = extu.Exec(protocol.Encode(&g.groupData), g.AssetGroupKey)
+			for i := 0; i < len(pad.ExtendedAssetHolding.Groups); i++ {
+				if pad.ExtendedAssetHolding.Groups[i].loaded {
+					if pad.ExtendedAssetHolding.Groups[i].AssetGroupKey != 0 { // existing entry, update
+						_, err = extu.Exec(protocol.Encode(
+							&pad.ExtendedAssetHolding.Groups[i].groupData),
+							pad.ExtendedAssetHolding.Groups[i].AssetGroupKey)
 						if err != nil {
 							break
 						}
 					} else {
 						// new entry, insert
-						result, err = exti.Exec(protocol.Encode(&g.groupData))
+						result, err = exti.Exec(protocol.Encode(&pad.ExtendedAssetHolding.Groups[i].groupData))
 						if err != nil {
 							break
 						}
-						key, err := result.LastInsertId()
+						pad.ExtendedAssetHolding.Groups[i].AssetGroupKey, err = result.LastInsertId()
 						if err != nil {
 							break
 						}
-						g.AssetGroupKey = uint64(key)
 					}
 				}
 			}
 		}
 	}
-
-	var rowsAffected int64
-
-	normBalance := delta.new.NormalizedOnlineBalance(proto)
-	result, err := baseu.Exec(normBalance, protocol.Encode(&pad), delta.old.rowid)
 	if err == nil {
-		// rowid doesn't change on update.
-		updatedAccounts[updateIdx].rowid = delta.old.rowid
-		updatedAccounts[updateIdx].pad = pad
-		rowsAffected, err = result.RowsAffected()
-		if rowsAffected != 1 {
-			err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, delta.old.rowid)
+		var rowsAffected int64
+		normBalance := delta.new.NormalizedOnlineBalance(proto)
+		result, err := baseu.Exec(normBalance, protocol.Encode(&pad), delta.old.rowid)
+		if err == nil {
+			// rowid doesn't change on update.
+			updatedAccounts[updateIdx].rowid = delta.old.rowid
+			updatedAccounts[updateIdx].pad = pad
+			rowsAffected, err = result.RowsAffected()
+			if rowsAffected != 1 {
+				err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, delta.old.rowid)
+			}
 		}
 	}
 
@@ -1853,25 +1859,6 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 					insertStmt, insertGroupDataStmt,
 					addr, data.new, proto,
 					updatedAccounts, updatedAccountIdx)
-
-				// normBalance := data.new.NormalizedOnlineBalance(proto)
-				// pad, err := toPersistedData(nil, &data.new)
-				// if err != nil {
-				// 	break
-				// }
-				// for _, g := range pad.ExtendedAssetHolding.Groups {
-				// 	gd := g.groupData
-				// 	result, err = insertGroupDataStmt.Exec(g.AssetGroupKey, protocol.Encode(&gd))
-				// 	if err != nil {
-				// 		break outer
-				// 	}
-				// }
-				// // TODO: cleanup on error
-				// result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&pad))
-				// if err == nil {
-				// 	updatedAccounts[updatedAccountIdx].rowid, err = result.LastInsertId()
-				// 	updatedAccounts[updatedAccountIdx].pad = pad
-				// }
 			}
 		} else {
 			if data.new.IsZero() {
@@ -1880,55 +1867,12 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 					deleteByRowIDStmt, deleteGroupDataStmt,
 					addr, data.old,
 					updatedAccounts, updatedAccountIdx)
-				// result, err = deleteByRowIDStmt.Exec(data.old.rowid)
-				// if err == nil {
-				// 	// we deleted the entry successfully.
-				// 	updatedAccounts[updatedAccountIdx].rowid = 0
-				// 	updatedAccounts[updatedAccountIdx].pad = PersistedAccountData{}
-				// 	rowsAffected, err = result.RowsAffected()
-				// 	if rowsAffected != 1 {
-				// 		err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, data.old.rowid)
-				// 	} else {
-				// 		// if no error delete extension records
-				// 		for _, g := range data.old.pad.ExtendedAssetHolding.Groups {
-				// 			result, err = deleteGroupDataStmt.Exec(g.AssetGroupKey)
-				// 			if err != nil {
-				// 				break outer
-				// 			}
-				// 		}
-				// 	}
-				// }
 			} else {
 				// non-zero rowid means we had a previous value so make an update.
 				updatedAccounts, err = accountsNewUpdate(
 					updateStmt, selectGroupDataStmt, updateGroupDataStmt, insertGroupDataStmt, deleteGroupDataStmt,
 					addr, data, proto,
 					updatedAccounts, updatedAccountIdx)
-				// pad, gds, err := toPersistedData(&data.old.pad, &data.new)
-				// if err != nil {
-				// 	break
-				// }
-				// for i, gd := range gds {
-				// 	g := pad.ExtendedAssetHolding.Groups[i]
-				// 	if gd.op == AssetsHoldingGroupNew {
-				// 		result, err = insertGroupDataStmt.Exec(g.AssetGroupKey, protocol.Encode(&gd.AssetsHoldingGroupData))
-				// 	} else if gd.op == AssetsHoldingGroupUpd {
-				// 		result, err = updateGroupDataStmt.Exec(protocol.Encode(&gd.AssetsHoldingGroupData), g.AssetGroupKey)
-				// 	}
-				// 	if err != nil {
-				// 		break outer
-				// 	}
-				// }
-				// result, err = updateStmt.Exec(normBalance, protocol.Encode(&pad), data.old.rowid)
-				// if err == nil {
-				// 	// rowid doesn't change on update.
-				// 	updatedAccounts[updatedAccountIdx].rowid = data.old.rowid
-				// 	updatedAccounts[updatedAccountIdx].pad = pad
-				// 	rowsAffected, err = result.RowsAffected()
-				// 	if rowsAffected != 1 {
-				// 		err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, data.old.rowid)
-				// 	}
-				// }
 			}
 		}
 

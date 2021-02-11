@@ -129,7 +129,7 @@ func (z *AssetsHoldingGroup) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "k"
 			o = append(o, 0xa1, 0x6b)
-			o = msgp.AppendUint64(o, (*z).AssetGroupKey)
+			o = msgp.AppendInt64(o, (*z).AssetGroupKey)
 		}
 		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "m"
@@ -188,7 +188,7 @@ func (z *AssetsHoldingGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).AssetGroupKey, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).AssetGroupKey, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetGroupKey")
 				return
@@ -236,7 +236,7 @@ func (z *AssetsHoldingGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "k":
-				(*z).AssetGroupKey, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).AssetGroupKey, bts, err = msgp.ReadInt64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetGroupKey")
 					return
@@ -261,7 +261,7 @@ func (_ *AssetsHoldingGroup) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AssetsHoldingGroup) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint32Size + 2 + (*z).MinAssetIndex.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	s = 1 + 2 + msgp.Uint32Size + 2 + (*z).MinAssetIndex.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Int64Size
 	return
 }
 

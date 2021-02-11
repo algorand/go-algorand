@@ -1271,7 +1271,7 @@ func TestAssetHoldingConvertToGroups(t *testing.T) {
 				total += int(e.Groups[i].Count)
 				a.Equal(test.minAssets[i], e.Groups[i].MinAssetIndex)
 				a.Equal(test.deltaAssets[i], e.Groups[i].DeltaMaxAssetIndex)
-				a.Equal(uint64(0), e.Groups[i].AssetGroupKey)
+				a.Equal(int64(0), e.Groups[i].AssetGroupKey)
 				a.True(e.Groups[i].loaded)
 
 				a.Equal(int(e.Groups[i].Count), len(e.Groups[i].groupData.Amounts))
