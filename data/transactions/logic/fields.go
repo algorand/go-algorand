@@ -79,7 +79,7 @@ const (
 	ApplicationID
 	// OnCompletion OnCompletion
 	OnCompletion
-	// ApplicationArgs []basics.TealValue
+	// ApplicationArgs  [][]byte
 	ApplicationArgs
 	// NumAppArgs len(ApplicationArgs)
 	NumAppArgs
@@ -123,6 +123,28 @@ const (
 	FreezeAssetAccount
 	// FreezeAssetFrozen bool
 	FreezeAssetFrozen
+	// ForeignAssets []basics.AssetIndex
+	ForeignAssets
+	// NumForeignAssets len(ForeignAssets)
+	NumForeignAssets
+	// ForeignApps []basics.AppIndex
+	ForeignApps
+	// NumForeignApps len(ForeignApps)
+	NumForeignApps
+
+	// GlobalStateInts uint64
+	GlobalStateInts
+	// GlobalStateByteslices uint64
+	GlobalStateByteslices
+	// LocalStateInts uint64
+	LocalStateInts
+	// LocalStateByteslices uint64
+	LocalStateByteslices
+
+	// LogicArgs [][]byte
+	LogicArgs
+	// NumLogicArgs len(LogicArgs)
+	NumLogicArgs
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -201,6 +223,16 @@ var txnFieldSpecs = []txnFieldSpec{
 	{FreezeAsset, StackUint64, 2},
 	{FreezeAssetAccount, StackBytes, 2},
 	{FreezeAssetFrozen, StackUint64, 2},
+	{ForeignAssets, StackUint64, 3},
+	{NumForeignAssets, StackUint64, 3},
+	{ForeignApps, StackUint64, 3},
+	{NumForeignApps, StackUint64, 3},
+	{GlobalStateInts, StackUint64, 3},
+	{GlobalStateByteslices, StackUint64, 3},
+	{LocalStateInts, StackUint64, 3},
+	{LocalStateByteslices, StackUint64, 3},
+	{LogicArgs, StackBytes, 3},
+	{NumLogicArgs, StackUint64, 3},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
@@ -211,11 +243,16 @@ var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String()}
 var TxnaFieldTypes = []StackType{
 	txnaFieldSpecByField[ApplicationArgs].ftype,
 	txnaFieldSpecByField[Accounts].ftype,
+	txnaFieldSpecByField[ForeignAssets].ftype,
+	txnaFieldSpecByField[ForeignApps].ftype,
 }
 
 var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
 	ApplicationArgs: {ApplicationArgs, StackBytes, 2},
 	Accounts:        {Accounts, StackBytes, 2},
+	ForeignAssets:   {ForeignAssets, StackUint64, 3},
+	ForeignApps:     {ForeignApps, StackUint64, 3},
+	LogicArgs:       {LogicArgs, StackBytes, 3},
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order
@@ -275,6 +312,8 @@ const (
 	ZeroAddress
 	// GroupSize len(txn group)
 	GroupSize
+
+	// v2
 	// LogicSigVersion ConsensusParams.LogicSigVersion
 	LogicSigVersion
 	// Round basics.Round
@@ -283,6 +322,10 @@ const (
 	LatestTimestamp
 	// CurrentApplicationID uint64
 	CurrentApplicationID
+
+	// v3
+	// CreatorAddress [32]byte
+	CreatorAddress
 
 	invalidGlobalField
 )
@@ -310,6 +353,7 @@ var globalFieldSpecs = []globalFieldSpec{
 	{Round, StackUint64, runModeApplication, 2},
 	{LatestTimestamp, StackUint64, runModeApplication, 2},
 	{CurrentApplicationID, StackUint64, runModeApplication, 2},
+	{CreatorAddress, StackBytes, runModeApplication, 3},
 }
 
 // GlobalFieldSpecByField maps GlobalField to spec

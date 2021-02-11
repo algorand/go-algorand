@@ -406,6 +406,16 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 45 | FreezeAsset | uint64 | Asset ID being frozen or un-frozen. LogicSigVersion >= 2. |
 | 46 | FreezeAssetAccount | []byte | 32 byte address of the account whose asset slot is being frozen or un-frozen. LogicSigVersion >= 2. |
 | 47 | FreezeAssetFrozen | uint64 | The new frozen value, 0 or 1. LogicSigVersion >= 2. |
+| 48 | ForeignAssets | uint64 | Foreign Assets listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
+| 49 | NumForeignAssets | uint64 | Number of Assets. LogicSigVersion >= 3. |
+| 50 | ForeignApps | uint64 | Foreign Apps listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
+| 51 | NumForeignApps | uint64 | Number of Apps. LogicSigVersion >= 3. |
+| 52 | GlobalStateInts | uint64 | Number of global integers requested in ApplicationCall. LogicSigVersion >= 3. |
+| 53 | GlobalStateByteslices | uint64 | Number of global byteslices requested in ApplicationCall. LogicSigVersion >= 3. |
+| 54 | LocalStateInts | uint64 | Number of local integers requested in ApplicationCall. LogicSigVersion >= 3. |
+| 55 | LocalStateByteslices | uint64 | Number of local byteslices requested in ApplicationCall. LogicSigVersion >= 3. |
+| 56 | LogicArgs | uint64 | Arguments given to the LogicSig. LogicSigVersion >= 3. |
+| 57 | NumLogicArgs | uint64 | Number of arguments given to the LogicSig. LogicSigVersion >= 3. |
 
 
 TypeEnum mapping:
@@ -443,6 +453,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 6 | Round | uint64 | Current round number. LogicSigVersion >= 2. |
 | 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
 | 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
+| 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
 
 
 ## gtxn

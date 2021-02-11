@@ -19,6 +19,7 @@ package ledger
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
@@ -72,6 +73,16 @@ func (al *logicLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err 
 	}
 
 	return record.MicroAlgos, nil
+}
+
+func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
+	// Fetch record with pending rewards applied
+	record, err := al.cow.Get(addr, true)
+	if err != nil {
+		return
+	}
+
+	return record.MinBalance(proto), nil
 }
 
 func (al *logicLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
@@ -129,6 +140,10 @@ func (al *logicLedger) LatestTimestamp() int64 {
 
 func (al *logicLedger) ApplicationID() basics.AppIndex {
 	return al.aidx
+}
+
+func (al *logicLedger) CreatorAddress() basics.Address {
+	return al.creator
 }
 
 func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {

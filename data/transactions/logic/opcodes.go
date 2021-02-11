@@ -21,7 +21,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 2
+const LogicVersion = 3
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -42,7 +42,7 @@ type opSize struct {
 
 var opSizeDefault = opSize{1, 1, nil}
 
-// OpSpec defines one byte opcode
+// OpSpec defines an opcode
 type OpSpec struct {
 	Opcode  byte
 	Name    string
@@ -59,9 +59,11 @@ type OpSpec struct {
 var oneBytes = StackTypes{StackBytes}
 var twoBytes = StackTypes{StackBytes, StackBytes}
 var threeBytes = StackTypes{StackBytes, StackBytes, StackBytes}
+var byteInt = StackTypes{StackBytes, StackUint64}
 var byteIntInt = StackTypes{StackBytes, StackUint64, StackUint64}
 var oneInt = StackTypes{StackUint64}
 var twoInts = StackTypes{StackUint64, StackUint64}
+var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
 var oneAny = StackTypes{StackAny}
 var twoAny = StackTypes{StackAny, StackAny}
 
@@ -110,18 +112,18 @@ var OpSpecs = []OpSpec{
 	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opSizeDefault},
 
 	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, opSize{1, 0, checkIntConstBlock}},
-	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, opSize{1, 2, nil}},
+	{0x21, "intc", opIntConstLoad, assembleIntC, disDefault, nil, oneInt, 1, modeAny, opSize{1, 2, nil}},
 	{0x22, "intc_0", opIntConst0, asmDefault, disDefault, nil, oneInt, 1, modeAny, opSizeDefault},
 	{0x23, "intc_1", opIntConst1, asmDefault, disDefault, nil, oneInt, 1, modeAny, opSizeDefault},
 	{0x24, "intc_2", opIntConst2, asmDefault, disDefault, nil, oneInt, 1, modeAny, opSizeDefault},
 	{0x25, "intc_3", opIntConst3, asmDefault, disDefault, nil, oneInt, 1, modeAny, opSizeDefault},
 	{0x26, "bytecblock", opByteConstBlock, assembleByteCBlock, disBytecblock, nil, nil, 1, modeAny, opSize{1, 0, checkByteConstBlock}},
-	{0x27, "bytec", opByteConstLoad, assembleByteC, disBytec, nil, oneBytes, 1, modeAny, opSize{1, 2, nil}},
+	{0x27, "bytec", opByteConstLoad, assembleByteC, disDefault, nil, oneBytes, 1, modeAny, opSize{1, 2, nil}},
 	{0x28, "bytec_0", opByteConst0, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
 	{0x29, "bytec_1", opByteConst1, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
 	{0x2a, "bytec_2", opByteConst2, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
 	{0x2b, "bytec_3", opByteConst3, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opSizeDefault},
-	{0x2c, "arg", opArg, assembleArg, disArg, nil, oneBytes, 1, runModeSignature, opSize{1, 2, nil}},
+	{0x2c, "arg", opArg, assembleArg, disDefault, nil, oneBytes, 1, runModeSignature, opSize{1, 2, nil}},
 	{0x2d, "arg_0", opArg0, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
 	{0x2e, "arg_1", opArg1, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
 	{0x2f, "arg_2", opArg2, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opSizeDefault},
@@ -134,8 +136,8 @@ var OpSpecs = []OpSpec{
 	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
 	{0x33, "gtxn", opGtxn, assembleGtxn, disGtxn, nil, oneAny, 1, modeAny, opSize{1, 3, nil}},
 	{0x33, "gtxn", opGtxn, assembleGtxn2, disGtxn, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},
-	{0x34, "load", opLoad, assembleLoad, disLoad, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
-	{0x35, "store", opStore, assembleStore, disStore, oneAny, nil, 1, modeAny, opSize{1, 2, nil}},
+	{0x34, "load", opLoad, asmDefault, disDefault, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
+	{0x35, "store", opStore, asmDefault, disDefault, oneAny, nil, 1, modeAny, opSize{1, 2, nil}},
 	{0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},
 	{0x37, "gtxna", opGtxna, assembleGtxna, disGtxna, nil, oneAny, 2, modeAny, opSize{1, 4, nil}},
 
@@ -148,7 +150,7 @@ var OpSpecs = []OpSpec{
 	{0x4a, "dup2", opDup2, asmDefault, disDefault, twoAny, twoAny.plus(twoAny), 2, modeAny, opSizeDefault},
 
 	{0x50, "concat", opConcat, asmDefault, disDefault, twoBytes, oneBytes, 2, modeAny, opSizeDefault},
-	{0x51, "substring", opSubstring, assembleSubstring, disSubstring, oneBytes, oneBytes, 2, modeAny, opSize{1, 3, nil}},
+	{0x51, "substring", opSubstring, assembleSubstring, disDefault, oneBytes, oneBytes, 2, modeAny, opSize{1, 3, nil}},
 	{0x52, "substring3", opSubstring3, asmDefault, disDefault, byteIntInt, oneBytes, 2, modeAny, opSizeDefault},
 
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opSizeDefault},
@@ -164,6 +166,28 @@ var OpSpecs = []OpSpec{
 
 	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, opSize{1, 2, nil}},
 	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, opSize{1, 2, nil}},
+
+	{0x72, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opSizeDefault},
+	{0x73, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opSizeDefault},
+
+	{0x74, "getbit", opGetBit, asmDefault, disDefault, twoInts, oneInt, 3, modeAny, opSizeDefault},
+	{0x75, "setbit", opSetBit, asmDefault, disDefault, threeInts, oneInt, 3, modeAny, opSizeDefault},
+	{0x76, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opSizeDefault},
+	{0x77, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opSizeDefault},
+	{0x78, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, opSizeDefault},
+	{0x79, "select", opSelect, asmDefault, disDefault, twoAny.plus(oneInt), oneAny, 3, modeAny, opSizeDefault},
+
+	// There must be at least one thing on the stack for dig, but
+	// it would be nice if we did better checking than that.
+	{0x80, "dig", opDig, asmDefault, disDefault, oneAny, twoAny, 3, modeAny, opSize{1, 2, nil}},
+
+	// Like gtxn, but gets txn index from stack, rather than immediate arg
+	{0x81, "stxn", opStxn, assembleStxn, disTxn, oneInt, oneAny, 3, modeAny, opSize{1, 2, nil}},
+	{0x82, "stxna", opStxna, assembleStxna, disTxna, oneInt, oneAny, 3, modeAny, opSize{1, 3, nil}},
+
+	// Immediate bytes and ints. Smaller code size for single use of constant.
+	{0x83, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, opSize{1, 0, checkPushBytes}},
+	{0x84, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, opSize{1, 0, checkPushInt}},
 }
 
 type sortByOpcode []OpSpec
@@ -173,7 +197,7 @@ func (a sortByOpcode) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a sortByOpcode) Less(i, j int) bool { return a[i].Opcode < a[j].Opcode }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
-// by copying v1 opcodes to v2 to create a full list.
+// by copying v1 opcodes to v2, and then on to v3 to create a full list
 func OpcodesByVersion(version uint64) []OpSpec {
 	// for updated opcodes use the lowest version opcode was introduced in
 	maxOpcode := 0
