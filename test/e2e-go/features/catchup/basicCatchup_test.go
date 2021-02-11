@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
@@ -76,13 +77,22 @@ func TestBasicCatchup(t *testing.T) {
 // The current versions are the original v1 and the upgraded to v2.1
 func TestCatchupOverGossip(t *testing.T) {
 	t.Parallel()
+
+	versions := network.SupportedProtocolVersions
+	require.LessOrEqual(t, len(versions), 3)
+
 	// ledger node upgraded version, fetcher node upgraded version
-	runCatchupOverGossip(t, false, false)
+	for i := 0; i < len(versions); i++ {
+		runCatchupOverGossip(t, "", "")
+		runCatchupOverGossip(t, versions[i], "")
+		runCatchupOverGossip(t, "", versions[i])
+		runCatchupOverGossip(t, versions[i], versions[i])
+	}
 }
 
 func runCatchupOverGossip(t *testing.T,
-	ledgerNodeDowngrade,
-	fetcherNodeDowngrade bool) {
+	ledgerNodeDowngradeTo,
+	fetcherNodeDowngradeTo string) {
 
 	if testing.Short() {
 		t.Skip()
@@ -99,22 +109,22 @@ func runCatchupOverGossip(t *testing.T,
 	// distribution for catchup so this is fine.
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
 
-	if ledgerNodeDowngrade {
+	if ledgerNodeDowngradeTo != ""{
 		// Force the node to only support v1
 		dir, err := fixture.GetNodeDir("Node")
 		a.NoError(err)
 		cfg, err := config.LoadConfigFromDisk(dir)
 		a.NoError(err)
-		cfg.NetworkProtocolVersion = "1"
+		cfg.NetworkProtocolVersion = ledgerNodeDowngradeTo
 		cfg.SaveToDisk(dir)
 	}
 
-	if fetcherNodeDowngrade {
+	if fetcherNodeDowngradeTo != "" {
 		// Force the node to only support v1
 		dir := fixture.PrimaryDataDir()
 		cfg, err := config.LoadConfigFromDisk(dir)
 		a.NoError(err)
-		cfg.NetworkProtocolVersion = "1"
+		cfg.NetworkProtocolVersion = fetcherNodeDowngradeTo
 		cfg.SaveToDisk(dir)
 	}
 
