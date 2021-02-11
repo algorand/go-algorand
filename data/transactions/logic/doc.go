@@ -109,7 +109,7 @@ var opDocList = []stringString{
 	{"getbit", "pop an integer A (between 0..63) and integer B. Extract the Ath bit of B and push it. A==0 is lowest order bit."},
 	{"setbit", "pop a bit A, integer B (between 0..63), and integer C. Set the Bth bit of C to A, and push the result"},
 	{"getbyte", "pop an integer A and string B. Extract the Ath byte of B and push it as an integer"},
-	{"setbyte", "pop a small integer A (between (0..255), and integer B, and string C. Set the Bth byte of C to A, and push the result"},
+	{"setbyte", "pop a small integer A (between 0..255), and integer B, and string C. Set the Bth byte of C to A, and push the result"},
 	{"balance", "get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender"},
 	{"min_balance", "get minimum balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender"},
 	{"app_opted_in", "check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1}"},

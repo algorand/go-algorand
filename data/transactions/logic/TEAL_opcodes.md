@@ -788,7 +788,7 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Opcode: 0x77
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
 - Pushes: []byte
-- pop a small integer A (between (0..255), and integer B, and string C. Set the Bth byte of C to A, and push the result
+- pop a small integer A (between 0..255), and integer B, and string C. Set the Bth byte of C to A, and push the result
 - LogicSigVersion >= 3
 
 ## swap
