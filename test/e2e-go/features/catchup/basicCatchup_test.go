@@ -78,12 +78,6 @@ func TestCatchupOverGossip(t *testing.T) {
 	t.Parallel()
 	// ledger node upgraded version, fetcher node upgraded version
 	runCatchupOverGossip(t, false, false)
-	// ledger node older version, fetcher node upgraded version
-	runCatchupOverGossip(t, true, false)
-	// ledger node upgraded older version, fetcher node older version
-	runCatchupOverGossip(t, false, true)
-	// ledger node older version, fetcher node older version
-	runCatchupOverGossip(t, true, true)
 }
 
 func runCatchupOverGossip(t *testing.T,
