@@ -763,7 +763,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 				for i, txib := range payset {
 					fee := txib.Txn.Fee.Raw
-					encodedLen := len(protocol.Encode(&txib))
+					encodedLen := txib.GetEncodedLength()
 
 					stats.IncludedCount++
 					totalFees += fee

@@ -315,6 +315,10 @@ func assetTransferTxEncode(tx transactions.Transaction, ad transactions.ApplyDat
 		xfer.CloseTo = tx.AssetTransferTxnFields.AssetCloseTo.String()
 	}
 
+	if ad.AssetClosingAmount != 0 {
+		xfer.CloseToAmount = ad.AssetClosingAmount
+	}
+
 	return v1.Transaction{
 		AssetTransfer: &xfer,
 	}

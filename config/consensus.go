@@ -145,9 +145,8 @@ type ConsensusParams struct {
 	FastRecoveryLambda    time.Duration // time between fast recovery attempts
 	FastPartitionRecovery bool          // set when fast partition recovery is enabled
 
-	// commit to payset using a hash of entire payset,
-	// instead of txid merkle tree
-	PaysetCommitFlat bool
+	// how to commit to the payset: flat or merkle tree
+	PaysetCommit PaysetCommitType
 
 	MaxTimestampIncrement int64 // maximum time between timestamps on successive blocks
 
@@ -342,7 +341,25 @@ type ConsensusParams struct {
 	// CompactCertSecKQ is the security parameter (k+q) for the compact
 	// certificate scheme.
 	CompactCertSecKQ uint64
+
+	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
+	// asset that were sent to the close-to address.
+	EnableAssetCloseAmount bool
 }
+
+// PaysetCommitType enumerates possible ways for the block header to commit to
+// the set of transactions in the block.
+type PaysetCommitType int
+
+const (
+	// PaysetCommitUnsupported is the zero value, reflecting the fact
+	// that some early protocols used a Merkle tree to commit to the
+	// transactions in a way that we no longer support.
+	PaysetCommitUnsupported PaysetCommitType = iota
+
+	// PaysetCommitFlat hashes the entire payset array.
+	PaysetCommitFlat
+)
 
 // ConsensusProtocols defines a set of supported protocol versions and their
 // corresponding parameters.
@@ -416,9 +433,19 @@ func checkSetAllocBounds(p ConsensusParams) {
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
+// if the params contains zero protocols, the existing consensus.json file will be removed if exists.
 func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
 
+	if len(params) == 0 {
+		// we have no consensus params to write. In this case, just delete the existing file
+		// ( if any )
+		err := os.Remove(consensusProtocolPath)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
 	encodedConsensusParams, err := json.Marshal(params)
 	if err != nil {
 		return err
@@ -618,7 +645,7 @@ func initConsensusProtocols() {
 	// v11 introduces SignedTxnInBlock.
 	v11 := v10
 	v11.SupportSignedTxnInBlock = true
-	v11.PaysetCommitFlat = true
+	v11.PaysetCommit = PaysetCommitFlat
 	v11.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV11] = v11
 
@@ -812,9 +839,20 @@ func initConsensusProtocols() {
 	// v23 can be upgraded to v24, with an update delay of 7 days ( see calculation above )
 	v23.ApprovedUpgrades[protocol.ConsensusV24] = 140000
 
+	// v25 enables AssetCloseAmount in the ApplyData
+	v25 := v24
+	v25.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable AssetCloseAmount field
+	v25.EnableAssetCloseAmount = true
+	Consensus[protocol.ConsensusV25] = v25
+
+	// v24 can be upgraded to v25, with an update delay of 7 days ( see calculation above )
+	v24.ApprovedUpgrades[protocol.ConsensusV25] = 140000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v24
+	vFuture := v25
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later

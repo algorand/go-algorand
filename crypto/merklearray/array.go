@@ -21,8 +21,9 @@ import (
 )
 
 // An Array represents a dense array of leaf elements that are
-// combined into a Merkle tree.  Each element must be hashable.
+// combined into a Merkle tree.  The GetHash method returns the
+// hash of a particular element in the array.
 type Array interface {
 	Length() uint64
-	Get(pos uint64) (crypto.Hashable, error)
+	GetHash(pos uint64) (crypto.Digest, error)
 }

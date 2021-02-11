@@ -47,6 +47,7 @@ type HTTPTxSync struct {
 }
 
 const requestContentType = "application/x-www-form-urlencoded"
+const baseResponseReadingBufferSize = uint64(1024)
 
 // ResponseBytes reads the content of the response object and return the body content
 // while obeying the read size limits
@@ -62,7 +63,7 @@ func ResponseBytes(response *http.Response, log logging.Logger, limit uint64) (d
 		_, err = io.ReadFull(response.Body, data)
 		return
 	}
-	slurper := network.LimitedReaderSlurper{Limit: limit}
+	slurper := network.MakeLimitedReaderSlurper(baseResponseReadingBufferSize, limit)
 	err = slurper.Read(response.Body)
 	if err == network.ErrIncomingMsgTooLarge {
 		log.Errorf("response too large: %d > %d", slurper.Size(), limit)

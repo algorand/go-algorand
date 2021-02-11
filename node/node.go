@@ -487,7 +487,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 		enc = append(enc, protocol.Encode(&tx)...)
 		txids = append(txids, tx.ID())
 	}
-	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, true, nil)
+	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, false, nil)
 	if err != nil {
 		node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
 		return err
@@ -707,7 +707,7 @@ func (node *AlgorandFullNode) checkForParticipationKeys() {
 		case <-ticker.C:
 			err := node.loadParticipationKeys()
 			if err != nil {
-				node.log.Error("Could not refresh participation keys: %v", err)
+				node.log.Errorf("Could not refresh participation keys: %v", err)
 			}
 		case <-node.ctx.Done():
 			ticker.Stop()
@@ -744,7 +744,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			handle.Close()
 			if err == account.ErrUnsupportedSchema {
 				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-				node.log.Warn("loadParticipationKeys: not loading unsupported participation key: %s; renaming to *.old", info.Name())
+				node.log.Warnf("loadParticipationKeys: not loading unsupported participation key: %s; renaming to *.old", info.Name())
 				fullname := filepath.Join(genesisDir, info.Name())
 				renamedFileName := filepath.Join(fullname, ".old")
 				err = os.Rename(fullname, renamedFileName)
