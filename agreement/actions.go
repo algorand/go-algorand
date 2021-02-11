@@ -145,7 +145,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 
 	var data []byte
 	var txnData [][]byte
-	//var tags []protocol.Tag
+	var tags []protocol.Tag
 	switch a.Tag {
 	case protocol.AgreementVoteTag:
 		data = protocol.Encode(&a.UnauthenticatedVote)
@@ -154,39 +154,36 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	case protocol.ProposalPayloadTag:
 		msg := a.CompoundMessage
 
-		//numtxns := len(msg.Proposal.Payset)
-		//txnData = make([][]byte, numtxns+1, numtxns+1)
-		//tags = make([]protocol.Tag, numtxns+1)
-		//for i, txib := range msg.Proposal.Payset {
-		//	stxn := txib.SignedTxn
-		//	txnData[i] = protocol.Encode(&stxn)
-		//	tags[i] = protocol.ProposalTransactionTag
-		//}
+		numtxns := len(msg.Proposal.Payset)
+		txnData = make([][]byte, numtxns+1, numtxns+1)
+		tags = make([]protocol.Tag, numtxns+1)
+		for i, txib := range msg.Proposal.Payset {
+			stxn := txib.SignedTxn
+			txnData[i] = protocol.Encode(&stxn)
+			tags[i] = protocol.ProposalTransactionTag
+		}
 		payload := transmittedPayload{
 			unauthenticatedProposal: msg.Proposal.Compressed(),
 			PriorVote:               msg.Vote,
 		}
-		//txnData[len(txnData)-1] = protocol.Encode(&payload)
-		//tags[len(txnData)-1] = protocol.ProposalPayloadTag
-		data = protocol.Encode(&payload)
+		txnData[len(txnData)-1] = protocol.Encode(&payload)
+		tags[len(txnData)-1] = protocol.ProposalPayloadTag
 	}
 
 	switch a.T {
 	case broadcast:
 		logging.Base().Infof("txncount, %v", len(txnData))
-		//if txnData != nil {
-		//	//protocol.TxnTag
-		//	s.Network.BroadcastArray(tags, txnData)
-		//} else
-		if data != nil {
+		if txnData != nil {
+			//protocol.TxnTag
+			s.Network.BroadcastArray(tags, txnData)
+		} else if data != nil {
 			s.Network.Broadcast(a.Tag, data)
 		}
 	case relay:
 		logging.Base().Infof("txncount, %v", len(txnData))
-		//if txnData != nil {
-		//	s.Network.RelayArray(a.h, tags, txnData)
-		//} else
-		if data != nil {
+		if txnData != nil {
+			s.Network.RelayArray(a.h, tags, txnData)
+		} else if data != nil {
 			s.Network.Relay(a.h, a.Tag, data)
 		}
 	case disconnect:

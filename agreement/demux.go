@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -137,22 +138,22 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
 				case protocol.ProposalPayloadTag:
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
-					//var err error
-					//logging.Base().Infof("len %v", len(msg.CompoundMessage.Proposal.Payset))
-					//for i, stib := range msg.CompoundMessage.Proposal.Payset {
-					//	var stxnBytes []byte
-					//	stxnData := net.LoadKV(msg.MessageHandle, stib.Digest)
-					//	stxnBytes = stxnData.([]byte)
-					//	var stxn transactions.SignedTxn
-					//	dec := protocol.NewDecoderBytes(stxnBytes)
-					//	err = dec.Decode(&stxn)
-					//	msg.CompoundMessage.Proposal.Payset[i].SignedTxn = stxn
-					//	if err != nil {
-					//		logging.Base().Warnf("Received a non-decodable txn: %v", err)
-					//		//net.Disconnect(raw.MessageHandle)
-					//		break
-					//	}
-					//}
+					var err error
+					logging.Base().Infof("len %v", len(msg.CompoundMessage.Proposal.Payset))
+					for i, stib := range msg.CompoundMessage.Proposal.Payset {
+						var stxnBytes []byte
+						stxnData := net.LoadKV(msg.MessageHandle, stib.Digest)
+						stxnBytes = stxnData.([]byte)
+						var stxn transactions.SignedTxn
+						dec := protocol.NewDecoderBytes(stxnBytes)
+						err = dec.Decode(&stxn)
+						msg.CompoundMessage.Proposal.Payset[i].SignedTxn = stxn
+						if err != nil {
+							logging.Base().Warnf("Received a non-decodable txn: %v", err)
+							//net.Disconnect(raw.MessageHandle)
+							break
+						}
+					}
 					if err != nil {
 						continue
 					}

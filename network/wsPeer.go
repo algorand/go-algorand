@@ -553,7 +553,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 	for _, msg := range msgs {
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
-			logging.Base().Infof("bad msg: %v", msg)
+			logging.Base().Infof("bad msg: %v", len(msg.data))
 			return err
 		}
 	}

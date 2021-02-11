@@ -270,8 +270,10 @@ func (block *Block) Compressed() Block {
 	c.BlockHeader = block.BlockHeader
 	c.Payset = make(transactions.Payset, len(block.Payset), len(block.Payset))
 	for i, stb := range block.Payset {
-		c.Payset[i] = stb
-		c.Payset[i].ApplyData = transactions.ApplyData{}
+		c.Payset[i] = transactions.SignedTxnInBlock{}
+		c.Payset[i].HasGenesisHash = stb.HasGenesisHash
+		c.Payset[i].HasGenesisID = stb.HasGenesisHash
+		c.Payset[i].Digest = stb.Digest
 	}
 	return c
 }
