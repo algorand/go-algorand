@@ -2271,7 +2271,6 @@ func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
 
 // StoreKV stores an entry in the corresponding peer's key-value store
 func (wn *WebsocketNetwork) StoreKV(node Peer, key crypto.Digest, value []byte) {
-	// TODO: add cache size limit
 	peer := node.(*wsPeer)
 	peer.StoreKV(key, value)
 }

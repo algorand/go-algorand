@@ -117,10 +117,8 @@ func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandl
 	stxnsData := net.LoadKV(h, keys)
 
 	for i, stxnData := range stxnsData {
-		var stxnBytes []byte
-		stxnBytes = stxnData.([]byte)
 		var stxn transactions.SignedTxn
-		dec := protocol.NewDecoderBytes(stxnBytes)
+		dec := protocol.NewDecoderBytes(stxnData)
 		err := dec.Decode(&stxn)
 		payset[i].SignedTxn = stxn
 		if err != nil {
@@ -128,7 +126,6 @@ func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandl
 			//net.Disconnect(raw.MessageHandle)
 			return err
 		}
-
 	}
 
 	logging.Base().Infof("done %v", len(payset))

@@ -20,6 +20,7 @@ package gossip
 
 import (
 	"context"
+	"github.com/algorand/go-algorand/crypto"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -207,18 +208,7 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 	i.net.Disconnect(metadata.raw.Sender)
 }
 
-func (i *networkImpl) StoreKV(h agreement.MessageHandle, key interface{}, value interface{}) {
-	metadata := messageMetadataFromHandle(h)
-
-	if metadata == nil { // synthentic loopback
-		// TODO warn
-		return
-	}
-
-	i.net.StoreKV(metadata.raw.Sender, key, value)
-}
-
-func (i *networkImpl) LoadKV(h agreement.MessageHandle, key interface{}) interface{} {
+func (i *networkImpl) LoadKV(h agreement.MessageHandle, keys []crypto.Digest) [][]byte {
 	metadata := messageMetadataFromHandle(h)
 
 	if metadata == nil { // synthentic loopback
@@ -226,27 +216,7 @@ func (i *networkImpl) LoadKV(h agreement.MessageHandle, key interface{}) interfa
 		return nil
 	}
 
-	return i.net.LoadKV(metadata.raw.Sender, key)
-}
-
-func (i *networkImpl) RLockKV(h agreement.MessageHandle) {
-	metadata := messageMetadataFromHandle(h)
-
-	if metadata == nil { // synthentic loopback
-		// TODO warn
-		return
-	}
-	i.net.RLockKV(metadata.raw.Sender)
-}
-
-func (i *networkImpl) RUnlockKV(h agreement.MessageHandle) {
-	metadata := messageMetadataFromHandle(h)
-
-	if metadata == nil { // synthentic loopback
-		// TODO warn
-		return
-	}
-	i.net.RUnlockKV(metadata.raw.Sender)
+	return i.net.LoadKV(metadata.raw.Sender, keys)
 }
 
 func Metadata(raw network.IncomingMessage) *messageMetadata {

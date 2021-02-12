@@ -559,7 +559,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 	for _, msg := range msgs {
 		hash := crypto.Hash(msg.data)
-		if !wp.LoadKVSender(hash) {
+		if wp.LoadKVSender(hash) {
 			continue
 		}
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
@@ -868,14 +868,16 @@ func (wp *wsPeer) StoreKV(key crypto.Digest, value []byte) {
 	//logging.Base().Infof("storekv, %v %v", key, wp.peerIndex)
 	for wp.keysList.Len() > 100000 {
 		key := wp.keysList.Front()
-		wp.keysList.Remove(key)
 		delete(wp.kvStore, key.Value.(crypto.Digest))
+		wp.keysList.Remove(key)
 		//logging.Base().Infof("deletekv, %v %v", key, wp.peerIndex)
 	}
 }
 
 // LoadKV retrieves an entry from the corresponding peer's key-value store
 func (wp *wsPeer) LoadKV(keys []crypto.Digest) [][]byte {
+	wp.kvStoreMutex.RLock()
+	defer wp.kvStoreMutex.RUnlock()
 	//logging.Base().Infof("loadkv, %v %v", key, wp.peerIndex)
 	values := make([][]byte, len(keys), len(keys))
 	for i, k := range keys {

@@ -290,11 +290,8 @@ type Network interface {
 	// to start receiving messages.
 	Start()
 
-	// StoreKV stores an entry in the corresponding peer's key-value store
-	StoreKV(MessageHandle, interface{}, interface{})
-
 	// LoadKV retrieves an entry from the corresponding peer's key-value store
-	LoadKV(MessageHandle, []crypto.Digest) []interface{}
+	LoadKV(MessageHandle, []crypto.Digest) [][]byte
 }
 
 // RandomSource is an abstraction over the random number generator.
