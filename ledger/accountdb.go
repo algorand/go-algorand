@@ -1592,7 +1592,7 @@ func (e *ExtendedAssetHolding) convertToGroups(assets map[basics.AssetIndex]basi
 }
 
 func accountsNewCreate(basei *sql.Stmt, exti *sql.Stmt, addr basics.Address, ad basics.AccountData, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
-	assetsThreshold := config.Consensus[protocol.ConsensusV14].MaxAssetsPerAccount
+	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 	var pad PersistedAccountData
 	if len(ad.Assets) <= assetsThreshold {
 		pad.AccountData = ad

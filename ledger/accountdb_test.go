@@ -1894,3 +1894,127 @@ func TestAssetHoldingDelete(t *testing.T) {
 	a.Equal(uint64(spec[0].end-spec[0].start), e.Groups[0].DeltaMaxAssetIndex)
 	checkAssetMap(aidx, e.Groups[0])
 }
+
+func TestAccountsNewCreateDelete(t *testing.T) {
+	a := require.New(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	err = accountsInit(tx, nil, proto)
+	a.NoError(err)
+	err = accountsAddNormalizedBalance(tx, proto)
+	a.NoError(err)
+	tx.Commit()
+
+	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
+	a.NoError(err)
+
+	insertGroupDataStmt, err := dbs.Wdb.Handle.Prepare("INSERT INTO accountext (data) VALUES (?)")
+	a.NoError(err)
+	insertStmt, err := dbs.Wdb.Handle.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+	a.NoError(err)
+	allExtData, err := dbs.Wdb.Handle.Prepare("SELECT data from accountext")
+	a.NoError(err)
+	deleteByRowIDStmt, err := dbs.Wdb.Handle.Prepare("DELETE FROM accountbase WHERE rowid=?")
+	a.NoError(err)
+	deleteGroupDataStmt, err := dbs.Wdb.Handle.Prepare("DELETE FROM accountext WHERE id=?")
+	a.NoError(err)
+	cleanbase, err := dbs.Wdb.Handle.Prepare("DELETE FROM accountbase")
+	a.NoError(err)
+
+	addr := randomAddress()
+	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
+	var tests = []struct {
+		count int
+	}{
+		{0}, {1}, {assetsThreshold + 1},
+	}
+	updatedAccounts := []dbAccountData{{}}
+	updatedAccountIdx := 0
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("create-asset-%d", test.count), func(t *testing.T) {
+			ad := basics.AccountData{}
+			if test.count > 0 {
+				ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, test.count)
+			}
+			for i := 1; i <= test.count; i++ {
+				ad.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
+			}
+
+			updatedAccounts, err = accountsNewCreate(
+				insertStmt, insertGroupDataStmt,
+				addr, ad, proto,
+				updatedAccounts, updatedAccountIdx,
+			)
+			a.NoError(err)
+			a.NotEmpty(updatedAccounts[updatedAccountIdx])
+
+			var buf []byte
+			var rowid sql.NullInt64
+			var rnd uint64
+			var pad PersistedAccountData
+
+			err = qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &rnd, &buf)
+			a.NoError(err)
+			a.True(rowid.Valid)
+			a.NoError(protocol.Decode(buf, &pad))
+
+			mempad := updatedAccounts[updatedAccountIdx].pad
+			if len(mempad.ExtendedAssetHolding.Groups) > 0 {
+				// copy and clear non-serializable loaded nad groupData fields to match account data
+				mempad.ExtendedAssetHolding.Groups = make([]AssetsHoldingGroup, len(updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups))
+				copy(mempad.ExtendedAssetHolding.Groups, updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups)
+				mempad.ExtendedAssetHolding.loaded = false // ignored on serialization
+				for i := 0; i < len(mempad.ExtendedAssetHolding.Groups); i++ {
+					// ignored on serialization
+					mempad.ExtendedAssetHolding.Groups[i].groupData = AssetsHoldingGroupData{}
+					mempad.ExtendedAssetHolding.Groups[i].loaded = false
+				}
+			}
+			a.Equal(mempad, pad)
+
+			rows, err := allExtData.Query()
+			i := 0
+			for rows.Next() {
+				err = rows.Scan(&buf)
+				a.NoError(err)
+				var gd AssetsHoldingGroupData
+				a.NoError(protocol.Decode(buf, &gd))
+				a.Equal(updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups[i].groupData, gd)
+				i++
+			}
+			if test.count < assetsThreshold {
+				a.Equal(0, i)
+				// clean trivial cases, preserve ad with groups for deletion test after
+				_, err = cleanbase.Exec()
+				a.NoError(err)
+			} else {
+				a.GreaterOrEqual(i, 4)
+			}
+			rows.Close()
+		})
+	}
+
+	// check deletion
+	dbad, err := qs.lookup(addr)
+	a.NoError(err)
+	updatedAccounts, err = accountsNewDelete(
+		deleteByRowIDStmt, deleteGroupDataStmt,
+		addr, dbad,
+		updatedAccounts, updatedAccountIdx,
+	)
+	a.NoError(err)
+	dbad = updatedAccounts[updatedAccountIdx]
+	a.Empty(dbad.pad)
+
+	rows, err := allExtData.Query()
+	a.NoError(err)
+	a.False(rows.Next())
+	rows.Close()
+}
