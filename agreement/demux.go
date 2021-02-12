@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
@@ -108,11 +109,15 @@ func (d *demux) UpdateEventsQueue(queueName string, queueLength int) {
 
 func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandle) error {
 	logging.Base().Infof("len %v", len(payset))
-	net.RLockKV(h)
-	defer net.RUnlockKV(h)
+
+	keys := make([]crypto.Digest, len(payset), len(payset))
 	for i, stib := range payset {
+		keys[i] = stib.Digest
+	}
+	stxnsData := net.LoadKV(h, keys)
+
+	for i, stxnData := range stxnsData {
 		var stxnBytes []byte
-		stxnData := net.LoadKV(h, stib.Digest)
 		stxnBytes = stxnData.([]byte)
 		var stxn transactions.SignedTxn
 		dec := protocol.NewDecoderBytes(stxnBytes)
@@ -123,7 +128,9 @@ func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandl
 			//net.Disconnect(raw.MessageHandle)
 			return err
 		}
+
 	}
+
 	logging.Base().Infof("done %v", len(payset))
 	return nil
 }

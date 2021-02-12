@@ -877,13 +877,20 @@ func (wp *wsPeer) StoreKV(key interface{}, value interface{}) {
 }
 
 // LoadKV retrieves an entry from the corresponding peer's key-value store
-func (wp *wsPeer) LoadKV(key interface{}) interface{} {
+func (wp *wsPeer) LoadKV(keys []interface{}) []interface{} {
 	//logging.Base().Infof("loadkv, %v %v", key, wp.peerIndex)
-	return wp.kvStore[key]
+	values := make([]interface{}, len(keys), len(keys))
+	for i, k := range keys {
+		values[i] = wp.kvStore[k]
+	}
+	return values
 }
 
 // StoreKVSender stores an entry in the corresponding peer's key-value store
 func (wp *wsPeer) StoreKVSender(key interface{}, value interface{}) {
+	wp.kvStoreMutex.RLock()
+	defer wp.kvStoreMutex.RUnlock()
+
 	wp.kvStoreSender[key] = value
 	wp.keysListSender.PushBack(key)
 	for wp.keysListSender.Len() > 10000 {
@@ -897,12 +904,4 @@ func (wp *wsPeer) StoreKVSender(key interface{}, value interface{}) {
 func (wp *wsPeer) LoadKVSender(key interface{}) interface{} {
 	value, _ := wp.kvStoreSender[key]
 	return value
-}
-
-func (wp *wsPeer) RLockKV() {
-	wp.kvStoreMutex.RLock()
-}
-
-func (wp *wsPeer) RUnlockKV() {
-	wp.kvStoreMutex.RUnlock()
 }
