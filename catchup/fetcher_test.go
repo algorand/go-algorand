@@ -867,7 +867,7 @@ func TestGetBlockWS(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 
-	versions := []string{"1", "2.1"}
+	versions := []string{"2.1"}
 	for _, version := range versions { // range network.SupportedProtocolVersions {
 
 		net := &httpTestPeerSource{}

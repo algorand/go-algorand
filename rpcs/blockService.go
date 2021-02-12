@@ -201,11 +201,6 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	}
 }
 
-// WsGetBlockRequest is a msgpack message requesting a block
-type WsGetBlockRequest struct {
-	Round uint64 `json:"round"`
-}
-
 // WsGetBlockOut is a msgpack message delivered on responding to a block (not rpc-based though)
 type WsGetBlockOut struct {
 	Round      uint64
@@ -245,32 +240,9 @@ const datatypeUnsupportedErrMsg = "requested data type is unsupported"
 
 // a blocking function for handling a catchup request
 func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
-	var res WsGetBlockOut
 	target := reqMsg.Sender.(network.UnicastPeer)
 	var respTopics network.Topics
 
-	if target.Version() == "1" {
-
-		defer func() {
-			bs.sendCatchupRes(ctx, target, reqMsg.Tag, res)
-		}()
-		var req WsGetBlockRequest
-		err := protocol.DecodeReflect(reqMsg.Data, &req)
-		if err != nil {
-			res.Error = err.Error()
-			return
-		}
-		res.Round = req.Round
-		encodedBlob, err := RawBlockBytes(bs.ledger, basics.Round(req.Round))
-
-		if err != nil {
-			res.Error = err.Error()
-			return
-		}
-		res.BlockBytes = encodedBlob
-		return
-	}
-	// Else, if version == 2.1
 	defer func() {
 		target.Respond(ctx, reqMsg, respTopics)
 	}()
@@ -309,15 +281,6 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 	}
 	respTopics = topicBlockBytes(bs.ledger, basics.Round(round), string(requestType))
 	return
-}
-
-func (bs *BlockService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
-	t := reqTag.Complement()
-	logging.Base().Infof("catching down peer: %v, round %v. outcome: %v. ledger: %v", target.GetAddress(), outMsg.Round, outMsg.Error, bs.ledger.LastRound())
-	err := target.Unicast(ctx, protocol.EncodeReflect(outMsg), t)
-	if err != nil {
-		logging.Base().Info("failed to respond to catchup req", err)
-	}
 }
 
 func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType string) network.Topics {
