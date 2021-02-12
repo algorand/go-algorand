@@ -866,7 +866,7 @@ func (wp *wsPeer) StoreKV(key crypto.Digest, value []byte) {
 	wp.kvStore[key] = value
 	wp.keysList.PushBack(key)
 	//logging.Base().Infof("storekv, %v %v", key, wp.peerIndex)
-	for wp.keysList.Len() > 50000 {
+	for wp.keysList.Len() > 100000 {
 		key := wp.keysList.Front()
 		wp.keysList.Remove(key)
 		delete(wp.kvStore, key.Value.(crypto.Digest))
