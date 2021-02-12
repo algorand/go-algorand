@@ -1783,10 +1783,14 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"2.1", "1"}
+var SupportedProtocolVersions = []string{"2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
-const ProtocolVersion = "1"
+/* Version history:
+ *  1   Catchup service over websocket connections with unicast messages between peers
+ *  2.1 Introducted topic key/data pairs and enabled services over the gossip connections
+*/
+const ProtocolVersion = "2.1"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"
