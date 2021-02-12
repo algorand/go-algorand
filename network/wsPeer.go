@@ -214,6 +214,11 @@ type wsPeer struct {
 	keysList *list.List
 
 	kvStoreMutex deadlock.RWMutex
+
+	kvStoreSender  map[interface{}]interface{}
+	keysListSender *list.List
+
+	kvStoreMutexSender deadlock.RWMutex
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -327,6 +332,9 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.sendMessageTag = defaultSendMessageTags
 	wp.kvStore = make(map[interface{}]interface{})
 	wp.keysList = list.New()
+
+	wp.kvStoreSender = make(map[interface{}]interface{})
+	wp.keysListSender = list.New()
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue
@@ -552,9 +560,15 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 	for _, msg := range msgs {
+		if wp.LoadKVSender(crypto.Hash(msg.data)) != nil {
+			continue
+		}
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
 			logging.Base().Infof("bad msg: %v", len(msg.data))
 			return err
+		}
+		if len(msg.data) > 2 && (protocol.Tag(msg.data[:2]) == protocol.ProposalTransactionTag || protocol.Tag(msg.data[:2]) == protocol.TxnTag) {
+			wp.StoreKVSender(crypto.Hash(msg.data), true)
 		}
 	}
 	return disconnectReasonNone
@@ -865,6 +879,23 @@ func (wp *wsPeer) StoreKV(key interface{}, value interface{}) {
 func (wp *wsPeer) LoadKV(key interface{}) interface{} {
 	//logging.Base().Infof("loadkv, %v %v", key, wp.peerIndex)
 	return wp.kvStore[key]
+}
+
+// StoreKVSender stores an entry in the corresponding peer's key-value store
+func (wp *wsPeer) StoreKVSender(key interface{}, value interface{}) {
+	wp.kvStoreSender[key] = value
+	wp.keysListSender.PushBack(key)
+	for wp.keysListSender.Len() > 100000 {
+		key := wp.keysListSender.Front()
+		wp.keysListSender.Remove(key)
+		delete(wp.kvStoreSender, key)
+	}
+}
+
+// LoadKVSender retrieves an entry from the corresponding peer's key-value store
+func (wp *wsPeer) LoadKVSender(key interface{}) interface{} {
+	value, _ := wp.kvStoreSender[key]
+	return value
 }
 
 func (wp *wsPeer) RLockKV() {
