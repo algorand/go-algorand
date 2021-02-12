@@ -392,6 +392,9 @@ func TestRewardPoolMinBalance(t *testing.T) {
 			RewardsResidue:            0,
 			RewardsRecalculationRound: basics.Round(consensusParams.RewardsRateRefreshInterval),
 		}
+		if consensusParams.RewardPoolMinBalance == true {
+			curRewardsState.RewardsRate = (incentivePoolBalance - consensusParams.MinBalance) / uint64(consensusParams.RewardsRateRefreshInterval)
+		}
 		for rnd := 1; rnd < int(consensusParams.RewardsRateRefreshInterval+2); rnd++ {
 			nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits)
 			// adjust the incentive pool balance

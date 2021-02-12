@@ -94,6 +94,10 @@ func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 		RewardsRecalculationRound: basics.Round(params.RewardsRateRefreshInterval),
 	}
 
+	if params.RewardPoolMinBalance {
+		genesisRewardsState.RewardsRate = (incentivePoolBalanceAtGenesis.Raw - params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
+	}
+
 	genesisProtoState := bookkeeping.UpgradeState{
 		CurrentProtocol: proto,
 	}
