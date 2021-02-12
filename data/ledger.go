@@ -94,7 +94,7 @@ func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 	}
 
 	if params.RewardPoolMinBalance {
-		genesisRewardsState.RewardsRate = (incentivePoolBalanceAtGenesis.Raw - params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
+		genesisRewardsState.RewardsRate = basics.SubSaturate(incentivePoolBalanceAtGenesis.Raw, params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
 	} else {
 		genesisRewardsState.RewardsRate = incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
 	}
