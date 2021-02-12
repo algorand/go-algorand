@@ -205,15 +205,8 @@ type GossipNode interface {
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
 
-	// StoreKV stores an entry in the corresponding peer's key-value store
-	StoreKV(node Peer, key interface{}, value interface{})
-
 	// LoadKV retrieves an entry from the corresponding peer's key-value store
-	LoadKV(node Peer, key interface{}) interface{}
-
-	RLockKV(node Peer)
-
-	RUnlockKV(node Peer)
+	LoadKV(node Peer, key []crypto.Digest) [][]byte
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -2277,31 +2270,21 @@ func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
 }
 
 // StoreKV stores an entry in the corresponding peer's key-value store
-func (wn *WebsocketNetwork) StoreKV(node Peer, key interface{}, value interface{}) {
+func (wn *WebsocketNetwork) StoreKV(node Peer, key crypto.Digest, value []byte) {
 	// TODO: add cache size limit
 	peer := node.(*wsPeer)
 	peer.StoreKV(key, value)
 }
 
 // LoadKV retrieves an entry from the corresponding peer's key-value store
-func (wn *WebsocketNetwork) LoadKV(node Peer, key interface{}) interface{} {
+func (wn *WebsocketNetwork) LoadKV(node Peer, keys []crypto.Digest) [][]byte {
 	peer := node.(*wsPeer)
-	return peer.LoadKV(key)
-}
-
-func (wn *WebsocketNetwork) RLockKV(node Peer) {
-	peer := node.(*wsPeer)
-	peer.RLockKV()
-}
-
-func (wn *WebsocketNetwork) RUnlockKV(node Peer) {
-	peer := node.(*wsPeer)
-	peer.RUnlockKV()
+	return peer.LoadKV(keys)
 }
 
 func (wn *WebsocketNetwork) TestPeer() wsPeer {
 	var wp wsPeer
-	wp.kvStore = make(map[interface{}]interface{})
+	wp.kvStore = make(map[crypto.Digest][]byte)
 	wp.keysList = list.New()
 	return wp
 }

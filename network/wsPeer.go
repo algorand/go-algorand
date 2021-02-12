@@ -210,14 +210,12 @@ type wsPeer struct {
 	// performance or not. Throttled connections are more likely to be short-lived connections.
 	throttledOutgoingConnection bool
 
-	kvStore  map[interface{}]interface{}
+	kvStore  map[crypto.Digest][]byte
 	keysList *list.List
-
 	kvStoreMutex deadlock.RWMutex
 
-	kvStoreSender  map[interface{}]interface{}
+	kvStoreSender  map[crypto.Digest]bool
 	keysListSender *list.List
-
 	kvStoreMutexSender deadlock.RWMutex
 }
 
@@ -330,10 +328,10 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
-	wp.kvStore = make(map[interface{}]interface{})
+	wp.kvStore = make(map[crypto.Digest][]byte)
 	wp.keysList = list.New()
 
-	wp.kvStoreSender = make(map[interface{}]interface{})
+	wp.kvStoreSender = make(map[crypto.Digest]bool)
 	wp.keysListSender = list.New()
 
 	// processed is a channel that messageHandlerThread writes to
@@ -561,7 +559,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 	for _, msg := range msgs {
 		hash := crypto.Hash(msg.data)
-		if wp.LoadKVSender(hash) != nil {
+		if !wp.LoadKVSender(hash) {
 			continue
 		}
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
@@ -862,7 +860,7 @@ func (wp *wsPeer) getAndRemoveResponseChannel(key uint64) (respChan chan *Respon
 }
 
 // StoreKV stores an entry in the corresponding peer's key-value store
-func (wp *wsPeer) StoreKV(key interface{}, value interface{}) {
+func (wp *wsPeer) StoreKV(key crypto.Digest, value []byte) {
 	wp.kvStoreMutex.Lock()
 	defer wp.kvStoreMutex.Unlock()
 	wp.kvStore[key] = value
@@ -871,15 +869,15 @@ func (wp *wsPeer) StoreKV(key interface{}, value interface{}) {
 	for wp.keysList.Len() > 50000 {
 		key := wp.keysList.Front()
 		wp.keysList.Remove(key)
-		delete(wp.kvStore, key)
+		delete(wp.kvStore, key.Value.(crypto.Digest))
 		//logging.Base().Infof("deletekv, %v %v", key, wp.peerIndex)
 	}
 }
 
 // LoadKV retrieves an entry from the corresponding peer's key-value store
-func (wp *wsPeer) LoadKV(keys []interface{}) []interface{} {
+func (wp *wsPeer) LoadKV(keys []crypto.Digest) [][]byte {
 	//logging.Base().Infof("loadkv, %v %v", key, wp.peerIndex)
-	values := make([]interface{}, len(keys), len(keys))
+	values := make([][]byte, len(keys), len(keys))
 	for i, k := range keys {
 		values[i] = wp.kvStore[k]
 	}
@@ -887,7 +885,7 @@ func (wp *wsPeer) LoadKV(keys []interface{}) []interface{} {
 }
 
 // StoreKVSender stores an entry in the corresponding peer's key-value store
-func (wp *wsPeer) StoreKVSender(key interface{}, value interface{}) {
+func (wp *wsPeer) StoreKVSender(key crypto.Digest, value bool) {
 	wp.kvStoreMutex.RLock()
 	defer wp.kvStoreMutex.RUnlock()
 
@@ -896,12 +894,12 @@ func (wp *wsPeer) StoreKVSender(key interface{}, value interface{}) {
 	for wp.keysListSender.Len() > 10000 {
 		key := wp.keysListSender.Front()
 		wp.keysListSender.Remove(key)
-		delete(wp.kvStoreSender, key)
+		delete(wp.kvStoreSender, key.Value.(crypto.Digest))
 	}
 }
 
 // LoadKVSender retrieves an entry from the corresponding peer's key-value store
-func (wp *wsPeer) LoadKVSender(key interface{}) interface{} {
+func (wp *wsPeer) LoadKVSender(key crypto.Digest) bool {
 	value, _ := wp.kvStoreSender[key]
 	return value
 }
