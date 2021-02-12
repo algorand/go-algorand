@@ -346,8 +346,8 @@ type ConsensusParams struct {
 	// asset that were sent to the close-to address.
 	EnableAssetCloseAmount bool
 
-	// update the rewards per round calculation to ensure we safely maintain a minimum balance in the reward pool
-	RewardPoolMinBalance bool
+	// update the initial rewards rate calculation to take the reward pool minimum balance into account
+	InitialRewardsRateCalculation bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -868,8 +868,8 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
-	// enable the RewardPoolMinBalance fix
-	vFuture.RewardPoolMinBalance = true
+	// enable the InitialRewardsRateCalculation fix
+	vFuture.InitialRewardsRateCalculation = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

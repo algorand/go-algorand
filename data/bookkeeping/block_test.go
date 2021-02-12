@@ -376,9 +376,9 @@ func TestDecodeMalformedSignedTxn(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestRewardPoolMinBalance perform positive and negative testing for the RewardPoolMinBalance fix by
+// TestInitialRewardsRateCalculation perform positive and negative testing for the InitialRewardsRateCalculation fix by
 // running the rounds in the same way eval() is executing them over RewardsRateRefreshInterval rounds.
-func TestRewardPoolMinBalance(t *testing.T) {
+func TestInitialRewardsRateCalculation(t *testing.T) {
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	runTest := func() bool {
@@ -391,7 +391,7 @@ func TestRewardPoolMinBalance(t *testing.T) {
 			RewardsResidue:            0,
 			RewardsRecalculationRound: basics.Round(consensusParams.RewardsRateRefreshInterval),
 		}
-		if consensusParams.RewardPoolMinBalance {
+		if consensusParams.InitialRewardsRateCalculation {
 			curRewardsState.RewardsRate = basics.SubSaturate(incentivePoolBalance, consensusParams.MinBalance) / uint64(consensusParams.RewardsRateRefreshInterval)
 		} else {
 			curRewardsState.RewardsRate = incentivePoolBalance / uint64(consensusParams.RewardsRateRefreshInterval)
@@ -422,10 +422,10 @@ func TestRewardPoolMinBalance(t *testing.T) {
 	}
 
 	// test expected failuire
-	consensusParams.RewardPoolMinBalance = false
+	consensusParams.InitialRewardsRateCalculation = false
 	require.False(t, runTest())
 
 	// test expected success
-	consensusParams.RewardPoolMinBalance = true
+	consensusParams.InitialRewardsRateCalculation = true
 	require.True(t, runTest())
 }
