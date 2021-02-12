@@ -78,15 +78,17 @@ func TestBasicCatchup(t *testing.T) {
 func TestCatchupOverGossip(t *testing.T) {
 	t.Parallel()
 
-	versions := network.SupportedProtocolVersions
-	require.LessOrEqual(t, len(versions), 3)
+	supportedVersions := network.SupportedProtocolVersions
+	require.LessOrEqual(t, len(supportedVersions), 3)
 
 	// ledger node upgraded version, fetcher node upgraded version
-	for i := 0; i < len(versions); i++ {
-		runCatchupOverGossip(t, "", "")
-		runCatchupOverGossip(t, versions[i], "")
-		runCatchupOverGossip(t, "", versions[i])
-		runCatchupOverGossip(t, versions[i], versions[i])
+	// Run with the default values. Instead of "", pass the default value
+	// to exercise loading it from the config file. 
+	runCatchupOverGossip(t, supportedVersions[0], supportedVersions[0])
+	for i := 1; i < len(supportedVersions); i++ {
+		runCatchupOverGossip(t, supportedVersions[i], "")
+		runCatchupOverGossip(t, "", supportedVersions[i])
+		runCatchupOverGossip(t, supportedVersions[i], supportedVersions[i])
 	}
 }
 
@@ -115,6 +117,7 @@ func runCatchupOverGossip(t *testing.T,
 		a.NoError(err)
 		cfg, err := config.LoadConfigFromDisk(dir)
 		a.NoError(err)
+		require.Empty(t, cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = ledgerNodeDowngradeTo
 		cfg.SaveToDisk(dir)
 	}
@@ -124,6 +127,7 @@ func runCatchupOverGossip(t *testing.T,
 		dir := fixture.PrimaryDataDir()
 		cfg, err := config.LoadConfigFromDisk(dir)
 		a.NoError(err)
+		require.Empty(t, cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = fetcherNodeDowngradeTo
 		cfg.SaveToDisk(dir)
 	}
