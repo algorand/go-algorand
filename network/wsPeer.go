@@ -560,7 +560,8 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 	for _, msg := range msgs {
-		if wp.LoadKVSender(crypto.Hash(msg.data)) != nil {
+		hash := crypto.Hash(msg.data)
+		if wp.LoadKVSender(hash) != nil {
 			continue
 		}
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
@@ -568,7 +569,7 @@ func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 			return err
 		}
 		if len(msg.data) > 2 && (protocol.Tag(msg.data[:2]) == protocol.ProposalTransactionTag || protocol.Tag(msg.data[:2]) == protocol.TxnTag) {
-			wp.StoreKVSender(crypto.Hash(msg.data), true)
+			wp.StoreKVSender(hash, true)
 		}
 	}
 	return disconnectReasonNone
@@ -885,7 +886,7 @@ func (wp *wsPeer) LoadKV(key interface{}) interface{} {
 func (wp *wsPeer) StoreKVSender(key interface{}, value interface{}) {
 	wp.kvStoreSender[key] = value
 	wp.keysListSender.PushBack(key)
-	for wp.keysListSender.Len() > 100000 {
+	for wp.keysListSender.Len() > 10000 {
 		key := wp.keysListSender.Front()
 		wp.keysListSender.Remove(key)
 		delete(wp.kvStoreSender, key)
