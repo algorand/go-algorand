@@ -3893,12 +3893,27 @@ func TestBits(t *testing.T) {
 	testAccepts(t, "int 8; int 3; getbit; int 1; ==", 3)
 
 	testAccepts(t, "int 15; int 3; int 0; setbit; int 7; ==", 3)
+
+	// bit 10 is the 3rd bit (from the high end) in the second byte
+	testAccepts(t, "byte 0xfff0; int 10; getbit; int 1; ==", 3)
+	testAccepts(t, "byte 0xfff0; int 12; getbit; int 0; ==", 3)
+	testPanics(t, "byte 0xfff0; int 16; getbit; int 0; ==", 3)
+
+	testAccepts(t, "byte 0xfffff0; int 21; int 1; setbit; byte 0xfffff4; ==", 3)
+	testAccepts(t, "byte 0xfffff4; int 1; int 0; setbit; byte 0xbffff4; ==", 3)
+	testPanics(t, "byte 0xfffff4; int 24; int 0; setbit; byte 0xbf; ==", 3)
 }
 
 func TestBytes(t *testing.T) {
 	t.Parallel()
 	testAccepts(t, "byte 0x12345678; int 2; getbyte; int 0x56; ==", 3)
-	testAccepts(t, `byte "john"; int 2; getbyte; int 104; ==`, 3) // 104 is ascii h
+	testPanics(t, "byte 0x12345678; int 4; getbyte; int 0x56; ==", 3)
+
+	testAccepts(t, `byte "john"; int 0; getbyte; int 106; ==`, 3) // ascii j
+	testAccepts(t, `byte "john"; int 1; getbyte; int 111; ==`, 3) // ascii o
+	testAccepts(t, `byte "john"; int 2; getbyte; int 104; ==`, 3) // ascii h
+	testAccepts(t, `byte "john"; int 3; getbyte; int 110; ==`, 3) // ascii n
+	testPanics(t, `byte "john"; int 4; getbyte; int 1; ==`, 3)    // past end
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
 	// dup makes copies, modifying one does not change the other

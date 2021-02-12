@@ -66,6 +66,8 @@ var twoInts = StackTypes{StackUint64, StackUint64}
 var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
 var oneAny = StackTypes{StackAny}
 var twoAny = StackTypes{StackAny, StackAny}
+var anyInt = StackTypes{StackAny, StackUint64}
+var anyIntInt = StackTypes{StackAny, StackUint64, StackUint64}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
@@ -170,8 +172,8 @@ var OpSpecs = []OpSpec{
 	{0x72, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opSizeDefault},
 	{0x73, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opSizeDefault},
 
-	{0x74, "getbit", opGetBit, asmDefault, disDefault, twoInts, oneInt, 3, modeAny, opSizeDefault},
-	{0x75, "setbit", opSetBit, asmDefault, disDefault, threeInts, oneInt, 3, modeAny, opSizeDefault},
+	{0x74, "getbit", opGetBit, asmDefault, disDefault, anyInt, oneInt, 3, modeAny, opSizeDefault},
+	{0x75, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneInt, 3, modeAny, opSizeDefault},
 	{0x76, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opSizeDefault},
 	{0x77, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opSizeDefault},
 	{0x78, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, opSizeDefault},

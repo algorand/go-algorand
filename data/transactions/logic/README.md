@@ -131,13 +131,13 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `~` | bitwise invert value X |
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 | `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
-| `getbit` | pop an integer A (between 0..63) and integer B. Extract the Ath bit of B and push it. A==0 is lowest order bit. |
-| `setbit` | pop a bit A, integer B (between 0..63), and integer C. Set the Bth bit of C to A, and push the result |
-| `getbyte` | pop an integer A and string B. Extract the Ath byte of B and push it as an integer |
-| `setbyte` | pop a small integer A (between 0..255), and integer B, and string C. Set the Bth byte of C to A, and push the result |
-| `concat` | pop two byte strings A and B and join them, push the result |
-| `substring` | pop a byte string X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the string length, the program fails |
-| `substring3` | pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the string length, the program fails |
+| `getbit` | pop an index A, a target B (integer or byte-array). Pushes the Ath bit of B. |
+| `setbit` | pop a bit A, index B, and target C. Sets the Bth bit of C to A, and push the result |
+| `getbyte` | pop an integer A and byte-array B. Extract the Ath byte of B and push it as an integer |
+| `setbyte` | pop a small integer A (between 0..255), and integer B, and byte-array C. Set the Bth byte of C to A, and push the result |
+| `concat` | pop two byte-arrays A and B and join them, push the result |
+| `substring` | pop a byte-array X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the array length, the program fails |
+| `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
 
 ### Loading Values
 
@@ -171,7 +171,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `txna` | push value from an array field from current transaction to stack |
 | `gtxna` | push value from an array field from a transaction in the current transaction group |
 | `stxn` | push field to the stack from transaction A in the current group |
-| `stxna` | pusha value from an array field from transaction A in the current group |
+| `stxna` | push value from an array field from transaction A in the current group |
 | `global` | push value from globals to stack |
 | `load` | copy a value from scratch space to the stack |
 | `store` | pop a value from the stack and store to scratch space |

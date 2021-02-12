@@ -1848,12 +1848,37 @@ func opSubstring3(cx *evalContext) {
 func opGetBit(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	if cx.stack[last].Uint > 63 {
-		cx.err = errors.New("getbit index > 63")
-		return
+	idx := cx.stack[last].Uint
+	target := cx.stack[prev]
+
+	var bit uint64
+	if target.argType() == StackUint64 {
+		if idx > 63 {
+			cx.err = errors.New("getbit index > 63 with with Uint")
+			return
+		}
+		mask := uint64(1) << idx
+		bit = (target.Uint & mask) >> idx
+	} else {
+		// indexing into a byteslice
+		byteIdx := idx / 8
+		if byteIdx >= uint64(len(target.Bytes)) {
+			cx.err = errors.New("getbit index beyond byteslice")
+			return
+		}
+		byteVal := target.Bytes[byteIdx]
+
+		bitIdx := idx % 8
+		// We saying that bit 9 (the 10th bit), for example,
+		// is the 2nd bit in the second byte, and that "2nd
+		// bit" here means almost-highest-order bit, because
+		// we're thinking of the bits in the byte itself as
+		// being big endian. So this looks "reversed"
+		mask := byte(0x80) >> bitIdx
+		bit = uint64((byteVal & mask) >> (7 - bitIdx))
 	}
-	mask := uint64(1) << cx.stack[last].Uint
-	cx.stack[prev].Uint = (cx.stack[prev].Uint & mask) >> cx.stack[last].Uint
+	cx.stack[prev].Uint = bit
+	cx.stack[prev].Bytes = nil
 	cx.stack = cx.stack[:last]
 }
 
@@ -1861,19 +1886,47 @@ func opSetBit(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	pprev := prev - 1
-	if cx.stack[last].Uint > 1 {
+
+	bit := cx.stack[last].Uint
+	idx := cx.stack[prev].Uint
+	target := cx.stack[pprev]
+
+	if bit > 1 {
 		cx.err = errors.New("setbit value > 1")
 		return
 	}
-	if cx.stack[prev].Uint > 63 {
-		cx.err = errors.New("setbit index > 63")
-		return
-	}
-	onmask := uint64(1) << cx.stack[prev].Uint
-	if cx.stack[last].Uint == uint64(1) {
-		cx.stack[pprev].Uint |= onmask
+
+	if target.argType() == StackUint64 {
+		if idx > 63 {
+			cx.err = errors.New("setbit index > 63 with Uint")
+			return
+		}
+		mask := uint64(1) << idx
+		if bit == uint64(1) {
+			cx.stack[pprev].Uint |= mask // manipulate stack in place
+		} else {
+			cx.stack[pprev].Uint &^= mask // manipulate stack in place
+		}
 	} else {
-		cx.stack[pprev].Uint &^= onmask
+		// indexing into a byteslice
+		byteIdx := idx / 8
+		if byteIdx >= uint64(len(target.Bytes)) {
+			cx.err = errors.New("setbit index beyond byteslice")
+			return
+		}
+
+		bitIdx := idx % 8
+		// We saying that bit 9 (the 10th bit), for example,
+		// is the 2nd bit in the second byte, and that "2nd
+		// bit" here means almost-highest-order bit, because
+		// we're thinking of the bits in the byte itself as
+		// being big endian. So this looks "reversed"
+		mask := byte(0x80) >> bitIdx
+		if bit == uint64(1) {
+			target.Bytes[byteIdx] |= mask
+		} else {
+			target.Bytes[byteIdx] &^= mask
+		}
 	}
 	cx.stack = cx.stack[:prev]
 }
@@ -1881,11 +1934,15 @@ func opSetBit(cx *evalContext) {
 func opGetByte(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	if cx.stack[last].Uint > uint64(len(cx.stack[prev].Bytes)) {
-		cx.err = errors.New("getbyte index > byte length")
+
+	idx := cx.stack[last].Uint
+	target := cx.stack[prev]
+
+	if idx >= uint64(len(target.Bytes)) {
+		cx.err = errors.New("getbyte index beyond byteslice")
 		return
 	}
-	cx.stack[prev].Uint = uint64(cx.stack[prev].Bytes[cx.stack[last].Uint])
+	cx.stack[prev].Uint = uint64(target.Bytes[idx])
 	cx.stack[prev].Bytes = nil
 	cx.stack = cx.stack[:last]
 }
