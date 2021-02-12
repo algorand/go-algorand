@@ -345,6 +345,9 @@ type ConsensusParams struct {
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
 	EnableAssetCloseAmount bool
+
+	// update the rewards per round calculation to ensure we safely maintain a minimum balance in the reward pool
+	RewardPoolMinBalance bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -864,6 +867,9 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
+
+	// enable the RewardPoolMinBalance fix
+	vFuture.RewardPoolMinBalance = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

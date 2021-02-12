@@ -375,3 +375,51 @@ func TestDecodeMalformedSignedTxn(t *testing.T) {
 	_, _, err = b.DecodeSignedTxn(txib2)
 	require.Error(t, err)
 }
+
+func TestRewardPoolMinBalance(t *testing.T) {
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	runTest := func() bool {
+		incentivePoolBalance := uint64(125000000000000)
+		totalRewardUnits := uint64(10000000000)
+		require.GreaterOrEqual(t, incentivePoolBalance, consensusParams.MinBalance)
+
+		rs := RewardsState{
+			RewardsLevel:              0,
+			RewardsRate:               incentivePoolBalance / uint64(consensusParams.RewardsRateRefreshInterval),
+			RewardsResidue:            0,
+			RewardsRecalculationRound: basics.Round(consensusParams.RewardsRateRefreshInterval),
+		}
+		for rnd := 1; rnd < int(consensusParams.RewardsRateRefreshInterval+2); rnd++ {
+			newrs := rs.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits)
+			// adjust the incentive pool balance
+			var ot basics.OverflowTracker
+
+			// get number of rewards per unit
+			rewardsPerUnit := ot.Sub(newrs.RewardsLevel, rs.RewardsLevel)
+			require.False(t, ot.Overflowed)
+
+			// subtract the total dispersed funds from the pool balance
+			incentivePoolBalance = ot.Sub(incentivePoolBalance, ot.Mul(totalRewardUnits, rewardsPerUnit))
+			require.False(t, ot.Overflowed)
+
+			// make sure the pool retain at least the min balance
+			ot.Sub(incentivePoolBalance, consensusParams.MinBalance)
+			if ot.Overflowed {
+				return false
+			}
+
+			// prepare for the next iteration
+			rs = newrs
+		}
+		return true
+	}
+
+	// test expected failuire
+	consensusParams.RewardPoolMinBalance = false
+	require.False(t, runTest())
+
+	// test expected success
+	consensusParams.RewardPoolMinBalance = true
+	require.True(t, runTest())
+}
