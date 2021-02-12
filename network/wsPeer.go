@@ -868,10 +868,10 @@ func (wp *wsPeer) StoreKV(key interface{}, value interface{}) {
 	wp.kvStore[key] = value
 	wp.keysList.PushBack(key)
 	//logging.Base().Infof("storekv, %v %v", key, wp.peerIndex)
-	for wp.keysList.Len() > 50000 {
+	for wp.keysList.Len() > 100000 {
 		key := wp.keysList.Front()
 		wp.keysList.Remove(key)
-		delete(wp.kvStore, key)
+		delete(wp.kvStore, key.Value)
 		//logging.Base().Infof("deletekv, %v %v", key, wp.peerIndex)
 	}
 }
@@ -889,7 +889,7 @@ func (wp *wsPeer) StoreKVSender(key interface{}, value interface{}) {
 	for wp.keysListSender.Len() > 10000 {
 		key := wp.keysListSender.Front()
 		wp.keysListSender.Remove(key)
-		delete(wp.kvStoreSender, key)
+		delete(wp.kvStoreSender, key.Value)
 	}
 }
 
