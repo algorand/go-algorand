@@ -1895,7 +1895,7 @@ func TestAssetHoldingDelete(t *testing.T) {
 	checkAssetMap(aidx, e.Groups[0])
 }
 
-func TestAccountsNewCreateDelete(t *testing.T) {
+func TestAccountsNewCRUD(t *testing.T) {
 	a := require.New(t)
 
 	dbs, _ := dbOpenTest(t, true)
@@ -1914,30 +1914,23 @@ func TestAccountsNewCreateDelete(t *testing.T) {
 	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	a.NoError(err)
 
-	insertGroupDataStmt, err := dbs.Wdb.Handle.Prepare("INSERT INTO accountext (data) VALUES (?)")
-	a.NoError(err)
-	insertStmt, err := dbs.Wdb.Handle.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+	q, err := makeAccountsNewQueries(dbs.Wdb.Handle)
+
+	allAccounts, err := dbs.Wdb.Handle.Prepare("SELECT address from accountbase")
 	a.NoError(err)
 	allExtData, err := dbs.Wdb.Handle.Prepare("SELECT data from accountext")
-	a.NoError(err)
-	deleteByRowIDStmt, err := dbs.Wdb.Handle.Prepare("DELETE FROM accountbase WHERE rowid=?")
-	a.NoError(err)
-	deleteGroupDataStmt, err := dbs.Wdb.Handle.Prepare("DELETE FROM accountext WHERE id=?")
-	a.NoError(err)
-	cleanbase, err := dbs.Wdb.Handle.Prepare("DELETE FROM accountbase")
 	a.NoError(err)
 
 	addr := randomAddress()
 	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
-	var tests = []struct {
+	var deletionTests = []struct {
 		count int
 	}{
 		{0}, {1}, {assetsThreshold + 1},
 	}
-	updatedAccounts := []dbAccountData{{}}
-	updatedAccountIdx := 0
+	temp := randomAccountData(100)
 
-	for _, test := range tests {
+	for _, test := range deletionTests {
 		t.Run(fmt.Sprintf("create-asset-%d", test.count), func(t *testing.T) {
 			ad := basics.AccountData{}
 			if test.count > 0 {
@@ -1947,13 +1940,17 @@ func TestAccountsNewCreateDelete(t *testing.T) {
 				ad.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
 			}
 
+			updatedAccounts := []dbAccountData{{pad: PersistedAccountData{AccountData: temp}}}
+			updatedAccountIdx := 0
+
 			updatedAccounts, err = accountsNewCreate(
-				insertStmt, insertGroupDataStmt,
+				q.insertStmt, q.insertGroupDataStmt,
 				addr, ad, proto,
 				updatedAccounts, updatedAccountIdx,
 			)
 			a.NoError(err)
 			a.NotEmpty(updatedAccounts[updatedAccountIdx])
+			a.NotEqual(updatedAccounts[updatedAccountIdx].pad.AccountData, temp)
 
 			var buf []byte
 			var rowid sql.NullInt64
@@ -1989,32 +1986,33 @@ func TestAccountsNewCreateDelete(t *testing.T) {
 				a.Equal(updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups[i].groupData, gd)
 				i++
 			}
-			if test.count < assetsThreshold {
-				a.Equal(0, i)
-				// clean trivial cases, preserve ad with groups for deletion test after
-				_, err = cleanbase.Exec()
-				a.NoError(err)
-			} else {
-				a.GreaterOrEqual(i, 4)
-			}
 			rows.Close()
+
+			invocations := test.count / assetsThreshold
+			a.GreaterOrEqual(i, invocations)
+
+			// check deletion
+			dbad, err := qs.lookup(addr)
+			a.NoError(err)
+			updatedAccounts, err = accountsNewDelete(
+				q.deleteByRowIDStmt, q.deleteGroupDataStmt,
+				addr, dbad,
+				updatedAccounts, updatedAccountIdx,
+			)
+			a.NoError(err)
+			dbad = updatedAccounts[updatedAccountIdx]
+			a.Empty(dbad.pad)
+
+			rows, err = allExtData.Query()
+			a.NoError(err)
+			a.False(rows.Next())
+			rows.Close()
+
+			rows, err = allAccounts.Query()
+			a.NoError(err)
+			a.False(rows.Next())
+			rows.Close()
+
 		})
 	}
-
-	// check deletion
-	dbad, err := qs.lookup(addr)
-	a.NoError(err)
-	updatedAccounts, err = accountsNewDelete(
-		deleteByRowIDStmt, deleteGroupDataStmt,
-		addr, dbad,
-		updatedAccounts, updatedAccountIdx,
-	)
-	a.NoError(err)
-	dbad = updatedAccounts[updatedAccountIdx]
-	a.Empty(dbad.pad)
-
-	rows, err := allExtData.Query()
-	a.NoError(err)
-	a.False(rows.Next())
-	rows.Close()
 }

@@ -1591,7 +1591,7 @@ func (e *ExtendedAssetHolding) convertToGroups(assets map[basics.AssetIndex]basi
 	e.Groups[currentGroup].DeltaMaxAssetIndex = uint64(flatten[len(flatten)-1].aidx - e.Groups[currentGroup].MinAssetIndex)
 }
 
-func accountsNewCreate(basei *sql.Stmt, exti *sql.Stmt, addr basics.Address, ad basics.AccountData, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
+func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, ad basics.AccountData, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
 	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 	var pad PersistedAccountData
 	if len(ad.Assets) <= assetsThreshold {
@@ -1605,7 +1605,7 @@ func accountsNewCreate(basei *sql.Stmt, exti *sql.Stmt, addr basics.Address, ad 
 	var result sql.Result
 	var err error
 	for i := 0; i < len(pad.ExtendedAssetHolding.Groups); i++ {
-		result, err = exti.Exec(protocol.Encode(&pad.ExtendedAssetHolding.Groups[i].groupData))
+		result, err = qaei.Exec(protocol.Encode(&pad.ExtendedAssetHolding.Groups[i].groupData))
 		if err != nil {
 			break
 		}
@@ -1617,7 +1617,7 @@ func accountsNewCreate(basei *sql.Stmt, exti *sql.Stmt, addr basics.Address, ad 
 
 	if err == nil {
 		normBalance := ad.NormalizedOnlineBalance(proto)
-		result, err = basei.Exec(addr[:], normBalance, protocol.Encode(&pad))
+		result, err = qabi.Exec(addr[:], normBalance, protocol.Encode(&pad))
 		if err == nil {
 			updatedAccounts[updateIdx].rowid, err = result.LastInsertId()
 			updatedAccounts[updateIdx].pad = pad
@@ -1626,8 +1626,8 @@ func accountsNewCreate(basei *sql.Stmt, exti *sql.Stmt, addr basics.Address, ad 
 	return updatedAccounts, err
 }
 
-func accountsNewDelete(based *sql.Stmt, extd *sql.Stmt, addr basics.Address, dbad dbAccountData, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
-	result, err := based.Exec(dbad.rowid)
+func accountsNewDelete(qabd *sql.Stmt, qaed *sql.Stmt, addr basics.Address, dbad dbAccountData, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
+	result, err := qabd.Exec(dbad.rowid)
 	if err == nil {
 		// we deleted the entry successfully.
 		updatedAccounts[updateIdx].rowid = 0
@@ -1639,7 +1639,7 @@ func accountsNewDelete(based *sql.Stmt, extd *sql.Stmt, addr basics.Address, dba
 		} else {
 			// if no error delete extension records
 			for _, g := range dbad.pad.ExtendedAssetHolding.Groups {
-				result, err = extd.Exec(g.AssetGroupKey)
+				result, err = qaed.Exec(g.AssetGroupKey)
 				if err != nil {
 					break
 				}
@@ -1650,8 +1650,8 @@ func accountsNewDelete(based *sql.Stmt, extd *sql.Stmt, addr basics.Address, dba
 }
 
 // accountsNewUpdate reconciles old and new AccountData in delta
-func accountsNewUpdate(baseu, extq, extu, exti, extd *sql.Stmt, addr basics.Address, delta accountDelta, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
-	assetsThreshold := config.Consensus[protocol.ConsensusV14].MaxAssetsPerAccount
+func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Address, delta accountDelta, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
+	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 
 	// need to reconcile asset holdings
 	// old always has all the assets (cached in Assets field) touched in new (see accountsLoadOld)
@@ -1695,7 +1695,7 @@ func accountsNewUpdate(baseu, extq, extu, exti, extd *sql.Stmt, addr basics.Addr
 		newCount := pad.NumAssetHoldings() + len(created) - len(deleted)
 		if newCount < assetsThreshold {
 			// Move all assets from groups to Assets field
-			assets, err := loadHoldings(extq, pad.ExtendedAssetHolding)
+			assets, err := loadHoldings(qabq, pad.ExtendedAssetHolding)
 			if err != nil {
 				return updatedAccounts, err
 			}
@@ -1712,7 +1712,7 @@ func accountsNewUpdate(baseu, extq, extu, exti, extd *sql.Stmt, addr basics.Addr
 
 			// now delete all old groups
 			for _, g := range pad.ExtendedAssetHolding.Groups {
-				extd.Exec(g.AssetGroupKey)
+				qaed.Exec(g.AssetGroupKey)
 			}
 		} else {
 			// Reconcile groups data:
@@ -1741,7 +1741,7 @@ func accountsNewUpdate(baseu, extq, extu, exti, extd *sql.Stmt, addr basics.Addr
 				key := pad.ExtendedAssetHolding.Groups[gi].AssetGroupKey
 				if pad.ExtendedAssetHolding.delete(gi, ai) {
 					// the only one asset was in the group, delete the group
-					extd.Exec(key)
+					qaed.Exec(key)
 				}
 			}
 
@@ -1754,7 +1754,7 @@ func accountsNewUpdate(baseu, extq, extu, exti, extd *sql.Stmt, addr basics.Addr
 			for i := 0; i < len(pad.ExtendedAssetHolding.Groups); i++ {
 				if pad.ExtendedAssetHolding.Groups[i].loaded {
 					if pad.ExtendedAssetHolding.Groups[i].AssetGroupKey != 0 { // existing entry, update
-						_, err = extu.Exec(protocol.Encode(
+						_, err = qaeu.Exec(protocol.Encode(
 							&pad.ExtendedAssetHolding.Groups[i].groupData),
 							pad.ExtendedAssetHolding.Groups[i].AssetGroupKey)
 						if err != nil {
@@ -1762,7 +1762,7 @@ func accountsNewUpdate(baseu, extq, extu, exti, extd *sql.Stmt, addr basics.Addr
 						}
 					} else {
 						// new entry, insert
-						result, err = exti.Exec(protocol.Encode(&pad.ExtendedAssetHolding.Groups[i].groupData))
+						result, err = qaei.Exec(protocol.Encode(&pad.ExtendedAssetHolding.Groups[i].groupData))
 						if err != nil {
 							break
 						}
@@ -1778,7 +1778,7 @@ func accountsNewUpdate(baseu, extq, extu, exti, extd *sql.Stmt, addr basics.Addr
 	if err == nil {
 		var rowsAffected int64
 		normBalance := delta.new.NormalizedOnlineBalance(proto)
-		result, err := baseu.Exec(normBalance, protocol.Encode(&pad), delta.old.rowid)
+		result, err := qabu.Exec(normBalance, protocol.Encode(&pad), delta.old.rowid)
 		if err == nil {
 			// rowid doesn't change on update.
 			updatedAccounts[updateIdx].rowid = delta.old.rowid
@@ -1793,85 +1793,122 @@ func accountsNewUpdate(baseu, extq, extu, exti, extd *sql.Stmt, addr basics.Addr
 	return updatedAccounts, err
 }
 
+type accountsNewQueries struct {
+	insertStmt          *sql.Stmt
+	updateStmt          *sql.Stmt
+	deleteByRowIDStmt   *sql.Stmt
+	insertGroupDataStmt *sql.Stmt
+	updateGroupDataStmt *sql.Stmt
+	deleteGroupDataStmt *sql.Stmt
+	queryGroupDataStmt  *sql.Stmt
+}
+
+func makeAccountsNewQueries(db db.Queryable) (q accountsNewQueries, err error) {
+	if q.insertStmt, err = db.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)"); err != nil {
+		q.close()
+		return
+	}
+
+	if q.updateStmt, err = db.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?"); err != nil {
+		q.close()
+		return
+	}
+
+	if q.deleteByRowIDStmt, err = db.Prepare("DELETE FROM accountbase WHERE rowid=?"); err != nil {
+		q.close()
+		return
+	}
+
+	if q.insertGroupDataStmt, err = db.Prepare("INSERT INTO accountext (data) VALUES (?)"); err != nil {
+		q.close()
+		return
+	}
+
+	if q.updateGroupDataStmt, err = db.Prepare("UPDATE accountext SET data = ? WHERE id = ?"); err != nil {
+		q.close()
+		return
+	}
+
+	if q.deleteGroupDataStmt, err = db.Prepare("DELETE FROM accountext WHERE id=?"); err != nil {
+		q.close()
+		return
+	}
+
+	if q.queryGroupDataStmt, err = db.Prepare("SELECT data FROM accountext WHERE id = ?"); err != nil {
+		q.close()
+		return
+	}
+
+	return
+}
+
+func (q *accountsNewQueries) close() {
+	if q.insertStmt != nil {
+		q.insertStmt.Close()
+		q.insertStmt = nil
+	}
+	if q.updateStmt != nil {
+		q.updateStmt.Close()
+		q.updateStmt = nil
+	}
+	if q.deleteByRowIDStmt != nil {
+		q.deleteByRowIDStmt.Close()
+		q.deleteByRowIDStmt = nil
+	}
+	if q.insertGroupDataStmt != nil {
+		q.insertGroupDataStmt.Close()
+		q.insertGroupDataStmt = nil
+	}
+	if q.updateGroupDataStmt != nil {
+		q.updateGroupDataStmt.Close()
+		q.updateGroupDataStmt = nil
+	}
+	if q.deleteGroupDataStmt != nil {
+		q.deleteGroupDataStmt.Close()
+		q.deleteGroupDataStmt = nil
+	}
+	if q.queryGroupDataStmt != nil {
+		q.queryGroupDataStmt.Close()
+		q.queryGroupDataStmt = nil
+	}
+}
+
 // accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a dbAccountData for the modified accounts which can be stored in the base cache.
 func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []dbAccountData, err error) {
-
-	var insertCreatableIdxStmt, deleteCreatableIdxStmt *sql.Stmt
-	var deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
-	var selectGroupDataStmt, insertGroupDataStmt, deleteGroupDataStmt, updateGroupDataStmt *sql.Stmt
-
-	deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
+	q, err := makeAccountsNewQueries(tx)
 	if err != nil {
 		return
 	}
-	defer deleteByRowIDStmt.Close()
 
-	insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer insertStmt.Close()
-
-	updateStmt, err = tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
-	if err != nil {
-		return
-	}
-	defer updateStmt.Close()
-
-	insertGroupDataStmt, err = tx.Prepare("INSERT INTO accountext (data) VALUES (?)")
-	if err != nil {
-		return
-	}
-	defer insertGroupDataStmt.Close()
-
-	deleteGroupDataStmt, err = tx.Prepare("DELETE FROM accountext WHERE id=?")
-	if err != nil {
-		return
-	}
-	defer deleteGroupDataStmt.Close()
-
-	updateGroupDataStmt, err = tx.Prepare("UPDATE accountext SET data = ? WHERE id = ?")
-	if err != nil {
-		return
-	}
-	defer updateGroupDataStmt.Close()
-
-	selectGroupDataStmt, err = tx.Prepare("SELECT data FROM accountext WHERE id = ?")
-	if err != nil {
-		return
-	}
-	defer selectGroupDataStmt.Close()
-
-	// var result sql.Result
-	// var rowsAffected int64
 	updatedAccounts = make([]dbAccountData, updates.len())
 	updatedAccountIdx := 0
 	for i := 0; i < updates.len(); i++ {
-		addr, data := updates.getByIdx(i)
-		if data.old.rowid == 0 {
+		addr, delta := updates.getByIdx(i)
+		if delta.old.rowid == 0 {
 			// zero rowid means we don't have a previous value.
-			if data.new.IsZero() {
+			if delta.new.IsZero() {
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				// create a new entry.
 				updatedAccounts, err = accountsNewCreate(
-					insertStmt, insertGroupDataStmt,
-					addr, data.new, proto,
+					q.insertStmt, q.insertGroupDataStmt,
+					addr, delta.new, proto,
 					updatedAccounts, updatedAccountIdx)
 			}
 		} else {
-			if data.new.IsZero() {
+			if delta.new.IsZero() {
 				// new value is zero, which means we need to delete the current value.
 				updatedAccounts, err = accountsNewDelete(
-					deleteByRowIDStmt, deleteGroupDataStmt,
-					addr, data.old,
+					q.deleteByRowIDStmt, q.deleteGroupDataStmt,
+					addr, delta.old,
 					updatedAccounts, updatedAccountIdx)
 			} else {
 				// non-zero rowid means we had a previous value so make an update.
 				updatedAccounts, err = accountsNewUpdate(
-					updateStmt, selectGroupDataStmt, updateGroupDataStmt, insertGroupDataStmt, deleteGroupDataStmt,
-					addr, data, proto,
+					q.updateStmt, q.queryGroupDataStmt,
+					q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+					addr, delta, proto,
 					updatedAccounts, updatedAccountIdx)
 			}
 		}
@@ -1887,6 +1924,8 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 	}
 
 	if len(creatables) > 0 {
+		var insertCreatableIdxStmt, deleteCreatableIdxStmt *sql.Stmt
+
 		insertCreatableIdxStmt, err = tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
 		if err != nil {
 			return
