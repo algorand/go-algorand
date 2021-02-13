@@ -18,7 +18,6 @@ package network
 
 import (
 	"container/heap"
-	"container/list"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -2269,21 +2268,17 @@ func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
 	return strings.Replace(rawURL, "{genesisID}", wn.GenesisID, -1)
 }
 
-// StoreKV stores an entry in the corresponding peer's key-value store
-func (wn *WebsocketNetwork) StoreKV(node Peer, key crypto.Digest, value []byte) {
-	peer := node.(*wsPeer)
-	peer.StoreKV(key, value)
-}
-
 // LoadKV retrieves an entry from the corresponding peer's key-value store
 func (wn *WebsocketNetwork) LoadKV(node Peer, keys []crypto.Digest) [][]byte {
 	peer := node.(*wsPeer)
-	return peer.LoadKV(keys)
+	return peer.receiveMsgTracker.LoadKV(keys)
 }
 
-func (wn *WebsocketNetwork) TestPeer() *wsPeer {
+func (wn *WebsocketNetwork) TestPeer(msgs [][]byte) *wsPeer {
 	var wp wsPeer
-	wp.kvStore = make(map[crypto.Digest][]byte)
-	wp.keysList = list.New()
+	wp.receiveMsgTracker = makeTracker(100000)
+	for _, msg := range msgs {
+		wp.receiveMsgTracker.storeMsg(msg)
+	}
 	return &wp
 }
