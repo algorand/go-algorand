@@ -1923,14 +1923,33 @@ func TestAccountsNewCRUD(t *testing.T) {
 
 	addr := randomAddress()
 	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
-	var deletionTests = []struct {
+
+	//----------------------------------------------------------------------------------------------
+	// test create and delete function
+	var createDeleteTests = []struct {
 		count int
 	}{
 		{0}, {1}, {assetsThreshold + 1},
 	}
 	temp := randomAccountData(100)
 
-	for _, test := range deletionTests {
+	// cleanPad copies and clears non-serializable loaded nad groupData fields to match account data
+	cleanPad := func(pad PersistedAccountData) PersistedAccountData {
+		clean := pad
+		if len(clean.ExtendedAssetHolding.Groups) > 0 {
+			clean.ExtendedAssetHolding.Groups = make([]AssetsHoldingGroup, len(pad.ExtendedAssetHolding.Groups))
+			copy(clean.ExtendedAssetHolding.Groups, pad.ExtendedAssetHolding.Groups)
+			clean.ExtendedAssetHolding.loaded = false // ignored on serialization
+			for i := 0; i < len(clean.ExtendedAssetHolding.Groups); i++ {
+				// ignored on serialization
+				clean.ExtendedAssetHolding.Groups[i].groupData = AssetsHoldingGroupData{}
+				clean.ExtendedAssetHolding.Groups[i].loaded = false
+			}
+		}
+		return clean
+	}
+
+	for _, test := range createDeleteTests {
 		t.Run(fmt.Sprintf("create-asset-%d", test.count), func(t *testing.T) {
 			ad := basics.AccountData{}
 			if test.count > 0 {
@@ -1962,18 +1981,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 			a.True(rowid.Valid)
 			a.NoError(protocol.Decode(buf, &pad))
 
-			mempad := updatedAccounts[updatedAccountIdx].pad
-			if len(mempad.ExtendedAssetHolding.Groups) > 0 {
-				// copy and clear non-serializable loaded nad groupData fields to match account data
-				mempad.ExtendedAssetHolding.Groups = make([]AssetsHoldingGroup, len(updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups))
-				copy(mempad.ExtendedAssetHolding.Groups, updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups)
-				mempad.ExtendedAssetHolding.loaded = false // ignored on serialization
-				for i := 0; i < len(mempad.ExtendedAssetHolding.Groups); i++ {
-					// ignored on serialization
-					mempad.ExtendedAssetHolding.Groups[i].groupData = AssetsHoldingGroupData{}
-					mempad.ExtendedAssetHolding.Groups[i].loaded = false
-				}
-			}
+			mempad := cleanPad(updatedAccounts[updatedAccountIdx].pad)
 			a.Equal(mempad, pad)
 
 			rows, err := allExtData.Query()
@@ -1988,8 +1996,8 @@ func TestAccountsNewCRUD(t *testing.T) {
 			}
 			rows.Close()
 
-			invocations := test.count / assetsThreshold
-			a.GreaterOrEqual(i, invocations)
+			numRowsExpected := test.count / maxHoldingGroupSize
+			a.GreaterOrEqual(i, numRowsExpected)
 
 			// check deletion
 			dbad, err := qs.lookup(addr)
@@ -2014,5 +2022,328 @@ func TestAccountsNewCRUD(t *testing.T) {
 			rows.Close()
 
 		})
+	}
+
+	//----------------------------------------------------------------------------------------------
+	// check accouts update func
+	// cover three cases: 1) old and new below the assetsThreshold
+	// 2) old is below and new is above
+	// 3) old and above the assetsThreshold
+	updatedAccounts := []dbAccountData{{pad: PersistedAccountData{AccountData: temp}}}
+	updatedAccountIdx := 0
+
+	// case 1)
+	// first create a basic record with 10 assets
+	ad := basics.AccountData{}
+	numBaseAssets := 10
+	ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numBaseAssets)
+	for i := 1; i <= numBaseAssets; i++ {
+		ad.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
+	}
+
+	updatedAccounts, err = accountsNewCreate(
+		q.insertStmt, q.insertGroupDataStmt,
+		addr, ad, proto,
+		updatedAccounts, updatedAccountIdx,
+	)
+
+	// use it as OLD
+	old, err := qs.lookup(addr)
+
+	// add some assets to NEW
+	updated := basics.AccountData{}
+	numNewAssets1 := 20
+	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numBaseAssets+numNewAssets1)
+	for k, v := range old.pad.Assets {
+		updated.Assets[k] = v
+	}
+	for i := 1001; i <= 1000+numNewAssets1; i++ {
+		updated.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
+	}
+
+	delta := accountDelta{old: old, new: updated}
+	updatedAccounts, err = accountsNewUpdate(
+		q.updateStmt, q.queryGroupDataStmt,
+		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+		addr, delta, proto,
+		updatedAccounts, updatedAccountIdx)
+
+	// ensure correctness of the data written
+	a.NotEmpty(updatedAccounts[updatedAccountIdx])
+	a.NotEqual(updatedAccounts[updatedAccountIdx].pad.AccountData, temp)
+
+	var buf []byte
+	var rowid sql.NullInt64
+	var rnd uint64
+	var pad PersistedAccountData
+
+	// check raw accountbase data
+	err = qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &rnd, &buf)
+	a.NoError(err)
+	a.True(rowid.Valid)
+	a.NoError(protocol.Decode(buf, &pad))
+	a.Equal(updatedAccounts[updatedAccountIdx].pad, pad)
+
+	// check no records in accountext table
+	rows, err := allExtData.Query()
+	a.NoError(err)
+	a.False(rows.Next())
+	rows.Close()
+
+	old, err = qs.lookup(addr)
+	a.Equal(numBaseAssets+numNewAssets1, len(old.pad.AccountData.Assets))
+	a.Equal(numBaseAssets+numNewAssets1, old.pad.NumAssetHoldings())
+	a.NotEmpty(old.rowid)
+
+	// case 2)
+	// now create additional 1000 assets to exceed assetsThreshold
+	numNewAssets2 := assetsThreshold
+	updated = basics.AccountData{}
+	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numBaseAssets+numNewAssets1+numNewAssets2)
+	savedAssets := make(map[basics.AssetIndex]bool, numBaseAssets+numNewAssets1+numNewAssets2)
+	for k, v := range old.pad.Assets {
+		updated.Assets[k] = v
+		savedAssets[k] = true
+	}
+	for i := 2001; i <= 2000+numNewAssets2; i++ {
+		updated.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
+		savedAssets[basics.AssetIndex(i)] = true
+	}
+
+	delta = accountDelta{old: old, new: updated}
+	updatedAccounts, err = accountsNewUpdate(
+		q.updateStmt, q.queryGroupDataStmt,
+		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+		addr, delta, proto,
+		updatedAccounts, updatedAccountIdx)
+
+	// ensure correctness of the data written
+	a.NotEmpty(updatedAccounts[updatedAccountIdx])
+
+	// ensure a single row
+	rows, err = allAccounts.Query()
+	a.True(rows.Next())
+	a.False(rows.Next())
+	rows.Close()
+
+	// check raw accountbase data
+	pad = PersistedAccountData{}
+	err = qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &rnd, &buf)
+	a.NoError(err)
+	a.True(rowid.Valid)
+	a.NoError(protocol.Decode(buf, &pad))
+	mempad := cleanPad(updatedAccounts[updatedAccountIdx].pad)
+	a.Equal(mempad, pad)
+
+	// check records in accountext table
+	rows, err = allExtData.Query()
+	a.NoError(err)
+	i := 0
+	for rows.Next() {
+		err = rows.Scan(&buf)
+		a.NoError(err)
+		var gd AssetsHoldingGroupData
+		a.NoError(protocol.Decode(buf, &gd))
+		a.Equal(updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups[i].groupData, gd)
+		i++
+	}
+	rows.Close()
+
+	numRowsExpected := (numBaseAssets + numNewAssets1 + numNewAssets2) / maxHoldingGroupSize
+	a.GreaterOrEqual(i, numRowsExpected)
+
+	old, err = qs.lookup(addr)
+	a.NoError(err)
+	a.Equal(0, len(old.pad.AccountData.Assets))
+	a.Equal(numBaseAssets+numNewAssets1+numNewAssets2, old.pad.NumAssetHoldings())
+	a.False(old.pad.ExtendedAssetHolding.loaded)
+	for i := 0; i < len(old.pad.ExtendedAssetHolding.Groups); i++ {
+		a.False(old.pad.ExtendedAssetHolding.Groups[i].loaded)
+		a.NotZero(old.pad.ExtendedAssetHolding.Groups[i].AssetGroupKey)
+	}
+
+	// case 3.1)
+	// len(old.Assets) > assetsThreshold
+	// new count > assetsThreshold => delete, update, create few
+	a.GreaterOrEqual(assetsThreshold, 1000)
+	del := []basics.AssetIndex{1, 2, 3, 10, 2900}
+	upd := []basics.AssetIndex{4, 5, 2999}
+	crt := []basics.AssetIndex{9001, 9501}
+	loaded := make(map[int]bool, numRowsExpected)
+	old.pad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(del)+len(upd))
+	for _, aidx := range append(del, upd...) {
+		gi, ai := old.pad.ExtendedAssetHolding.findAsset(aidx, 0)
+		a.NotEqual(-1, gi, aidx)
+		g := &old.pad.ExtendedAssetHolding.Groups[gi]
+		if !g.loaded {
+			g.groupData, err = loadAssetHoldingGroupData(qs.loadAssetHoldingGroupStmt, g.AssetGroupKey)
+			g.loaded = true
+			a.NoError(err)
+			loaded[gi] = true
+		}
+		gi, ai = old.pad.ExtendedAssetHolding.findAsset(aidx, gi)
+		a.NotEqual(-1, gi)
+		a.NotEqual(-1, ai)
+		old.pad.Assets[aidx] = basics.AssetHolding{Amount: g.groupData.Amounts[ai], Frozen: g.groupData.Frozens[ai]}
+	}
+	for _, aidx := range del {
+		delete(savedAssets, aidx)
+	}
+	for _, aidx := range crt {
+		savedAssets[aidx] = true
+	}
+
+	updated = basics.AccountData{}
+	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(upd)+len(crt))
+	for _, aidx := range upd {
+		updated.Assets[aidx] = old.pad.Assets[aidx]
+	}
+	for _, aidx := range crt {
+		updated.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
+	}
+
+	delta = accountDelta{old: old, new: updated}
+
+	updatedAccounts, err = accountsNewUpdate(
+		q.updateStmt, q.queryGroupDataStmt,
+		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+		addr, delta, proto,
+		updatedAccounts, updatedAccountIdx)
+
+	// ensure correctness of the data written
+	a.NotEmpty(updatedAccounts[updatedAccountIdx])
+	expectedCount := numBaseAssets + numNewAssets1 + numNewAssets2 - len(del) + len(crt)
+	a.Equal(expectedCount, updatedAccounts[updatedAccountIdx].pad.NumAssetHoldings())
+
+	// ensure a single row
+	rows, err = allAccounts.Query()
+	a.True(rows.Next())
+	a.False(rows.Next())
+	rows.Close()
+
+	// check raw accountbase data
+	pad = PersistedAccountData{}
+	err = qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &rnd, &buf)
+	a.NoError(err)
+	a.True(rowid.Valid)
+	a.NoError(protocol.Decode(buf, &pad))
+	mempad = cleanPad(updatedAccounts[updatedAccountIdx].pad)
+	a.Equal(mempad, pad)
+
+	// check records in accountext table
+	rows, err = allExtData.Query()
+	a.NoError(err)
+	i = 0
+	j := 0
+	for rows.Next() {
+		err = rows.Scan(&buf)
+		a.NoError(err)
+		var gd AssetsHoldingGroupData
+		a.NoError(protocol.Decode(buf, &gd))
+		if loaded[i] {
+			a.Equal(updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups[i].groupData, gd, i)
+			j++
+		}
+		i++
+	}
+	rows.Close()
+
+	numRowsExpected = expectedCount / maxHoldingGroupSize
+	a.GreaterOrEqual(i, numRowsExpected)
+	a.Equal(len(loaded), j)
+
+	old, err = qs.lookup(addr)
+	a.NoError(err)
+	a.Equal(0, len(old.pad.AccountData.Assets))
+	for _, aidx := range append(crt, upd...) {
+		gi, ai := old.pad.ExtendedAssetHolding.findAsset(aidx, 0)
+		a.NotEqual(-1, gi, aidx)
+		a.Equal(-1, ai) // not loaded
+	}
+
+	for gi := range old.pad.ExtendedAssetHolding.Groups {
+		g := &old.pad.ExtendedAssetHolding.Groups[gi]
+		if !g.loaded {
+			g.groupData, err = loadAssetHoldingGroupData(qs.loadAssetHoldingGroupStmt, g.AssetGroupKey)
+			g.loaded = true
+		}
+	}
+	for _, aidx := range append(crt, upd...) {
+		gi, ai := old.pad.ExtendedAssetHolding.findAsset(aidx, 0)
+		a.NotEqual(-1, gi, aidx)
+		a.NotEqual(-1, ai)
+	}
+
+	for _, aidx := range del {
+		gi, ai := old.pad.ExtendedAssetHolding.findAsset(aidx, 0)
+		a.Equal(-1, gi, aidx)
+		a.Equal(-1, ai)
+	}
+
+	// case 3.2)
+	// len(old.Assets) > assetsThreshold
+	// new count > assetsThreshold => delete most and update, create some
+
+	holdingMap, err := loadHoldings(qs.loadAssetHoldingGroupStmt, old.pad.ExtendedAssetHolding)
+	a.Equal(len(savedAssets), len(holdingMap))
+	for k := range savedAssets {
+		a.Contains(holdingMap, k)
+	}
+
+	old.pad.Assets = holdingMap // cache all the modifed
+	holdings := make([]basics.AssetIndex, 0, len(holdingMap))
+	for k := range holdingMap {
+		holdings = append(holdings, k)
+	}
+	del = holdings[:len(holdings)-3]
+	upd = holdings[len(holdings)-3:]
+	crt = []basics.AssetIndex{10001, 10002}
+
+	updated = basics.AccountData{}
+	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(upd)+len(crt))
+	for _, aidx := range upd {
+		updated.Assets[aidx] = old.pad.Assets[aidx]
+	}
+	for _, aidx := range crt {
+		updated.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
+	}
+
+	delta = accountDelta{old: old, new: updated}
+
+	updatedAccounts, err = accountsNewUpdate(
+		q.updateStmt, q.queryGroupDataStmt,
+		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+		addr, delta, proto,
+		updatedAccounts, updatedAccountIdx)
+
+	a.NotEmpty(updatedAccounts[updatedAccountIdx])
+	expectedCount = len(crt) + len(upd)
+	a.Equal(expectedCount, updatedAccounts[updatedAccountIdx].pad.NumAssetHoldings())
+
+	// ensure a single row
+	rows, err = allAccounts.Query()
+	a.True(rows.Next())
+	a.False(rows.Next())
+	rows.Close()
+
+	pad = PersistedAccountData{}
+	err = qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &rnd, &buf)
+	a.NoError(err)
+	a.True(rowid.Valid)
+	a.NoError(protocol.Decode(buf, &pad))
+	mempad = cleanPad(updatedAccounts[updatedAccountIdx].pad)
+	a.Equal(mempad, pad)
+
+	// check no records in accountext table
+	rows, err = allExtData.Query()
+	a.NoError(err)
+	a.False(rows.Next())
+	rows.Close()
+
+	old, err = qs.lookup(addr)
+	a.Equal(expectedCount, len(old.pad.AccountData.Assets))
+	a.Equal(expectedCount, old.pad.NumAssetHoldings())
+	for _, aidx := range append(upd, crt...) {
+		a.Contains(old.pad.AccountData.Assets, aidx)
 	}
 }
