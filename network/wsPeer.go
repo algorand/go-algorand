@@ -210,12 +210,12 @@ type wsPeer struct {
 	// performance or not. Throttled connections are more likely to be short-lived connections.
 	throttledOutgoingConnection bool
 
-	kvStore  map[crypto.Digest][]byte
-	keysList *list.List
+	kvStore      map[crypto.Digest][]byte
+	keysList     *list.List
 	kvStoreMutex deadlock.RWMutex
 
-	kvStoreSender  map[crypto.Digest]bool
-	keysListSender *list.List
+	kvStoreSender      map[crypto.Digest]bool
+	keysListSender     *list.List
 	kvStoreMutexSender deadlock.RWMutex
 }
 

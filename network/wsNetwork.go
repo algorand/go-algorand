@@ -2281,9 +2281,9 @@ func (wn *WebsocketNetwork) LoadKV(node Peer, keys []crypto.Digest) [][]byte {
 	return peer.LoadKV(keys)
 }
 
-func (wn *WebsocketNetwork) TestPeer() wsPeer {
+func (wn *WebsocketNetwork) TestPeer() *wsPeer {
 	var wp wsPeer
 	wp.kvStore = make(map[crypto.Digest][]byte)
 	wp.keysList = list.New()
-	return wp
+	return &wp
 }

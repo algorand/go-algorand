@@ -553,14 +553,14 @@ func BenchmarkReconstructBlock(b *testing.B) {
 	var wn *network.WebsocketNetwork
 	net := gossip.WrapNetwork(wn, nil)
 	wp := wn.TestPeer()
-	h := gossip.Metadata(network.IncomingMessage{Sender: &wp})
+	h := gossip.Metadata(network.IncomingMessage{Sender: wp})
 
 	_, signed, _, _ := generateTestObjects(100000, 100, 1)
 	var block bookkeeping.Block
 	block.Payset = make(transactions.Payset, len(signed), len(signed))
 	for i, stx := range signed {
 		block.Payset[i].Digest = crypto.HashObj(stx)
-		net.StoreKV(h, block.Payset[i].Digest, protocol.Encode(&stx))
+		wp.StoreKV(block.Payset[i].Digest, protocol.Encode(&stx))
 		//fmt.Println(net.LoadKV(h, block.Payset[i].Digest))
 	}
 	block.Payset = block.Payset[:5000]

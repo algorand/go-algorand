@@ -208,8 +208,6 @@ func unauthenticatedProposalBlockPanicWrapper(t *testing.T, message string, uap 
 	return
 }
 
-
-
 func keypair() *crypto.SignatureSecrets {
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
