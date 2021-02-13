@@ -888,12 +888,9 @@ func (wp *wsPeer) LoadKV(keys []crypto.Digest) [][]byte {
 
 // StoreKVSender stores an entry in the corresponding peer's key-value store
 func (wp *wsPeer) StoreKVSender(key crypto.Digest, value bool) {
-	wp.kvStoreMutex.RLock()
-	defer wp.kvStoreMutex.RUnlock()
-
 	wp.kvStoreSender[key] = value
 	wp.keysListSender.PushBack(key)
-	for wp.keysListSender.Len() > 10000 {
+	for wp.keysListSender.Len() > 50000 {
 		key := wp.keysListSender.Front()
 		wp.keysListSender.Remove(key)
 		delete(wp.kvStoreSender, key.Value.(crypto.Digest))
