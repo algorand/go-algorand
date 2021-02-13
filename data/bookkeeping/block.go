@@ -264,13 +264,28 @@ func (block *Block) Seed() committee.Seed {
 	return block.BlockHeader.Seed
 }
 
-// Compressed returns the Block without ApplyData
-func (block *Block) Compressed() Block {
+// StripAD returns the Block without ApplyData
+func (block *Block) StripAD() Block {
+	logging.Base().Infof("start compress")
 	var c Block
 	c.BlockHeader = block.BlockHeader
 	c.Payset = make(transactions.Payset, len(block.Payset), len(block.Payset))
 	for i, stb := range block.Payset {
-		c.Payset[i] = transactions.SignedTxnInBlock{}
+		c.Payset[i].SignedTxn = stb.SignedTxn
+		c.Payset[i].HasGenesisHash = stb.HasGenesisHash
+		c.Payset[i].HasGenesisID = stb.HasGenesisID
+		c.Payset[i].Digest = stb.Digest
+	}
+	return c
+}
+
+// StripSignedTxnWithAD returns the Block without SignedTxnWithApplyData
+func (block *Block) StripSignedTxnWithAD() Block {
+	logging.Base().Infof("start compress")
+	var c Block
+	c.BlockHeader = block.BlockHeader
+	c.Payset = make(transactions.Payset, len(block.Payset), len(block.Payset))
+	for i, stb := range block.Payset {
 		c.Payset[i].HasGenesisHash = stb.HasGenesisHash
 		c.Payset[i].HasGenesisID = stb.HasGenesisID
 		c.Payset[i].Digest = stb.Digest

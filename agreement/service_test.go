@@ -540,11 +540,7 @@ func (e *testingNetworkEndpoint) Disconnect(h MessageHandle) {
 
 func (e *testingNetworkEndpoint) Start() {}
 
-func (e *testingNetworkEndpoint) StoreKV(h MessageHandle, key interface{}, value interface{}) {
-
-}
-
-func (e *testingNetworkEndpoint) LoadKV(h MessageHandle, key interface{}) interface{} {
+func (e *testingNetworkEndpoint) LoadKV(h MessageHandle, keys []crypto.Digest) [][]byte {
 	return nil
 }
 

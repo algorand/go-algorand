@@ -18,6 +18,10 @@ package agreement
 
 import (
 	"context"
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/transactions"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -202,4 +206,75 @@ func unauthenticatedProposalBlockPanicWrapper(t *testing.T, message string, uap 
 	require.Panics(t, func() { block = uap.Block })
 	logging.Base().SetOutput(os.Stderr)
 	return
+}
+
+
+
+func keypair() *crypto.SignatureSecrets {
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
+	s := crypto.GenerateSignatureSecrets(seed)
+	return s
+}
+
+func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+	txs := make([]transactions.Transaction, numTxs)
+	signed := make([]transactions.SignedTxn, numTxs)
+	secrets := make([]*crypto.SignatureSecrets, numAccs)
+	addresses := make([]basics.Address, numAccs)
+
+	for i := 0; i < numAccs; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+	var iss, exp int
+	u := uint64(0)
+	for i := 0; i < numTxs; i++ {
+		s := rand.Intn(numAccs)
+		r := rand.Intn(numAccs)
+		a := rand.Intn(1000)
+		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10)) + u
+		if blockRound == 0 {
+			iss = 50 + rand.Intn(30)
+			exp = iss + 10
+		} else {
+			iss = int(blockRound) / 2
+			exp = int(blockRound) + rand.Intn(30)
+		}
+
+		txs[i] = transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addresses[s],
+				Fee:         basics.MicroAlgos{Raw: f},
+				FirstValid:  basics.Round(iss),
+				LastValid:   basics.Round(exp),
+				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addresses[r],
+				Amount:   basics.MicroAlgos{Raw: uint64(a)},
+			},
+		}
+		signed[i] = txs[i].Sign(secrets[s])
+		u += 100
+	}
+
+	return txs, signed, secrets, addresses
+}
+
+func BenchmarkStripSignedTxnWithAD(b *testing.B) {
+	_, signed, _, _ := generateTestObjects(5000, 100, 1)
+	var up unauthenticatedProposal
+	up.Payset = make(transactions.Payset, len(signed), len(signed))
+	for i, stx := range signed {
+		up.Payset[i].SignedTxn = stx
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		up.StripSignedTxnWithAD()
+	}
 }

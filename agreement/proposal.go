@@ -73,14 +73,18 @@ func (p unauthenticatedProposal) value() proposalValue {
 		OriginalPeriod:   p.OriginalPeriod,
 		OriginalProposer: p.OriginalProposer,
 		BlockDigest:      p.Digest(),
-		EncodingDigest:   crypto.HashObj(p.Compressed()),
+		EncodingDigest:   crypto.HashObj(p),
 	}
 }
 
-func (p unauthenticatedProposal) Compressed() unauthenticatedProposal {
-	up := p
-	up.Block = up.Block.Compressed()
-	return up
+func (p unauthenticatedProposal) StripAD() unauthenticatedProposal {
+	p.Block = p.Block.StripAD()
+	return p
+}
+
+func (p unauthenticatedProposal) StripSignedTxnWithAD() unauthenticatedProposal {
+	p.Block = p.Block.StripSignedTxnWithAD()
+	return p
 }
 
 // A proposal is an Block along with everything needed to validate it.
@@ -93,6 +97,8 @@ type proposal struct {
 	// to disk, so after a crash, we will fall back to applying the
 	// raw Block to the ledger (and re-computing the state delta).
 	ve ValidatedBlock
+
+	pv proposalValue
 }
 
 func makeProposal(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
@@ -247,29 +253,33 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 
 	ve = ve.WithSeed(newSeed)
 	proposal := makeProposal(ve, seedProof, period, address)
-	value := proposal.value()
+	value := proposal.StripAD().value()
+	proposal.pv = value
 	return proposal, value, nil
 }
 
 // validate returns true if the proposal is valid.
 // It checks the proposal seed and then calls validator.Validate.
 func (p unauthenticatedProposal) validate(ctx context.Context, current round, ledger LedgerReader, validator BlockValidator) (proposal, error) {
-	var invalid proposal
+	var pr proposal
 	entry := p.Block
 
 	if entry.Round() != current {
-		return invalid, fmt.Errorf("proposed entry from wrong round: entry.Round() != current: %v != %v", entry.Round(), current)
+		return pr, fmt.Errorf("proposed entry from wrong round: entry.Round() != current: %v != %v", entry.Round(), current)
 	}
 
 	err := verifyNewSeed(p, ledger)
 	if err != nil {
-		return invalid, fmt.Errorf("proposal has bad seed: %v", err)
+		return pr, fmt.Errorf("proposal has bad seed: %v", err)
 	}
 
 	ve, err := validator.Validate(ctx, entry)
 	if err != nil {
-		return invalid, fmt.Errorf("EntryValidator rejected entry: %v", err)
+		return pr, fmt.Errorf("EntryValidator rejected entry: %v", err)
 	}
 
-	return makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
+	pr = makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer)
+	pr.pv = p.value()
+
+	return pr, nil
 }

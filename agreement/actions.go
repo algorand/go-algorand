@@ -163,7 +163,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 			tags[i] = protocol.TxnTag
 		}
 		payload := transmittedPayload{
-			unauthenticatedProposal: msg.Proposal.Compressed(),
+			unauthenticatedProposal: msg.Proposal.StripSignedTxnWithAD(),
 			PriorVote:               msg.Vote,
 		}
 		txnData[len(txnData)-1] = protocol.Encode(&payload)
