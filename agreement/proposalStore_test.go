@@ -713,6 +713,7 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 		BlockDigest:      propPay.Digest(),
 		EncodingDigest:   crypto.HashObj(propPay),
 	}
+	propPay.pv = propVal
 	rv = rawVote{
 		Sender:   proposer,
 		Round:    curRound,
@@ -742,6 +743,7 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 		BlockDigest:      propPay.Digest(),
 		EncodingDigest:   crypto.HashObj(propPay),
 	}
+	propPay.pv = propVal
 	rv = rawVote{
 		Sender:   proposer,
 		Round:    curRound,
