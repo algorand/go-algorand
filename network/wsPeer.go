@@ -549,9 +549,10 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 }
 
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
+
 	for _, msg := range msgs {
 		hash := crypto.Hash(msg.data)
-		if wp.sendMsgTracker.exists(hash) {
+		if wp.sendMsgTracker.existsUnsafe(hash) {
 			continue
 		}
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
