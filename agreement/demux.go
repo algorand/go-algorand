@@ -114,7 +114,10 @@ func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandl
 	for i, stib := range payset {
 		keys[i] = stib.Digest
 	}
-	stxnsData := net.LoadKV(h, keys)
+	stxnsData, allPresent := net.LoadKV(h, keys)
+	if !allPresent {
+		return fmt.Errorf("could not recover txns")
+	}
 
 	for i, stxnData := range stxnsData {
 		var stxn transactions.SignedTxn

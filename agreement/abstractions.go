@@ -291,7 +291,7 @@ type Network interface {
 	Start()
 
 	// LoadKV retrieves an entry from the corresponding peer's key-value store
-	LoadKV(MessageHandle, []crypto.Digest) [][]byte
+	LoadKV(MessageHandle, []crypto.Digest) ([][]byte, bool)
 }
 
 // RandomSource is an abstraction over the random number generator.

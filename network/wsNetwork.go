@@ -205,7 +205,7 @@ type GossipNode interface {
 	SubstituteGenesisID(rawURL string) string
 
 	// LoadKV retrieves an entry from the corresponding peer's key-value store
-	LoadKV(node Peer, key []crypto.Digest) [][]byte
+	LoadKV(node Peer, key []crypto.Digest) ([][]byte,bool)
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -2269,16 +2269,16 @@ func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
 }
 
 // LoadKV retrieves an entry from the corresponding peer's key-value store
-func (wn *WebsocketNetwork) LoadKV(node Peer, keys []crypto.Digest) [][]byte {
+func (wn *WebsocketNetwork) LoadKV(node Peer, keys []crypto.Digest) ([][]byte, bool) {
 	peer := node.(*wsPeer)
 	return peer.receiveMsgTracker.LoadKV(keys)
 }
 
-func (wn *WebsocketNetwork) TestPeer(msgs [][]byte) *wsPeer {
+func (wn *WebsocketNetwork) TestPeer(hashes []crypto.Digest, msgs [][]byte) *wsPeer {
 	var wp wsPeer
 	wp.receiveMsgTracker = makeTracker(100000)
-	for _, msg := range msgs {
-		wp.receiveMsgTracker.storeMsg(msg)
+	for i, msg := range msgs {
+		wp.receiveMsgTracker.insert(hashes[i], msg)
 	}
 	return &wp
 }

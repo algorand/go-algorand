@@ -540,8 +540,8 @@ func (e *testingNetworkEndpoint) Disconnect(h MessageHandle) {
 
 func (e *testingNetworkEndpoint) Start() {}
 
-func (e *testingNetworkEndpoint) LoadKV(h MessageHandle, keys []crypto.Digest) [][]byte {
-	return nil
+func (e *testingNetworkEndpoint) LoadKV(h MessageHandle, keys []crypto.Digest) ([][]byte, bool) {
+	return nil, true
 }
 
 type activityMonitor struct {
