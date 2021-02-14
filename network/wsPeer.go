@@ -96,6 +96,7 @@ type sendMessage struct {
 	enqueued     time.Time             // the time at which the message was first generated
 	peerEnqueued time.Time             // the time at which the peer was attempting to enqueue the message
 	msgTags      map[protocol.Tag]bool // when msgTags is speficied ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
+	hash crypto.Digest
 }
 
 // wsPeerCore also works for non-connected peers we want to do HTTP GET from
@@ -548,11 +549,10 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 	wp.outgoingMsgFilter.CheckDigest(digest, true, true)
 }
 
+var emptyHash = crypto.Digest{}
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
-
 	for _, msg := range msgs {
-		hash := crypto.Hash(msg.data)
-		if wp.sendMsgTracker.existsUnsafe(hash) {
+		if wp.sendMsgTracker.existsUnsafe(msg.hash) {
 			continue
 		}
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
@@ -560,7 +560,9 @@ func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 			return err
 		}
 		if len(msg.data) >= 2 && protocol.Tag(msg.data[:2]) == protocol.TxnTag {
-			wp.sendMsgTracker.remember(hash)
+			if msg.hash != emptyHash {
+				wp.sendMsgTracker.remember(msg.hash)
+			}
 		}
 	}
 	return disconnectReasonNone
@@ -685,7 +687,7 @@ func (wp *wsPeer) writeNonBlockMsgs(data [][]byte, highPrio bool, digest []crypt
 	index := 0
 	for i, d := range data {
 		if !filtered[i] {
-			msgs[index] = sendMessage{data: d, enqueued: msgEnqueueTime, peerEnqueued: enqueueTime}
+			msgs[index] = sendMessage{data: d, enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, hash: digest[i]}
 			index++
 		}
 	}
