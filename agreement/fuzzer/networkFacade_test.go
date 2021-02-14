@@ -31,6 +31,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/timers"
@@ -174,6 +175,10 @@ func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
 	}
 }
 
+func (n *NetworkFacade) LoadKV(node network.Peer, key []crypto.Digest) ([][]byte,bool) {
+	return nil, true
+}
+
 // Broadcast
 func (n *NetworkFacade) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, exclude network.Peer) error {
 	excludeNode := -1
@@ -183,10 +188,34 @@ func (n *NetworkFacade) Broadcast(ctx context.Context, tag protocol.Tag, data []
 	return n.broadcast(tag, data, excludeNode, "NetworkFacade service-%v Broadcast %v %v\n")
 }
 
+func (n *NetworkFacade) BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, exclude network.Peer) error {
+	excludeNode := -1
+	if exclude != nil {
+		excludeNode = n.peerToNode[exclude]
+	}
+	for i := range data {
+		err := n.broadcast(tag[i], data[i], excludeNode, "NetworkFacade service-%v Broadcast %v %v\n")
+		if err != nil {
+			 return err
+		}
+	}
+	return nil
+}
+
 // Relay
 func (n *NetworkFacade) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, exclude network.Peer) error {
 	return n.Broadcast(ctx, tag, data, wait, exclude)
 }
+
+func (n *NetworkFacade) RelayArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, exclude network.Peer) error {
+	for i := range data {
+		if err := n.Broadcast(ctx, tag[i], data[i], wait, exclude); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 
 func (n *NetworkFacade) broadcast(tag protocol.Tag, data []byte, exclude int, debugMsg string) error {
 	n.pendingOutgoingMsgMu.Lock()
