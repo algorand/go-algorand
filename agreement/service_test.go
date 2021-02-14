@@ -540,7 +540,7 @@ func (e *testingNetworkEndpoint) Disconnect(h MessageHandle) {
 
 func (e *testingNetworkEndpoint) Start() {}
 
-func (e *testingNetworkEndpoint) LoadMsg(h MessageHandle, keys []crypto.Digest) ([][]byte, bool) {
+func (e *testingNetworkEndpoint) LoadMessage(h MessageHandle, keys []crypto.Digest) ([][]byte, bool) {
 	return nil, true
 }
 
