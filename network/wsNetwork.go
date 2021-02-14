@@ -204,8 +204,8 @@ type GossipNode interface {
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
 
-	// LoadKV retrieves an entry from the corresponding peer's key-value store
-	LoadKV(node Peer, key []crypto.Digest) ([][]byte,bool)
+	// LoadMessage retrieves an entry from the corresponding peer's key-value store
+	LoadMessage(node Peer, key []crypto.Digest) ([][]byte,bool)
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -2268,10 +2268,10 @@ func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
 	return strings.Replace(rawURL, "{genesisID}", wn.GenesisID, -1)
 }
 
-// LoadKV retrieves an entry from the corresponding peer's key-value store
-func (wn *WebsocketNetwork) LoadKV(node Peer, keys []crypto.Digest) ([][]byte, bool) {
+// LoadMessage retrieves an entry from the corresponding peer's key-value store
+func (wn *WebsocketNetwork) LoadMessage(node Peer, keys []crypto.Digest) ([][]byte, bool) {
 	peer := node.(*wsPeer)
-	return peer.receiveMsgTracker.LoadKV(keys)
+	return peer.receiveMsgTracker.LoadMessage(keys)
 }
 
 func (wn *WebsocketNetwork) TestPeer(hashes []crypto.Digest, msgs [][]byte) *wsPeer {

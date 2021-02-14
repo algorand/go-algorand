@@ -175,7 +175,7 @@ func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
 	}
 }
 
-func (n *NetworkFacade) LoadKV(node network.Peer, key []crypto.Digest) ([][]byte,bool) {
+func (n *NetworkFacade) LoadMessage(node network.Peer, key []crypto.Digest) ([][]byte,bool) {
 	return nil, true
 }
 

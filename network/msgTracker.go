@@ -36,8 +36,8 @@ func (tracker *msgTracker) exists(key crypto.Digest) bool {
 	return tracker.existsUnsafe(key)
 }
 
-// LoadKV retrieves an entry from the corresponding peer's key-value store
-func (tracker *msgTracker) LoadKV(keys []crypto.Digest) ([][]byte, bool) {
+// LoadMessage retrieves an entry from the corresponding peer's key-value store
+func (tracker *msgTracker) LoadMessage(keys []crypto.Digest) ([][]byte, bool) {
 	tracker.mu.RLock()
 	defer tracker.mu.RUnlock()
 

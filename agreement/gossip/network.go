@@ -208,7 +208,7 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 	i.net.Disconnect(metadata.raw.Sender)
 }
 
-func (i *networkImpl) LoadKV(h agreement.MessageHandle, keys []crypto.Digest) ([][]byte, bool) {
+func (i *networkImpl) LoadMessage(h agreement.MessageHandle, keys []crypto.Digest) ([][]byte, bool) {
 	metadata := messageMetadataFromHandle(h)
 
 	if metadata == nil { // synthentic loopback
@@ -216,7 +216,7 @@ func (i *networkImpl) LoadKV(h agreement.MessageHandle, keys []crypto.Digest) ([
 		return nil, true
 	}
 
-	return i.net.LoadKV(metadata.raw.Sender, keys)
+	return i.net.LoadMessage(metadata.raw.Sender, keys)
 }
 
 func Metadata(raw network.IncomingMessage) *messageMetadata {
