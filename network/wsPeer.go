@@ -97,6 +97,7 @@ type sendMessage struct {
 	peerEnqueued time.Time             // the time at which the peer was attempting to enqueue the message
 	msgTags      map[protocol.Tag]bool // when msgTags is speficied ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
 	hash crypto.Digest
+	ctx context.Context
 }
 
 // wsPeerCore also works for non-connected peers we want to do HTTP GET from
@@ -274,7 +275,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 		digest = crypto.Hash(mbytes)
 	}
 
-	ok := wp.writeNonBlock(mbytes, false, digest, time.Now())
+	ok := wp.writeNonBlock(mbytes, false, digest, time.Now(), ctx)
 	if !ok {
 		networkBroadcastsDropped.Inc(nil)
 		err = fmt.Errorf("wsPeer failed to unicast: %v", wp.GetAddress())
@@ -302,7 +303,9 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	msg[0] = sendMessage{
 		data:         append([]byte(protocol.TopicMsgRespTag), serializedMsg...),
 		enqueued:     time.Now(),
-		peerEnqueued: time.Now()}
+		peerEnqueued: time.Now(),
+		ctx: context.Background(),
+	}
 	select {
 	case wp.sendBufferBulk <- msg:
 	case <-wp.closing:
@@ -506,6 +509,7 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now(),
 		msgTags:      msgTagsMap,
+		ctx: context.Background(),
 	}
 
 	// try to send the message to the send loop. The send loop will store the message locally and would use it.
@@ -555,14 +559,22 @@ func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 		if wp.sendMsgTracker.existsUnsafe(msg.hash) {
 			continue
 		}
+
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
 			logging.Base().Infof("bad msg: %v", len(msg.data))
 			return err
 		}
+
 		if len(msg.data) >= 2 && protocol.Tag(msg.data[:2]) == protocol.TxnTag {
 			if msg.hash != emptyHash {
 				wp.sendMsgTracker.remember(msg.hash)
 			}
+		}
+
+		select {
+		case <-msg.ctx.Done():
+			return disconnectReasonNone
+		default:
 		}
 	}
 	return disconnectReasonNone
@@ -652,16 +664,16 @@ func (wp *wsPeer) writeLoopCleanup(reason disconnectReason) {
 	wp.wg.Done()
 }
 
-func (wp *wsPeer) writeNonBlock(data []byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time) bool {
+func (wp *wsPeer) writeNonBlock(data []byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time, ctx context.Context) bool {
 	msgs := make([][]byte, 1, 1)
 	digests := make([]crypto.Digest, 1, 1)
 	msgs[0] = data
 	digests[0] = digest
-	return wp.writeNonBlockMsgs(msgs, highPrio, digests, msgEnqueueTime)
+	return wp.writeNonBlockMsgs(msgs, highPrio, digests, msgEnqueueTime, ctx)
 }
 
 // return true if enqueued/sent
-func (wp *wsPeer) writeNonBlockMsgs(data [][]byte, highPrio bool, digest []crypto.Digest, msgEnqueueTime time.Time) bool {
+func (wp *wsPeer) writeNonBlockMsgs(data [][]byte, highPrio bool, digest []crypto.Digest, msgEnqueueTime time.Time, ctx context.Context) bool {
 	filteredCount := 0
 	filtered := make([]bool, len(data), len(data))
 	for i := range data {
@@ -687,7 +699,7 @@ func (wp *wsPeer) writeNonBlockMsgs(data [][]byte, highPrio bool, digest []crypt
 	index := 0
 	for i, d := range data {
 		if !filtered[i] {
-			msgs[index] = sendMessage{data: d, enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, hash: digest[i]}
+			msgs[index] = sendMessage{data: d, enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, hash: digest[i], ctx: ctx}
 			index++
 		}
 	}
@@ -723,7 +735,7 @@ func (wp *wsPeer) sendPing() bool {
 	copy(mbytes, tagBytes)
 	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]
-	sent := wp.writeNonBlock(mbytes, false, crypto.Digest{}, time.Now())
+	sent := wp.writeNonBlock(mbytes, false, crypto.Digest{}, time.Now(), context.Background())
 
 	if sent {
 		wp.pingInFlight = true
@@ -814,7 +826,8 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	msg[0] = sendMessage{
 		data:         append([]byte(tag), serializedMsg...),
 		enqueued:     time.Now(),
-		peerEnqueued: time.Now()}
+		peerEnqueued: time.Now(),
+		ctx: context.Background()}
 	select {
 	case wp.sendBufferBulk <- msg:
 	case <-wp.closing:

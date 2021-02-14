@@ -406,6 +406,7 @@ type broadcastRequest struct {
 	except      *wsPeer
 	done        chan struct{}
 	enqueueTime time.Time
+	ctx context.Context
 }
 
 func (r broadcastRequest) ToBeHashed() (protocol.HashID, []byte) {
@@ -458,7 +459,7 @@ func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 // TODO: add `priority` argument so that we don't have to guess it based on tag
 func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
-	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now()}
+	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
 		request.except = except.(*wsPeer)
 	}
@@ -1376,7 +1377,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer == request.except {
 			continue
 		}
-		ok := peer.writeNonBlockMsgs(data, prio, digests, request.enqueueTime)
+		ok := peer.writeNonBlockMsgs(data, prio, digests, request.enqueueTime, request.ctx)
 		if ok {
 			sentMessageCount++
 			continue
@@ -2069,7 +2070,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(mbytes, true, crypto.Digest{}, time.Now())
+				sent := peer.writeNonBlock(mbytes, true, crypto.Digest{}, time.Now(), context.Background())
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}

@@ -1148,7 +1148,7 @@ func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte
 	msgArr[0] = data
 	tagArr := make([]protocol.Tag, 1, 1)
 	tagArr[0] = tag
-	request := broadcastRequest{tags: tagArr, data: msgArr, enqueueTime: when}
+	request := broadcastRequest{tags: tagArr, data: msgArr, enqueueTime: when, ctx: context.Background()}
 
 	broadcastQueue := wn.broadcastQueueBulk
 	if highPriorityTag(tagArr) {
