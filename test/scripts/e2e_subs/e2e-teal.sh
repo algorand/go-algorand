@@ -117,4 +117,13 @@ ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNTM}
 
 ${gcmd} clerk send --amount 200000 --from ${ACCOUNTM} --to ${ACCOUNTC} -L ${TEMPDIR}/mtrue.lsig
 
+echo "#pragma version 1" | ${gcmd} clerk compile -
+echo "#pragma version 2" | ${gcmd} clerk compile -
+
+set +o pipefail
+# The compile will fail, but this tests against a regression in which compile SEGV'd
+echo "#pragma version 100" | ${gcmd} clerk compile - 2>&1 | grep "unsupported version"
+set -o pipefail
+
+
 date '+e2e_teal OK %Y%m%d_%H%M%S'
