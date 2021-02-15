@@ -48,7 +48,7 @@ func (tma *txnMerkleArray) Length() uint64 {
 // Get implements the merklearray.Array interface.
 func (tma *txnMerkleArray) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= uint64(len(tma.block.Payset)) {
-		return crypto.Digest{}, fmt.Errorf("txnMerkleArray.Get(%d) out of bounds %d", pos, len(tma.block.Payset))
+		return crypto.Digest{}, fmt.Errorf("txnMerkleArray.Get(%d): out of bounds, payset size %d", pos, len(tma.block.Payset))
 	}
 
 	var elem txnMerkleElem
