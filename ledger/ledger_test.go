@@ -92,7 +92,12 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 	initAccounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
 
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
-	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
+	var initialRewardsPerRound uint64
+	if params.InitialRewardsRateCalculation {
+		initialRewardsPerRound = basics.SubSaturate(incentivePoolBalanceAtGenesis.Raw, params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
+	} else {
+		initialRewardsPerRound = incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
+	}
 
 	initBlock := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
