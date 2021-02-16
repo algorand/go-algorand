@@ -175,7 +175,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		logging.Base().Infof("txncount, %v", len(txnData))
 		if txnData != nil {
 			//protocol.TxnTag
-			s.Network.BroadcastArray(tags, txnData)
+			s.Network.BroadcastArray(ctx, tags, txnData)
 		} else if data != nil {
 			s.Network.Broadcast(a.Tag, data)
 		}

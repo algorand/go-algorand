@@ -504,7 +504,7 @@ func (e *testingNetworkEndpoint) Broadcast(tag protocol.Tag, data []byte) error 
 	return nil
 }
 
-func (e *testingNetworkEndpoint) BroadcastArray(tag []protocol.Tag, data [][]byte) error {
+func (e *testingNetworkEndpoint) BroadcastArray(_ context.Context, tag []protocol.Tag, data [][]byte) error {
 	e.parent.multicastArray(tag, data, e.id, e.id)
 	return nil
 }

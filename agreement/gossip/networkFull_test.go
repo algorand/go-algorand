@@ -388,7 +388,7 @@ func testNetworkImplFull(t *testing.T, nodesCount int) {
 	t.Run("Multisource", func(t *testing.T) {
 		testNetworkImplMultisource(t, nodesCount)
 	})
-	
+
 	t.Run("Rebroadcast", func(t *testing.T) {
 		testNetworkImplRebroadcast(t, nodesCount)
 	})
