@@ -1,3 +1,6 @@
+GOPATH	:= $(shell go env GOPATH)
+GOPATH1	:= $(firstword $(subst :, ,$(GOPATH)))
+
 # `make all` or just `make` should be appropriate for dev work
 all:	server/v2/generated/types.go server/v2/generated/routes.go server/v2/generated/private/types.go server/v2/generated/private/routes.go
 
@@ -5,16 +8,16 @@ all:	server/v2/generated/types.go server/v2/generated/routes.go server/v2/genera
 generate:	oapi-codegen all
 
 server/v2/generated/types.go:	algod.oas3.yml
-	oapi-codegen -package generated -type-mappings integer=uint64 -generate types -exclude-tags=private,common -o ./server/v2/generated/types.go algod.oas3.yml
+	$(GOPATH1)/bin/oapi-codegen -package generated -type-mappings integer=uint64 -generate types -exclude-tags=private,common -o ./server/v2/generated/types.go algod.oas3.yml
 
 server/v2/generated/routes.go:	algod.oas3.yml
-	oapi-codegen -package generated -type-mappings integer=uint64 -generate server,spec -exclude-tags=private,common -o ./server/v2/generated/routes.go algod.oas3.yml
+	$(GOPATH1)/bin/oapi-codegen -package generated -type-mappings integer=uint64 -generate server,spec -exclude-tags=private,common -o ./server/v2/generated/routes.go algod.oas3.yml
 
 server/v2/generated/private/types.go:	algod.oas3.yml
-	oapi-codegen -package private -type-mappings integer=uint64 -generate types -include-tags=private -o ./server/v2/generated/private/types.go algod.oas3.yml
+	$(GOPATH1)/bin/oapi-codegen -package private -type-mappings integer=uint64 -generate types -include-tags=private -o ./server/v2/generated/private/types.go algod.oas3.yml
 
 server/v2/generated/private/routes.go:	algod.oas3.yml
-	oapi-codegen -package private -type-mappings integer=uint64 -generate server,spec -include-tags=private -o ./server/v2/generated/private/routes.go algod.oas3.yml
+	$(GOPATH1)/bin/oapi-codegen -package private -type-mappings integer=uint64 -generate server,spec -include-tags=private -o ./server/v2/generated/private/routes.go algod.oas3.yml
 
 algod.oas3.yml:	algod.oas2.json
 	curl -s -X POST "https://converter.swagger.io/api/convert" -H "accept: application/json" -H "Content-Type: application/json" -d @./algod.oas2.json -o .3tmp.json

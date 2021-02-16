@@ -167,10 +167,10 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 	return s.hints, nil
 }
 
-// Verify ensures that the positions in elems correspond to the hashes of their respective
-// crypto.Hashable objects in a tree with the given root hash.  The proof is expected to
-// be the proof returned by Prove().
-func Verify(root crypto.Digest, elems map[uint64]crypto.Hashable, proof []crypto.Digest) error {
+// Verify ensures that the positions in elems correspond to the respective hashes
+// in a tree with the given root hash.  The proof is expected to be the proof
+// returned by Prove().
+func Verify(root crypto.Digest, elems map[uint64]crypto.Digest, proof []crypto.Digest) error {
 	if len(elems) == 0 {
 		if len(proof) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
@@ -183,7 +183,7 @@ func Verify(root crypto.Digest, elems map[uint64]crypto.Hashable, proof []crypto
 	for pos, elem := range elems {
 		pl = append(pl, layerItem{
 			pos:  pos,
-			hash: crypto.HashObj(elem),
+			hash: elem,
 		})
 	}
 
