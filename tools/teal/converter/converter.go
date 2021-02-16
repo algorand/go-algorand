@@ -22,7 +22,12 @@ import (
 	"log"
 )
 
-const MaxBranchOffset = 0x7FFF
+const MaxBranchOffset = 0x7fff
+const MinBranchOffset = -MaxBranchOffset - 1
+
+// AllowBackwardBranch determines if backward branches should be allowed or not. When it is set to true offsets bigger
+// than 0x7fff will be considered as negative numbers. Otherwise, these offsets will cause an error.
+const AllowBackwardBranch = true
 
 // DefaultNewTealVersion is the version number that DefaultConverterMaker assumes for TEAL scripts it is converting from.
 const DefaultNewTealVersion = 3
@@ -176,9 +181,15 @@ func newBranchInst(inst *Instruction) *branchInst {
 	if len(inst.operands) != 2 {
 		log.Panic("invalid operands for branch instruction")
 	}
+	var offset int
+	if AllowBackwardBranch {
+		offset = int(int8(inst.operands[0]))<<8 | int(inst.operands[1])
+	} else {
+		offset = int(inst.operands[0])<<8 | int(inst.operands[1])
+	}
 	return &branchInst{
 		Instruction: inst,
-		offset:      int(inst.operands[0])<<8 | int(inst.operands[1]),
+		offset:      offset,
 	}
 }
 
@@ -186,13 +197,25 @@ func (bi *branchInst) Convert() ([]*Instruction, error) {
 	if bi.translator == nil {
 		log.Panic("no translator is available for offset conversion")
 	}
-	branchAddr := bi.position + bi.Length() + bi.offset
-	if branchAddr >= len(bi.translator) || branchAddr < 0 {
-		return nil, errors.New("trying to branch out of the program")
-	}
-	newOffset := bi.translator[branchAddr] - (bi.translator[bi.position] + bi.Length() + bi.LengthDelta())
-	if newOffset > MaxBranchOffset || newOffset < 0 {
-		return nil, errors.New("overflow in branch's offset")
+	var branchAddr, newOffset int
+	if bi.offset >= 0 {
+		branchAddr = bi.position + bi.Length() + bi.offset
+		if branchAddr >= len(bi.translator) || branchAddr < 0 {
+			return nil, errors.New("trying to branch out of the program")
+		}
+		newOffset = bi.translator[branchAddr] - (bi.translator[bi.position] + bi.Length() + bi.LengthDelta())
+		if newOffset > MaxBranchOffset || newOffset < 0 {
+			return nil, errors.New("overflow in branch offset")
+		}
+	} else {
+		branchAddr = bi.position + bi.offset
+		if branchAddr >= len(bi.translator) || branchAddr < 0 {
+			return nil, errors.New("trying to branch out of the program")
+		}
+		newOffset = bi.translator[branchAddr] - bi.translator[bi.position]
+		if newOffset < MinBranchOffset || newOffset >= 0 {
+			return nil, errors.New("overflow in branch offset")
+		}
 	}
 	return []*Instruction{
 		NewInstruction(bi.opcode, []byte{byte(newOffset >> 8), byte(newOffset)}, bi.position),

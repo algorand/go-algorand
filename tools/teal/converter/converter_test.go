@@ -75,13 +75,13 @@ func TestBranchInst_Convert(t *testing.T) {
 			name:       "+overflow",
 			inst:       NewInstruction(0x40, []byte{0x00, 0x00}, 0),
 			addrMap:    []int{0, 0, 4, 0x7fff + 4, 0, 42, 0, 10},
-			wantErrStr: "overflow in branch's offset",
+			wantErrStr: "overflow in branch offset",
 		},
 		{
 			name:       "-overflow",
 			inst:       NewInstruction(0x40, []byte{0x00, 0x02}, 2),
 			addrMap:    []int{0, 0, 6, 0, 0, 42, 0, 2},
-			wantErrStr: "overflow in branch's offset",
+			wantErrStr: "overflow in branch offset",
 		},
 	}
 	for _, test := range tests {
@@ -105,7 +105,8 @@ func TestProgram_ConvertTo(t *testing.T) {
 	tests := []struct {
 		name              string
 		byteCode          []byte
-		v                 Version
+		to                Version
+		backWard          bool
 		wantByteCode      []byte
 		wantAssembly      string
 		wantParsErr       string
@@ -117,12 +118,12 @@ func TestProgram_ConvertTo(t *testing.T) {
 		},
 		{
 			byteCode:     []byte{0x03},
-			v:            10,
+			to:           10,
 			wantByteCode: []byte{10},
 		},
 		{
 			byteCode:          []byte{0x03, 0x05},
-			v:                 1,
+			to:                1,
 			wantConversionErr: "can not convert from version 3 to version 1",
 		},
 		{
@@ -164,8 +165,30 @@ func TestProgram_ConvertTo(t *testing.T) {
 			byteCode:     []byte{0x03, 0x4a, 0x41, 0x0, 0x02, 0x62, 0x22, 0x64, 0x33},
 			wantAssembly: "// version 2\ndup2\nbz label1\nbytecblock 0x22\nbytec_0\napp_local_get\nlabel1:\nbytecblock 0x33\nbytec_0\napp_global_get\n",
 		},
+		{
+			name:         "backward br",
+			backWard:     true,
+			byteCode:     []byte{0x03, 0x65, 0x0, 0x7, 0x63, 0x2, 0x40, 0xff, 0xfd},
+			wantByteCode: []byte{0x2, 0x26, 0x1, 0x1, 0x0, 0x28, 0x65, 0x7, 0x26, 0x1, 0x1, 0x2, 0x28, 0x63, 0x40, 0xff, 0xf9},
+		},
+		{
+			name:         "backward br to changed",
+			backWard:     true,
+			byteCode:     []byte{0x03, 0x65, 0x0, 0x40, 0xff, 0xfe},
+			wantByteCode: []byte{0x2, 0x26, 0x1, 0x1, 0x0, 0x28, 0x65, 0x40, 0xff, 0xfa},
+		},
+		{
+			name:              "backward br out",
+			backWard:          true,
+			byteCode:          []byte{0x03, 0x40, 0xff, 0xff},
+			wantConversionErr: "trying to branch out of the program",
+		},
 	}
 	for _, test := range tests {
+		// skip backward branch tests when backward branches are not allowed
+		if test.backWard && !AllowBackwardBranch {
+			continue
+		}
 		t.Run(test.name, func(t *testing.T) {
 			p, err := NewProgram(test.byteCode)
 			if test.wantParsErr != "" {
@@ -173,10 +196,10 @@ func TestProgram_ConvertTo(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			if test.v == 0 {
-				test.v = DefaultOldTealVersion
+			if test.to == 0 {
+				test.to = DefaultOldTealVersion
 			}
-			b, err := p.ConvertTo(test.v)
+			b, err := p.ConvertTo(test.to)
 			if test.wantConversionErr != "" {
 				require.EqualError(t, err, test.wantConversionErr)
 				return
