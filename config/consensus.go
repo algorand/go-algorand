@@ -362,6 +362,9 @@ const (
 
 	// PaysetCommitFlat hashes the entire payset array.
 	PaysetCommitFlat
+
+	// PaysetCommitMerkle uses merklearray to commit to the payset.
+	PaysetCommitMerkle
 )
 
 // ConsensusProtocols defines a set of supported protocol versions and their
@@ -870,6 +873,8 @@ func initConsensusProtocols() {
 
 	// enable the InitialRewardsRateCalculation fix
 	vFuture.InitialRewardsRateCalculation = true
+	// Enable transaction Merkle tree.
+	vFuture.PaysetCommit = PaysetCommitMerkle
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

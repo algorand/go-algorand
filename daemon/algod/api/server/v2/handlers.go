@@ -182,6 +182,64 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
+// GetProof generates a Merkle proof for a transaction in a block.
+// (GET /v2/blocks/{round}/transactions/{txid}/proof)
+func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params generated.GetProofParams) error {
+	var txID transactions.Txid
+	err := txID.UnmarshalText([]byte(txid))
+	if err != nil {
+		return badRequest(ctx, err, errNoTxnSpecified, v2.Log)
+	}
+
+	ledger := v2.Node.Ledger()
+	block, _, err := ledger.BlockCert(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	proto := config.Consensus[block.CurrentProtocol]
+	if proto.PaysetCommit != config.PaysetCommitMerkle {
+		return notFound(ctx, err, "protocol does not support Merkle proofs", v2.Log)
+	}
+
+	txns, err := block.DecodePaysetFlat()
+	if err != nil {
+		return internalError(ctx, err, "decoding transactions", v2.Log)
+	}
+
+	for idx := range txns {
+		if txns[idx].Txn.ID() == txID {
+			tree, err := block.TxnMerkleTree()
+			if err != nil {
+				return internalError(ctx, err, "building Merkle tree", v2.Log)
+			}
+
+			proof, err := tree.Prove([]uint64{uint64(idx)})
+			if err != nil {
+				return internalError(ctx, err, "generating proof", v2.Log)
+			}
+
+			var proofconcat []byte
+			for _, proofelem := range proof {
+				proofconcat = append(proofconcat, proofelem[:]...)
+			}
+
+			stibhash := block.Payset[idx].Hash()
+
+			response := generated.ProofResponse{
+				Proof:    proofconcat,
+				Stibhash: stibhash[:],
+				Idx:      uint64(idx),
+			}
+
+			return ctx.JSON(http.StatusOK, response)
+		}
+	}
+
+	err = errors.New(errTransactionNotFound)
+	return notFound(ctx, err, err.Error(), v2.Log)
+}
+
 // GetSupply gets the current supply reported by the ledger.
 // (GET /v2/ledger/supply)
 func (v2 *Handlers) GetSupply(ctx echo.Context) error {
