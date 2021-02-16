@@ -108,7 +108,6 @@ type AlgorandFullNode struct {
 	catchpointCatchupService *catchup.CatchpointCatchupService
 	blockService             *rpcs.BlockService
 	ledgerService            *rpcs.LedgerService
-	wsFetcherService         *rpcs.WsFetcherService // to handle inbound gossip msgs for fetching over gossip
 	txPoolSyncerService      *rpcs.TxSyncer
 
 	indexer *indexer.Indexer

@@ -169,28 +169,28 @@ func (w *wsFetcherClient) RequestBlock(ctx context.Context, round basics.Round) 
 	roundBin := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(roundBin, uint64(round))
 	topics := network.Topics{
-		network.MakeTopic(rpcs.RequestDataTypeKey,
-			[]byte(rpcs.BlockAndCertValue)),
+		network.MakeTopic(network.RequestDataTypeKey,
+			[]byte(network.BlockAndCertValue)),
 		network.MakeTopic(
-			rpcs.RoundKey,
+			network.RoundKey,
 			roundBin),
 	}
 	resp, err := w.target.Request(ctx, w.tag, topics)
 	if err != nil {
-		return rpcs.WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s).RequestBlock(%d): Request failed, %v", w.target.GetAddress(), round, err)
+		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s).RequestBlock(%d): Request failed, %v", w.target.GetAddress(), round, err)
 	}
 
 	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
-		return rpcs.WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s).RequestBlock(%d): Request failed, %s", w.target.GetAddress(), round, string(errMsg))
+		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s).RequestBlock(%d): Request failed, %s", w.target.GetAddress(), round, string(errMsg))
 	}
 
-	blk, found := resp.Topics.GetValue(rpcs.BlockDataKey)
+	blk, found := resp.Topics.GetValue(network.BlockDataKey)
 	if !found {
-		return rpcs.WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s): request failed: block data not found", w.target.GetAddress())
+		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s): request failed: block data not found", w.target.GetAddress())
 	}
-	cert, found := resp.Topics.GetValue(rpcs.CertDataKey)
+	cert, found := resp.Topics.GetValue(network.CertDataKey)
 	if !found {
-		return rpcs.WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s): request failed: cert data not found", w.target.GetAddress())
+		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s): request failed: cert data not found", w.target.GetAddress())
 	}
 
 	// For backward compatibility, the block and cert are repackaged here.
