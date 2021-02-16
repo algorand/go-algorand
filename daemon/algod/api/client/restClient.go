@@ -579,3 +579,10 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	response = blob
 	return
 }
+
+// Proof gets a Merkle proof for a transaction in a block.
+func (client RestClient) Proof(txid string, round uint64) (response generatedV2.ProofResponse, err error) {
+	txid = stripTransaction(txid)
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), nil)
+	return
+}
