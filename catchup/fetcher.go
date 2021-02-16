@@ -61,7 +61,6 @@ type FetcherFactory interface {
 type NetworkFetcherFactory struct {
 	net       network.GossipNode
 	peerLimit int
-	fs        *rpcs.WsFetcherService
 	cfg       *config.Local
 
 	log logging.Logger
@@ -78,12 +77,11 @@ func (factory NetworkFetcherFactory) makeHTTPFetcherFromPeer(log logging.Logger,
 
 // MakeNetworkFetcherFactory returns a network fetcher factory, that associates fetchers with no more than peerLimit peers from the aggregator.
 // WSClientSource can be nil, if no network exists to create clients from (defaults to http clients)
-func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, fs *rpcs.WsFetcherService, cfg *config.Local) NetworkFetcherFactory {
+func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, cfg *config.Local) NetworkFetcherFactory {
 	var factory NetworkFetcherFactory
 	factory.net = net
 	factory.peerLimit = peerLimit
 	factory.log = logging.Base()
-	factory.fs = fs
 	factory.cfg = cfg
 	return factory
 }
@@ -131,7 +129,7 @@ func (factory NetworkFetcherFactory) NewOverGossip(tag protocol.Tag) Fetcher {
 		factory.log.Info("WsFetcherService not available; fetch over gossip disabled")
 		return factory.New()
 	}
-	f := MakeWsFetcher(factory.log, tag, gossipPeers, factory.fs, factory.cfg)
+	f := MakeWsFetcher(factory.log, tag, gossipPeers, factory.cfg)
 	return &ComposedFetcher{fetchers: []Fetcher{factory.New(), f}}
 }
 

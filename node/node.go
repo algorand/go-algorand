@@ -230,7 +230,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.blockService = rpcs.MakeBlockService(cfg, node.ledger, p2pNode, node.genesisID)
 	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
-	node.wsFetcherService = rpcs.MakeWsFetcherService(node.log, p2pNode)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	crashPathname := filepath.Join(genesisDir, config.CrashFilename)

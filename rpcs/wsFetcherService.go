@@ -17,8 +17,6 @@
 package rpcs
 
 import (
-	"context"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
@@ -40,11 +38,11 @@ type WsFetcherService struct {
 
 // Constant strings used as keys for topics
 const (
-	roundKey           = "roundKey"        // Block round-number topic-key in the request
-	requestDataTypeKey = "requestDataType" // Data-type topic-key in the request (e.g. block, cert, block+cert)
-	blockDataKey       = "blockData"       // Block-data topic-key in the response
-	certDataKey        = "certData"        // Cert-data topic-key in the response
-	blockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
+	RoundKey           = "roundKey"        // Block round-number topic-key in the request
+	RequestDataTypeKey = "requestDataType" // Data-type topic-key in the request (e.g. block, cert, block+cert)
+	BlockDataKey       = "blockData"       // Block-data topic-key in the response
+	CertDataKey        = "certData"        // Cert-data topic-key in the response
+	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
 )
 
 func makePendingRequestKey(target network.UnicastPeer, round basics.Round, tag protocol.Tag) string {
@@ -92,68 +90,6 @@ func (fs *WsFetcherService) handleNetworkMsg(msg network.IncomingMessage) (out n
 
 	f <- resp
 	return
-}
-
-// RequestBlock send a request for block <round> and wait until it receives a response or a context expires.
-func (fs *WsFetcherService) RequestBlock(ctx context.Context, target network.UnicastPeer, round basics.Round, tag protocol.Tag) (WsGetBlockOut, error) {
-	waitCh := make(chan WsGetBlockOut, 1)
-	waitKey := makePendingRequestKey(target, round, tag)
-
-	// register.
-	fs.mu.Lock()
-	if _, has := fs.pendingRequests[waitKey]; has {
-		// we already have a pending request for the same round and tag from the same peer
-		fs.mu.Unlock()
-		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService.RequestBlock(%d): only single concurrent request for a round from a single peer(%s) is supported", round, target.GetAddress())
-	}
-	fs.pendingRequests[waitKey] = waitCh
-	fs.mu.Unlock()
-
-	defer func() {
-		// unregister
-		fs.mu.Lock()
-		delete(fs.pendingRequests, waitKey)
-		fs.mu.Unlock()
-	}()
-
-	roundBin := make([]byte, binary.MaxVarintLen64)
-	binary.PutUvarint(roundBin, uint64(round))
-	topics := network.Topics{
-		network.MakeTopic(requestDataTypeKey,
-			[]byte(blockAndCertValue)),
-		network.MakeTopic(
-			roundKey,
-			roundBin),
-	}
-	resp, err := target.Request(ctx, tag, topics)
-	if err != nil {
-		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s).RequestBlock(%d): Request failed, %v", target.GetAddress(), round, err)
-	}
-
-	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
-		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s).RequestBlock(%d): Request failed, %s", target.GetAddress(), round, string(errMsg))
-	}
-
-	blk, found := resp.Topics.GetValue(blockDataKey)
-	if !found {
-		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s): request failed: block data not found", target.GetAddress())
-	}
-	cert, found := resp.Topics.GetValue(certDataKey)
-	if !found {
-		return WsGetBlockOut{}, fmt.Errorf("WsFetcherService(%s): request failed: cert data not found", target.GetAddress())
-	}
-
-	// For backward compatibility, the block and cert are repackaged here.
-	// This can be dropeed once the v1 is dropped.
-	blockCertBytes := protocol.EncodeReflect(PreEncodedBlockCert{
-		Block:       blk,
-		Certificate: cert})
-
-	wsBlockOut := WsGetBlockOut{
-		Round:      uint64(round),
-		BlockBytes: blockCertBytes,
-	}
-	return wsBlockOut, nil
 }
 
 // MakeWsFetcherService creates and returns a WsFetcherService that services gossip fetcher responses
