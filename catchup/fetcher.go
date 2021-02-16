@@ -125,10 +125,6 @@ func (factory NetworkFetcherFactory) NewOverGossip(tag protocol.Tag) Fetcher {
 		factory.log.Info("no gossip peers for NewOverGossip")
 		return factory.New()
 	}
-	if factory.fs == nil {
-		factory.log.Info("WsFetcherService not available; fetch over gossip disabled")
-		return factory.New()
-	}
 	f := MakeWsFetcher(factory.log, tag, gossipPeers, factory.cfg)
 	return &ComposedFetcher{fetchers: []Fetcher{factory.New(), f}}
 }

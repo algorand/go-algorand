@@ -887,18 +887,15 @@ func TestGetBlockWS(t *testing.T) {
 		factory.log = logging.TestingLog(t)
 		fetcher := factory.NewOverGossip(protocol.UniCatchupReqTag)
 		// we have one peer, the Ws block server
-		//		require.Equal(t, fetcher.NumPeers(), 1)
+		require.Equal(t, fetcher.NumPeers(), 1)
 
 		var block *bookkeeping.Block
 		var cert *agreement.Certificate
 		var client FetcherClient
 
-		//		start := time.Now()
 		block, cert, client, err = fetcher.FetchBlock(context.Background(), next)
 		require.NotNil(t, client)
 		require.NoError(t, err)
-		//		end := time.Now()
-		//		require.True(t, end.Sub(start) < 10*time.Second)
 		require.Equal(t, &b, block)
 		if err == nil {
 			require.NotEqual(t, nil, block)
