@@ -289,7 +289,7 @@ func (pe PanicError) Error() string {
 }
 
 var errLoopDetected = errors.New("loop detected")
-var errLogicSignNotSupported = errors.New("LogicSig not supported")
+var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
 // EvalStateful executes stateful TEAL program
@@ -343,7 +343,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	}()
 
 	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
-		err = errLogicSignNotSupported
+		err = errLogicSigNotSupported
 		return
 	}
 	if cx.EvalParams.Txn.Lsig.Args != nil && len(cx.EvalParams.Txn.Lsig.Args) > transactions.EvalMaxArgs {
@@ -458,7 +458,7 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
-		err = errLogicSignNotSupported
+		err = errLogicSigNotSupported
 		return
 	}
 	var cx evalContext
