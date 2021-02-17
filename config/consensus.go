@@ -345,6 +345,9 @@ type ConsensusParams struct {
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
 	EnableAssetCloseAmount bool
+
+	// update the initial rewards rate calculation to take the reward pool minimum balance into account
+	InitialRewardsRateCalculation bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -359,6 +362,9 @@ const (
 
 	// PaysetCommitFlat hashes the entire payset array.
 	PaysetCommitFlat
+
+	// PaysetCommitMerkle uses merklearray to commit to the payset.
+	PaysetCommitMerkle
 )
 
 // ConsensusProtocols defines a set of supported protocol versions and their
@@ -864,6 +870,11 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
+
+	// enable the InitialRewardsRateCalculation fix
+	vFuture.InitialRewardsRateCalculation = true
+	// Enable transaction Merkle tree.
+	vFuture.PaysetCommit = PaysetCommitMerkle
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
