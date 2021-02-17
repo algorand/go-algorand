@@ -74,8 +74,6 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 	protocol.TxnTag:             true,
 	protocol.UniCatchupReqTag:   true,
 	protocol.UniEnsBlockReqTag:  true,
-	protocol.UniEnsBlockResTag:  true,
-	protocol.UniCatchupResTag:   true,
 	protocol.VoteBundleTag:      true,
 }
 
