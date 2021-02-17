@@ -134,7 +134,7 @@ func (w *wsFetcherClient) GetBlockBytes(ctx context.Context, r basics.Round) ([]
 		delete(w.pendingCtxs, childCtx)
 	}()
 
-	resp, err := w.RequestBlock(childCtx, r)
+	resp, err := w.requestBlock(childCtx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -164,31 +164,31 @@ func (w *wsFetcherClient) Close() error {
 	return nil
 }
 
-// RequestBlock send a request for block <round> and wait until it receives a response or a context expires.
-func (w *wsFetcherClient) RequestBlock(ctx context.Context, round basics.Round) (rpcs.WsGetBlockOut, error) {
+// requestBlock send a request for block <round> and wait until it receives a response or a context expires.
+func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) (rpcs.WsGetBlockOut, error) {
 	roundBin := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(roundBin, uint64(round))
 	topics := network.Topics{
-		network.MakeTopic(network.RequestDataTypeKey,
-			[]byte(network.BlockAndCertValue)),
+		network.MakeTopic(rpcs.RequestDataTypeKey,
+			[]byte(rpcs.BlockAndCertValue)),
 		network.MakeTopic(
-			network.RoundKey,
+			rpcs.RoundKey,
 			roundBin),
 	}
 	resp, err := w.target.Request(ctx, w.tag, topics)
 	if err != nil {
-		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s).RequestBlock(%d): Request failed, %v", w.target.GetAddress(), round, err)
+		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s).requestBlock(%d): Request failed, %v", w.target.GetAddress(), round, err)
 	}
 
 	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
-		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s).RequestBlock(%d): Request failed, %s", w.target.GetAddress(), round, string(errMsg))
+		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s).requestBlock(%d): Request failed, %s", w.target.GetAddress(), round, string(errMsg))
 	}
 
-	blk, found := resp.Topics.GetValue(network.BlockDataKey)
+	blk, found := resp.Topics.GetValue(rpcs.BlockDataKey)
 	if !found {
 		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s): request failed: block data not found", w.target.GetAddress())
 	}
-	cert, found := resp.Topics.GetValue(network.CertDataKey)
+	cert, found := resp.Topics.GetValue(rpcs.CertDataKey)
 	if !found {
 		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s): request failed: cert data not found", w.target.GetAddress())
 	}

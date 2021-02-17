@@ -48,6 +48,15 @@ const blockServerCatchupRequestBufferSize = 10
 // e.g. .Handle(BlockServiceBlockPath, &ls)
 const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
 
+// Constant strings used as keys for topics
+const (
+	RoundKey           = "roundKey"        // Block round-number topic-key in the request
+	RequestDataTypeKey = "requestDataType" // Data-type topic-key in the request (e.g. block, cert, block+cert)
+	BlockDataKey       = "blockData"       // Block-data topic-key in the response
+	CertDataKey        = "certData"        // Cert-data topic-key in the response
+	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
+)
+
 // BlockService represents the Block RPC API
 type BlockService struct {
 	ledger                  *data.Ledger
@@ -254,7 +263,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 			network.MakeTopic(network.ErrorKey, []byte(err.Error()))}
 		return
 	}
-	roundBytes, found := topics.GetValue(network.RoundKey)
+	roundBytes, found := topics.GetValue(RoundKey)
 	if !found {
 		logging.Base().Infof("BlockService handleCatchupReq: %s", noRoundNumberErrMsg)
 		respTopics = network.Topics{
@@ -262,7 +271,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 				[]byte(noRoundNumberErrMsg))}
 		return
 	}
-	requestType, found := topics.GetValue(network.RequestDataTypeKey)
+	requestType, found := topics.GetValue(RequestDataTypeKey)
 	if !found {
 		logging.Base().Infof("BlockService handleCatchupReq: %s", noDataTypeErrMsg)
 		respTopics = network.Topics{
@@ -295,12 +304,12 @@ func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType st
 			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailabeErrMsg))}
 	}
 	switch requestType {
-	case network.BlockAndCertValue:
+	case BlockAndCertValue:
 		return network.Topics{
 			network.MakeTopic(
-				network.BlockDataKey, blk),
+				BlockDataKey, blk),
 			network.MakeTopic(
-				network.CertDataKey, cert),
+				CertDataKey, cert),
 		}
 	default:
 		return network.Topics{

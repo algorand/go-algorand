@@ -37,7 +37,7 @@ const (
 	TxnTag             Tag = "TX"
 	UniCatchupReqTag   Tag = "UC"
 	UniEnsBlockReqTag  Tag = "UE"
-	UniEnsBlockResTag  Tag = "US" // was used for wsfetcherservice
-	UniCatchupResTag   Tag = "UT" // was used for wsfetcherservice
-	VoteBundleTag      Tag = "VB"
+	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
+	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
+	VoteBundleTag Tag = "VB"
 )
