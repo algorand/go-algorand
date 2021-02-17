@@ -25,13 +25,8 @@ import (
 
 // Constant strings used as keys for topics
 const (
-	requestHashKey     = "RequestHash"
-	ErrorKey           = "Error"           // used for passing an error message
-	RoundKey           = "roundKey"        // Block round-number topic-key in the request
-	RequestDataTypeKey = "requestDataType" // Data-type topic-key in the request (e.g. block, cert, block+cert)
-	BlockDataKey       = "blockData"       // Block-data topic-key in the response
-	CertDataKey        = "certData"        // Cert-data topic-key in the response
-	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
+	requestHashKey = "RequestHash"
+	ErrorKey       = "Error" // used for passing an error message
 )
 
 // Topic is a key-value pair
