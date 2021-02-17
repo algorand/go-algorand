@@ -210,13 +210,6 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	}
 }
 
-// WsGetBlockOut is a msgpack message delivered on responding to a block (not rpc-based though)
-type WsGetBlockOut struct {
-	Round      uint64
-	Error      string
-	BlockBytes []byte `json:"blockbytes"`
-}
-
 func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n network.OutgoingMessage) {
 	// don't block - just stick in a slightly buffered channel if possible
 	select {
