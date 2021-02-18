@@ -345,6 +345,9 @@ type ConsensusParams struct {
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
 	EnableAssetCloseAmount bool
+
+	// update the initial rewards rate calculation to take the reward pool minimum balance into account
+	InitialRewardsRateCalculation bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -359,6 +362,9 @@ const (
 
 	// PaysetCommitFlat hashes the entire payset array.
 	PaysetCommitFlat
+
+	// PaysetCommitMerkle uses merklearray to commit to the payset.
+	PaysetCommitMerkle
 )
 
 // ConsensusProtocols defines a set of supported protocol versions and their
@@ -847,12 +853,28 @@ func initConsensusProtocols() {
 	v25.EnableAssetCloseAmount = true
 	Consensus[protocol.ConsensusV25] = v25
 
-	// v24 can be upgraded to v25, with an update delay of 7 days ( see calculation above )
-	v24.ApprovedUpgrades[protocol.ConsensusV25] = 140000
+	// v26 adds support for teal3
+	v26 := v25
+	v26.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable the InitialRewardsRateCalculation fix
+	v26.InitialRewardsRateCalculation = true
+
+	// Enable transaction Merkle tree.
+	v26.PaysetCommit = PaysetCommitMerkle
+
+	// Enable teal3
+	v26.LogicSigVersion = 3
+
+	Consensus[protocol.ConsensusV26] = v26
+
+	// v25 or v24 can be upgraded to v26, with an update delay of 7 days ( see calculation above )
+	v25.ApprovedUpgrades[protocol.ConsensusV26] = 140000
+	v24.ApprovedUpgrades[protocol.ConsensusV26] = 140000
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v25
+	vFuture := v26
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
