@@ -461,7 +461,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 
 ## gtxn
 
-- Opcode: 0x33 {uint8 transaction group index}{uint8 transaction field index}
+- Opcode: 0x33 {uint8 transaction group index} {uint8 transaction field index}
 - Pops: _None_
 - Pushes: any
 - push field to the stack from a transaction in the current transaction group
@@ -484,7 +484,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 ## txna
 
-- Opcode: 0x36 {uint8 transaction field index}{uint8 transaction field array index}
+- Opcode: 0x36 {uint8 transaction field index} {uint8 transaction field array index}
 - Pops: _None_
 - Pushes: any
 - push value from an array field from current transaction to stack
@@ -492,7 +492,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 ## gtxna
 
-- Opcode: 0x37 {uint8 transaction group index}{uint8 transaction field index}{uint8 transaction field array index}
+- Opcode: 0x37 {uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}
 - Pops: _None_
 - Pushes: any
 - push value from an array field from a transaction in the current transaction group
@@ -571,7 +571,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 ## substring
 
-- Opcode: 0x51 {uint8 start position}{uint8 end position}
+- Opcode: 0x51 {uint8 start position} {uint8 end position}
 - Pops: *... stack*, []byte
 - Pushes: []byte
 - pop a byte-array X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the array length, the program fails
@@ -827,7 +827,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `s
 
 ## stxna
 
-- Opcode: 0x82 {uint8 transaction field index}{uint8 transaction field array index}
+- Opcode: 0x82 {uint8 transaction field index} {uint8 transaction field array index}
 - Pops: *... stack*, uint64
 - Pushes: any
 - push value from an array field from transaction A in the current group
@@ -835,7 +835,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `s
 
 ## pushbytes
 
-- Opcode: 0x83
+- Opcode: 0x83 {varuint length} {bytes}
 - Pops: _None_
 - Pushes: []byte
 - push the following program bytes to the stack
@@ -843,7 +843,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `s
 
 ## pushint
 
-- Opcode: 0x84
+- Opcode: 0x84 {varuint int}
 - Pops: _None_
 - Pushes: uint64
 - push the following varuint encoded bytes to the stack as an integer
