@@ -317,6 +317,8 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	return nil
 }
 
+const maxBroadcastArraySize = 50000
+
 // setup values not trivially assigned
 func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.net.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.rootURL)
@@ -326,8 +328,8 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
-	wp.sendMsgTracker = makeTracker(50000)
-	wp.receiveMsgTracker = makeTracker(100000)
+	wp.sendMsgTracker = makeTracker(2 * maxBroadcastArraySize)
+	wp.receiveMsgTracker = makeTracker(3 * maxBroadcastArraySize)
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue

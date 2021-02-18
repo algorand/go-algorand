@@ -172,17 +172,24 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 
 	switch a.T {
 	case broadcast:
-		logging.Base().Infof("txncount, %v", len(txnData))
+		logging.Base().Infof("broadcast: txncount, %v, is context nil? %v", len(txnData), a.CompoundMessage.Proposal.ctx == nil)
 		if txnData != nil {
 			//protocol.TxnTag
-			s.Network.BroadcastArray(ctx, tags, txnData)
+			if a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
+				a.CompoundMessage.Proposal.ctx = context.Background()
+			}
+			s.Network.BroadcastArray(a.CompoundMessage.Proposal.ctx, tags, txnData)
 		} else if data != nil {
 			s.Network.Broadcast(a.Tag, data)
 		}
 	case relay:
-		logging.Base().Infof("txncount, %v", len(txnData))
+		logging.Base().Infof("relay: txncount, %v, is context nil? %v", len(txnData), a.CompoundMessage.Proposal.ctx == nil)
 		if txnData != nil {
-			s.Network.RelayArray(a.h, tags, txnData)
+			if a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
+				a.CompoundMessage.Proposal.ctx = context.Background()
+			}
+
+			s.Network.RelayArray(a.CompoundMessage.Proposal.ctx, a.h, tags, txnData)
 		} else if data != nil {
 			s.Network.Relay(a.h, a.Tag, data)
 		}

@@ -280,7 +280,7 @@ type Network interface {
 	// otherwise, a nil is returned.
 	Relay(MessageHandle, protocol.Tag, []byte) error
 
-	RelayArray(MessageHandle, []protocol.Tag, [][]byte) error
+	RelayArray(context.Context, MessageHandle, []protocol.Tag, [][]byte) error
 
 	// Disconnect sends the Network a hint to disconnect to the peer
 	// associated with the given MessageHandle.

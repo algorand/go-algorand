@@ -278,6 +278,7 @@ func (c *poolCryptoVerifier) VerifyVote(ctx context.Context, request cryptoVoteR
 func (c *poolCryptoVerifier) VerifyProposal(ctx context.Context, request cryptoProposalRequest) {
 	c.proposalContexts.clearStaleContexts(request.Round, request.Period, request.Pinned, false)
 	request.ctx = c.proposalContexts.addProposal(request)
+	request.message.UnauthenticatedProposal.ctx = request.ctx
 	switch request.Tag {
 	case protocol.ProposalPayloadTag:
 		select {

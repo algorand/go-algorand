@@ -519,7 +519,7 @@ func (e *testingNetworkEndpoint) Relay(h MessageHandle, t protocol.Tag, data []b
 	return nil
 }
 
-func (e *testingNetworkEndpoint) RelayArray(h MessageHandle, t []protocol.Tag, data [][]byte) error {
+func (e *testingNetworkEndpoint) RelayArray(_ context.Context, h MessageHandle, t []protocol.Tag, data [][]byte) error {
 	sourceID := e.id
 	if _, isMsg := h.(*int); isMsg {
 		sourceID = e.parent.sourceOf(h)

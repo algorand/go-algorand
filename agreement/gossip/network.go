@@ -181,15 +181,15 @@ func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []by
 	return
 }
 
-func (i *networkImpl) RelayArray(h agreement.MessageHandle, t []protocol.Tag, data [][]byte) (err error) {
+func (i *networkImpl) RelayArray(ctx context.Context, h agreement.MessageHandle, t []protocol.Tag, data [][]byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
 	if metadata == nil { // synthentic loopback
-		err = i.net.BroadcastArray(context.Background(), t, data, false, nil)
+		err = i.net.BroadcastArray(ctx, t, data, false, nil)
 		if err != nil {
 			i.log.Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
 		}
 	} else {
-		err = i.net.RelayArray(context.Background(), t, data, false, metadata.raw.Sender)
+		err = i.net.RelayArray(ctx, t, data, false, metadata.raw.Sender)
 		if err != nil {
 			i.log.Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
 		}
