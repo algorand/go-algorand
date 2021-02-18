@@ -3,10 +3,11 @@
 # Create a local private network and run functional tests on it in parallel.
 #
 # Each test is run as `ftest.sh wallet_name` for a wallet with a
-# million Algos.  A test should carefully specify that wallet (or
-# wallets created for the test) for all actions. Tests are expected to
-# not be CPU intensive, merely setting up a handful of transactions
-# and executing them against the network, exercising aspects of the
+# million Algos, with the current directory set to the top of the
+# repo.  A test should carefully specify that wallet (or wallets
+# created for the test) for all actions. Tests are expected to not be
+# CPU intensive, merely setting up a handful of transactions and
+# executing them against the network, exercising aspects of the
 # network and the goal tools.
 #
 # Usage:
@@ -33,6 +34,9 @@ import threading
 import algosdk
 
 logger = logging.getLogger(__name__)
+
+scriptdir = os.path.dirname(os.path.realpath(__file__))
+repodir =  os.path.join(scriptdir, "..", "..")
 
 # less than 16kB of log we show the whole thing, otherwise the last 16kB
 LOG_WHOLE_CUTOFF = 1024 * 16
@@ -104,7 +108,7 @@ def _script_thread_inner(runset, scriptname):
         runset.done(scriptname, False, time.time() - start)
         return
     logger.info('starting %s', scriptname)
-    p = subprocess.Popen([scriptname, walletname], env=env, stdout=cmdlog, stderr=subprocess.STDOUT)
+    p = subprocess.Popen([scriptname, walletname], env=env, cwd=repodir, stdout=cmdlog, stderr=subprocess.STDOUT)
     cmdlog.close()
     runset.running(scriptname, p)
     timeout = read_script_for_timeout(scriptname)
@@ -362,6 +366,7 @@ def main():
     ap.add_argument('--keep-temps', default=False, action='store_true', help='if set, keep all the test files')
     ap.add_argument('--timeout', default=500, type=int, help='integer seconds to wait for the scripts to run')
     ap.add_argument('--verbose', default=False, action='store_true')
+    ap.add_argument('--version', default="Future")
     args = ap.parse_args()
 
     if args.verbose:
@@ -387,13 +392,9 @@ def main():
     netdir = os.path.join(tempdir, 'net')
     env['NETDIR'] = netdir
 
-    gopath = os.getenv('GOPATH')
-    if not gopath:
-        logger.error('$GOPATH not set')
-        sys.exit(1)
-
     retcode = 0
-    xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(gopath, 'src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=90)
+    capv = args.version.capitalize()
+    xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, f'test/testdata/nettemplates/TwoNodes50Each{capv}.json')], timeout=90)
     xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
     atexit.register(goal_network_stop, netdir, env)
 
