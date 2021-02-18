@@ -41,8 +41,6 @@ const numBufferedInternalMsg = 1
 // a custom websockets interface (bidirectional). Internally it keeps track
 // of multiple peers and handles dropping them appropriately using a NetworkFetcher.
 type WsFetcher struct {
-	tag protocol.Tag // domain separation per request
-
 	f       *NetworkFetcher
 	clients map[network.Peer]*wsFetcherClient
 	config  *config.Local
@@ -53,12 +51,11 @@ type WsFetcher struct {
 }
 
 // MakeWsFetcher creates a fetcher that fetches over the gossip network.
-// It instantiates a NetworkFetcher under the hood, registers as a handler for the given message tag,
+// It instantiates a NetworkFetcher under the hood,
 // and demuxes messages appropriately to the corresponding fetcher clients.
-func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, cfg *config.Local) Fetcher {
+func MakeWsFetcher(log logging.Logger, peers []network.Peer, cfg *config.Local) Fetcher {
 	f := &WsFetcher{
 		log:    log,
-		tag:    tag,
 		config: cfg,
 	}
 	f.clients = make(map[network.Peer]*wsFetcherClient)
@@ -66,7 +63,6 @@ func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, c
 	for i, peer := range peers {
 		fc := &wsFetcherClient{
 			target:      peer.(network.UnicastPeer),
-			tag:         f.tag,
 			pendingCtxs: make(map[context.Context]context.CancelFunc),
 			config:      cfg,
 		}
@@ -105,7 +101,6 @@ func (wsf *WsFetcher) Close() {
 // a stub fetcherClient to satisfy the NetworkFetcher interface
 type wsFetcherClient struct {
 	target      network.UnicastPeer                    // the peer where we're going to send the request.
-	tag         protocol.Tag                           // the tag that is associated with the request/
 	pendingCtxs map[context.Context]context.CancelFunc // a map of all the current pending contexts.
 	config      *config.Local
 
@@ -134,17 +129,14 @@ func (w *wsFetcherClient) GetBlockBytes(ctx context.Context, r basics.Round) ([]
 		delete(w.pendingCtxs, childCtx)
 	}()
 
-	resp, err := w.requestBlock(childCtx, r)
+	blockBytes, err := w.requestBlock(childCtx, r)
 	if err != nil {
 		return nil, err
 	}
-	if resp.Error != "" {
-		return nil, fmt.Errorf("wsFetcherClient(%d): server error, %v", r, resp.Error)
-	}
-	if len(resp.BlockBytes) == 0 {
+	if len(blockBytes) == 0 {
 		return nil, fmt.Errorf("wsFetcherClient(%d): empty response", r)
 	}
-	return resp.BlockBytes, nil
+	return blockBytes, nil
 }
 
 // Address implements FetcherClient
@@ -165,7 +157,7 @@ func (w *wsFetcherClient) Close() error {
 }
 
 // requestBlock send a request for block <round> and wait until it receives a response or a context expires.
-func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) (rpcs.WsGetBlockOut, error) {
+func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) ([]byte, error) {
 	roundBin := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(roundBin, uint64(round))
 	topics := network.Topics{
@@ -175,33 +167,27 @@ func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) 
 			rpcs.RoundKey,
 			roundBin),
 	}
-	resp, err := w.target.Request(ctx, w.tag, topics)
+	resp, err := w.target.Request(ctx, protocol.UniEnsBlockReqTag, topics)
 	if err != nil {
-		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s).requestBlock(%d): Request failed, %v", w.target.GetAddress(), round, err)
+		return nil, fmt.Errorf("wsFetcherClient(%s).requestBlock(%d): Request failed, %v", w.target.GetAddress(), round, err)
 	}
 
 	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
-		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s).requestBlock(%d): Request failed, %s", w.target.GetAddress(), round, string(errMsg))
+		return nil, fmt.Errorf("wsFetcherClient(%s).requestBlock(%d): Request failed, %s", w.target.GetAddress(), round, string(errMsg))
 	}
 
 	blk, found := resp.Topics.GetValue(rpcs.BlockDataKey)
 	if !found {
-		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s): request failed: block data not found", w.target.GetAddress())
+		return nil, fmt.Errorf("wsFetcherClient(%s): request failed: block data not found", w.target.GetAddress())
 	}
 	cert, found := resp.Topics.GetValue(rpcs.CertDataKey)
 	if !found {
-		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s): request failed: cert data not found", w.target.GetAddress())
+		return nil, fmt.Errorf("wsFetcherClient(%s): request failed: cert data not found", w.target.GetAddress())
 	}
 
-	// For backward compatibility, the block and cert are repackaged here.
-	// This can be dropeed once the v1 is dropped.
 	blockCertBytes := protocol.EncodeReflect(rpcs.PreEncodedBlockCert{
 		Block:       blk,
 		Certificate: cert})
 
-	wsBlockOut := rpcs.WsGetBlockOut{
-		Round:      uint64(round),
-		BlockBytes: blockCertBytes,
-	}
-	return wsBlockOut, nil
+	return blockCertBytes, nil
 }
