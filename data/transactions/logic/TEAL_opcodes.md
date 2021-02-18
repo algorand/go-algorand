@@ -764,7 +764,7 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Opcode: 0x74
 - Pops: *... stack*, {any A}, {uint64 B}
 - Pushes: uint64
-- pop an index A, a target B (integer or byte-array). Pushes the Ath bit of B.
+- pop a target A (integer or byte-array), and index B. Pushes the Bth bit of A.
 - LogicSigVersion >= 3
 
 ## setbit
@@ -772,7 +772,7 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Opcode: 0x75
 - Pops: *... stack*, {any A}, {uint64 B}, {uint64 C}
 - Pushes: uint64
-- pop a bit A, index B, and target C. Sets the Bth bit of C to A, and push the result
+- pop a target A, index B, and bit C. Sets the Bth bit of A to C, and push the result
 - LogicSigVersion >= 3
 
 ## getbyte
@@ -780,7 +780,7 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Opcode: 0x76
 - Pops: *... stack*, {[]byte A}, {uint64 B}
 - Pushes: uint64
-- pop an integer A and byte-array B. Extract the Ath byte of B and push it as an integer
+- pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer
 - LogicSigVersion >= 3
 
 ## setbyte
@@ -788,7 +788,7 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Opcode: 0x77
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
 - Pushes: []byte
-- pop a small integer A (between 0..255), and integer B, and byte-array C. Set the Bth byte of C to A, and push the result
+- pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result
 - LogicSigVersion >= 3
 
 ## swap

@@ -131,10 +131,10 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `~` | bitwise invert value X |
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 | `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
-| `getbit` | pop an index A, a target B (integer or byte-array). Pushes the Ath bit of B. |
-| `setbit` | pop a bit A, index B, and target C. Sets the Bth bit of C to A, and push the result |
-| `getbyte` | pop an integer A and byte-array B. Extract the Ath byte of B and push it as an integer |
-| `setbyte` | pop a small integer A (between 0..255), and integer B, and byte-array C. Set the Bth byte of C to A, and push the result |
+| `getbit` | pop a target A (integer or byte-array), and index B. Pushes the Bth bit of A. |
+| `setbit` | pop a target A, index B, and bit C. Sets the Bth bit of A to C, and push the result |
+| `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
+| `setbyte` | pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result |
 | `concat` | pop two byte-arrays A and B and join them, push the result |
 | `substring` | pop a byte-array X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the array length, the program fails |
 | `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
