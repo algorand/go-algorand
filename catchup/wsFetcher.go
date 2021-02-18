@@ -18,6 +18,7 @@ package catchup
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"time"
 
@@ -46,9 +47,6 @@ type WsFetcher struct {
 	clients map[network.Peer]*wsFetcherClient
 	config  *config.Local
 
-	// service
-	service *rpcs.WsFetcherService
-
 	// metadata
 	log logging.Logger
 	mu  deadlock.RWMutex
@@ -57,7 +55,7 @@ type WsFetcher struct {
 // MakeWsFetcher creates a fetcher that fetches over the gossip network.
 // It instantiates a NetworkFetcher under the hood, registers as a handler for the given message tag,
 // and demuxes messages appropriately to the corresponding fetcher clients.
-func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, service *rpcs.WsFetcherService, cfg *config.Local) Fetcher {
+func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, cfg *config.Local) Fetcher {
 	f := &WsFetcher{
 		log:    log,
 		tag:    tag,
@@ -70,7 +68,6 @@ func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, s
 			target:      peer.(network.UnicastPeer),
 			tag:         f.tag,
 			pendingCtxs: make(map[context.Context]context.CancelFunc),
-			service:     service,
 			config:      cfg,
 		}
 		p[i] = fc
@@ -82,7 +79,6 @@ func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, s
 		peers:           p,
 		log:             f.log,
 	}
-	f.service = service
 	return f
 }
 
@@ -110,7 +106,6 @@ func (wsf *WsFetcher) Close() {
 type wsFetcherClient struct {
 	target      network.UnicastPeer                    // the peer where we're going to send the request.
 	tag         protocol.Tag                           // the tag that is associated with the request/
-	service     *rpcs.WsFetcherService                 // the fetcher service. This is where we perform the actual request and waiting for the response.
 	pendingCtxs map[context.Context]context.CancelFunc // a map of all the current pending contexts.
 	config      *config.Local
 
@@ -139,7 +134,7 @@ func (w *wsFetcherClient) GetBlockBytes(ctx context.Context, r basics.Round) ([]
 		delete(w.pendingCtxs, childCtx)
 	}()
 
-	resp, err := w.service.RequestBlock(childCtx, w.target, r, w.tag)
+	resp, err := w.requestBlock(childCtx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -167,4 +162,46 @@ func (w *wsFetcherClient) Close() error {
 	}
 	w.pendingCtxs = make(map[context.Context]context.CancelFunc)
 	return nil
+}
+
+// requestBlock send a request for block <round> and wait until it receives a response or a context expires.
+func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) (rpcs.WsGetBlockOut, error) {
+	roundBin := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(roundBin, uint64(round))
+	topics := network.Topics{
+		network.MakeTopic(rpcs.RequestDataTypeKey,
+			[]byte(rpcs.BlockAndCertValue)),
+		network.MakeTopic(
+			rpcs.RoundKey,
+			roundBin),
+	}
+	resp, err := w.target.Request(ctx, w.tag, topics)
+	if err != nil {
+		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s).requestBlock(%d): Request failed, %v", w.target.GetAddress(), round, err)
+	}
+
+	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
+		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s).requestBlock(%d): Request failed, %s", w.target.GetAddress(), round, string(errMsg))
+	}
+
+	blk, found := resp.Topics.GetValue(rpcs.BlockDataKey)
+	if !found {
+		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s): request failed: block data not found", w.target.GetAddress())
+	}
+	cert, found := resp.Topics.GetValue(rpcs.CertDataKey)
+	if !found {
+		return rpcs.WsGetBlockOut{}, fmt.Errorf("wsFetcherClient(%s): request failed: cert data not found", w.target.GetAddress())
+	}
+
+	// For backward compatibility, the block and cert are repackaged here.
+	// This can be dropeed once the v1 is dropped.
+	blockCertBytes := protocol.EncodeReflect(rpcs.PreEncodedBlockCert{
+		Block:       blk,
+		Certificate: cert})
+
+	wsBlockOut := rpcs.WsGetBlockOut{
+		Round:      uint64(round),
+		BlockBytes: blockCertBytes,
+	}
+	return wsBlockOut, nil
 }

@@ -22,7 +22,7 @@ LEASE=uImiLf+mqOqs0BFsqIUHBh436N/z964X50e3P9Ii4ac=
 ${gcmd} clerk send -a 100000000 -f ${ACCOUNT} -t ${ACCOUNTB}
 
 # Generate the template
-algotmpl -d ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/ dynamic-fee --amt=1000000 --cls=${ACCOUNTC} --to=${ACCOUNTD} --fv=1 --lv=1001 --lease=${LEASE} > ${TEMPDIR}/dynamic.teal
+algotmpl -d tools/teal/templates/ dynamic-fee --amt=1000000 --cls=${ACCOUNTC} --to=${ACCOUNTD} --fv=1 --lv=1001 --lease=${LEASE} > ${TEMPDIR}/dynamic.teal
 
 #
 # Fee will come from ACCOUNT in the first transaction
