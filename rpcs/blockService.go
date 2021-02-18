@@ -111,7 +111,7 @@ func (bs *BlockService) Start() {
 		bs.net.RegisterHandlers(handlers)
 	}
 	bs.stop = make(chan struct{})
-	go bs.ListenForCatchupReq(bs.catchupReqs, bs.stop)
+	go bs.listenForCatchupReq(bs.catchupReqs, bs.stop)
 }
 
 // Stop servicing catchup requests over ws
@@ -210,13 +210,6 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	}
 }
 
-// WsGetBlockOut is a msgpack message delivered on responding to a block (not rpc-based though)
-type WsGetBlockOut struct {
-	Round      uint64
-	Error      string
-	BlockBytes []byte `json:"blockbytes"`
-}
-
 func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n network.OutgoingMessage) {
 	// don't block - just stick in a slightly buffered channel if possible
 	select {
@@ -227,8 +220,8 @@ func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n n
 	return
 }
 
-// ListenForCatchupReq handles catchup getblock request
-func (bs *BlockService) ListenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
+// listenForCatchupReq handles catchup getblock request
+func (bs *BlockService) listenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
