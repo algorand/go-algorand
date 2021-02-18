@@ -138,6 +138,11 @@ const ConsensusV25 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/bea19289bf41217d2c0af30522fa222ef1366466",
 )
 
+// ConsensusV26 adds support for teal3
+const ConsensusV26 = ConsensusVersion(
+	"to-be-figured-out",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
