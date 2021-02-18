@@ -851,7 +851,7 @@ func makeTestUnicastPeer(gn network.GossipNode, version string, t *testing.T) ne
 // A quick GetBlock over websockets test hitting a mocked websocket server (no actual connection)
 func TestGetBlockWS(t *testing.T) {
 	// test the WS fetcher:
-	// 1. fetcher sends UniCatchupReqTag to http peer
+	// 1. fetcher sends UniEnsBlockReqTag to http peer
 	// 2. peer send message to gossip node
 	// 3. gossip node send message to ledger service
 	// 4. ledger service responds with UniCatchupResTag sending it back to the http peer
@@ -885,7 +885,7 @@ func TestGetBlockWS(t *testing.T) {
 		require.True(t, ok)
 		factory := MakeNetworkFetcherFactory(net, numberOfPeers, &cfg)
 		factory.log = logging.TestingLog(t)
-		fetcher := factory.NewOverGossip(protocol.UniCatchupReqTag)
+		fetcher := factory.NewOverGossip()
 		// we have one peer, the Ws block server
 		require.Equal(t, fetcher.NumPeers(), 1)
 

@@ -60,7 +60,7 @@ func (factory *MockedFetcherFactory) New() Fetcher {
 	return factory.fetcher
 }
 
-func (factory *MockedFetcherFactory) NewOverGossip(tag protocol.Tag) Fetcher {
+func (factory *MockedFetcherFactory) NewOverGossip() Fetcher {
 	return factory.New()
 }
 

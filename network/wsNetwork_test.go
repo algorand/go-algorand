@@ -1425,7 +1425,7 @@ func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
 
 // Set up two nodes, test topics send/recieve is working
 func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
-	var topicMsgReqTag Tag = protocol.UniCatchupReqTag
+	var topicMsgReqTag Tag = protocol.UniEnsBlockReqTag
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.Start()
