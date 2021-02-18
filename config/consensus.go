@@ -887,11 +887,6 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
-	// enable the InitialRewardsRateCalculation fix
-	vFuture.InitialRewardsRateCalculation = true
-	// Enable transaction Merkle tree.
-	vFuture.PaysetCommit = PaysetCommitMerkle
-
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
