@@ -322,7 +322,7 @@ func (s *Service) pipelineCallback(fetcher Fetcher, r basics.Round, thisFetchCom
 
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
 func (s *Service) pipelinedFetch(seedLookback uint64) {
-	fetcher := s.fetcherFactory.NewOverGossip(protocol.UniCatchupReqTag)
+	fetcher := s.fetcherFactory.NewOverGossip()
 	defer fetcher.Close()
 
 	// make sure that we have at least one peer
@@ -557,7 +557,7 @@ func (s *Service) syncCert(cert *PendingUnmatchedCertificate) {
 // TODO this doesn't actually use the digest from cert!
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
-	fetcher := s.latestRoundFetcherFactory.NewOverGossip(protocol.UniEnsBlockReqTag)
+	fetcher := s.latestRoundFetcherFactory.NewOverGossip()
 	defer func() {
 		fetcher.Close()
 	}()
@@ -567,7 +567,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			// refresh peers and try again
 			logging.Base().Warn("fetchRound found no outgoing peers")
 			s.net.RequestConnectOutgoing(true, s.ctx.Done())
-			fetcher = s.latestRoundFetcherFactory.NewOverGossip(protocol.UniEnsBlockReqTag)
+			fetcher = s.latestRoundFetcherFactory.NewOverGossip()
 		}
 		// Ask the fetcher to get the block somehow
 		block, fetchedCert, rpcc, err := s.innerFetch(fetcher, cert.Round)

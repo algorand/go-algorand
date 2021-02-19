@@ -35,7 +35,7 @@ const (
 	ProposalPayloadTag Tag = "PP"
 	TopicMsgRespTag    Tag = "TS"
 	TxnTag             Tag = "TX"
-	UniCatchupReqTag   Tag = "UC"
+	UniCatchupReqTag   Tag = "UC" //Replaced by UniEnsBlockReqTag. Only for backward compatibility.
 	UniEnsBlockReqTag  Tag = "UE"
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
 	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
