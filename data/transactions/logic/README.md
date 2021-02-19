@@ -131,8 +131,8 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `~` | bitwise invert value X |
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 | `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
-| `getbit` | pop a target A (integer or byte-array), and index B. Pushes the Bth bit of A. |
-| `setbit` | pop a target A, index B, and bit C. Sets the Bth bit of A to C, and push the result |
+| `getbit` | pop a target A (integer or byte-array), and index B. Push the Bth bit of A. |
+| `setbit` | pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result |
 | `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
 | `setbyte` | pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result |
 | `concat` | pop two byte-arrays A and B and join them, push the result |

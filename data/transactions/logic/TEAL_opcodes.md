@@ -764,20 +764,20 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Opcode: 0x74
 - Pops: *... stack*, {any A}, {uint64 B}
 - Pushes: uint64
-- pop a target A (integer or byte-array), and index B. Pushes the Bth bit of A.
+- pop a target A (integer or byte-array), and index B. Push the Bth bit of A.
 - LogicSigVersion >= 3
 
-bit indexing begins with low-order bits in integers. Bit 4 is the 1 in int 0x0010. Indexing begins in the first bytes of a byte-string (as seen in getbyte and substring). Bits 0 through 11 are 1 in byte 0xfff000000000
+see explanation of bit ordering in setbit
 
 ## setbit
 
 - Opcode: 0x75
 - Pops: *... stack*, {any A}, {uint64 B}, {uint64 C}
 - Pushes: uint64
-- pop a target A, index B, and bit C. Sets the Bth bit of A to C, and push the result
+- pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result
 - LogicSigVersion >= 3
 
-see explanation of bit ordering in getbit
+bit indexing begins with low-order bits in integers. Setting bit 4 to 1 on the integer 0 yields 16 (`int 0x0010`, or 2^4). Indexing begins in the first bytes of a byte-string (as seen in getbyte and substring). Setting bits 0 through 11 to 1 in a 4 byte-array of 0s yields `byte 0xfff00000`
 
 ## getbyte
 
