@@ -98,9 +98,15 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 		return
 	}
 
+	// Trim size of txLeases map
+	txLeases := make(map[ledgercore.Txlease]basics.Round, len(delta.Txleases))
+	for k, v := range delta.Txleases {
+		txLeases[k] = v
+	}
+
 	t.recent[rnd] = roundTxMembers{
 		txids:    delta.Txids,
-		txleases: delta.Txleases,
+		txleases: txLeases,
 		proto:    config.Consensus[blk.CurrentProtocol],
 	}
 

@@ -92,3 +92,12 @@ func TestAccountDeltas(t *testing.T) {
 	a.Equal(addr1, address)
 	a.Equal(sample1, data)
 }
+
+func BenchmarkMakeStateDelta(b *testing.B) {
+	hint := 23000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		MakeStateDelta(nil, 0, hint)
+	}
+}
