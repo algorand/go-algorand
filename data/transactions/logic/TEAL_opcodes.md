@@ -767,6 +767,8 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - pop a target A (integer or byte-array), and index B. Pushes the Bth bit of A.
 - LogicSigVersion >= 3
 
+bit indexing begins with low-order bits in integers. Bit 4 is the 1 in int 0x0010. Indexing begins in the first bytes of a byte-string (as seen in getbyte and substring). Bits 0 through 11 are 1 in byte 0xfff000000000
+
 ## setbit
 
 - Opcode: 0x75
@@ -774,6 +776,8 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Pushes: uint64
 - pop a target A, index B, and bit C. Sets the Bth bit of A to C, and push the result
 - LogicSigVersion >= 3
+
+see explanation of bit ordering in getbit
 
 ## getbyte
 
@@ -823,7 +827,7 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - push field to the stack from transaction A in the current group
 - LogicSigVersion >= 3
 
-for notes on transaction fields available, see `txn`. If top of stack is _i_, `stxn field` is equivalent to `gtxn _i_ field`.
+for notes on transaction fields available, see `txn`. If top of stack is _i_, `stxn field` is equivalent to `gtxn _i_ field`. stxn exists so that _i_ can be calculated, often based on the index of the current transaction.
 
 ## stxna
 

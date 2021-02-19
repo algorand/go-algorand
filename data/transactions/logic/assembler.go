@@ -301,7 +301,7 @@ func (ops *OpStream) Gtxna(gid, fieldNum uint64, arrayFieldIdx uint64) {
 	ops.tpush(TxnFieldTypes[fieldNum])
 }
 
-// Gtxn writes opcodes for loading a field from the current transaction
+// Stxn writes opcodes for loading a field from the current transaction
 func (ops *OpStream) Stxn(fieldNum uint64) {
 	if fieldNum >= uint64(len(TxnFieldNames)) {
 		ops.errorf("invalid stxn field: %d", fieldNum)
@@ -312,14 +312,14 @@ func (ops *OpStream) Stxn(fieldNum uint64) {
 	ops.tpush(TxnFieldTypes[fieldNum])
 }
 
-// Gtxna writes opcodes for loading an array field from the current transaction
+// Stxna writes opcodes for loading an array field from the current transaction
 func (ops *OpStream) Stxna(fieldNum uint64, arrayFieldIdx uint64) {
 	if fieldNum >= uint64(len(TxnFieldNames)) {
 		ops.errorf("invalid stxna field: %d", fieldNum)
 		fieldNum = 0 // avoid further error in tpush as we forge ahead
 	}
 	if arrayFieldIdx > 255 {
-		ops.errorf("gtxna array index beyond 255: %d", arrayFieldIdx)
+		ops.errorf("stxna array index beyond 255: %d", arrayFieldIdx)
 	}
 	ops.pending.WriteByte(0x82)
 	ops.pending.WriteByte(uint8(fieldNum))
@@ -720,10 +720,10 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found txna field %v in txn op", args[0])
+		return ops.errorf("found array field %v in txn op", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("txn %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	val := fs.field
 	ops.Txn(uint64(val))
@@ -779,10 +779,10 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found gtxna field %v in gtxn op", args[1])
+		return ops.errorf("found array field %v in gtxn op", args[1])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("gtxn %s available in version %d. Missed #pragma version?", args[1], fs.version)
+		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 	val := fs.field
 	ops.Gtxn(gtid, uint64(val))
@@ -840,10 +840,10 @@ func assembleStxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found gtxna field %v in gtxn op", args[0])
+		return ops.errorf("found array field %v in stxn op", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("gtxn %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	val := fs.field
 	ops.Stxn(uint64(val))

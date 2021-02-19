@@ -3902,6 +3902,11 @@ func TestBits(t *testing.T) {
 	testAccepts(t, "byte 0xfffff0; int 21; int 1; setbit; byte 0xfffff4; ==", 3)
 	testAccepts(t, "byte 0xfffff4; int 1; int 0; setbit; byte 0xbffff4; ==", 3)
 	testPanics(t, "byte 0xfffff4; int 24; int 0; setbit; byte 0xbf; ==", 3)
+
+	testAccepts(t, "byte 0x0000; int 3; int 1; setbit; byte 0x1000; ==", 3)
+	testAccepts(t, "byte 0x0000; int 15; int 1; setbit; byte 0x0001; ==", 3)
+	testAccepts(t, "int 0x0000; int 3; int 1; setbit; int 0x0008; ==", 3)
+	testAccepts(t, "int 0x0000; int 12; int 1; setbit; int 0x1000; ==", 3)
 }
 
 func TestBytes(t *testing.T) {
