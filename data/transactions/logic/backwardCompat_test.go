@@ -418,7 +418,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			if _, ok := txnaFieldSpecByField[fs.field]; ok {
 				parts := strings.Split(text, " ")
 				op := parts[0]
-				asmError = fmt.Sprintf("found %sa field %s in %s op", op, field, op)
+				asmError = fmt.Sprintf("found array field %s in %s op", field, op)
 			}
 			// check assembler fails if version before introduction
 			testLine(t, text, assemblerNoVersion, asmError)

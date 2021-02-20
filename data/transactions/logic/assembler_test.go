@@ -412,11 +412,11 @@ func TestAssembleTxna(t *testing.T) {
 	testLine(t, "txn ABC", 2, "txn unknown field: ABC")
 	testLine(t, "gtxn 0 ABC", 2, "gtxn unknown field: ABC")
 	testLine(t, "gtxn a ABC", 2, "strconv.ParseUint...")
-	testLine(t, "txn Accounts", AssemblerMaxVersion, "found txna field Accounts in txn op")
-	testLine(t, "txn Accounts", 1, "found txna field Accounts in txn op")
+	testLine(t, "txn Accounts", AssemblerMaxVersion, "found array field Accounts in txn op")
+	testLine(t, "txn Accounts", 1, "found array field Accounts in txn op")
 	testLine(t, "txn Accounts 0", AssemblerMaxVersion, "")
-	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "found gtxna field Accounts in gtxn op")
-	testLine(t, "gtxn 0 Accounts", 1, "found gtxna field Accounts in gtxn op")
+	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "found array field Accounts in gtxn op")
+	testLine(t, "gtxn 0 Accounts", 1, "found array field Accounts in gtxn op")
 	testLine(t, "gtxn 0 Accounts 1", AssemblerMaxVersion, "")
 }
 
