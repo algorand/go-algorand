@@ -307,7 +307,7 @@ func (ops *OpStream) Stxn(fieldNum uint64) {
 		ops.errorf("invalid stxn field: %d", fieldNum)
 		fieldNum = 0 // avoid further error in tpush as we forge ahead
 	}
-	ops.pending.WriteByte(0x81)
+	ops.pending.WriteByte(0x38)
 	ops.pending.WriteByte(uint8(fieldNum))
 	ops.tpush(TxnFieldTypes[fieldNum])
 }
@@ -321,7 +321,7 @@ func (ops *OpStream) Stxna(fieldNum uint64, arrayFieldIdx uint64) {
 	if arrayFieldIdx > 255 {
 		ops.errorf("stxna array index beyond 255: %d", arrayFieldIdx)
 	}
-	ops.pending.WriteByte(0x82)
+	ops.pending.WriteByte(0x39)
 	ops.pending.WriteByte(uint8(fieldNum))
 	ops.pending.WriteByte(uint8(arrayFieldIdx))
 	ops.tpush(TxnFieldTypes[fieldNum])

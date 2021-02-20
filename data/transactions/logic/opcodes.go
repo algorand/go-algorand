@@ -142,18 +142,31 @@ var OpSpecs = []OpSpec{
 	{0x35, "store", opStore, asmDefault, disDefault, oneAny, nil, 1, modeAny, opSize{1, 2, nil}},
 	{0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},
 	{0x37, "gtxna", opGtxna, assembleGtxna, disGtxna, nil, oneAny, 2, modeAny, opSize{1, 4, nil}},
+	// Like gtxn, but gets txn index from stack, rather than immediate arg
+	{0x38, "stxn", opStxn, assembleStxn, disTxn, oneInt, oneAny, 3, modeAny, opSize{1, 2, nil}},
+	{0x39, "stxna", opStxna, assembleStxna, disTxna, oneInt, oneAny, 3, modeAny, opSize{1, 3, nil}},
 
 	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opSize{1, 3, checkBranch}},
 	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opSize{1, 3, checkBranch}},
 	{0x42, "b", opB, assembleBranch, disBranch, nil, nil, 2, modeAny, opSize{1, 3, checkBranch}},
 	{0x43, "return", opReturn, asmDefault, disDefault, oneInt, nil, 2, modeAny, opSizeDefault},
+	{0x44, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opSizeDefault},
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opSizeDefault},
 	{0x49, "dup", opDup, asmDefault, disDefault, oneAny, twoAny, 1, modeAny, opSizeDefault},
 	{0x4a, "dup2", opDup2, asmDefault, disDefault, twoAny, twoAny.plus(twoAny), 2, modeAny, opSizeDefault},
+	// There must be at least one thing on the stack for dig, but
+	// it would be nice if we did better checking than that.
+	{0x4b, "dig", opDig, asmDefault, disDefault, oneAny, twoAny, 3, modeAny, opSize{1, 2, nil}},
+	{0x4c, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, opSizeDefault},
+	{0x4d, "select", opSelect, asmDefault, disDefault, twoAny.plus(oneInt), oneAny, 3, modeAny, opSizeDefault},
 
 	{0x50, "concat", opConcat, asmDefault, disDefault, twoBytes, oneBytes, 2, modeAny, opSizeDefault},
 	{0x51, "substring", opSubstring, assembleSubstring, disDefault, oneBytes, oneBytes, 2, modeAny, opSize{1, 3, nil}},
 	{0x52, "substring3", opSubstring3, asmDefault, disDefault, byteIntInt, oneBytes, 2, modeAny, opSizeDefault},
+	{0x53, "getbit", opGetBit, asmDefault, disDefault, anyInt, oneInt, 3, modeAny, opSizeDefault},
+	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneInt, 3, modeAny, opSizeDefault},
+	{0x55, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opSizeDefault},
+	{0x56, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opSizeDefault},
 
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opSizeDefault},
 	{0x61, "app_opted_in", opAppCheckOptedIn, asmDefault, disDefault, twoInts, oneInt, 2, runModeApplication, opSizeDefault},
@@ -169,27 +182,11 @@ var OpSpecs = []OpSpec{
 	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, opSize{1, 2, nil}},
 	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, opSize{1, 2, nil}},
 
-	{0x72, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opSizeDefault},
-	{0x73, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opSizeDefault},
-
-	{0x74, "getbit", opGetBit, asmDefault, disDefault, anyInt, oneInt, 3, modeAny, opSizeDefault},
-	{0x75, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneInt, 3, modeAny, opSizeDefault},
-	{0x76, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opSizeDefault},
-	{0x77, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opSizeDefault},
-	{0x78, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, opSizeDefault},
-	{0x79, "select", opSelect, asmDefault, disDefault, twoAny.plus(oneInt), oneAny, 3, modeAny, opSizeDefault},
-
-	// There must be at least one thing on the stack for dig, but
-	// it would be nice if we did better checking than that.
-	{0x80, "dig", opDig, asmDefault, disDefault, oneAny, twoAny, 3, modeAny, opSize{1, 2, nil}},
-
-	// Like gtxn, but gets txn index from stack, rather than immediate arg
-	{0x81, "stxn", opStxn, assembleStxn, disTxn, oneInt, oneAny, 3, modeAny, opSize{1, 2, nil}},
-	{0x82, "stxna", opStxna, assembleStxna, disTxna, oneInt, oneAny, 3, modeAny, opSize{1, 3, nil}},
+	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opSizeDefault},
 
 	// Immediate bytes and ints. Smaller code size for single use of constant.
-	{0x83, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, opSize{1, 0, checkPushBytes}},
-	{0x84, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, opSize{1, 0, checkPushInt}},
+	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, opSize{1, 0, checkPushBytes}},
+	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, opSize{1, 0, checkPushInt}},
 }
 
 type sortByOpcode []OpSpec
