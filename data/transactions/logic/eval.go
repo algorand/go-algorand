@@ -563,16 +563,16 @@ func (cx *evalContext) step() {
 	}
 
 	deets := spec.Details
-	if deets.size != 0 && (cx.pc+deets.size > len(cx.program)) {
+	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return
 	}
-	cx.cost += deets.cost
+	cx.cost += deets.Cost
 	spec.op(cx)
 	if cx.Trace != nil {
 		immArgsString := " "
 		if spec.Name != "bnz" {
-			for i := 1; i < spec.Details.size; i++ {
+			for i := 1; i < spec.Details.Size; i++ {
 				immArgsString += fmt.Sprintf("0x%02x ", cx.program[cx.pc+i])
 			}
 		}
@@ -610,7 +610,7 @@ func (cx *evalContext) step() {
 		cx.pc = cx.nextpc
 		cx.nextpc = 0
 	} else {
-		cx.pc += deets.size
+		cx.pc += deets.Size
 	}
 }
 
@@ -626,7 +626,7 @@ func (cx *evalContext) checkStep() (cost int) {
 		return
 	}
 	deets := spec.Details
-	if deets.size != 0 && (cx.pc+deets.size > len(cx.program)) {
+	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return 1
 	}
@@ -637,11 +637,11 @@ func (cx *evalContext) checkStep() (cost int) {
 			cx.pc = cx.nextpc
 			cx.nextpc = 0
 		} else {
-			cx.pc += deets.size
+			cx.pc += deets.Size
 		}
 	} else {
-		cost = deets.cost
-		cx.pc += deets.size
+		cost = deets.Cost
+		cx.pc += deets.Size
 	}
 	if cx.Trace != nil {
 		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)

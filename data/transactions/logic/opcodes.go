@@ -36,22 +36,19 @@ const appsEnabledVersion = 2
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
 type opDetails struct {
-	cost       int
-	size       int
+	Cost       int
+	Size       int
 	checkFunc  opCheckFunc
 	Immediates []immediate
 }
 
 var opDefault = opDetails{1, 1, nil, nil}
+var opBranch = opDetails{1, 3, checkBranch, []immediate{{"target", immLabel}}}
 
-// convenience for single-byte opcodes with a non-1 cost
 func costly(cost int) opDetails {
 	return opDetails{cost, 1, nil, nil}
 }
 
-func opImmediates(immediates []immediate) opDetails {
-	return opDetails{1, len(immediates) + 1, nil, immediates}
-}
 func immediates(name string, rest ...string) opDetails {
 	num := 1 + len(rest)
 	immediates := make([]immediate, num, len(rest)+1)
@@ -62,16 +59,21 @@ func immediates(name string, rest ...string) opDetails {
 	return opDetails{1, 1 + num, nil, immediates}
 }
 
-func checked(size int, checker opCheckFunc) opDetails {
-	return opDetails{1, size, checker, nil}
+func varies(checker opCheckFunc, name string, kind immKind) opDetails {
+	return opDetails{1, 0, checker, []immediate{{name, kind}}}
 }
 
 // immType describes the immediate arguments to an opcode
 type immKind byte
 
-const immByte immKind = 0
-const immLabel immKind = 1
-const immVaruint immKind = 2
+const (
+	immByte immKind = iota
+	immLabel
+	immInt
+	immBytes
+	immInts
+	immBytess		// "ss" not a typo.  Multiple "bytes"
+)
 
 type immediate struct {
 	Name string
@@ -149,13 +151,13 @@ var OpSpecs = []OpSpec{
 	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opDefault},
 	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opDefault},
 
-	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, checked(0, checkIntConstBlock)},
+	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, varies(checkIntConstBlock, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, assembleIntC, disDefault, nil, oneInt, 1, modeAny, immediates("i")},
 	{0x22, "intc_0", opIntConst0, asmDefault, disDefault, nil, oneInt, 1, modeAny, opDefault},
 	{0x23, "intc_1", opIntConst1, asmDefault, disDefault, nil, oneInt, 1, modeAny, opDefault},
 	{0x24, "intc_2", opIntConst2, asmDefault, disDefault, nil, oneInt, 1, modeAny, opDefault},
 	{0x25, "intc_3", opIntConst3, asmDefault, disDefault, nil, oneInt, 1, modeAny, opDefault},
-	{0x26, "bytecblock", opByteConstBlock, assembleByteCBlock, disBytecblock, nil, nil, 1, modeAny, checked(0, checkByteConstBlock)},
+	{0x26, "bytecblock", opByteConstBlock, assembleByteCBlock, disBytecblock, nil, nil, 1, modeAny, varies(checkByteConstBlock, "bytes ...", immBytess)},
 	{0x27, "bytec", opByteConstLoad, assembleByteC, disDefault, nil, oneBytes, 1, modeAny, immediates("i")},
 	{0x28, "bytec_0", opByteConst0, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opDefault},
 	{0x29, "bytec_1", opByteConst1, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opDefault},
@@ -166,25 +168,25 @@ var OpSpecs = []OpSpec{
 	{0x2e, "arg_1", opArg1, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opDefault},
 	{0x2f, "arg_2", opArg2, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opDefault},
 	{0x30, "arg_3", opArg3, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opDefault},
-	{0x31, "txn", opTxn, assembleTxn, disTxn, nil, oneAny, 1, modeAny, immediates("field")},
+	{0x31, "txn", opTxn, assembleTxn, disTxn, nil, oneAny, 1, modeAny, immediates("f")},
 	// It is ok to have the same opcode for different TEAL versions.
 	// This 'txn' asm command supports additional argument in version 2 and
 	// generates 'txna' opcode in that particular case
-	{0x31, "txn", opTxn, assembleTxn2, disTxn, nil, oneAny, 2, modeAny, immediates("field")},
-	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, immediates("field")},
-	{0x33, "gtxn", opGtxn, assembleGtxn, disGtxn, nil, oneAny, 1, modeAny, immediates("t", "field")},
-	{0x33, "gtxn", opGtxn, assembleGtxn2, disGtxn, nil, oneAny, 2, modeAny, immediates("t", "field")},
+	{0x31, "txn", opTxn, assembleTxn2, disTxn, nil, oneAny, 2, modeAny, immediates("f")},
+	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, immediates("f")},
+	{0x33, "gtxn", opGtxn, assembleGtxn, disGtxn, nil, oneAny, 1, modeAny, immediates("t", "f")},
+	{0x33, "gtxn", opGtxn, assembleGtxn2, disGtxn, nil, oneAny, 2, modeAny, immediates("t", "f")},
 	{0x34, "load", opLoad, asmDefault, disDefault, nil, oneAny, 1, modeAny, immediates("i")},
 	{0x35, "store", opStore, asmDefault, disDefault, oneAny, nil, 1, modeAny, immediates("i")},
-	{0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, immediates("field", "i")},
-	{0x37, "gtxna", opGtxna, assembleGtxna, disGtxna, nil, oneAny, 2, modeAny, immediates("t", "field", "i")},
+	{0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, immediates("f", "i")},
+	{0x37, "gtxna", opGtxna, assembleGtxna, disGtxna, nil, oneAny, 2, modeAny, immediates("t", "f", "i")},
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
-	{0x38, "stxn", opStxn, assembleStxn, disTxn, oneInt, oneAny, 3, modeAny, immediates("field")},
-	{0x39, "stxna", opStxna, assembleStxna, disTxna, oneInt, oneAny, 3, modeAny, immediates("field", "i")},
+	{0x38, "stxn", opStxn, assembleStxn, disTxn, oneInt, oneAny, 3, modeAny, immediates("f")},
+	{0x39, "stxna", opStxna, assembleStxna, disTxna, oneInt, oneAny, 3, modeAny, immediates("f", "i")},
 
-	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, checked(3, checkBranch)},
-	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, checked(3, checkBranch)},
-	{0x42, "b", opB, assembleBranch, disBranch, nil, nil, 2, modeAny, checked(3, checkBranch)},
+	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opBranch},
+	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opBranch},
+	{0x42, "b", opB, assembleBranch, disBranch, nil, nil, 2, modeAny, opBranch},
 	{0x43, "return", opReturn, asmDefault, disDefault, oneInt, nil, 2, modeAny, opDefault},
 	{0x44, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 3, modeAny, opDefault},
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opDefault},
@@ -197,7 +199,7 @@ var OpSpecs = []OpSpec{
 	{0x4d, "select", opSelect, asmDefault, disDefault, twoAny.plus(oneInt), oneAny, 3, modeAny, opDefault},
 
 	{0x50, "concat", opConcat, asmDefault, disDefault, twoBytes, oneBytes, 2, modeAny, opDefault},
-	{0x51, "substring", opSubstring, assembleSubstring, disDefault, oneBytes, oneBytes, 2, modeAny, immediates("m", "n")},
+	{0x51, "substring", opSubstring, assembleSubstring, disDefault, oneBytes, oneBytes, 2, modeAny, immediates("s", "e")},
 	{0x52, "substring3", opSubstring3, asmDefault, disDefault, byteIntInt, oneBytes, 2, modeAny, opDefault},
 	{0x53, "getbit", opGetBit, asmDefault, disDefault, anyInt, oneInt, 3, modeAny, opDefault},
 	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneInt, 3, modeAny, opDefault},
@@ -221,8 +223,8 @@ var OpSpecs = []OpSpec{
 	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opDefault},
 
 	// Immediate bytes and ints. Smaller code size for single use of constant.
-	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, checked(0, checkPushBytes)},
-	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, checked(0, checkPushInt)},
+	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, varies(checkPushBytes, "bytes", immBytes)},
+	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, varies(checkPushInt, "uint", immInt)},
 }
 
 type sortByOpcode []OpSpec
@@ -279,7 +281,7 @@ func OpcodesByVersion(version uint64) []OpSpec {
 
 // direct opcode bytes
 var opsByOpcode [LogicVersion + 1][256]OpSpec
-var opsByName [LogicVersion + 1]map[string]OpSpec
+var OpsByName [LogicVersion + 1]map[string]OpSpec
 
 // Migration from TEAL v1 to TEAL v2.
 // TEAL v1 allowed execution of program with version 0.
@@ -290,27 +292,27 @@ var opsByName [LogicVersion + 1]map[string]OpSpec
 func init() {
 	// First, initialize baseline v1 opcodes.
 	// Zero (empty) version is an alias for TEAL v1 opcodes and needed for compatibility with v1 code.
-	opsByName[0] = make(map[string]OpSpec, 256)
-	opsByName[1] = make(map[string]OpSpec, 256)
+	OpsByName[0] = make(map[string]OpSpec, 256)
+	OpsByName[1] = make(map[string]OpSpec, 256)
 	for _, oi := range OpSpecs {
 		if oi.Version == 1 {
 			cp := oi
 			cp.Version = 0
 			opsByOpcode[0][oi.Opcode] = cp
-			opsByName[0][oi.Name] = cp
+			OpsByName[0][oi.Name] = cp
 
 			opsByOpcode[1][oi.Opcode] = oi
-			opsByName[1][oi.Name] = oi
+			OpsByName[1][oi.Name] = oi
 		}
 	}
 	// Start from v2 TEAL and higher,
 	// copy lower version opcodes and overwrite matching version
 	for v := uint64(2); v <= EvalMaxVersion; v++ {
-		opsByName[v] = make(map[string]OpSpec, 256)
+		OpsByName[v] = make(map[string]OpSpec, 256)
 
 		// Copy opcodes from lower version
-		for opName, oi := range opsByName[v-1] {
-			opsByName[v][opName] = oi
+		for opName, oi := range OpsByName[v-1] {
+			OpsByName[v][opName] = oi
 		}
 		for op, oi := range opsByOpcode[v-1] {
 			opsByOpcode[v][op] = oi
@@ -320,7 +322,7 @@ func init() {
 		for _, oi := range OpSpecs {
 			if oi.Version == v {
 				opsByOpcode[v][oi.Opcode] = oi
-				opsByName[v][oi.Name] = oi
+				OpsByName[v][oi.Name] = oi
 			}
 		}
 	}

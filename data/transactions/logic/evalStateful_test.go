@@ -1327,7 +1327,7 @@ int 1
 	require.True(t, pass)
 
 	// check holdings invalid offsets
-	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
+	require.Equal(t, OpsByName[ep.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
 	ops.Program[9] = 0x02
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
@@ -1354,7 +1354,7 @@ int 1
 	require.NoError(t, err)
 	require.True(t, pass)
 	// check holdings invalid offsets
-	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
+	require.Equal(t, OpsByName[ep.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
 	ops.Program[7] = 0x20
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
@@ -1502,8 +1502,8 @@ int 100
 			ep.Ledger = ledger
 
 			saved := ops.Program[firstCmdOffset]
-			require.Equal(t, opsByName[0]["intc_0"].Opcode, saved)
-			ops.Program[firstCmdOffset] = opsByName[0]["intc_1"].Opcode
+			require.Equal(t, OpsByName[0]["intc_0"].Opcode, saved)
+			ops.Program[firstCmdOffset] = OpsByName[0]["intc_1"].Opcode
 			_, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "cannot load account[100]")
@@ -2736,7 +2736,7 @@ func TestReturnTypes(t *testing.T) {
 		"pushbytes":         `pushbytes "jojogoodgorilla"`,
 	}
 
-	byName := opsByName[LogicVersion]
+	byName := OpsByName[LogicVersion]
 	for _, m := range []runMode{runModeSignature, runModeApplication} {
 		t.Run(fmt.Sprintf("m=%s", m.String()), func(t *testing.T) {
 			for name, spec := range byName {

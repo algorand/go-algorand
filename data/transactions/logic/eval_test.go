@@ -837,8 +837,8 @@ func TestTxnBadField(t *testing.T) {
 	isNotPanic(t, err)
 
 	// test txn does not accept ApplicationArgs and Accounts
-	txnOpcode := opsByName[LogicVersion]["txn"].Opcode
-	txnaOpcode := opsByName[LogicVersion]["txna"].Opcode
+	txnOpcode := OpsByName[LogicVersion]["txn"].Opcode
+	txnaOpcode := OpsByName[LogicVersion]["txna"].Opcode
 
 	fields := []TxnField{ApplicationArgs, Accounts}
 	for _, field := range fields {
@@ -902,8 +902,8 @@ func TestGtxnBadField(t *testing.T) {
 	isNotPanic(t, err)
 
 	// test gtxn does not accept ApplicationArgs and Accounts
-	txnOpcode := opsByName[LogicVersion]["txn"].Opcode
-	txnaOpcode := opsByName[LogicVersion]["txna"].Opcode
+	txnOpcode := OpsByName[LogicVersion]["txn"].Opcode
+	txnaOpcode := OpsByName[LogicVersion]["txna"].Opcode
 
 	fields := []TxnField{ApplicationArgs, Accounts}
 	for _, field := range fields {
@@ -3403,7 +3403,7 @@ intc_0
 
 	ep := defaultEvalParams(nil, nil)
 
-	origSpec := opsByName[LogicVersion]["+"]
+	origSpec := OpsByName[LogicVersion]["+"]
 	spec := origSpec
 	defer func() {
 		// restore, opsByOpcode is global

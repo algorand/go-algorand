@@ -65,37 +65,37 @@ var opDocList = []stringString{
 	{"~", "bitwise invert value X"},
 	{"mulw", "A times B out to 128-bit long result as low (top) and high uint64 values on the stack"},
 	{"addw", "A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack"},
-	{"intcblock", "load block of uint64 constants"},
-	{"intc", "push value from uint64 constants to stack by index into constants"},
+	{"intcblock", "prepare block of uint64 constants for use by intc"},
+	{"intc", "push Ith constant from intcblock to stack"},
 	{"intc_0", "push constant 0 from intcblock to stack"},
 	{"intc_1", "push constant 1 from intcblock to stack"},
 	{"intc_2", "push constant 2 from intcblock to stack"},
 	{"intc_3", "push constant 3 from intcblock to stack"},
-	{"pushint", "push the following varuint encoded bytes to the stack as an integer"},
-	{"bytecblock", "load block of byte-array constants"},
-	{"bytec", "push bytes constant to stack by index into constants"},
+	{"pushint", "push immediate UINT to the stack as an integer"},
+	{"bytecblock", "prepare block of byte-array constants for use by bytec"},
+	{"bytec", "push Ith constant from bytecblock to stack"},
 	{"bytec_0", "push constant 0 from bytecblock to stack"},
 	{"bytec_1", "push constant 1 from bytecblock to stack"},
 	{"bytec_2", "push constant 2 from bytecblock to stack"},
 	{"bytec_3", "push constant 3 from bytecblock to stack"},
 	{"pushbytes", "push the following program bytes to the stack"},
-	{"arg", "push Args[N] value to stack by index"},
-	{"arg_0", "push Args[0] to stack"},
-	{"arg_1", "push Args[1] to stack"},
-	{"arg_2", "push Args[2] to stack"},
-	{"arg_3", "push Args[3] to stack"},
-	{"txn", "push field from current transaction to stack"},
-	{"gtxn", "push field to the stack from transaction index T in the current group"},
-	{"stxn", "push field to the stack from transaction index A (top-of-stack) in the current group"},
-	{"txna", "push value from an array field from current transaction to stack"},
-	{"gtxna", "push value from an array field from a transaction index T in the current transaction group"},
-	{"stxna", "push value from an array field from transaction index A (top-of-stack) in the current group"},
+	{"arg", "push Nth LogicSig argument to stack"},
+	{"arg_0", "push LogicSig argument 0 to stack"},
+	{"arg_1", "push LogicSig argument 1 to stack"},
+	{"arg_2", "push LogicSig argument 2 to stack"},
+	{"arg_3", "push LogicSig argument 3 to stack"},
+	{"txn", "push field F of current transaction to stack"},
+	{"gtxn", "push field F of the Tth transaction in the current group"},
+	{"stxn", "push field F of the Ath transaction in the current group"},
+	{"txna", "push Ith value of the array field F of the current transaction"},
+	{"gtxna", "push Ith value of the array field F from the Tth transaction in the current group"},
+	{"stxna", "push Ith value of the array field F from the Ath transaction in the current group"},
 	{"global", "push value from globals to stack"},
 	{"load", "copy a value from scratch space to the stack"},
 	{"store", "pop a value from the stack and store to scratch space"},
-	{"bnz", "branch if value X is not zero"},
-	{"bz", "branch if value X is zero"},
-	{"b", "branch unconditionally to offset"},
+	{"bnz", "branch to TARGET if value X is not zero"},
+	{"bz", "branch to TARGET if value X is zero"},
+	{"b", "branch unconditionally to TARGET"},
 	{"return", "use last value on stack as success value; end"},
 	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
@@ -104,7 +104,7 @@ var opDocList = []stringString{
 	{"swap", "swaps two last values on stack: A, B -> B, A"},
 	{"select", "selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)"},
 	{"concat", "pop two byte-arrays A and B and join them, push the result"},
-	{"substring", "pop a byte-array X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the array length, the program fails"},
+	{"substring", "pop a byte-array X. For immediate values in 0..255 S and E: extract a range of bytes from it starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails"},
 	{"substring3", "pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails"},
 	{"getbit", "pop a target A (integer or byte-array), and index B. Push the Bth bit of A."},
 	{"setbit", "pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result"},
@@ -226,20 +226,15 @@ var OpGroupList = []OpGroup{
 	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 
-// OpCost returns the relative cost score for an op
-func OpCost(opName string) int {
-	return opsByName[LogicVersion][opName].Details.cost
-}
-
 // OpAllCosts returns an array of the relative cost score for an op by version.
 // If all the costs are the same the array is single entry
 // otherwise it has costs by op version
 func OpAllCosts(opName string) []int {
-	cost := opsByName[LogicVersion][opName].Details.cost
+	cost := OpsByName[LogicVersion][opName].Details.Cost
 	costs := make([]int, LogicVersion+1)
 	isDifferent := false
 	for v := 1; v <= LogicVersion; v++ {
-		costs[v] = opsByName[v][opName].Details.cost
+		costs[v] = OpsByName[v][opName].Details.Cost
 		if costs[v] > 0 && costs[v] != cost {
 			isDifferent = true
 		}
@@ -249,11 +244,6 @@ func OpAllCosts(opName string) []int {
 	}
 
 	return costs
-}
-
-// OpSize returns the number of bytes for an op. 0 for variable.
-func OpSize(opName string) int {
-	return opsByName[LogicVersion][opName].Details.size
 }
 
 // see assembler.go TxnTypeNames

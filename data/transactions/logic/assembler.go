@@ -341,7 +341,7 @@ func (ops *OpStream) AssetHolding(val uint64) {
 		ops.errorf("invalid asset holding field: %d", val)
 		val = 0 // avoid further error in tpush as we forge ahead
 	}
-	ops.pending.WriteByte(opsByName[ops.Version]["asset_holding_get"].Opcode)
+	ops.pending.WriteByte(OpsByName[ops.Version]["asset_holding_get"].Opcode)
 	ops.pending.WriteByte(uint8(val))
 	ops.tpush(AssetHoldingFieldTypes[val])
 	ops.tpush(StackUint64)
@@ -353,7 +353,7 @@ func (ops *OpStream) AssetParams(val uint64) {
 		ops.errorf("invalid asset params field: %d", val)
 		val = 0 // avoid further error in tpush as we forge ahead
 	}
-	ops.pending.WriteByte(opsByName[ops.Version]["asset_params_get"].Opcode)
+	ops.pending.WriteByte(OpsByName[ops.Version]["asset_params_get"].Opcode)
 	ops.pending.WriteByte(uint8(val))
 	ops.tpush(AssetParamsFieldTypes[val])
 	ops.tpush(StackUint64)
@@ -924,11 +924,11 @@ type assembleFunc func(*OpStream, *OpSpec, []string) error
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.checkArgs(*spec)
-	if len(args) != spec.Details.size-1 {
-		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.size)
+	if len(args) != spec.Details.Size-1 {
+		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.Size)
 	}
 	ops.pending.WriteByte(spec.Opcode)
-	for i := 0; i < spec.Details.size-1; i++ {
+	for i := 0; i < spec.Details.Size-1; i++ {
 		val, err := strconv.ParseUint(args[i], 0, 64)
 		if err != nil {
 			return ops.error(err)
@@ -1126,7 +1126,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			ops.Version = AssemblerDefaultVersion
 		}
 		opstring := fields[0]
-		spec, ok := opsByName[ops.Version][opstring]
+		spec, ok := OpsByName[ops.Version][opstring]
 		if !ok {
 			spec, ok = keywords[opstring]
 		}
@@ -1142,7 +1142,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			continue
 		}
 		// unknown opcode, let's report a good error if version problem
-		spec, ok = opsByName[AssemblerMaxVersion][opstring]
+		spec, ok = OpsByName[AssemblerMaxVersion][opstring]
 		if ok {
 			ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
 		} else {
@@ -1407,18 +1407,18 @@ type disassembleFunc func(dis *disassembleState, spec *OpSpec)
 
 // Basic disasemble, and extra bytes of opcode are decoded as bytes integers.
 func disDefault(dis *disassembleState, spec *OpSpec) {
-	lastIdx := dis.pc + spec.Details.size - 1
+	lastIdx := dis.pc + spec.Details.Size - 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
 		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 		return
 	}
-	dis.nextpc = dis.pc + spec.Details.size
+	dis.nextpc = dis.pc + spec.Details.Size
 	_, dis.err = fmt.Fprintf(dis.out, "%s", spec.Name)
 	if dis.err != nil {
 		return
 	}
-	for s := 1; s < spec.Details.size; s++ {
+	for s := 1; s < spec.Details.Size; s++ {
 		b := uint(dis.program[dis.pc+s])
 		_, dis.err = fmt.Fprintf(dis.out, " %d", b)
 		if dis.err != nil {
