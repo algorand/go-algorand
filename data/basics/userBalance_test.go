@@ -203,8 +203,8 @@ func TestEncodedAccountAllocationBounds(t *testing.T) {
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds
 	for protoVer, proto := range config.Consensus {
-		if proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
-			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
+		if proto.MaxAssetsPerAccount > EncodedMaxAssetsPerAccount {
+			require.Failf(t, "proto.MaxAssetsPerAccount > EncodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
 		}
 		if proto.MaxAppsCreated > EncodedMaxAppParams {
 			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
