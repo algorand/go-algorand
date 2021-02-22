@@ -28,7 +28,7 @@ func TestOpSpecs(t *testing.T) {
 	t.Parallel()
 
 	for _, spec := range OpSpecs {
-		require.NotEmpty(t, spec.opSize, spec)
+		require.NotEmpty(t, spec.Details, spec)
 	}
 }
 
@@ -159,8 +159,8 @@ func TestOpcodesVersioningV2(t *testing.T) {
 			reflect.ValueOf(a.dis).Pointer() == reflect.ValueOf(b.dis).Pointer() &&
 			reflect.DeepEqual(a.Args, b.Args) && reflect.DeepEqual(a.Returns, b.Returns) &&
 			a.Modes == b.Modes &&
-			a.opSize.cost == b.opSize.cost && a.opSize.size == b.opSize.size &&
-			reflect.ValueOf(a.opSize.checkFunc).Pointer() == reflect.ValueOf(b.opSize.checkFunc).Pointer()
+			a.Details.cost == b.Details.cost && a.Details.size == b.Details.size &&
+			reflect.ValueOf(a.Details.checkFunc).Pointer() == reflect.ValueOf(b.Details.checkFunc).Pointer()
 		return
 	}
 	// ensure v0 and v1 are the same

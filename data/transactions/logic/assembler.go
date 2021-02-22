@@ -924,11 +924,11 @@ type assembleFunc func(*OpStream, *OpSpec, []string) error
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.checkArgs(*spec)
-	if len(args) != spec.opSize.size-1 {
-		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.opSize.size)
+	if len(args) != spec.Details.size-1 {
+		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.size)
 	}
 	ops.pending.WriteByte(spec.Opcode)
-	for i := 0; i < spec.opSize.size-1; i++ {
+	for i := 0; i < spec.Details.size-1; i++ {
 		val, err := strconv.ParseUint(args[i], 0, 64)
 		if err != nil {
 			return ops.error(err)
@@ -944,10 +944,10 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 // keywords handle parsing and assembling special asm language constructs like 'addr'
 // We use OpSpec here, but somewhat degenerate, since they don't have opcodes or eval functions
 var keywords = map[string]OpSpec{
-	"int":  {0, "int", nil, assembleInt, nil, nil, oneInt, 1, modeAny, opSize{1, 2, nil}},
-	"byte": {0, "byte", nil, assembleByte, nil, nil, oneBytes, 1, modeAny, opSize{1, 2, nil}},
+	"int":  {0, "int", nil, assembleInt, nil, nil, oneInt, 1, modeAny, opDetails{1, 2, nil, nil}},
+	"byte": {0, "byte", nil, assembleByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opSize{1, 2, nil}},
+	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
 }
 
 type lineError struct {
@@ -1407,18 +1407,18 @@ type disassembleFunc func(dis *disassembleState, spec *OpSpec)
 
 // Basic disasemble, and extra bytes of opcode are decoded as bytes integers.
 func disDefault(dis *disassembleState, spec *OpSpec) {
-	lastIdx := dis.pc + spec.opSize.size - 1
+	lastIdx := dis.pc + spec.Details.size - 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
 		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 		return
 	}
-	dis.nextpc = dis.pc + spec.opSize.size
+	dis.nextpc = dis.pc + spec.Details.size
 	_, dis.err = fmt.Fprintf(dis.out, "%s", spec.Name)
 	if dis.err != nil {
 		return
 	}
-	for s := 1; s < spec.opSize.size; s++ {
+	for s := 1; s < spec.Details.size; s++ {
 		b := uint(dis.program[dis.pc+s])
 		_, dis.err = fmt.Fprintf(dis.out, " %d", b)
 		if dis.err != nil {

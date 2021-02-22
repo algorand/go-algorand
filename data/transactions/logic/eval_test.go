@@ -2640,7 +2640,7 @@ func TestPanic(t *testing.T) {
 					oldSpec = spec
 					opsByOpcode[v][opcode].op = opPanic
 					opsByOpcode[v][opcode].Modes = modeAny
-					opsByOpcode[v][opcode].opSize.checkFunc = checkPanic
+					opsByOpcode[v][opcode].Details.checkFunc = checkPanic
 					ops.Program = append(ops.Program, byte(opcode))
 					break
 				}

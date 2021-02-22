@@ -100,8 +100,6 @@ For one-argument ops, `X` is the last element on the stack, which is typically r
 
 For two-argument ops, `A` is the previous element on the stack and `B` is the last element on the stack. These typically result in popping A and B from the stack and pushing the result.
 
-`ed25519verify` is currently the only 3 argument opcode and is described in detail in the opcode refrence.
-
 | Op | Description |
 | --- | --- |
 | `sha256` | SHA256 hash of value X, yields [32]byte |
@@ -167,11 +165,11 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `arg_2` | push Args[2] to stack |
 | `arg_3` | push Args[3] to stack |
 | `txn` | push field from current transaction to stack |
-| `gtxn` | push field to the stack from a transaction in the current transaction group |
+| `gtxn` | push field to the stack from transaction index T in the current group |
 | `txna` | push value from an array field from current transaction to stack |
-| `gtxna` | push value from an array field from a transaction in the current transaction group |
-| `stxn` | push field to the stack from transaction A in the current group |
-| `stxna` | push value from an array field from transaction A in the current group |
+| `gtxna` | push value from an array field from a transaction index T in the current transaction group |
+| `stxn` | push field to the stack from transaction index A (top-of-stack) in the current group |
+| `stxna` | push value from an array field from transaction index A (top-of-stack) in the current group |
 | `global` | push value from globals to stack |
 | `load` | copy a value from scratch space to the stack |
 | `store` | pop a value from the stack and store to scratch space |
@@ -297,9 +295,9 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | `pop` | discard value X from stack |
 | `dup` | duplicate last value on stack |
 | `dup2` | duplicate two last values on stack: A, B -> A, B, A, B |
-| `dig` | duplicate value N from the top of stack |
+| `dig` | push the Nth value from the top of the stack. dig 0 is equivalent to dup |
 | `swap` | swaps two last values on stack: A, B -> B, A |
-| `select` | selects one of two values to retain: A, B, C -> A ? B : C |
+| `select` | selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A) |
 | `assert` | immediately fail unless value X is a non-zero number |
 
 ### State Access
@@ -307,12 +305,12 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | Op | Description |
 | --- | --- |
 | `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender |
-| `min_balance` | get minimum balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender |
+| `min_balance` | get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage |
 | `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
 | `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the current application key B => value |
-| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value} |
+| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C => [*... stack*, value, 0 or 1] |
 | `app_global_get` | read key A from global state of a current application => value |
-| `app_global_get_ex` | read from application Txn.ForeignApps[A] global state key B => {0 or 1 (top), value}. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app |
+| `app_global_get_ex` | read from application Txn.ForeignApps[A] global state key B => [*... stack*, value, 0 or 1]. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app |
 | `app_local_put` | write to account specified by Txn.Accounts[A] to local state of a current application key B with value C |
 | `app_global_put` | write key A and value B to global state of the current application |
 | `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |

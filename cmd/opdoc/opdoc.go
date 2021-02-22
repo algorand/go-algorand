@@ -82,7 +82,7 @@ func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, 
 }
 
 func transactionFieldsMarkdown(out io.Writer) {
-	fmt.Fprintf(out, "\n`txn` Fields:\n\n")
+	fmt.Fprintf(out, "\n`txn` Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/)):\n\n")
 	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs())
 }
 
@@ -101,6 +101,14 @@ func assetParamsFieldsMarkdown(out io.Writer) {
 	fieldTableMarkdown(out, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs)
 }
 
+func immediateMarkdown(op *logic.OpSpec) string {
+	markdown := ""
+	for _, imm := range op.Details.Immediates {
+		markdown = markdown + " " + imm.Name
+	}
+	return markdown
+}
+
 func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	ws := ""
 	opextra := logic.OpImmediateNote(op.Name)
@@ -108,7 +116,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		ws = " "
 	}
 	costs := logic.OpAllCosts(op.Name)
-	fmt.Fprintf(out, "\n## %s\n\n- Opcode: 0x%02x%s%s\n", op.Name, op.Opcode, ws, opextra)
+	fmt.Fprintf(out, "\n## %s%s\n\n- Opcode: 0x%02x%s%s\n", op.Name, immediateMarkdown(op), op.Opcode, ws, opextra)
 	if op.Args == nil {
 		fmt.Fprintf(out, "- Pops: _None_\n")
 	} else if len(op.Args) == 1 {

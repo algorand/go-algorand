@@ -85,11 +85,11 @@ var opDocList = []stringString{
 	{"arg_2", "push Args[2] to stack"},
 	{"arg_3", "push Args[3] to stack"},
 	{"txn", "push field from current transaction to stack"},
-	{"gtxn", "push field to the stack from a transaction in the current transaction group"},
-	{"stxn", "push field to the stack from transaction A in the current group"},
+	{"gtxn", "push field to the stack from transaction index T in the current group"},
+	{"stxn", "push field to the stack from transaction index A (top-of-stack) in the current group"},
 	{"txna", "push value from an array field from current transaction to stack"},
-	{"gtxna", "push value from an array field from a transaction in the current transaction group"},
-	{"stxna", "push value from an array field from transaction A in the current group"},
+	{"gtxna", "push value from an array field from a transaction index T in the current transaction group"},
+	{"stxna", "push value from an array field from transaction index A (top-of-stack) in the current group"},
 	{"global", "push value from globals to stack"},
 	{"load", "copy a value from scratch space to the stack"},
 	{"store", "pop a value from the stack and store to scratch space"},
@@ -100,9 +100,9 @@ var opDocList = []stringString{
 	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
 	{"dup2", "duplicate two last values on stack: A, B -> A, B, A, B"},
-	{"dig", "duplicate value N from the top of stack"},
+	{"dig", "push the Nth value from the top of the stack. dig 0 is equivalent to dup"},
 	{"swap", "swaps two last values on stack: A, B -> B, A"},
-	{"select", "selects one of two values to retain: A, B, C -> A ? B : C"},
+	{"select", "selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)"},
 	{"concat", "pop two byte-arrays A and B and join them, push the result"},
 	{"substring", "pop a byte-array X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the array length, the program fails"},
 	{"substring3", "pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails"},
@@ -111,12 +111,12 @@ var opDocList = []stringString{
 	{"getbyte", "pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer"},
 	{"setbyte", "pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result"},
 	{"balance", "get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender"},
-	{"min_balance", "get minimum balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender"},
+	{"min_balance", "get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage"},
 	{"app_opted_in", "check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1}"},
 	{"app_local_get", "read from account specified by Txn.Accounts[A] from local state of the current application key B => value"},
-	{"app_local_get_ex", "read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value}"},
+	{"app_local_get_ex", "read from account specified by Txn.Accounts[A] from local state of the application B key C => [*... stack*, value, 0 or 1]"},
 	{"app_global_get", "read key A from global state of a current application => value"},
-	{"app_global_get_ex", "read from application Txn.ForeignApps[A] global state key B => {0 or 1 (top), value}. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app"},
+	{"app_global_get_ex", "read from application Txn.ForeignApps[A] global state key B => [*... stack*, value, 0 or 1]. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app"},
 	{"app_local_put", "write to account specified by Txn.Accounts[A] to local state of a current application key B with value C"},
 	{"app_global_put", "write key A and value B to global state of the current application"},
 	{"app_local_del", "delete from account specified by Txn.Accounts[A] local state key B of the current application"},
@@ -190,10 +190,10 @@ var opDocExtraList = []stringString{
 	{"getbit", "see explanation of bit ordering in setbit"},
 	{"setbit", "bit indexing begins with low-order bits in integers. Setting bit 4 to 1 on the integer 0 yields 16 (`int 0x0010`, or 2^4). Indexing begins in the first bytes of a byte-string (as seen in getbyte and substring). Setting bits 0 through 11 to 1 in a 4 byte-array of 0s yields `byte 0xfff00000`"},
 	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise."},
-	{"app_local_get", "params: account index, state key. Return: value. The value is zero if the key does not exist."},
-	{"app_local_get_ex", "params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value."},
-	{"app_global_get_ex", "params: application index, state key. Return: value. Application index is"},
-	{"app_global_get", "params: state key. Return: value. The value is zero if the key does not exist."},
+	{"app_local_get", "params: account index, state key. Return: value. The value is zero (of type uint64) if the key does not exist."},
+	{"app_local_get_ex", "params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist."},
+	{"app_global_get_ex", "params: application index, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist."},
+	{"app_global_get", "params: state key. Return: value. The value is zero (of type uint64) if the key does not exist."},
 	{"app_local_put", "params: account index, state key, value."},
 	{"app_local_del", "params: account index, state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)"},
 	{"app_global_del", "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)"},
@@ -228,18 +228,18 @@ var OpGroupList = []OpGroup{
 
 // OpCost returns the relative cost score for an op
 func OpCost(opName string) int {
-	return opsByName[LogicVersion][opName].opSize.cost
+	return opsByName[LogicVersion][opName].Details.cost
 }
 
 // OpAllCosts returns an array of the relative cost score for an op by version.
 // If all the costs are the same the array is single entry
 // otherwise it has costs by op version
 func OpAllCosts(opName string) []int {
-	cost := opsByName[LogicVersion][opName].opSize.cost
+	cost := opsByName[LogicVersion][opName].Details.cost
 	costs := make([]int, LogicVersion+1)
 	isDifferent := false
 	for v := 1; v <= LogicVersion; v++ {
-		costs[v] = opsByName[v][opName].opSize.cost
+		costs[v] = opsByName[v][opName].Details.cost
 		if costs[v] > 0 && costs[v] != cost {
 			isDifferent = true
 		}
@@ -253,7 +253,7 @@ func OpAllCosts(opName string) []int {
 
 // OpSize returns the number of bytes for an op. 0 for variable.
 func OpSize(opName string) int {
-	return opsByName[LogicVersion][opName].opSize.size
+	return opsByName[LogicVersion][opName].Details.size
 }
 
 // see assembler.go TxnTypeNames

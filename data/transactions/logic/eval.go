@@ -562,17 +562,17 @@ func (cx *evalContext) step() {
 		}
 	}
 
-	oz := spec.opSize
-	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
+	deets := spec.Details
+	if deets.size != 0 && (cx.pc+deets.size > len(cx.program)) {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return
 	}
-	cx.cost += oz.cost
+	cx.cost += deets.cost
 	spec.op(cx)
 	if cx.Trace != nil {
 		immArgsString := " "
 		if spec.Name != "bnz" {
-			for i := 1; i < spec.opSize.size; i++ {
+			for i := 1; i < spec.Details.size; i++ {
 				immArgsString += fmt.Sprintf("0x%02x ", cx.program[cx.pc+i])
 			}
 		}
@@ -610,7 +610,7 @@ func (cx *evalContext) step() {
 		cx.pc = cx.nextpc
 		cx.nextpc = 0
 	} else {
-		cx.pc += oz.size
+		cx.pc += deets.size
 	}
 }
 
@@ -625,23 +625,23 @@ func (cx *evalContext) checkStep() (cost int) {
 		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
 		return
 	}
-	oz := spec.opSize
-	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
+	deets := spec.Details
+	if deets.size != 0 && (cx.pc+deets.size > len(cx.program)) {
 		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return 1
 	}
 	prevpc := cx.pc
-	if oz.checkFunc != nil {
-		cost = oz.checkFunc(cx)
+	if deets.checkFunc != nil {
+		cost = deets.checkFunc(cx)
 		if cx.nextpc != 0 {
 			cx.pc = cx.nextpc
 			cx.nextpc = 0
 		} else {
-			cx.pc += oz.size
+			cx.pc += deets.size
 		}
 	} else {
-		cost = oz.cost
-		cx.pc += oz.size
+		cost = deets.cost
+		cx.pc += deets.size
 	}
 	if cx.Trace != nil {
 		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
