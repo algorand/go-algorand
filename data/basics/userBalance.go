@@ -30,9 +30,9 @@ import (
 type Status byte
 
 const (
-	// Offline indicates that the associated account recieve rewards but does not participate in the consensus.
+	// Offline indicates that the associated account receives rewards but does not participate in the consensus.
 	Offline Status = iota
-	// Online indicates that the associated account participate in the consensus and receive rewards.
+	// Online indicates that the associated account participates in the consensus and receive rewards.
 	Online
 	// NotParticipating indicates that the associated account neither participates in the consensus, nor recieves rewards.
 	// Accounts that are marked as NotParticipating cannot change their status, but can receive and send Algos to other accounts.
