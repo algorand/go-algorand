@@ -124,7 +124,7 @@ type dbAccountData struct {
 	// data structure in queues directly, without "attaching" the address as the address as the map key.
 	addr basics.Address
 	// The underlaying account data
-	accountData basics.AccountData
+	pad ledgercore.PersistedAccountData
 	// The rowid, when available. If the entry was loaded from the disk, then we have the rowid for it. Entries
 	// that doesn't have rowid ( hence, rowid == 0 ) represent either deleted accounts or non-existing accounts.
 	rowid int64
@@ -268,7 +268,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 		case nil:
 			if len(acctDataBuf) > 0 {
 				persistedAcctData := &dbAccountData{addr: addr, rowid: rowid.Int64}
-				err = protocol.Decode(acctDataBuf, &persistedAcctData.accountData)
+				err = protocol.Decode(acctDataBuf, &persistedAcctData.pad)
 				if err != nil {
 					return err
 				}
@@ -811,7 +811,7 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data dbAccountData, er
 			data.addr = addr
 			if len(buf) > 0 && rowid.Valid {
 				data.rowid = rowid.Int64
-				return protocol.Decode(buf, &data.accountData)
+				return protocol.Decode(buf, &data.pad)
 			}
 			// we don't have that account, just return the database round.
 			return nil
@@ -1065,7 +1065,7 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 				result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
 				if err == nil {
 					updatedAccounts[updatedAccountIdx].rowid, err = result.LastInsertId()
-					updatedAccounts[updatedAccountIdx].accountData = data.new
+					updatedAccounts[updatedAccountIdx].pad = ledgercore.PersistedAccountData{AccountData: data.new}
 				}
 			}
 		} else {
@@ -1076,7 +1076,7 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 				if err == nil {
 					// we deleted the entry successfully.
 					updatedAccounts[updatedAccountIdx].rowid = 0
-					updatedAccounts[updatedAccountIdx].accountData = basics.AccountData{}
+					updatedAccounts[updatedAccountIdx].pad = ledgercore.PersistedAccountData{}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, data.old.rowid)
@@ -1088,7 +1088,7 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 				if err == nil {
 					// rowid doesn't change on update.
 					updatedAccounts[updatedAccountIdx].rowid = data.old.rowid
-					updatedAccounts[updatedAccountIdx].accountData = data.new
+					updatedAccounts[updatedAccountIdx].pad = ledgercore.PersistedAccountData{AccountData: data.new}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, data.old.rowid)
@@ -1147,7 +1147,7 @@ func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpda
 	accounts := make(map[basics.Address]basics.AccountData, compactUpdates.len())
 	for i := 0; i < compactUpdates.len(); i++ {
 		addr, acctData := compactUpdates.getByIdx(i)
-		accounts[addr] = acctData.old.accountData
+		accounts[addr] = acctData.old.pad.AccountData
 	}
 
 	for i := 0; i < len(updates); i++ {

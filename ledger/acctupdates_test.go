@@ -1400,7 +1400,7 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[1][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: false}
 	creatableDeltas[1][101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
 
-	baseAccounts.write(dbAccountData{addr: addrs[0], accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
+	baseAccounts.write(dbAccountData{addr: addrs[0], pad: ledgercore.PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}}})
 	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, baseAccounts)
 	outCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
@@ -1408,11 +1408,11 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, 2, len(outCreatableDeltas))
 
 	delta, _ = outAccountDeltas.get(addrs[0])
-	require.Equal(t, uint64(1), delta.old.accountData.MicroAlgos.Raw)
+	require.Equal(t, uint64(1), delta.old.pad.MicroAlgos.Raw)
 	require.Equal(t, uint64(3), delta.new.MicroAlgos.Raw)
 	require.Equal(t, int(2), delta.ndeltas)
 	delta, _ = outAccountDeltas.get(addrs[3])
-	require.Equal(t, uint64(0), delta.old.accountData.MicroAlgos.Raw)
+	require.Equal(t, uint64(0), delta.old.pad.MicroAlgos.Raw)
 	require.Equal(t, uint64(8), delta.new.MicroAlgos.Raw)
 	require.Equal(t, int(1), delta.ndeltas)
 

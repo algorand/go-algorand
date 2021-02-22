@@ -1367,8 +1367,8 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 
 	for i := 0; i < accountsDeltas.len(); i++ {
 		addr, delta := accountsDeltas.getByIdx(i)
-		if !delta.old.accountData.IsZero() {
-			deleteHash := accountHashBuilder(addr, delta.old.accountData.RewardsBase, protocol.Encode(&delta.old.accountData))
+		if !delta.old.pad.IsZero() {
+			deleteHash := accountHashBuilder(addr, delta.old.pad.RewardsBase, protocol.Encode(&delta.old.pad))
 			deleted, err = au.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return err
@@ -1441,13 +1441,13 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		if latestAcctData, has := au.accounts[addr]; has {
 			previousAccountData = latestAcctData.data
 		} else if baseAccountData, has := au.baseAccounts.read(addr); has {
-			previousAccountData = baseAccountData.accountData
+			previousAccountData = baseAccountData.pad.AccountData
 		} else {
 			// it's missing from the base accounts, so we'll try to load it from disk.
 			if acctData, err := au.accountsq.lookup(addr); err != nil {
 				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
 			} else {
-				previousAccountData = acctData.accountData
+				previousAccountData = acctData.pad.AccountData
 				au.baseAccounts.write(acctData)
 			}
 		}
@@ -1553,7 +1553,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
-			return macct.accountData, nil
+			return macct.pad.AccountData, nil
 		}
 
 		au.accountsMu.RUnlock()
@@ -1567,7 +1567,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		dbad, err = au.accountsq.lookup(addr)
 		if dbad.round == currentDbRound {
 			au.baseAccounts.writePending(dbad)
-			return dbad.accountData, err
+			return dbad.pad.AccountData, err
 		}
 
 		if dbad.round < currentDbRound {
@@ -1638,7 +1638,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
-			return macct.accountData, rnd, nil
+			return macct.pad.AccountData, rnd, nil
 		}
 
 		if synchronized {
@@ -1653,7 +1653,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		dbad, err = au.accountsq.lookup(addr)
 		if dbad.round == currentDbRound {
 			au.baseAccounts.writePending(dbad)
-			return dbad.accountData, rnd, err
+			return dbad.pad.AccountData, rnd, err
 		}
 		if synchronized {
 			if dbad.round < currentDbRound {
