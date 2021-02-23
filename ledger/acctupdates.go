@@ -1074,6 +1074,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
+			case 4:
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1327,6 +1333,25 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 3 to 4: %v", err)
 	}
 	return 4, nil
+}
+
+// upgradeDatabaseSchema4 upgrades the database schema from version 4 to version 5,
+// adding accountext table
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	current := int32(4)
+	upgraded := current + 1
+
+	err = createAccountExtTable(tx)
+	if err != nil {
+		return 0, err
+	}
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, upgraded)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from %d to %d: %v", err, current, upgraded)
+	}
+	return upgraded, nil
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
