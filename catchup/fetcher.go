@@ -86,12 +86,12 @@ func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, cfg *confi
 	return factory
 }
 
-// BuildFetcherClients returns a set of clients we can fetch blocks from
-func (factory NetworkFetcherFactory) BuildFetcherClients() []FetcherClient {
+// buildFetcherClients returns a set of clients we can fetch blocks from
+func (factory NetworkFetcherFactory) buildFetcherClients() []FetcherClient {
 	peers := factory.net.GetPeers(network.PeersPhonebookRelays)
 	factory.log.Debugf("%d outgoing peers", len(peers))
 	if len(peers) == 0 {
-		factory.log.Warn("no outgoing peers for BuildFetcherClients")
+		factory.log.Warn("no outgoing peers for buildFetcherClients")
 		return nil
 	}
 	out := make([]FetcherClient, 0, len(peers))
@@ -109,7 +109,7 @@ func (factory NetworkFetcherFactory) New() Fetcher {
 	return &NetworkFetcher{
 		roundUpperBound: make(map[FetcherClient]basics.Round),
 		activeFetches:   make(map[FetcherClient]int),
-		peers:           factory.BuildFetcherClients(),
+		peers:           factory.buildFetcherClients(),
 		log:             logging.Base(),
 	}
 }
