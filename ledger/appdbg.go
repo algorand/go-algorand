@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -45,6 +46,11 @@ func (w *ledgerForCowBaseWrapper) checkDup(config.ConsensusParams, basics.Round,
 
 func (w *ledgerForCowBaseWrapper) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	return w.l.LookupWithoutRewards(rnd, addr)
+}
+
+func (w *ledgerForCowBaseWrapper) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.PersistedAccountData, basics.Round, error) {
+	ad, rnd, err := w.l.LookupWithoutRewards(rnd, addr)
+	return ledgercore.PersistedAccountData{AccountData: ad}, rnd, err
 }
 
 func (w *ledgerForCowBaseWrapper) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
