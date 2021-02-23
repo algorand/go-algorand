@@ -18,6 +18,7 @@ package catchup
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -47,37 +48,33 @@ func MakeUniversalFetcher(config config.Local, net network.GossipNode, log loggi
 func (uf *UniversalFetcher) FetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
 	cert *agreement.Certificate, downloadDuration time.Duration, err error) {
 
+	var fetcherClient FetcherClient
 	httpPeer, validHTTPPeer := peer.(network.HTTPPeer)
 	if validHTTPPeer {
-		fetcher := makeHTTPFetcher(uf.log, httpPeer, uf.net, &uf.config)
-		blk, cert, downloadDuration, err = uf.fetchBlockHTTP(ctx, fetcher, round)
-
+		fetcherClient = &HTTPFetcher{
+			peer:    httpPeer,
+			rootURL: httpPeer.GetAddress(),
+			net:     uf.net,
+			client:  httpPeer.GetHTTPClient(),
+			log:     uf.log,
+			config:  &uf.config}
+	} else if wsPeer, validWSPeer := peer.(network.UnicastPeer); validWSPeer {
+		fetcherClient = &wsFetcherClient{
+			target:      wsPeer,
+			pendingCtxs: make(map[context.Context]context.CancelFunc),
+			config:      &uf.config,
+		}
 	} else {
-		fetcher := MakeWsFetcher(uf.log, []network.Peer{peer}, &uf.config)
-		blk, cert, downloadDuration, err = uf.fetchBlockWs(ctx, fetcher, round)
+		return nil, nil, time.Duration(0), fmt.Errorf("FetchBlock: UniversalFetcher only supports HTTPPeer or UnicastPeer")
 	}
-	return blk, cert, downloadDuration, err
-}
 
-func (uf *UniversalFetcher) fetchBlockWs(ctx context.Context, wsf Fetcher, round basics.Round) (*bookkeeping.Block,
-	*agreement.Certificate, time.Duration, error) {
-	blockDownloadStartTime := time.Now()
-	blk, cert, client, err := wsf.FetchBlock(ctx, round)
+	fetchedBuf, err := fetcherClient.GetBlockBytes(ctx, round)
 	if err != nil {
 		return nil, nil, time.Duration(0), err
 	}
-	client.Close()
-	downloadDuration := time.Now().Sub(blockDownloadStartTime)
-	return blk, cert, downloadDuration, nil
-}
-
-func (uf *UniversalFetcher) fetchBlockHTTP(ctx context.Context, hf *HTTPFetcher, round basics.Round) (blk *bookkeeping.Block,
-	cert *agreement.Certificate, dur time.Duration, err error) {
-	blockDownloadStartTime := time.Now()
-	blk, cert, err = hf.FetchBlock(ctx, round)
-	downloadDuration := time.Now().Sub(blockDownloadStartTime)
+	block, cert, err := processBlockBytes(fetchedBuf, round, fetcherClient.Address())
 	if err != nil {
 		return nil, nil, time.Duration(0), err
 	}
-	return blk, cert, downloadDuration, err
+	return block, cert, downloadDuration, err
 }

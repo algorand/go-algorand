@@ -62,10 +62,12 @@ func TestUGetBlockWs(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, &b, block)
+	require.GreaterOrEqual(t, int64(duration), int64(0))
 
 	block, cert, duration, err = fetcher.FetchBlock(context.Background(), next+1, up)
 
-	require.Error(t, errNoBlockForRound, err)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "requested block is not available")
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
@@ -105,11 +107,24 @@ func TestUGetBlockHttp(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, &b, block)
-	require.Greater(t, int64(duration), int64(0))
+	require.GreaterOrEqual(t, int64(duration), int64(0))
 
 	block, cert, duration, err = fetcher.FetchBlock(context.Background(), next+1, net.GetPeers()[0])
 
 	require.Error(t, errNoBlockForRound, err)
+	require.Contains(t, err.Error(), "No block available for given round")
+	require.Nil(t, block)
+	require.Nil(t, cert)
+	require.Equal(t, int64(duration), int64(0))
+}
+
+// TestUGetBlockUnsupported tests the handling of an unsupported peer
+func TestUGetBlockUnsupported(t *testing.T) {
+	fetcher := UniversalFetcher{}
+	peer := ""
+	block, cert, duration, err := fetcher.FetchBlock(context.Background(), 1, peer)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "FetchBlock: UniversalFetcher only supports HTTPPeer or UnicastPeer")
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
