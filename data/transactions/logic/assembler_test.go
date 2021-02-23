@@ -237,9 +237,9 @@ swap
 select
 dig 2
 int 1
-stxn ConfigAsset
+gtxns ConfigAsset
 int 2
-stxna Accounts 0
+gtxnsa Accounts 0
 pushint 1000
 pushbytes "john"
 `
@@ -916,10 +916,10 @@ txn ConfigAssetClawback
 txn FreezeAsset
 txn FreezeAssetAccount
 txn FreezeAssetFrozen
-txna ForeignAssets 0
-txn NumForeignAssets
-txna ForeignApps 0
-txn NumForeignApps
+txna Assets 0
+txn NumAssets
+txna Applications 0
+txn NumApplications
 txn GlobalStateInts
 txn GlobalStateByteslices
 txn LocalStateInts

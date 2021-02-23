@@ -1401,19 +1401,19 @@ int 1
 
 const testTxnProgramTextV3 = testTxnProgramTextV2 + `
 assert
-txn NumForeignAssets
+txn NumAssets
 int 2
 ==
 assert
-txna ForeignAssets 0
+txna Assets 0
 int 55
 ==
 assert
-txn NumForeignApps
+txn NumApplications
 int 3
 ==
 assert
-txn ForeignApps 2			// Assembler will use 'txna'
+txn Applications 3			// Assembler will use 'txna'
 int 111
 ==
 assert
@@ -1758,12 +1758,13 @@ int 1
 			ep.TxnGroup = makeSampleTxnGroup(txn)
 			testLogic(t, source, v, ep)
 			if v >= 3 {
-				stxnProg := strings.ReplaceAll(source, "gtxn 0", "int 0; stxn")
-				stxnProg = strings.ReplaceAll(stxnProg, "gtxn 1", "int 1; stxn")
-				stxnProg = strings.ReplaceAll(stxnProg, "gtxna 0", "int 0; stxna")
-				stxnProg = strings.ReplaceAll(stxnProg, "gtxna 1", "int 1; stxna")
-				require.False(t, strings.Contains(stxnProg, "gtxn")) // Got 'em all
-				testLogic(t, stxnProg, v, ep)
+				gtxnsProg := strings.ReplaceAll(source, "gtxn 0", "int 0; gtxns")
+				gtxnsProg = strings.ReplaceAll(gtxnsProg, "gtxn 1", "int 1; gtxns")
+				gtxnsProg = strings.ReplaceAll(gtxnsProg, "gtxna 0", "int 0; gtxnsa")
+				gtxnsProg = strings.ReplaceAll(gtxnsProg, "gtxna 1", "int 1; gtxnsa")
+				require.False(t, strings.Contains(gtxnsProg, "gtxn "))  // Got 'em all
+				require.False(t, strings.Contains(gtxnsProg, "gtxna ")) // Got 'em all
+				testLogic(t, gtxnsProg, v, ep)
 			}
 		})
 	}
@@ -3745,8 +3746,8 @@ func TestAllowedOpcodesV3(t *testing.T) {
 		"swap":        "int 1; byte \"x\"; swap",
 		"select":      "int 1; byte \"x\"; int 1; select",
 		"dig":         "int 1; int 1; dig 1",
-		"stxn":        "int 0; stxn FirstValid",
-		"stxna":       "int 0; stxna Accounts 0",
+		"gtxns":       "int 0; gtxns FirstValid",
+		"gtxnsa":      "int 0; gtxnsa Accounts 0",
 		"pushint":     "pushint 7; pushint 4",
 		"pushbytes":   `pushbytes "stringsfail?"`,
 	}

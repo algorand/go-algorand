@@ -409,10 +409,10 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 45 | FreezeAsset | uint64 | Asset ID being frozen or un-frozen. LogicSigVersion >= 2. |
 | 46 | FreezeAssetAccount | []byte | 32 byte address of the account whose asset slot is being frozen or un-frozen. LogicSigVersion >= 2. |
 | 47 | FreezeAssetFrozen | uint64 | The new frozen value, 0 or 1. LogicSigVersion >= 2. |
-| 48 | ForeignAssets | uint64 | Foreign Assets listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
-| 49 | NumForeignAssets | uint64 | Number of Assets. LogicSigVersion >= 3. |
-| 50 | ForeignApps | uint64 | Foreign Apps listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
-| 51 | NumForeignApps | uint64 | Number of Applications. LogicSigVersion >= 3. |
+| 48 | Assets | uint64 | Foreign Assets listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
+| 49 | NumAssets | uint64 | Number of Assets. LogicSigVersion >= 3. |
+| 50 | Applications | uint64 | Foreign Apps listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
+| 51 | NumApplications | uint64 | Number of Applications. LogicSigVersion >= 3. |
 | 52 | GlobalStateInts | uint64 | Number of global state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 53 | GlobalStateByteslices | uint64 | Number of global state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 54 | LocalStateInts | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
@@ -498,7 +498,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - push Ith value of the array field F from the Tth transaction in the current group
 - LogicSigVersion >= 2
 
-## stxn f
+## gtxns f
 
 - Opcode: 0x38 {uint8 transaction field index}
 - Pops: *... stack*, uint64
@@ -506,9 +506,9 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - push field F of the Ath transaction in the current group
 - LogicSigVersion >= 3
 
-for notes on transaction fields available, see `txn`. If top of stack is _i_, `stxn field` is equivalent to `gtxn _i_ field`. stxn exists so that _i_ can be calculated, often based on the index of the current transaction.
+for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.
 
-## stxna f i
+## gtxnsa f i
 
 - Opcode: 0x39 {uint8 transaction field index} {uint8 transaction field array index}
 - Pops: *... stack*, uint64

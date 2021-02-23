@@ -125,14 +125,14 @@ const (
 	FreezeAssetAccount
 	// FreezeAssetFrozen bool
 	FreezeAssetFrozen
-	// ForeignAssets []basics.AssetIndex
-	ForeignAssets
-	// NumForeignAssets len(ForeignAssets)
-	NumForeignAssets
-	// ForeignApps []basics.AppIndex
-	ForeignApps
-	// NumForeignApps len(ForeignApps)
-	NumForeignApps
+	// Assets []basics.AssetIndex
+	Assets
+	// NumAssets len(ForeignAssets)
+	NumAssets
+	// Applications []basics.AppIndex
+	Applications
+	// NumApplication len(ForeignApps)
+	NumApplications
 
 	// GlobalStateInts uint64
 	GlobalStateInts
@@ -225,10 +225,10 @@ var txnFieldSpecs = []txnFieldSpec{
 	{FreezeAsset, StackUint64, 2},
 	{FreezeAssetAccount, StackBytes, 2},
 	{FreezeAssetFrozen, StackUint64, 2},
-	{ForeignAssets, StackUint64, 3},
-	{NumForeignAssets, StackUint64, 3},
-	{ForeignApps, StackUint64, 3},
-	{NumForeignApps, StackUint64, 3},
+	{Assets, StackUint64, 3},
+	{NumAssets, StackUint64, 3},
+	{Applications, StackUint64, 3},
+	{NumApplications, StackUint64, 3},
 	{GlobalStateInts, StackUint64, 3},
 	{GlobalStateByteslices, StackUint64, 3},
 	{LocalStateInts, StackUint64, 3},
@@ -245,15 +245,15 @@ var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String()}
 var TxnaFieldTypes = []StackType{
 	txnaFieldSpecByField[ApplicationArgs].ftype,
 	txnaFieldSpecByField[Accounts].ftype,
-	txnaFieldSpecByField[ForeignAssets].ftype,
-	txnaFieldSpecByField[ForeignApps].ftype,
+	txnaFieldSpecByField[Assets].ftype,
+	txnaFieldSpecByField[Applications].ftype,
 }
 
 var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
 	ApplicationArgs: {ApplicationArgs, StackBytes, 2},
 	Accounts:        {Accounts, StackBytes, 2},
-	ForeignAssets:   {ForeignAssets, StackUint64, 3},
-	ForeignApps:     {ForeignApps, StackUint64, 3},
+	Assets:          {Assets, StackUint64, 3},
+	Applications:    {Applications, StackUint64, 3},
 	LogicArgs:       {LogicArgs, StackBytes, 3},
 }
 

@@ -72,7 +72,7 @@ const (
 	immInt
 	immBytes
 	immInts
-	immBytess		// "ss" not a typo.  Multiple "bytes"
+	immBytess // "ss" not a typo.  Multiple "bytes"
 )
 
 type immediate struct {
@@ -181,8 +181,8 @@ var OpSpecs = []OpSpec{
 	{0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, immediates("f", "i")},
 	{0x37, "gtxna", opGtxna, assembleGtxna, disGtxna, nil, oneAny, 2, modeAny, immediates("t", "f", "i")},
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
-	{0x38, "stxn", opStxn, assembleStxn, disTxn, oneInt, oneAny, 3, modeAny, immediates("f")},
-	{0x39, "stxna", opStxna, assembleStxna, disTxna, oneInt, oneAny, 3, modeAny, immediates("f", "i")},
+	{0x38, "gtxns", opGtxns, assembleGtxns, disTxn, oneInt, oneAny, 3, modeAny, immediates("f")},
+	{0x39, "gtxnsa", opGtxnsa, assembleGtxns, disTxna, oneInt, oneAny, 3, modeAny, immediates("f", "i")},
 
 	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opBranch},
 	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opBranch},
@@ -281,6 +281,8 @@ func OpcodesByVersion(version uint64) []OpSpec {
 
 // direct opcode bytes
 var opsByOpcode [LogicVersion + 1][256]OpSpec
+
+// Opcode map for each each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
 // Migration from TEAL v1 to TEAL v2.

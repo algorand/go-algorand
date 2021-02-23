@@ -1362,6 +1362,7 @@ func (cx *evalContext) txnFieldToStack(stxn *transactions.SignedTxn, field TxnFi
 		sv.Uint = uint64(txn.ApplicationID)
 	case OnCompletion:
 		sv.Uint = uint64(txn.OnCompletion)
+
 	case ApplicationArgs:
 		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {
 			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
@@ -1370,6 +1371,7 @@ func (cx *evalContext) txnFieldToStack(stxn *transactions.SignedTxn, field TxnFi
 		sv.Bytes = nilToEmpty(txn.ApplicationArgs[arrayFieldIdx])
 	case NumAppArgs:
 		sv.Uint = uint64(len(txn.ApplicationArgs))
+
 	case LogicArgs:
 		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {
 			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
@@ -1378,6 +1380,7 @@ func (cx *evalContext) txnFieldToStack(stxn *transactions.SignedTxn, field TxnFi
 		sv.Bytes = nilToEmpty(txn.ApplicationArgs[arrayFieldIdx])
 	case NumLogicArgs:
 		sv.Uint = uint64(len(txn.ApplicationArgs))
+
 	case Accounts:
 		if arrayFieldIdx == 0 {
 			// special case: sender
@@ -1391,30 +1394,40 @@ func (cx *evalContext) txnFieldToStack(stxn *transactions.SignedTxn, field TxnFi
 		}
 	case NumAccounts:
 		sv.Uint = uint64(len(txn.Accounts))
-	case ForeignAssets:
+
+	case Assets:
 		if arrayFieldIdx >= uint64(len(txn.ForeignAssets)) {
 			err = fmt.Errorf("invalid Assets index %d", arrayFieldIdx)
 			return
 		}
 		sv.Uint = uint64(txn.ForeignAssets[arrayFieldIdx])
-	case NumForeignAssets:
+	case NumAssets:
 		sv.Uint = uint64(len(txn.ForeignAssets))
-	case ForeignApps:
-		if arrayFieldIdx >= uint64(len(txn.ForeignApps)) {
-			err = fmt.Errorf("invalid Apps index %d", arrayFieldIdx)
-			return
+
+	case Applications:
+		if arrayFieldIdx == 0 {
+			// special case: current app id
+			sv.Uint = uint64(txn.ApplicationID)
+		} else {
+			if arrayFieldIdx > uint64(len(txn.ForeignApps)) {
+				err = fmt.Errorf("invalid Applications index %d", arrayFieldIdx)
+				return
+			}
+			sv.Uint = uint64(txn.ForeignApps[arrayFieldIdx-1])
 		}
-		sv.Uint = uint64(txn.ForeignApps[arrayFieldIdx])
-	case NumForeignApps:
+	case NumApplications:
 		sv.Uint = uint64(len(txn.ForeignApps))
+
 	case GlobalStateInts:
 		sv.Uint = uint64(txn.GlobalStateSchema.NumUint)
 	case GlobalStateByteslices:
 		sv.Uint = uint64(txn.GlobalStateSchema.NumByteSlice)
+
 	case LocalStateInts:
 		sv.Uint = uint64(txn.LocalStateSchema.NumUint)
 	case LocalStateByteslices:
 		sv.Uint = uint64(txn.LocalStateSchema.NumByteSlice)
+
 	case ApprovalProgram:
 		sv.Bytes = nilToEmpty(txn.ApprovalProgram)
 	case ClearStateProgram:
@@ -1571,11 +1584,11 @@ func opGtxna(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func opStxn(cx *evalContext) {
+func opGtxns(cx *evalContext) {
 	last := len(cx.stack) - 1
 	gtxid := int(cx.stack[last].Uint)
 	if gtxid >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("stxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		cx.err = fmt.Errorf("gtxns lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	stx := &cx.TxnGroup[gtxid]
@@ -1605,11 +1618,11 @@ func opStxn(cx *evalContext) {
 	cx.stack[last] = sv
 }
 
-func opStxna(cx *evalContext) {
+func opGtxnsa(cx *evalContext) {
 	last := len(cx.stack) - 1
 	gtxid := int(cx.stack[last].Uint)
 	if gtxid >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("stxna lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		cx.err = fmt.Errorf("gtxnsa lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
 	stx := &cx.TxnGroup[gtxid]
