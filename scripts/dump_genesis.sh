@@ -54,6 +54,9 @@ for LEDGER in $LEDGERS; do
       catchpointstate)
         SORT=id
         ;;
+      accountext)
+        SORT=id
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1
