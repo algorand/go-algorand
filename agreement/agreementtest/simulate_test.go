@@ -213,6 +213,26 @@ func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountDat
 	return l.state[a], nil
 }
 
+func (l *testLedger) TotalStake(r basics.Round) (basics.MicroAlgos, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if r >= l.nextRound {
+		err := fmt.Errorf("TotalStake called on future round: %v > %v! (this is probably a bug)", r, l.nextRound)
+		panic(err)
+	}
+
+	var sum basics.MicroAlgos
+	var overflowed bool
+	for _, rec := range l.state {
+		sum, overflowed = basics.OAddA(sum, rec.VotingStake())
+		if overflowed {
+			panic("total stake computation overflowed")
+		}
+	}
+	return sum, nil
+}
+
 func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

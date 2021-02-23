@@ -241,7 +241,7 @@ func (e *RoundOffsetError) Error() string {
 }
 
 // StaleDatabaseRoundError is generated when we detect that the database round is behind the accountUpdates in-memory dbRound. This
-// should never happen, since we update the database first, and only upon a successfull update we update the in-memory dbRound.
+// should never happen, since we update the database first, and only upon a successful update we update the in-memory dbRound.
 type StaleDatabaseRoundError struct {
 	memoryRound   basics.Round
 	databaseRound basics.Round
@@ -361,7 +361,7 @@ func (au *accountUpdates) IsWritingCatchpointFile() bool {
 
 // LookupWithRewards returns the account data for a given address at a given round.
 // Note that the function doesn't update the account with the rewards,
-// even while it does return the AccoutData which represent the "rewarded" account data.
+// even while it does return the AccountData which represent the "rewarded" account data.
 func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
 	return au.lookupWithRewards(rnd, addr)
 }
@@ -685,7 +685,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	offset = uint64(newBase - au.dbRound)
 
 	// check to see if this is a catchpoint round
-	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
+	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64(offset+uint64(lookback+au.dbRound)) % au.catchpointInterval))
 
 	// calculate the number of pending deltas
 	pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
@@ -1069,6 +1069,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
+			case 4:
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1322,6 +1328,22 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 3 to 4: %v", err)
 	}
 	return 4, nil
+}
+
+// upgradeDatabaseSchema4 upgrades the database schema from version 4 to version 5,
+// adding the stake column to the accounttotals table.
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	err = totalsAddStake(tx, au.ledger.GenesisProto())
+	if err != nil {
+		return 0, err
+	}
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 5)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 4 to 5: %v", err)
+	}
+	return 5, nil
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
@@ -1810,7 +1832,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		// if this is an archival ledger, we might need to update the catchpointWriting variable.
 		if au.archivalLedger {
 			// determine if this was a catchpoint round
-			isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
+			isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64(offset+uint64(lookback+dbRound)) % au.catchpointInterval))
 			if isCatchpointRound {
 				// it was a catchpoint round, so update the catchpointWriting to indicate that we're done.
 				atomic.StoreInt32(&au.catchpointWriting, 0)
@@ -1826,7 +1848,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	newBase := basics.Round(offset) + dbRound
 	flushTime := time.Now()
-	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
+	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64(offset+uint64(lookback+dbRound)) % au.catchpointInterval))
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]ledgercore.AccountDeltas, offset, offset)

@@ -28,8 +28,8 @@ import (
 func (z *AccountTotals) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 6 bits */
 	if ((*z).NotParticipating.Money.MsgIsZero()) && ((*z).NotParticipating.RewardUnits == 0) {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -45,6 +45,10 @@ func (z *AccountTotals) MarshalMsg(b []byte) (o []byte) {
 	if (*z).RewardsLevel == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
+	}
+	if (*z).Stake.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x20
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -134,6 +138,11 @@ func (z *AccountTotals) MarshalMsg(b []byte) (o []byte) {
 			// string "rwdlvl"
 			o = append(o, 0xa6, 0x72, 0x77, 0x64, 0x6c, 0x76, 0x6c)
 			o = msgp.AppendUint64(o, (*z).RewardsLevel)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "stake"
+			o = append(o, 0xa5, 0x73, 0x74, 0x61, 0x6b, 0x65)
+			o = (*z).Stake.MarshalMsg(o)
 		}
 	}
 	return
@@ -371,6 +380,14 @@ func (z *AccountTotals) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 					}
 				}
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Stake.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Stake")
+				return
 			}
 		}
 		if zb0001 > 0 {
@@ -614,6 +631,12 @@ func (z *AccountTotals) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 					}
 				}
+			case "stake":
+				bts, err = (*z).Stake.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Stake")
+					return
+				}
 			case "rwdlvl":
 				(*z).RewardsLevel, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
@@ -640,13 +663,13 @@ func (_ *AccountTotals) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AccountTotals) Msgsize() (s int) {
-	s = 1 + 7 + 1 + 4 + (*z).Online.Money.Msgsize() + 4 + msgp.Uint64Size + 8 + 1 + 4 + (*z).Offline.Money.Msgsize() + 4 + msgp.Uint64Size + 8 + 1 + 4 + (*z).NotParticipating.Money.Msgsize() + 4 + msgp.Uint64Size + 7 + msgp.Uint64Size
+	s = 1 + 7 + 1 + 4 + (*z).Online.Money.Msgsize() + 4 + msgp.Uint64Size + 8 + 1 + 4 + (*z).Offline.Money.Msgsize() + 4 + msgp.Uint64Size + 8 + 1 + 4 + (*z).NotParticipating.Money.Msgsize() + 4 + msgp.Uint64Size + 6 + (*z).Stake.Msgsize() + 7 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *AccountTotals) MsgIsZero() bool {
-	return (((*z).Online.Money.MsgIsZero()) && ((*z).Online.RewardUnits == 0)) && (((*z).Offline.Money.MsgIsZero()) && ((*z).Offline.RewardUnits == 0)) && (((*z).NotParticipating.Money.MsgIsZero()) && ((*z).NotParticipating.RewardUnits == 0)) && ((*z).RewardsLevel == 0)
+	return (((*z).Online.Money.MsgIsZero()) && ((*z).Online.RewardUnits == 0)) && (((*z).Offline.Money.MsgIsZero()) && ((*z).Offline.RewardUnits == 0)) && (((*z).NotParticipating.Money.MsgIsZero()) && ((*z).NotParticipating.RewardUnits == 0)) && ((*z).Stake.MsgIsZero()) && ((*z).RewardsLevel == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

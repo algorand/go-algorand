@@ -48,14 +48,16 @@ type Ledger struct {
 
 	// a two-item moving window cache for the total number of online circulating coins
 	lastRoundCirculation atomic.Value
+	// a two-item moving window cache for the total stake of accounts
+	lastRoundStake atomic.Value
 	// a two-item moving window cache for the round seed
 	lastRoundSeed atomic.Value
 }
 
 // roundCirculationPair used to hold a pair of matching round number and the amount of online money
 type roundCirculationPair struct {
-	round       basics.Round
-	onlineMoney basics.MicroAlgos
+	round  basics.Round
+	online basics.MicroAlgos
 }
 
 // roundCirculation is the cache for the circulating coins
@@ -222,13 +224,43 @@ func (l *Ledger) NextRound() basics.Round {
 	return l.LastRound() + 1
 }
 
+// TotalStake implements agreement.Ledger.TotalStake.
+func (l *Ledger) TotalStake(r basics.Round) (basics.MicroAlgos, error) {
+	stake, cached := l.lastRoundStake.Load().(roundCirculation)
+	if cached && r != basics.Round(0) {
+		for _, element := range stake.elements {
+			if element.round == r {
+				return element.online, nil
+			}
+		}
+	}
+
+	totals, err := l.Totals(r)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+
+	if !cached || r > stake.elements[1].round {
+		l.lastRoundStake.Store(
+			roundCirculation{
+				elements: [2]roundCirculationPair{
+					stake.elements[1],
+					{
+						round:  r,
+						online: totals.Stake},
+				},
+			})
+	}
+	return totals.Stake, nil
+}
+
 // Circulation implements agreement.Ledger.Circulation.
 func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	circulation, cached := l.lastRoundCirculation.Load().(roundCirculation)
 	if cached && r != basics.Round(0) {
 		for _, element := range circulation.elements {
 			if element.round == r {
-				return element.onlineMoney, nil
+				return element.online, nil
 			}
 		}
 	}
@@ -244,8 +276,8 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 				elements: [2]roundCirculationPair{
 					circulation.elements[1],
 					{
-						round:       r,
-						onlineMoney: totals.Online.Money},
+						round:  r,
+						online: totals.Online.Money},
 				},
 			})
 	}

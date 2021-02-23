@@ -336,6 +336,10 @@ func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountDat
 	return l.state[a], nil
 }
 
+func (l *testLedger) TotalStake(r basics.Round) (basics.MicroAlgos, error) {
+	return l.Circulation(r)
+}
+
 func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

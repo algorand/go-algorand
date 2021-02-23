@@ -54,6 +54,7 @@ var accountsSchema = []string{
 		rnd integer)`,
 	`CREATE TABLE IF NOT EXISTS accounttotals (
 		id string primary key,
+		stake integer,
 		online integer,
 		onlinerewardunits integer,
 		offline integer,
@@ -101,6 +102,11 @@ var createOnlineAccountIndex = []string{
 	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
 }
 
+var addTotalStakeColumn = []string{
+	`ALTER TABLE accounttotals
+		ADD COLUMN stake INTEGER`,
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -114,7 +120,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(4)
+var accountDBVersion = int32(5)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -528,6 +534,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			return err
 		}
 	}
+	// TODO: do we need to migrate accounttotals table?
 
 	// Run creatables migration if it hasn't run yet
 	var creatableMigrated bool
@@ -626,6 +633,61 @@ func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) erro
 				return err
 			}
 		}
+	}
+
+	return rows.Err()
+}
+
+// totalsAddStake adds the stake column to the accounttotals table.
+func totalsAddStake(tx *sql.Tx, proto config.ConsensusParams) error {
+	var exists bool
+	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('accounttotals') WHERE name='stake'").Scan(&exists)
+	if err == nil {
+		// Already exists.
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+
+	for _, stmt := range addTotalStakeColumn {
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var ot basics.OverflowTracker
+	var totals ledgercore.AccountTotals
+
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		err = rows.Scan(&addrbuf, &buf)
+		if err != nil {
+			return err
+		}
+
+		var data basics.AccountData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return err
+		}
+		totals.AddAccount(proto, data, &ot)
+	}
+	if ot.Overflowed {
+		return fmt.Errorf("overflow computing totals")
+	}
+
+	err = accountsPutTotals(tx, totals, false)
+	if err != nil {
+		return err
 	}
 
 	return rows.Err()
@@ -1003,8 +1065,10 @@ func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals ledgercore.Accou
 	if catchpointStaging {
 		id = "catchpointStaging"
 	}
-	row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
-	err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
+	row := tx.QueryRow("SELECT stake, online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
+	err = row.Scan(
+		&totals.Stake.Raw,
+		&totals.Online.Money.Raw, &totals.Online.RewardUnits,
 		&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
 		&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
 		&totals.RewardsLevel)
@@ -1017,8 +1081,13 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 	if catchpointStaging {
 		id = "catchpointStaging"
 	}
-	_, err := tx.Exec("REPLACE INTO accounttotals (id, online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+	// TODO remove this in the release version
+	if totals.Stake.IsZero() && !totals.Online.Money.IsZero() {
+		return fmt.Errorf("probably something's wrong, total stake is zero: %v", totals)
+	}
+	_, err := tx.Exec("REPLACE INTO accounttotals (id, stake, online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		id,
+		totals.Stake.Raw,
 		totals.Online.Money.Raw, totals.Online.RewardUnits,
 		totals.Offline.Money.Raw, totals.Offline.RewardUnits,
 		totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,

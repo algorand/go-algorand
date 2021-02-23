@@ -47,6 +47,13 @@ type AccountTotals struct {
 	Online           AlgoCount `codec:"online"`
 	Offline          AlgoCount `codec:"offline"`
 	NotParticipating AlgoCount `codec:"notpart"`
+	// Stake shows the total voting stake that currently exists in the system. This
+	// value can be computed by summing the voting stake of all existing accounts:
+	//
+	// 	Stake = 0
+	// 	for each account
+	// 		Stake += account.VotingStake()
+	Stake basics.MicroAlgos `codec:"stake"`
 
 	// Total number of algos received per reward unit since genesis
 	RewardsLevel uint64 `codec:"rwdlvl"`
@@ -68,20 +75,24 @@ func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 	}
 }
 
-// AddAccount adds an account algos from the total money
+// AddAccount adds an account ALGOs and stake to the account totals
 func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
-	algos, _ := data.Money(proto, at.RewardsLevel)
-	sum.Money = ot.AddA(sum.Money, algos)
+	updatedData := data.WithUpdatedRewards(proto, at.RewardsLevel)
+	sum.Money = ot.AddA(sum.Money, updatedData.Money())
 	sum.RewardUnits = ot.Add(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
+	// Adding stake
+	at.Stake = ot.AddA(at.Stake, updatedData.VotingStake())
 }
 
-// DelAccount removes an account algos from the total money
+// DelAccount removes an account ALGOs and stake from the account totals
 func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
-	algos, _ := data.Money(proto, at.RewardsLevel)
-	sum.Money = ot.SubA(sum.Money, algos)
+	updatedData := data.WithUpdatedRewards(proto, at.RewardsLevel)
+	sum.Money = ot.SubA(sum.Money, updatedData.Money())
 	sum.RewardUnits = ot.Sub(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
+	// Subtracting stake
+	at.Stake = ot.SubA(at.Stake, updatedData.VotingStake())
 }
 
 // ApplyRewards adds the reward to the account totals based on the new rewards level

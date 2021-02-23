@@ -106,6 +106,11 @@ func (i ledgerImpl) Lookup(r basics.Round, addr basics.Address) (basics.AccountD
 	return i.l.Lookup(r, addr)
 }
 
+// TotalStake implements Ledger.TotalStake.
+func (i ledgerImpl) TotalStake(r basics.Round) (basics.MicroAlgos, error) {
+	return i.l.TotalStake(r)
+}
+
 // Circulation implements Ledger.Circulation.
 func (i ledgerImpl) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	return i.l.Circulation(r)

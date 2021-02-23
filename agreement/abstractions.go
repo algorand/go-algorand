@@ -146,6 +146,15 @@ type LedgerReader interface {
 	// protocol may lose liveness.
 	Circulation(basics.Round) (basics.MicroAlgos, error)
 
+	// TotalStake returns the total amount of accounts stake at the conclusion of a
+	// given round.
+	//
+	// This method returns an error if the given Round has not yet been
+	// confirmed. It may also return an error if the given Round is
+	// unavailable by the storage device. In that case, the agreement
+	// protocol may lose liveness.
+	TotalStake(basics.Round) (basics.MicroAlgos, error)
+
 	// LookupDigest returns the Digest of the entry that was agreed on in a
 	// given round.
 	//

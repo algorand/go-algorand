@@ -376,10 +376,22 @@ func MakeAccountData(status Status, algos MicroAlgos) AccountData {
 	return AccountData{Status: status, MicroAlgos: algos}
 }
 
-// Money returns the amount of MicroAlgos associated with the user's account
-func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (money MicroAlgos, rewards MicroAlgos) {
-	e := u.WithUpdatedRewards(proto, rewardsLevel)
-	return e.MicroAlgos, e.RewardedMicroAlgos
+// Money returns the amount of MicroAlgos associated with the user's account. It
+// assumes the caller has already updated rewards appropriately using
+// WithUpdatedRewards().
+func (u AccountData) Money() MicroAlgos {
+	return u.MicroAlgos
+}
+
+// VotingStake returns the amount of MicroAlgos associated with the user's account
+// for the purpose of participating in the Algorand protocol.  It assumes the
+// caller has already updated rewards appropriately using WithUpdatedRewards().
+func (u AccountData) VotingStake() MicroAlgos {
+	if u.Status != Online {
+		return MicroAlgos{Raw: 0}
+	}
+
+	return u.MicroAlgos
 }
 
 // PendingRewards computes the amount of rewards (in microalgos) that
@@ -405,7 +417,7 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 		u.RewardsBase = rewardsLevel
 		// The total reward over the lifetime of the account could exceed a 64-bit value. As a result
 		// this rewardAlgos counter could potentially roll over.
-		u.RewardedMicroAlgos = MicroAlgos{Raw: (u.RewardedMicroAlgos.Raw + rewards.Raw)}
+		u.RewardedMicroAlgos = MicroAlgos{Raw: u.RewardedMicroAlgos.Raw + rewards.Raw}
 	}
 
 	return u
@@ -439,17 +451,6 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 
 	res.Raw = min
 	return res
-}
-
-// VotingStake returns the amount of MicroAlgos associated with the user's account
-// for the purpose of participating in the Algorand protocol.  It assumes the
-// caller has already updated rewards appropriately using WithUpdatedRewards().
-func (u AccountData) VotingStake() MicroAlgos {
-	if u.Status != Online {
-		return MicroAlgos{Raw: 0}
-	}
-
-	return u.MicroAlgos
 }
 
 // KeyDilution returns the key dilution for this account,

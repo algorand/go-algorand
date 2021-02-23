@@ -487,6 +487,12 @@ func (t *demuxTester) Lookup(basics.Round, basics.Address) (basics.AccountData, 
 }
 
 // implement Ledger
+func (t *demuxTester) TotalStake(basics.Round) (basics.MicroAlgos, error) {
+	// we don't care about this function in this test.
+	return basics.MicroAlgos{}, nil
+}
+
+// implement Ledger
 func (t *demuxTester) Circulation(basics.Round) (basics.MicroAlgos, error) {
 	// we don't care about this function in this test.
 	return basics.MicroAlgos{}, nil
