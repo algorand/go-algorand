@@ -28,12 +28,14 @@ import (
 	"github.com/algorand/go-algorand/network"
 )
 
+// UniversalFetcher fetches blocks either from an http peer or ws peer.
 type UniversalFetcher struct {
 	config config.Local
 	net    network.GossipNode
 	log    logging.Logger
 }
 
+// MakeUniversalFetcher returns a fetcher for http and ws peers.
 func MakeUniversalFetcher(config config.Local, net network.GossipNode, log logging.Logger) UniversalFetcher {
 	return UniversalFetcher{
 		config: config,
@@ -41,22 +43,23 @@ func MakeUniversalFetcher(config config.Local, net network.GossipNode, log loggi
 		log:    log}
 }
 
+// FetchBlock returns a block from the peer. The peer can be either an http or ws peer.
 func (uf *UniversalFetcher) FetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
 	cert *agreement.Certificate, downloadDuration time.Duration, err error) {
 
-	httpPeer, validHttpPeer := peer.(network.HTTPPeer)
-	if validHttpPeer {
+	httpPeer, validHTTPPeer := peer.(network.HTTPPeer)
+	if validHTTPPeer {
 		fetcher := makeHTTPFetcher(uf.log, httpPeer, uf.net, &uf.config)
-		blk, cert, downloadDuration, err = uf.fetchBlockHttp(fetcher, ctx, round)
+		blk, cert, downloadDuration, err = uf.fetchBlockHTTP(ctx, fetcher, round)
 
 	} else {
 		fetcher := MakeWsFetcher(uf.log, []network.Peer{peer}, &uf.config)
-		blk, cert, downloadDuration, err = uf.fetchBlockWs(fetcher, ctx, round)
+		blk, cert, downloadDuration, err = uf.fetchBlockWs(ctx, fetcher, round)
 	}
 	return blk, cert, downloadDuration, err
 }
 
-func (uf *UniversalFetcher) fetchBlockWs(wsf Fetcher, ctx context.Context, round basics.Round) (*bookkeeping.Block,
+func (uf *UniversalFetcher) fetchBlockWs(ctx context.Context, wsf Fetcher, round basics.Round) (*bookkeeping.Block,
 	*agreement.Certificate, time.Duration, error) {
 	blockDownloadStartTime := time.Now()
 	blk, cert, client, err := wsf.FetchBlock(ctx, round)
@@ -68,7 +71,7 @@ func (uf *UniversalFetcher) fetchBlockWs(wsf Fetcher, ctx context.Context, round
 	return blk, cert, downloadDuration, nil
 }
 
-func (uf *UniversalFetcher) fetchBlockHttp(hf *HTTPFetcher, ctx context.Context, round basics.Round) (blk *bookkeeping.Block,
+func (uf *UniversalFetcher) fetchBlockHTTP(ctx context.Context, hf *HTTPFetcher, round basics.Round) (blk *bookkeeping.Block,
 	cert *agreement.Certificate, dur time.Duration, err error) {
 	blockDownloadStartTime := time.Now()
 	blk, cert, err = hf.FetchBlock(ctx, round)
