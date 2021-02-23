@@ -855,7 +855,7 @@ func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (ledgercore.A
 }
 
 // CheckDup test to see if the given transaction id/lease already exists. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
-func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
+func (aul *accountUpdatesLedgerEvaluator) checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
 	// this is a non-issue since this call will never be made on non-validating evaluation
 	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
@@ -866,7 +866,7 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
-func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+func (aul *accountUpdatesLedgerEvaluator) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
 }
 
