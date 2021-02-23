@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net/http"
 
@@ -57,6 +58,16 @@ type ApplicationIndexerResponse struct {
 	CurrentRound uint64 `json:"current-round"`
 }
 
+// AssetIndexerResponse represents the Asset Response object from querying indexer
+type AssetIndexerResponse struct {
+
+	// Application index and its parameters
+	Asset generated.Asset `json:"asset,omitempty"`
+
+	// Round at which the results were computed.
+	CurrentRound uint64 `json:"current-round"`
+}
+
 type localLedger struct {
 	balances        map[basics.Address]basics.AccountData
 	txnGroup        []transactions.SignedTxn
@@ -83,6 +94,8 @@ func makeBalancesAdapter(
 	apps := []basics.AppIndex{appIdx}
 	apps = append(apps, txn.Txn.ForeignApps...)
 
+	assets := txn.Txn.ForeignAssets
+
 	// populate balances from the indexer if not already
 	if indexerURL != "" {
 		for _, acc := range accounts {
@@ -97,6 +110,16 @@ func makeBalancesAdapter(
 		}
 		for _, app := range apps {
 			creator, err := getAppCreatorFromIndexer(indexerURL, indexerToken, app)
+			if err != nil {
+				return nil, AppState{}, err
+			}
+			balances[creator], err = getBalanceFromIndexer(indexerURL, indexerToken, creator, round)
+			if err != nil {
+				return nil, AppState{}, err
+			}
+		}
+		for _, asset := range assets {
+			creator, err := getAssetCreatorFromIndexer(indexerURL, indexerToken, asset)
 			if err != nil {
 				return nil, AppState{}, err
 			}
@@ -138,8 +161,35 @@ func makeBalancesAdapter(
 		}
 	}
 
+	assetsExist := make(map[basics.AssetIndex]bool, len(assets))
+	for _, aid := range assets {
+		for _, ad := range balances {
+			if _, ok := ad.AssetParams[aid]; ok {
+				assetsExist[aid] = true
+			}
+		}
+	}
+
 	// painless mode creates all missed global states and opt-in all mentioned accounts
 	if painless {
+		for _, aid := range assets {
+			if ok := assetsExist[aid]; !ok {
+				// create balance record and AppParams for this asset
+				addr, err := getRandomAddress()
+				if err != nil {
+					return nil, AppState{}, err
+				}
+				ad := basics.AccountData{
+					AssetParams: map[basics.AssetIndex]basics.AssetParams{
+						aid: makeAssetParams(addr),
+					},
+					Assets: map[basics.AssetIndex]basics.AssetHolding{
+						aid: makeAssetHolding(),
+					},
+				}
+				balances[addr] = ad
+			}
+		}
 		for _, aid := range apps {
 			if ok := appsExist[aid]; !ok {
 				// create balance record and AppParams for this app
@@ -211,6 +261,34 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	return creator, nil
 }
 
+func getAssetCreatorFromIndexer(indexerURL string, indexerToken string, asset basics.AssetIndex) (basics.Address, error) {
+	queryString := fmt.Sprintf("%s/v2/assets/%d", indexerURL, asset)
+	client := &http.Client{}
+	request, err := http.NewRequest("GET", queryString, nil)
+	request.Header.Set("X-Indexer-API-Token", indexerToken)
+	resp, err := client.Do(request)
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("asset request error: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		msg, _ := ioutil.ReadAll(resp.Body)
+		return basics.Address{}, fmt.Errorf("asset response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
+	}
+	var assetResp AssetIndexerResponse
+	err = json.NewDecoder(resp.Body).Decode(&assetResp)
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("asset response decode error: %s", err)
+	}
+
+	creator, err := basics.UnmarshalChecksumAddress(assetResp.Asset.Params.Creator)
+
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("UnmarshalChecksumAddress error: %s", err)
+	}
+	return creator, nil
+}
+
 func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round uint64) (basics.AccountData, error) {
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
@@ -255,6 +333,27 @@ func makeGlobalSchema() basics.StateSchema {
 	return basics.StateSchema{
 		NumUint:      64,
 		NumByteSlice: 64,
+	}
+}
+
+func makeAssetParams(creator basics.Address) basics.AssetParams {
+	return basics.AssetParams{
+		Total:         math.MaxUint64,
+		Decimals:      6,
+		DefaultFrozen: false,
+		UnitName:      "TST",
+		AssetName:     "Test Asset",
+		Manager:       creator,
+		Reserve:       creator,
+		Freeze:        creator,
+		Clawback:      creator,
+	}
+}
+
+func makeAssetHolding() basics.AssetHolding {
+	return basics.AssetHolding{
+		Amount: math.MaxUint64,
+		Frozen: false,
 	}
 }
 
