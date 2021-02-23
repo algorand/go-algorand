@@ -39,7 +39,7 @@ func (w *ledgerForCowBaseWrapper) BlockHdr(basics.Round) (bookkeeping.BlockHeade
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (w *ledgerForCowBaseWrapper) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
+func (w *ledgerForCowBaseWrapper) checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
 	return nil
 }
 
@@ -47,7 +47,7 @@ func (w *ledgerForCowBaseWrapper) LookupWithoutRewards(rnd basics.Round, addr ba
 	return w.l.LookupWithoutRewards(rnd, addr)
 }
 
-func (w *ledgerForCowBaseWrapper) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+func (w *ledgerForCowBaseWrapper) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return w.l.GetCreatorForRound(rnd, cidx, ctype)
 }
 

@@ -404,7 +404,7 @@ func (l *Ledger) GetLastCatchpointLabel() string {
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
 // look up a creator address, setting ok to false if the query succeeded but no
 // creator was found.
-func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+func (l *Ledger) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.GetCreatorForRound(rnd, cidx, ctype)
@@ -483,7 +483,7 @@ func (l *Ledger) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
 }
 
 // CheckDup return whether a transaction is a duplicate one.
-func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl TxLease) error {
+func (l *Ledger) checkDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl TxLease) error {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl.Txlease)
