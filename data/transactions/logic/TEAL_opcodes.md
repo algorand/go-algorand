@@ -624,7 +624,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x51 {uint8 start position} {uint8 end position}
 - Pops: *... stack*, []byte
 - Pushes: []byte
-- pop a byte-array X. For immediate values in 0..255 S and E: extract a range of bytes from it starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails
+- pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails
 - LogicSigVersion >= 2
 
 ## substring3

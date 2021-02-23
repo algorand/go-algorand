@@ -134,7 +134,7 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
 | `setbyte` | pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result |
 | `concat` | pop two byte-arrays A and B and join them, push the result |
-| `substring s e` | pop a byte-array X. For immediate values in 0..255 S and E: extract a range of bytes from it starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
+| `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
 
 ### Loading Values

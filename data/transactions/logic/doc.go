@@ -104,7 +104,7 @@ var opDocList = []stringString{
 	{"swap", "swaps two last values on stack: A, B -> B, A"},
 	{"select", "selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)"},
 	{"concat", "pop two byte-arrays A and B and join them, push the result"},
-	{"substring", "pop a byte-array X. For immediate values in 0..255 S and E: extract a range of bytes from it starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails"},
+	{"substring", "pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails"},
 	{"substring3", "pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails"},
 	{"getbit", "pop a target A (integer or byte-array), and index B. Push the Bth bit of A."},
 	{"setbit", "pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result"},
