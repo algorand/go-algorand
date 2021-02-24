@@ -165,7 +165,7 @@ tasks:
     target: mule-sign
 
 jobs:
-  sign-docker:
+  package-linux-amd64:
     tasks:
       - docker.Make.docker-sign
 #  build-linux-amd64:
