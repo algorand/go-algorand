@@ -362,8 +362,22 @@ func (au *accountUpdates) IsWritingCatchpointFile() bool {
 // LookupWithRewards returns the account data for a given address at a given round.
 // Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
+func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Address) (pad ledgercore.PersistedAccountData, err error) {
 	return au.lookupWithRewards(rnd, addr)
+}
+
+// LookupFullWithRewards returns the account data for a given address at a given round.
+// Note that the function doesn't update the account with the rewards,
+// even while it does return the AccoutData which represent the "rewarded" account data.
+func (au *accountUpdates) LookupFullWithRewards(rnd basics.Round, addr basics.Address) (pad ledgercore.PersistedAccountData, err error) {
+	return au.lookupFullWithRewards(rnd, addr)
+}
+
+// LookupWithHolding returns the account data for a given address at a given round.
+// Note that the function doesn't update the account with the rewards,
+// even while it does return the AccoutData which represent the "rewarded" account data.
+func (au *accountUpdates) LookupWithHolding(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
+	return au.lookupWithHolding(rnd, addr, cidx, ctype)
 }
 
 // LookupWithoutRewards returns the account data for a given address at a given round.
@@ -1522,7 +1536,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 // lookupWithRewards returns the account data for a given address at a given round.
 // The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
+func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Address) (pad ledgercore.PersistedAccountData, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true
 	defer func() {
@@ -1551,7 +1565,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		if withRewards {
 			defer func() {
 				if err == nil {
-					data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
+					pad.AccountData = pad.AccountData.WithUpdatedRewards(rewardsProto, rewardsLevel)
 				}
 			}()
 			withRewards = false
@@ -1563,7 +1577,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				return macct.data, nil
+				return ledgercore.PersistedAccountData{AccountData: macct.data}, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
@@ -1573,7 +1587,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 				offset--
 				d, ok := au.deltas[offset].Get(addr)
 				if ok {
-					return d, nil
+					return ledgercore.PersistedAccountData{AccountData: d}, nil
 				}
 			}
 		}
@@ -1583,7 +1597,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
-			return macct.pad.AccountData, nil
+			return macct.pad, nil
 		}
 
 		au.accountsMu.RUnlock()
@@ -1597,12 +1611,12 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		dbad, err = au.accountsq.lookup(addr)
 		if dbad.round == currentDbRound {
 			au.baseAccounts.writePending(dbad)
-			return dbad.pad.AccountData, err
+			return dbad.pad, err
 		}
 
 		if dbad.round < currentDbRound {
 			au.log.Errorf("accountUpdates.lookupWithRewards: database round %d is behind in-memory round %d", dbad.round, currentDbRound)
-			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: dbad.round, memoryRound: currentDbRound}
+			return ledgercore.PersistedAccountData{}, &StaleDatabaseRoundError{databaseRound: dbad.round, memoryRound: currentDbRound}
 		}
 		au.accountsMu.RLock()
 		needUnlock = true
@@ -1610,6 +1624,73 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			au.accountsReadCond.Wait()
 		}
 	}
+}
+
+// lookupFullWithRewards returns the full account data for a given address at a given round.
+// The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
+// even while it does return the AccoutData which represent the "rewarded" account data.
+func (au *accountUpdates) lookupFullWithRewards(rnd basics.Round, addr basics.Address) (pad ledgercore.PersistedAccountData, err error) {
+	pad, err = au.lookupWithRewards(rnd, addr)
+	if err != nil {
+		return
+	}
+
+	if pad.ExtendedAssetHolding.Count == 0 {
+		return
+	}
+
+	pad.AccountData.Assets, _, err = loadHoldings(au.accountsq.loadAssetHoldingGroupStmt, pad.ExtendedAssetHolding)
+	return
+}
+
+// lookupWithHoldings returns the full account data for a given address at a given round.
+// The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
+// even while it does return the AccoutData which represent the "rewarded" account data.
+func (au *accountUpdates) lookupFullWithoutRewards(rnd basics.Round, addr basics.Address) (pad ledgercore.PersistedAccountData, err error) {
+	pad, _, err = au.lookupWithoutRewards(rnd, addr, true)
+	if err != nil {
+		return
+	}
+
+	if pad.ExtendedAssetHolding.Count == 0 {
+		return
+	}
+
+	pad.AccountData.Assets, _, err = loadHoldings(au.accountsq.loadAssetHoldingGroupStmt, pad.ExtendedAssetHolding)
+	return
+}
+
+// lookupWithHoldings returns the full account data for a given address at a given round.
+// The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
+// even while it does return the AccoutData which represent the "rewarded" account data.
+func (au *accountUpdates) lookupWithHolding(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
+	pad, err = au.lookupWithRewards(rnd, addr)
+	if err != nil {
+		return
+	}
+
+	if pad.ExtendedAssetHolding.Count == 0 {
+		return
+	}
+
+	if ctype == basics.AssetCreatable {
+		gi, _ := pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(cidx), 0)
+		if gi != -1 {
+			g := pad.ExtendedAssetHolding.Groups[gi]
+			var holdings map[basics.AssetIndex]basics.AssetHolding
+			holdings, _, err = loadHoldingGroup(au.accountsq.loadAssetHoldingGroupStmt, g, nil)
+			if err != nil {
+				return
+			}
+			_, ai := pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(cidx), gi)
+			if ai != -1 {
+				pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, 1)
+				pad.AccountData.Assets[basics.AssetIndex(cidx)] = holdings[basics.AssetIndex(cidx)]
+			}
+		}
+	}
+
+	return
 }
 
 // lookupWithoutRewards returns the account data for a given address at a given round.

@@ -458,7 +458,7 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 		return basics.AccountData{}, err
 	}
 
-	return data, nil
+	return data.AccountData, nil
 }
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up

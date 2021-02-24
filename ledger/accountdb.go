@@ -882,6 +882,20 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data dbAccountData, er
 	return
 }
 
+func (qs *accountsDbQueries) lookupFull(addr basics.Address) (data dbAccountData, err error) {
+	data, err = qs.lookup(addr)
+	if err != nil {
+		return
+	}
+
+	if data.pad.ExtendedAssetHolding.Count == 0 {
+		return
+	}
+
+	data.pad.Assets, data.pad.ExtendedAssetHolding, err = loadHoldings(qs.loadAssetHoldingGroupStmt, data.pad.ExtendedAssetHolding)
+	return
+}
+
 func (qs *accountsDbQueries) storeCatchpoint(ctx context.Context, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	err = db.Retry(func() (err error) {
 		_, err = qs.deleteStoredCatchpoint.ExecContext(ctx, round)
@@ -1033,8 +1047,8 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 			return nil, err
 		}
 
-		var data basics.AccountData
-		err = protocol.Decode(buf, &data)
+		var pad ledgercore.PersistedAccountData
+		err = protocol.Decode(buf, &pad)
 		if err != nil {
 			return nil, err
 		}
@@ -1046,7 +1060,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 		}
 
 		copy(addr[:], addrbuf)
-		res[addr] = accountDataToOnline(addr, &data, proto)
+		res[addr] = accountDataToOnline(addr, &pad.AccountData, proto)
 	}
 
 	return res, rows.Err()
