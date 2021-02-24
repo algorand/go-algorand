@@ -436,7 +436,7 @@ func (wp *wsPeer) readLoop() {
 
 			select {
 			case channel <- &Response{Topics: topics}:
-				// do nothing. writing was successfull.
+				// do nothing. writing was successful.
 			default:
 				wp.net.log.Warnf("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
 			}
