@@ -160,32 +160,36 @@ tasks:
     target: mule-package-docker
 
 jobs:
-  build-linux-amd64:
-    tasks:
-      - docker.Make.build.amd64
-      - stash.Stash.linux-amd64
-  build-linux-arm64:
-    tasks:
-      - docker.Make.build.arm64
-      - stash.Stash.linux-arm64
-  build-linux-arm32:
-    tasks:
-      - docker.Make.build.arm
-      - stash.Stash.linux-arm
+#  build-linux-amd64:
+#    tasks:
+#      - docker.Make.build.amd64
+#      - stash.Stash.linux-amd64
+#  build-linux-arm64:
+#    tasks:
+#      - docker.Make.build.arm64
+#      - stash.Stash.linux-arm64
+#  build-linux-arm32:
+#    tasks:
+#      - docker.Make.build.arm
+#      - stash.Stash.linux-arm
+#
+#  package-linux-amd64:
+#    tasks:
+#      - stash.Unstash.linux-amd64
+#      - stash.Unstash.linux-arm64
+#      - stash.Unstash.linux-arm
+#      - docker.Make.deb.amd64
+#      - docker.Make.rpm.amd64
+#      - stash.Stash.packages
+#  archive-linux-amd64:
+#    tasks:
+#      - stash.Unstash.packages
+#      - docker.Make.archive.amd64
+#
+#  package-docker:
+#    tasks:
+#      - docker.Make.docker-image
 
-  package-linux-amd64:
+  sign-docker:
     tasks:
-      - stash.Unstash.linux-amd64
-      - stash.Unstash.linux-arm64
-      - stash.Unstash.linux-arm
-      - docker.Make.deb.amd64
-      - docker.Make.rpm.amd64
-      - stash.Stash.packages
-  archive-linux-amd64:
-    tasks:
-      - stash.Unstash.packages
-      - docker.Make.archive.amd64
-
-  package-docker:
-    tasks:
-      - docker.Make.docker-image
+      - docker.Make.docker-sign
