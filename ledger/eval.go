@@ -340,6 +340,7 @@ func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.Com
 // BlockEvaluator represents an in-progress evaluation of a block
 // against the ledger.
 type BlockEvaluator struct {
+	base     *roundCowBase
 	state    *roundCowState
 	validate bool
 	generate bool
@@ -403,6 +404,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		proto:       proto,
 		genesisHash: l.GenesisHash(),
 		l:           l,
+		base:        base,
 	}
 
 	// Preallocate space for the payset so that we don't have to
@@ -1125,6 +1127,8 @@ func (validator *evalTxValidator) run() {
 	}
 }
 
+var ParallelPrefetchThreads int = 1
+
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
 // Validate: eval(ctx, l, blk, true, txcache, executionPool, true)
@@ -1144,9 +1148,27 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	}()
 
 	// If validationCtx or underlying ctx are Done, end prefetch
-	if usePrefetch {
-		wg.Add(1)
-		go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset, &wg)
+	if usePrefetch && (ParallelPrefetchThreads > 0) {
+		//fmt.Fprintf(os.Stderr, "eval.base %p eval.state %p eval.state.lookupParent %p\n", eval.base, eval.state, eval.state.lookupParent)
+		wg.Add(ParallelPrefetchThreads)
+		if ParallelPrefetchThreads <= 1 {
+			go prefetchThread(validationCtx, eval.base, blk.Payset, 1, 0, &wg)
+		} else if true {
+			for offset := 0; offset < ParallelPrefetchThreads; offset++ {
+				go prefetchThread(validationCtx, eval.base, blk.Payset, ParallelPrefetchThreads, offset, &wg)
+			}
+			/*
+				} else {
+					prev := 0
+					for i := 1; i < ParallelPrefetchThreads; i++ {
+						split := (i * len(blk.Payset)) / ParallelPrefetchThreads
+						go prefetchThread(validationCtx, eval.base, blk.Payset[prev:split], &wg)
+						prev = split
+					}
+					go prefetchThread(validationCtx, eval.base, blk.Payset[prev:], &wg)
+			*/
+		}
+		//wg.Wait()
 	}
 
 	// Next, transactions
@@ -1218,21 +1240,22 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	return eval.state.deltas(), nil
 }
 
-func prefetchThread(ctx context.Context, state roundCowParent, payset []transactions.SignedTxnInBlock, wg *sync.WaitGroup) {
+func prefetchThread(ctx context.Context, base *roundCowBase, payset []transactions.SignedTxnInBlock, step, offset int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	maybelookup := func(addr basics.Address) {
 		if addr.IsZero() {
 			return
 		}
-		state.lookup(addr)
+		base.lookup(addr)
 	}
-	for _, stxn := range payset {
+	for i := 0; (i + offset) < len(payset); i += step {
+		stxn := payset[i+offset]
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
-		state.lookup(stxn.Txn.Sender)
+		base.lookup(stxn.Txn.Sender)
 		maybelookup(stxn.Txn.Receiver)
 		maybelookup(stxn.Txn.CloseRemainderTo)
 		maybelookup(stxn.Txn.AssetSender)

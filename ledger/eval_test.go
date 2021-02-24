@@ -19,9 +19,12 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime/pprof"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -447,26 +450,33 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 }
 
 func BenchmarkBlockEvaluatorRAMCrypto(b *testing.B) {
-	benchmarkBlockEvaluator(b, true, true)
+	benchmarkBlockEvaluator(b, true, true, false)
 }
 func BenchmarkBlockEvaluatorRAMNoCrypto(b *testing.B) {
-	benchmarkBlockEvaluator(b, true, false)
+	benchmarkBlockEvaluator(b, true, false, false)
 }
 func BenchmarkBlockEvaluatorDiskCrypto(b *testing.B) {
-	benchmarkBlockEvaluator(b, false, true)
+	for i := 0; i <= 4; i++ {
+		ParallelPrefetchThreads = i
+		b.Run(fmt.Sprintf("%d_threads", i), func(b *testing.B) {
+			benchmarkBlockEvaluator(b, false, true, true)
+		})
+	}
+	ParallelPrefetchThreads = 1
 }
 func BenchmarkBlockEvaluatorDiskNoCrypto(b *testing.B) {
-	benchmarkBlockEvaluator(b, false, false)
+	benchmarkBlockEvaluator(b, false, false, false)
 }
 
 // this variant focuses on benchmarking ledger.go `eval()`, the rest is setup, it runs eval() b.N times.
-func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
+func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto, extradbg bool) {
 	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
 	defer func() { deadlock.Opts.Disable = deadlockDisable }()
 	start := time.Now()
 	genesisInitState, addrs, keys := genesis(100000)
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
+	dbName = strings.ReplaceAll(dbName, "/", "_")
 	proto := config.Consensus[genesisInitState.Block.CurrentProtocol]
 	proto.MaxTxnBytesPerBlock = 1000000000 // very big, no limit
 	config.Consensus[protocol.ConsensusVersion(dbName)] = proto
@@ -550,13 +560,14 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 	defer backlogPool.Shutdown()
 
 	// test speed of block validation
-	// This should be the same as the eval line in ledger.go AddBlock()
-	// This is pulled out to isolate eval() time from db ops of AddValidatedBlock()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		var err error
 		if withCrypto {
+			// This is most like processing a catchup block or a newly proposed block.
 			_, err = l2.Validate(context.Background(), validatedBlock.blk, backlogPool)
 		} else {
+			// This is most like ledger.go AddBlock() except with a nil txcache
 			_, err = eval(context.Background(), l2, validatedBlock.blk, false, nil, nil, true)
 		}
 		require.NoError(b, err)
@@ -565,6 +576,126 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 	abDone := time.Now()
 	abTime := abDone.Sub(avbDone)
 	b.ReportMetric(float64(abTime)/float64(numTxns*b.N), "ns/eval_validate_tx")
+
+	b.StopTimer()
+}
+
+func BenchmarkLedgerRandomReadDisk(b *testing.B) {
+	for t := 1; t <= 4; t++ {
+		b.Run(
+			fmt.Sprintf("%d_threads", t),
+			func(b *testing.B) {
+				benchmarkLedgerRandomRead_inner(b, false, t)
+			},
+		)
+	}
+}
+func benchmarkLedgerRandomRead_inner(b *testing.B, inMem bool, threads int) {
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() { deadlock.Opts.Disable = deadlockDisable }()
+	start := time.Now()
+	genesisInitState, addrs, _ /*keys*/ := genesis(100000)
+	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
+	dbName = strings.ReplaceAll(dbName, "/", "_")
+	proto := config.Consensus[genesisInitState.Block.CurrentProtocol]
+	proto.MaxTxnBytesPerBlock = 1000000000 // very big, no limit
+	config.Consensus[protocol.ConsensusVersion(dbName)] = proto
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusVersion(dbName)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(b, err)
+	defer testLedgerCleanup(l, dbName, inMem)
+
+	rnd := basics.Round(0)
+
+	setupDone := time.Now()
+	setupTime := setupDone.Sub(start)
+	b.Logf("BenchmarkLedgerRandomRead setup time %s", setupTime.String())
+
+	b.ResetTimer()
+	var wg sync.WaitGroup
+	wg.Add(threads)
+
+	threadf := func() {
+		addrOrder := rand.Perm(len(addrs))
+		for i := 0; i < b.N/threads; i++ {
+			addr := addrs[addrOrder[i%len(addrOrder)]]
+			_, _, err := l.LookupWithoutRewards(rnd, addr)
+			require.NoError(b, err)
+		}
+		wg.Done()
+	}
+	for i := 1; i <= threads; i++ {
+		go threadf()
+	}
+	wg.Wait()
+
+	b.StopTimer()
+}
+
+// Benchmark roundCowBase
+func BenchmarkRCBRandomReadDisk(b *testing.B) {
+	for t := 1; t <= 4; t++ {
+		b.Run(
+			fmt.Sprintf("%d_threads", t),
+			func(b *testing.B) {
+				benchmarkRCBRandomRead_inner(b, false, t)
+			},
+		)
+	}
+}
+func benchmarkRCBRandomRead_inner(b *testing.B, inMem bool, threads int) {
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() { deadlock.Opts.Disable = deadlockDisable }()
+	start := time.Now()
+	genesisInitState, addrs, _ /*keys*/ := genesis(100000)
+	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
+	dbName = strings.ReplaceAll(dbName, "/", "_")
+	proto := config.Consensus[genesisInitState.Block.CurrentProtocol]
+	proto.MaxTxnBytesPerBlock = 1000000000 // very big, no limit
+	config.Consensus[protocol.ConsensusVersion(dbName)] = proto
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusVersion(dbName)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(b, err)
+	defer testLedgerCleanup(l, dbName, inMem)
+
+	base := &roundCowBase{
+		l: l,
+		// round that lookups come from is previous block.  We validate
+		// the block at this round below, so underflow will be caught.
+		// If we are not validating, we must have previously checked
+		// an agreement.Certificate attesting that hdr is valid.
+		rnd:      0,
+		proto:    proto,
+		accounts: make(map[basics.Address]basics.AccountData),
+	}
+
+	setupDone := time.Now()
+	setupTime := setupDone.Sub(start)
+	b.Logf("BenchmarkLedgerRandomRead setup time %s", setupTime.String())
+
+	b.ResetTimer()
+	var wg sync.WaitGroup
+	wg.Add(threads)
+
+	threadf := func() {
+		addrOrder := rand.Perm(len(addrs))
+		for i := 0; i < b.N/threads; i++ {
+			addr := addrs[addrOrder[i%len(addrOrder)]]
+			_, err := base.lookup(addr)
+			require.NoError(b, err)
+		}
+		wg.Done()
+	}
+	for i := 1; i <= threads; i++ {
+		go threadf()
+	}
+	wg.Wait()
 
 	b.StopTimer()
 }
