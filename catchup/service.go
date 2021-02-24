@@ -28,12 +28,11 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/rpcs"
 )
 
 const catchupPeersForSync = 10
@@ -103,17 +102,16 @@ type BlockAuthenticator interface {
 }
 
 // MakeService creates a catchup service instance from its constituent components
-// If wsf is nil, then fetch over gossip is disabled.
-func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger Ledger, wsf *rpcs.WsFetcherService, auth BlockAuthenticator, unmatchedPendingCertificates <-chan PendingUnmatchedCertificate) (s *Service) {
+func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger Ledger, auth BlockAuthenticator, unmatchedPendingCertificates <-chan PendingUnmatchedCertificate) (s *Service) {
 	s = &Service{}
 
 	s.cfg = config
-	s.fetcherFactory = MakeNetworkFetcherFactory(net, catchupPeersForSync, wsf, &config)
+	s.fetcherFactory = MakeNetworkFetcherFactory(net, catchupPeersForSync, &config)
 	s.ledger = ledger
 	s.net = net
 	s.auth = auth
 	s.unmatchedPendingCertificates = unmatchedPendingCertificates
-	s.latestRoundFetcherFactory = MakeNetworkFetcherFactory(net, blockQueryPeerLimit, wsf, &config)
+	s.latestRoundFetcherFactory = MakeNetworkFetcherFactory(net, blockQueryPeerLimit, &config)
 	s.log = log.With("Context", "sync")
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
@@ -280,7 +278,7 @@ func (s *Service) fetchAndWrite(fetcher Fetcher, r basics.Round, prevFetchComple
 				err = s.ledger.AddBlock(*block, *cert)
 				if err != nil {
 					switch err.(type) {
-					case ledger.BlockInLedgerError:
+					case ledgercore.BlockInLedgerError:
 						s.log.Infof("fetchAndWrite(%d): block already in ledger", r)
 						return true
 					case protocol.Error:
@@ -324,7 +322,7 @@ func (s *Service) pipelineCallback(fetcher Fetcher, r basics.Round, thisFetchCom
 
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
 func (s *Service) pipelinedFetch(seedLookback uint64) {
-	fetcher := s.fetcherFactory.NewOverGossip(protocol.UniCatchupReqTag)
+	fetcher := s.fetcherFactory.NewOverGossip()
 	defer fetcher.Close()
 
 	// make sure that we have at least one peer
@@ -445,7 +443,10 @@ func (s *Service) periodicSync() {
 	case <-s.ctx.Done():
 		return
 	}
-	s.sync()
+	// if the catchup is disabled in the config file, just skip it.
+	if s.parallelBlocks != 0 {
+		s.sync()
+	}
 	stuckInARow := 0
 	sleepDuration := s.deadlineTimeout
 	for {
@@ -463,6 +464,10 @@ func (s *Service) periodicSync() {
 		case <-time.After(sleepDuration):
 			if sleepDuration < s.deadlineTimeout {
 				sleepDuration = s.deadlineTimeout
+				continue
+			}
+			// if the catchup is disabled in the config file, just skip it.
+			if s.parallelBlocks == 0 {
 				continue
 			}
 			// check to see if we're currently writing a catchpoint file. If so, wait longer before attempting again.
@@ -552,7 +557,7 @@ func (s *Service) syncCert(cert *PendingUnmatchedCertificate) {
 // TODO this doesn't actually use the digest from cert!
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
-	fetcher := s.latestRoundFetcherFactory.NewOverGossip(protocol.UniEnsBlockReqTag)
+	fetcher := s.latestRoundFetcherFactory.NewOverGossip()
 	defer func() {
 		fetcher.Close()
 	}()
@@ -562,7 +567,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			// refresh peers and try again
 			logging.Base().Warn("fetchRound found no outgoing peers")
 			s.net.RequestConnectOutgoing(true, s.ctx.Done())
-			fetcher = s.latestRoundFetcherFactory.NewOverGossip(protocol.UniEnsBlockReqTag)
+			fetcher = s.latestRoundFetcherFactory.NewOverGossip()
 		}
 		// Ask the fetcher to get the block somehow
 		block, fetchedCert, rpcc, err := s.innerFetch(fetcher, cert.Round)

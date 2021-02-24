@@ -25,8 +25,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/rpcs"
@@ -56,16 +58,20 @@ type HTTPFetcher struct {
 	config *config.Local
 }
 
-// MakeHTTPFetcher wraps an HTTPPeer so that we can get blocks from it
+// MakeHTTPFetcher wraps an HTTPPeer so that we can get blocks from it, and return the FetcherClient interface
 func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net network.GossipNode, cfg *config.Local) (fc FetcherClient) {
-	fc = &HTTPFetcher{
+	return makeHTTPFetcher(log, peer, net, cfg)
+}
+
+// makeHTTPFetcher wraps an HTTPPeer so that we can get blocks from it, and returns a HTTPFetcher object.
+func makeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net network.GossipNode, cfg *config.Local) *HTTPFetcher {
+	return &HTTPFetcher{
 		peer:    peer,
 		rootURL: peer.GetAddress(),
 		net:     net,
 		client:  peer.GetHTTPClient(),
 		log:     log,
 		config:  cfg}
-	return
 }
 
 // GetBlockBytes gets a block.
@@ -75,7 +81,8 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 	if err != nil {
 		return nil, err
 	}
-	parsedURL.Path = hf.peer.PrepareURL(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(r), 36)))
+
+	parsedURL.Path = hf.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(r), 36)))
 	blockURL := parsedURL.String()
 	hf.log.Debugf("block GET %#v peer %#v %T", blockURL, hf.peer, hf.peer)
 	request, err := http.NewRequest("GET", blockURL, nil)
@@ -99,8 +106,8 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 		response.Body.Close()
 		return nil, errNoBlockForRound
 	default:
-		hf.log.Warn("http block fetcher response status code : ", response.StatusCode)
 		bodyBytes, err := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
+		hf.log.Warn("HTTPFetcher.GetBlockBytes: response status code %d from '%s'. Response body '%s' ", response.StatusCode, blockURL, string(bodyBytes))
 		if err == nil {
 			err = fmt.Errorf("GetBlockBytes error response status code %d when requesting '%s'. Response body '%s'", response.StatusCode, blockURL, string(bodyBytes))
 		} else {
@@ -144,4 +151,19 @@ func (hf *HTTPFetcher) Address() string {
 // Peer owns that connection and will close as needed.
 func (hf *HTTPFetcher) Close() error {
 	return nil
+}
+
+// FetchBlock is a copy of the functionality in NetworkFetcher.FetchBlock, designed to complete
+// the HTTPFetcher functionality as a standalone fetcher
+func (hf *HTTPFetcher) FetchBlock(ctx context.Context, r basics.Round) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
+	fetchedBuf, err := hf.GetBlockBytes(ctx, r)
+	if err != nil {
+		err = fmt.Errorf("Peer %v: %v", hf.Address(), err)
+		return
+	}
+	block, cert, err := processBlockBytes(fetchedBuf, r, hf.Address())
+	if err != nil {
+		return
+	}
+	return block, cert, nil
 }

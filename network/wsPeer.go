@@ -21,11 +21,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,6 +39,7 @@ import (
 )
 
 const maxMessageLength = 4 * 1024 * 1024 // Currently the biggest message is VB vote bundles. TODO: per message type size limit?
+const averageMessageLength = 2 * 1024    // Most of the messages are smaller than this size, which makes it into a good base allocation.
 
 // This parameter controls how many messages from a single peer can be
 // queued up in the global wsNetwork.readBuffer at a time.  Making this
@@ -75,8 +74,6 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 	protocol.TxnTag:             true,
 	protocol.UniCatchupReqTag:   true,
 	protocol.UniEnsBlockReqTag:  true,
-	protocol.UniEnsBlockResTag:  true,
-	protocol.UniCatchupResTag:   true,
 	protocol.VoteBundleTag:      true,
 }
 
@@ -214,10 +211,6 @@ type wsPeer struct {
 type HTTPPeer interface {
 	GetAddress() string
 	GetHTTPClient() *http.Client
-
-	// PrepareURL takes a URL that may have substitution parameters in it and returns a URL with those parameters filled in.
-	// E.g. /v1/{genesisID}/gossip -> /v1/1234/gossip
-	PrepareURL(string) string
 }
 
 // UnicastPeer is another possible interface for the opaque Peer.
@@ -252,11 +245,6 @@ func (wp *wsPeerCore) GetAddress() string {
 // http.Client will maintain a cache of connections with some keepalive.
 func (wp *wsPeerCore) GetHTTPClient() *http.Client {
 	return &wp.client
-}
-
-// PrepareURL substitutes placeholders like "{genesisID}" for their values.
-func (wp *wsPeerCore) PrepareURL(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", wp.net.GenesisID, -1)
 }
 
 // Version returns the matching version from network.SupportedProtocolVersions
@@ -370,7 +358,7 @@ func (wp *wsPeer) readLoop() {
 		wp.readLoopCleanup(cleanupCloseError)
 	}()
 	wp.conn.SetReadLimit(maxMessageLength)
-	slurper := LimitedReaderSlurper{Limit: maxMessageLength}
+	slurper := MakeLimitedReaderSlurper(averageMessageLength, maxMessageLength)
 	for {
 		msg := IncomingMessage{}
 		mtype, reader, err := wp.conn.NextReader()
@@ -665,7 +653,7 @@ func (wp *wsPeer) sendPing() bool {
 	tagBytes := []byte(protocol.PingTag)
 	mbytes := make([]byte, len(tagBytes)+pingLength)
 	copy(mbytes, tagBytes)
-	rand.Read(mbytes[len(tagBytes):])
+	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]
 	sent := wp.writeNonBlock(mbytes, false, crypto.Digest{}, time.Now())
 
@@ -698,8 +686,14 @@ func (wp *wsPeer) Close() {
 	atomic.StoreInt32(&wp.didSignalClose, 1)
 	if atomic.CompareAndSwapInt32(&wp.didInnerClose, 0, 1) {
 		close(wp.closing)
-		wp.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(5*time.Second))
-		wp.conn.CloseWithoutFlush()
+		err := wp.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(5*time.Second))
+		if err != nil {
+			wp.net.log.Infof("failed to write CloseMessage to connection for %s", wp.conn.RemoteAddr().String())
+		}
+		err = wp.conn.CloseWithoutFlush()
+		if err != nil {
+			wp.net.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddr().String())
+		}
 	}
 }
 

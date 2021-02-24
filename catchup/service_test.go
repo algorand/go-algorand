@@ -38,14 +38,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var defaultConfig = config.Local{
-	Archival:                 false,
-	GossipFanout:             4,
-	NetAddress:               "",
-	BaseLoggerDebugLevel:     1,
-	IncomingConnectionsLimit: -1,
-}
-
+var defaultConfig = config.GetDefaultLocal()
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var sinkAddr = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 
@@ -67,7 +60,7 @@ func (factory *MockedFetcherFactory) New() Fetcher {
 	return factory.fetcher
 }
 
-func (factory *MockedFetcherFactory) NewOverGossip(tag protocol.Tag) Fetcher {
+func (factory *MockedFetcherFactory) NewOverGossip() Fetcher {
 	return factory.New()
 }
 
@@ -184,7 +177,7 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	net := &mocks.MockNetwork{}
 
 	// Make Service
-	syncer := MakeService(logging.Base(), defaultConfig, net, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
+	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil)
 	syncer.fetcherFactory = makeMockFactory(&MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)})
 
 	syncer.testStart()
@@ -202,7 +195,7 @@ func TestPeriodicSync(t *testing.T) {
 	require.True(t, 0 == initialLocalRound)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, auth, nil)
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, auth, nil)
 	s.deadlineTimeout = 2 * time.Second
 
 	factory := MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
@@ -237,7 +230,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	net := &mocks.MockNetwork{}
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil)
 	factory := MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
 	s.fetcherFactory = &factory
 
@@ -278,7 +271,7 @@ func TestAbruptWrites(t *testing.T) {
 	lastRound := local.LastRound()
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, &mockedAuthenticator{errorRound: -1}, nil)
 	factory := MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
 	s.fetcherFactory = &factory
 
@@ -315,7 +308,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 	lastRoundAtStart := local.LastRound()
 
 	// Make Service
-	syncer := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
+	syncer := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, &mockedAuthenticator{errorRound: -1}, nil)
 	syncer.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
 
 	// Start the service ( dummy )
@@ -347,7 +340,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 
 	lastRoundAtStart := local.LastRound()
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
 	s.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
 
 	// Start the service ( dummy )
@@ -463,9 +456,11 @@ func helperTestOnSwitchToUnSupportedProtocol(
 
 	local = mLocal
 	remote = Ledger(mRemote)
+	config := defaultConfig
+	config.CatchupParallelBlocks = 2
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
+	s := MakeService(logging.Base(), config, &mocks.MockNetwork{}, local, &mockedAuthenticator{errorRound: -1}, nil)
 	s.deadlineTimeout = 2 * time.Second
 
 	s.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
@@ -652,7 +647,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	lastRoundAtStart := local.LastRound()
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
+	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
 	s.latestRoundFetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
 	s.testStart()
 	for roundNumber := 2; roundNumber < 10; roundNumber += 3 {

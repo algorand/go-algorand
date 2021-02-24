@@ -26,6 +26,7 @@ import (
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+	"github.com/algorand/go-algorand/rpcs"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -33,6 +34,7 @@ import (
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
@@ -737,6 +739,24 @@ func (c *Client) RawBlock(round uint64) (resp v1.RawBlock, err error) {
 	return
 }
 
+// BookkeepingBlock takes a round and returns its block
+func (c *Client) BookkeepingBlock(round uint64) (block bookkeeping.Block, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawBlock(round)
+		if err == nil {
+			var b rpcs.EncodedBlockCert
+			err = protocol.DecodeReflect(resp, &b)
+			if err != nil {
+				return
+			}
+			block = b.Block
+		}
+	}
+	return
+}
+
 // HealthCheck returns an error if something is wrong
 func (c *Client) HealthCheck() error {
 	algod, err := c.ensureAlgodClient()
@@ -1023,6 +1043,15 @@ func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error
 			return
 		}
 		err = json.Unmarshal(data, &resp)
+	}
+	return
+}
+
+// TxnProof returns a Merkle proof for a transaction in a block.
+func (c *Client) TxnProof(txid string, round uint64) (resp generatedV2.ProofResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.Proof(txid, round)
 	}
 	return
 }

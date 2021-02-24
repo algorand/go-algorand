@@ -194,8 +194,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		ad.AppLocalStates[AppIndex(0x1234123412341234-appHolderApps)] = ls
 	}
 
-	encoded, err := ad.MarshalMsg(nil)
-	require.NoError(t, err)
+	encoded := ad.MarshalMsg(nil)
 	require.GreaterOrEqual(t, MaxEncodedAccountDataSize, len(encoded))
 }
 
@@ -206,16 +205,16 @@ func TestEncodedAccountAllocationBounds(t *testing.T) {
 		if proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
 			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppsCreated > encodedMaxAppParams {
+		if proto.MaxAppsCreated > EncodedMaxAppParams {
 			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
 		}
-		if proto.MaxAppsOptedIn > encodedMaxAppLocalStates {
+		if proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
 			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
 		}
-		if proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries {
+		if proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries {
 			require.Failf(t, "proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
 		}
-		if proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries {
+		if proto.MaxGlobalSchemaEntries > EncodedMaxKeyValueEntries {
 			require.Failf(t, "proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
 		}
 	}

@@ -26,10 +26,9 @@ txna ApplicationArgs 0
 byte base64 Y2hlY2s=
 ==
 
-// and arg 1 must be the value at "foo"
-// Key "foo"
+// and arg 1 must be the value inserted by globwrite.teal
 int 0
-byte base64 Zm9v
+byte 0xfefeffef0000112233
 app_global_get_ex
 
 // Value must exist
@@ -48,8 +47,8 @@ bnz done
 write:
 // Write to GlobalState
 
-// Key "foo"
-byte base64 Zm9v
+// non-utf8 key
+byte 0xfefeffef0000112233
 
 // Value "bar"
 byte base64 YmFy
