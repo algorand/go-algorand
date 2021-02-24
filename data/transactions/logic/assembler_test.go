@@ -920,10 +920,10 @@ txna Assets 0
 txn NumAssets
 txna Applications 0
 txn NumApplications
-txn GlobalStateInts
-txn GlobalStateByteslices
-txn LocalStateInts
-txn LocalStateByteslices
+txn GlobalNumUint
+txn GlobalNumByteSlice
+txn LocalNumUint
+txn LocalNumByteSlice
 txn NumLogicArgs
 txna LogicArgs 2
 gtxn 12 Fee

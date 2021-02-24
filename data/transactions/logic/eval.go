@@ -1418,14 +1418,14 @@ func (cx *evalContext) txnFieldToStack(stxn *transactions.SignedTxn, field TxnFi
 	case NumApplications:
 		sv.Uint = uint64(len(txn.ForeignApps))
 
-	case GlobalStateInts:
+	case GlobalNumUint:
 		sv.Uint = uint64(txn.GlobalStateSchema.NumUint)
-	case GlobalStateByteslices:
+	case GlobalNumByteSlice:
 		sv.Uint = uint64(txn.GlobalStateSchema.NumByteSlice)
 
-	case LocalStateInts:
+	case LocalNumUint:
 		sv.Uint = uint64(txn.LocalStateSchema.NumUint)
-	case LocalStateByteslices:
+	case LocalNumByteSlice:
 		sv.Uint = uint64(txn.LocalStateSchema.NumByteSlice)
 
 	case ApprovalProgram:

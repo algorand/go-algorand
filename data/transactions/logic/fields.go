@@ -134,14 +134,14 @@ const (
 	// NumApplication len(ForeignApps)
 	NumApplications
 
-	// GlobalStateInts uint64
-	GlobalStateInts
-	// GlobalStateByteslices uint64
-	GlobalStateByteslices
-	// LocalStateInts uint64
-	LocalStateInts
-	// LocalStateByteslices uint64
-	LocalStateByteslices
+	// GlobalNumUint uint64
+	GlobalNumUint
+	// GlobalNumByteSlice uint64
+	GlobalNumByteSlice
+	// LocalNumUint uint64
+	LocalNumUint
+	// LocalNumByteSlice uint64
+	LocalNumByteSlice
 
 	// LogicArgs [][]byte
 	LogicArgs
@@ -229,10 +229,10 @@ var txnFieldSpecs = []txnFieldSpec{
 	{NumAssets, StackUint64, 3},
 	{Applications, StackUint64, 3},
 	{NumApplications, StackUint64, 3},
-	{GlobalStateInts, StackUint64, 3},
-	{GlobalStateByteslices, StackUint64, 3},
-	{LocalStateInts, StackUint64, 3},
-	{LocalStateByteslices, StackUint64, 3},
+	{GlobalNumUint, StackUint64, 3},
+	{GlobalNumByteSlice, StackUint64, 3},
+	{LocalNumUint, StackUint64, 3},
+	{LocalNumByteSlice, StackUint64, 3},
 	{LogicArgs, StackBytes, 3},
 	{NumLogicArgs, StackUint64, 3},
 }

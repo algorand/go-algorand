@@ -1418,19 +1418,19 @@ int 111
 ==
 assert
 
-txn GlobalStateInts
+txn GlobalNumUint
 int 3
 ==
 assert
-txn GlobalStateByteslices
+txn GlobalNumByteSlice
 int 0
 ==
 assert
-txn LocalStateInts
+txn LocalNumUint
 int 1
 ==
 assert
-txn LocalStateByteslices
+txn LocalNumByteSlice
 int 2
 ==
 assert
