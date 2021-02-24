@@ -557,8 +557,15 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 
 var emptyHash = crypto.Digest{}
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
+	numSkipped := 0
+	defer func() {
+		if numSkipped > 0 {
+			logging.Base().Infof("num skipped: %v", numSkipped)
+		}
+	}()
 	for _, msg := range msgs {
 		if wp.sendMsgTracker.existsUnsafe(msg.hash) {
+			numSkipped++
 			continue
 		}
 

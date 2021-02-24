@@ -168,6 +168,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 				case protocol.ProposalPayloadTag:
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
 					if err := ReconstructProposal(net, msg.CompoundMessage.Proposal.Payset, msg.MessageHandle); err != nil {
+						logging.Base().Warnf("Failed to reconstruct proposal: %v", err)
 						continue
 					}
 				default:
