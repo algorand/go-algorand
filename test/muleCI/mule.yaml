@@ -159,6 +159,11 @@ tasks:
     agent: docker-ubuntu
     target: mule-package-docker
 
+  - task: docker.Make
+    name: docker-sign
+    agent: docker-ubuntu
+    target: mule-sign
+
 jobs:
 #  build-linux-amd64:
 #    tasks:
