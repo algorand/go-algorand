@@ -88,11 +88,11 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int)
 			accts:      make([]basics.BalanceRecord, 0, hint*2),
 			acctsCache: make(map[basics.Address]int, hint*2),
 		},
-		Txids:         make(map[transactions.Txid]basics.Round, hint),
-		Txleases:      make(map[Txlease]basics.Round, hint),
-		Creatables:    make(map[basics.CreatableIndex]ModifiedCreatable, hint),
-		Hdr:           hdr,
-		PrevTimestamp: prevTimestamp,
+		Txids:                    make(map[transactions.Txid]basics.Round, hint),
+		Txleases:                 make(map[Txlease]basics.Round, hint),
+		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable, hint),
+		Hdr:                      hdr,
+		PrevTimestamp:            prevTimestamp,
 		initialTransactionsCount: hint,
 	}
 }
@@ -156,13 +156,13 @@ func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
 
 // OptimizeAllocatedMemory by reallocating maps to needed capacity
 func (sd *StateDelta) OptimizeAllocatedMemory() {
-	if len(sd.Accts.accts) < sd.initialTransactionsCount/2 {
+	if len(sd.Accts.accts) < sd.initialTransactionsCount-500 {
 		accts := make([]basics.BalanceRecord, len(sd.Accts.acctsCache))
 		copy(accts, sd.Accts.accts)
 		sd.Accts.accts = accts
 	}
 
-	if len(sd.Accts.acctsCache) < sd.initialTransactionsCount/2 {
+	if len(sd.Accts.acctsCache) < sd.initialTransactionsCount-500 {
 		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
 		for k, v := range sd.Accts.acctsCache {
 			acctsCache[k] = v
@@ -170,7 +170,7 @@ func (sd *StateDelta) OptimizeAllocatedMemory() {
 		sd.Accts.acctsCache = acctsCache
 	}
 
-	if len(sd.Txleases) < sd.initialTransactionsCount/2 {
+	if len(sd.Txleases) < sd.initialTransactionsCount-1000 {
 		txLeases := make(map[Txlease]basics.Round, len(sd.Txleases))
 		for k, v := range sd.Txleases {
 			txLeases[k] = v
@@ -178,7 +178,7 @@ func (sd *StateDelta) OptimizeAllocatedMemory() {
 		sd.Txleases = txLeases
 	}
 
-	if len(sd.Creatables) < sd.initialTransactionsCount/2 {
+	if len(sd.Creatables) < sd.initialTransactionsCount-1000 {
 		creatableDeltas := make(map[basics.CreatableIndex]ModifiedCreatable, len(sd.Creatables))
 		for k, v := range sd.Creatables {
 			creatableDeltas[k] = v
