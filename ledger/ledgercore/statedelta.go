@@ -93,6 +93,7 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int)
 		Creatables:    make(map[basics.CreatableIndex]ModifiedCreatable, hint),
 		Hdr:           hdr,
 		PrevTimestamp: prevTimestamp,
+		initialTransactionsCount: hint,
 	}
 }
 
