@@ -1423,15 +1423,9 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
 	}
 
-	// Trim size of creatableDeltas map
-	creatableDeltas := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, len(delta.Creatables))
-	for k, v := range delta.Creatables {
-		creatableDeltas[k] = v
-	}
-
 	au.deltas = append(au.deltas, delta.Accts)
 	au.protos = append(au.protos, proto)
-	au.creatableDeltas = append(au.creatableDeltas, creatableDeltas)
+	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
 	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
 
