@@ -448,6 +448,7 @@ func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) 
 // Lookup uses the accounts tracker to return the account state for a
 // given account in a particular round.  The account values reflect
 // the changes of all blocks up to and including rnd.
+// The resultant AccountData might not include all the holdings, use LookupFull for this purpose.
 func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
@@ -458,7 +459,7 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 		return basics.AccountData{}, err
 	}
 
-	return data, nil
+	return data.AccountData, nil
 }
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
@@ -466,6 +467,23 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	pad, rnd, err := l.lookupWithoutRewards(rnd, addr)
 	return pad.AccountData, rnd, err
+}
+
+// LookupFull is similar to Lookup but also loads all the holdings from extended groups.
+// It uses the accounts tracker to return the account state for a
+// given account in a particular round.  The account values reflect
+// the changes of all blocks up to and including rnd.
+func (l *Ledger) LookupFull(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	// Intentionally apply (pending) rewards up to rnd.
+	data, err := l.accts.LookupFullWithRewards(rnd, addr)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+
+	return data.AccountData, nil
 }
 
 func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.PersistedAccountData, basics.Round, error) {
@@ -478,6 +496,19 @@ func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (le
 	}
 
 	return pad, validThrough, nil
+}
+
+// lookupHoldingWithoutRewards is like lookupWithoutRewards but also loads the specified holding/local state
+func (l *Ledger) lookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.PersistedAccountData, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	data, err := l.accts.LookupHoldingWithoutRewards(rnd, addr, cidx, ctype)
+	if err != nil {
+		return ledgercore.PersistedAccountData{}, err
+	}
+
+	return data, nil
 }
 
 // Totals returns the totals of all accounts at the end of round rnd.

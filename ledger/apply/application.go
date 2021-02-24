@@ -128,7 +128,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	}
 
 	// Allocate global storage
-	err = balances.Allocate(creator, appIdx, true, ac.GlobalStateSchema)
+	err = balances.Allocate(creator, basics.CreatableIndex(appIdx), basics.AppCreatable, true, ac.GlobalStateSchema)
 	if err != nil {
 		return 0, err
 	}
@@ -166,7 +166,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	}
 
 	// Deallocate global storage
-	err = balances.Deallocate(creator, appIdx, true)
+	err = balances.Deallocate(creator, basics.CreatableIndex(appIdx), basics.AppCreatable, true)
 	if err != nil {
 		return err
 	}
@@ -228,7 +228,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	}
 
 	// Allocate local storage
-	err = balances.Allocate(sender, appIdx, false, params.LocalStateSchema)
+	err = balances.Allocate(sender, basics.CreatableIndex(appIdx), basics.AppCreatable, false, params.LocalStateSchema)
 	if err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	}
 
 	// Deallocate local storage
-	err = balances.Deallocate(sender, appIdx, false)
+	err = balances.Deallocate(sender, basics.CreatableIndex(appIdx), basics.AppCreatable, false)
 	if err != nil {
 		return err
 	}

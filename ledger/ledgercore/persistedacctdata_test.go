@@ -18,6 +18,7 @@ package ledgercore
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -243,7 +244,7 @@ func TestAssetHoldingGroupInsert(t *testing.T) {
 	e.Groups[0].insert(aidx, basics.AssetHolding{Amount: uint64(aidx)})
 	a.Equal(oldCount+1, e.Groups[0].Count)
 	a.Equal(aidx, e.Groups[0].MinAssetIndex)
-	a.Equal(oldDeltaMaxAssetIndex, e.Groups[0].DeltaMaxAssetIndex)
+	a.Equal(oldDeltaMaxAssetIndex+uint64((spec[0].start-aidx)), e.Groups[0].DeltaMaxAssetIndex)
 	a.Equal(int(e.Groups[0].Count), len(e.Groups[0].groupData.AssetOffsets))
 	a.Equal(int(e.Groups[0].Count), len(e.Groups[0].groupData.Amounts))
 	a.Equal(int(e.Groups[0].Count), len(e.Groups[0].groupData.Frozens))
@@ -690,7 +691,7 @@ func TestAssetHoldingDelete(t *testing.T) {
 	a.Equal(oldCount-1, e.Count)
 	a.Equal(len(spec), len(e.Groups))
 	a.Equal(spec[0].start+basics.AssetIndex(gap), e.Groups[0].MinAssetIndex)
-	a.Equal(uint64(spec[0].end-spec[0].start), e.Groups[0].DeltaMaxAssetIndex)
+	a.Equal(uint64(spec[0].end-spec[0].start-basics.AssetIndex(gap)), e.Groups[0].DeltaMaxAssetIndex)
 	checkAssetMap(aidx, e.Groups[0])
 
 	// delete last entry in a group
@@ -715,4 +716,48 @@ func TestAssetHoldingDelete(t *testing.T) {
 	a.Equal(spec[0].start, e.Groups[0].MinAssetIndex)
 	a.Equal(uint64(spec[0].end-spec[0].start), e.Groups[0].DeltaMaxAssetIndex)
 	checkAssetMap(aidx, e.Groups[0])
+}
+
+func TestAssetHoldingDeleteRepeat(t *testing.T) {
+	a := require.New(t)
+
+	spec := []groupSpec{
+		{1, 256, MaxHoldingGroupSize},
+		{257, 512, MaxHoldingGroupSize},
+	}
+
+	e := genExtendedHolding(t, spec)
+	a.Equal(uint32(spec[0].count+spec[1].count), e.Count)
+	a.Equal(uint32(spec[0].count), e.Groups[0].Count)
+	a.Equal(uint32(spec[1].count), e.Groups[1].Count)
+	a.Equal(spec[0].start, e.Groups[0].MinAssetIndex)
+	a.Equal(spec[0].end, e.Groups[0].MinAssetIndex+basics.AssetIndex(e.Groups[0].DeltaMaxAssetIndex))
+	a.Equal(spec[1].start, e.Groups[1].MinAssetIndex)
+	a.Equal(spec[1].end, e.Groups[1].MinAssetIndex+basics.AssetIndex(e.Groups[1].DeltaMaxAssetIndex))
+	for i := 1; i < MaxHoldingGroupSize; i++ {
+		e.Groups[0].groupData.AssetOffsets[i] = basics.AssetIndex(1)
+		e.Groups[1].groupData.AssetOffsets[i] = basics.AssetIndex(1)
+	}
+	maxReps := rand.Intn(30)
+	for c := 0; c < maxReps; c++ {
+		maxIdx := rand.Intn(MaxHoldingGroupSize)
+		delOrder := rand.Perm(maxIdx)
+		for _, i := range delOrder {
+			if i < int(e.Groups[0].Count) {
+				e.Delete(0, i)
+			}
+		}
+
+		// validate the group after deletion
+		g := e.Groups[0]
+		maxAsset := g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex)
+		a.Less(uint64(maxAsset), uint64(e.Groups[1].MinAssetIndex))
+		asset := g.MinAssetIndex
+		for _, offset := range g.groupData.AssetOffsets {
+			asset += offset
+		}
+		a.Equal(maxAsset, asset)
+
+		e = genExtendedHolding(t, spec)
+	}
 }

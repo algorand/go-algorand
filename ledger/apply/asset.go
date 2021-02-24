@@ -70,15 +70,16 @@ func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetPa
 func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, txnCounter uint64) error {
 	if cc.ConfigAsset == 0 {
 		// Allocating an asset.
-		record, err := balances.Get(header.Sender, false)
+
+		// Ensure index is never zero
+		newidx := basics.AssetIndex(txnCounter + 1)
+
+		record, err := balances.GetEx(header.Sender, basics.CreatableIndex(newidx), basics.AssetCreatable)
 		if err != nil {
 			return err
 		}
 		record.Assets = cloneAssetHoldings(record.Assets)
 		record.AssetParams = cloneAssetParams(record.AssetParams)
-
-		// Ensure index is never zero
-		newidx := basics.AssetIndex(txnCounter + 1)
 
 		// Sanity check that there isn't an asset with this counter value.
 		_, present := record.AssetParams[newidx]
@@ -102,7 +103,14 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			Index:   basics.CreatableIndex(newidx),
 		}
 
-		return balances.PutWithCreatable(header.Sender, record, created, nil)
+		// Save asset params and holding, and register new creatable
+		err = balances.PutWithCreatable(header.Sender, record, created, nil)
+		if err != nil {
+			return err
+		}
+
+		// register new holding
+		return balances.Allocate(header.Sender, basics.CreatableIndex(newidx), basics.AssetCreatable, false, basics.StateSchema{})
 	}
 
 	// Re-configuration and destroying must be done by the manager key.
@@ -115,7 +123,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		return fmt.Errorf("this transaction should be issued by the manager. It is issued by %v, manager key %v", header.Sender, params.Manager)
 	}
 
-	record, err := balances.Get(creator, false)
+	record, err := balances.GetEx(creator, basics.CreatableIndex(cc.ConfigAsset), basics.AssetCreatable)
 	if err != nil {
 		return err
 	}
@@ -140,6 +148,8 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 
 		delete(record.Assets, cc.ConfigAsset)
 		delete(record.AssetParams, cc.ConfigAsset)
+
+		balances.Deallocate(creator, basics.CreatableIndex(cc.ConfigAsset), basics.AssetCreatable, false)
 	} else {
 		// Changing keys in an asset.
 		if !params.Manager.IsZero() {
@@ -166,7 +176,7 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 		return nil
 	}
 
-	snd, err := balances.Get(addr, false)
+	snd, err := balances.GetEx(addr, basics.CreatableIndex(asset), basics.AssetCreatable)
 	if err != nil {
 		return err
 	}
@@ -196,7 +206,7 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 		return nil
 	}
 
-	rcv, err := balances.Get(addr, false)
+	rcv, err := balances.GetEx(addr, basics.CreatableIndex(asset), basics.AssetCreatable)
 	if err != nil {
 		return err
 	}
@@ -247,7 +257,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 	// Allocate a slot for asset (self-transfer of zero amount).
 	if ct.AssetAmount == 0 && ct.AssetReceiver == source && !clawback {
-		snd, err := balances.Get(source, false)
+		snd, err := balances.GetEx(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable)
 		if err != nil {
 			return err
 		}
@@ -272,6 +282,8 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 			if err != nil {
 				return err
 			}
+
+			balances.Allocate(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable, false, basics.StateSchema{})
 		}
 	}
 
@@ -299,7 +311,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		// Fetch the sender balance record. We will use this to ensure
 		// that the sender is not the creator of the asset, and to
 		// figure out how much of the asset to move.
-		snd, err := balances.Get(source, false)
+		snd, err := balances.GetEx(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable)
 		if err != nil {
 			return err
 		}
@@ -320,7 +332,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 		// Fetch the destination balance record to check if we are
 		// closing out to the creator
-		dst, err := balances.Get(ct.AssetCloseTo, false)
+		dst, err := balances.GetEx(ct.AssetCloseTo, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable)
 		if err != nil {
 			return err
 		}
@@ -350,7 +362,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		}
 
 		// Delete the slot from the account.
-		snd, err = balances.Get(source, false)
+		snd, err = balances.GetEx(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable)
 		if err != nil {
 			return err
 		}
@@ -366,6 +378,8 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		if err != nil {
 			return err
 		}
+
+		return balances.Deallocate(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable, false)
 	}
 
 	return nil
@@ -384,7 +398,7 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 	}
 
 	// Get the account to be frozen/unfrozen.
-	record, err := balances.Get(cf.FreezeAccount, false)
+	record, err := balances.GetEx(cf.FreezeAccount, basics.CreatableIndex(cf.FreezeAsset), basics.AssetCreatable)
 	if err != nil {
 		return err
 	}

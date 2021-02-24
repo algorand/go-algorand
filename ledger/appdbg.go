@@ -53,6 +53,11 @@ func (w *ledgerForCowBaseWrapper) lookupWithoutRewards(rnd basics.Round, addr ba
 	return ledgercore.PersistedAccountData{AccountData: ad}, rnd, err
 }
 
+func (w *ledgerForCowBaseWrapper) lookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.PersistedAccountData, error) {
+	ad, _, err := w.l.LookupWithoutRewards(rnd, addr)
+	return ledgercore.PersistedAccountData{AccountData: ad}, err
+}
+
 func (w *ledgerForCowBaseWrapper) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return w.l.GetCreatorForRound(rnd, cidx, ctype)
 }
@@ -63,9 +68,9 @@ func MakeDebugBalances(l ApplicationDbgLedger, round basics.Round, proto protoco
 
 	base := &roundCowBase{
 		l:        &w,
-		rnd:      round - 1,
+		rnd:      round.SubSaturate(1),
 		proto:    config.Consensus[proto],
-		accounts: make(map[basics.Address]basics.AccountData),
+		accounts: make(map[basics.Address]ledgercore.PersistedAccountData),
 	}
 
 	hdr := bookkeeping.BlockHeader{

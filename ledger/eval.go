@@ -72,10 +72,10 @@ type roundCowBase struct {
 	// The accounts that we're already accessed during this round evaluation. This is a caching
 	// buffer used to avoid looking up the same account data more than once during a single evaluator
 	// execution. The AccountData is always an historical one, then therefore won't be changing.
-	// The underlying (accountupdates) infrastucture may provide additional cross-round caching which
+	// The underlying (accountupdates) infrastructure may provide additional cross-round caching which
 	// are beyond the scope of this cache.
 	// The account data store here is always the account data without the rewards.
-	accounts map[basics.Address]basics.AccountData
+	accounts map[basics.Address]ledgercore.PersistedAccountData
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -85,16 +85,20 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 // lookup returns the non-rewarded account data for the provided account address. It uses the internal per-round cache
 // first, and if it cannot find it there, it would defer to the underlaying implementation.
 // note that errors in accounts data retrivals are not cached as these typically cause the transaction evaluation to fail.
-func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	if accountData, found := x.accounts[addr]; found {
-		return accountData, nil
+func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.PersistedAccountData, error) {
+	if pad, found := x.accounts[addr]; found {
+		return pad, nil
 	}
 
-	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	pad, _, err := x.l.lookupWithoutRewards(x.rnd, addr)
 	if err == nil {
-		x.accounts[addr] = accountData
+		x.accounts[addr] = pad
 	}
-	return accountData, err
+	return pad, err
+}
+
+func (x *roundCowBase) lookupHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (data ledgercore.PersistedAccountData, err error) {
+	return x.l.lookupHoldingWithoutRewards(x.rnd, addr, cidx, ctype)
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -228,14 +232,22 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
 func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
-	acct, err := cs.lookup(addr)
+	pad, err := cs.lookup(addr)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
 	if withPendingRewards {
-		acct = acct.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+		pad.AccountData = pad.AccountData.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
 	}
-	return acct, nil
+	return pad.AccountData, nil
+}
+
+func (cs *roundCowState) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	pad, err := cs.lookupHolding(addr, cidx, ctype)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+	return pad.AccountData, nil
 }
 
 func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -367,6 +379,7 @@ type ledgerForCowBase interface {
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 
 	lookupWithoutRewards(basics.Round, basics.Address) (ledgercore.PersistedAccountData, basics.Round, error)
+	lookupHoldingWithoutRewards(basics.Round, basics.Address, basics.CreatableIndex, basics.CreatableType) (ledgercore.PersistedAccountData, error)
 	checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	getCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
@@ -391,9 +404,9 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		// the block at this round below, so underflow will be caught.
 		// If we are not validating, we must have previously checked
 		// an agreement.Certificate attesting that hdr is valid.
-		rnd:      hdr.Round - 1,
+		rnd:      hdr.Round.SubSaturate(1),
 		proto:    proto,
-		accounts: make(map[basics.Address]basics.AccountData),
+		accounts: make(map[basics.Address]ledgercore.PersistedAccountData),
 	}
 
 	eval := &BlockEvaluator{
@@ -1189,7 +1202,7 @@ transactionGroupLoop:
 			}
 
 			for _, br := range txgroup.balances {
-				base.accounts[br.Addr] = br.AccountData
+				base.accounts[br.Addr] = br.PersistedAccountData
 			}
 			err = eval.TransactionGroup(txgroup.group)
 			if err != nil {
@@ -1234,12 +1247,12 @@ transactionGroupLoop:
 	return eval.state.deltas(), nil
 }
 
-// loadedTransactionGroup is a helper struct to allow asyncronious loading of the account data needed by the transaction groups
+// loadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
 type loadedTransactionGroup struct {
 	// group is the transaction group
 	group []transactions.SignedTxnWithAD
 	// balances is a list of all the balances that the transaction group refer to and are needed.
-	balances []basics.BalanceRecord
+	balances []ledgercore.PersistedBalanceRecord
 	// err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
 	// one of the entries in the balances would be uninitialized.
 	err error
@@ -1253,7 +1266,7 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 		// groupTask helps to organize the account loading for each transaction group.
 		type groupTask struct {
 			// balances contains the loaded balances each transaction group have
-			balances []basics.BalanceRecord
+			balances []ledgercore.PersistedBalanceRecord
 			// balancesCount is the number of balances that nees to be loaded per transaction group
 			balancesCount int
 			// done is a waiting channel for all the account data for the transaction group to be loaded
@@ -1332,10 +1345,10 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 		}
 		close(addressesCh)
 
-		// updata all the groups task :
+		// update all the groups task :
 		// allocate the correct number of balances, as well as
 		// enough space on the "done" channel.
-		allBalances := make([]basics.BalanceRecord, totalBalances)
+		allBalances := make([]ledgercore.PersistedBalanceRecord, totalBalances)
 		usedBalances := 0
 		for _, gr := range groupsReady {
 			gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
@@ -1355,10 +1368,10 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 							return
 						}
 						// lookup the account data directly from the ledger.
-						acctData, _, err := l.LookupWithoutRewards(rnd, task.address)
-						br := basics.BalanceRecord{
-							Addr:        task.address,
-							AccountData: acctData,
+						pad, _, err := l.lookupWithoutRewards(rnd, task.address)
+						br := ledgercore.PersistedBalanceRecord{
+							Addr:                 task.address,
+							PersistedAccountData: pad,
 						}
 						// if there is no error..
 						if err == nil {

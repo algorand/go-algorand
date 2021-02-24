@@ -41,8 +41,12 @@ type addrApp struct {
 type emptyLedger struct {
 }
 
-func (ml *emptyLedger) lookup(addr basics.Address) (basics.AccountData, error) {
-	return basics.AccountData{}, nil
+func (ml *emptyLedger) lookup(addr basics.Address) (ledgercore.PersistedAccountData, error) {
+	return ledgercore.PersistedAccountData{}, nil
+}
+
+func (ml *emptyLedger) lookupHolding(basics.Address, basics.CreatableIndex, basics.CreatableType) (ledgercore.PersistedAccountData, error) {
+	return ledgercore.PersistedAccountData{}, nil
 }
 
 func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
@@ -239,7 +243,7 @@ func TestCowStorage(t *testing.T) {
 				NumUint:      rand.Uint64(),
 				NumByteSlice: rand.Uint64(),
 			}
-			err := cow.Allocate(addr, sptr.aidx, sptr.global, rschema)
+			err := cow.Allocate(addr, basics.CreatableIndex(sptr.aidx), basics.AppCreatable, sptr.global, rschema)
 			if actuallyAllocated {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "cannot allocate")
@@ -253,7 +257,7 @@ func TestCowStorage(t *testing.T) {
 		// Deallocate
 		if rand.Float32() < 0.25 {
 			actuallyAllocated := st.allocated(aapp)
-			err := cow.Deallocate(addr, sptr.aidx, sptr.global)
+			err := cow.Deallocate(addr, basics.CreatableIndex(sptr.aidx), basics.AppCreatable, sptr.global)
 			if actuallyAllocated {
 				require.NoError(t, err)
 				err := st.dealloc(aapp)
@@ -992,16 +996,16 @@ func TestCowGet(t *testing.T) {
 	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
 
 	addr1 := getRandomAddress(a)
-	bre := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}}
+	bre := ledgercore.PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}}}
 	c.mods.Accts.Upsert(addr1, bre)
 
 	bra, err := c.Get(addr1, true)
 	a.NoError(err)
-	a.Equal(bre, bra)
+	a.Equal(bre.AccountData, bra)
 
 	bra, err = c.Get(addr1, false)
 	a.NoError(err)
-	a.Equal(bre, bra)
+	a.Equal(bre.AccountData, bra)
 
 	// ensure other requests go down to roundCowParent
 	a.Panics(func() { c.Get(getRandomAddress(a), true) })
