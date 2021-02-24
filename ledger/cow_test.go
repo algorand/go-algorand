@@ -31,8 +31,12 @@ type mockLedger struct {
 	balanceMap map[basics.Address]basics.AccountData
 }
 
-func (ml *mockLedger) lookup(addr basics.Address) (basics.AccountData, error) {
-	return ml.balanceMap[addr], nil
+func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.PersistedAccountData, error) {
+	return ledgercore.PersistedAccountData{AccountData: ml.balanceMap[addr]}, nil
+}
+
+func (ml *mockLedger) lookupHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.PersistedAccountData, error) {
+	return ledgercore.PersistedAccountData{AccountData: ml.balanceMap[addr]}, nil
 }
 
 func (ml *mockLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
@@ -83,12 +87,12 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	for addr, data := range accts {
 		d, err := cow.lookup(addr)
 		require.NoError(t, err)
-		require.Equal(t, d, data)
+		require.Equal(t, d.AccountData, data)
 	}
 
 	d, err := cow.lookup(randomAddress())
 	require.NoError(t, err)
-	require.Equal(t, d, basics.AccountData{})
+	require.Equal(t, d.AccountData, basics.AccountData{})
 }
 
 func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {

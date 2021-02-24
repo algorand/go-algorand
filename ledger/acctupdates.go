@@ -373,16 +373,15 @@ func (au *accountUpdates) LookupFullWithRewards(rnd basics.Round, addr basics.Ad
 	return au.lookupFullWithRewards(rnd, addr)
 }
 
-// LookupWithHolding returns the account data for a given address at a given round.
-// Note that the function doesn't update the account with the rewards,
-// even while it does return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) LookupWithHolding(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
-	return au.lookupWithHolding(rnd, addr, cidx, ctype)
-}
-
 // LookupWithoutRewards returns the account data for a given address at a given round.
 func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data ledgercore.PersistedAccountData, validThrough basics.Round, err error) {
 	return au.lookupWithoutRewards(rnd, addr, true /* take lock*/)
+}
+
+// LookupHoldingWithoutRewards returns the account data for a given address at a given round
+// with looking for the specified holding/local state in extension table(s)
+func (au *accountUpdates) LookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
+	return au.lookupHoldingWithoutRewards(rnd, addr, cidx, ctype)
 }
 
 // ListAssets lists the assets by their asset index, limiting to the first maxResults
@@ -882,6 +881,12 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 
 func (aul *accountUpdatesLedgerEvaluator) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.PersistedAccountData, basics.Round, error) {
 	return aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
+}
+
+// lookupHoldingWithoutRewards returns the account data for a given address at a given round
+// with looking for the specified holding/local state in extension table(s)
+func (aul *accountUpdatesLedgerEvaluator) lookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
+	return aul.au.lookupHoldingWithoutRewards(rnd, addr, cidx, ctype)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
@@ -1639,7 +1644,9 @@ func (au *accountUpdates) lookupFullWithRewards(rnd basics.Round, addr basics.Ad
 		return
 	}
 
+	au.accountsMu.RLock()
 	pad.AccountData.Assets, _, err = loadHoldings(au.accountsq.loadAssetHoldingGroupStmt, pad.ExtendedAssetHolding)
+	au.accountsMu.RUnlock()
 	return
 }
 
@@ -1656,15 +1663,17 @@ func (au *accountUpdates) lookupFullWithoutRewards(rnd basics.Round, addr basics
 		return
 	}
 
+	au.accountsMu.RLock()
 	pad.AccountData.Assets, _, err = loadHoldings(au.accountsq.loadAssetHoldingGroupStmt, pad.ExtendedAssetHolding)
+	au.accountsMu.RUnlock()
 	return
 }
 
 // lookupWithHoldings returns the full account data for a given address at a given round.
 // The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupWithHolding(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
-	pad, err = au.lookupWithRewards(rnd, addr)
+func (au *accountUpdates) lookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
+	pad, _, err = au.lookupWithoutRewards(rnd, addr, true)
 	if err != nil {
 		return
 	}
@@ -1678,7 +1687,9 @@ func (au *accountUpdates) lookupWithHolding(rnd basics.Round, addr basics.Addres
 		if gi != -1 {
 			g := pad.ExtendedAssetHolding.Groups[gi]
 			var holdings map[basics.AssetIndex]basics.AssetHolding
+			au.accountsMu.RLock()
 			holdings, _, err = loadHoldingGroup(au.accountsq.loadAssetHoldingGroupStmt, g, nil)
+			au.accountsMu.RUnlock()
 			if err != nil {
 				return
 			}

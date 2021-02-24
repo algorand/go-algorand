@@ -78,6 +78,18 @@ type AccountDeltas struct {
 	acctsCache map[basics.Address]int
 }
 
+// AccountDataModsRecord is similar to AccountData but contains AccountDataMods
+type AccountDataModsRecord struct {
+	addr basics.Address
+	AccountDataMods
+}
+
+// AccountDataMods encapsulates intermediate creatable changes for AccountData
+type AccountDataMods struct {
+	PersistedAccountData
+	basics.CreatableLocator
+}
+
 // MakeStateDelta creates a new instance of StateDelta
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int) StateDelta {
 	return StateDelta{

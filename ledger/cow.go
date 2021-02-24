@@ -36,7 +36,9 @@ import (
 //                  ||     ||
 
 type roundCowParent interface {
-	lookup(basics.Address) (basics.AccountData, error)
+	// lookout with rewards
+	lookup(basics.Address) (ledgercore.PersistedAccountData, error)
+	lookupHolding(basics.Address, basics.CreatableIndex, basics.CreatableType) (ledgercore.PersistedAccountData, error)
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
@@ -87,11 +89,11 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 		var delta basics.AccountData
 		var exist bool
 		if delta, exist = cb.mods.Accts.Get(addr); !exist {
-			ad, err := cb.lookup(addr)
+			pad, err := cb.lookup(addr)
 			if err != nil {
 				panic(fmt.Sprintf("fetching account data failed for addr %s: %s", addr.String(), err.Error()))
 			}
-			delta = ad
+			delta = pad.AccountData
 		}
 		for aapp, storeDelta := range smap {
 			if delta, err = applyStorageDelta(delta, aapp, storeDelta); err != nil {
@@ -126,13 +128,39 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 	return cb.lookupParent.getCreator(cidx, ctype)
 }
 
-func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
+func (cb *roundCowState) lookup(addr basics.Address) (pad ledgercore.PersistedAccountData, err error) {
 	d, ok := cb.mods.Accts.Get(addr)
 	if ok {
-		return d, nil
+		return ledgercore.PersistedAccountData{AccountData: d}, nil
 	}
 
 	return cb.lookupParent.lookup(addr)
+}
+
+// lookupWithHolding is gets account data but also fetches asset holding or app local data for a specified creatable
+func (cb *roundCowState) lookupHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (data ledgercore.PersistedAccountData, err error) {
+	ad, ok := cb.mods.Accts.Get(addr)
+	if ok {
+		exist := false
+		if ctype == basics.AssetCreatable {
+			_, exist = ad.Assets[basics.AssetIndex(cidx)]
+		} else {
+			_, exist = ad.AppLocalStates[basics.AppIndex(cidx)]
+		}
+
+		if exist {
+			return ledgercore.PersistedAccountData{AccountData: ad}, nil
+		}
+	}
+
+	d, err := cb.lookupParent.lookupHolding(addr, cidx, ctype)
+
+	// if err != nil {
+	// 	// save ExtendedHolding portion if possible for later reference
+	// 	cb.mods.Accts.Register(addr, d)
+	// }
+
+	return d, err
 }
 
 func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -167,6 +195,7 @@ func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 }
 
 func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
+	// add := ledgercore.AccountDataMods{AccountData: new}
 	cb.mods.Accts.Upsert(addr, new)
 
 	if newCreatable != nil {

@@ -310,7 +310,28 @@ type CreatableLocator struct {
 	Type    CreatableType
 	Creator Address
 	Index   CreatableIndex
+	Action  CreatableAction
 }
+
+// CreatableAction is an enum of actions on creatable holdings
+type CreatableAction uint64
+
+const (
+	// CreatableCreateAction indicates that a new creatable item is created
+	CreatableCreateAction CreatableAction = 1 + iota
+
+	// CreatableDeleteAction indicates that a creatable item is deleted
+	CreatableDeleteAction
+
+	// CreatableHoldingCreateAction indicates that a new holding item is created
+	CreatableHoldingCreateAction
+
+	// CreatableHoldingUpdateAction indicates that an holding item is modified
+	CreatableHoldingUpdateAction
+
+	// CreatableHoldingDeleteAction indicates that an holding item is deleted
+	CreatableHoldingDeleteAction
+)
 
 // AssetHolding describes an asset held by an account.
 type AssetHolding struct {

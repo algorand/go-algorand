@@ -41,8 +41,12 @@ type addrApp struct {
 type emptyLedger struct {
 }
 
-func (ml *emptyLedger) lookup(addr basics.Address) (basics.AccountData, error) {
-	return basics.AccountData{}, nil
+func (ml *emptyLedger) lookup(addr basics.Address) (ledgercore.PersistedAccountData, error) {
+	return ledgercore.PersistedAccountData{}, nil
+}
+
+func (ml *emptyLedger) lookupHolding(basics.Address, basics.CreatableIndex, basics.CreatableType) (ledgercore.PersistedAccountData, error) {
+	return ledgercore.PersistedAccountData{}, nil
 }
 
 func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {

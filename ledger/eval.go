@@ -68,9 +68,13 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 	return x.l.getCreatorForRound(x.rnd, cidx, ctype)
 }
 
-func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData, err error) {
-	acctData, _, err = x.l.LookupWithoutRewards(x.rnd, addr)
-	return acctData, err
+func (x *roundCowBase) lookup(addr basics.Address) (pad ledgercore.PersistedAccountData, err error) {
+	pad, _, err = x.l.lookupWithoutRewards(x.rnd, addr)
+	return pad, err
+}
+
+func (x *roundCowBase) lookupHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (data ledgercore.PersistedAccountData, err error) {
+	return x.l.lookupHoldingWithoutRewards(x.rnd, addr, cidx, ctype)
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -204,14 +208,14 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
 func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
-	acct, err := cs.lookup(addr)
+	pad, err := cs.lookup(addr)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
 	if withPendingRewards {
-		acct = acct.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+		pad.AccountData = pad.AccountData.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
 	}
-	return acct, nil
+	return pad.AccountData, nil
 }
 
 func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -336,6 +340,7 @@ type ledgerForCowBase interface {
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 
 	lookupWithoutRewards(basics.Round, basics.Address) (ledgercore.PersistedAccountData, basics.Round, error)
+	lookupHoldingWithoutRewards(basics.Round, basics.Address, basics.CreatableIndex, basics.CreatableType) (ledgercore.PersistedAccountData, error)
 	checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	getCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
