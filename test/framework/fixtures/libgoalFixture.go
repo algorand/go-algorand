@@ -102,7 +102,7 @@ func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile stri
 	}
 }
 
-// nodeExitWithError is a callback from the network indicating that the node exit with an error after a successfull startup.
+// nodeExitWithError is a callback from the network indicating that the node exit with an error after a successful startup.
 // i.e. node terminated, and not due to shutdown.. this is likely to be a crash/panic.
 func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err error) {
 	if err == nil {
