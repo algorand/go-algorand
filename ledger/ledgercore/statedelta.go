@@ -153,10 +153,15 @@ func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
 	ad.acctsCache[addr] = last
 }
 
-func (sd *StateDelta) Compress() {
-	sd.Accts.accts = sd.Accts.accts[:len(sd.Accts.accts)]
+// OptimizeAllocatedMemory by reallocating maps to needed capacity
+func (sd *StateDelta) OptimizeAllocatedMemory() {
+	if len(sd.Accts.accts) < sd.initialTransactionsCount/2 {
+		accts := make([]basics.BalanceRecord, len(sd.Accts.acctsCache))
+		copy(accts, sd.Accts.accts)
+		sd.Accts.accts = accts
+	}
 
-	if len(sd.Accts.acctsCache) < sd.initialTransactionsCount / 2 {
+	if len(sd.Accts.acctsCache) < sd.initialTransactionsCount/2 {
 		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
 		for k, v := range sd.Accts.acctsCache {
 			acctsCache[k] = v
@@ -164,7 +169,7 @@ func (sd *StateDelta) Compress() {
 		sd.Accts.acctsCache = acctsCache
 	}
 
-	if len(sd.Txleases) < sd.initialTransactionsCount / 2 {
+	if len(sd.Txleases) < sd.initialTransactionsCount/2 {
 		txLeases := make(map[Txlease]basics.Round, len(sd.Txleases))
 		for k, v := range sd.Txleases {
 			txLeases[k] = v
@@ -172,7 +177,7 @@ func (sd *StateDelta) Compress() {
 		sd.Txleases = txLeases
 	}
 
-	if len(sd.Creatables) < sd.initialTransactionsCount / 2 {
+	if len(sd.Creatables) < sd.initialTransactionsCount/2 {
 		creatableDeltas := make(map[basics.CreatableIndex]ModifiedCreatable, len(sd.Creatables))
 		for k, v := range sd.Creatables {
 			creatableDeltas[k] = v
