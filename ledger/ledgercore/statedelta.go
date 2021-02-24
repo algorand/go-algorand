@@ -68,6 +68,9 @@ type StateDelta struct {
 
 	// previous block timestamp
 	PrevTimestamp int64
+
+	// initial hint for allocating data structures for StateDelta
+	initialTransactionsCount int
 }
 
 // AccountDeltas stores ordered accounts and allows fast lookup by address
@@ -148,4 +151,32 @@ func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
 		ad.acctsCache = make(map[basics.Address]int)
 	}
 	ad.acctsCache[addr] = last
+}
+
+func (sd *StateDelta) Compress() {
+	sd.Accts.accts = sd.Accts.accts[:len(sd.Accts.accts)]
+
+	if len(sd.Accts.acctsCache) < sd.initialTransactionsCount / 2 {
+		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
+		for k, v := range sd.Accts.acctsCache {
+			acctsCache[k] = v
+		}
+		sd.Accts.acctsCache = acctsCache
+	}
+
+	if len(sd.Txleases) < sd.initialTransactionsCount / 2 {
+		txLeases := make(map[Txlease]basics.Round, len(sd.Txleases))
+		for k, v := range sd.Txleases {
+			txLeases[k] = v
+		}
+		sd.Txleases = txLeases
+	}
+
+	if len(sd.Creatables) < sd.initialTransactionsCount / 2 {
+		creatableDeltas := make(map[basics.CreatableIndex]ModifiedCreatable, len(sd.Creatables))
+		for k, v := range sd.Creatables {
+			creatableDeltas[k] = v
+		}
+		sd.Creatables = creatableDeltas
+	}
 }
