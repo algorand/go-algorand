@@ -165,6 +165,9 @@ tasks:
     target: mule-sign
 
 jobs:
+  sign-docker:
+    tasks:
+      - docker.Make.docker-sign
 #  build-linux-amd64:
 #    tasks:
 #      - docker.Make.build.amd64
@@ -195,6 +198,3 @@ jobs:
 #    tasks:
 #      - docker.Make.docker-image
 
-  sign-docker:
-    tasks:
-      - docker.Make.docker-sign
