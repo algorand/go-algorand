@@ -230,10 +230,10 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 49 | NumAssets | uint64 | Number of Assets. LogicSigVersion >= 3. |
 | 50 | Applications | uint64 | Foreign Apps listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
 | 51 | NumApplications | uint64 | Number of Applications. LogicSigVersion >= 3. |
-| 52 | GlobalStateInts | uint64 | Number of global state integers in ApplicationCall. LogicSigVersion >= 3. |
-| 53 | GlobalStateByteslices | uint64 | Number of global state byteslices in ApplicationCall. LogicSigVersion >= 3. |
-| 54 | LocalStateInts | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
-| 55 | LocalStateByteslices | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
+| 52 | GlobalNumUint | uint64 | Number of global state integers in ApplicationCall. LogicSigVersion >= 3. |
+| 53 | GlobalNumByteSlice | uint64 | Number of global state byteslices in ApplicationCall. LogicSigVersion >= 3. |
+| 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
+| 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 56 | LogicArgs | []byte | Arguments to the LogicSig of the transaction. LogicSigVersion >= 3. |
 | 57 | NumLogicArgs | uint64 | Number of arguments to the LogicSig of the transaction. LogicSigVersion >= 3. |
 
