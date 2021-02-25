@@ -92,7 +92,7 @@ var trieMemoryConfig = merkletrie.MemoryConfig{
 type modifiedAccount struct {
 	// data stores the most recent AccountData for this modified
 	// account.
-	data basics.AccountData
+	data ledgercore.PersistedAccountData
 
 	// ndelta keeps track of how many times this account appears in
 	// accountUpdates.deltas.  This is used to evict modifiedAccount
@@ -514,7 +514,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 					continue
 				}
 
-				modifiedAccounts[addr] = accountDataToOnline(addr, &d, proto)
+				modifiedAccounts[addr] = accountDataToOnline(addr, &d.AccountData, proto)
 			}
 		}
 
@@ -1486,9 +1486,9 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 
 	var previousAccountData basics.AccountData
 	for i := 0; i < delta.Accts.Len(); i++ {
-		addr, data := delta.Accts.GetByIdx(i)
+		addr, pad := delta.Accts.GetByIdx(i)
 		if latestAcctData, has := au.accounts[addr]; has {
-			previousAccountData = latestAcctData.data
+			previousAccountData = latestAcctData.data.AccountData
 		} else if baseAccountData, has := au.baseAccounts.read(addr); has {
 			previousAccountData = baseAccountData.pad.AccountData
 		} else {
@@ -1502,11 +1502,11 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		}
 
 		newTotals.DelAccount(proto, previousAccountData, &ot)
-		newTotals.AddAccount(proto, data, &ot)
+		newTotals.AddAccount(proto, pad.AccountData, &ot)
 
 		macct := au.accounts[addr]
 		macct.ndeltas++
-		macct.data = data
+		macct.data = pad
 		au.accounts[addr] = macct
 	}
 
@@ -1582,7 +1582,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				return ledgercore.PersistedAccountData{AccountData: macct.data}, nil
+				return macct.data, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
@@ -1592,7 +1592,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 				offset--
 				d, ok := au.deltas[offset].Get(addr)
 				if ok {
-					return ledgercore.PersistedAccountData{AccountData: d}, nil
+					return d, nil
 				}
 			}
 		}
@@ -1739,7 +1739,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				return ledgercore.PersistedAccountData{AccountData: macct.data}, rnd, nil
+				return macct.data, rnd, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
 			// delta range of [0..offset], so we'll need to check :
@@ -1751,7 +1751,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
-					return ledgercore.PersistedAccountData{AccountData: d}, rnd, nil
+					return d, rnd, nil
 				}
 			}
 		} else {

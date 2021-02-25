@@ -90,15 +90,16 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 		require.Equal(t, d.AccountData, data)
 	}
 
-	d, err := cow.lookup(randomAddress())
+	pad, err := cow.lookup(randomAddress())
 	require.NoError(t, err)
-	require.Equal(t, d.AccountData, basics.AccountData{})
+	require.Equal(t, pad, ledgercore.PersistedAccountData{})
 }
 
 func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
 	for i := 0; i < updates.Len(); i++ {
-		addr, delta := updates.GetByIdx(i)
-		cow.put(addr, delta, nil, nil)
+		addr, pad := updates.GetByIdx(i)
+		cow.lookup(addr) // populate getPadCache
+		cow.put(addr, pad.AccountData, nil, nil)
 	}
 }
 
@@ -112,6 +113,10 @@ func TestCowBalance(t *testing.T) {
 	c1 := c0.child()
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts0)
+
+	require.Panics(t, func() {
+		c1.put(randomAddress(), basics.AccountData{}, nil, nil)
+	})
 
 	updates1, accts1, _ := randomDeltas(10, accts0, 0)
 	applyUpdates(c1, updates1)

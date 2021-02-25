@@ -63,6 +63,10 @@ type roundCowState struct {
 	// 2. Stateful TEAL evaluation (see SetKey/DelKey)
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
+
+	// getPadCache provides compatibility between mods that uses PersistedAccountData
+	// and balances interface implementation (Get, GetEx, Put, PutWithCreatable) that work with AccountData view to PersistedAccountData
+	getPadCache map[basics.Address]ledgercore.PersistedAccountData
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
@@ -72,6 +76,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
+		getPadCache:  make(map[basics.Address]ledgercore.PersistedAccountData),
 	}
 }
 
@@ -86,21 +91,20 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 	//    SetKey/DelKey work only with sdeltas, so need to pull missing accounts
 	// 2. Call applyStorageDelta for every delta per account
 	for addr, smap := range cb.sdeltas {
-		var delta basics.AccountData
+		var pad ledgercore.PersistedAccountData
 		var exist bool
-		if delta, exist = cb.mods.Accts.Get(addr); !exist {
-			pad, err := cb.lookup(addr)
+		if pad, exist = cb.mods.Accts.Get(addr); !exist {
+			pad, err = cb.lookup(addr)
 			if err != nil {
 				panic(fmt.Sprintf("fetching account data failed for addr %s: %s", addr.String(), err.Error()))
 			}
-			delta = pad.AccountData
 		}
 		for aapp, storeDelta := range smap {
-			if delta, err = applyStorageDelta(delta, aapp, storeDelta); err != nil {
+			if pad.AccountData, err = applyStorageDelta(pad.AccountData, aapp, storeDelta); err != nil {
 				panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
 			}
 		}
-		cb.mods.Accts.Upsert(addr, delta)
+		cb.mods.Accts.Upsert(addr, pad)
 	}
 	return cb.mods
 }
@@ -129,45 +133,50 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 }
 
 func (cb *roundCowState) lookup(addr basics.Address) (pad ledgercore.PersistedAccountData, err error) {
-	d, ok := cb.mods.Accts.Get(addr)
+	pad, ok := cb.mods.Accts.Get(addr)
 	if ok {
-		return ledgercore.PersistedAccountData{AccountData: d}, nil
+		return pad, nil
 	}
 
-	return cb.lookupParent.lookup(addr)
+	pad, err = cb.lookupParent.lookup(addr)
+	if err != nil {
+		return
+	}
+
+	// save PersistentAccountData for later usage in put
+	cb.getPadCache[addr] = pad
+	return
 }
 
 // lookupWithHolding is gets account data but also fetches asset holding or app local data for a specified creatable
 func (cb *roundCowState) lookupHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (data ledgercore.PersistedAccountData, err error) {
-	ad, modified := cb.mods.Accts.Get(addr)
+	pad, modified := cb.mods.Accts.Get(addr)
 	if modified {
 		exist := false
 		if ctype == basics.AssetCreatable {
-			_, exist = ad.Assets[basics.AssetIndex(cidx)]
+			_, exist = pad.AccountData.Assets[basics.AssetIndex(cidx)]
 		} else {
-			_, exist = ad.AppLocalStates[basics.AppIndex(cidx)]
+			_, exist = pad.AccountData.AppLocalStates[basics.AppIndex(cidx)]
 		}
 
 		if exist {
-			return ledgercore.PersistedAccountData{AccountData: ad}, nil
+			return pad, nil
 		}
 	}
 
-	d, err := cb.lookupParent.lookupHolding(addr, cidx, ctype)
+	parentPad, err := cb.lookupParent.lookupHolding(addr, cidx, ctype)
 	if !modified {
-		return d, err
+		cb.getPadCache[addr] = parentPad
+		return parentPad, err
 	}
 
 	// data from cb.mods.Accts is newer than from lookupParent.lookupHolding, so add the asset if any
-	if holding, ok := d.AccountData.Assets[basics.AssetIndex(cidx)]; ok {
-		ad.Assets[basics.AssetIndex(cidx)] = holding
+	if holding, ok := parentPad.AccountData.Assets[basics.AssetIndex(cidx)]; ok {
+		pad.AccountData.Assets[basics.AssetIndex(cidx)] = holding
 	}
-	return ledgercore.PersistedAccountData{AccountData: ad}, nil
 
-	// if err != nil {
-	// 	// save ExtendedHolding portion if possible for later reference
-	// 	cb.mods.Accts.Register(addr, d)
-	// }
+	cb.getPadCache[addr] = pad
+	return pad, nil
 }
 
 func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -202,7 +211,14 @@ func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 }
 
 func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
-	cb.mods.Accts.Upsert(addr, new)
+	// convert AccountData to PersistentAccountData by using getPadCache
+	// that is must be filled in lookup* methods
+	if pad, ok := cb.getPadCache[addr]; ok {
+		pad.AccountData = new
+		cb.mods.Accts.Upsert(addr, pad)
+	} else {
+		panic(fmt.Sprintf("Address %s does not have entry in getPadCache", addr.String()))
+	}
 
 	if newCreatable != nil {
 		cb.mods.Creatables[newCreatable.Index] = ledgercore.ModifiedCreatable{
@@ -236,6 +252,7 @@ func (cb *roundCowState) child() *roundCowState {
 		proto:        cb.proto,
 		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, 1),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
+		getPadCache:  make(map[basics.Address]ledgercore.PersistedAccountData),
 	}
 }
 
@@ -266,6 +283,10 @@ func (cb *roundCowState) commitToParent() {
 		}
 	}
 	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
+
+	for addr, pad := range cb.getPadCache {
+		cb.commitParent.getPadCache[addr] = pad
+	}
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {

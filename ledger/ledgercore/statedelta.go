@@ -83,30 +83,24 @@ const (
 // AccountDeltas stores ordered accounts and allows fast lookup by address
 type AccountDeltas struct {
 	// actual data
-	accts []basics.BalanceRecord
+	accts []PersistedAdRecord
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
 	// holdings keeps track of created and deleted holdings per address
 	holdings map[basics.Address]map[basics.AssetIndex]HoldingAction
 }
 
-// AccountDataModsRecord is similar to AccountData but contains AccountDataMods
-type AccountDataModsRecord struct {
-	addr basics.Address
-	AccountDataMods
-}
-
-// AccountDataMods encapsulates intermediate creatable changes for AccountData
-type AccountDataMods struct {
+// PersistedAdRecord is similar to BalanceRecord but contains PersistedAccountData
+type PersistedAdRecord struct {
+	Addr basics.Address
 	PersistedAccountData
-	basics.CreatableLocator
 }
 
 // MakeStateDelta creates a new instance of StateDelta
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int) StateDelta {
 	return StateDelta{
 		Accts: AccountDeltas{
-			accts:      make([]basics.BalanceRecord, 0, hint*2),
+			accts:      make([]PersistedAdRecord, 0, hint*2),
 			acctsCache: make(map[basics.Address]int, hint*2),
 			holdings:   make(map[basics.Address]map[basics.AssetIndex]HoldingAction),
 		},
@@ -119,12 +113,12 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int)
 }
 
 // Get lookups AccountData by address
-func (ad *AccountDeltas) Get(addr basics.Address) (basics.AccountData, bool) {
+func (ad *AccountDeltas) Get(addr basics.Address) (PersistedAccountData, bool) {
 	idx, ok := ad.acctsCache[addr]
 	if !ok {
-		return basics.AccountData{}, false
+		return PersistedAccountData{}, false
 	}
-	return ad.accts[idx].AccountData, true
+	return ad.accts[idx].PersistedAccountData, true
 }
 
 // ModifiedAccounts returns list of addresses of modified accounts
@@ -150,24 +144,24 @@ func (ad *AccountDeltas) Len() int {
 
 // GetByIdx returns address and AccountData
 // It does NOT check boundaries.
-func (ad *AccountDeltas) GetByIdx(i int) (basics.Address, basics.AccountData) {
-	return ad.accts[i].Addr, ad.accts[i].AccountData
+func (ad *AccountDeltas) GetByIdx(i int) (basics.Address, PersistedAccountData) {
+	return ad.accts[i].Addr, ad.accts[i].PersistedAccountData
 }
 
 // Upsert adds new or updates existing account account
-func (ad *AccountDeltas) Upsert(addr basics.Address, data basics.AccountData) {
-	ad.upsert(basics.BalanceRecord{Addr: addr, AccountData: data})
+func (ad *AccountDeltas) Upsert(addr basics.Address, pad PersistedAccountData) {
+	ad.upsert(PersistedAdRecord{Addr: addr, PersistedAccountData: pad})
 }
 
-func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
-	addr := br.Addr
+func (ad *AccountDeltas) upsert(par PersistedAdRecord) {
+	addr := par.Addr
 	if idx, exist := ad.acctsCache[addr]; exist { // nil map lookup is OK
-		ad.accts[idx] = br
+		ad.accts[idx] = par
 		return
 	}
 
 	last := len(ad.accts)
-	ad.accts = append(ad.accts, br)
+	ad.accts = append(ad.accts, par)
 
 	if ad.acctsCache == nil {
 		ad.acctsCache = make(map[basics.Address]int)

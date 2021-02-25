@@ -159,7 +159,7 @@ type compactAccountDeltas struct {
 
 type accountDelta struct {
 	old     dbAccountData
-	new     basics.AccountData
+	new     ledgercore.PersistedAccountData
 	ndeltas int
 }
 
@@ -1137,14 +1137,10 @@ func loadAssetHoldingGroupData(stmt *sql.Stmt, key int64) (group ledgercore.Asse
 	return
 }
 
-func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, ad basics.AccountData, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
+func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, pad ledgercore.PersistedAccountData, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
 	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
-	var pad ledgercore.PersistedAccountData
-	if len(ad.Assets) <= assetsThreshold {
-		pad.AccountData = ad
-	} else {
-		pad.ExtendedAssetHolding.ConvertToGroups(ad.Assets)
-		pad.AccountData = ad
+	if len(pad.Assets) > assetsThreshold {
+		pad.ExtendedAssetHolding.ConvertToGroups(pad.Assets)
 		pad.AccountData.Assets = nil
 	}
 
@@ -1162,7 +1158,7 @@ func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, ad b
 	}
 
 	if err == nil {
-		normBalance := ad.NormalizedOnlineBalance(proto)
+		normBalance := pad.AccountData.NormalizedOnlineBalance(proto)
 		result, err = qabi.Exec(addr[:], normBalance, protocol.Encode(&pad))
 		if err == nil {
 			updatedAccounts[updateIdx].rowid, err = result.LastInsertId()
@@ -1213,10 +1209,10 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 	var pad ledgercore.PersistedAccountData
 	var err error
 	if delta.old.pad.NumAssetHoldings() <= assetsThreshold && len(delta.new.Assets) <= assetsThreshold {
-		pad.AccountData = delta.new
+		pad.AccountData = delta.new.AccountData
 	} else if delta.old.pad.NumAssetHoldings() <= assetsThreshold && len(delta.new.Assets) > assetsThreshold {
 		pad.ExtendedAssetHolding.ConvertToGroups(delta.new.Assets)
-		pad.AccountData = delta.new
+		pad.AccountData = delta.new.AccountData
 		pad.AccountData.Assets = nil
 
 		// update group data DB table
@@ -1236,7 +1232,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 		updated := make([]basics.AssetIndex, 0, len(delta.new.Assets))     // items in both new and old
 		created := make([]basics.AssetIndex, 0, len(delta.new.Assets))     // items in new but not in old
 
-		pad.AccountData = delta.new
+		pad = delta.new
 		oldPad := delta.old.pad
 
 		for aidx := range oldPad.AccountData.Assets {
@@ -1544,8 +1540,8 @@ func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpda
 		totals.ApplyRewards(accountTotals[i].RewardsLevel, &ot)
 
 		for j := 0; j < updates[i].Len(); j++ {
-			addr, data := updates[i].GetByIdx(j)
-
+			addr, pad := updates[i].GetByIdx(j)
+			data := pad.AccountData
 			if oldAccountData, has := accounts[addr]; has {
 				totals.DelAccount(protos[i], oldAccountData, &ot)
 			} else {

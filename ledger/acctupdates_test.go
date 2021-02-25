@@ -202,7 +202,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	for offset := uint64(0); offset < offsetLimit; offset++ {
 		for i := 0; i < au.deltas[offset].Len(); i++ {
 			addr, delta := au.deltas[offset].GetByIdx(i)
-			bals[addr] = delta
+			bals[addr] = delta.AccountData
 		}
 	}
 	return
@@ -361,7 +361,7 @@ func TestAcctUpdates(t *testing.T) {
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
+		updates.Upsert(testPoolAddr, ledgercore.PersistedAccountData{AccountData: newPool})
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -444,7 +444,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
+		updates.Upsert(testPoolAddr, ledgercore.PersistedAccountData{AccountData: newPool})
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -533,7 +533,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
+		updates.Upsert(testPoolAddr, ledgercore.PersistedAccountData{AccountData: newPool})
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -660,7 +660,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
+		updates.Upsert(testPoolAddr, ledgercore.PersistedAccountData{AccountData: newPool})
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -836,7 +836,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 
 			delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, len(updates))
 			for addr, ad := range updates {
-				delta.Accts.Upsert(addr, ad)
+				delta.Accts.Upsert(addr, ledgercore.PersistedAccountData{AccountData: ad})
 			}
 			au.newBlock(blk, delta)
 			au.committedUpTo(i)
@@ -1243,7 +1243,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 			addr := randomAddress()
 			acctData := basics.AccountData{}
 			acctData.MicroAlgos.Raw = 1
-			updates.upsert(addr, accountDelta{new: acctData})
+			updates.upsert(addr, accountDelta{new: ledgercore.PersistedAccountData{AccountData: acctData}})
 			i++
 		}
 
@@ -1315,7 +1315,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 				addr := randomAddress()
 				acctData := basics.AccountData{}
 				acctData.MicroAlgos.Raw = 1
-				updates.upsert(addr, accountDelta{new: acctData})
+				updates.upsert(addr, accountDelta{new: ledgercore.PersistedAccountData{AccountData: acctData}})
 				i++
 			}
 
@@ -1353,7 +1353,7 @@ func BenchmarkCompactDeltas(b *testing.B) {
 				start = window/2 + (rnd-1)*window
 			}
 			for k := start; k < start+window; k++ {
-				accountDeltas[rnd].Upsert(addrs[k], basics.AccountData{})
+				accountDeltas[rnd].Upsert(addrs[k], ledgercore.PersistedAccountData{})
 				m[addrs[k]] = basics.AccountData{}
 			}
 		}
@@ -1374,7 +1374,7 @@ func TestCompactDeltas(t *testing.T) {
 	accountDeltas := make([]ledgercore.AccountDeltas, 1, 1)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1, 1)
 	creatableDeltas[0] = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	accountDeltas[0].Upsert(addrs[0], basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}})
+	accountDeltas[0].Upsert(addrs[0], ledgercore.PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}})
 	creatableDeltas[0][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true}
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
@@ -1387,14 +1387,14 @@ func TestCompactDeltas(t *testing.T) {
 
 	delta, _ := outAccountDeltas.get(addrs[0])
 	require.Equal(t, dbAccountData{}, delta.old)
-	require.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}, delta.new)
+	require.Equal(t, ledgercore.PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}}, delta.new)
 	require.Equal(t, ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 
 	// add another round
 	accountDeltas = append(accountDeltas, ledgercore.AccountDeltas{})
 	creatableDeltas = append(creatableDeltas, make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable))
-	accountDeltas[1].Upsert(addrs[0], basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 3}})
-	accountDeltas[1].Upsert(addrs[3], basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 8}})
+	accountDeltas[1].Upsert(addrs[0], ledgercore.PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 3}}})
+	accountDeltas[1].Upsert(addrs[3], ledgercore.PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 8}}})
 
 	creatableDeltas[1][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: false}
 	creatableDeltas[1][101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
@@ -1487,7 +1487,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates.Upsert(testPoolAddr, newPool)
+		updates.Upsert(testPoolAddr, ledgercore.PersistedAccountData{AccountData: newPool})
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{

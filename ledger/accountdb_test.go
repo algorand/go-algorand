@@ -283,7 +283,7 @@ func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 			} else {
 				new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
 			}
-			updates.Upsert(addr, new)
+			updates.Upsert(addr, ledgercore.PersistedAccountData{AccountData: new})
 			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 			totals[addr] = new
 			break
@@ -300,7 +300,7 @@ func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 		} else {
 			new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
 		}
-		updates.Upsert(addr, new)
+		updates.Upsert(addr, ledgercore.PersistedAccountData{AccountData: new})
 		imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 		totals[addr] = new
 	}
@@ -330,7 +330,7 @@ func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountD
 	newPool := oldPool
 	newPool.MicroAlgos.Raw += uint64(imbalance)
 
-	updates.Upsert(testPoolAddr, newPool)
+	updates.Upsert(testPoolAddr, ledgercore.PersistedAccountData{AccountData: newPool})
 	totals[testPoolAddr] = newPool
 
 	return updates, totals, lastCreatableID
@@ -1172,7 +1172,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(0, ad.len())
 	a.Panics(func() { ad.getByIdx(0) })
 
-	sample1 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
+	sample1 := accountDelta{new: ledgercore.PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}}
 	ad.upsert(addr, sample1)
 	data, idx = ad.get(addr)
 	a.NotEqual(-1, idx)
@@ -1183,7 +1183,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample1, data)
 
-	sample2 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
+	sample2 := accountDelta{new: ledgercore.PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}}
 	ad.upsert(addr, sample2)
 	data, idx = ad.get(addr)
 	a.NotEqual(-1, idx)
@@ -1300,7 +1300,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 
 			updatedAccounts, err = accountsNewCreate(
 				q.insertStmt, q.insertGroupDataStmt,
-				addr, ad, proto,
+				addr, ledgercore.PersistedAccountData{AccountData: ad}, proto,
 				updatedAccounts, updatedAccountIdx,
 			)
 			a.NoError(err)
@@ -1379,7 +1379,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 
 	updatedAccounts, err = accountsNewCreate(
 		q.insertStmt, q.insertGroupDataStmt,
-		addr, ad, proto,
+		addr, ledgercore.PersistedAccountData{AccountData: ad}, proto,
 		updatedAccounts, updatedAccountIdx,
 	)
 
@@ -1397,7 +1397,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		updated.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
 	}
 
-	delta := accountDelta{old: old, new: updated}
+	delta := accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}}
 	updatedAccounts, err = accountsNewUpdate(
 		q.updateStmt, q.queryGroupDataStmt,
 		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
@@ -1446,7 +1446,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		savedAssets[basics.AssetIndex(i)] = true
 	}
 
-	delta = accountDelta{old: old, new: updated}
+	delta = accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}}
 	updatedAccounts, err = accountsNewUpdate(
 		q.updateStmt, q.queryGroupDataStmt,
 		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
@@ -1538,7 +1538,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		updated.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
 	}
 
-	delta = accountDelta{old: old, new: updated}
+	delta = accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}}
 
 	updatedAccounts, err = accountsNewUpdate(
 		q.updateStmt, q.queryGroupDataStmt,
@@ -1645,7 +1645,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		updated.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
 	}
 
-	delta = accountDelta{old: old, new: updated}
+	delta = accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}}
 
 	updatedAccounts, err = accountsNewUpdate(
 		q.updateStmt, q.queryGroupDataStmt,

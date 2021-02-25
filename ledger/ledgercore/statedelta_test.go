@@ -37,19 +37,19 @@ func TestAccountDeltas(t *testing.T) {
 	ad := AccountDeltas{}
 	data, ok := ad.Get(basics.Address{})
 	a.False(ok)
-	a.Equal(basics.AccountData{}, data)
+	a.Equal(PersistedAccountData{}, data)
 
 	addr := randomAddress()
 	data, ok = ad.Get(addr)
 	a.False(ok)
-	a.Equal(basics.AccountData{}, data)
+	a.Equal(PersistedAccountData{}, data)
 
 	a.Equal(0, ad.Len())
 	a.Panics(func() { ad.GetByIdx(0) })
 
 	a.Equal([]basics.Address{}, ad.ModifiedAccounts())
 
-	sample1 := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}
+	sample1 := PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
 	ad.Upsert(addr, sample1)
 	data, ok = ad.Get(addr)
 	a.True(ok)
@@ -60,7 +60,7 @@ func TestAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample1, data)
 
-	sample2 := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}
+	sample2 := PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
 	ad.Upsert(addr, sample2)
 	data, ok = ad.Get(addr)
 	a.True(ok)
