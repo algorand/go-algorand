@@ -564,6 +564,12 @@ func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 		}
 	}()
 	for _, msg := range msgs {
+		select {
+		case <-msg.ctx.Done():
+			return disconnectReasonNone
+		default:
+		}
+
 		if wp.sendMsgTracker.existsUnsafe(msg.hash) {
 			numSkipped++
 			continue
@@ -578,12 +584,6 @@ func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 			if msg.hash != emptyHash {
 				wp.sendMsgTracker.remember(msg.hash)
 			}
-		}
-
-		select {
-		case <-msg.ctx.Done():
-			return disconnectReasonNone
-		default:
 		}
 	}
 	return disconnectReasonNone
