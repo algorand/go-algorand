@@ -127,6 +127,14 @@ func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (basics
 	return ad, nil
 }
 
+func (b *testBalances) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	ad, ok := b.balances[addr]
+	if !ok {
+		return basics.AccountData{}, fmt.Errorf("mock balance not found")
+	}
+	return ad, nil
+}
+
 func (b *testBalances) Put(addr basics.Address, ad basics.AccountData) error {
 	b.put++
 	if b.putBalances == nil {
@@ -171,13 +179,13 @@ func (b *testBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, s
 func (b *testBalances) ConsensusParams() config.ConsensusParams {
 	return b.proto
 }
-func (b *testBalances) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
-	b.allocatedAppIdx = aidx
+func (b *testBalances) Allocate(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, space basics.StateSchema) error {
+	b.allocatedAppIdx = basics.AppIndex(cidx)
 	return nil
 }
 
-func (b *testBalances) Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
-	b.deAllocatedAppIdx = aidx
+func (b *testBalances) Deallocate(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool) error {
+	b.deAllocatedAppIdx = basics.AppIndex(cidx)
 	return nil
 }
 
@@ -186,6 +194,14 @@ func (b *testBalances) StatefulEval(params logic.EvalParams, aidx basics.AppInde
 }
 
 func (b *testBalancesPass) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+	ad, ok := b.balances[addr]
+	if !ok {
+		return basics.AccountData{}, fmt.Errorf("mock balance not found")
+	}
+	return ad, nil
+}
+
+func (b *testBalancesPass) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
 	ad, ok := b.balances[addr]
 	if !ok {
 		return basics.AccountData{}, fmt.Errorf("mock balance not found")
@@ -212,12 +228,12 @@ func (b *testBalancesPass) PutWithCreatable(addr basics.Address, ad basics.Accou
 func (b *testBalancesPass) ConsensusParams() config.ConsensusParams {
 	return b.proto
 }
-func (b *testBalancesPass) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
-	b.allocatedAppIdx = aidx
+func (b *testBalancesPass) Allocate(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, space basics.StateSchema) error {
+	b.allocatedAppIdx = basics.AppIndex(cidx)
 	return nil
 }
 
-func (b *testBalancesPass) Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
+func (b *testBalancesPass) Deallocate(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool) error {
 	return nil
 }
 

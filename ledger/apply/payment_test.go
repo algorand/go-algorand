@@ -85,11 +85,11 @@ func (balances mockBalances) Round() basics.Round {
 	return basics.Round(8675309)
 }
 
-func (balances mockBalances) Allocate(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
+func (balances mockBalances) Allocate(basics.Address, basics.CreatableIndex, basics.CreatableType, bool, basics.StateSchema) error {
 	return nil
 }
 
-func (balances mockBalances) Deallocate(basics.Address, basics.AppIndex, bool) error {
+func (balances mockBalances) Deallocate(basics.Address, basics.CreatableIndex, basics.CreatableType, bool) error {
 	return nil
 }
 
@@ -102,6 +102,10 @@ func (balances mockBalances) PutWithCreatable(basics.Address, basics.AccountData
 }
 
 func (balances mockBalances) Get(basics.Address, bool) (basics.AccountData, error) {
+	return basics.AccountData{}, nil
+}
+
+func (balances mockBalances) GetEx(basics.Address, basics.CreatableIndex, basics.CreatableType) (basics.AccountData, error) {
 	return basics.AccountData{}, nil
 }
 

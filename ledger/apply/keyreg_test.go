@@ -40,6 +40,10 @@ func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards b
 	return balances.addrs[addr], nil
 }
 
+func (balances keyregTestBalances) GetEx(basics.Address, basics.CreatableIndex, basics.CreatableType) (basics.AccountData, error) {
+	return basics.AccountData{}, nil
+}
+
 func (balances keyregTestBalances) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return basics.Address{}, true, nil
 }
@@ -64,11 +68,11 @@ func (balances keyregTestBalances) Round() basics.Round {
 	return basics.Round(4294967296)
 }
 
-func (balances keyregTestBalances) Allocate(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
+func (balances keyregTestBalances) Allocate(basics.Address, basics.CreatableIndex, basics.CreatableType, bool, basics.StateSchema) error {
 	return nil
 }
 
-func (balances keyregTestBalances) Deallocate(basics.Address, basics.AppIndex, bool) error {
+func (balances keyregTestBalances) Deallocate(basics.Address, basics.CreatableIndex, basics.CreatableType, bool) error {
 	return nil
 }
 

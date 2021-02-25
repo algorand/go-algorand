@@ -218,6 +218,14 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 	return pad.AccountData, nil
 }
 
+func (cs *roundCowState) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	pad, err := cs.lookupHolding(addr, cidx, ctype)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+	return pad.AccountData, nil
+}
+
 func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return cs.getCreator(cidx, ctype)
 }

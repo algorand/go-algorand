@@ -31,6 +31,9 @@ type Balances interface {
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
 	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
 
+	// GetEx is like Get(addr, false), but also loads specific creatable
+	GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error)
+
 	Put(basics.Address, basics.AccountData) error
 
 	// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.
@@ -39,15 +42,17 @@ type Balances interface {
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 
-	// Allocate or Deallocate either global or address-local app storage.
+	// Allocate or Deallocate either global or address-local app storage, or asset holding
 	//
 	// PutWithCreatable(...) and then {Allocate/Deallocate}(..., ..., global=true)
 	// creates/destroys an application.
 	//
 	// Put(...) and then {Allocate/Deallocate}(..., ..., global=false)
 	// opts into/closes out of an application.
-	Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error
-	Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error
+	//
+	// global and space parmaters are not used for assets
+	Allocate(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, space basics.StateSchema) error
+	Deallocate(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool) error
 
 	// StatefulEval executes a TEAL program in stateful mode on the balances.
 	// It returns whether the program passed and its error.  It alo returns

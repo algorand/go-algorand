@@ -243,7 +243,7 @@ func TestCowStorage(t *testing.T) {
 				NumUint:      rand.Uint64(),
 				NumByteSlice: rand.Uint64(),
 			}
-			err := cow.Allocate(addr, sptr.aidx, sptr.global, rschema)
+			err := cow.Allocate(addr, basics.CreatableIndex(sptr.aidx), basics.AppCreatable, sptr.global, rschema)
 			if actuallyAllocated {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "cannot allocate")
@@ -257,7 +257,7 @@ func TestCowStorage(t *testing.T) {
 		// Deallocate
 		if rand.Float32() < 0.25 {
 			actuallyAllocated := st.allocated(aapp)
-			err := cow.Deallocate(addr, sptr.aidx, sptr.global)
+			err := cow.Deallocate(addr, basics.CreatableIndex(sptr.aidx), basics.AppCreatable, sptr.global)
 			if actuallyAllocated {
 				require.NoError(t, err)
 				err := st.dealloc(aapp)

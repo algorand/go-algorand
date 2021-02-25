@@ -195,7 +195,6 @@ func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 }
 
 func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
-	// add := ledgercore.AccountDataMods{AccountData: new}
 	cb.mods.Accts.Upsert(addr, new)
 
 	if newCreatable != nil {
@@ -205,7 +204,6 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 			Created: true,
 		}
 	}
-
 	if deletedCreatable != nil {
 		cb.mods.Creatables[deletedCreatable.Index] = ledgercore.ModifiedCreatable{
 			Ctype:   deletedCreatable.Type,
