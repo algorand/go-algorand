@@ -1143,17 +1143,19 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		wg.Wait()
 	}()
 
-	// If validationCtx or underlying ctx are Done, end prefetch
-	if usePrefetch {
-		wg.Add(1)
-		go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset, &wg)
-	}
-
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}
+
+	// If validationCtx or underlying ctx are Done, end prefetch
+	if usePrefetch {
+		//wg.Add(1)
+		//go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset, &wg)
+	}
+	paysetgroupsCh := loadAccounts(l, blk.Round()-1, eval.state, paysetgroups)
+
 	var txvalidator evalTxValidator
 	if validate {
 		_, ok := config.Consensus[blk.CurrentProtocol]
@@ -1171,8 +1173,17 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 
 	}
 
-	for _, txgroup := range paysetgroups {
+	for {
 		select {
+		case txgroup, ok := <-paysetgroupsCh:
+			if !ok {
+				break
+			}
+			err = eval.TransactionGroup(txgroup)
+			if err != nil {
+				return ledgercore.StateDelta{}, err
+			}
+			continue
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
 		case err, open := <-txvalidator.done:
@@ -1180,13 +1191,9 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 			if open && err != nil {
 				return ledgercore.StateDelta{}, err
 			}
-		default:
+			continue
 		}
-
-		err = eval.TransactionGroup(txgroup)
-		if err != nil {
-			return ledgercore.StateDelta{}, err
-		}
+		break
 	}
 
 	// Finally, procees any pending end-of-block state changes
@@ -1218,31 +1225,71 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	return eval.state.deltas(), nil
 }
 
-func prefetchThread(ctx context.Context, state roundCowParent, payset []transactions.SignedTxnInBlock, wg *sync.WaitGroup) {
-	defer wg.Done()
-	maybelookup := func(addr basics.Address) {
-		if addr.IsZero() {
-			return
+func loadAccounts(l ledgerForEvaluator, rnd basics.Round, state *roundCowState, groups [][]transactions.SignedTxnWithAD) chan []transactions.SignedTxnWithAD {
+	outChan := make(chan []transactions.SignedTxnWithAD, len(groups))
+	go func() {
+		type addrTask struct {
+			addr       basics.Address
+			waitGroups []*sync.WaitGroup
 		}
-		state.lookup(addr)
-	}
-	for _, stxn := range payset {
-		select {
-		case <-ctx.Done():
-			return
-		default:
+		accountsChannels := make(map[basics.Address]*addrTask)
+		addressesCh := make(chan *addrTask, len(groups)*16*10)
+		initAccount := func(addr basics.Address, wg *sync.WaitGroup) {
+			if addr.IsZero() {
+				return
+			}
+			if _, have := accountsChannels[addr]; !have {
+				task := &addrTask{
+					addr:       addr,
+					waitGroups: []*sync.WaitGroup{wg},
+				}
+				accountsChannels[addr] = task
+				addressesCh <- task
+			} else {
+				task := accountsChannels[addr]
+				task.waitGroups = append(task.waitGroups, wg)
+			}
+			wg.Add(1)
 		}
-		state.lookup(stxn.Txn.Sender)
-		maybelookup(stxn.Txn.Receiver)
-		maybelookup(stxn.Txn.CloseRemainderTo)
-		maybelookup(stxn.Txn.AssetSender)
-		maybelookup(stxn.Txn.AssetReceiver)
-		maybelookup(stxn.Txn.AssetCloseTo)
-		maybelookup(stxn.Txn.FreezeAccount)
-		for _, xa := range stxn.Txn.Accounts {
-			maybelookup(xa)
+		groupsReady := make([]*sync.WaitGroup, len(groups))
+		for i, group := range groups {
+			groupWg := &sync.WaitGroup{}
+			groupsReady[i] = groupWg
+			for _, stxn := range group {
+				initAccount(stxn.Txn.Sender, groupWg)
+				initAccount(stxn.Txn.Receiver, groupWg)
+				initAccount(stxn.Txn.CloseRemainderTo, groupWg)
+				initAccount(stxn.Txn.AssetSender, groupWg)
+				initAccount(stxn.Txn.AssetReceiver, groupWg)
+				initAccount(stxn.Txn.AssetCloseTo, groupWg)
+				initAccount(stxn.Txn.FreezeAccount, groupWg)
+				for _, xa := range stxn.Txn.Accounts {
+					initAccount(xa, groupWg)
+				}
+			}
 		}
-	}
+		close(addressesCh)
+
+		base := state.lookupParent.(*roundCowBase)
+
+		for i := 0; i < 4; i++ {
+			go func() {
+				for task := range addressesCh {
+					// load the address
+					base.lookup(task.addr)
+					for _, wg := range task.waitGroups {
+						wg.Done()
+					}
+				}
+			}()
+		}
+		for i, wg := range groupsReady {
+			wg.Wait()
+			outChan <- groups[i]
+		}
+		close(outChan)
+	}()
+	return outChan
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.
