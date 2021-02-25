@@ -1144,7 +1144,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		//wg.Add(1)
 		//go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset, &wg)
 	}
-	paysetgroupsCh := loadAccounts(ctx, l, blk.Round()-1, paysetgroups)
+	paysetgroupsCh := loadAccounts(ctx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink)
 
 	var txvalidator evalTxValidator
 	if validate {
@@ -1229,7 +1229,7 @@ type loadedTransactionGroup struct {
 	err      error
 }
 
-func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD) chan loadedTransactionGroup {
+func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address) chan loadedTransactionGroup {
 	outChan := make(chan loadedTransactionGroup, len(groups))
 	go func() {
 		type groupTask struct {
@@ -1269,6 +1269,13 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 			wg.balancesCount++
 			totalBalances++
 		}
+		if len(groups) > 0 {
+			task := &addrTask{
+				addr: feeSinkAddr,
+			}
+			addressesCh <- task
+			accountsChannels[feeSinkAddr] = task
+		}
 		groupsReady := make([]*groupTask, len(groups))
 		for i, group := range groups {
 			groupWg := &groupTask{}
@@ -1285,6 +1292,11 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 					initAccount(xa, groupWg)
 				}
 			}
+		}
+
+		// Add fee sink to the first group
+		if len(groupsReady) > 0 {
+			initAccount(feeSinkAddr, groupsReady[0])
 		}
 		close(addressesCh)
 
