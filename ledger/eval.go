@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
@@ -73,9 +71,6 @@ type roundCowBase struct {
 	// are beyond the scope of this cache.
 	// The account data store here is always the account data without the rewards.
 	accounts map[basics.Address]basics.AccountData
-
-	// accountsMu is the accounts read-write mutex, used to syncronize the access ot the accounts map.
-	accountsMu deadlock.RWMutex
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -86,18 +81,13 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 // first, and if it cannot find it there, it would defer to the underlaying implementation.
 // note that errors in accounts data retrivals are not cached as these typically cause the transaction evaluation to fail.
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	x.accountsMu.RLock()
 	if accountData, found := x.accounts[addr]; found {
-		x.accountsMu.RUnlock()
 		return accountData, nil
 	}
-	x.accountsMu.RUnlock()
 
 	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err == nil {
-		x.accountsMu.Lock()
 		x.accounts[addr] = accountData
-		x.accountsMu.Unlock()
 	}
 	return accountData, err
 }
@@ -1154,7 +1144,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		//wg.Add(1)
 		//go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset, &wg)
 	}
-	paysetgroupsCh := loadAccounts(l, blk.Round()-1, eval.state, paysetgroups)
+	paysetgroupsCh := loadAccounts(l, blk.Round()-1, paysetgroups)
 
 	var txvalidator evalTxValidator
 	if validate {
@@ -1173,13 +1163,18 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 
 	}
 
+	base := eval.state.lookupParent.(*roundCowBase)
+
 	for {
 		select {
 		case txgroup, ok := <-paysetgroupsCh:
 			if !ok {
 				break
 			}
-			err = eval.TransactionGroup(txgroup)
+			for _, br := range txgroup.balances {
+				base.accounts[br.Addr] = br.AccountData
+			}
+			err = eval.TransactionGroup(txgroup.group)
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}
@@ -1225,35 +1220,53 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	return eval.state.deltas(), nil
 }
 
-func loadAccounts(l ledgerForEvaluator, rnd basics.Round, state *roundCowState, groups [][]transactions.SignedTxnWithAD) chan []transactions.SignedTxnWithAD {
-	outChan := make(chan []transactions.SignedTxnWithAD, len(groups))
+type loadedTransactionGroup struct {
+	group    []transactions.SignedTxnWithAD
+	balances []basics.BalanceRecord
+}
+
+func loadAccounts(l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD) chan loadedTransactionGroup {
+	outChan := make(chan loadedTransactionGroup, len(groups))
 	go func() {
-		type addrTask struct {
-			addr       basics.Address
-			waitGroups []*sync.WaitGroup
+		type groupTask struct {
+			balances      []basics.BalanceRecord
+			balancesCount int
+			done          chan struct{}
 		}
+		type addrTask struct {
+			addr         basics.Address
+			groups       []*groupTask
+			groupIndices []int
+		}
+
 		accountsChannels := make(map[basics.Address]*addrTask)
 		addressesCh := make(chan *addrTask, len(groups)*16*10)
-		initAccount := func(addr basics.Address, wg *sync.WaitGroup) {
+		totalBalances := 0
+		initAccount := func(addr basics.Address, wg *groupTask) {
 			if addr.IsZero() {
 				return
 			}
 			if _, have := accountsChannels[addr]; !have {
 				task := &addrTask{
-					addr:       addr,
-					waitGroups: []*sync.WaitGroup{wg},
+					addr:         addr,
+					groups:       make([]*groupTask, 1, 4),
+					groupIndices: make([]int, 1, 4),
 				}
+				task.groups[0] = wg
+				task.groupIndices[0] = wg.balancesCount
 				accountsChannels[addr] = task
 				addressesCh <- task
 			} else {
 				task := accountsChannels[addr]
-				task.waitGroups = append(task.waitGroups, wg)
+				task.groups = append(task.groups, wg)
+				task.groupIndices = append(task.groupIndices, wg.balancesCount)
 			}
-			wg.Add(1)
+			wg.balancesCount++
+			totalBalances++
 		}
-		groupsReady := make([]*sync.WaitGroup, len(groups))
+		groupsReady := make([]*groupTask, len(groups))
 		for i, group := range groups {
-			groupWg := &sync.WaitGroup{}
+			groupWg := &groupTask{}
 			groupsReady[i] = groupWg
 			for _, stxn := range group {
 				initAccount(stxn.Txn.Sender, groupWg)
@@ -1270,22 +1283,43 @@ func loadAccounts(l ledgerForEvaluator, rnd basics.Round, state *roundCowState, 
 		}
 		close(addressesCh)
 
-		base := state.lookupParent.(*roundCowBase)
+		allBalances := make([]basics.BalanceRecord, totalBalances)
+		usedBalances := 0
+		for _, gr := range groupsReady {
+			gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
+			gr.done = make(chan struct{}, gr.balancesCount)
+			usedBalances += gr.balancesCount
+		}
 
 		for i := 0; i < 4; i++ {
 			go func() {
 				for task := range addressesCh {
 					// load the address
-					base.lookup(task.addr)
-					for _, wg := range task.waitGroups {
-						wg.Done()
+					acctData, _, err := l.LookupWithoutRewards(rnd, task.addr)
+					br := basics.BalanceRecord{
+						Addr:        task.addr,
+						AccountData: acctData,
+					}
+					if err == nil {
+						for i, wg := range task.groups {
+							wg.balances[task.groupIndices[i]] = br
+							wg.done <- struct{}{}
+						}
+					} else {
+						// todo - handle error cases.
+						panic(err)
 					}
 				}
 			}()
 		}
 		for i, wg := range groupsReady {
-			wg.Wait()
-			outChan <- groups[i]
+			for j := 0; j < wg.balancesCount; j++ {
+				<-wg.done
+			}
+			outChan <- loadedTransactionGroup{
+				group:    groups[i],
+				balances: wg.balances,
+			}
 		}
 		close(outChan)
 	}()
