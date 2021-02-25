@@ -122,8 +122,8 @@ type Response struct {
 }
 
 type wsPeer struct {
-	// lastPacketTime contains the UnixNano at the last time a successfull communication was made with the peer.
-	// "successfull communication" above refers to either reading from or writing to a connection without receiving any
+	// lastPacketTime contains the UnixNano at the last time a successful communication was made with the peer.
+	// "successful communication" above refers to either reading from or writing to a connection without receiving any
 	// error.
 	// we want this to be a 64-bit aligned for atomics.
 	lastPacketTime int64
@@ -436,7 +436,7 @@ func (wp *wsPeer) readLoop() {
 
 			select {
 			case channel <- &Response{Topics: topics}:
-				// do nothing. writing was successfull.
+				// do nothing. writing was successful.
 			default:
 				wp.net.log.Warnf("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
 			}
