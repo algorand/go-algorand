@@ -70,12 +70,24 @@ type StateDelta struct {
 	PrevTimestamp int64
 }
 
+// HoldingAction is an enum of actions on holdings
+type HoldingAction uint64
+
+const (
+	// ActionCreate is for asset holding creation
+	ActionCreate HoldingAction = 1 + iota
+	// ActionDelete is for asset holding creation
+	ActionDelete
+)
+
 // AccountDeltas stores ordered accounts and allows fast lookup by address
 type AccountDeltas struct {
 	// actual data
 	accts []basics.BalanceRecord
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
+	// holdings keeps track of created and deleted holdings per address
+	holdings map[basics.Address]map[basics.AssetIndex]HoldingAction
 }
 
 // AccountDataModsRecord is similar to AccountData but contains AccountDataMods
@@ -96,6 +108,7 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int)
 		Accts: AccountDeltas{
 			accts:      make([]basics.BalanceRecord, 0, hint*2),
 			acctsCache: make(map[basics.Address]int, hint*2),
+			holdings:   make(map[basics.Address]map[basics.AssetIndex]HoldingAction),
 		},
 		Txids:         make(map[transactions.Txid]basics.Round, hint),
 		Txleases:      make(map[Txlease]basics.Round, hint),
@@ -160,4 +173,22 @@ func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
 		ad.acctsCache = make(map[basics.Address]int)
 	}
 	ad.acctsCache[addr] = last
+}
+
+// SetHoldingDelta saves creation/deletion info about asset holding
+// Creation is not really important since the holding is already in ad.accts,
+// but saving deleteion info is only the way to know if the asset gone
+func (ad *AccountDeltas) SetHoldingDelta(addr basics.Address, aidx basics.AssetIndex, created bool) {
+	amap, ok := ad.holdings[addr]
+	if !ok {
+		amap = make(map[basics.AssetIndex]HoldingAction)
+	}
+
+	if created {
+		amap[aidx] = ActionCreate
+	} else {
+		amap[aidx] = ActionDelete
+	}
+
+	ad.holdings[addr] = amap
 }

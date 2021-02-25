@@ -200,63 +200,6 @@ func errAlreadyStorage(addr basics.Address, aidx basics.AppIndex, global bool) e
 	return fmt.Errorf("%v has already opted in to app %d", addr, aidx)
 }
 
-// Allocate creates kv storage for a given {addr, aidx, global}. It is called on app creation (global) or opting in (local)
-func (cb *roundCowState) Allocate(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, space basics.StateSchema) error {
-	if ctype == basics.AppCreatable {
-		// Check that account is not already opted in
-		aidx := basics.AppIndex(cidx)
-		allocated, err := cb.allocated(addr, aidx, global)
-		if err != nil {
-			return err
-		}
-		if allocated {
-			err = fmt.Errorf("cannot allocate storage, %v", errAlreadyStorage(addr, aidx, global))
-			return err
-		}
-
-		lsd, err := cb.ensureStorageDelta(addr, aidx, global, allocAction)
-		if err != nil {
-			return err
-		}
-
-		lsd.action = allocAction
-		lsd.maxCounts = &space
-
-		return nil
-	}
-
-	return fmt.Errorf("not supported creatable type %v", ctype)
-}
-
-// Deallocate clears storage for {addr, aidx, global}. It happens on app deletion (global) or closing out (local)
-func (cb *roundCowState) Deallocate(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool) error {
-	if ctype == basics.AppCreatable {
-		// Check that account has allocated storage
-		aidx := basics.AppIndex(cidx)
-		allocated, err := cb.allocated(addr, aidx, global)
-		if err != nil {
-			return err
-		}
-		if !allocated {
-			err = fmt.Errorf("cannot deallocate storage, %v", errNoStorage(addr, aidx, global))
-			return err
-		}
-
-		lsd, err := cb.ensureStorageDelta(addr, aidx, global, deallocAction)
-		if err != nil {
-			return err
-		}
-
-		lsd.action = deallocAction
-		lsd.counts = &basics.StateSchema{}
-		lsd.maxCounts = &basics.StateSchema{}
-		lsd.kvCow = make(stateDelta)
-		return nil
-	}
-
-	return fmt.Errorf("not supported creatable type %v", ctype)
-}
-
 // GetKey looks for a key in {addr, aidx, global} storage
 func (cb *roundCowState) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
 	return cb.getKey(addr, aidx, global, key)

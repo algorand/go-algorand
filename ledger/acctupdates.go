@@ -381,7 +381,7 @@ func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Add
 // LookupHoldingWithoutRewards returns the account data for a given address at a given round
 // with looking for the specified holding/local state in extension table(s)
 func (au *accountUpdates) LookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
-	return au.lookupHoldingWithoutRewards(rnd, addr, cidx, ctype)
+	return au.lookupHoldingWithoutRewards(rnd, addr, cidx, ctype, true)
 }
 
 // ListAssets lists the assets by their asset index, limiting to the first maxResults
@@ -886,7 +886,7 @@ func (aul *accountUpdatesLedgerEvaluator) lookupWithoutRewards(rnd basics.Round,
 // lookupHoldingWithoutRewards returns the account data for a given address at a given round
 // with looking for the specified holding/local state in extension table(s)
 func (aul *accountUpdatesLedgerEvaluator) lookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
-	return aul.au.lookupHoldingWithoutRewards(rnd, addr, cidx, ctype)
+	return aul.au.lookupHoldingWithoutRewards(rnd, addr, cidx, ctype, false)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
@@ -1672,31 +1672,38 @@ func (au *accountUpdates) lookupFullWithoutRewards(rnd basics.Round, addr basics
 // lookupWithHoldings returns the full account data for a given address at a given round.
 // The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
-	pad, _, err = au.lookupWithoutRewards(rnd, addr, true)
+func (au *accountUpdates) lookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (pad ledgercore.PersistedAccountData, err error) {
+	pad, _, err = au.lookupWithoutRewards(rnd, addr, synchronized)
 	if err != nil {
 		return
 	}
 
+	// if not extended holdings then all the holdins in pad.AccountData.Assets
 	if pad.ExtendedAssetHolding.Count == 0 {
 		return
 	}
 
 	if ctype == basics.AssetCreatable {
-		gi, _ := pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(cidx), 0)
+		gi, ai := pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(cidx), 0)
 		if gi != -1 {
-			g := pad.ExtendedAssetHolding.Groups[gi]
-			var holdings map[basics.AssetIndex]basics.AssetHolding
-			au.accountsMu.RLock()
-			holdings, _, err = loadHoldingGroup(au.accountsq.loadAssetHoldingGroupStmt, g, nil)
-			au.accountsMu.RUnlock()
-			if err != nil {
-				return
+			// if matching group found but the group is not loaded then load it
+			if ai == -1 {
+				if synchronized {
+					au.accountsMu.RLock()
+					defer au.accountsMu.RUnlock()
+				}
+				_, pad.ExtendedAssetHolding.Groups[gi], err = loadHoldingGroup(au.accountsq.loadAssetHoldingGroupStmt, pad.ExtendedAssetHolding.Groups[gi], nil)
+				if err != nil {
+					return
+				}
+				_, ai = pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(cidx), gi)
 			}
-			_, ai := pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(cidx), gi)
 			if ai != -1 {
-				pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, 1)
-				pad.AccountData.Assets[basics.AssetIndex(cidx)] = holdings[basics.AssetIndex(cidx)]
+				if pad.AccountData.Assets == nil {
+					// pad.AccountData.Assets might not be nil because looks up into deltas cache
+					pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, 1)
+				}
+				pad.AccountData.Assets[basics.AssetIndex(cidx)] = pad.ExtendedAssetHolding.Groups[gi].GetHolding(ai)
 			}
 		}
 	}

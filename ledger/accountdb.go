@@ -1111,9 +1111,6 @@ func loadHoldings(stmt *sql.Stmt, eah ledgercore.ExtendedAssetHolding) (map[basi
 }
 
 func loadHoldingGroup(stmt *sql.Stmt, g ledgercore.AssetsHoldingGroup, holdings map[basics.AssetIndex]basics.AssetHolding) (map[basics.AssetIndex]basics.AssetHolding, ledgercore.AssetsHoldingGroup, error) {
-	if holdings == nil {
-		holdings = make(map[basics.AssetIndex]basics.AssetHolding, g.Count)
-	}
 	groupData, err := loadAssetHoldingGroupData(stmt, g.AssetGroupKey)
 	if err != nil {
 		return nil, ledgercore.AssetsHoldingGroup{}, err
@@ -1121,7 +1118,9 @@ func loadHoldingGroup(stmt *sql.Stmt, g ledgercore.AssetsHoldingGroup, holdings 
 	aidx := g.MinAssetIndex
 	for i := 0; i < len(groupData.AssetOffsets); i++ {
 		aidx += groupData.AssetOffsets[i]
-		holdings[aidx] = groupData.GetHolding(i)
+		if holdings != nil {
+			holdings[aidx] = groupData.GetHolding(i)
+		}
 	}
 	g.Load(groupData)
 	return holdings, g, nil

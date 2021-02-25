@@ -139,8 +139,8 @@ func (cb *roundCowState) lookup(addr basics.Address) (pad ledgercore.PersistedAc
 
 // lookupWithHolding is gets account data but also fetches asset holding or app local data for a specified creatable
 func (cb *roundCowState) lookupHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (data ledgercore.PersistedAccountData, err error) {
-	ad, ok := cb.mods.Accts.Get(addr)
-	if ok {
+	ad, modified := cb.mods.Accts.Get(addr)
+	if modified {
 		exist := false
 		if ctype == basics.AssetCreatable {
 			_, exist = ad.Assets[basics.AssetIndex(cidx)]
@@ -154,13 +154,20 @@ func (cb *roundCowState) lookupHolding(addr basics.Address, cidx basics.Creatabl
 	}
 
 	d, err := cb.lookupParent.lookupHolding(addr, cidx, ctype)
+	if !modified {
+		return d, err
+	}
+
+	// data from cb.mods.Accts is newer than from lookupParent.lookupHolding, so add the asset if any
+	if holding, ok := d.AccountData.Assets[basics.AssetIndex(cidx)]; ok {
+		ad.Assets[basics.AssetIndex(cidx)] = holding
+	}
+	return ledgercore.PersistedAccountData{AccountData: ad}, nil
 
 	// if err != nil {
 	// 	// save ExtendedHolding portion if possible for later reference
 	// 	cb.mods.Accts.Register(addr, d)
 	// }
-
-	return d, err
 }
 
 func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
