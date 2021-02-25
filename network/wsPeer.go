@@ -574,7 +574,7 @@ func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 			return err
 		}
 
-		if len(msg.data) >= 2 && protocol.Tag(msg.data[:2]) == protocol.TxnTag {
+		if len(msg.data) >= 2 && msgToTrack(protocol.Tag(msg.data[:2])) {
 			if msg.hash != emptyHash {
 				wp.sendMsgTracker.remember(msg.hash)
 			}

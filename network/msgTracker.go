@@ -2,9 +2,15 @@ package network
 
 import (
 	"container/list"
+
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
 )
+
+func msgToTrack(tag protocol.Tag) bool {
+	return tag == protocol.TxnTag
+}
 
 type msgTracker struct {
 	store       map[crypto.Digest][]byte
@@ -41,17 +47,16 @@ func (tracker *msgTracker) LoadMessage(keys []crypto.Digest) ([][]byte, bool) {
 	tracker.mu.RLock()
 	defer tracker.mu.RUnlock()
 
-	allFound := true
 	found := true
 	values := make([][]byte, len(keys), len(keys))
 	for i, k := range keys {
 		values[i], found = tracker.store[k]
 		if !found {
-			allFound = false
+			return values, false
 		}
 
 	}
-	return values, allFound
+	return values, true
 }
 
 func (tracker *msgTracker) remember(msgHash crypto.Digest) {
