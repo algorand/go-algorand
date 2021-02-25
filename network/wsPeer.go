@@ -559,7 +559,7 @@ var emptyHash = crypto.Digest{}
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 	numSkipped := 0
 	defer func() {
-		if numSkipped > 0 {
+		if len(msgs) > 1 {
 			logging.Base().Infof("num skipped: %v", numSkipped)
 		}
 	}()
