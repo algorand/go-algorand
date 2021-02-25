@@ -420,8 +420,7 @@ func (wp *wsPeer) readLoop() {
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		msg.Sender = wp
 
-		//TODO(yg) is ProposalTransactionTag useful?
-		if msg.Tag == protocol.TxnTag || msg.Tag == protocol.ProposalTransactionTag {
+		if msgToTrack(protocol.TxnTag)  {
 			wp.receiveMsgTracker.storeMsg(msg.Data)
 		}
 
