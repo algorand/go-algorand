@@ -1144,7 +1144,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		//wg.Add(1)
 		//go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset, &wg)
 	}
-	paysetgroupsCh := loadAccounts(l, blk.Round()-1, paysetgroups)
+	paysetgroupsCh := loadAccounts(ctx, l, blk.Round()-1, paysetgroups)
 
 	var txvalidator evalTxValidator
 	if validate {
@@ -1170,7 +1170,10 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		case txgroup, ok := <-paysetgroupsCh:
 			if !ok {
 				break
+			} else if txgroup.err != nil {
+				return ledgercore.StateDelta{}, err
 			}
+
 			for _, br := range txgroup.balances {
 				base.accounts[br.Addr] = br.AccountData
 			}
@@ -1223,21 +1226,23 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 type loadedTransactionGroup struct {
 	group    []transactions.SignedTxnWithAD
 	balances []basics.BalanceRecord
+	err      error
 }
 
-func loadAccounts(l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD) chan loadedTransactionGroup {
+func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD) chan loadedTransactionGroup {
 	outChan := make(chan loadedTransactionGroup, len(groups))
 	go func() {
 		type groupTask struct {
 			balances      []basics.BalanceRecord
 			balancesCount int
-			done          chan struct{}
+			done          chan error
 		}
 		type addrTask struct {
 			addr         basics.Address
 			groups       []*groupTask
 			groupIndices []int
 		}
+		defer close(outChan)
 
 		accountsChannels := make(map[basics.Address]*addrTask)
 		addressesCh := make(chan *addrTask, len(groups)*16*10)
@@ -1287,41 +1292,64 @@ func loadAccounts(l ledgerForEvaluator, rnd basics.Round, groups [][]transaction
 		usedBalances := 0
 		for _, gr := range groupsReady {
 			gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
-			gr.done = make(chan struct{}, gr.balancesCount)
+			gr.done = make(chan error, gr.balancesCount)
 			usedBalances += gr.balancesCount
 		}
 
 		for i := 0; i < 4; i++ {
 			go func() {
-				for task := range addressesCh {
-					// load the address
-					acctData, _, err := l.LookupWithoutRewards(rnd, task.addr)
-					br := basics.BalanceRecord{
-						Addr:        task.addr,
-						AccountData: acctData,
-					}
-					if err == nil {
-						for i, wg := range task.groups {
-							wg.balances[task.groupIndices[i]] = br
-							wg.done <- struct{}{}
+				for {
+					select {
+					case task, ok := <-addressesCh:
+						// load the address
+						if !ok {
+							return
 						}
-					} else {
-						// todo - handle error cases.
-						panic(err)
+						acctData, _, err := l.LookupWithoutRewards(rnd, task.addr)
+						br := basics.BalanceRecord{
+							Addr:        task.addr,
+							AccountData: acctData,
+						}
+						if err == nil {
+							for i, wg := range task.groups {
+								wg.balances[task.groupIndices[i]] = br
+								wg.done <- nil
+							}
+						} else {
+							for i, wg := range task.groups {
+								wg.balances[task.groupIndices[i]] = br
+								wg.done <- err
+							}
+						}
+					case <-ctx.Done():
+						return
 					}
+
 				}
 			}()
 		}
+
 		for i, wg := range groupsReady {
 			for j := 0; j < wg.balancesCount; j++ {
-				<-wg.done
+				select {
+				case err := <-wg.done:
+					if err != nil {
+						outChan <- loadedTransactionGroup{
+							group: groups[i],
+							err:   err,
+						}
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+
 			}
 			outChan <- loadedTransactionGroup{
 				group:    groups[i],
 				balances: wg.balances,
 			}
 		}
-		close(outChan)
 	}()
 	return outChan
 }
