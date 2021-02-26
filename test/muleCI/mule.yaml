@@ -199,8 +199,8 @@ jobs:
   package-linux-amd64:
     tasks:
       - stash.Unstash.linux-amd64
-      - stash.Unstash.linux-arm64
-      - stash.Unstash.linux-arm
+#      - stash.Unstash.linux-arm64
+#      - stash.Unstash.linux-arm
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
       - stash.Stash.packages
