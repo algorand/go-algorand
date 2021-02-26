@@ -420,8 +420,7 @@ func (wp *wsPeer) readLoop() {
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		msg.Sender = wp
 
-		//TODO(yg) is ProposalTransactionTag useful?
-		if msg.Tag == protocol.TxnTag || msg.Tag == protocol.ProposalTransactionTag {
+		if msgToTrack(protocol.TxnTag)  {
 			wp.receiveMsgTracker.storeMsg(msg.Data)
 		}
 
@@ -563,9 +562,10 @@ func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 			logging.Base().Infof("num skipped: %v", numSkipped)
 		}
 	}()
-	for _, msg := range msgs {
+	for i, msg := range msgs {
 		select {
 		case <-msg.ctx.Done():
+			logging.Base().Infof("cancelled large send, msg %v out of %v", i, len(msgs))
 			return disconnectReasonNone
 		default:
 		}
@@ -586,6 +586,11 @@ func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 			}
 		}
 	}
+
+	if len(msgs) > 1 {
+		logging.Base().Infof("num skipped: %v of %v", numSkipped, len(msgs))
+	}
+
 	return disconnectReasonNone
 }
 
