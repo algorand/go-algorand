@@ -180,6 +180,7 @@ tasks:
 jobs:
   sign-signer:
     tasks:
+      - stash.Untash.linux-amd64
       - docker.Make.docker-sign
   build-linux-amd64:
     tasks:
@@ -194,14 +195,14 @@ jobs:
 #      - docker.Make.build.arm
 #      - stash.Stash.linux-arm
 #
-#  package-linux-amd64:
-#    tasks:
-#      - stash.Unstash.linux-amd64
-#      - stash.Unstash.linux-arm64
-#      - stash.Unstash.linux-arm
-#      - docker.Make.deb.amd64
-#      - docker.Make.rpm.amd64
-#      - stash.Stash.packages
+  package-linux-amd64:
+    tasks:
+      - stash.Unstash.linux-amd64
+      - stash.Unstash.linux-arm64
+      - stash.Unstash.linux-arm
+      - docker.Make.deb.amd64
+      - docker.Make.rpm.amd64
+      - stash.Stash.packages
 #  archive-linux-amd64:
 #    tasks:
 #      - stash.Unstash.packages
