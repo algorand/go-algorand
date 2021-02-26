@@ -278,6 +278,9 @@ func (c *poolCryptoVerifier) VerifyVote(ctx context.Context, request cryptoVoteR
 func (c *poolCryptoVerifier) VerifyProposal(ctx context.Context, request cryptoProposalRequest) {
 	c.proposalContexts.clearStaleContexts(request.Round, request.Period, request.Pinned, false)
 	request.ctx = c.proposalContexts.addProposal(request)
+	// carry the context, in case this proposal should be cancelled before it is sent out
+	request.UnauthenticatedProposal.ctx = request.ctx
+
 	switch request.Tag {
 	case protocol.ProposalPayloadTag:
 		select {
@@ -371,9 +374,6 @@ func (c *poolCryptoVerifier) verifyProposalPayload(request cryptoProposalRequest
 		err := makeSerErrf("rejected invalid proposalPayload: %v", err)
 		return cryptoResult{message: m, Err: err, TaskIndex: request.TaskIndex}
 	}
-
-	// carry the context, in case this proposal should be cancelled before it is sent out
-	p.unauthenticatedProposal.ctx = request.ctx
 
 	m.Proposal = p
 	return cryptoResult{message: m, TaskIndex: request.TaskIndex}
