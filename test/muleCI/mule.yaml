@@ -180,8 +180,9 @@ tasks:
 jobs:
   sign-signer:
     tasks:
-      - stash.Untash.linux-amd64
+      - stash.Unstash.packages
       - docker.Make.docker-sign
+      - stash.Stash.packages
   build-linux-amd64:
     tasks:
       - docker.Make.build.amd64
