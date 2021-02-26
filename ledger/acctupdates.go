@@ -1422,7 +1422,6 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	if rnd != au.latest()+1 {
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
 	}
-
 	au.deltas = append(au.deltas, delta.Accts)
 	au.protos = append(au.protos, proto)
 	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
