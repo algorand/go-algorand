@@ -46,6 +46,11 @@ var ErrNoSpace = errors.New("block does not have space for transaction")
 // many transactions in a block.
 const maxPaysetHint = 20000
 
+// asyncAccountLoadingThreadCount controls how many go routines would be used
+// to load the account data before the eval() start processing individual
+// transaction group.
+const asyncAccountLoadingThreadCount = 4
+
 type roundCowBase struct {
 	l ledgerForCowBase
 
@@ -1120,7 +1125,7 @@ func (validator *evalTxValidator) run() {
 // Validate: eval(ctx, l, blk, true, txcache, executionPool, true)
 // AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
 // tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, usePrefetch bool) (ledgercore.StateDelta, error) {
+func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
@@ -1139,11 +1144,6 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		return ledgercore.StateDelta{}, err
 	}
 
-	// If validationCtx or underlying ctx are Done, end prefetch
-	if usePrefetch {
-		//wg.Add(1)
-		//go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset, &wg)
-	}
 	paysetgroupsCh := loadAccounts(ctx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink)
 
 	var txvalidator evalTxValidator
@@ -1223,37 +1223,53 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	return eval.state.deltas(), nil
 }
 
+// loadedTransactionGroup is a helper struct to allow asyncronious loading of the account data needed by the transaction groups
 type loadedTransactionGroup struct {
-	group    []transactions.SignedTxnWithAD
+	// group is the transaction group
+	group []transactions.SignedTxnWithAD
+	// balances is a list of all the balances that the transaction group refer to and are needed.
 	balances []basics.BalanceRecord
-	err      error
+	// err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
+	// one of the entries in the balances would be uninitialized.
+	err error
 }
 
+// loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
+// The order of the transaction groups returned by the channel is identical to the one in the input array.
 func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address) chan loadedTransactionGroup {
 	outChan := make(chan loadedTransactionGroup, len(groups))
 	go func() {
+		// groupTask helps to organize the account loading for each transaction group.
 		type groupTask struct {
-			balances      []basics.BalanceRecord
+			// balances contains the loaded balances each transaction group have
+			balances []basics.BalanceRecord
+			// balancesCount is the number of balances that nees to be loaded per transaction group
 			balancesCount int
-			done          chan error
+			// done is a waiting channel for all the account data for the transaction group to be loaded
+			done chan error
 		}
+		// addrTask manage the loading of a single account address.
 		type addrTask struct {
-			addr         basics.Address
-			groups       []*groupTask
+			// account address to fetch
+			address basics.Address
+			// a list of transaction group tasks that depends on this address
+			groups []*groupTask
+			// a list of indices into the groupTask.balances where the address would be stored
 			groupIndices []int
 		}
 		defer close(outChan)
 
 		accountsChannels := make(map[basics.Address]*addrTask)
 		addressesCh := make(chan *addrTask, len(groups)*16*10)
+		// totalBalances counts the total number of balances over all the transaction groups
 		totalBalances := 0
 		initAccount := func(addr basics.Address, wg *groupTask) {
 			if addr.IsZero() {
 				return
 			}
-			if _, have := accountsChannels[addr]; !have {
+			if task, have := accountsChannels[addr]; !have {
 				task := &addrTask{
-					addr:         addr,
+					address:      addr,
 					groups:       make([]*groupTask, 1, 4),
 					groupIndices: make([]int, 1, 4),
 				}
@@ -1262,20 +1278,22 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 				accountsChannels[addr] = task
 				addressesCh <- task
 			} else {
-				task := accountsChannels[addr]
 				task.groups = append(task.groups, wg)
 				task.groupIndices = append(task.groupIndices, wg.balancesCount)
 			}
 			wg.balancesCount++
 			totalBalances++
 		}
+		// add the fee sink address to the accountsChannels/addressesCh so that it will be loaded first.
 		if len(groups) > 0 {
 			task := &addrTask{
-				addr: feeSinkAddr,
+				address: feeSinkAddr,
 			}
 			addressesCh <- task
 			accountsChannels[feeSinkAddr] = task
 		}
+
+		// iterate over the transaction groups and add all their account addresses to the list
 		groupsReady := make([]*groupTask, len(groups))
 		for i, group := range groups {
 			groupWg := &groupTask{}
@@ -1300,6 +1318,9 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 		}
 		close(addressesCh)
 
+		// updata all the groups task :
+		// allocate the correct number of balances, as well as
+		// enough space on the "done" channel.
 		allBalances := make([]basics.BalanceRecord, totalBalances)
 		usedBalances := 0
 		for _, gr := range groupsReady {
@@ -1308,32 +1329,40 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 			usedBalances += gr.balancesCount
 		}
 
-		for i := 0; i < 4; i++ {
+		// create few go-routines to load asyncroniously the account data.
+		for i := 0; i < asyncAccountLoadingThreadCount; i++ {
 			go func() {
 				for {
 					select {
 					case task, ok := <-addressesCh:
 						// load the address
 						if !ok {
+							// the channel got closed, which mean we're done.
 							return
 						}
-						acctData, _, err := l.LookupWithoutRewards(rnd, task.addr)
+						// lookup the account data directly from the ledger.
+						acctData, _, err := l.LookupWithoutRewards(rnd, task.address)
 						br := basics.BalanceRecord{
-							Addr:        task.addr,
+							Addr:        task.address,
 							AccountData: acctData,
 						}
+						// if there is no error..
 						if err == nil {
+							// update all the group tasks with the new acquired balance.
 							for i, wg := range task.groups {
 								wg.balances[task.groupIndices[i]] = br
+								// write a nil to indicate that we're loaded one entry.
 								wg.done <- nil
 							}
 						} else {
-							for i, wg := range task.groups {
-								wg.balances[task.groupIndices[i]] = br
+							// there was an error loading that entry.
+							for _, wg := range task.groups {
+								// notify the channel of the error.
 								wg.done <- err
 							}
 						}
 					case <-ctx.Done():
+						// if the context was canceled, abort right away.
 						return
 					}
 
@@ -1341,11 +1370,14 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 			}()
 		}
 
+		// iterate on the transaction groups tasks. This array retains the original order.
 		for i, wg := range groupsReady {
+			// Wait to receive wg.balancesCount nil error messages, one for each address referenced in this txn group.
 			for j := 0; j < wg.balancesCount; j++ {
 				select {
 				case err := <-wg.done:
 					if err != nil {
+						// if there is an error, report the error to the output channel.
 						outChan <- loadedTransactionGroup{
 							group: groups[i],
 							err:   err,
@@ -1355,8 +1387,9 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 				case <-ctx.Done():
 					return
 				}
-
 			}
+			// if we had no error, write the result to the output channel.
+			// this write will not block since we preallocated enough space on the channel.
 			outChan <- loadedTransactionGroup{
 				group:    groups[i],
 				balances: wg.balances,
@@ -1371,7 +1404,7 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool, true)
+	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
 		return nil, err
 	}
