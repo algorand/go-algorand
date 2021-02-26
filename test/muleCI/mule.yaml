@@ -59,6 +59,19 @@ agents:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+  - name: docker-ubuntu-signer
+    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
+    image: algorand/go-algorand-docker-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    env:
+      - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    volumes:
+      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
+      - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
 
 tasks:
   - task: docker.Make
@@ -161,7 +174,7 @@ tasks:
 
   - task: docker.Make
     name: docker-sign
-    agent: docker-ubuntu
+    agent: docker-ubuntu-signer
     target: mule-sign
 
 jobs:
