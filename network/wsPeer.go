@@ -557,11 +557,6 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 var emptyHash = crypto.Digest{}
 func (wp *wsPeer) writeLoopSend(msgs []sendMessage) disconnectReason {
 	numSkipped := 0
-	defer func() {
-		if len(msgs) > 1 {
-			logging.Base().Infof("num skipped: %v", numSkipped)
-		}
-	}()
 	for i, msg := range msgs {
 		select {
 		case <-msg.ctx.Done():
