@@ -158,9 +158,10 @@ type compactAccountDeltas struct {
 }
 
 type accountDelta struct {
-	old     dbAccountData
-	new     ledgercore.PersistedAccountData
-	ndeltas int
+	old      dbAccountData
+	new      ledgercore.PersistedAccountData
+	holdings map[basics.AssetIndex]ledgercore.HoldingAction
+	ndeltas  int
 }
 
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
@@ -226,22 +227,26 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 	for _, roundDelta := range accountDeltas {
 		for i := 0; i < roundDelta.Len(); i++ {
 			addr, acctDelta := roundDelta.GetByIdx(i)
+			hmap := roundDelta.GetHoldingDeltas(addr)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
 				outAccountDeltas.update(idx, accountDelta{ // update instead of upsert economizes one map lookup
-					old:     prev.old,
-					new:     acctDelta,
-					ndeltas: prev.ndeltas + 1,
+					old:      prev.old,
+					new:      acctDelta,
+					holdings: hmap,
+					ndeltas:  prev.ndeltas + 1,
 				})
 			} else {
 				// it's a new entry.
 				newEntry := accountDelta{
-					new:     acctDelta,
-					ndeltas: 1,
+					new:      acctDelta,
+					holdings: hmap,
+					ndeltas:  1,
 				}
 				if baseAccountData, has := baseAccounts.read(addr); has {
 					newEntry.old = baseAccountData
 					outAccountDeltas.insert(addr, newEntry) // insert instead of upsert economizes one map lookup
 				} else {
+					// missing old entries will be populated in accountsLoadOld
 					outAccountDeltas.insertMissing(addr, newEntry)
 				}
 			}
@@ -1196,12 +1201,17 @@ func accountsNewDelete(qabd *sql.Stmt, qaed *sql.Stmt, addr basics.Address, dbad
 func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Address, delta accountDelta, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
 	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 
-	// need to reconcile asset holdings
+	// sanity check: counts must match since all the modications are in delta.new.Assets and mods map
+	if delta.old.pad.ExtendedAssetHolding.Count != delta.new.ExtendedAssetHolding.Count {
+		return updatedAccounts, fmt.Errorf("extended holdings count mismatch (old) %d != %d (new)", delta.old.pad.ExtendedAssetHolding.Count, delta.new.ExtendedAssetHolding.Count)
+	}
+
+	// Reconciliation asset holdings logic:
 	// old.Assets must always have the assets modified in new (see accountsLoadOld)
 	// PersistedAccountData stores the data either in Assets field or as ExtendedHoldings
 	// this means:
 	// 1. if both old and new below the threshold then all set
-	// 2. if old is below and new is above then clear Assets field and regroup
+	// 2. if old is below and new is above then create group data and clear Assets field
 	// 3. if old is above the threshold
 	//  - find created and deleted entries
 	//  - if the result is below the threshold then move everything in Assets field
@@ -1228,31 +1238,24 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 			}
 		}
 	} else { // default case: delta.old.pad.NumAssetHoldings() > assetsThreshold
-		deleted := make([]basics.AssetIndex, 0, len(delta.old.pad.Assets)) // items in old but not in new
-		updated := make([]basics.AssetIndex, 0, len(delta.new.Assets))     // items in both new and old
-		created := make([]basics.AssetIndex, 0, len(delta.new.Assets))     // items in new but not in old
+		deleted := make([]basics.AssetIndex, 0, len(delta.holdings))
+		created := make([]basics.AssetIndex, 0, len(delta.holdings))
 
 		pad = delta.new
 		oldPad := delta.old.pad
 
-		for aidx := range oldPad.AccountData.Assets {
-			if _, ok := delta.new.Assets[aidx]; ok {
-				updated = append(updated, aidx)
-			} else {
+		for aidx, action := range delta.holdings {
+			if action == ledgercore.ActionDelete {
 				deleted = append(deleted, aidx)
-			}
-		}
-		for aidx := range delta.new.Assets {
-			if _, ok := oldPad.AccountData.Assets[aidx]; ok {
-				// updated = append(updated, aidx)
-				// handled above as updated
 			} else {
 				created = append(created, aidx)
 			}
 		}
+
 		newCount := oldPad.NumAssetHoldings() + len(created) - len(deleted)
 		if newCount < assetsThreshold {
 			// Move all assets from groups to Assets field
+			// TODO: lock?
 			assets, _, err := loadHoldings(qabq, oldPad.ExtendedAssetHolding)
 			if err != nil {
 				return updatedAccounts, err
@@ -1260,11 +1263,9 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 			for _, aidx := range deleted {
 				delete(assets, aidx)
 			}
-			for _, aidx := range created {
-				assets[aidx] = delta.new.Assets[aidx]
-			}
-			for _, aidx := range updated {
-				assets[aidx] = delta.new.Assets[aidx]
+			// copy created + deleted from delta.new
+			for aidx, holding := range delta.new.Assets {
+				assets[aidx] = holding
 			}
 			pad.AccountData.Assets = assets
 
@@ -1277,6 +1278,13 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 			// Reconcile groups data:
 			// identify groups, load, update, then delete and insert, dump to the disk
 
+			updated := make([]basics.AssetIndex, 0, len(delta.new.Assets))
+			for aidx := range delta.new.Assets {
+				if _, ok := delta.holdings[aidx]; !ok {
+					updated = append(updated, aidx)
+				}
+			}
+
 			pad.ExtendedAssetHolding = oldPad.ExtendedAssetHolding
 			if len(updated) > 0 {
 				sort.SliceStable(updated, func(i, j int) bool { return updated[i] < updated[j] })
@@ -1284,7 +1292,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 				for _, aidx := range updated {
 					gi, ai = pad.ExtendedAssetHolding.FindAsset(aidx, gi)
 					if gi == -1 || ai == -1 {
-						return updatedAccounts, fmt.Errorf("failed to find asset group for %d", aidx)
+						return updatedAccounts, fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
 					}
 					// group data is loaded in accountsLoadOld
 					pad.ExtendedAssetHolding.Groups[gi].Update(ai, delta.new.Assets[aidx])
@@ -1298,7 +1306,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 				for _, aidx := range deleted {
 					gi, ai = pad.ExtendedAssetHolding.FindAsset(aidx, gi)
 					if gi == -1 || ai == -1 {
-						return updatedAccounts, fmt.Errorf("failed to find asset group for %d", aidx)
+						return updatedAccounts, fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
 					}
 					// group data is loaded in accountsLoadOld
 					key := pad.ExtendedAssetHolding.Groups[gi].AssetGroupKey

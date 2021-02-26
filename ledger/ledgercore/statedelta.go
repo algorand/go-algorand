@@ -173,16 +173,21 @@ func (ad *AccountDeltas) upsert(par PersistedAdRecord) {
 // Creation is not really important since the holding is already in ad.accts,
 // but saving deleteion info is only the way to know if the asset gone
 func (ad *AccountDeltas) SetHoldingDelta(addr basics.Address, aidx basics.AssetIndex, created bool) {
-	amap, ok := ad.holdings[addr]
+	hmap, ok := ad.holdings[addr]
 	if !ok {
-		amap = make(map[basics.AssetIndex]HoldingAction)
+		hmap = make(map[basics.AssetIndex]HoldingAction)
 	}
 
 	if created {
-		amap[aidx] = ActionCreate
+		hmap[aidx] = ActionCreate
 	} else {
-		amap[aidx] = ActionDelete
+		hmap[aidx] = ActionDelete
 	}
 
-	ad.holdings[addr] = amap
+	ad.holdings[addr] = hmap
+}
+
+// GetHoldingDeltas return map of created/deleted asset holdings
+func (ad *AccountDeltas) GetHoldingDeltas(addr basics.Address) map[basics.AssetIndex]HoldingAction {
+	return ad.holdings[addr]
 }

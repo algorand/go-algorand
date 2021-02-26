@@ -190,13 +190,18 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		return
 	}
 
+	pars := make(map[basics.Address]ledgercore.PersistedAccountData)
 	err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		bals, err0 = accountsAll(tx)
+		pars, err0 = accountsAll(tx)
 		return err0
 	})
 	if err != nil {
 		return
+	}
+	bals = make(map[basics.Address]basics.AccountData, len(pars))
+	for addr, pad := range pars {
+		bals[addr] = pad.AccountData
 	}
 
 	for offset := uint64(0); offset < offsetLimit; offset++ {
@@ -1172,14 +1177,20 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
+func accountsAll(tx *sql.Tx) (bals map[basics.Address]ledgercore.PersistedAccountData, err error) {
 	rows, err := tx.Query("SELECT address, data FROM accountbase")
 	if err != nil {
 		return
 	}
 	defer rows.Close()
 
-	bals = make(map[basics.Address]basics.AccountData)
+	stmt, err := tx.Prepare("SELECT data FROM accountext WHERE id=?")
+	if err != nil {
+		return
+	}
+	defer stmt.Close()
+
+	bals = make(map[basics.Address]ledgercore.PersistedAccountData)
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
@@ -1188,8 +1199,8 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 			return
 		}
 
-		var data basics.AccountData
-		err = protocol.Decode(buf, &data)
+		var pad ledgercore.PersistedAccountData
+		err = protocol.Decode(buf, &pad)
 		if err != nil {
 			return
 		}
@@ -1199,9 +1210,12 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
+		if pad.ExtendedAssetHolding.Count > 0 {
+			pad.AccountData.Assets, pad.ExtendedAssetHolding, err = loadHoldings(stmt, pad.ExtendedAssetHolding)
+		}
 
 		copy(addr[:], addrbuf)
-		bals[addr] = data
+		bals[addr] = pad
 	}
 
 	err = rows.Err()

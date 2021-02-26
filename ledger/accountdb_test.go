@@ -371,7 +371,23 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	all, err := accountsAll(tx)
 	require.NoError(t, err)
-	require.Equal(t, all, accts)
+	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
+	acctsExt := make(map[basics.Address]ledgercore.PersistedAccountData, len(accts))
+	for a, d := range accts {
+		pad := ledgercore.PersistedAccountData{AccountData: d}
+		if len(d.Assets) > assetsThreshold {
+			pad.ExtendedAssetHolding.ConvertToGroups(d.Assets)
+		}
+		acctsExt[a] = pad
+	}
+	// clear AssetGroupKey since convertToGroups does not fill them
+	for a, pad := range all {
+		for gi := 0; gi < len(pad.ExtendedAssetHolding.Groups); gi++ {
+			pad.ExtendedAssetHolding.Groups[gi].AssetGroupKey = 0
+		}
+		all[a] = pad
+	}
+	require.Equal(t, all, acctsExt)
 
 	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
@@ -1404,6 +1420,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		addr, delta, proto,
 		updatedAccounts, updatedAccountIdx)
 
+	a.NoError(err)
 	// ensure correctness of the data written
 	a.NotEmpty(updatedAccounts[updatedAccountIdx])
 	a.NotEqual(updatedAccounts[updatedAccountIdx].pad.AccountData, temp)
@@ -1453,6 +1470,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		addr, delta, proto,
 		updatedAccounts, updatedAccountIdx)
 
+	a.NoError(err)
 	// ensure correctness of the data written
 	a.NotEmpty(updatedAccounts[updatedAccountIdx])
 
@@ -1522,11 +1540,15 @@ func TestAccountsNewCRUD(t *testing.T) {
 		a.NotEqual(-1, ai)
 		old.pad.Assets[aidx] = g.GetHolding(ai)
 	}
+
+	deltaHoldings := make(map[basics.AssetIndex]ledgercore.HoldingAction, len(del)+len(crt))
 	for _, aidx := range del {
 		delete(savedAssets, aidx)
+		deltaHoldings[aidx] = ledgercore.ActionDelete
 	}
 	for _, aidx := range crt {
 		savedAssets[aidx] = true
+		deltaHoldings[aidx] = ledgercore.ActionCreate
 	}
 
 	updated = basics.AccountData{}
@@ -1538,7 +1560,11 @@ func TestAccountsNewCRUD(t *testing.T) {
 		updated.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
 	}
 
-	delta = accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}}
+	delta = accountDelta{
+		old:      old,
+		new:      ledgercore.PersistedAccountData{AccountData: updated, ExtendedAssetHolding: old.pad.ExtendedAssetHolding},
+		holdings: deltaHoldings,
+	}
 
 	updatedAccounts, err = accountsNewUpdate(
 		q.updateStmt, q.queryGroupDataStmt,
@@ -1546,6 +1572,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		addr, delta, proto,
 		updatedAccounts, updatedAccountIdx)
 
+	a.NoError(err)
 	// ensure correctness of the data written
 	a.NotEmpty(updatedAccounts[updatedAccountIdx])
 	expectedCount := numBaseAssets + numNewAssets1 + numNewAssets2 - len(del) + len(crt)
@@ -1638,14 +1665,23 @@ func TestAccountsNewCRUD(t *testing.T) {
 
 	updated = basics.AccountData{}
 	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(upd)+len(crt))
+	deltaHoldings = make(map[basics.AssetIndex]ledgercore.HoldingAction, len(del)+len(crt))
+	for _, aidx := range del {
+		deltaHoldings[aidx] = ledgercore.ActionDelete
+	}
 	for _, aidx := range upd {
 		updated.Assets[aidx] = old.pad.Assets[aidx]
 	}
 	for _, aidx := range crt {
 		updated.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
+		deltaHoldings[aidx] = ledgercore.ActionCreate
 	}
 
-	delta = accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}}
+	delta = accountDelta{
+		old:      old,
+		new:      ledgercore.PersistedAccountData{AccountData: updated, ExtendedAssetHolding: old.pad.ExtendedAssetHolding},
+		holdings: deltaHoldings,
+	}
 
 	updatedAccounts, err = accountsNewUpdate(
 		q.updateStmt, q.queryGroupDataStmt,
@@ -1653,6 +1689,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		addr, delta, proto,
 		updatedAccounts, updatedAccountIdx)
 
+	a.NoError(err)
 	a.NotEmpty(updatedAccounts[updatedAccountIdx])
 	expectedCount = len(crt) + len(upd)
 	a.Equal(expectedCount, updatedAccounts[updatedAccountIdx].pad.NumAssetHoldings())
