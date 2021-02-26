@@ -181,10 +181,10 @@ jobs:
   sign-signer:
     tasks:
       - docker.Make.docker-sign
-#  build-linux-amd64:
-#    tasks:
-#      - docker.Make.build.amd64
-#      - stash.Stash.linux-amd64
+  build-linux-amd64:
+    tasks:
+      - docker.Make.build.amd64
+      - stash.Stash.linux-amd64
 #  build-linux-arm64:
 #    tasks:
 #      - docker.Make.build.arm64
