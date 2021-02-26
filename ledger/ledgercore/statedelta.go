@@ -158,14 +158,14 @@ func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
 // For each data structure, reallocate if it would save us at least 50MB aggregate
 func (sd *StateDelta) OptimizeAllocatedMemory() {
 	// accts takes up 232 bytes per entry, and is saved for 320 rounds
-	if (2 * sd.initialTransactionsCount - len(sd.Accts.accts)) * 232 * 320 < 50000000 {
+	if (2*sd.initialTransactionsCount-len(sd.Accts.accts))*232*320 < 50000000 {
 		accts := make([]basics.BalanceRecord, len(sd.Accts.acctsCache))
 		copy(accts, sd.Accts.accts)
 		sd.Accts.accts = accts
 	}
 
 	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
-	if (2 * sd.initialTransactionsCount - len(sd.Accts.acctsCache)) * 64 * 320 < 50000000 {
+	if (2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*64*320 < 50000000 {
 		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
 		for k, v := range sd.Accts.acctsCache {
 			acctsCache[k] = v
@@ -174,7 +174,7 @@ func (sd *StateDelta) OptimizeAllocatedMemory() {
 	}
 
 	// TxLeases takes up 112 bytes per entry, and is saved for 1000 rounds
-	if (sd.initialTransactionsCount - len(sd.Txleases)) * 112 * 1000 < 50000000 {
+	if (sd.initialTransactionsCount-len(sd.Txleases))*112*1000 < 50000000 {
 		txLeases := make(map[Txlease]basics.Round, len(sd.Txleases))
 		for k, v := range sd.Txleases {
 			txLeases[k] = v
@@ -183,7 +183,7 @@ func (sd *StateDelta) OptimizeAllocatedMemory() {
 	}
 
 	// Creatables takes up 100 bytes per entry, and is saved for 320 rounds
-	if (sd.initialTransactionsCount - len(sd.Creatables)) * 100 * 320 < 50000000 {
+	if (sd.initialTransactionsCount-len(sd.Creatables))*100*320 < 50000000 {
 		creatableDeltas := make(map[basics.CreatableIndex]ModifiedCreatable, len(sd.Creatables))
 		for k, v := range sd.Creatables {
 			creatableDeltas[k] = v
