@@ -101,3 +101,51 @@ func BenchmarkMakeStateDelta(b *testing.B) {
 		MakeStateDelta(nil, 0, hint)
 	}
 }
+
+func BenchmarkBalanceRecord(b *testing.B) {
+	hint := 23000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		x := make([]basics.BalanceRecord, 0, hint*2)
+		if len(x) > 0 {
+			return
+		}
+	}
+}
+
+func BenchmarkAcctCache(b *testing.B) {
+	hint := 23000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		x := make(map[basics.Address]int, hint*2)
+		if len(x) > 0 {
+			return
+		}
+	}
+}
+
+func BenchmarkCreatables(b *testing.B) {
+	hint := 23000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		x := make(map[basics.CreatableIndex]ModifiedCreatable, hint)
+		if len(x) > 0 {
+			return
+		}
+	}
+}
+
+func BenchmarkTxLeases(b *testing.B) {
+	hint := 23000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		x := make(map[Txlease]basics.Round, hint)
+		if len(x) > 0 {
+			return
+		}
+	}
+}
