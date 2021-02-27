@@ -86,6 +86,8 @@ type CatchpointCatchupService struct {
 	abortCtxFunc context.CancelFunc
 	// blocksDownloadPeerSelector is the peer selector used for downloading blocks.
 	blocksDownloadPeerSelector *peerSelector
+	// blockFetcherFactory gives a block fetcher
+	blockFetcherFactory blockFetcherFactory
 }
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
@@ -107,7 +109,8 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
 				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
 			}),
-	}
+		blockFetcherFactory: makeUniversalBlockFetcherFactory(log, net, cfg)}
+
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
 		return nil, err
@@ -144,6 +147,7 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
 				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
 			}),
+		blockFetcherFactory: makeUniversalBlockFetcherFactory(log, net, cfg),
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
@@ -595,9 +599,9 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 		}
 		return nil, time.Duration(0), peer, true, cs.abort(fmt.Errorf("fetchBlock: recurring non-HTTP peer was provided by the peer selector"))
 	}
-	fetcher := makeHTTPFetcher(cs.log, httpPeer, cs.net, &cs.config)
+	fetcher := cs.blockFetcherFactory.newBlockFetcher()
 	blockDownloadStartTime := time.Now()
-	blk, _, err = fetcher.FetchBlock(cs.ctx, round)
+	blk, _, _, err = fetcher.fetchBlock(cs.ctx, round, httpPeer)
 	if err != nil {
 		if cs.ctx.Err() != nil {
 			return nil, time.Duration(0), peer, true, cs.stopOrAbort()
@@ -611,7 +615,6 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 		return nil, time.Duration(0), peer, true, cs.abort(fmt.Errorf("fetchBlock failed after multiple blocks download attempts"))
 	}
 	// success
-	fetcher.Close()
 	downloadDuration = time.Now().Sub(blockDownloadStartTime)
 	return blk, downloadDuration, peer, false, nil
 }

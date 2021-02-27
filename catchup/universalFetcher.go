@@ -30,22 +30,52 @@ import (
 )
 
 // UniversalFetcher fetches blocks either from an http peer or ws peer.
-type UniversalFetcher struct {
+type universalFetcher struct {
 	config config.Local
 	net    network.GossipNode
 	log    logging.Logger
 }
 
+// Fetcher queries the current block of the network, and fetches agreed-upon blocks
+type blockFetcher interface {
+	// fetchBlock fetches a block for a given round.
+	fetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
+		cert *agreement.Certificate, downloadDuration time.Duration, err error)
+}
+
+// FetcherFactory creates fetchers
+type blockFetcherFactory interface {
+	// Create a new fetcher
+	newBlockFetcher() blockFetcher
+}
+
+type universalBlockFetcherFactory struct {
+	log    logging.Logger
+	net    network.GossipNode
+	config config.Local
+}
+
+func makeUniversalBlockFetcherFactory(log logging.Logger, net network.GossipNode, config config.Local) blockFetcherFactory {
+	return &universalBlockFetcherFactory{
+		log:    log,
+		net:    net,
+		config: config}
+}
+
+func (uff *universalBlockFetcherFactory) newBlockFetcher() blockFetcher {
+	return makeUniversalBlockFetcher(uff.log, uff.net, uff.config)
+}
+
 // MakeUniversalFetcher returns a fetcher for http and ws peers.
-func MakeUniversalFetcher(config config.Local, net network.GossipNode, log logging.Logger) UniversalFetcher {
-	return UniversalFetcher{
+func makeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, config config.Local) blockFetcher {
+	return &universalFetcher{
 		config: config,
 		net:    net,
 		log:    log}
 }
 
 // FetchBlock returns a block from the peer. The peer can be either an http or ws peer.
-func (uf *UniversalFetcher) FetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
+func (uf *universalFetcher) fetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
 	cert *agreement.Certificate, downloadDuration time.Duration, err error) {
 
 	var fetcherClient FetcherClient
