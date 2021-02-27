@@ -1165,11 +1165,12 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 
 	base := eval.state.lookupParent.(*roundCowBase)
 
+transactionGroupLoop:
 	for {
 		select {
 		case txgroup, ok := <-paysetgroupsCh:
 			if !ok {
-				break
+				break transactionGroupLoop
 			} else if txgroup.err != nil {
 				return ledgercore.StateDelta{}, err
 			}
@@ -1181,7 +1182,6 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}
-			continue
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
 		case err, open := <-txvalidator.done:
@@ -1189,9 +1189,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 			if open && err != nil {
 				return ledgercore.StateDelta{}, err
 			}
-			continue
 		}
-		break
 	}
 
 	// Finally, procees any pending end-of-block state changes
