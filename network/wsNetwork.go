@@ -459,6 +459,10 @@ func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 // TODO: add `priority` argument so that we don't have to guess it based on tag
 func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
+	if len(tags) > maxBroadcastArraySize || len(tags) != len(data) {
+		return errBcastInvalidArray
+	}
+
 	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
 		request.except = except.(*wsPeer)
@@ -1862,6 +1866,8 @@ var errBadAddr = errors.New("bad address")
 var errNetworkClosing = errors.New("WebsocketNetwork shutting down")
 
 var errBcastCallerCancel = errors.New("caller cancelled broadcast")
+
+var errBcastInvalidArray = errors.New("invalid broadcast array")
 
 var errBcastQFull = errors.New("broadcast queue full")
 
