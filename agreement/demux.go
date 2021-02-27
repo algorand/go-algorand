@@ -203,7 +203,7 @@ func (d *demux) verifyVote(ctx context.Context, m message, taskIndex int, r roun
 func (d *demux) verifyPayload(ctx context.Context, m message, r round, p period, pinned bool) {
 	d.UpdateEventsQueue(eventQueueCryptoVerifierProposal, 1)
 	d.monitor.inc(cryptoVerifierCoserviceType)
-	d.crypto.VerifyProposal(ctx, cryptoProposalRequest{message: m, Round: r, Period: p, Pinned: pinned})
+	d.crypto.VerifyProposal(ctx, &cryptoProposalRequest{message: m, Round: r, Period: p, Pinned: pinned})
 }
 
 // verifyBundle enqueues a bundle message to be verified.

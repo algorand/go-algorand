@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"context"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -556,10 +555,6 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		case payloadPipelined:
 			ep := ef.(payloadProcessedEvent)
 			if ep.Round == p.Round {
-				var ctxptr *context.Context
-				e.Input.UnauthenticatedProposal.ctx = &ctxptr
-				e.Input.CompoundMessage.Proposal.ctx = &ctxptr
-
 				up := e.Input.UnauthenticatedProposal
 				uv := ef.(payloadProcessedEvent).Vote.u()
 
