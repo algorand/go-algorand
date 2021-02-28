@@ -30,8 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/rpcs"
 )
 
 // Fetcher queries the current block of the network, and fetches agreed-upon blocks
@@ -112,20 +110,6 @@ func (factory NetworkFetcherFactory) New() Fetcher {
 		peers:           factory.buildFetcherClients(),
 		log:             logging.Base(),
 	}
-}
-
-// NewOverGossip returns a fetcher using the given message tag.
-// If there are gossip peers, then it returns a fetcher over gossip
-// Otherwise, it returns an HTTP fetcher
-func (factory NetworkFetcherFactory) NewOverGossip() Fetcher {
-	gossipPeers := factory.net.GetPeers(network.PeersConnectedIn)
-	factory.log.Debugf("%d gossip peers", len(gossipPeers))
-	if len(gossipPeers) == 0 {
-		factory.log.Info("no gossip peers for NewOverGossip")
-		return factory.New()
-	}
-	f := MakeWsFetcher(factory.log, gossipPeers, factory.cfg)
-	return &ComposedFetcher{fetchers: []Fetcher{factory.New(), f}}
 }
 
 // NetworkFetcher fetches data from remote RPC clients
@@ -289,22 +273,3 @@ func (cf *ComposedFetcher) Close() {
 
 /* Utils */
 
-func processBlockBytes(fetchedBuf []byte, r basics.Round, debugStr string) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
-	var decodedEntry rpcs.EncodedBlockCert
-	err = protocol.Decode(fetchedBuf, &decodedEntry)
-	if err != nil {
-		err = fmt.Errorf("networkFetcher.FetchBlock(%d): cannot decode block from peer %v: %v", r, debugStr, err)
-		return
-	}
-
-	if decodedEntry.Block.Round() != r {
-		err = fmt.Errorf("networkFetcher.FetchBlock(%d): got wrong block from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Block.Round())
-		return
-	}
-
-	if decodedEntry.Certificate.Round != r {
-		err = fmt.Errorf("networkFetcher.FetchBlock(%d): got wrong cert from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Certificate.Round)
-		return
-	}
-	return &decodedEntry.Block, &decodedEntry.Certificate, nil
-}
