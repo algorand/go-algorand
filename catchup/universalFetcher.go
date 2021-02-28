@@ -27,6 +27,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 // UniversalFetcher fetches blocks either from an http peer or ws peer.
@@ -107,4 +109,24 @@ func (uf *universalFetcher) fetchBlock(ctx context.Context, round basics.Round, 
 		return nil, nil, time.Duration(0), err
 	}
 	return block, cert, downloadDuration, err
+}
+
+func processBlockBytes(fetchedBuf []byte, r basics.Round, debugStr string) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
+	var decodedEntry rpcs.EncodedBlockCert
+	err = protocol.Decode(fetchedBuf, &decodedEntry)
+	if err != nil {
+		err = fmt.Errorf("networkFetcher.FetchBlock(%d): cannot decode block from peer %v: %v", r, debugStr, err)
+		return
+	}
+
+	if decodedEntry.Block.Round() != r {
+		err = fmt.Errorf("networkFetcher.FetchBlock(%d): got wrong block from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Block.Round())
+		return
+	}
+
+	if decodedEntry.Certificate.Round != r {
+		err = fmt.Errorf("networkFetcher.FetchBlock(%d): got wrong cert from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Certificate.Round)
+		return
+	}
+	return &decodedEntry.Block, &decodedEntry.Certificate, nil
 }

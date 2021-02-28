@@ -24,79 +24,12 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 )
-
-// Buffer messages from the network to have fewer drops.
-const numBufferedInternalMsg = 1
-
-// WsFetcher implements Fetcher, getting the block over
-// a custom websockets interface (bidirectional). Internally it keeps track
-// of multiple peers and handles dropping them appropriately using a NetworkFetcher.
-type WsFetcher struct {
-	f       *NetworkFetcher
-	clients map[network.Peer]*wsFetcherClient
-	config  *config.Local
-
-	// metadata
-	log logging.Logger
-	mu  deadlock.RWMutex
-}
-
-// MakeWsFetcher creates a fetcher that fetches over the gossip network.
-// It instantiates a NetworkFetcher under the hood,
-// and demuxes messages appropriately to the corresponding fetcher clients.
-func MakeWsFetcher(log logging.Logger, peers []network.Peer, cfg *config.Local) Fetcher {
-	f := &WsFetcher{
-		log:    log,
-		config: cfg,
-	}
-	f.clients = make(map[network.Peer]*wsFetcherClient)
-	p := make([]FetcherClient, len(peers))
-	for i, peer := range peers {
-		fc := &wsFetcherClient{
-			target:      peer.(network.UnicastPeer),
-			pendingCtxs: make(map[context.Context]context.CancelFunc),
-			config:      cfg,
-		}
-		p[i] = fc
-		f.clients[peer] = fc
-	}
-	f.f = &NetworkFetcher{
-		roundUpperBound: make(map[FetcherClient]basics.Round),
-		activeFetches:   make(map[FetcherClient]int),
-		peers:           p,
-		log:             f.log,
-	}
-	return f
-}
-
-// FetchBlock implements Fetcher interface
-func (wsf *WsFetcher) FetchBlock(ctx context.Context, r basics.Round) (*bookkeeping.Block, *agreement.Certificate, FetcherClient, error) {
-	return wsf.f.FetchBlock(ctx, r)
-}
-
-// OutOfPeers implements Fetcher interface
-func (wsf *WsFetcher) OutOfPeers(round basics.Round) bool {
-	return wsf.f.OutOfPeers(round)
-}
-
-// NumPeers implements Fetcher interface
-func (wsf *WsFetcher) NumPeers() int {
-	return wsf.f.NumPeers()
-}
-
-// Close calls a delegate close fn passed in by the parent of this fetcher
-func (wsf *WsFetcher) Close() {
-	wsf.f.Close()
-}
 
 // a stub fetcherClient to satisfy the NetworkFetcher interface
 type wsFetcherClient struct {
