@@ -170,13 +170,13 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		tags[len(txnData)-1] = protocol.ProposalPayloadTag
 	}
 
-	backgroundctx := context.Background()
 	switch a.T {
 	case broadcast:
 		if txnData != nil {
 			//protocol.TxnTag
-			if a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
+			if a.CompoundMessage.Proposal.ctx == nil || *a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
 				logging.Base().Warnf("broadcast: context is nil")
+				backgroundctx := context.Background()
 				a.CompoundMessage.Proposal.ctx = &backgroundctx
 			}
 
@@ -187,8 +187,9 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		}
 	case relay:
 		if txnData != nil {
-			if a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
+			if a.CompoundMessage.Proposal.ctx == nil || *a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
 				logging.Base().Warnf("relay: context is nil")
+				backgroundctx := context.Background()
 				a.CompoundMessage.Proposal.ctx = &backgroundctx
 			} else if a.h == nil {
 				logging.Base().Infof("was proposer")
