@@ -288,7 +288,8 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 		}
 
 		// we'll never cancel sending our own block, but it might not be sent out.
-		payload.ctx = context.Background()
+		backgroundctx := context.Background()
+		payload.ctx = &backgroundctx
 
 		// create the block proposal
 		proposals = append(proposals, payload)
