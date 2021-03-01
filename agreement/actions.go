@@ -181,7 +181,10 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 			}
 
 			logging.Base().Infof("broadcast: txncount %v", len(txnData))
-			s.Network.BroadcastArray(*a.CompoundMessage.Proposal.ctx, tags, txnData)
+			// sending a large message. Send to one peer at a time to get another peer propagating it as soon as we can.
+			pacer := make(chan int, 1)
+			pacer <- 1
+			s.Network.BroadcastArray(*a.CompoundMessage.Proposal.ctx, tags, txnData, pacer)
 		} else if data != nil {
 			s.Network.Broadcast(a.Tag, data)
 		}

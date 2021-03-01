@@ -262,7 +262,7 @@ type Network interface {
 	// otherwise, a nil is returned.
 	Broadcast(protocol.Tag, []byte) error
 
-	BroadcastArray(context.Context, []protocol.Tag, [][]byte) error
+	BroadcastArray(context.Context, []protocol.Tag, [][]byte, chan int) error
 
 	// Relay attempts to send a slice of bytes under some protocol.Tag to
 	// all neighbors, except for the neighbor associated with the given
