@@ -17,9 +17,18 @@
 package ledgercore
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+)
+
+const (
+	accountArrayEntrySize                 = uint64(232) // Measured by BenchmarkBalanceRecord
+	accountMapCacheEntrySize              = uint64(64)  // Measured by BenchmarkAcctCache
+	txleasesEntrySize                     = uint64(112) // Measured by BenchmarkTxLeases
+	creatablesEntrySize                   = uint64(100) // Measured by BenchmarkCreatables
+	stateDeltaTargetOptimizationThreshold = uint64(50000000)
 )
 
 // ModifiedCreatable defines the changes to a single single creatable state
@@ -156,16 +165,16 @@ func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
 
 // OptimizeAllocatedMemory by reallocating maps to needed capacity
 // For each data structure, reallocate if it would save us at least 50MB aggregate
-func (sd *StateDelta) OptimizeAllocatedMemory() {
+func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 	// accts takes up 232 bytes per entry, and is saved for 320 rounds
-	if (2*sd.initialTransactionsCount-len(sd.Accts.accts))*232*320 < 50000000 {
+	if uint64(2*sd.initialTransactionsCount-len(sd.Accts.accts))*accountArrayEntrySize*proto.MaxBalLookback < stateDeltaTargetOptimizationThreshold {
 		accts := make([]basics.BalanceRecord, len(sd.Accts.acctsCache))
 		copy(accts, sd.Accts.accts)
 		sd.Accts.accts = accts
 	}
 
 	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
-	if (2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*64*320 < 50000000 {
+	if uint64(2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*proto.MaxBalLookback < stateDeltaTargetOptimizationThreshold {
 		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
 		for k, v := range sd.Accts.acctsCache {
 			acctsCache[k] = v
@@ -174,7 +183,7 @@ func (sd *StateDelta) OptimizeAllocatedMemory() {
 	}
 
 	// TxLeases takes up 112 bytes per entry, and is saved for 1000 rounds
-	if (sd.initialTransactionsCount-len(sd.Txleases))*112*1000 < 50000000 {
+	if uint64(sd.initialTransactionsCount-len(sd.Txleases))*txleasesEntrySize*proto.MaxTxnLife < stateDeltaTargetOptimizationThreshold {
 		txLeases := make(map[Txlease]basics.Round, len(sd.Txleases))
 		for k, v := range sd.Txleases {
 			txLeases[k] = v
@@ -183,7 +192,7 @@ func (sd *StateDelta) OptimizeAllocatedMemory() {
 	}
 
 	// Creatables takes up 100 bytes per entry, and is saved for 320 rounds
-	if (sd.initialTransactionsCount-len(sd.Creatables))*100*320 < 50000000 {
+	if uint64(sd.initialTransactionsCount-len(sd.Creatables))*creatablesEntrySize*proto.MaxBalLookback < stateDeltaTargetOptimizationThreshold {
 		creatableDeltas := make(map[basics.CreatableIndex]ModifiedCreatable, len(sd.Creatables))
 		for k, v := range sd.Creatables {
 			creatableDeltas[k] = v
