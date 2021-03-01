@@ -564,6 +564,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 var emptyHash = crypto.Digest{}
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 
+	/*
 	if msgs.pacer != nil {
 		<-msgs.pacer
 
@@ -571,7 +572,7 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 			pacer <- 1
 		}(msgs.pacer)
 	}
-
+	*/
 
 	numSkipped := 0
 	for i, msg := range msgs.msgs {
