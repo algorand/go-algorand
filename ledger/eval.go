@@ -1144,7 +1144,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		return ledgercore.StateDelta{}, err
 	}
 
-	paysetgroupsCh := loadAccounts(ctx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink)
+	paysetgroupsCh := loadAccounts(ctx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
 
 	var txvalidator evalTxValidator
 	if validate {
@@ -1234,7 +1234,7 @@ type loadedTransactionGroup struct {
 
 // loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
 // The order of the transaction groups returned by the channel is identical to the one in the input array.
-func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address) chan loadedTransactionGroup {
+func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
 	outChan := make(chan loadedTransactionGroup, len(groups))
 	go func() {
 		// groupTask helps to organize the account loading for each transaction group.
@@ -1257,15 +1257,17 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 		}
 		defer close(outChan)
 
-		accountsChannels := make(map[basics.Address]*addrTask)
-		addressesCh := make(chan *addrTask, len(groups)*16*10)
+		accountTasks := make(map[basics.Address]*addrTask)
+		maxAddressesPerTransaction := 7 + consensusParams.MaxAppTxnAccounts
+		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesPerTransaction)
 		// totalBalances counts the total number of balances over all the transaction groups
 		totalBalances := 0
+
 		initAccount := func(addr basics.Address, wg *groupTask) {
 			if addr.IsZero() {
 				return
 			}
-			if task, have := accountsChannels[addr]; !have {
+			if task, have := accountTasks[addr]; !have {
 				task := &addrTask{
 					address:      addr,
 					groups:       make([]*groupTask, 1, 4),
@@ -1273,7 +1275,8 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 				}
 				task.groups[0] = wg
 				task.groupIndices[0] = wg.balancesCount
-				accountsChannels[addr] = task
+
+				accountTasks[addr] = task
 				addressesCh <- task
 			} else {
 				task.groups = append(task.groups, wg)
@@ -1282,30 +1285,30 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 			wg.balancesCount++
 			totalBalances++
 		}
-		// add the fee sink address to the accountsChannels/addressesCh so that it will be loaded first.
+		// add the fee sink address to the accountTasks/addressesCh so that it will be loaded first.
 		if len(groups) > 0 {
 			task := &addrTask{
 				address: feeSinkAddr,
 			}
 			addressesCh <- task
-			accountsChannels[feeSinkAddr] = task
+			accountTasks[feeSinkAddr] = task
 		}
 
 		// iterate over the transaction groups and add all their account addresses to the list
 		groupsReady := make([]*groupTask, len(groups))
 		for i, group := range groups {
-			groupWg := &groupTask{}
-			groupsReady[i] = groupWg
+			task := &groupTask{}
+			groupsReady[i] = task
 			for _, stxn := range group {
-				initAccount(stxn.Txn.Sender, groupWg)
-				initAccount(stxn.Txn.Receiver, groupWg)
-				initAccount(stxn.Txn.CloseRemainderTo, groupWg)
-				initAccount(stxn.Txn.AssetSender, groupWg)
-				initAccount(stxn.Txn.AssetReceiver, groupWg)
-				initAccount(stxn.Txn.AssetCloseTo, groupWg)
-				initAccount(stxn.Txn.FreezeAccount, groupWg)
+				initAccount(stxn.Txn.Sender, task)
+				initAccount(stxn.Txn.Receiver, task)
+				initAccount(stxn.Txn.CloseRemainderTo, task)
+				initAccount(stxn.Txn.AssetSender, task)
+				initAccount(stxn.Txn.AssetReceiver, task)
+				initAccount(stxn.Txn.AssetCloseTo, task)
+				initAccount(stxn.Txn.FreezeAccount, task)
 				for _, xa := range stxn.Txn.Accounts {
-					initAccount(xa, groupWg)
+					initAccount(xa, task)
 				}
 			}
 		}
