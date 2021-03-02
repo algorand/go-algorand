@@ -105,7 +105,6 @@ func (e *emulator) run() {
 	lastRoundStarted := guidedClock.Since()
 	e.clock = guidedClock
 	e.start()
-	e.waitBlocked()
 	// start the nodes
 	for e.clock.Since() < e.scenario.testDuration {
 		if guidedClock.Since() > lastRoundStarted+roundDuration {
@@ -132,8 +131,9 @@ func (e *emulator) unblockStep() {
 	}
 }
 func (e *emulator) start() {
-	for _, node := range e.syncers {
+	for i, node := range e.syncers {
 		node.Start()
+		e.nodes[i].waitBlocked()
 	}
 }
 func (e *emulator) stop() {
