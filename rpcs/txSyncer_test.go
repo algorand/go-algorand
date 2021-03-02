@@ -75,8 +75,16 @@ func (mock mockPendingTxAggregate) PendingTxIDs() []transactions.Txid {
 	}
 	return ids
 }
-func (mock mockPendingTxAggregate) PendingTxGroups() [][]transactions.SignedTxn {
-	return bookkeeping.SignedTxnsToGroups(mock.txns)
+func makeSignedTxGroup(source [][]transactions.SignedTxn) (result []transactions.SignedTxGroup) {
+	result = make([]transactions.SignedTxGroup, len(source))
+	for i := range source {
+		result[i].Transactions = source[i]
+	}
+	return
+}
+
+func (mock mockPendingTxAggregate) PendingTxGroups() (result []transactions.SignedTxGroup) {
+	return makeSignedTxGroup(bookkeeping.SignedTxnsToGroups(mock.txns))
 }
 
 type mockHandler struct {
@@ -97,7 +105,7 @@ type mockRunner struct {
 	done          chan *rpc.Call
 	failWithNil   bool
 	failWithError bool
-	txgroups      [][]transactions.SignedTxn
+	txgroups      []transactions.SignedTxGroup
 }
 
 type mockRPCClient struct {
@@ -128,7 +136,11 @@ func (client *mockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txg
 	if client.client.failWithError {
 		return nil, errors.New("failing call")
 	}
-	return client.client.txgroups, nil
+	txgroups = make([][]transactions.SignedTxn, len(client.client.txgroups))
+	for i := range txgroups {
+		txgroups[i] = client.client.txgroups[i].Transactions
+	}
+	return txgroups, nil
 }
 func (client *mockRPCClient) GetBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
 	return nil, nil

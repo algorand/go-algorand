@@ -201,6 +201,10 @@ type GossipNode interface {
 
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
+
+	GetPeerData(peer Peer, key string) interface{}
+
+	SetPeerData(peer Peer, key string, value interface{})
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -210,6 +214,9 @@ type IncomingMessage struct {
 	Data   []byte
 	Err    error
 	Net    GossipNode
+
+	// Sequence is the sequence number of the message for the specific tag and peer
+	Sequence uint64
 
 	// Received is time.Time.UnixNano()
 	Received int64
@@ -1054,7 +1061,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		})
 
 	if wn.messagesOfInterestEnc != nil {
-		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag)
+		err = peer.Unicast(wn.messagesOfInterestEnc, protocol.MsgOfInterestTag, nil)
 		if err != nil {
 			wn.log.Infof("ws send msgOfInterest: %v", err)
 		}
@@ -1333,7 +1340,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer == request.except {
 			continue
 		}
-		ok := peer.writeNonBlock(mbytes, prio, digest, request.enqueueTime)
+		ok := peer.writeNonBlock(mbytes, prio, digest, request.enqueueTime, nil)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1783,14 +1790,15 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"2.1"}
+var SupportedProtocolVersions = []string{"2.5", "2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
  *  2.1 Introducted topic key/data pairs and enabled services over the gossip connections
+ *  2.5 Introducted new transaction gossiping protocol
  */
-const ProtocolVersion = "2.1"
+const ProtocolVersion = "2.5"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"
@@ -2030,12 +2038,32 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(mbytes, true, crypto.Digest{}, time.Now())
+				sent := peer.writeNonBlock(mbytes, true, crypto.Digest{}, time.Now(), nil)
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}
 			}
 		}
+	}
+}
+
+// GetPeerData returns the peer data associated with a particular key.
+func (wn *WebsocketNetwork) GetPeerData(peer Peer, key string) interface{} {
+	switch p := peer.(type) {
+	case *wsPeer:
+		return p.getPeerData(key)
+	default:
+		return nil
+	}
+}
+
+// SetPeerData sets the peer data associated with a particular key.
+func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}) {
+	switch p := peer.(type) {
+	case *wsPeer:
+		p.setPeerData(key, value)
+	default:
+		return
 	}
 }
 

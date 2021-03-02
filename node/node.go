@@ -48,6 +48,7 @@ import (
 	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/txnsync"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -109,6 +110,7 @@ type AlgorandFullNode struct {
 	blockService             *rpcs.BlockService
 	ledgerService            *rpcs.LedgerService
 	txPoolSyncerService      *rpcs.TxSyncer
+	txnSyncService           *txnsync.Service
 
 	indexer *indexer.Indexer
 
@@ -135,6 +137,8 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	compactCert *compactcert.Worker
+
+	txnSyncConnector transcationSyncNodeConnector
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -259,6 +263,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
+	node.txnSyncConnector = makeTranscationSyncNodeConnector(node)
+	node.txnSyncService = txnsync.MakeTranscationSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "")
 
 	err = node.loadParticipationKeys()
 	if err != nil {
@@ -356,6 +362,8 @@ func (node *AlgorandFullNode) Start() {
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.compactCert.Start()
+		node.txnSyncService.Start()
+		node.txnSyncConnector.start()
 
 		// start indexer
 		if idx, err := node.Indexer(); err == nil {
@@ -417,6 +425,7 @@ func (node *AlgorandFullNode) Stop() {
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
+		node.txnSyncService.Stop()
 		node.txHandler.Stop()
 		node.agreementService.Shutdown()
 		node.catchupService.Stop()
@@ -466,7 +475,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	err = node.transactionPool.Remember(txgroup)
+	err = node.transactionPool.Remember(transactions.SignedTxGroup{Transactions: txgroup, LocallyOriginated: true})
 	if err != nil {
 		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
 		return err
@@ -476,6 +485,8 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	if err != nil {
 		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
+
+	node.txnSyncConnector.onNewTransactionPoolEntry(node.transactionPool.PendingCount())
 
 	var enc []byte
 	var txids []transactions.Txid
@@ -691,7 +702,12 @@ func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
 // GetPendingTxnsFromPool returns a snapshot of every pending transactions from the node's transaction pool in a slice.
 // Transactions are sorted in decreasing order. If no transactions, returns an empty slice.
 func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
-	return bookkeeping.SignedTxnGroupsFlatten(node.transactionPool.PendingTxGroups()), nil
+	poolGroups := node.transactionPool.PendingTxGroups()
+	txnGroups := make([][]transactions.SignedTxn, len(poolGroups))
+	for i := range txnGroups {
+		txnGroups[i] = poolGroups[i].Transactions
+	}
+	return bookkeeping.SignedTxnGroupsFlatten(txnGroups), nil
 }
 
 // Reload participation keys from disk periodically
@@ -787,9 +803,12 @@ func (node *AlgorandFullNode) IsArchival() bool {
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
 func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
-	if node.ledger.Latest() > block.Round() {
+	blkRound := block.Round()
+	if node.ledger.Latest() > blkRound {
 		return
 	}
+	node.txnSyncConnector.onNewRound(blkRound, node.accountManager.HasLiveKeys(blkRound, blkRound))
+
 	node.syncStatusMu.Lock()
 	node.lastRoundTimestamp = time.Now()
 	node.hasSyncedSinceStartup = true
@@ -958,6 +977,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			}()
 			node.net.ClearHandlers()
 			node.txHandler.Stop()
+			node.txnSyncService.Stop()
 			node.agreementService.Shutdown()
 			node.catchupService.Stop()
 			node.txPoolSyncerService.Stop()
@@ -982,6 +1002,8 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.blockService.Start()
 		node.ledgerService.Start()
 		node.txHandler.Start()
+		node.txnSyncService.Start()
+		node.txnSyncConnector.start()
 
 		// start indexer
 		if idx, err := node.Indexer(); err == nil {

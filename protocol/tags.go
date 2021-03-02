@@ -40,4 +40,5 @@ const (
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
 	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
 	VoteBundleTag Tag = "VB"
+	Txn2Tag       Tag = "tx"
 )

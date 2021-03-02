@@ -194,7 +194,11 @@ func (txs *TxService) updateTxCache() (pendingTxGroups [][]transactions.SignedTx
 		// The txs.pool.PendingTxGroups() function allocates a new array on every call. That means that the old
 		// array ( if being used ) is still valid. There is no risk of data race here since
 		// the txs.pendingTxGroups is a slice (hence a pointer to the array) and not the array itself.
-		txs.pendingTxGroups = txs.pool.PendingTxGroups()
+		pendingSignedTxGroups := txs.pool.PendingTxGroups()
+		txs.pendingTxGroups = make([][]transactions.SignedTxn, len(pendingSignedTxGroups))
+		for i := range txs.pendingTxGroups {
+			txs.pendingTxGroups[i] = pendingSignedTxGroups[i].Transactions
+		}
 		txs.lastUpdate = currentUnixTime
 	}
 	return txs.pendingTxGroups

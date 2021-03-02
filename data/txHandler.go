@@ -175,7 +175,7 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	verifiedTxGroup := wi.unverifiedTxGroup
 
 	// save the transaction, if it has high enough fee and not already in the cache
-	err := handler.txPool.Remember(verifiedTxGroup)
+	err := handler.txPool.Remember(transactions.SignedTxGroup{Transactions: verifiedTxGroup})
 	if err != nil {
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return
@@ -307,7 +307,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	verifiedTxGroup := unverifiedTxGroup
 
 	// save the transaction, if it has high enough fee and not already in the cache
-	err = handler.txPool.Remember(verifiedTxGroup)
+	err = handler.txPool.Remember(transactions.SignedTxGroup{Transactions: verifiedTxGroup})
 	if err != nil {
 		logging.Base().Debugf("could not remember tx: %v", err)
 		return network.OutgoingMessage{}, true

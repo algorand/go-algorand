@@ -30,7 +30,7 @@ type Monotonic struct {
 }
 
 // MakeMonotonicClock creates a new monotonic clock with a given zero point.
-func MakeMonotonicClock(zero time.Time) Clock {
+func MakeMonotonicClock(zero time.Time) WallClock {
 	return &Monotonic{
 		zero: zero,
 	}
@@ -85,4 +85,15 @@ func (m *Monotonic) Decode(data []byte) (Clock, error) {
 
 func (m *Monotonic) String() string {
 	return time.Time(m.zero).String()
+}
+
+// Since returns the time that has passed between the time the clock was last zeroed out and now
+func (m *Monotonic) Since() time.Duration {
+	return time.Now().Sub(m.zero)
+}
+
+// DeadlineMonitorAt returns a DeadlineMonitor that expires after the provided delta time from zero has passed.
+// The method must be called after Zero; otherwise, the context's behavior is undefined.
+func (m *Monotonic) DeadlineMonitorAt(at time.Duration) DeadlineMonitor {
+	return MakeMonotonicDeadlineMonitor(m, at)
 }
