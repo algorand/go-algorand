@@ -311,7 +311,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 						if gi != -1 {
 							g := &dbad.pad.ExtendedAssetHolding.Groups[gi]
 							if !g.Loaded() {
-								groupData, err := loadAssetHoldingGroupData(loadStmt, g.AssetGroupKey)
+								groupData, err := loadHoldingGroupData(loadStmt, g.AssetGroupKey)
 								if err != nil {
 									return err
 								}
@@ -326,7 +326,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 						if gi != -1 {
 							g := &dbad.pad.ExtendedAssetHolding.Groups[gi]
 							if !g.Loaded() {
-								groupData, err := loadAssetHoldingGroupData(loadStmt, g.AssetGroupKey)
+								groupData, err := loadHoldingGroupData(loadStmt, g.AssetGroupKey)
 								if err != nil {
 									return err
 								}
@@ -1141,7 +1141,7 @@ func loadHoldings(stmt *sql.Stmt, eah ledgercore.ExtendedAssetHolding) (map[basi
 }
 
 func loadHoldingGroup(stmt *sql.Stmt, g ledgercore.AssetsHoldingGroup, holdings map[basics.AssetIndex]basics.AssetHolding) (map[basics.AssetIndex]basics.AssetHolding, ledgercore.AssetsHoldingGroup, error) {
-	groupData, err := loadAssetHoldingGroupData(stmt, g.AssetGroupKey)
+	groupData, err := loadHoldingGroupData(stmt, g.AssetGroupKey)
 	if err != nil {
 		return nil, ledgercore.AssetsHoldingGroup{}, err
 	}
@@ -1156,14 +1156,26 @@ func loadHoldingGroup(stmt *sql.Stmt, g ledgercore.AssetsHoldingGroup, holdings 
 	return holdings, g, nil
 }
 
-func loadAssetHoldingGroupData(stmt *sql.Stmt, key int64) (group ledgercore.AssetsHoldingGroupData, err error) {
-	var buf []byte
-	err = stmt.QueryRow(key).Scan(&buf)
+// loadHoldingGroupData loads a single holdings group data
+func loadHoldingGroupData(stmt *sql.Stmt, key int64) (group ledgercore.AssetsHoldingGroupData, err error) {
+	err = db.Retry(func() error {
+		var buf []byte
+		err = stmt.QueryRow(key).Scan(&buf)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("loadHoldingGroupData failed to retrive data for key %d", key)
+		}
+
+		// Some other database error
+		if err != nil {
+			return err
+		}
+		return protocol.Decode(buf, &group)
+	})
+
 	if err != nil {
 		return ledgercore.AssetsHoldingGroupData{}, err
 	}
 
-	err = protocol.Decode(buf, &group)
 	return
 }
 
@@ -1280,7 +1292,6 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 		newCount := oldPad.NumAssetHoldings() + len(created) - len(deleted)
 		if newCount < assetsThreshold {
 			// Move all assets from groups to Assets field
-			// TODO: lock?
 			assets, _, err := loadHoldings(qabq, oldPad.ExtendedAssetHolding)
 			if err != nil {
 				return updatedAccounts, err

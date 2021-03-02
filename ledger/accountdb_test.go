@@ -1804,7 +1804,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		a.NotEqual(-1, gi, aidx)
 		g := &old.pad.ExtendedAssetHolding.Groups[gi]
 		if !g.Loaded() {
-			groupData, err := loadAssetHoldingGroupData(qs.loadAssetHoldingGroupStmt, g.AssetGroupKey)
+			groupData, err := loadHoldingGroupData(qs.loadAssetHoldingGroupStmt, g.AssetGroupKey)
 			a.NoError(err)
 			g.Load(groupData)
 			loaded[gi] = true
@@ -1901,7 +1901,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 	for gi := range old.pad.ExtendedAssetHolding.Groups {
 		g := &old.pad.ExtendedAssetHolding.Groups[gi]
 		if !g.Loaded() {
-			groupData, err := loadAssetHoldingGroupData(qs.loadAssetHoldingGroupStmt, g.AssetGroupKey)
+			groupData, err := loadHoldingGroupData(qs.loadAssetHoldingGroupStmt, g.AssetGroupKey)
 			a.NoError(err)
 			g.Load(groupData)
 		}
