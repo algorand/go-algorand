@@ -290,27 +290,52 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 					return err
 				}
 
-				// fetch holdings that are in new
-				// these are either new or modified, and needed to be written back later.
-				// to simplify upcoming reconciliation load them now
-				_, delta := a.getByIdx(idx)
-				if len(delta.new.Assets) > 0 && len(dbad.pad.Assets) == 0 {
-					dbad.pad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(delta.new.Assets))
-				}
-				for aidx := range delta.new.Assets {
-					if _, ok := dbad.pad.AccountData.Assets[aidx]; !ok {
+				if dbad.pad.ExtendedAssetHolding.Count > 0 {
+					// fetch holdings that are in new
+					// these are either new or modified, and needed to be written back later.
+					// to simplify upcoming reconciliation load them now
+					_, delta := a.getByIdx(idx)
+					if len(delta.new.Assets) > 0 && len(dbad.pad.AccountData.Assets) == 0 {
+						dbad.pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(delta.new.Assets))
+					}
+
+					// load created and deleted asset holding groups
+					for aidx, action := range delta.holdings {
+						gi := -1
+						if action == ledgercore.ActionCreate {
+							// use FindGroup to find a possible matching group for insertion
+							gi = dbad.pad.ExtendedAssetHolding.FindGroup(aidx, 0)
+						} else if action == ledgercore.ActionDelete {
+							gi, _ = dbad.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
+						}
+						if gi != -1 {
+							g := &dbad.pad.ExtendedAssetHolding.Groups[gi]
+							if !g.Loaded() {
+								groupData, err := loadAssetHoldingGroupData(loadStmt, g.AssetGroupKey)
+								if err != nil {
+									return err
+								}
+								g.Load(groupData)
+							}
+						}
+					}
+
+					// load updated assets
+					for aidx := range delta.new.Assets {
 						gi, ai := dbad.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
 						if gi != -1 {
 							g := &dbad.pad.ExtendedAssetHolding.Groups[gi]
-							groupData, err := loadAssetHoldingGroupData(loadStmt, g.AssetGroupKey)
-							if err != nil {
-								return err
+							if !g.Loaded() {
+								groupData, err := loadAssetHoldingGroupData(loadStmt, g.AssetGroupKey)
+								if err != nil {
+									return err
+								}
+								g.Load(groupData)
 							}
-							g.Load(groupData)
 							_, ai = dbad.pad.ExtendedAssetHolding.FindAsset(aidx, gi)
 							if ai != -1 {
 								// found!
-								dbad.pad.AccountData.Assets[aidx] = groupData.GetHolding(ai)
+								dbad.pad.AccountData.Assets[aidx] = g.GetHolding(ai)
 							} else {
 								// no such asset => newly created
 							}
@@ -1300,7 +1325,9 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 			}
 
 			if len(deleted) > 0 {
-				// TODO: handle pad.NumAssetHoldings() == len(deleted)
+				// TODO: possible optimizations:
+				// 1. pad.NumAssetHoldings() == len(deleted)
+				// 2. deletion of entire group
 				sort.SliceStable(deleted, func(i, j int) bool { return deleted[i] < deleted[j] })
 				gi, ai := 0, 0
 				for _, aidx := range deleted {

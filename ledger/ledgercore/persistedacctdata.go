@@ -449,6 +449,15 @@ func (e ExtendedAssetHolding) findGroup(aidx basics.AssetIndex, startIdx int) fg
 	return fgres{found: false, gi: len(e.Groups) - 1, split: false}
 }
 
+// FindGroup returns a group suitable for asset insertion
+func (e ExtendedAssetHolding) FindGroup(aidx basics.AssetIndex, startIdx int) int {
+	res := e.findGroup(aidx, startIdx)
+	if res.found {
+		return res.gi
+	}
+	return -1
+}
+
 // FindAsset returns group index and asset index if found and (-1, -1) otherwise.
 // If a matching group found but the group is not loaded yet, it returns (gi, -1)
 func (e ExtendedAssetHolding) FindAsset(aidx basics.AssetIndex, startIdx int) (int, int) {
