@@ -73,7 +73,6 @@ agents:
       - NETWORK=$NETWORK
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
-      - GPG_DIR=$GPG_DIR
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     volumes:
