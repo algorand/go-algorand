@@ -67,7 +67,7 @@ agents:
       - TRAVIS_BRANCH=${GIT_BRANCH}
       - NETWORK=$NETWORK
       - VERSION=$VERSION
-      - GPG_DIR=$GPG_DIR
+      - GPG_DIR=~/.gnupg
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     volumes:
@@ -108,7 +108,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
     globSpecs:
-      - tmp/node_pkgs/**
+      - tmp/node_pkgs/**/*.tar.gz
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -117,7 +117,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
     globSpecs:
-      - tmp/node_pkgs/**
+      - tmp/node_pkgs/**/*.tar.gz
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -126,7 +126,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
     globSpecs:
-      - tmp/node_pkgs/**
+      - tmp/node_pkgs/**/*.tar.gz
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -135,7 +135,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
     globSpecs:
-      - tmp/node_pkgs/**
+      - tmp/node_pkgs/**/*.tar.gz
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -144,7 +144,10 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/packages
     globSpecs:
-      - tmp/node_pkgs/**
+      - tmp/node_pkgs/**/*.tar.gz
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
 
     # Unstash tasks
   - task: stash.Unstash
