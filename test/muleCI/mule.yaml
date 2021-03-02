@@ -114,7 +114,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
     globSpecs:
-      - tmp/node_pkgs/**/*.tar.gz
+      - tmp/node_pkgs/**/*
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -123,7 +123,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
     globSpecs:
-      - tmp/node_pkgs/**/*.tar.gz
+      - tmp/node_pkgs/**/*
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -132,7 +132,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
     globSpecs:
-      - tmp/node_pkgs/**/*.tar.gz
+      - tmp/node_pkgs/**/*
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -141,7 +141,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
     globSpecs:
-      - tmp/node_pkgs/**/*.tar.gz
+      - tmp/node_pkgs/**/*
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
