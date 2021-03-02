@@ -67,6 +67,7 @@ agents:
       - TRAVIS_BRANCH=${GIT_BRANCH}
       - NETWORK=$NETWORK
       - VERSION=$VERSION
+      - GPG_DIR=$GPG_DIR
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     volumes:
