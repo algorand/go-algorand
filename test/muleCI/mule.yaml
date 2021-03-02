@@ -8,6 +8,7 @@ agents:
       - TRAVIS_BRANCH=${GIT_BRANCH}
       - NETWORK=$NETWORK
       - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -20,6 +21,7 @@ agents:
       - TRAVIS_BRANCH=${GIT_BRANCH}
       - NETWORK=$NETWORK
       - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -32,6 +34,7 @@ agents:
       - TRAVIS_BRANCH=${GIT_BRANCH}
       - NETWORK=$NETWORK
       - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
@@ -44,6 +47,7 @@ agents:
       - TRAVIS_BRANCH=${GIT_BRANCH}
       - NETWORK=$NETWORK
       - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm32v6
@@ -55,6 +59,7 @@ agents:
       - TRAVIS_BRANCH=${GIT_BRANCH}
       - NETWORK=$NETWORK
       - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     volumes:
@@ -67,6 +72,7 @@ agents:
       - TRAVIS_BRANCH=${GIT_BRANCH}
       - NETWORK=$NETWORK
       - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
       - GPG_DIR=~/.gnupg
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
