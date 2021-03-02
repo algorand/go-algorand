@@ -184,10 +184,13 @@ func (ad *AccountDeltas) SetHoldingDelta(addr basics.Address, aidx basics.AssetI
 		hmap[aidx] = ActionDelete
 	}
 
+	if ad.holdings == nil {
+		ad.holdings = make(map[basics.Address]map[basics.AssetIndex]HoldingAction)
+	}
 	ad.holdings[addr] = hmap
 }
 
 // GetHoldingDeltas return map of created/deleted asset holdings
-func (ad *AccountDeltas) GetHoldingDeltas(addr basics.Address) map[basics.AssetIndex]HoldingAction {
+func (ad AccountDeltas) GetHoldingDeltas(addr basics.Address) map[basics.AssetIndex]HoldingAction {
 	return ad.holdings[addr]
 }
