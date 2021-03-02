@@ -32,7 +32,7 @@ import (
 // PendingTxAggregate is a container of pending transactions
 type PendingTxAggregate interface {
 	PendingTxIDs() []transactions.Txid
-	PendingTxGroups() [][]transactions.SignedTxn
+	PendingTxGroups() []transactions.SignedTxGroup
 }
 
 // TxSyncClient abstracts sync-ing pending transactions from a peer.

@@ -54,6 +54,15 @@ type TestingT interface {
 
 var minBalance = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
 
+// RememberOne stores the provided transaction.
+// Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
+func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
+	txgroup := transactions.SignedTxGroup{
+		Transactions: []transactions.SignedTxn{t},
+	}
+	return pool.Remember(txgroup)
+}
+
 func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) *ledger.Ledger {
 	var hash crypto.Digest
 	crypto.RandBytes(hash[:])
@@ -827,7 +836,7 @@ func TestRemove(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 	require.NoError(t, transactionPool.RememberOne(signedTx))
-	require.Equal(t, transactionPool.PendingTxGroups(), [][]transactions.SignedTxn{{signedTx}})
+	require.Equal(t, transactionPool.PendingTxGroups(), []transactions.SignedTxGroup{{Transactions: []transactions.SignedTxn{signedTx}}})
 }
 
 func TestLogicSigOK(t *testing.T) {
@@ -1207,7 +1216,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 	}
 
 	for groupSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize; groupSize > 0; groupSize-- {
-		var txgroup []transactions.SignedTxn
+		var txgroup transactions.SignedTxGroup
 		// fill the transaction group with groupSize transactions.
 		for i := 0; i < groupSize; i++ {
 			tx := transactions.Transaction{
@@ -1226,7 +1235,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 				},
 			}
 			signedTx := tx.Sign(secrets[0])
-			txgroup = append(txgroup, signedTx)
+			txgroup.Transactions = append(txgroup.Transactions, signedTx)
 			uniqueTxID++
 		}
 
@@ -1236,7 +1245,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 		if groupSize > 1 {
 			// add a single transaction and ensure we succeed
 			// consume the transaction of allowed limit
-			require.NoError(t, transactionPool.RememberOne(txgroup[0]))
+			require.NoError(t, transactionPool.RememberOne(txgroup.Transactions[0]))
 		}
 	}
 }

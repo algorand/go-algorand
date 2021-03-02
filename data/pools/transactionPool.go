@@ -76,15 +76,16 @@ type TransactionPool struct {
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu       deadlock.RWMutex
-	pendingTxGroups [][]transactions.SignedTxn
+	pendingTxGroups []transactions.SignedTxGroup
 	pendingTxids    map[transactions.Txid]transactions.SignedTxn
+	pendingCounter  uint64
 
 	// Calls to remember() add transactions to rememberedTxGroups and
 	// rememberedTxids.  Calling rememberCommit() adds them to the
 	// pendingTxGroups and pendingTxids.  This allows us to batch the
 	// changes in OnNewBlock() without preventing a concurrent call
 	// to PendingTxGroups() or Verified().
-	rememberedTxGroups [][]transactions.SignedTxn
+	rememberedTxGroups []transactions.SignedTxGroup
 	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
 
 	log logging.Logger
@@ -190,7 +191,7 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 
 // PendingTxGroups returns a list of transaction groups that should be proposed
 // in the next block, in order.
-func (pool *TransactionPool) PendingTxGroups() [][]transactions.SignedTxn {
+func (pool *TransactionPool) PendingTxGroups() []transactions.SignedTxGroup {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
 	// note that this operation is safe for the sole reason that arrays in go are immutable.
@@ -222,6 +223,14 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 		pool.pendingTxids = pool.rememberedTxids
 		pool.ledger.VerifiedTransactionCache().UpdatePinned(pool.pendingTxids)
 	} else {
+		// update the GroupCounter on all the transaction groups we're going to add.
+		// this would ensure that each transaction group has a unique monotonic GroupCounter
+		for i, txGroup := range pool.rememberedTxGroups {
+			pool.pendingCounter++
+			txGroup.GroupCounter = pool.pendingCounter
+			txGroup.FirstTransactionID = txGroup.Transactions[0].ID()
+			pool.rememberedTxGroups[i] = txGroup
+		}
 		pool.pendingTxGroups = append(pool.pendingTxGroups, pool.rememberedTxGroups...)
 
 		for txid, txn := range pool.rememberedTxids {
@@ -245,7 +254,7 @@ func (pool *TransactionPool) PendingCount() int {
 func (pool *TransactionPool) pendingCountNoLock() int {
 	var count int
 	for _, txgroup := range pool.pendingTxGroups {
-		count += len(txgroup)
+		count += len(txgroup.Transactions)
 	}
 	return count
 }
@@ -309,12 +318,12 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 
 // checkSufficientFee take a set of signed transactions and verifies that each transaction has
 // sufficient fee to get into the transaction pool
-func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
+func (pool *TransactionPool) checkSufficientFee(txgroup transactions.SignedTxGroup) error {
 	// Special case: the compact cert transaction, if issued from the
 	// special compact-cert-sender address, in a singleton group, pays
 	// no fee.
-	if len(txgroup) == 1 {
-		t := txgroup[0].Txn
+	if len(txgroup.Transactions) == 1 {
+		t := txgroup.Transactions[0].Txn
 		if t.Type == protocol.CompactCertTx && t.Sender == transactions.CompactCertSender && t.Fee.IsZero() {
 			return nil
 		}
@@ -323,7 +332,7 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 	// get the current fee per byte
 	feePerByte := pool.computeFeePerByte()
 
-	for _, t := range txgroup {
+	for _, t := range txgroup.Transactions {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
 		if t.Txn.Fee.Raw < feeThreshold {
 			return fmt.Errorf("fee %d below threshold %d (%d per byte * %d bytes)",
@@ -357,7 +366,7 @@ type poolIngestParams struct {
 }
 
 // remember attempts to add a transaction group to the pool.
-func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
+func (pool *TransactionPool) remember(txgroup transactions.SignedTxGroup) error {
 	params := poolIngestParams{
 		recomputing: false,
 	}
@@ -366,7 +375,7 @@ func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 
 // add tries to add the transaction group to the pool, bypassing the fee
 // priority checks.
-func (pool *TransactionPool) add(txgroup []transactions.SignedTxn, stats *telemetryspec.AssembleBlockMetrics) error {
+func (pool *TransactionPool) add(txgroup transactions.SignedTxGroup, stats *telemetryspec.AssembleBlockMetrics) error {
 	params := poolIngestParams{
 		recomputing: true,
 		stats:       stats,
@@ -379,7 +388,7 @@ func (pool *TransactionPool) add(txgroup []transactions.SignedTxn, stats *teleme
 //
 // ingest assumes that pool.mu is locked.  It might release the lock
 // while it waits for OnNewBlock() to be called.
-func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poolIngestParams) error {
+func (pool *TransactionPool) ingest(txgroup transactions.SignedTxGroup, params poolIngestParams) error {
 	if pool.pendingBlockEvaluator == nil {
 		return fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
 	}
@@ -409,22 +418,18 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 	}
 
 	pool.rememberedTxGroups = append(pool.rememberedTxGroups, txgroup)
-	for _, t := range txgroup {
+	for _, t := range txgroup.Transactions {
 		pool.rememberedTxids[t.ID()] = t
 	}
 	return nil
 }
 
-// RememberOne stores the provided transaction.
-// Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
-	return pool.Remember([]transactions.SignedTxn{t})
-}
-
 // Remember stores the provided transaction group.
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
-	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
+// The function is called by the transaction handler ( i.e. txsync or gossip ) or by the node when
+// transaction is coming from a REST API call.
+func (pool *TransactionPool) Remember(txgroup transactions.SignedTxGroup) error {
+	if err := pool.checkPendingQueueSize(len(txgroup.Transactions)); err != nil {
 		return err
 	}
 
@@ -544,9 +549,9 @@ func (pool *TransactionPool) isAssemblyTimedOut() bool {
 	return time.Now().After(pool.assemblyDeadline.Add(-generateBlockDuration))
 }
 
-func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
+func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup transactions.SignedTxGroup, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
 	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
-	for _, tx := range txgroup {
+	for _, tx := range txgroup.Transactions {
 		if tx.Txn.LastValid < r {
 			return transactions.TxnDeadError{
 				Round:      r,
@@ -556,8 +561,8 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		}
 	}
 
-	txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
-	for i, tx := range txgroup {
+	txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup.Transactions))
+	for i, tx := range txgroup.Transactions {
 		txgroupad[i].SignedTxn = tx
 	}
 
@@ -612,7 +617,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	return err
 }
 
-func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.SignedTxn, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
+func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup transactions.SignedTxGroup, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
 	err := pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	if err == ledger.ErrNoSpace {
 		pool.numPendingWholeBlocks++
@@ -679,17 +684,17 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	// Feed the transactions in order
 	for _, txgroup := range txgroups {
-		if len(txgroup) == 0 {
+		if len(txgroup.Transactions) == 0 {
 			asmStats.InvalidCount++
 			continue
 		}
-		if _, alreadyCommitted := committedTxIds[txgroup[0].ID()]; alreadyCommitted {
+		if _, alreadyCommitted := committedTxIds[txgroup.Transactions[0].ID()]; alreadyCommitted {
 			asmStats.EarlyCommittedCount++
 			continue
 		}
 		err := pool.add(txgroup, &asmStats)
 		if err != nil {
-			for _, tx := range txgroup {
+			for _, tx := range txgroup.Transactions {
 				pool.statusCache.put(tx, err.Error())
 			}
 

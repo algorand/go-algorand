@@ -587,3 +587,22 @@ func (tc ExplicitTxnContext) GenesisID() string {
 func (tc ExplicitTxnContext) GenesisHash() crypto.Digest {
 	return tc.GenHash
 }
+
+// SignedTxGroup used as the in-memory representation of a signed transaction group.
+// unlike the plain array of signed transactions, this includes transaction origination and counter
+// used by the transaction pool and the transaction sync
+//msgp: ignore SignedTxGroup
+type SignedTxGroup struct {
+	// Transactions contains the signed transactions that are included in this transaction group.
+	Transactions []SignedTxn
+	// LocallyOriginated specify whether the trancation group was inroduced via the REST API or
+	// by the transaction sync.
+	LocallyOriginated bool
+	// GroupCounter is a monotonic increasing counter, that provides an identify for each transaction group.
+	// The transaction sync is using it as a way to scan the transactions group list more efficiently, as it
+	// can continue scanning the list from the place where it last stopped.
+	GroupCounter uint64
+	// FirstTransactionID is the transaction ID of the first transaction in this transaction group.
+	// TODO - make this more secure by making this the hash of the first signed transaction.
+	FirstTransactionID Txid
+}

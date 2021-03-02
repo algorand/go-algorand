@@ -232,7 +232,7 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 2)
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -240,8 +240,8 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte("bar"), false, nil)
 
 	select {
 	case <-counterDone:
@@ -266,7 +266,7 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 2)
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -277,9 +277,9 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 	require.Equal(t, 1, len(netA.peers))
 	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	peerB := netA.peers[0]
-	err := peerB.Unicast(context.Background(), []byte("foo"), protocol.TxnTag)
+	err := peerB.Unicast([]byte("foo"), protocol.AgreementVoteTag, nil)
 	assert.NoError(t, err)
-	err = peerB.Unicast(context.Background(), []byte("bar"), protocol.TxnTag)
+	err = peerB.Unicast([]byte("bar"), protocol.AgreementVoteTag, nil)
 	assert.NoError(t, err)
 
 	select {
@@ -308,7 +308,7 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 2)
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -316,8 +316,8 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte("bar"), false, nil)
 
 	select {
 	case <-counterDone:
@@ -340,7 +340,7 @@ func lineNetwork(t *testing.T, numNodes int) (nodes []*WebsocketNetwork, counter
 			addrPrev, postListen := nodes[i-1].Address()
 			require.True(t, postListen)
 			nodes[i].phonebook.ReplacePeerList([]string{addrPrev}, "default", PhoneBookEntryRelayRole)
-			nodes[i].RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: &counters[i]}})
+			nodes[i].RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: &counters[i]}})
 		}
 		nodes[i].Start()
 		counters[i].t = t
@@ -395,7 +395,7 @@ func TestLineNetwork(t *testing.T) {
 		sendTime := time.Now().UnixNano()
 		var timeblob [8]byte
 		binary.LittleEndian.PutUint64(timeblob[:], uint64(sendTime))
-		nodes[0].Broadcast(context.Background(), protocol.TxnTag, timeblob[:], true, nil)
+		nodes[0].Broadcast(context.Background(), protocol.AgreementVoteTag, timeblob[:], true, nil)
 	}
 	select {
 	case <-counterDone:
@@ -856,7 +856,7 @@ func BenchmarkWebsocketNetworkBasic(t *testing.B) {
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	returns := make(chan uint64, 100)
 	bhandler := benchmarkHandler{returns}
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: &bhandler}})
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: &bhandler}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -879,7 +879,7 @@ func BenchmarkWebsocketNetworkBasic(t *testing.B) {
 		}
 		msg := make([]byte, msgSize)
 		binary.LittleEndian.PutUint64(msg, uint64(i))
-		err := netA.Broadcast(context.Background(), protocol.TxnTag, msg, true, nil)
+		err := netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
 		if err != nil {
 			t.Errorf("error on broadcast: %v", err)
 			return
@@ -976,7 +976,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netB.SetPrioScheme(&prioB)
 	netB.config.GossipFanout = 1
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counterB}})
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counterB}})
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
@@ -989,7 +989,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netC.SetPrioScheme(&prioC)
 	netC.config.GossipFanout = 1
 	netC.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-	netC.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counterC}})
+	netC.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counterC}})
 	netC.Start()
 	defer func() { t.Log("stopping C"); netC.Stop(); t.Log("C done") }()
 
@@ -1006,7 +1006,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	}
 	waitReady(t, netA, time.After(time.Second))
 
-	netA.Broadcast(context.Background(), protocol.TxnTag, nil, true, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, nil, true, nil)
 
 	select {
 	case <-counterBdone:
@@ -1176,7 +1176,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 5)
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -1184,7 +1184,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 
 	currentTime := time.Now()
 	for i := 0; i < 10; i++ {
-		err := netA.broadcastWithTimestamp(protocol.TxnTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
+		err := netA.broadcastWithTimestamp(protocol.AgreementVoteTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
 		require.NoErrorf(t, err, "No error was expected")
 	}
 
@@ -1275,7 +1275,7 @@ func TestForceMessageRelaying(t *testing.T) {
 
 	counter := newMessageCounter(t, 5)
 	counterDone := counter.done
-	netA.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+	netA.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
 	netA.Start()
 	addrA, postListen := netA.Address()
 	require.Truef(t, postListen, "Listening network failed to start")
@@ -1302,9 +1302,9 @@ func TestForceMessageRelaying(t *testing.T) {
 
 	// send 5 messages from both netB and netC to netA
 	for i := 0; i < 5; i++ {
-		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
+		err := netB.Relay(context.Background(), protocol.AgreementVoteTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
-		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
+		err = netC.Relay(context.Background(), protocol.AgreementVoteTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
 
@@ -1320,13 +1320,13 @@ func TestForceMessageRelaying(t *testing.T) {
 	netA.ClearHandlers()
 	counter = newMessageCounter(t, 10)
 	counterDone = counter.done
-	netA.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+	netA.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
 
 	// hack the relayMessages on the netB so that it would start sending messages.
 	netB.relayMessages = true
 	// send additional 10 messages from netB
 	for i := 0; i < 10; i++ {
-		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
+		err := netB.Relay(context.Background(), protocol.AgreementVoteTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
 
@@ -1541,7 +1541,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	// send 5 messages of few types.
 	for i := 0; i < 5; i++ {
 		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
-		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil)
+		netA.Broadcast(context.Background(), protocol.CompactCertSigTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	}
@@ -1769,7 +1769,7 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 	// register all the handlers.
 	taggedHandlersA := []TaggedMessageHandler{
 		{
-			Tag:            protocol.TxnTag,
+			Tag:            protocol.AgreementVoteTag,
 			MessageHandler: HandlerFunc(msgHandlerA),
 		},
 	}
@@ -1793,7 +1793,7 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 			t.ResetTimer()
 			startTime := time.Now()
 			for i := 0; i < t.N/txnCount; i++ {
-				netB.Broadcast(context.Background(), protocol.TxnTag, dataBuffer, true, nil)
+				netB.Broadcast(context.Background(), protocol.AgreementVoteTag, dataBuffer, true, nil)
 				<-msgProcessed
 			}
 			deltaTime := time.Now().Sub(startTime)

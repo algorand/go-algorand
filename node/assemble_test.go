@@ -130,7 +130,8 @@ func BenchmarkAssembleBlock(b *testing.B) {
 			if okcount == 0 {
 				worstTxID = signedTx.ID()
 			}
-			err := tp.Remember([]transactions.SignedTxn{signedTx})
+
+			err := tp.Remember(transactions.SignedTxGroup{Transactions: []transactions.SignedTxn{signedTx}})
 			if err != nil {
 				errcount++
 				b.Logf("(%d/%d) could not send [%d] %s -> [%d] %s: %s", errcount, okcount, sourcei, addresses[sourcei], desti, addresses[desti], err)
