@@ -47,16 +47,17 @@ func (tracker *msgTracker) LoadMessage(keys []crypto.Digest) ([][]byte, bool) {
 	tracker.mu.RLock()
 	defer tracker.mu.RUnlock()
 
-	found := true
+	ok := true
 	values := make([][]byte, len(keys), len(keys))
 	for i, k := range keys {
+		var found bool
 		values[i], found = tracker.store[k]
 		if !found {
-			return values, false
+			ok = false
 		}
 
 	}
-	return values, true
+	return values, ok
 }
 
 func (tracker *msgTracker) remember(msgHash crypto.Digest) {

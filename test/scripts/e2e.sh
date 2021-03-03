@@ -86,7 +86,7 @@ python3 -m venv ${TEMPDIR}/ve
 . ${TEMPDIR}/ve/bin/activate
 ${TEMPDIR}/ve/bin/pip3 install --upgrade pip
 ${TEMPDIR}/ve/bin/pip3 install --upgrade py-algorand-sdk cryptography
-${TEMPDIR}/ve/bin/python3 e2e_client_runner.py e2e_subs/*.sh
+${TEMPDIR}/ve/bin/python3 e2e_client_runner.py e2e_subs/*.sh --keep-temps
 deactivate
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder

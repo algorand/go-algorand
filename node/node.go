@@ -1056,3 +1056,21 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 	}
 	return validatedBlock{vb: lvb}, nil
 }
+
+func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) {
+	for i, stib := range block.Payset {
+		tx, found := node.transactionPool.FindTxn(stib.Digest)
+		if found {
+			block.Payset[i].SignedTxn = tx
+			logging.Base().Infof("find txn")
+		} else {
+			logging.Base().Infof("failed to find txn: %v", stib.Digest)
+		}
+		block.Payset[i].Digest = crypto.Digest{}
+		var err error
+		block.Payset[i], err = block.EncodeSignedTxn(block.Payset[i].SignedTxn, transactions.ApplyData{})
+		if err != nil {
+			logging.Base().Warnf("failed to reconstruct block: %v", err)
+		}
+	}
+}

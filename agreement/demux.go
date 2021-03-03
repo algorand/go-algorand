@@ -114,20 +114,22 @@ func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandl
 	for i, stib := range payset {
 		keys[i] = stib.Digest
 	}
-	stxnsData, allPresent := net.LoadMessage(h, keys)
-	if !allPresent {
-		return fmt.Errorf("could not recover txns")
-	}
+	stxnsData, _ := net.LoadMessage(h, keys)
+	//if !allPresent {
+	//	return fmt.Errorf("could not recover txns")
+	//}
 
 	for i, stxnData := range stxnsData {
-		var stxn transactions.SignedTxn
-		dec := protocol.NewDecoderBytes(stxnData)
-		err := dec.Decode(&stxn)
-		payset[i].SignedTxn = stxn
-		if err != nil {
-			logging.Base().Warnf("Received a non-decodable txn: %v", err)
-			//net.Disconnect(raw.MessageHandle)
-			return err
+		if stxnData != nil {
+			var stxn transactions.SignedTxn
+			dec := protocol.NewDecoderBytes(stxnData)
+			err := dec.Decode(&stxn)
+			payset[i].SignedTxn = stxn
+			if err != nil {
+				logging.Base().Warnf("Received a non-decodable txn: %v", err)
+				//net.Disconnect(raw.MessageHandle)
+				return err
+			}
 		}
 	}
 
@@ -345,7 +347,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		if !open {
 			return emptyEvent{}, false
 		}
-		e = setupCompoundMessage(d.ledger, m)
+		e = setupCompoundMessage(d.ledger, m, s)
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.UpdateEventsQueue(eventQueueTokenized[protocol.ProposalPayloadTag], 0)
 		d.monitor.inc(demuxCoserviceType)
@@ -385,8 +387,9 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 }
 
 // setupCompoundMessage processes compound messages: distinct messages which are delivered together
-func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
+func setupCompoundMessage(l LedgerReader, m message, s *Service) (res externalEvent) {
 	compound := m.CompoundMessage
+	s.ReconstructBlock(compound.Proposal.Block)
 	if compound.Vote == (unauthenticatedVote{}) {
 		m.Tag = protocol.ProposalPayloadTag
 		m.UnauthenticatedProposal = compound.Proposal

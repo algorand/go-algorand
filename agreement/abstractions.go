@@ -89,6 +89,8 @@ type BlockFactory interface {
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
 	AssembleBlock(basics.Round, time.Time) (ValidatedBlock, error)
+
+	ReconstructBlock(bookkeeping.Block)
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.

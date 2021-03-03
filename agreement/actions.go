@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 
 	"github.com/algorand/go-algorand/logging/logspec"
@@ -157,8 +158,14 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		numtxns := len(msg.Proposal.Payset)
 		txnData = make([][]byte, numtxns+1, numtxns+1)
 		tags = make([]protocol.Tag, numtxns+1)
-		for i, txib := range msg.Proposal.Payset {
-			stxn := txib.SignedTxn
+		payset, err := msg.Proposal.Block.DecodePaysetFlat()
+		if err != nil {
+			logging.Base().Warnf("failed to decode payset: %v", err)
+		}
+		msg.Proposal.Payset = make(transactions.Payset, len(payset))
+		for i := range msg.Proposal.Payset {
+			msg.Proposal.Payset[i].SignedTxnWithAD = payset[i]
+			stxn := payset[i].SignedTxn
 			txnData[i] = protocol.Encode(&stxn)
 			tags[i] = protocol.TxnTag
 		}

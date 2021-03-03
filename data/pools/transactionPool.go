@@ -18,6 +18,7 @@ package pools
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -78,6 +79,7 @@ type TransactionPool struct {
 	pendingMu       deadlock.RWMutex
 	pendingTxGroups [][]transactions.SignedTxn
 	pendingTxids    map[transactions.Txid]transactions.SignedTxn
+	pendingDigests  map[crypto.Digest]transactions.SignedTxn
 
 	// Calls to remember() add transactions to rememberedTxGroups and
 	// rememberedTxids.  Calling rememberCommit() adds them to the
@@ -86,6 +88,7 @@ type TransactionPool struct {
 	// to PendingTxGroups() or Verified().
 	rememberedTxGroups [][]transactions.SignedTxn
 	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
+	rememberedDigests  map[crypto.Digest]transactions.SignedTxn
 
 	log logging.Logger
 }
@@ -97,7 +100,9 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	}
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
+		pendingDigests:       make(map[crypto.Digest]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
+		rememberedDigests:    make(map[crypto.Digest]transactions.SignedTxn),
 		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
@@ -220,6 +225,7 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 	if flush {
 		pool.pendingTxGroups = pool.rememberedTxGroups
 		pool.pendingTxids = pool.rememberedTxids
+		pool.pendingDigests = pool.rememberedDigests
 		pool.ledger.VerifiedTransactionCache().UpdatePinned(pool.pendingTxids)
 	} else {
 		pool.pendingTxGroups = append(pool.pendingTxGroups, pool.rememberedTxGroups...)
@@ -227,10 +233,14 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 		for txid, txn := range pool.rememberedTxids {
 			pool.pendingTxids[txid] = txn
 		}
+		for digest, txn := range pool.rememberedDigests {
+			pool.pendingDigests[digest] = txn
+		}
 	}
 
 	pool.rememberedTxGroups = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
+	pool.rememberedDigests = make(map[crypto.Digest]transactions.SignedTxn)
 }
 
 // PendingCount returns the number of transactions currently pending in the pool.
@@ -411,6 +421,7 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 	pool.rememberedTxGroups = append(pool.rememberedTxGroups, txgroup)
 	for _, t := range txgroup {
 		pool.rememberedTxids[t.ID()] = t
+		pool.rememberedDigests[crypto.Hash(protocol.Encode(&t))] = t
 	}
 	return nil
 }
@@ -460,6 +471,17 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	}
 
 	return pool.statusCache.check(txid)
+}
+
+func (pool *TransactionPool) FindTxn(digest crypto.Digest) (tx transactions.SignedTxn, found bool) {
+	pool.pendingMu.RLock()
+	pool.pendingMu.RUnlock()
+	tx, found = pool.rememberedDigests[digest]
+	if found {
+		return
+	}
+	tx, found = pool.pendingDigests[digest]
+	return
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired

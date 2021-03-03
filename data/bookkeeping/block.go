@@ -286,9 +286,7 @@ func (block *Block) StripSignedTxnWithAD() Block {
 	c.BlockHeader = block.BlockHeader
 	c.Payset = make(transactions.Payset, len(block.Payset), len(block.Payset))
 	for i, stb := range block.Payset {
-		c.Payset[i].HasGenesisHash = stb.HasGenesisHash
-		c.Payset[i].HasGenesisID = stb.HasGenesisID
-		c.Payset[i].Digest = stb.Digest
+		c.Payset[i].Digest = crypto.Hash(protocol.Encode(&stb.SignedTxn))
 	}
 	return c
 }
@@ -756,6 +754,5 @@ func (bh BlockHeader) EncodeSignedTxn(st transactions.SignedTxn, ad transactions
 
 	stb.SignedTxn = st
 	stb.ApplyData = ad
-	stb.Digest = crypto.Hash(protocol.Encode(&st))
 	return stb, nil
 }

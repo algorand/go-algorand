@@ -65,6 +65,10 @@ func (i entryFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time) 
 	return validatedBlock{blk: &b}, nil
 }
 
+func (i entryFactoryImpl) ReconstructBlock(block bookkeeping.Block){
+	return
+}
+
 // WithSeed implements the agreement.ValidatedBlock interface.
 func (ve validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
 	newblock := ve.blk.WithSeed(s)
