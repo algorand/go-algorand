@@ -924,8 +924,6 @@ txn GlobalNumUint
 txn GlobalNumByteSlice
 txn LocalNumUint
 txn LocalNumByteSlice
-txn NumLogicArgs
-txna LogicArgs 2
 gtxn 12 Fee
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
@@ -1430,6 +1428,7 @@ func TestPragmas(t *testing.T) {
 	// will default to 1
 	ops = testProg(t, "int 3", assemblerNoVersion)
 	require.Equal(t, uint64(1), ops.Version)
+	require.Equal(t, uint8(1), ops.Program[0])
 
 	ops = testProg(t, "\n#pragma version 2", assemblerNoVersion)
 	require.Equal(t, uint64(2), ops.Version)

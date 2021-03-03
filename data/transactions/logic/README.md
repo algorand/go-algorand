@@ -234,8 +234,6 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 53 | GlobalNumByteSlice | uint64 | Number of global state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
-| 56 | LogicArgs | []byte | Arguments to the LogicSig of the transaction. LogicSigVersion >= 3. |
-| 57 | NumLogicArgs | uint64 | Number of arguments to the LogicSig of the transaction. LogicSigVersion >= 3. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.

@@ -316,8 +316,6 @@ var txnFieldDocList = []stringString{
 	{"OnCompletion", "ApplicationCall transaction on completion action"},
 	{"ApplicationArgs", "Arguments passed to the application in the ApplicationCall transaction"},
 	{"NumAppArgs", "Number of ApplicationArgs"},
-	{"LogicArgs", "Arguments to the LogicSig of the transaction"},
-	{"NumLogicArgs", "Number of arguments to the LogicSig of the transaction"},
 	{"Accounts", "Accounts listed in the ApplicationCall transaction"},
 	{"NumAccounts", "Number of Accounts"},
 	{"Assets", "Foreign Assets listed in the ApplicationCall transaction"},

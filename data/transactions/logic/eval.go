@@ -1286,8 +1286,7 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 // TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
 func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField, arrayFieldIdx uint64) (basics.TealValue, error) {
 	cx := evalContext{EvalParams: EvalParams{GroupIndex: groupIndex}}
-	stx := transactions.SignedTxn{Txn: *txn}
-	sv, err := cx.txnFieldToStack(&stx, field, arrayFieldIdx, groupIndex)
+	sv, err := cx.txnFieldToStack(txn, field, arrayFieldIdx, groupIndex)
 	return sv.toTealValue(), err
 }
 
@@ -1307,8 +1306,7 @@ func (cx *evalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	return txid
 }
 
-func (cx *evalContext) txnFieldToStack(stxn *transactions.SignedTxn, field TxnField, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
-	txn := &stxn.Txn
+func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
 	err = nil
 	switch field {
 	case Sender:
@@ -1370,15 +1368,6 @@ func (cx *evalContext) txnFieldToStack(stxn *transactions.SignedTxn, field TxnFi
 		}
 		sv.Bytes = nilToEmpty(txn.ApplicationArgs[arrayFieldIdx])
 	case NumAppArgs:
-		sv.Uint = uint64(len(txn.ApplicationArgs))
-
-	case LogicArgs:
-		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {
-			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
-			return
-		}
-		sv.Bytes = nilToEmpty(txn.ApplicationArgs[arrayFieldIdx])
-	case NumLogicArgs:
 		sv.Uint = uint64(len(txn.ApplicationArgs))
 
 	case Accounts:
@@ -1491,7 +1480,7 @@ func opTxn(cx *evalContext) {
 	}
 	var sv stackValue
 	var err error
-	sv, err = cx.txnFieldToStack(cx.Txn, field, 0, cx.GroupIndex)
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -1514,7 +1503,7 @@ func opTxna(cx *evalContext) {
 	var sv stackValue
 	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err = cx.txnFieldToStack(cx.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -1528,7 +1517,7 @@ func opGtxn(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxn lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
-	stx := &cx.TxnGroup[gtxid]
+	tx := &cx.TxnGroup[gtxid].Txn
 	field := TxnField(uint64(cx.program[cx.pc+2]))
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
@@ -1546,7 +1535,7 @@ func opGtxn(cx *evalContext) {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(stx, field, 0, gtxid)
+		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
 		if err != nil {
 			cx.err = err
 			return
@@ -1561,7 +1550,7 @@ func opGtxna(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxna lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
-	stx := &cx.TxnGroup[gtxid]
+	tx := &cx.TxnGroup[gtxid].Txn
 	field := TxnField(uint64(cx.program[cx.pc+2]))
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
@@ -1576,7 +1565,7 @@ func opGtxna(cx *evalContext) {
 	var sv stackValue
 	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err = cx.txnFieldToStack(stx, field, arrayFieldIdx, gtxid)
+	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
@@ -1591,7 +1580,7 @@ func opGtxns(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxns lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
-	stx := &cx.TxnGroup[gtxid]
+	tx := &cx.TxnGroup[gtxid].Txn
 	field := TxnField(uint64(cx.program[cx.pc+1]))
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
@@ -1609,7 +1598,7 @@ func opGtxns(cx *evalContext) {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(stx, field, 0, gtxid)
+		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
 		if err != nil {
 			cx.err = err
 			return
@@ -1625,7 +1614,7 @@ func opGtxnsa(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxnsa lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
 		return
 	}
-	stx := &cx.TxnGroup[gtxid]
+	tx := &cx.TxnGroup[gtxid].Txn
 	field := TxnField(uint64(cx.program[cx.pc+1]))
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
@@ -1640,7 +1629,7 @@ func opGtxnsa(cx *evalContext) {
 	var sv stackValue
 	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err = cx.txnFieldToStack(stx, field, arrayFieldIdx, gtxid)
+	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return

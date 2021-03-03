@@ -1434,14 +1434,6 @@ txn LocalNumByteSlice
 int 2
 ==
 assert
-txn NumLogicArgs
-int 8
-==
-assert
-txn LogicArgs 0
-byte "pay"
-==
-assert
 
 
 int 1

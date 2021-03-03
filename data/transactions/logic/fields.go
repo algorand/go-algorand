@@ -143,11 +143,6 @@ const (
 	// LocalNumByteSlice uint64
 	LocalNumByteSlice
 
-	// LogicArgs [][]byte
-	LogicArgs
-	// NumLogicArgs len(LogicArgs)
-	NumLogicArgs
-
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -233,8 +228,6 @@ var txnFieldSpecs = []txnFieldSpec{
 	{GlobalNumByteSlice, StackUint64, 3},
 	{LocalNumUint, StackUint64, 3},
 	{LocalNumByteSlice, StackUint64, 3},
-	{LogicArgs, StackBytes, 3},
-	{NumLogicArgs, StackUint64, 3},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
@@ -254,7 +247,6 @@ var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
 	Accounts:        {Accounts, StackBytes, 2},
 	Assets:          {Assets, StackUint64, 3},
 	Applications:    {Applications, StackUint64, 3},
-	LogicArgs:       {LogicArgs, StackBytes, 3},
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order
