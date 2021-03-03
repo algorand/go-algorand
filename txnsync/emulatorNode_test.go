@@ -30,19 +30,6 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
-// SyncMachineState defines the state of the transaction sync state machine.
-//msgp:ignore SyncMachineState
-type SyncMachineState int
-
-const (
-	// StateMachineBlocked indicates that the state machine is currently blocked and waiting for external
-	// event to be triggered before it can make progress.
-	StateMachineBlocked SyncMachineState = iota + 1
-	// StateMachineRunning indicates that the state machine is currently running and it's state is continually
-	// changing.
-	StateMachineRunning
-)
-
 type queuedSentMessageCallback struct {
 	callback SendMessageCallback
 	seq      uint64
@@ -74,11 +61,12 @@ type emulatedNode struct {
 	txpoolEntries      []transactions.SignedTxGroup
 	txpoolIds          map[transactions.Txid]bool
 	name               string
-	state              SyncMachineState
 	blocked            chan struct{}
 	mu                 deadlock.Mutex
 	txpoolGroupCounter uint64
 	blockingEnabled    bool
+	nodeBlocked        chan struct{} // channel is closed when node is blocked.
+	nodeRunning        chan struct{} // channel is closed when node is running.
 }
 
 func makeEmulatedNode(emulator *emulator, nodeIdx int) *emulatedNode {
@@ -89,9 +77,12 @@ func makeEmulatedNode(emulator *emulator, nodeIdx int) *emulatedNode {
 		nodeIndex:       nodeIdx,
 		txpoolIds:       make(map[transactions.Txid]bool),
 		name:            emulator.scenario.netConfig.nodes[nodeIdx].name,
-		state:           StateMachineRunning,
 		blockingEnabled: true,
+		nodeBlocked:     make(chan struct{}, 1),
+		nodeRunning:     make(chan struct{}, 1),
 	}
+	close(en.nodeRunning)
+
 	// add outgoing connections
 	for _, conn := range emulator.scenario.netConfig.nodes[nodeIdx].outgoingConnections {
 		en.peers[conn.target] = &networkPeer{
@@ -132,12 +123,14 @@ func (n *emulatedNode) NotifyMonitor() chan struct{} {
 	n.mu.Lock()
 	if n.blockingEnabled {
 		c = make(chan struct{})
-		n.state = StateMachineBlocked
 		n.blocked = c
+		close(n.nodeBlocked)
+		n.nodeRunning = make(chan struct{}, 1)
 		n.mu.Unlock()
 		<-c
 		n.mu.Lock()
-		n.state = StateMachineRunning
+		close(n.nodeRunning)
+		n.nodeBlocked = make(chan struct{}, 1)
 		n.mu.Unlock()
 		// return a closed channel.
 		return c
@@ -155,24 +148,31 @@ func (n *emulatedNode) disableBlocking() {
 func (n *emulatedNode) unblock() {
 	n.mu.Lock()
 	// wait until the state chages to StateMachineRunning
-	for n.state == StateMachineBlocked {
+	select {
+	case <-n.nodeBlocked:
+		// we're blocked.
 		if n.blocked != nil {
 			close(n.blocked)
 			n.blocked = nil
 		}
+		runningCh := n.nodeRunning
 		n.mu.Unlock()
-		time.Sleep(100 * time.Nanosecond)
-		n.mu.Lock()
+		<-runningCh
+		return
+	default:
 	}
 	n.mu.Unlock()
 }
 
 func (n *emulatedNode) waitBlocked() {
 	n.mu.Lock()
-	for n.state != StateMachineBlocked {
+	select {
+	case <-n.nodeRunning:
+		blockedCh := n.nodeBlocked
 		n.mu.Unlock()
-		time.Sleep(100 * time.Nanosecond)
-		n.mu.Lock()
+		<-blockedCh
+		return
+	default:
 	}
 	n.mu.Unlock()
 }
