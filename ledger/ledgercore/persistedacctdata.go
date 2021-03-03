@@ -78,9 +78,6 @@ type ExtendedAssetHolding struct {
 
 	Count  uint32               `codec:"c"`
 	Groups []AssetsHoldingGroup `codec:"gs,allocbound=maxEncodedGroupsSize"` // 1M asset holdings
-
-	//msgp:ignore loaded
-	loaded bool
 }
 
 // PersistedAccountData represents actual data stored in DB
@@ -166,11 +163,12 @@ func (g AssetsHoldingGroup) GetHolding(ai int) basics.AssetHolding {
 
 // Encode returns msgp-encoded group data
 func (g AssetsHoldingGroup) Encode() []byte {
+	// TODO: use GetEncodingBuf/PutEncodingBuf
 	return protocol.Encode(&g.groupData)
 }
 
-// GetGroupData returns group data. Used in tests only
-func (g AssetsHoldingGroup) GetGroupData() AssetsHoldingGroupData {
+// TestGetGroupData returns group data. Used in tests only
+func (g AssetsHoldingGroup) TestGetGroupData() AssetsHoldingGroupData {
 	return g.groupData
 }
 
@@ -261,7 +259,9 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 // It returns true if the group is gone and needs to be removed from DB.
 func (e *ExtendedAssetHolding) Delete(gi int, ai int) bool {
 	if e.Groups[gi].Count == 1 {
-		copy(e.Groups[gi:], e.Groups[gi+1:])
+		if gi < len(e.Groups)-1 {
+			copy(e.Groups[gi:], e.Groups[gi+1:])
+		}
 		e.Groups[len(e.Groups)-1] = AssetsHoldingGroup{} // release AssetsHoldingGroup data
 		e.Groups = e.Groups[:len(e.Groups)-1]
 		e.Count--
@@ -482,7 +482,7 @@ func (e ExtendedAssetHolding) FindAsset(aidx basics.AssetIndex, startIdx int) (i
 				return gi + startIdx, -1
 			}
 
-			// TODO: bin search
+			// linear search because AssetOffsets is delta-encoded, not values
 			cur := g.MinAssetIndex
 			for ai, d := range g.groupData.AssetOffsets {
 				cur = d + cur
@@ -517,10 +517,7 @@ func (e *ExtendedAssetHolding) ConvertToGroups(assets map[basics.AssetIndex]basi
 	}
 	sort.SliceStable(flatten, func(i, j int) bool { return flatten[i].aidx < flatten[j].aidx })
 
-	numGroups := len(assets) / MaxHoldingGroupSize
-	if len(assets)%MaxHoldingGroupSize != 0 {
-		numGroups++
-	}
+	numGroups := (len(assets) + MaxHoldingGroupSize - 1) / MaxHoldingGroupSize
 	min := func(a, b int) int {
 		if a < b {
 			return a
@@ -530,61 +527,172 @@ func (e *ExtendedAssetHolding) ConvertToGroups(assets map[basics.AssetIndex]basi
 
 	e.Count = uint32(len(assets))
 	e.Groups = make([]AssetsHoldingGroup, numGroups)
-	e.loaded = true
 
-	size := min(MaxHoldingGroupSize, len(assets))
-	currentGroup := 0
-	e.Groups[currentGroup] = AssetsHoldingGroup{
-		Count:         uint32(size),
-		MinAssetIndex: flatten[0].aidx,
-		groupData: AssetsHoldingGroupData{
+	for i := 0; i < numGroups; i++ {
+		start := i * MaxHoldingGroupSize
+		end := min((i+1)*MaxHoldingGroupSize, len(assets))
+		size := end - start
+		gd := AssetsHoldingGroupData{
 			AssetOffsets: make([]basics.AssetIndex, size, size),
 			Amounts:      make([]uint64, size, size),
 			Frozens:      make([]bool, size, size),
-		},
-		loaded: true,
-	}
-	prevAssetIndex := e.Groups[currentGroup].MinAssetIndex
-	prevGroupIndex := currentGroup
-	for i, a := range flatten {
-		currentGroup = i / MaxHoldingGroupSize
-		if currentGroup != prevGroupIndex {
-			e.Groups[prevGroupIndex].DeltaMaxAssetIndex = uint64(flatten[i-1].aidx - e.Groups[prevGroupIndex].MinAssetIndex)
-			size := min(MaxHoldingGroupSize, len(assets)-i)
-			e.Groups[currentGroup] = AssetsHoldingGroup{
-				Count:         uint32(size),
-				MinAssetIndex: flatten[i].aidx,
-				groupData: AssetsHoldingGroupData{
-					AssetOffsets: make([]basics.AssetIndex, size, size),
-					Amounts:      make([]uint64, size, size),
-					Frozens:      make([]bool, size, size),
-				},
-				loaded: true,
-			}
-			prevAssetIndex = e.Groups[currentGroup].MinAssetIndex
-			prevGroupIndex = currentGroup
 		}
-		e.Groups[currentGroup].groupData.AssetOffsets[i%MaxHoldingGroupSize] = a.aidx - prevAssetIndex
-		e.Groups[currentGroup].groupData.Amounts[i%MaxHoldingGroupSize] = a.holdings.Amount
-		e.Groups[currentGroup].groupData.Frozens[i%MaxHoldingGroupSize] = a.holdings.Frozen
-		prevAssetIndex = a.aidx
+		first := flatten[start].aidx
+		prev := first
+		for j, di := start, 0; j < end; j, di = j+1, di+1 {
+			gd.AssetOffsets[di] = flatten[j].aidx - prev
+			gd.Amounts[di] = flatten[j].holdings.Amount
+			gd.Frozens[di] = flatten[j].holdings.Frozen
+			prev = flatten[j].aidx
+		}
+		e.Groups[i] = AssetsHoldingGroup{
+			Count:              uint32(size),
+			MinAssetIndex:      first,
+			DeltaMaxAssetIndex: uint64(prev - first),
+			groupData:          gd,
+			loaded:             true,
+		}
 	}
-	e.Groups[currentGroup].DeltaMaxAssetIndex = uint64(flatten[len(flatten)-1].aidx - e.Groups[currentGroup].MinAssetIndex)
 }
 
-// Loaded return a boolean flag indicated if groups are loaded or not
-func (e ExtendedAssetHolding) Loaded() bool {
-	return e.loaded
+// continuosRange describes range of groups that can be merged
+type continuosRange struct {
+	start int // group start index
+	size  int // number of groups
+	count int // total holdings
 }
 
-// SetLoaded sets loaded flag to true
-func (e *ExtendedAssetHolding) SetLoaded() {
-	e.loaded = true
+func (e ExtendedAssetHolding) findLoadedSiblings() (loaded []int, crs []continuosRange) {
+	// find candidates for merging
+	loaded = make([]int, 0, len(e.Groups))
+	for i := 0; i < len(e.Groups); i++ {
+		if !e.Groups[i].Loaded() {
+			continue
+		}
+		if len(loaded) > 0 && loaded[len(loaded)-1] == i-1 {
+			// found continuos range
+			exists := false
+			if len(crs) != 0 {
+				last := &crs[len(crs)-1]
+				if last.start+last.size == i {
+					last.size++
+					last.count += int(e.Groups[i].Count)
+					exists = true
+				}
+			}
+			if !exists {
+				count := int(e.Groups[i-1].Count + e.Groups[i].Count)
+				crs = append(crs, continuosRange{i - 1, 2, count})
+			}
+		}
+		loaded = append(loaded, i)
+	}
+	if len(loaded) == 0 {
+		return nil, nil
+	}
+
+	return
 }
 
-// Clear removes all the groups data, used in tests only
-func (e *ExtendedAssetHolding) Clear() {
-	e.loaded = false // ignored on serialization
+// merge merges groups [start, start+size) and returns keys of deleted group data entries
+func (e *ExtendedAssetHolding) merge(start int, size int, hint int) (deleted []int64) {
+	deleted = make([]int64, 0, hint)
+	// process i and i + 1 groups at once => size-1 iterations
+	i := 0
+	for i < size-1 {
+		li := start + i     // left group index, destination
+		ri := start + i + 1 // right group index, source
+		lg := &e.Groups[li]
+		rg := &e.Groups[ri]
+
+		num := int(MaxHoldingGroupSize - lg.Count)
+		if num == 0 { // group is full, skip
+			i++
+			continue
+		}
+		if num > int(rg.Count) { // source group is shorter than dest capacity, adjust
+			num = int(rg.Count)
+		}
+		groupDelta := rg.MinAssetIndex - (lg.MinAssetIndex + basics.AssetIndex(lg.DeltaMaxAssetIndex))
+		delta := basics.AssetIndex(0)
+		lg.groupData.AssetOffsets = append(lg.groupData.AssetOffsets, rg.groupData.AssetOffsets[0]+groupDelta)
+		for j := 1; j < num; j++ {
+			lg.groupData.AssetOffsets = append(lg.groupData.AssetOffsets, rg.groupData.AssetOffsets[j])
+			delta += rg.groupData.AssetOffsets[j]
+		}
+		lg.DeltaMaxAssetIndex += uint64(delta + groupDelta)
+		lg.groupData.Amounts = append(lg.groupData.Amounts, rg.groupData.Amounts[:num]...)
+		lg.groupData.Frozens = append(lg.groupData.Frozens, rg.groupData.Frozens[:num]...)
+		lg.Count += uint32(num)
+		if num != int(rg.Count) {
+			// src group survived, update it and repeat
+			rg.Count -= uint32(num)
+			rg.groupData.AssetOffsets = rg.groupData.AssetOffsets[num:]
+			delta += rg.groupData.AssetOffsets[0]
+			rg.groupData.AssetOffsets[0] = 0
+			rg.groupData.Amounts = rg.groupData.Amounts[num:]
+			rg.groupData.Frozens = rg.groupData.Frozens[num:]
+			rg.MinAssetIndex += delta
+			rg.DeltaMaxAssetIndex -= uint64(delta)
+			i++
+		} else {
+			// entire src group gone: save the key and delete from Groups
+			deleted = append(deleted, e.Groups[ri].AssetGroupKey)
+			if ri == len(e.Groups) {
+				// last group, cut and exit
+				e.Groups = e.Groups[:len(e.Groups)-1]
+				return
+			}
+			e.Groups = append(e.Groups[:ri], e.Groups[ri+1:]...)
+			// restart merging with the same index but decrease size
+			size--
+		}
+	}
+	return
+}
+
+// Merge attempts to re-merge loaded groups by squashing small loaded sibling groups together
+// Returns:
+// - loaded list group indices that are loaded and needs to flushed
+// - deleted list of group data keys that needs to be deleted
+func (e *ExtendedAssetHolding) Merge() (loaded []int, deleted []int64) {
+	loaded, crs := e.findLoadedSiblings()
+	if len(crs) == 0 {
+		return
+	}
+
+	someGroupDeleted := false
+	offset := 0 // difference in group indexes that happens after deleteion some groups from e.Groups array
+	for _, cr := range crs {
+		minGroupsRequired := (cr.count + MaxHoldingGroupSize - 1) / MaxHoldingGroupSize
+		if minGroupsRequired == cr.size {
+			// no gain in merging, skip
+			continue
+		}
+		del := e.merge(cr.start-offset, cr.size, cr.size-minGroupsRequired)
+		offset += len(del)
+		for _, key := range del {
+			someGroupDeleted = true
+			if key != 0 { // 0 key means a new group that exist only in memory
+				deleted = append(deleted, key)
+			}
+		}
+	}
+
+	if someGroupDeleted {
+		// rebuild loaded list since indices changed after merging
+		loaded = make([]int, 0, len(loaded)-len(deleted))
+		for i := 0; i < len(e.Groups); i++ {
+			if e.Groups[i].Loaded() {
+				loaded = append(loaded, i)
+			}
+		}
+	}
+	return
+}
+
+// TestClearGroupData removes all the groups, used in tests only
+func (e *ExtendedAssetHolding) TestClearGroupData() {
 	for i := 0; i < len(e.Groups); i++ {
 		// ignored on serialization
 		e.Groups[i].groupData = AssetsHoldingGroupData{}

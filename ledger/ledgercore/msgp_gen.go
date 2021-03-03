@@ -1296,7 +1296,7 @@ func (z *ExtendedAssetHolding) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(2)
-	var zb0002Mask uint8 /* 4 bits */
+	var zb0002Mask uint8 /* 3 bits */
 	if (*z).Count == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2

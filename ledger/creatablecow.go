@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // Allocate creates kv storage for a given {addr, aidx, global}. It is called on app creation (global) or opting in (local)
@@ -49,7 +50,7 @@ func (cb *roundCowState) Allocate(addr basics.Address, cidx basics.CreatableInde
 	}
 
 	if ctype == basics.AssetCreatable {
-		cb.mods.Accts.SetHoldingDelta(addr, basics.AssetIndex(cidx), true)
+		cb.mods.Accts.SetHoldingDelta(addr, basics.AssetIndex(cidx), ledgercore.ActionCreate)
 		return nil
 	}
 
@@ -84,7 +85,7 @@ func (cb *roundCowState) Deallocate(addr basics.Address, cidx basics.CreatableIn
 	}
 
 	if ctype == basics.AssetCreatable {
-		cb.mods.Accts.SetHoldingDelta(addr, basics.AssetIndex(cidx), false)
+		cb.mods.Accts.SetHoldingDelta(addr, basics.AssetIndex(cidx), ledgercore.ActionDelete)
 		return nil
 	}
 
