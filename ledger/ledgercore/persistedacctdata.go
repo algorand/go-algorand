@@ -69,11 +69,14 @@ type AssetsHoldingGroupData struct {
 	Frozens []bool `codec:"f,allocbound=MaxHoldingGroupSize"`
 }
 
+const maxEncodedGroupsSize = 4096
+
 // ExtendedAssetHolding is AccountData's extension for storing asset holdings
 type ExtendedAssetHolding struct {
-	_struct struct{}             `codec:",omitempty,omitemptyarray"`
-	Count   uint32               `codec:"c"`
-	Groups  []AssetsHoldingGroup `codec:"gs,allocbound=4096"` // 1M asset holdings
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Count  uint32               `codec:"c"`
+	Groups []AssetsHoldingGroup `codec:"gs,allocbound=maxEncodedGroupsSize"` // 1M asset holdings
 
 	//msgp:ignore loaded
 	loaded bool
@@ -82,6 +85,7 @@ type ExtendedAssetHolding struct {
 // PersistedAccountData represents actual data stored in DB
 type PersistedAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	basics.AccountData
 	ExtendedAssetHolding ExtendedAssetHolding `codec:"eash"`
 }

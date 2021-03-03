@@ -1392,8 +1392,8 @@ func (z *ExtendedAssetHolding) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Groups")
 				return
 			}
-			if zb0004 > 4096 {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(4096))
+			if zb0004 > maxEncodedGroupsSize {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxEncodedGroupsSize))
 				err = msgp.WrapError(err, "struct-from-array", "Groups")
 				return
 			}
@@ -1449,8 +1449,8 @@ func (z *ExtendedAssetHolding) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Groups")
 					return
 				}
-				if zb0006 > 4096 {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(4096))
+				if zb0006 > maxEncodedGroupsSize {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(maxEncodedGroupsSize))
 					err = msgp.WrapError(err, "Groups")
 					return
 				}
