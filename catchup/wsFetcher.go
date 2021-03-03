@@ -34,7 +34,6 @@ import (
 // a stub fetcherClient to satisfy the NetworkFetcher interface
 type wsFetcherClient struct {
 	target      network.UnicastPeer                    // the peer where we're going to send the request.
-	pendingCtxs map[context.Context]context.CancelFunc // a map of all the current pending contexts.
 	config      *config.Local
 
 	closed bool // a flag indicating that the fetcher will not perform additional block retrivals.
@@ -51,7 +50,6 @@ func (w *wsFetcherClient) GetBlockBytes(ctx context.Context, r basics.Round) ([]
 	}
 
 	childCtx, cancelFunc := context.WithTimeout(ctx, time.Duration(w.config.CatchupGossipBlockFetchTimeoutSec)*time.Second)
-	w.pendingCtxs[childCtx] = cancelFunc
 	w.mu.Unlock()
 
 	defer func() {
@@ -59,7 +57,6 @@ func (w *wsFetcherClient) GetBlockBytes(ctx context.Context, r basics.Round) ([]
 		// note that we don't need to have additional Unlock here since
 		// we already have a defered Unlock above ( which executes in reversed order )
 		w.mu.Lock()
-		delete(w.pendingCtxs, childCtx)
 	}()
 
 	blockBytes, err := w.requestBlock(childCtx, r)
@@ -75,18 +72,6 @@ func (w *wsFetcherClient) GetBlockBytes(ctx context.Context, r basics.Round) ([]
 // Address implements FetcherClient
 func (w *wsFetcherClient) Address() string {
 	return fmt.Sprintf("[ws] (%v)", w.target.GetAddress())
-}
-
-// Close is part of FetcherClient interface
-func (w *wsFetcherClient) Close() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.closed = true
-	for _, cancelFunc := range w.pendingCtxs {
-		cancelFunc()
-	}
-	w.pendingCtxs = make(map[context.Context]context.CancelFunc)
-	return nil
 }
 
 // requestBlock send a request for block <round> and wait until it receives a response or a context expires.

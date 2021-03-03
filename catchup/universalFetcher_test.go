@@ -52,8 +52,7 @@ func TestUGetBlockWs(t *testing.T) {
 	ls := rpcs.MakeBlockService(blockServiceConfig, ledger, net, "test genesisID")
 	ls.Start()
 
-	bff := makeUniversalBlockFetcherFactory(logging.TestingLog(t), net, cfg)
-	fetcher := bff.newBlockFetcher()
+	fetcher := makeUniversalBlockFetcher(logging.TestingLog(t), net, cfg)
 
 	var block *bookkeeping.Block
 	var cert *agreement.Certificate
@@ -99,7 +98,7 @@ func TestUGetBlockHttp(t *testing.T) {
 	rootURL := nodeA.rootURL()
 
 	net.addPeer(rootURL)
-	fetcher := makeUniversalBlockFetcherFactory(logging.TestingLog(t), net, cfg).newBlockFetcher()
+	fetcher := makeUniversalBlockFetcher(logging.TestingLog(t), net, cfg)
 
 	var block *bookkeeping.Block
 	var cert *agreement.Certificate
@@ -121,7 +120,7 @@ func TestUGetBlockHttp(t *testing.T) {
 
 // TestUGetBlockUnsupported tests the handling of an unsupported peer
 func TestUGetBlockUnsupported(t *testing.T) {
-	fetcher := universalFetcher{}
+	fetcher := universalBlockFetcher{}
 	peer := ""
 	block, cert, duration, err := fetcher.fetchBlock(context.Background(), 1, peer)
 	require.Error(t, err)

@@ -43,7 +43,6 @@ var errNoBlockForRound = errors.New("No block available for given round")
 type FetcherClient interface {
 	GetBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error)
 	Address() string
-	Close() error
 }
 
 // HTTPFetcher implements FetcherClient doing an HTTP GET of the block
@@ -142,15 +141,6 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 // Returns the root URL of the connected peer.
 func (hf *HTTPFetcher) Address() string {
 	return hf.rootURL
-}
-
-// Close is part of FetcherClient interface
-//
-// Does nothing, leaves underlying client open because other HTTP
-// requests from other interfaces could be open on it. Somewhere a
-// Peer owns that connection and will close as needed.
-func (hf *HTTPFetcher) Close() error {
-	return nil
 }
 
 // FetchBlock is a copy of the functionality in NetworkFetcher.FetchBlock, designed to complete

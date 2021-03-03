@@ -32,52 +32,22 @@ import (
 )
 
 // UniversalFetcher fetches blocks either from an http peer or ws peer.
-type universalFetcher struct {
+type universalBlockFetcher struct {
 	config config.Local
 	net    network.GossipNode
 	log    logging.Logger
 }
 
-// Fetcher queries the current block of the network, and fetches agreed-upon blocks
-type blockFetcher interface {
-	// fetchBlock fetches a block for a given round.
-	fetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
-		cert *agreement.Certificate, downloadDuration time.Duration, err error)
-}
-
-// FetcherFactory creates fetchers
-type blockFetcherFactory interface {
-	// Create a new fetcher
-	newBlockFetcher() blockFetcher
-}
-
-type universalBlockFetcherFactory struct {
-	log    logging.Logger
-	net    network.GossipNode
-	config config.Local
-}
-
-func makeUniversalBlockFetcherFactory(log logging.Logger, net network.GossipNode, config config.Local) blockFetcherFactory {
-	return &universalBlockFetcherFactory{
-		log:    log,
-		net:    net,
-		config: config}
-}
-
-func (uff *universalBlockFetcherFactory) newBlockFetcher() blockFetcher {
-	return makeUniversalBlockFetcher(uff.log, uff.net, uff.config)
-}
-
-// MakeUniversalFetcher returns a fetcher for http and ws peers.
-func makeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, config config.Local) blockFetcher {
-	return &universalFetcher{
+// makeUniversalFetcher returns a fetcher for http and ws peers.
+func makeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, config config.Local) *universalBlockFetcher {
+	return &universalBlockFetcher{
 		config: config,
 		net:    net,
 		log:    log}
 }
 
 // FetchBlock returns a block from the peer. The peer can be either an http or ws peer.
-func (uf *universalFetcher) fetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
+func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
 	cert *agreement.Certificate, downloadDuration time.Duration, err error) {
 
 	var fetcherClient FetcherClient
@@ -93,7 +63,6 @@ func (uf *universalFetcher) fetchBlock(ctx context.Context, round basics.Round, 
 	} else if wsPeer, validWSPeer := peer.(network.UnicastPeer); validWSPeer {
 		fetcherClient = &wsFetcherClient{
 			target:      wsPeer,
-			pendingCtxs: make(map[context.Context]context.CancelFunc),
 			config:      &uf.config,
 		}
 	} else {
@@ -113,6 +82,9 @@ func (uf *universalFetcher) fetchBlock(ctx context.Context, round basics.Round, 
 
 func processBlockBytes(fetchedBuf []byte, r basics.Round, debugStr string) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
 	var decodedEntry rpcs.EncodedBlockCert
+	if uint64(r) == 0 {
+		r = 0
+	}
 	err = protocol.Decode(fetchedBuf, &decodedEntry)
 	if err != nil {
 		err = fmt.Errorf("networkFetcher.FetchBlock(%d): cannot decode block from peer %v: %v", r, debugStr, err)

@@ -87,8 +87,6 @@ type Service struct {
 
 	// blocksDownloadPeerSelector is the peer selector used for downloading blocks.
 	blocksDownloadPeerSelector *peerSelector
-	// blockFetcherFactory is gives a block fetcher
-	blockFetcherFactory blockFetcherFactory
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -121,7 +119,6 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
 			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
 		})
-	s.blockFetcherFactory = makeUniversalBlockFetcherFactory(s.log, s.net, s.cfg)
 	return s
 }
 
@@ -162,7 +159,7 @@ func (s *Service) SynchronizingTime() time.Duration {
 }
 
 // function scope to make a bunch of defer statements better
-func (s *Service) innerFetch(fetcher blockFetcher, r basics.Round) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
+func (s *Service) innerFetch(fetcher *universalBlockFetcher, r basics.Round) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
 	ctx, cf := context.WithCancel(s.ctx)
 	defer cf()
 	stopWaitingForLedgerRound := make(chan struct{})
@@ -175,16 +172,18 @@ func (s *Service) innerFetch(fetcher blockFetcher, r basics.Round) (blk *bookkee
 		}
 	}()
 	peer, err := s.blocksDownloadPeerSelector.GetNextPeer()
-	// xxx check err
+	if err != nil {
+		return nil, nil, time.Duration(0), err
+	}
 	return fetcher.fetchBlock(ctx, r, peer)
 }
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
 // Returns false if we couldn't fetch or write (i.e., if we failed even after a given number of retries or if we were told to abort.)
-func (s *Service) fetchAndWrite(fetcher blockFetcher, r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool) bool {
+func (s *Service) fetchAndWrite(fetcher *universalBlockFetcher, r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool) bool {
 	i := 0
 	hasLookback := false
-	for true { // !fetcher.OutOfPeers(r) {
+	for true {
 		i++
 		select {
 		case <-s.ctx.Done():
@@ -204,6 +203,9 @@ func (s *Service) fetchAndWrite(fetcher blockFetcher, r basics.Round, prevFetchC
 		block, cert, _, err := s.innerFetch(fetcher, r)
 
 		if err != nil {
+			if err == errPeerSelectorNoPeerPoolsAvailable {
+				break
+			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exists and we're making many requests down the chain
@@ -310,7 +312,7 @@ func (s *Service) fetchAndWrite(fetcher blockFetcher, r basics.Round, prevFetchC
 
 type task func() basics.Round
 
-func (s *Service) pipelineCallback(fetcher blockFetcher, r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool) func() basics.Round {
+func (s *Service) pipelineCallback(fetcher *universalBlockFetcher, r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool) func() basics.Round {
 	return func() basics.Round {
 		fetchResult := s.fetchAndWrite(fetcher, r, prevFetchCompleteChan, lookbackChan)
 
@@ -328,7 +330,7 @@ func (s *Service) pipelineCallback(fetcher blockFetcher, r basics.Round, thisFet
 
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
 func (s *Service) pipelinedFetch(seedLookback uint64) {
-	fetcher := s.blockFetcherFactory.newBlockFetcher()
+	fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
 
 	parallelRequests := s.parallelBlocks
 	if parallelRequests < seedLookback {
@@ -557,17 +559,8 @@ func (s *Service) syncCert(cert *PendingUnmatchedCertificate) {
 // TODO this doesn't actually use the digest from cert!
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
-	fetcher := s.blockFetcherFactory.newBlockFetcher()
+	fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
 	for s.ledger.LastRound() < cert.Round {
-		// xxx this needs to change
-		/*		if fetcher.OutOfPeers(cert.Round) {
-				fetcher.Close()
-				// refresh peers and try again
-				logging.Base().Warn("fetchRound found no outgoing peers")
-				s.net.RequestConnectOutgoing(true, s.ctx.Done())
-				fetcher := MakeUniversalFetcher(s.log, s.net, s.cfg)
-				//			fetcher = s.latestRoundFetcherFactory.NewOverGossip()
-			}*/
 		// Ask the fetcher to get the block somehow
 		block, fetchedCert, _, err := s.innerFetch(fetcher, cert.Round)
 
