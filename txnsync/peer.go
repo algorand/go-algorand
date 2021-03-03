@@ -17,7 +17,6 @@
 package txnsync
 
 import (
-	"fmt"
 	"sort"
 	"time"
 
@@ -25,8 +24,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
-
-var _ = fmt.Printf
 
 //msgp:ignore peerState
 type peerState int

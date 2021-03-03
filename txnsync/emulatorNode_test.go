@@ -30,20 +30,38 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
+// SyncMachineState defines the state of the transaction sync state machine.
+//msgp:ignore SyncMachineState
+type SyncMachineState int
+
+const (
+	// StateMachineBlocked indicates that the state machine is currently blocked and waiting for external
+	// event to be triggered before it can make progress.
+	StateMachineBlocked SyncMachineState = iota + 1
+	// StateMachineRunning indicates that the state machine is currently running and it's state is continually
+	// changing.
+	StateMachineRunning
+)
+
+type queuedSentMessageCallback struct {
+	callback SendMessageCallback
+	seq      uint64
+}
 type queuedMessage struct {
 	bytes   []byte
 	readyAt time.Duration
 }
 type networkPeer struct {
-	peer          *Peer
-	uploadSpeed   uint64
-	downloadSpeed uint64
-	isOutgoing    bool
-	outSeq        uint64
-	inSeq         uint64
-	target        int
-	messageQ      []queuedMessage // incoming message queue
-	mu            deadlock.Mutex
+	peer                 *Peer
+	uploadSpeed          uint64
+	downloadSpeed        uint64
+	isOutgoing           bool
+	outSeq               uint64
+	inSeq                uint64
+	target               int
+	messageQ             []queuedMessage // incoming message queue
+	mu                   deadlock.Mutex
+	deferredSentMessages []queuedSentMessageCallback // outgoing messages callback queue
 }
 
 // emulatedNode implements the NodeConnector interface
@@ -109,13 +127,12 @@ func (n *emulatedNode) Events() <-chan Event {
 	return n.externalEvents
 }
 
-func (n *emulatedNode) NotifyState(updatedState SyncMachineState) chan struct{} {
+func (n *emulatedNode) NotifyMonitor() chan struct{} {
 	var c chan struct{}
 	n.mu.Lock()
-	if updatedState == StateMachineBlocked && n.blockingEnabled {
-
+	if n.blockingEnabled {
 		c = make(chan struct{})
-		n.state = updatedState
+		n.state = StateMachineBlocked
 		n.blocked = c
 		n.mu.Unlock()
 		<-c
@@ -137,23 +154,27 @@ func (n *emulatedNode) disableBlocking() {
 }
 func (n *emulatedNode) unblock() {
 	n.mu.Lock()
-	if n.blocked != nil {
-		close(n.blocked)
-		n.blocked = nil
+	// wait until the state chages to StateMachineRunning
+	for n.state == StateMachineBlocked {
+		if n.blocked != nil {
+			close(n.blocked)
+			n.blocked = nil
+		}
+		n.mu.Unlock()
+		time.Sleep(100 * time.Nanosecond)
+		n.mu.Lock()
 	}
 	n.mu.Unlock()
 }
 
 func (n *emulatedNode) waitBlocked() {
-	for {
-		n.mu.Lock()
-		state := n.state
+	n.mu.Lock()
+	for n.state != StateMachineBlocked {
 		n.mu.Unlock()
-		if state == StateMachineBlocked {
-			return
-		}
 		time.Sleep(100 * time.Nanosecond)
+		n.mu.Lock()
 	}
+	n.mu.Unlock()
 }
 
 func (n *emulatedNode) GetCurrentRoundSettings() RoundSettings {
@@ -227,7 +248,13 @@ func (n *emulatedNode) UpdatePeers(txPeers []*Peer, netPeers []interface{}) {
 
 func (n *emulatedNode) enqueueMessage(from int, msg queuedMessage) {
 	n.peers[from].mu.Lock()
-	n.peers[from].messageQ = append(n.peers[from].messageQ, msg)
+	baseTime := n.emulator.clock.Since()
+	if len(n.peers[from].messageQ) > 0 {
+		if n.peers[from].messageQ[len(n.peers[from].messageQ)-1].readyAt > baseTime {
+			baseTime = n.peers[from].messageQ[len(n.peers[from].messageQ)-1].readyAt
+		}
+	}
+	n.peers[from].messageQ = append(n.peers[from].messageQ, queuedMessage{bytes: msg.bytes, readyAt: baseTime + msg.readyAt})
 	n.peers[from].mu.Unlock()
 }
 
@@ -235,8 +262,9 @@ func (n *emulatedNode) SendPeerMessage(netPeer interface{}, msg []byte, callback
 	peer := netPeer.(*networkPeer)
 	otherNode := n.emulator.nodes[peer.target]
 	sendTime := time.Duration(len(msg)) * time.Second / time.Duration(peer.uploadSpeed)
-	otherNode.enqueueMessage(n.nodeIndex, queuedMessage{bytes: msg, readyAt: n.emulator.clock.Since() + sendTime})
-	callback(true, peer.outSeq)
+	otherNode.enqueueMessage(n.nodeIndex, queuedMessage{bytes: msg, readyAt: sendTime})
+
+	peer.deferredSentMessages = append(peer.deferredSentMessages, queuedSentMessageCallback{callback: callback, seq: peer.outSeq})
 	peer.outSeq++
 }
 
@@ -279,13 +307,35 @@ func (n *emulatedNode) step() {
 
 	for _, peer := range n.orderedPeers() {
 		peer.mu.Lock()
-		for len(peer.messageQ) > 0 {
+
+		for i := len(peer.deferredSentMessages); i > 0; i-- {
+			dm := peer.deferredSentMessages[0]
+			peer.deferredSentMessages = peer.deferredSentMessages[1:]
+			peer.mu.Unlock()
+			dm.callback(true, dm.seq)
+			n.unblock()
+			n.waitBlocked()
+			peer.mu.Lock()
+		}
+
+		for i := len(peer.messageQ); i > 0; i-- {
 			if peer.messageQ[0].readyAt > now {
 				break
 			}
-			msgHandler(peer, peer.peer, peer.messageQ[0].bytes, peer.inSeq)
+
+			msgBytes := peer.messageQ[0].bytes
+			msgInSeq := peer.inSeq
+
 			peer.inSeq++
 			peer.messageQ = peer.messageQ[1:]
+
+			peer.mu.Unlock()
+
+			msgHandler(peer, peer.peer, msgBytes, msgInSeq)
+			n.unblock()
+			n.waitBlocked()
+			peer.mu.Lock()
+
 		}
 		peer.mu.Unlock()
 	}

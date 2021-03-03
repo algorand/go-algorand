@@ -125,9 +125,12 @@ func (e *emulator) nextRound() {
 }
 func (e *emulator) unblockStep() {
 	for _, node := range e.nodes {
+		// let it run through the clock advancement.
 		node.unblock()
-		node.step()
 		node.waitBlocked()
+
+		// make step
+		node.step()
 	}
 }
 func (e *emulator) start() {
@@ -142,11 +145,7 @@ func (e *emulator) stop() {
 		node.Stop()
 	}
 }
-func (e *emulator) waitBlocked() {
-	for _, node := range e.nodes {
-		node.waitBlocked()
-	}
-}
+
 func (e *emulator) initNodes() {
 	e.nodes = make([]*emulatedNode, e.nodeCount, e.nodeCount)
 	for i := 0; i < e.nodeCount; i++ {

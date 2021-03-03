@@ -56,7 +56,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	// The following would allow the emulator to start the service in a "stopped" mode.
-	s.node.NotifyState(StateMachineBlocked)
+	s.node.NotifyMonitor()
 
 	s.clock = s.node.Clock()
 	s.incomingMessagesCh = make(chan incomingMessage, 1024)
@@ -76,6 +76,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 		} else {
 			nextPeerStateCh = nil
 		}
+
 		select {
 		case ent := <-externalEvents:
 			switch ent.eventType {
@@ -120,7 +121,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			s.rollOffsets()
 		case <-serviceCtx.Done():
 			return
-		case <-s.node.NotifyState(StateMachineBlocked):
+		case <-s.node.NotifyMonitor():
 		}
 	}
 }
@@ -147,7 +148,6 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 	// reset the interruptablePeers array, since all it's members were made into holdsoff
 	s.interruptablePeers = nil
 	s.interruptablePeersMap = make(map[*Peer]int)
-
 	deadlineMonitor := s.clock.DeadlineMonitorAt(s.clock.Since() + sendMessagesTime)
 	s.sendMessageLoop(s.clock.Since(), deadlineMonitor, peers)
 
