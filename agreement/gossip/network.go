@@ -157,8 +157,8 @@ func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) (err error) {
 	return
 }
 
-func (i *networkImpl) BroadcastArray(ctx context.Context, t []protocol.Tag, data [][]byte) (err error) {
-	err = i.net.BroadcastArray(ctx, t, data, false, nil)
+func (i *networkImpl) BroadcastArray(ctx context.Context, t []protocol.Tag, data [][]byte, pacer chan int) (err error) {
+	err = i.net.BroadcastArray(ctx, t, data, pacer, false, nil)
 	if err != nil {
 		i.log.Infof("agreement: could not broadcast message with tag %v: %v", t, err)
 	}
@@ -184,7 +184,7 @@ func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []by
 func (i *networkImpl) RelayArray(ctx context.Context, h agreement.MessageHandle, t []protocol.Tag, data [][]byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
 	if metadata == nil { // synthentic loopback
-		err = i.net.BroadcastArray(ctx, t, data, false, nil)
+		err = i.net.BroadcastArray(ctx, t, data, nil, false, nil)
 		if err != nil {
 			i.log.Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
 		}

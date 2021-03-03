@@ -188,7 +188,7 @@ func (n *NetworkFacade) Broadcast(ctx context.Context, tag protocol.Tag, data []
 	return n.broadcast(tag, data, excludeNode, "NetworkFacade service-%v Broadcast %v %v\n")
 }
 
-func (n *NetworkFacade) BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, exclude network.Peer) error {
+func (n *NetworkFacade) BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, pacer chan int, wait bool, exclude network.Peer) error {
 	excludeNode := -1
 	if exclude != nil {
 		excludeNode = n.peerToNode[exclude]

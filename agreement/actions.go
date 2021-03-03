@@ -177,25 +177,29 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		tags[len(txnData)-1] = protocol.ProposalPayloadTag
 	}
 
-	backgroundctx := context.Background()
 	switch a.T {
 	case broadcast:
 		if txnData != nil {
 			//protocol.TxnTag
-			if a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
+			if a.CompoundMessage.Proposal.ctx == nil || *a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
 				logging.Base().Warnf("broadcast: context is nil")
+				backgroundctx := context.Background()
 				a.CompoundMessage.Proposal.ctx = &backgroundctx
 			}
 
 			logging.Base().Infof("broadcast: txncount %v", len(txnData))
-			s.Network.BroadcastArray(*a.CompoundMessage.Proposal.ctx, tags, txnData)
+			// sending a large message. Send to one peer at a time to get another peer propagating it as soon as we can.
+			pacer := make(chan int, 1)
+			pacer <- 1
+			s.Network.BroadcastArray(*a.CompoundMessage.Proposal.ctx, tags, txnData, pacer)
 		} else if data != nil {
 			s.Network.Broadcast(a.Tag, data)
 		}
 	case relay:
 		if txnData != nil {
-			if a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
+			if a.CompoundMessage.Proposal.ctx == nil || *a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
 				logging.Base().Warnf("relay: context is nil")
+				backgroundctx := context.Background()
 				a.CompoundMessage.Proposal.ctx = &backgroundctx
 			} else if a.h == nil {
 				logging.Base().Infof("was proposer")
