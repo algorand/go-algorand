@@ -120,8 +120,12 @@ func (tc *TagCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
 // AddMetric is part of the Metric interface
 // Copy the values in this TagCounter out into the string-string map.
 func (tc *TagCounter) AddMetric(values map[string]string) {
+	tagp := tc.tagptr.Load()
+	if tagp == nil {
+		return
+	}
 	isTemplate := strings.Contains(tc.Name, "{TAG}")
-	tags := tc.tagptr.Load().(map[string]*uint64)
+	tags := tagp.(map[string]*uint64)
 	for tag, tagcount := range tags {
 		if tagcount == nil {
 			continue
