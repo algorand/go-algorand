@@ -116,7 +116,6 @@ func makeMockClientAggregator(t *testing.T, failWithNil bool, failWithError bool
 	return &mockClientAggregator{peers: clients}
 }
 
-
 type dummyFetcher struct {
 	failWithNil   bool
 	failWithError bool
@@ -170,7 +169,6 @@ func (df *dummyFetcher) Close() error {
 	return nil
 }
 
-
 func buildTestLedger(t *testing.T) (ledger *data.Ledger, next basics.Round, b bookkeeping.Block, err error) {
 	var user basics.Address
 	user[0] = 123
@@ -179,15 +177,15 @@ func buildTestLedger(t *testing.T) (ledger *data.Ledger, next basics.Round, b bo
 	genesis := make(map[basics.Address]basics.AccountData)
 	genesis[user] = basics.AccountData{
 		Status:     basics.Online,
-		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
 	genesis[sinkAddr] = basics.AccountData{
 		Status:     basics.Online,
-		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
 	genesis[poolAddr] = basics.AccountData{
 		Status:     basics.Online,
-		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2},
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
 
 	log := logging.TestingLog(t)
@@ -225,6 +223,7 @@ func buildTestLedger(t *testing.T) (ledger *data.Ledger, next basics.Round, b bo
 
 	prev, err := ledger.Block(ledger.LastRound())
 	require.NoError(t, err)
+	b.BlockHeader.RewardsState.RewardsPool = poolAddr
 	b.RewardsLevel = prev.RewardsLevel
 	b.BlockHeader.Round = next
 	b.BlockHeader.GenesisHash = genHash
@@ -234,9 +233,27 @@ func buildTestLedger(t *testing.T) (ledger *data.Ledger, next basics.Round, b bo
 	b.Payset = []transactions.SignedTxnInBlock{
 		txib,
 	}
-
+	b.TxnRoot, err = b.PaysetCommit()
+	require.NoError(t, err)
 	require.NoError(t, ledger.AddBlock(b, agreement.Certificate{Round: next}))
 	return
+}
+
+func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBlocks int) {
+	var err error
+	for i := 0; i < numBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.TxnRoot, err = blk.PaysetCommit()
+		require.NoError(t, err)
+
+		err := ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})
+		require.NoError(t, err)
+
+		hdr, err := ledger.BlockHdr(blk.BlockHeader.Round)
+		require.NoError(t, err)
+		require.Equal(t, blk.BlockHeader, hdr)
+	}
 }
 
 type basicRPCNode struct {
@@ -337,7 +354,6 @@ func nodePair() (*basicRPCNode, *basicRPCNode) {
 	return nodeA, nodeB
 }
 
-
 // implement network.UnicastPeer
 type testUnicastPeer struct {
 	gn               network.GossipNode
@@ -416,4 +432,3 @@ func makeTestUnicastPeer(gn network.GossipNode, version string, t *testing.T) ne
 	wsp.responseChannels = make(map[uint64]chan *network.Response)
 	return &wsp
 }
-
