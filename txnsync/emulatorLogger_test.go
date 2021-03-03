@@ -88,6 +88,7 @@ func (e emulatorNodeLogger) printMsg(s string, args ...interface{}) {
 			}
 		}
 	}
+
 	elapsed := e.node.emulator.clock.Since().Milliseconds()
 	out := fmt.Sprintf("%3d.%03d ", elapsed/1000, elapsed%1000)
 	if s == outgoingTxSyncMsgFormat {

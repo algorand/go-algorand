@@ -62,8 +62,8 @@ func (tsnc *transcationSyncNodeConnector) GetCurrentRoundSettings() txnsync.Roun
 	}
 }
 
-// NotifyState is used for testing purposes only, and can remain empty on production code.
-func (tsnc *transcationSyncNodeConnector) NotifyState(updatedState txnsync.SyncMachineState) chan struct{} {
+// NotifyMonitor is used for testing purposes only, and can remain(almost) empty on production code.
+func (tsnc *transcationSyncNodeConnector) NotifyMonitor() chan struct{} {
 	return tsnc.openStateCh
 }
 

@@ -17,14 +17,11 @@
 package txnsync
 
 import (
-	"fmt"
 	"github.com/algorand/go-algorand/util/timers"
 	"time"
 
 	"github.com/algorand/go-algorand/data/transactions"
 )
-
-var _ = fmt.Printf
 
 const messageTimeWindow = 20 * time.Millisecond
 

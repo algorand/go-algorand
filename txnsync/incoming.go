@@ -18,11 +18,9 @@ package txnsync
 
 import (
 	"errors"
-	"fmt"
 	"time"
 )
 
-var _ = fmt.Printf
 var incomingTxSyncMsgFormat = "Incoming Txsync #%d round %d transacations %d request [%d/%d] bloom %d nextTS %d"
 
 var errUnsupportedTransactionSyncMessageVersion = errors.New("unsupported transaction sync message version")
@@ -141,14 +139,12 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		// if the peer's round is more than a single round behind the local node, then we don't want to
 		// try and load the transactions. The other peer should first catch up before getting transactions.
 		if (peer.lastRound + 1) < s.round {
-			//fmt.Printf("received message from old round %d\n", peer.lastRound)
 			s.log.Info("Incoming Txsync #%d late round %d", seq, peer.lastRound)
 			continue
 		}
 		txnGroups, err := decodeTransactionGroups(txMsg.TransactionGroups.Bytes)
 		if err != nil {
-			// todo
-			fmt.Printf("received transactions groups failed %v\n", err)
+			s.log.Warn("received transactions groups failed %v\n", err)
 			continue
 		}
 

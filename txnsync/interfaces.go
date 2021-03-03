@@ -30,19 +30,6 @@ const (
 	newRoundEvent               eventType = 2
 )
 
-// SyncMachineState defines the state of the transaction sync state machine.
-//msgp:ignore SyncMachineState
-type SyncMachineState int
-
-const (
-	// StateMachineBlocked indicates that the state machine is currently blocked and waiting for external
-	// event to be triggered before it can make progress.
-	StateMachineBlocked SyncMachineState = iota
-	// StateMachineRunning indicates that the state machine is currently running and it's state is continually
-	// changing.
-	StateMachineRunning
-)
-
 // RoundSettings is used to communicate the transaction syncer setting for a specific round
 type RoundSettings struct {
 	Round             basics.Round
@@ -86,7 +73,7 @@ type NodeConnector interface {
 	// IncomingTransactionGroups is called by the transaction sync when transactions have been received and need
 	// to be stored in the transaction pool
 	IncomingTransactionGroups(interface{}, []transactions.SignedTxGroup) (transactionPoolSize int)
-	NotifyState(SyncMachineState) chan struct{}
+	NotifyMonitor() chan struct{}
 }
 
 // MakeTranscationPoolChangeEvent creates an event for when a txn pool size has changed.
