@@ -853,6 +853,7 @@ func initConsensusProtocols() {
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
 	vFuture := v25
+	vFuture.LogicSigVersion = 3
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
