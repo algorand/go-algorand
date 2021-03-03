@@ -476,10 +476,6 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 func (pool *TransactionPool) FindTxn(digest crypto.Digest) (tx transactions.SignedTxn, found bool) {
 	pool.pendingMu.RLock()
 	pool.pendingMu.RUnlock()
-	tx, found = pool.rememberedDigests[digest]
-	if found {
-		return
-	}
 	tx, found = pool.pendingDigests[digest]
 	return
 }

@@ -1062,9 +1062,6 @@ func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) {
 		tx, found := node.transactionPool.FindTxn(stib.Digest)
 		if found {
 			block.Payset[i].SignedTxn = tx
-			logging.Base().Infof("find txn")
-		} else {
-			logging.Base().Infof("failed to find txn: %v", stib.Digest)
 		}
 		block.Payset[i].Digest = crypto.Digest{}
 		var err error
