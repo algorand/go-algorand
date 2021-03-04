@@ -165,6 +165,7 @@ const (
 	infoBackupExplanation        = "Your new wallet has a backup phrase that can be used for recovery.\nKeeping this backup phrase safe is extremely important.\nWould you like to see it now? (Y/n): "
 	infoPrintedBackupPhrase      = "Your backup phrase is printed below.\nKeep this information safe -- never share it with anyone!"
 	infoBackupPhrase             = "\n\x1B[32m%s\033[0m"
+	infoBackupPhraseWindows      = "\n%s"
 	infoNoWallets                = "No wallets found. You can create a wallet with `goal wallet new`"
 	errorCouldntCreateWallet     = "Couldn't create wallet: %s"
 	errorCouldntInitializeWallet = "Couldn't initialize wallet: %s"

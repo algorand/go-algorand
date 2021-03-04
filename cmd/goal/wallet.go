@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -166,7 +167,11 @@ var newWalletCmd = &cobra.Command{
 
 				// Display the mnemonic to the user
 				reportInfoln(infoPrintedBackupPhrase)
-				reportInfof(infoBackupPhrase, mnemonic)
+				if runtime.GOOS == "windows" {
+					reportInfof(infoBackupPhraseWindows, mnemonic)
+				} else {
+					reportInfof(infoBackupPhrase, mnemonic)
+				}
 			}
 		}
 
