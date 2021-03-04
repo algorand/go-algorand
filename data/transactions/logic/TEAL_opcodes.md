@@ -674,7 +674,7 @@ bit indexing begins with low-order bits in integers. Setting bit 4 to 1 on the i
 - Opcode: 0x60
 - Pops: *... stack*, uint64
 - Pushes: uint64
-- get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender
+- get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -831,7 +831,7 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Opcode: 0x78
 - Pops: *... stack*, uint64
 - Pushes: uint64
-- get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage
+- get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.
 - LogicSigVersion >= 3
 - Mode: Application
 
