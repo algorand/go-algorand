@@ -118,6 +118,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 		[]peerClass{
 			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
 			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			{initialRank: peerRank1LowBlockTime, peerClass: network.PeersConnectedIn},
 		})
 	return s
 }
@@ -204,6 +205,7 @@ func (s *Service) fetchAndWrite(fetcher *universalBlockFetcher, r basics.Round, 
 
 		if err != nil {
 			if err == errPeerSelectorNoPeerPoolsAvailable {
+				s.log.Infof("fetchAndWrite: was unable to obtain a peer to retrieve the block from")
 				break
 			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
