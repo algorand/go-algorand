@@ -116,9 +116,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.blocksDownloadPeerSelector = makePeerSelector(
 		net,
 		[]peerClass{
-			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
-			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-			{initialRank: peerRank1LowBlockTime, peerClass: network.PeersConnectedIn},
+			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn},
 		})
 	return s
 }
@@ -208,7 +206,7 @@ func (s *Service) fetchAndWrite(fetcher *universalBlockFetcher, r basics.Round, 
 				s.log.Infof("fetchAndWrite: was unable to obtain a peer to retrieve the block from")
 				break
 			}
-			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
+			s.log.Infof("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exists and we're making many requests down the chain
 			// for no reason.
@@ -302,7 +300,7 @@ func (s *Service) fetchAndWrite(fetcher *universalBlockFetcher, r basics.Round, 
 
 					return false
 				}
-				s.log.Debugf("fetchAndWrite(%v): Wrote block to ledger", r)
+				s.log.Infof("fetchAndWrite(%v): Wrote block to ledger", r)
 				return true
 			}
 			s.log.Warnf("fetchAndWrite(%v): previous block doesn't exist (perhaps fetching block %v failed)", r, r-1)
