@@ -79,6 +79,20 @@ const baseAccountsPendingAccountsBufferSize = 100000
 // is being flushed into the main base account cache.
 const baseAccountsPendingAccountsWarnThreshold = 85000
 
+// initializeCachesReadaheadBlocksStream defines how many block we're going to attempt to queue for the
+// initializeCaches method before it can process and store the account changes to disk.
+const initializeCachesReadaheadBlocksStream = 4
+
+// initializeCachesRoundFlushInterval defines the number of rounds between every to consecutive
+// attempts to flush the memory account data to disk. Setting this value too high would increase
+// memory utilization. Setting this too low, would increase disk i/o.
+const initializeCachesRoundFlushInterval = 1000
+
+// initializingAccountCachesMessageTimeout controls the amount of time passes before we
+// log "initializingAccount initializing.." message to the log file. This is primarily for
+// nodes with slower disk access, where a feedback that the node is functioning correctly is needed.
+const initializingAccountCachesMessageTimeout = 3 * time.Second
+
 var trieMemoryConfig = merkletrie.MemoryConfig{
 	NodesCountPerPage:         merkleCommitterNodesPerPage,
 	CachedNodesCount:          trieCachedNodesCount,
@@ -881,7 +895,9 @@ func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals ledgercore.Accoun
 	return
 }
 
-// initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks
+// initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
+// the method also support balances recovery in cases where the difference between the lastBalancesRound and the lastestBlockRound
+// is far greater than 320; in these cases, it would flush to disk periodically in order to avoid high memory consumption.
 func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound, writingCatchpointRound basics.Round) (catchpointBlockDigest crypto.Digest, err error) {
 	var blk bookkeeping.Block
 	var delta ledgercore.StateDelta
@@ -896,26 +912,111 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 		}
 	}
 
-	for lastBalancesRound < lastestBlockRound {
-		next := lastBalancesRound + 1
-
-		blk, err = au.ledger.Block(next)
-		if err != nil {
-			return
+	skipAccountCacheMessage := make(chan struct{}, 1)
+	writeAccountCacheMessageCompleted := make(chan struct{})
+	defer func() {
+		close(skipAccountCacheMessage)
+		select {
+		case <-writeAccountCacheMessageCompleted:
+			au.log.Infof("initializeCaches completed initializing account data caches")
+		default:
 		}
+	}()
+	go func() {
+		select {
+		case <-time.After(initializingAccountCachesMessageTimeout):
+			au.log.Infof("initializeCaches is initializing account data caches")
+			close(writeAccountCacheMessageCompleted)
+		case <-skipAccountCacheMessage:
+		}
+	}()
 
+	blocksStream := make(chan bookkeeping.Block, initializeCachesReadaheadBlocksStream)
+	blockEvalFailed := make(chan struct{}, 1)
+	go func() {
+		defer close(blocksStream)
+		for roundNumber := lastBalancesRound + 1; roundNumber <= lastestBlockRound; roundNumber++ {
+			blk, err = au.ledger.Block(roundNumber)
+			if err != nil {
+				return
+			}
+			select {
+			case blocksStream <- blk:
+			case <-blockEvalFailed:
+				return
+			}
+		}
+	}()
+
+	lastFlushedRound := lastBalancesRound
+	const accountsCacheLoadingMessageInterval = 5 * time.Second
+	lastProgressMessage := time.Now().Add(-accountsCacheLoadingMessageInterval / 2)
+
+	for blk := range blocksStream {
 		delta, err = au.ledger.trackerEvalVerified(blk, &accLedgerEval)
 		if err != nil {
+			close(blockEvalFailed)
 			return
 		}
 
 		au.newBlockImpl(blk, delta)
-		lastBalancesRound = next
 
-		if next == basics.Round(writingCatchpointRound) {
+		if blk.Round() == basics.Round(writingCatchpointRound) {
 			catchpointBlockDigest = blk.Digest()
 		}
 
+		// flush to disk if any of the following applies:
+		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
+		// 2. if we completed the loading and we loaded up more than 320 rounds.
+		if blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval ||
+			(lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound) {
+			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
+			au.lastFlushTime = time.Now().Add(-balancesFlushInterval)
+
+			// The unlocking/relocking here isn't very elegant, but it does get the work done :
+			// this method is called on either startup or when fast catchup is complete. In the former usecase, the
+			// locking here is not really needed since the system is only starting up, and there are no other
+			// consumers for the accounts update. On the latter usecase, the function would always have exactly 320 rounds,
+			// and therefore this wouldn't be an issue.
+			// However, to make sure we're not missing any other future codepath, unlocking here and re-locking later on is a pretty
+			// safe bet.
+			au.accountsMu.Unlock()
+
+			// flush the account data
+			au.committedUpTo(blk.Round())
+
+			// wait for the writing to complete.
+			au.waitAccountsWriting()
+
+			// The au.dbRound after writing should be ~320 behind the block round.
+			roundsBehind := blk.Round() - au.dbRound
+
+			au.accountsMu.Lock()
+
+			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(au.catchpointInterval) {
+				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes.
+				close(blockEvalFailed)
+				au.log.Errorf("initializeCaches was unable to fill up the account caches accounts round = %d, block round = %d. See above error for more details.", au.dbRound, blk.Round())
+				err = fmt.Errorf("initializeCaches failed to initialize the account data caches")
+				return
+			}
+
+			// and once we flushed it to disk, update the lastFlushedRound
+			lastFlushedRound = blk.Round()
+		}
+
+		// if enough time have passed since the last time we wrote a message to the log file then give the user an update about the progess.
+		if time.Now().Sub(lastProgressMessage) > accountsCacheLoadingMessageInterval {
+			// drop the initial message if we're got to this point so that we'll have this message instead.
+			select {
+			case skipAccountCacheMessage <- struct{}{}:
+			default:
+			}
+			au.log.Infof("initializeCaches is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, lastestBlockRound-lastBalancesRound)
+			lastProgressMessage = time.Now()
+		}
+
+		// prepare for the next iteration.
 		accLedgerEval.prevHeader = *delta.Hdr
 	}
 	return
