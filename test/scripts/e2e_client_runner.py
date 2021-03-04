@@ -3,10 +3,11 @@
 # Create a local private network and run functional tests on it in parallel.
 #
 # Each test is run as `ftest.sh wallet_name` for a wallet with a
-# million Algos.  A test should carefully specify that wallet (or
-# wallets created for the test) for all actions. Tests are expected to
-# not be CPU intensive, merely setting up a handful of transactions
-# and executing them against the network, exercising aspects of the
+# million Algos, with the current directory set to the top of the
+# repo.  A test should carefully specify that wallet (or wallets
+# created for the test) for all actions. Tests are expected to not be
+# CPU intensive, merely setting up a handful of transactions and
+# executing them against the network, exercising aspects of the
 # network and the goal tools.
 #
 # Usage:
@@ -33,6 +34,9 @@ import threading
 import algosdk
 
 logger = logging.getLogger(__name__)
+
+scriptdir = os.path.dirname(os.path.realpath(__file__))
+repodir =  os.path.join(scriptdir, "..", "..")
 
 # less than 16kB of log we show the whole thing, otherwise the last 16kB
 LOG_WHOLE_CUTOFF = 1024 * 16
@@ -79,15 +83,21 @@ def _script_thread_inner(runset, scriptname):
     # send one million Algos to the test wallet's account
     params = algod.suggested_params()
     round = params['lastRound']
-    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params['minFee'], first=round, last=round+100, gh=params['genesishashb64'], receiver=addr, amt=1000000000000, flat_fee=True)
+    max_init_wait_rounds = 5
+    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params['minFee'], first=round, last=round+max_init_wait_rounds, gh=params['genesishashb64'], receiver=addr, amt=1000000000000, flat_fee=True)
     stxn = kmd.sign_transaction(pubw, '', txn)
     txid = algod.send_transaction(stxn)
     ptxinfo = None
-    for i in range(50):
+    for i in range(max_init_wait_rounds):
         txinfo = algod.pending_transaction_info(txid)
         if txinfo.get('round'):
             break
-        time.sleep(0.1)
+        status = algod.status_after_block(round_num=round)
+        round = status['lastRound']
+
+    if ptxinfo is not None:
+        sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds.\n'.format(scriptname, max_init_wait_rounds))
+        runset.done(scriptname, False, time.time() - start)
 
     env = dict(runset.env)
     env['TEMPDIR'] = os.path.join(env['TEMPDIR'], walletname)
@@ -98,7 +108,7 @@ def _script_thread_inner(runset, scriptname):
         runset.done(scriptname, False, time.time() - start)
         return
     logger.info('starting %s', scriptname)
-    p = subprocess.Popen([scriptname, walletname], env=env, stdout=cmdlog, stderr=subprocess.STDOUT)
+    p = subprocess.Popen([scriptname, walletname], env=env, cwd=repodir, stdout=cmdlog, stderr=subprocess.STDOUT)
     cmdlog.close()
     runset.running(scriptname, p)
     timeout = read_script_for_timeout(scriptname)
@@ -174,8 +184,8 @@ class RunSet:
         if self.algod and self.kmd:
             return
         # should run from inside self.lock
-        xrun(['goal', 'kmd', 'start', '-t', '200'], env=self.env, timeout=5)
         algodata = self.env['ALGORAND_DATA']
+        xrun(['goal', 'kmd', 'start', '-t', '3600','-d', algodata], env=self.env, timeout=5)
         self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
 
@@ -271,7 +281,7 @@ class RunSet:
 already_stopped = False
 already_deleted = False
 
-def goal_network_stop(netdir, normal_cleanup=False):
+def goal_network_stop(netdir, env, normal_cleanup=False):
     global already_stopped, already_deleted
     if already_stopped or already_deleted:
         return
@@ -281,6 +291,14 @@ def goal_network_stop(netdir, normal_cleanup=False):
         xrun(['goal', 'network', 'stop', '-r', netdir], timeout=10)
     except Exception as e:
         logger.error('error stopping network', exc_info=True)
+        if normal_cleanup:
+            raise e
+    try:
+        algodata = env['ALGORAND_DATA']
+        logger.info('stop kmd in %s', algodata)
+        xrun(['goal', 'kmd', 'stop', '-d', algodata], timeout=5)
+    except Exception as e:
+        logger.error('error stopping kmd', exc_info=True)
         if normal_cleanup:
             raise e
     already_stopped = True
@@ -373,15 +391,10 @@ def main():
     netdir = os.path.join(tempdir, 'net')
     env['NETDIR'] = netdir
 
-    gopath = os.getenv('GOPATH')
-    if not gopath:
-        logger.error('$GOPATH not set')
-        sys.exit(1)
-
     retcode = 0
-    xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(gopath, 'src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=90)
+    xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, 'test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=90)
     xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
-    atexit.register(goal_network_stop, netdir)
+    atexit.register(goal_network_stop, netdir, env)
 
     env['ALGORAND_DATA'] = os.path.join(netdir, 'Node')
     env['ALGORAND_DATA2'] = os.path.join(netdir, 'Primary')
@@ -401,7 +414,7 @@ def main():
     logger.info('statuses-json: %s', json.dumps(rs.statuses))
 
     # ensure 'network stop' and 'network delete' also make they job
-    goal_network_stop(netdir, normal_cleanup=True)
+    goal_network_stop(netdir, env, normal_cleanup=True)
     if not args.keep_temps:
         goal_network_delete(netdir, normal_cleanup=True)
 

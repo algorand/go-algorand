@@ -524,6 +524,11 @@ type Transaction struct {
 	// required: true
 	ApplicationCall *ApplicationCallTransactionType `json:"app,omitempty"`
 
+	// CompactCert
+	//
+	// required: true
+	CompactCert *CompactCertTransactionType `json:"compactcert,omitempty"`
+
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
 	//
@@ -670,6 +675,11 @@ type AssetTransferTransactionType struct {
 	//
 	// required: false
 	CloseTo string `json:"closeto"`
+
+	// CloseToAmount is amount of the remaining funds that were transferred to the close to address (if closing).
+	//
+	// required: false
+	CloseToAmount uint64 `json:"closetoamount,omitempty"`
 }
 
 // AssetFreezeTransactionType contains the additional fields for an asset freeze transaction
@@ -764,6 +774,21 @@ type ApplicationCallTransactionType struct {
 	//
 	// require: true
 	OnCompletion string `json:"oncompletion"`
+}
+
+// CompactCertTransactionType contains the additional fields for a compact cert transaction
+// swagger:model CompactCertTransactionType
+type CompactCertTransactionType struct {
+	// CertRound is the round whose block this compact cert refers to.
+	//
+	// required: true
+	CertRound uint64 `json:"rnd"`
+
+	// Cert is the msgpack encoding of the compact cert.
+	//
+	// required: true
+	// swagger:strfmt byte
+	Cert []byte `json:"cert"`
 }
 
 // TransactionList contains a list of transactions
@@ -916,6 +941,24 @@ type Block struct {
 
 	UpgradeState
 	UpgradeVote
+
+	// CompactCertVoters is the root of the merkle tree of voters for compact certs.
+	//
+	// required: true
+	// swagger:strfmt byte
+	CompactCertVoters []byte `json:"compactCertVoters"`
+
+	// CompactCertVotersTotal is the total amount of microalgos held by the voters in
+	// the CompactCertVoters merkle tree.
+	//
+	// required: true
+	CompactCertVotersTotal uint64 `json:"compactCertVotersTotal"`
+
+	// CompactCertNextRound is the next round for which a compact certificate is
+	// expected.
+	//
+	// required: true
+	CompactCertNextRound uint64 `json:"compactCertNextRound"`
 }
 
 // UpgradeState contains the information about a current state of an upgrade

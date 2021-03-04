@@ -1,6 +1,7 @@
 #pragma version 2
-// Key is "foo"
-byte base64 Zm9v
+// Key is deliberately not valid utf-8
+// Keep in sync with globcheck.teal
+byte 0xfefeffef0000112233
 
 // Value is ApplicationArgs 0
 txna ApplicationArgs 0

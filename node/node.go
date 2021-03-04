@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
+	"github.com/algorand/go-algorand/compactcert"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -40,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
@@ -106,7 +108,6 @@ type AlgorandFullNode struct {
 	catchpointCatchupService *catchup.CatchpointCatchupService
 	blockService             *rpcs.BlockService
 	ledgerService            *rpcs.LedgerService
-	wsFetcherService         *rpcs.WsFetcherService // to handle inbound gossip msgs for fetching over gossip
 	txPoolSyncerService      *rpcs.TxSyncer
 
 	indexer *indexer.Indexer
@@ -132,6 +133,8 @@ type AlgorandFullNode struct {
 	monitoringRoutinesWaitGroup sync.WaitGroup
 
 	tracer messagetracer.MessageTracer
+
+	compactCert *compactcert.Worker
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -226,7 +229,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.blockService = rpcs.MakeBlockService(cfg, node.ledger, p2pNode, node.genesisID)
 	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
-	node.wsFetcherService = rpcs.MakeWsFetcherService(node.log, p2pNode)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
@@ -255,7 +257,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.agreementService = agreement.MakeService(agreementParameters)
 
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
-	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates)
+	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	err = node.loadParticipationKeys()
@@ -281,6 +283,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
+
+	compactCertPathname := filepath.Join(genesisDir, config.CompactCertFilename)
+	compactCertAccess, err := db.MakeAccessor(compactCertPathname, false, false)
+	if err != nil {
+		log.Errorf("Cannot load compact cert data: %v", err)
+		return nil, err
+	}
+	node.compactCert = compactcert.NewWorker(compactCertAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }
@@ -339,13 +349,13 @@ func (node *AlgorandFullNode) Start() {
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Start(node.ctx)
 	} else {
-		node.wsFetcherService.Start()
 		node.catchupService.Start()
 		node.agreementService.Start()
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
 		node.blockService.Start()
 		node.ledgerService.Start()
 		node.txHandler.Start()
+		node.compactCert.Start()
 
 		// start indexer
 		if idx, err := node.Indexer(); err == nil {
@@ -413,13 +423,13 @@ func (node *AlgorandFullNode) Stop() {
 		node.txPoolSyncerService.Stop()
 		node.blockService.Stop()
 		node.ledgerService.Stop()
-		node.wsFetcherService.Stop()
 	}
 	node.catchupBlockAuth.Quit()
 	node.highPriorityCryptoVerificationPool.Shutdown()
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
+	node.compactCert.Shutdown()
 	if node.indexer != nil {
 		node.indexer.Shutdown()
 	}
@@ -473,7 +483,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 		enc = append(enc, protocol.Encode(&tx)...)
 		txids = append(txids, tx.ID())
 	}
-	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, true, nil)
+	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, false, nil)
 	if err != nil {
 		node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
 		return err
@@ -693,7 +703,7 @@ func (node *AlgorandFullNode) checkForParticipationKeys() {
 		case <-ticker.C:
 			err := node.loadParticipationKeys()
 			if err != nil {
-				node.log.Error("Could not refresh participation keys: %v", err)
+				node.log.Errorf("Could not refresh participation keys: %v", err)
 			}
 		case <-node.ctx.Done():
 			ticker.Stop()
@@ -730,7 +740,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			handle.Close()
 			if err == account.ErrUnsupportedSchema {
 				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-				node.log.Warn("loadParticipationKeys: not loading unsupported participation key: %s; renaming to *.old", info.Name())
+				node.log.Warnf("loadParticipationKeys: not loading unsupported participation key: %s; renaming to *.old", info.Name())
 				fullname := filepath.Join(genesisDir, info.Name())
 				renamedFileName := filepath.Join(fullname, ".old")
 				err = os.Rename(fullname, renamedFileName)
@@ -776,7 +786,7 @@ func (node *AlgorandFullNode) IsArchival() bool {
 }
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
-func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
+func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	if node.ledger.Latest() > block.Round() {
 		return
 	}
@@ -806,24 +816,48 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 
 		r := node.ledger.Latest()
 
+		// We need the latest header to determine the next compact cert
+		// round, if any.
+		latestHdr, err := node.ledger.BlockHdr(r)
+		if err != nil {
+			switch err.(type) {
+			case ledgercore.ErrNoEntry:
+				// No need to warn; expected during catchup.
+			default:
+				node.log.Warnf("Cannot look up latest block %d for deleting ephemeral keys: %v", r, err)
+			}
+			continue
+		}
+
+		// If compact certs are enabled, we need to determine what signatures
+		// we already computed, since we can then delete ephemeral keys that
+		// were already used to compute a signature (stored in the compact
+		// cert db).
+		ccSigs, err := node.compactCert.LatestSigsFromThisNode()
+		if err != nil {
+			node.log.Warnf("Cannot look up latest compact cert sigs: %v", err)
+			continue
+		}
+
 		// We need to find the consensus protocol used to agree on block r,
 		// since that determines the params used for ephemeral keys in block
 		// r.  The params come from agreement.ParamsRound(r), which is r-2.
 		hdr, err := node.ledger.BlockHdr(agreement.ParamsRound(r))
 		if err != nil {
 			switch err.(type) {
-			case ledger.ErrNoEntry:
+			case ledgercore.ErrNoEntry:
 				// No need to warn; expected during catchup.
 			default:
-				node.log.Warnf("Cannot look up block %d for deleting ephemeral keys: %v", agreement.ParamsRound(r), err)
+				node.log.Warnf("Cannot look up params block %d for deleting ephemeral keys: %v", agreement.ParamsRound(r), err)
 			}
-		} else {
-			proto := config.Consensus[hdr.CurrentProtocol]
-
-			node.mu.Lock()
-			node.accountManager.DeleteOldKeys(r+1, proto)
-			node.mu.Unlock()
+			continue
 		}
+
+		agreementProto := config.Consensus[hdr.CurrentProtocol]
+
+		node.mu.Lock()
+		node.accountManager.DeleteOldKeys(latestHdr, ccSigs, agreementProto)
+		node.mu.Unlock()
 	}
 }
 
@@ -929,7 +963,6 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.txPoolSyncerService.Stop()
 			node.blockService.Stop()
 			node.ledgerService.Stop()
-			node.wsFetcherService.Stop()
 
 			prevNodeCancelFunc := node.cancelCtx
 
@@ -943,7 +976,6 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		defer node.mu.Unlock()
 		// start
 		node.transactionPool.Reset()
-		node.wsFetcherService.Start()
 		node.catchupService.Start()
 		node.agreementService.Start()
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)

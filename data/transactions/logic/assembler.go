@@ -942,10 +942,6 @@ type lineError struct {
 	Err  error
 }
 
-func fmtLineError(line int, format string, args ...interface{}) error {
-	return &lineError{Line: line, Err: fmt.Errorf(format, args...)}
-}
-
 func (le *lineError) Error() string {
 	return fmt.Sprintf("%d: %s", le.Line, le.Err.Error())
 }
@@ -1072,6 +1068,9 @@ func (ops *OpStream) checkArgs(spec OpSpec) {
 
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(fin io.Reader) error {
+	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
+		return ops.errorf("Can not assemble version %d", ops.Version)
+	}
 	scanner := bufio.NewScanner(fin)
 	ops.sourceLine = 0
 	for scanner.Scan() {
@@ -1086,14 +1085,18 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			continue
 		}
 		if strings.HasPrefix(line, "#pragma") {
-			// all pragmas must be be already processed in advance
 			ops.trace("%d: #pragma line\n", ops.sourceLine)
+			ops.pragma(line)
 			continue
 		}
 		fields := fieldsFromLine(line)
 		if len(fields) == 0 {
 			ops.trace("%d: no fields\n", ops.sourceLine)
 			continue
+		}
+		// we're going to process opcodes, so fix the Version
+		if ops.Version == assemblerNoVersion {
+			ops.Version = AssemblerDefaultVersion
 		}
 		opstring := fields[0]
 		spec, ok := opsByName[ops.Version][opstring]
@@ -1141,6 +1144,49 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 	}
 	ops.Program = program
 	return nil
+}
+
+func (ops *OpStream) pragma(line string) error {
+	fields := strings.Split(line, " ")
+	if fields[0] != "#pragma" {
+		return ops.errorf("invalid syntax: %s", fields[0])
+	}
+	if len(fields) < 2 {
+		return ops.error("empty pragma")
+	}
+	key := fields[1]
+	switch key {
+	case "version":
+		if len(fields) < 3 {
+			return ops.error("no version value")
+		}
+		value := fields[2]
+		var ver uint64
+		if ops.pending.Len() > 0 {
+			return ops.error("#pragma version is only allowed before instructions")
+		}
+		ver, err := strconv.ParseUint(value, 0, 64)
+		if err != nil {
+			return ops.errorf("bad #pragma version: %#v", value)
+		}
+		if ver < 1 || ver > AssemblerMaxVersion {
+			return ops.errorf("unsupported version: %d", ver)
+		}
+
+		// We initialize Version with assemblerNoVersion as a marker for
+		// non-specified version because version 0 is valid
+		// version for TEAL v1.
+		if ops.Version == assemblerNoVersion {
+			ops.Version = ver
+		} else if ops.Version != ver {
+			return ops.errorf("version mismatch: assembling v%d with v%d assembler", ops.Version, ver)
+		} else {
+			// ops.Version is already correct
+		}
+		return nil
+	default:
+		return ops.errorf("unsupported pragma directive: %#v", key)
+	}
 }
 
 func (ops *OpStream) resolveLabels() {
@@ -1300,80 +1346,9 @@ func AssembleString(text string) (*OpStream, error) {
 // to warnings, (multiple) errors, or the PC to source line mapping.
 func AssembleStringWithVersion(text string, version uint64) (*OpStream, error) {
 	sr := strings.NewReader(text)
-	ps := PragmaStream{}
-	err := ps.Process(sr)
-	if err != nil {
-		return nil, err
-	}
-	// If version not set yet then set either default or #pragma version.
-	// We have to use assemblerNoVersion as a marker for non-specified version
-	// because version 0 is valid version for TEAL v1
-	if version == assemblerNoVersion {
-		if ps.Version != 0 {
-			version = ps.Version
-		} else {
-			version = AssemblerDefaultVersion
-		}
-	} else if ps.Version != 0 && version != ps.Version {
-		err = fmt.Errorf("version mismatch: assembling v%d with v%d assembler", ps.Version, version)
-		return nil, err
-	} else {
-		// otherwise the passed version matches the pragma and we are ok
-	}
-
-	sr = strings.NewReader(text)
 	ops := OpStream{Version: version}
-	err = ops.assemble(sr)
+	err := ops.assemble(sr)
 	return &ops, err
-}
-
-// PragmaStream represents all parsed pragmas from the program
-type PragmaStream struct {
-	Version uint64
-}
-
-// Process all pragmas in the input stream
-func (ps *PragmaStream) Process(fin io.Reader) (err error) {
-	scanner := bufio.NewScanner(fin)
-	sourceLine := 0
-	for scanner.Scan() {
-		sourceLine++
-		line := scanner.Text()
-		if len(line) == 0 || !strings.HasPrefix(line, "#pragma") {
-			continue
-		}
-
-		fields := strings.Split(line, " ")
-		if fields[0] != "#pragma" {
-			return fmtLineError(sourceLine, "invalid syntax: %s", fields[0])
-		}
-		if len(fields) < 2 {
-			return fmtLineError(sourceLine, "empty pragma")
-		}
-		key := fields[1]
-		switch key {
-		case "version":
-			if len(fields) < 3 {
-				return fmtLineError(sourceLine, "no version value")
-			}
-			value := fields[2]
-			var ver uint64
-			if sourceLine != 1 {
-				return fmtLineError(sourceLine, "#pragma version is only allowed on 1st line")
-			}
-			ver, err = strconv.ParseUint(value, 0, 64)
-			if err != nil {
-				return &lineError{Line: sourceLine, Err: err}
-			}
-			if ver < 1 || ver > AssemblerMaxVersion {
-				return fmtLineError(sourceLine, "unsupported version: %d", ver)
-			}
-			ps.Version = ver
-		default:
-			return fmtLineError(sourceLine, "unsupported pragma directive: %s", key)
-		}
-	}
-	return
 }
 
 type disassembleState struct {

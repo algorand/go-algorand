@@ -39,18 +39,53 @@ func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.MerkleArrayNode, buf[:]
 }
 
+// Hash implements an optimized version of crypto.HashObj(p).
+func (p *pair) Hash() crypto.Digest {
+	var buf [len(protocol.MerkleArrayNode) + 2*crypto.DigestSize]byte
+	s := buf[:0]
+	s = append(s, protocol.MerkleArrayNode...)
+	s = append(s, p.l[:]...)
+	s = append(s, p.r[:]...)
+	return crypto.Hash(s)
+}
+
+func upWorker(ws *workerState, in layer, out layer) {
+	ws.started()
+	batchSize := uint64(2)
+
+	for {
+		off := ws.next(batchSize)
+		if off >= ws.maxidx {
+			break
+		}
+
+		for i := off; i < off+batchSize && i < ws.maxidx; i += 2 {
+			var p pair
+			p.l = in[i]
+			if i+1 < ws.maxidx {
+				p.r = in[i+1]
+			}
+			out[i/2] = p.Hash()
+		}
+
+		batchSize += 2
+	}
+
+	ws.done()
+}
+
 // up takes a layer representing some level in the tree,
 // and returns the next-higher level in the tree,
 // represented as a layer.
 func (l layer) up() layer {
-	res := make(layer, (uint64(len(l))+1)/2)
-	for i := 0; i < len(l); i += 2 {
-		var p pair
-		p.l = l[i]
-		if i+1 < len(l) {
-			p.r = l[i+1]
-		}
-		res[i/2] = crypto.HashObj(&p)
+	n := len(l)
+	res := make(layer, (uint64(n)+1)/2)
+
+	ws := newWorkerState(uint64(n))
+	for ws.nextWorker() {
+		go upWorker(ws, l, res)
 	}
+	ws.wait()
+
 	return res
 }

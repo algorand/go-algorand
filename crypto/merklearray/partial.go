@@ -114,7 +114,7 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool) (partialLayer, err
 				p.l = siblingHash
 				p.r = posHash
 			}
-			nextLayerHash = crypto.HashObj(&p)
+			nextLayerHash = p.Hash()
 		}
 
 		res = append(res, layerItem{

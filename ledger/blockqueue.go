@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -58,7 +59,7 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 	bq.closed = make(chan struct{})
 	ledgerBlockqInitCount.Inc(nil)
 	start := time.Now()
-	err := bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		bq.lastCommitted, err0 = blockLatest(tx)
 		return err0
@@ -108,7 +109,7 @@ func (bq *blockQueue) syncer() {
 
 		start := time.Now()
 		ledgerSyncBlockputCount.Inc(nil)
-		err := bq.l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err := bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			for _, e := range workQ {
 				err0 := blockPut(tx, e.block, e.cert)
 				if err0 != nil {
@@ -144,7 +145,7 @@ func (bq *blockQueue) syncer() {
 			minToSave := bq.l.notifyCommit(committed)
 			bfstart := time.Now()
 			ledgerSyncBlockforgetCount.Inc(nil)
-			err = bq.l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			err = bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 				return blockForgetBefore(tx, minToSave)
 			})
 			ledgerSyncBlockforgetMicros.AddMicrosecondsSince(bfstart, nil)
@@ -195,7 +196,7 @@ func (bq *blockQueue) putBlock(blk bookkeeping.Block, cert agreement.Certificate
 		}
 		bq.mu.Lock()
 
-		return BlockInLedgerError{blk.Round(), nextRound}
+		return ledgercore.BlockInLedgerError{LastRound: blk.Round(), NextRound: nextRound}
 	}
 
 	if blk.Round() != nextRound {
@@ -219,7 +220,7 @@ func (bq *blockQueue) checkEntry(r basics.Round) (e *blockEntry, lastCommitted b
 	latest = bq.lastCommitted + basics.Round(len(bq.q))
 
 	if r > bq.lastCommitted+basics.Round(len(bq.q)) {
-		return nil, lastCommitted, latest, ErrNoEntry{
+		return nil, lastCommitted, latest, ledgercore.ErrNoEntry{
 			Round:     r,
 			Latest:    latest,
 			Committed: lastCommitted,
@@ -236,7 +237,7 @@ func (bq *blockQueue) checkEntry(r basics.Round) (e *blockEntry, lastCommitted b
 func updateErrNoEntry(err error, lastCommitted basics.Round, latest basics.Round) error {
 	if err != nil {
 		switch errt := err.(type) {
-		case ErrNoEntry:
+		case ledgercore.ErrNoEntry:
 			errt.Committed = lastCommitted
 			errt.Latest = latest
 			return errt
@@ -258,7 +259,7 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 
 	start := time.Now()
 	ledgerGetblockCount.Inc(nil)
-	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		blk, err0 = blockGet(tx, r)
 		return err0
@@ -280,7 +281,7 @@ func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, 
 
 	start := time.Now()
 	ledgerGetblockhdrCount.Inc(nil)
-	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		hdr, err0 = blockGetHdr(tx, r)
 		return err0
@@ -306,7 +307,7 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 
 	start := time.Now()
 	ledgerGeteblockcertCount.Inc(nil)
-	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		blk, cert, err0 = blockGetEncodedCert(tx, r)
 		return err0
@@ -328,7 +329,7 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 
 	start := time.Now()
 	ledgerGetblockcertCount.Inc(nil)
-	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		blk, cert, err0 = blockGetCert(tx, r)
 		return err0

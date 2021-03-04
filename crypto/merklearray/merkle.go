@@ -34,20 +34,56 @@ func (tree *Tree) topLayer() layer {
 	return tree.levels[len(tree.levels)-1]
 }
 
-// Build constructs a Merkle tree given an array.
-func Build(array Array) (*Tree, error) {
-	tree := &Tree{}
+func buildWorker(ws *workerState, array Array, leaves layer, errs chan error) {
+	ws.started()
+	batchSize := uint64(1)
 
-	var leaves layer
-	arraylen := array.Length()
-	for i := uint64(0); i < arraylen; i++ {
-		data, err := array.Get(i)
-		if err != nil {
-			return nil, err
+	for {
+		off := ws.next(batchSize)
+		if off >= ws.maxidx {
+			goto done
 		}
 
-		leaves = append(leaves, crypto.HashObj(data))
+		for i := off; i < off+batchSize && i < ws.maxidx; i++ {
+			hash, err := array.GetHash(i)
+			if err != nil {
+				select {
+				case errs <- err:
+				default:
+				}
+
+				goto done
+			}
+
+			leaves[i] = hash
+		}
+
+		batchSize++
 	}
+
+done:
+	ws.done()
+}
+
+// Build constructs a Merkle tree given an array.
+func Build(array Array) (*Tree, error) {
+	arraylen := array.Length()
+	leaves := make(layer, arraylen)
+	errs := make(chan error, 1)
+
+	ws := newWorkerState(arraylen)
+	for ws.nextWorker() {
+		go buildWorker(ws, array, leaves, errs)
+	}
+	ws.wait()
+
+	select {
+	case err := <-errs:
+		return nil, err
+	default:
+	}
+
+	tree := &Tree{}
 
 	if arraylen > 0 {
 		tree.levels = []layer{leaves}
@@ -131,10 +167,10 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 	return s.hints, nil
 }
 
-// Verify ensures that the positions in elems correspond to the hashes of their respective
-// crypto.Hashable objects in a tree with the given root hash.  The proof is expected to
-// be the proof returned by Prove().
-func Verify(root crypto.Digest, elems map[uint64]crypto.Hashable, proof []crypto.Digest) error {
+// Verify ensures that the positions in elems correspond to the respective hashes
+// in a tree with the given root hash.  The proof is expected to be the proof
+// returned by Prove().
+func Verify(root crypto.Digest, elems map[uint64]crypto.Digest, proof []crypto.Digest) error {
 	if len(elems) == 0 {
 		if len(proof) != 0 {
 			return fmt.Errorf("non-empty proof for empty set of elements")
@@ -147,7 +183,7 @@ func Verify(root crypto.Digest, elems map[uint64]crypto.Hashable, proof []crypto
 	for pos, elem := range elems {
 		pl = append(pl, layerItem{
 			pos:  pos,
-			hash: crypto.HashObj(elem),
+			hash: elem,
 		})
 	}
 

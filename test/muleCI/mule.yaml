@@ -6,6 +6,9 @@ agents:
     arch: amd64
     env:
       - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -16,6 +19,9 @@ agents:
     arch: amd64
     env:
       - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -26,6 +32,9 @@ agents:
     arch: arm64v8
     env:
       - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
@@ -36,6 +45,9 @@ agents:
     arch: arm32v6
     env:
       - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm32v6
@@ -45,10 +57,27 @@ agents:
     version: scripts/configure_dev-deps.sh
     env:
       - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+  - name: docker-ubuntu-signer
+    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
+    image: algorand/go-algorand-docker-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    env:
+      - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
+      - BUILD_NUMBER=$BUILD_NUMBER
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    volumes:
+      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
+      - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
 
 tasks:
   - task: docker.Make
@@ -84,7 +113,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
     globSpecs:
-      - tmp/node_pkgs/**
+      - tmp/node_pkgs/**/*
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -93,7 +122,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
     globSpecs:
-      - tmp/node_pkgs/**
+      - tmp/node_pkgs/**/*
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -102,7 +131,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
     globSpecs:
-      - tmp/node_pkgs/**
+      - tmp/node_pkgs/**/*
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -111,7 +140,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
     globSpecs:
-      - tmp/node_pkgs/**
+      - tmp/node_pkgs/**/*
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
@@ -120,7 +149,10 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/packages
     globSpecs:
-      - tmp/node_pkgs/**
+      - tmp/node_pkgs/**/*
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
 
     # Unstash tasks
   - task: stash.Unstash
@@ -149,6 +181,11 @@ tasks:
     agent: docker-ubuntu
     target: mule-package-docker
 
+  - task: docker.Make
+    name: docker-sign
+    agent: docker-ubuntu-signer
+    target: mule-sign
+
 jobs:
   build-linux-amd64:
     tasks:
@@ -162,7 +199,6 @@ jobs:
     tasks:
       - docker.Make.build.arm
       - stash.Stash.linux-arm
-
   package-linux-amd64:
     tasks:
       - stash.Unstash.linux-amd64
@@ -175,7 +211,11 @@ jobs:
     tasks:
       - stash.Unstash.packages
       - docker.Make.archive.amd64
-
   package-docker:
     tasks:
       - docker.Make.docker-image
+  sign-signer:
+    tasks:
+      - stash.Unstash.packages
+      - docker.Make.docker-sign
+      - stash.Stash.packages
