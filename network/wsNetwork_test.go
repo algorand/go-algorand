@@ -240,8 +240,8 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"),false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"),false, nil)
 
 	select {
 	case <-counterDone:
@@ -316,8 +316,8 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"),false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"),false, nil)
 
 	select {
 	case <-counterDone:
@@ -621,8 +621,8 @@ func TestSlowOutboundPeer(t *testing.T) {
 	for i := range destPeers {
 		destPeers[i].closing = make(chan struct{})
 		destPeers[i].net = node
-		destPeers[i].sendBufferHighPrio = make(chan sendMessage, sendBufferLength)
-		destPeers[i].sendBufferBulk = make(chan sendMessage, sendBufferLength)
+		destPeers[i].sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
+		destPeers[i].sendBufferBulk = make(chan sendMessages, sendBufferLength)
 		destPeers[i].conn = &nopConnSingleton
 		destPeers[i].rootURL = fmt.Sprintf("fake %d", i)
 		node.addPeer(&destPeers[i])
@@ -631,7 +631,7 @@ func TestSlowOutboundPeer(t *testing.T) {
 	tctx, cf := context.WithTimeout(context.Background(), 5*time.Second)
 	for i := 0; i < sendBufferLength; i++ {
 		t.Logf("broadcast %d", i)
-		sent := node.Broadcast(tctx, xtag, []byte{byte(i)}, true, nil)
+		sent := node.Broadcast(tctx, xtag, []byte{byte(i)},true, nil)
 		require.NoError(t, sent)
 	}
 	cf()
@@ -759,7 +759,7 @@ func TestDupFilter(t *testing.T) {
 	rand.Read(msg)
 	t.Log("A send, C non-dup-send")
 	netA.Broadcast(context.Background(), debugTag2, msg, true, nil)
-	// B should broadcast its non-desire to recieve the message again
+	// B should broadcast its non-desire to receive the message again
 	time.Sleep(500 * time.Millisecond)
 
 	// C should now not send these
@@ -774,6 +774,7 @@ func TestDupFilter(t *testing.T) {
 	assert.Equal(t, 1, counter2.count)
 
 	debugMetrics(t)
+
 }
 
 func TestGetPeers(t *testing.T) {
@@ -1006,7 +1007,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	}
 	waitReady(t, netA, time.After(time.Second))
 
-	netA.Broadcast(context.Background(), protocol.TxnTag, nil, true, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, nil,true, nil)
 
 	select {
 	case <-counterBdone:
@@ -1143,10 +1144,14 @@ func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
 }
 
 func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte, when time.Time) error {
-	request := broadcastRequest{tag: tag, data: data, enqueueTime: when}
+	msgArr := make([][]byte, 1, 1)
+	msgArr[0] = data
+	tagArr := make([]protocol.Tag, 1, 1)
+	tagArr[0] = tag
+	request := broadcastRequest{tags: tagArr, data: msgArr, enqueueTime: when, ctx: context.Background()}
 
 	broadcastQueue := wn.broadcastQueueBulk
-	if highPriorityTag(tag) {
+	if highPriorityTag(tagArr) {
 		broadcastQueue = wn.broadcastQueueHighPrio
 	}
 	// no wait
@@ -1184,7 +1189,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 
 	currentTime := time.Now()
 	for i := 0; i < 10; i++ {
-		err := netA.broadcastWithTimestamp(protocol.TxnTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
+		err := netA.broadcastWithTimestamp(protocol.TxnTag, []byte(string(i)), currentTime.Add(time.Hour*time.Duration(i-5)))
 		require.NoErrorf(t, err, "No error was expected")
 	}
 
@@ -1302,9 +1307,9 @@ func TestForceMessageRelaying(t *testing.T) {
 
 	// send 5 messages from both netB and netC to netA
 	for i := 0; i < 5; i++ {
-		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{byte(i), 2, 3}, true, nil)
 		require.NoError(t, err)
-		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
+		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{byte(i), 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
 
@@ -1326,7 +1331,7 @@ func TestForceMessageRelaying(t *testing.T) {
 	netB.relayMessages = true
 	// send additional 10 messages from netB
 	for i := 0; i < 10; i++ {
-		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{byte(i), 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
 
@@ -1532,7 +1537,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
-	netB.Broadcast(context.Background(), protocol.MsgOfInterestTag, MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}), true, nil)
+	netB.Broadcast(context.Background(), protocol.MsgOfInterestTag, MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}),true, nil)
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -1583,7 +1588,7 @@ func TestWebsocketDisconnection(t *testing.T) {
 	msgHandlerA := func(msg IncomingMessage) (out OutgoingMessage) {
 		// if we received a message, send a message back.
 		if msg.Data[0]%10 == 2 {
-			netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 8}, true, nil)
+			netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 8},true, nil)
 		}
 		return
 	}

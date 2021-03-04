@@ -135,6 +135,32 @@ func getSelectorCapacity(tag protocol.Tag) int {
 	}
 }
 
+func TestVerifyProposalSetsContext(t *testing.T) {
+	t.Parallel()
+	ledger, addresses, selections, votings := readOnlyFixture100()
+	ctx := context.Background()
+
+	verifier := makeCryptoVerifier(ledger, testBlockValidator{}, MakeAsyncVoteVerifier(nil), logging.Base())
+
+	request1 := cryptoProposalRequest{message:
+	makeMessage(1, protocol.ProposalPayloadTag, addresses[1], ledger, selections[1], votings[1], 300, 0, 0),
+		Round: ledger.NextRound()}
+	assert.Nil(t, request1.ctx)
+	assert.Nil(t, request1.UnauthenticatedProposal.ctx)
+	verifier.VerifyProposal(ctx, &request1)
+	assert.NotNil(t, request1.ctx)
+	assert.NotNil(t, request1.UnauthenticatedProposal.ctx)
+
+	request2 := cryptoProposalRequest{message:
+	makeMessage(2, protocol.ProposalPayloadTag, addresses[2], ledger, selections[2], votings[2], 300, 0, 0),
+		Round: ledger.NextRound()}
+	assert.Nil(t, request2.ctx)
+	assert.Nil(t, request2.UnauthenticatedProposal.ctx)
+	verifier.VerifyProposal(ctx, &request2)
+	assert.NotNil(t, request2.ctx)
+	assert.NotNil(t, request2.UnauthenticatedProposal.ctx)
+}
+
 func TestCryptoVerifierBuffers(t *testing.T) {
 	t.Skip("Test is flaky")
 
@@ -161,7 +187,7 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 			case protocol.AgreementVoteTag:
 				verifier.VerifyVote(ctx, cryptoVoteRequest{message: makeMessage(msgID, msgType, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
 			case protocol.ProposalPayloadTag:
-				verifier.VerifyProposal(ctx, cryptoProposalRequest{message: makeMessage(msgID, msgType, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
+				verifier.VerifyProposal(ctx, &cryptoProposalRequest{message: makeMessage(msgID, msgType, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
 			case protocol.VoteBundleTag:
 				verifier.VerifyBundle(ctx, cryptoBundleRequest{message: makeMessage(msgID, msgType, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
 			}
@@ -207,7 +233,7 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 					case protocol.AgreementVoteTag:
 						verifier.VerifyVote(ctx, cryptoVoteRequest{message: makeMessage(msgID, tag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
 					case protocol.ProposalPayloadTag:
-						verifier.VerifyProposal(ctx, cryptoProposalRequest{message: makeMessage(msgID, tag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
+						verifier.VerifyProposal(ctx, &cryptoProposalRequest{message: makeMessage(msgID, tag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
 					case protocol.VoteBundleTag:
 						verifier.VerifyBundle(ctx, cryptoBundleRequest{message: makeMessage(msgID, tag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
 					}
@@ -337,7 +363,7 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 	b.ResetTimer()
 	go func() {
 		for n := 0; n < b.N; n++ {
-			verifier.VerifyProposal(ctx, request)
+			verifier.VerifyProposal(ctx, &request)
 		}
 	}()
 	for n := 0; n < b.N; n++ {

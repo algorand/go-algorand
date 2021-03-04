@@ -58,6 +58,7 @@ type unauthenticatedProposal struct {
 
 	OriginalPeriod   period         `codec:"oper"`
 	OriginalProposer basics.Address `codec:"oprop"`
+	ctx *context.Context //TODO(yg): set to background?
 }
 
 // ToBeHashed implements the Hashable interface.

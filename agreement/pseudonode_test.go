@@ -306,7 +306,7 @@ func (n serializedPseudonode) MakeProposals(ctx context.Context, r round, p peri
 	}
 
 	for i, proposal := range proposals {
-		verifier.VerifyProposal(ctx, cryptoProposalRequest{message: message{Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: proposal.u()}, Round: r})
+		verifier.VerifyProposal(ctx, &cryptoProposalRequest{message: message{Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: proposal.u()}, Round: r})
 		select {
 		case cryptoResult, ok := <-verifier.Verified(protocol.ProposalPayloadTag):
 			if !ok {
