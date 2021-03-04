@@ -49,7 +49,7 @@ type (
 		// VerifyProposal enqueues the request to be verified.
 		//
 		// The passed-in context ctx may be used to cancel the enqueuing request.
-		VerifyProposal(ctx context.Context, request cryptoProposalRequest)
+		VerifyProposal(ctx context.Context, request *cryptoProposalRequest)
 
 		// VerifyBundle enqueues the request to be verified.
 		//
@@ -275,13 +275,21 @@ func (c *poolCryptoVerifier) VerifyVote(ctx context.Context, request cryptoVoteR
 	}
 }
 
-func (c *poolCryptoVerifier) VerifyProposal(ctx context.Context, request cryptoProposalRequest) {
+func (c *poolCryptoVerifier) VerifyProposal(ctx context.Context, request *cryptoProposalRequest) {
 	c.proposalContexts.clearStaleContexts(request.Round, request.Period, request.Pinned, false)
-	request.ctx = c.proposalContexts.addProposal(request)
+	request.ctx = c.proposalContexts.addProposal(*request)
+	// carry the context, in case this proposal should be cancelled before it is sent out
+	if request.UnauthenticatedProposal.ctx != nil {
+		*request.UnauthenticatedProposal.ctx = request.ctx
+	} else {
+		request.UnauthenticatedProposal.ctx = &request.ctx
+	}
+
+
 	switch request.Tag {
 	case protocol.ProposalPayloadTag:
 		select {
-		case c.proposals.in <- request:
+		case c.proposals.in <- *request:
 		case <-ctx.Done():
 		}
 	default:
