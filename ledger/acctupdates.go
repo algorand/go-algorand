@@ -933,11 +933,12 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 
 	blocksStream := make(chan bookkeeping.Block, initializeCachesReadaheadBlocksStream)
 	blockEvalFailed := make(chan struct{}, 1)
+	var blockRetrievalError error
 	go func() {
 		defer close(blocksStream)
 		for roundNumber := lastBalancesRound + 1; roundNumber <= lastestBlockRound; roundNumber++ {
-			blk, err = au.ledger.Block(roundNumber)
-			if err != nil {
+			blk, blockRetrievalError = au.ledger.Block(roundNumber)
+			if blockRetrievalError != nil {
 				return
 			}
 			select {
@@ -1018,6 +1019,10 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 
 		// prepare for the next iteration.
 		accLedgerEval.prevHeader = *delta.Hdr
+	}
+
+	if blockRetrievalError != nil {
+		err = blockRetrievalError
 	}
 	return
 }
