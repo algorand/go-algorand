@@ -17,7 +17,6 @@
 package nodecontrol
 
 import (
-	"os"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -113,7 +112,7 @@ func (nc NodeController) stopProcesses() (kmdAlreadyStopped bool, err error) {
 }
 
 func killPID(pid int) error {
-	process, err := os.FindProcess(pid)
+	process, err := util.FindProcess(pid)
 	if process == nil || err != nil {
 		return err
 	}
