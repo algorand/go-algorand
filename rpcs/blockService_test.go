@@ -77,7 +77,7 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 
 	// case where data type is missing
 	roundNumberData := make([]byte, 0)
-	reqTopics = network.Topics{network.MakeTopic(roundKey, roundNumberData)}
+	reqTopics = network.Topics{network.MakeTopic(RoundKey, roundNumberData)}
 	reqMsg.Data = reqTopics.MarshallTopics()
 	ls.handleCatchupReq(context.Background(), reqMsg)
 	respTopics = reqMsg.Sender.(*mockUnicastPeer).responseTopics
@@ -88,8 +88,8 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 
 	// case where round number is corrupted
 	roundNumberData = make([]byte, 0)
-	reqTopics = network.Topics{network.MakeTopic(roundKey, roundNumberData),
-		network.MakeTopic(requestDataTypeKey, []byte(blockAndCertValue)),
+	reqTopics = network.Topics{network.MakeTopic(RoundKey, roundNumberData),
+		network.MakeTopic(RequestDataTypeKey, []byte(BlockAndCertValue)),
 	}
 	reqMsg.Data = reqTopics.MarshallTopics()
 	ls.handleCatchupReq(context.Background(), reqMsg)

@@ -24,37 +24,20 @@ type Tag string
 // These tags must not contain a comma character because lists of tags
 // are encoded using a comma separator (see network/msgOfInterest.go).
 const (
-	UnknownMsgTag          Tag = "??"
-	AgreementVoteTag       Tag = "AV"
-	CompactCertSigTag      Tag = "CS"
-	MsgOfInterestTag       Tag = "MI"
-	MsgDigestSkipTag       Tag = "MS"
-	NetPrioResponseTag     Tag = "NP"
-	PingTag                Tag = "pi"
-	PingReplyTag           Tag = "pj"
-	ProposalPayloadTag     Tag = "PP"
-	ProposalTransactionTag Tag = "PT"
-	TopicMsgRespTag        Tag = "TS"
-	TxnTag                 Tag = "TX"
-	UniCatchupReqTag       Tag = "UC"
-	UniEnsBlockReqTag      Tag = "UE"
-	UniEnsBlockResTag      Tag = "US"
-	UniCatchupResTag       Tag = "UT"
-	VoteBundleTag          Tag = "VB"
+	UnknownMsgTag      Tag = "??"
+	AgreementVoteTag   Tag = "AV"
+	CompactCertSigTag  Tag = "CS"
+	MsgOfInterestTag   Tag = "MI"
+	MsgDigestSkipTag   Tag = "MS"
+	NetPrioResponseTag Tag = "NP"
+	PingTag            Tag = "pi"
+	PingReplyTag       Tag = "pj"
+	ProposalPayloadTag Tag = "PP"
+	TopicMsgRespTag    Tag = "TS"
+	TxnTag             Tag = "TX"
+	UniCatchupReqTag   Tag = "UC" //Replaced by UniEnsBlockReqTag. Only for backward compatibility.
+	UniEnsBlockReqTag  Tag = "UE"
+	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
+	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
+	VoteBundleTag Tag = "VB"
 )
-
-// Complement is a convenience function for returning a corresponding response/request tag
-func (t Tag) Complement() Tag {
-	switch t {
-	case UniCatchupResTag:
-		return UniCatchupReqTag
-	case UniCatchupReqTag:
-		return UniCatchupResTag
-	case UniEnsBlockResTag:
-		return UniEnsBlockReqTag
-	case UniEnsBlockReqTag:
-		return UniEnsBlockResTag
-	default:
-		return UnknownMsgTag
-	}
-}

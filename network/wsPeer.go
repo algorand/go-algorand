@@ -64,21 +64,18 @@ var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.Ou
 // defaultSendMessageTags is the default list of messages which a peer would
 // allow to be sent without receiving any explicit request.
 var defaultSendMessageTags = map[protocol.Tag]bool{
-	protocol.AgreementVoteTag:       true,
-	protocol.MsgDigestSkipTag:       true,
-	protocol.NetPrioResponseTag:     true,
-	protocol.PingTag:                true,
-	protocol.PingReplyTag:           true,
-	protocol.ProposalPayloadTag:     true,
-	protocol.ProposalTransactionTag: true,
-	protocol.TopicMsgRespTag:        true,
-	protocol.MsgOfInterestTag:       true,
-	protocol.TxnTag:                 true,
-	protocol.UniCatchupReqTag:       true,
-	protocol.UniEnsBlockReqTag:      true,
-	protocol.UniEnsBlockResTag:      true,
-	protocol.UniCatchupResTag:       true,
-	protocol.VoteBundleTag:          true,
+	protocol.AgreementVoteTag:   true,
+	protocol.MsgDigestSkipTag:   true,
+	protocol.NetPrioResponseTag: true,
+	protocol.PingTag:            true,
+	protocol.PingReplyTag:       true,
+	protocol.ProposalPayloadTag: true,
+	protocol.TopicMsgRespTag:    true,
+	protocol.MsgOfInterestTag:   true,
+	protocol.TxnTag:             true,
+	protocol.UniCatchupReqTag:   true,
+	protocol.UniEnsBlockReqTag:  true,
+	protocol.VoteBundleTag:      true,
 }
 
 // interface allows substituting debug implementation for *websocket.Conn
@@ -133,8 +130,8 @@ type sendMessages struct {
 }
 
 type wsPeer struct {
-	// lastPacketTime contains the UnixNano at the last time a successfull communication was made with the peer.
-	// "successfull communication" above refers to either reading from or writing to a connection without receiving any
+	// lastPacketTime contains the UnixNano at the last time a successful communication was made with the peer.
+	// "successful communication" above refers to either reading from or writing to a connection without receiving any
 	// error.
 	// we want this to be a 64-bit aligned for atomics.
 	lastPacketTime int64
@@ -463,7 +460,7 @@ func (wp *wsPeer) readLoop() {
 
 			select {
 			case channel <- &Response{Topics: topics}:
-				// do nothing. writing was successfull.
+				// do nothing. writing was successful.
 			default:
 				wp.net.log.Warnf("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
 			}

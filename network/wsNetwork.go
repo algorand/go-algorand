@@ -1747,7 +1747,7 @@ func (wn *WebsocketNetwork) pingThread() {
 		wn.log.Debugf("ping %d peers...", len(sendList))
 		for _, peer := range sendList {
 			if !peer.sendPing() {
-				// if we failed to send a ping, see how long it was since last successfull ping.
+				// if we failed to send a ping, see how long it was since last successful ping.
 				lastPingSent, _ := peer.pingTimes()
 				wn.log.Infof("failed to ping to %v for the past %f seconds", peer, time.Now().Sub(lastPingSent).Seconds())
 			}
@@ -1831,10 +1831,14 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"2.1", "1"}
+var SupportedProtocolVersions = []string{"2.1"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
-const ProtocolVersion = "1"
+/* Version history:
+ *  1   Catchup service over websocket connections with unicast messages between peers
+ *  2.1 Introducted topic key/data pairs and enabled services over the gossip connections
+ */
+const ProtocolVersion = "2.1"
 
 // TelemetryIDHeader HTTP header for telemetry-id for logging
 const TelemetryIDHeader = "X-Algorand-TelId"

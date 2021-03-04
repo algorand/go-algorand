@@ -50,8 +50,10 @@ const (
 	Seed              HashID = "SD"
 	SignedTxn         HashID = "STX"
 	SpecialAddr       HashID = "SpecialAddr"
+	SignedTxnInBlock  HashID = "STIB"
 	TestHashable      HashID = "TE"
 	TxGroup           HashID = "TG"
+	TxnMerkleLeaf     HashID = "TL"
 	Transaction       HashID = "TX"
 	Vote              HashID = "VO"
 

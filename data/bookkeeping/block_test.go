@@ -375,3 +375,57 @@ func TestDecodeMalformedSignedTxn(t *testing.T) {
 	_, _, err = b.DecodeSignedTxn(txib2)
 	require.Error(t, err)
 }
+
+// TestInitialRewardsRateCalculation perform positive and negative testing for the InitialRewardsRateCalculation fix by
+// running the rounds in the same way eval() is executing them over RewardsRateRefreshInterval rounds.
+func TestInitialRewardsRateCalculation(t *testing.T) {
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	runTest := func() bool {
+		incentivePoolBalance := uint64(125000000000000)
+		totalRewardUnits := uint64(10000000000)
+		require.GreaterOrEqual(t, incentivePoolBalance, consensusParams.MinBalance)
+
+		curRewardsState := RewardsState{
+			RewardsLevel:              0,
+			RewardsResidue:            0,
+			RewardsRecalculationRound: basics.Round(consensusParams.RewardsRateRefreshInterval),
+		}
+		if consensusParams.InitialRewardsRateCalculation {
+			curRewardsState.RewardsRate = basics.SubSaturate(incentivePoolBalance, consensusParams.MinBalance) / uint64(consensusParams.RewardsRateRefreshInterval)
+		} else {
+			curRewardsState.RewardsRate = incentivePoolBalance / uint64(consensusParams.RewardsRateRefreshInterval)
+		}
+		for rnd := 1; rnd < int(consensusParams.RewardsRateRefreshInterval+2); rnd++ {
+			nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits)
+			// adjust the incentive pool balance
+			var ot basics.OverflowTracker
+
+			// get number of rewards per unit
+			rewardsPerUnit := ot.Sub(nextRewardState.RewardsLevel, curRewardsState.RewardsLevel)
+			require.False(t, ot.Overflowed)
+
+			// subtract the total dispersed funds from the pool balance
+			incentivePoolBalance = ot.Sub(incentivePoolBalance, ot.Mul(totalRewardUnits, rewardsPerUnit))
+			require.False(t, ot.Overflowed)
+
+			// make sure the pool retain at least the min balance
+			ot.Sub(incentivePoolBalance, consensusParams.MinBalance)
+			if ot.Overflowed {
+				return false
+			}
+
+			// prepare for the next iteration
+			curRewardsState = nextRewardState
+		}
+		return true
+	}
+
+	// test expected failuire
+	consensusParams.InitialRewardsRateCalculation = false
+	require.False(t, runTest())
+
+	// test expected success
+	consensusParams.InitialRewardsRateCalculation = true
+	require.True(t, runTest())
+}

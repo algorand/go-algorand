@@ -241,7 +241,7 @@ func (e *RoundOffsetError) Error() string {
 }
 
 // StaleDatabaseRoundError is generated when we detect that the database round is behind the accountUpdates in-memory dbRound. This
-// should never happen, since we update the database first, and only upon a successfull update we update the in-memory dbRound.
+// should never happen, since we update the database first, and only upon a successful update we update the in-memory dbRound.
 type StaleDatabaseRoundError struct {
 	memoryRound   basics.Round
 	databaseRound basics.Round
@@ -361,7 +361,7 @@ func (au *accountUpdates) IsWritingCatchpointFile() bool {
 
 // LookupWithRewards returns the account data for a given address at a given round.
 // Note that the function doesn't update the account with the rewards,
-// even while it does return the AccoutData which represent the "rewarded" account data.
+// even while it does return the AccountData which represent the "rewarded" account data.
 func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
 	return au.lookupWithRewards(rnd, addr)
 }
@@ -1491,7 +1491,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 
 // lookupWithRewards returns the account data for a given address at a given round.
 // The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
-// even while it does return the AccoutData which represent the "rewarded" account data.
+// even while it does return the AccountData which represent the "rewarded" account data.
 func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true

@@ -30,11 +30,14 @@ import (
 type Status byte
 
 const (
-	// Offline indicates that the associated account is delegated.
+	// Offline indicates that the associated account receives rewards but does not participate in the consensus.
 	Offline Status = iota
-	// Online indicates that the associated account used as part of the delegation pool.
+	// Online indicates that the associated account participates in the consensus and receive rewards.
 	Online
-	// NotParticipating indicates that the associated account is neither a delegator nor a delegate. Currently it is reserved for the incentive pool.
+	// NotParticipating indicates that the associated account neither participates in the consensus, nor recieves rewards.
+	// Accounts that are marked as NotParticipating cannot change their status, but can receive and send Algos to other accounts.
+	// Two special accounts that are defined as NotParticipating are the incentive pool (also know as rewards pool) and the fee sink.
+	// These two accounts also have additional Algo transfer restrictions
 	NotParticipating
 
 	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.

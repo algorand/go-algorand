@@ -47,9 +47,8 @@ type (
 		Seed committee.Seed `codec:"seed"`
 
 		// TxnRoot authenticates the set of transactions appearing in the block.
-		// More specifically, it's the root of a merkle tree whose leaves are the block's Txids.
-		// Note that the TxnRoot does not authenticate the signatures on the transactions, only the transactions themselves.
-		// Two blocks with the same transactions but with different signatures will have the same TxnRoot.
+		// The commitment is computed based on the PaysetCommit type specified
+		// in the block's consensus protocol.
 		TxnRoot crypto.Digest `codec:"txn"`
 
 		// TimeStamp in seconds since epoch
@@ -179,11 +178,15 @@ type (
 	// (instead of materializing it separately, like balances).
 	//msgp:ignore UpgradeState
 	UpgradeState struct {
-		CurrentProtocol        protocol.ConsensusVersion `codec:"proto"`
-		NextProtocol           protocol.ConsensusVersion `codec:"nextproto"`
-		NextProtocolApprovals  uint64                    `codec:"nextyes"`
-		NextProtocolVoteBefore basics.Round              `codec:"nextbefore"`
-		NextProtocolSwitchOn   basics.Round              `codec:"nextswitch"`
+		CurrentProtocol       protocol.ConsensusVersion `codec:"proto"`
+		NextProtocol          protocol.ConsensusVersion `codec:"nextproto"`
+		NextProtocolApprovals uint64                    `codec:"nextyes"`
+		// NextProtocolVoteBefore specify the last voting round for the next protocol proposal. If there is no voting for
+		// an upgrade taking place, this would be zero.
+		NextProtocolVoteBefore basics.Round `codec:"nextbefore"`
+		// NextProtocolSwitchOn specify the round number at which the next protocol would be adopted. If there is no upgrade taking place,
+		// nor a wait for the next protocol, this would be zero.
+		NextProtocolSwitchOn basics.Round `codec:"nextswitch"`
 	}
 
 	// CompactCertState tracks the state of compact certificates.
@@ -513,11 +516,21 @@ func (block Block) PaysetCommit() (crypto.Digest, error) {
 		return crypto.Digest{}, fmt.Errorf("unsupported protocol %v", block.CurrentProtocol)
 	}
 
-	switch params.PaysetCommit {
+	return block.paysetCommit(params.PaysetCommit)
+}
+
+func (block Block) paysetCommit(t config.PaysetCommitType) (crypto.Digest, error) {
+	switch t {
 	case config.PaysetCommitFlat:
 		return block.Payset.CommitFlat(), nil
+	case config.PaysetCommitMerkle:
+		tree, err := block.TxnMerkleTree()
+		if err != nil {
+			return crypto.Digest{}, err
+		}
+		return tree.Root(), nil
 	default:
-		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", params.PaysetCommit)
+		return crypto.Digest{}, fmt.Errorf("unsupported payset commit type %d", t)
 	}
 }
 
