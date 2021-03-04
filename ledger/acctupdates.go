@@ -93,6 +93,12 @@ const initializeCachesRoundFlushInterval = 1000
 // nodes with slower disk access, where a feedback that the node is functioning correctly is needed.
 const initializingAccountCachesMessageTimeout = 3 * time.Second
 
+// accountsUpdatePerRoundHighWatermark is the warning watermark for updating accounts data that takes
+// longer then expected. We set it up here for one second per round, so that if we're bulk updating
+// four rounds, we would allow up to 4 seconds. This becomes important when supporting balances recovery
+// where we end up batching up to 1000 rounds in a single update.
+const accountsUpdatePerRoundHighWatermark = 1 * time.Second
+
 var trieMemoryConfig = merkletrie.MemoryConfig{
 	NodesCountPerPage:         merkleCommitterNodesPerPage,
 	CachedNodesCount:          trieCachedNodesCount,
@@ -236,6 +242,12 @@ type accountUpdates struct {
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseAccounts lruAccounts
+
+	// the synchronous mode that would be used for the account database.
+	synchronousMode db.SynchronousMode
+
+	// the synchronous mode that would be used while the accounts database is being rebuilt.
+	accountsRebuildSynchronousMode db.SynchronousMode
 }
 
 type deferredCommit struct {
@@ -309,6 +321,8 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.commitSyncerClosed = make(chan struct{})
 	close(au.commitSyncerClosed)
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
+	au.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
+	au.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -974,6 +988,9 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
 			au.lastFlushTime = time.Now().Add(-balancesFlushInterval)
 
+			// switch to rebuild synchronous mode to improve performance
+			au.dbs.Wdb.SetSynchronousMode(context.Background(), au.accountsRebuildSynchronousMode, au.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
+
 			// The unlocking/relocking here isn't very elegant, but it does get the work done :
 			// this method is called on either startup or when fast catchup is complete. In the former usecase, the
 			// locking here is not really needed since the system is only starting up, and there are no other
@@ -993,6 +1010,9 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 			roundsBehind := blk.Round() - au.dbRound
 
 			au.accountsMu.Lock()
+
+			// restore default synchronous mode
+			au.dbs.Wdb.SetSynchronousMode(context.Background(), au.synchronousMode, au.synchronousMode >= db.SynchronousModeFull)
 
 			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
 			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(au.catchpointInterval) {
@@ -1998,6 +2018,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
+
+		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 
 		err = compactDeltas.accountsLoadOld(tx)
 		if err != nil {
