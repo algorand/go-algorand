@@ -912,7 +912,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 		}
 	}
 
-	skipAccountCacheMessage := make(chan struct{}, 1)
+	skipAccountCacheMessage := make(chan struct{})
 	writeAccountCacheMessageCompleted := make(chan struct{})
 	defer func() {
 		close(skipAccountCacheMessage)
@@ -994,8 +994,10 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 
 			au.accountsMu.Lock()
 
+			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
 			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(au.catchpointInterval) {
-				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes.
+				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any futher changes
+				// would just accumulate in memory.
 				close(blockEvalFailed)
 				au.log.Errorf("initializeCaches was unable to fill up the account caches accounts round = %d, block round = %d. See above error for more details.", au.dbRound, blk.Round())
 				err = fmt.Errorf("initializeCaches failed to initialize the account data caches")
@@ -1008,9 +1010,11 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 
 		// if enough time have passed since the last time we wrote a message to the log file then give the user an update about the progess.
 		if time.Now().Sub(lastProgressMessage) > accountsCacheLoadingMessageInterval {
-			// drop the initial message if we're got to this point so that we'll have this message instead.
+			// drop the initial message if we're got to this point since a message saying "still initializing" that comes after "is initializing" doesn't seems to be right.
 			select {
 			case skipAccountCacheMessage <- struct{}{}:
+				// if we got to this point, we should be able to close the writeAccountCacheMessageCompleted channel to have the "completed initializing" message written.
+				close(writeAccountCacheMessageCompleted)
 			default:
 			}
 			au.log.Infof("initializeCaches is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, lastestBlockRound-lastBalancesRound)

@@ -1545,3 +1545,95 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		}
 	}
 }
+
+// TestCachesInitialization test the functionality of the initializeCaches cache.
+func TestCachesInitialization(t *testing.T) {
+	protocolVersion := protocol.ConsensusCurrentVersion
+	proto := config.Consensus[protocolVersion]
+
+	initialRounds := uint64(1)
+
+	ml := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion)
+	ml.log.SetLevel(logging.Warn)
+	defer ml.Close()
+
+	accountsCount := 5
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+	defer au.close()
+
+	// cover initialRounds genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < int(initialRounds); i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	recoveredLedgerRound := basics.Round(initializeCachesRoundFlushInterval * 3)
+
+	for i := basics.Round(initialRounds); i <= recoveredLedgerRound; i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		accountChanges := 2
+
+		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		prevTotals, err := au.Totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = protocolVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta.Accts.MergeAccounts(updates)
+		ml.addMockBlock(blockEntry{block: blk}, delta)
+		au.newBlock(blk, delta)
+		au.committedUpTo(basics.Round(i))
+		au.waitAccountsWriting()
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+	au.close()
+
+	// create another mocked ledger, but this time with a fresh new tracker database.
+	ml2 := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion)
+	ml2.log.SetLevel(logging.Warn)
+	defer ml2.Close()
+
+	// and "fix" it to contain the blocks and deltas from before.
+	ml2.blocks = ml.blocks
+	ml2.deltas = ml.deltas
+
+	au = &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	err = au.loadFromDisk(ml2)
+	require.NoError(t, err)
+
+	// make sure the deltas array end up containing only the most recent 320 rounds.
+	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
+	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.dbRound)
+}
