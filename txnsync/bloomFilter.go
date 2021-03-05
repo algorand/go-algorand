@@ -72,7 +72,7 @@ func (bf *bloomFilter) encode() (out encodedBloomFilter) {
 	}
 	return
 }
-func (bf *bloomFilter) compare(other bloomFilter) bool {
+func (bf *bloomFilter) sameParams(other bloomFilter) bool {
 	return (bf.encodingParams == other.encodingParams) && (bf.containedTxnsRange == other.containedTxnsRange)
 }
 
