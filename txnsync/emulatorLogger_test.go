@@ -79,7 +79,10 @@ func (e emulatorNodeLogger) printMsg(s string, args ...interface{}) {
 	var offset, modulator int
 	var bloom int
 	var nextTS int
-	fmt.Sscanf(fmt.Sprintf("%v %v %v %v %v %v %v", args...), "%d %d %d %d %d %d %d", &seq, &round, &transactions, &offset, &modulator, &bloom, &nextTS)
+	var destIndex int
+	fmt.Sscanf(fmt.Sprintf("%v %v %v %v %v %v %v %v", args...), "%d %d %d %d %d %d %d %d", &seq, &round, &transactions, &offset, &modulator, &bloom, &nextTS, &destIndex)
+
+	destName := e.node.emulator.nodes[destIndex].name
 
 	if e.longestName == 0 {
 		for _, node := range e.node.emulator.nodes {
@@ -94,7 +97,7 @@ func (e emulatorNodeLogger) printMsg(s string, args ...interface{}) {
 	if s == outgoingTxSyncMsgFormat {
 		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", e.node.name)
 	} else {
-		out += strings.Repeat(" ", e.longestName)
+		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", destName)
 	}
 	bfColor := hiblack
 	if bloom > 0 {
@@ -123,7 +126,7 @@ func (e emulatorNodeLogger) printMsg(s string, args ...interface{}) {
 	}
 
 	if s == outgoingTxSyncMsgFormat {
-		out += strings.Repeat(" ", e.longestName)
+		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", destName)
 	} else {
 		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", e.node.name)
 	}

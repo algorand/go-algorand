@@ -362,3 +362,7 @@ func (n *emulatedNode) onNewRound(round basics.Round, hasParticipationKeys bool)
 func (n *emulatedNode) onNewTransactionPoolEntry() {
 	n.externalEvents <- MakeTranscationPoolChangeEvent(len(n.txpoolEntries))
 }
+
+func (p *networkPeer) GetAddress() string {
+	return fmt.Sprintf("%d", p.target)
+}

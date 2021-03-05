@@ -57,6 +57,12 @@ type PeerInfo struct {
 	IsOutgoing  bool
 }
 
+// networkPeerAddress is a subset of the network package HTTPPeer and UnicastPeer interface that
+// provides feedback for the destination address. It's used for logging out packet's destination addresses.
+type networkPeerAddress interface {
+	GetAddress() string
+}
+
 // NodeConnector is used by the transaction sync for communicating with components external to the txnsync package.
 type NodeConnector interface {
 	Events() <-chan Event
