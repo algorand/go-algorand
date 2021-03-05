@@ -601,6 +601,7 @@ type SignedTxGroup struct {
 	// GroupCounter is a monotonic increasing counter, that provides an identify for each transaction group.
 	// The transaction sync is using it as a way to scan the transactions group list more efficiently, as it
 	// can continue scanning the list from the place where it last stopped.
+	// GroupCounter is local, assigned when the group is first seen by the local transaction pool.
 	GroupCounter uint64
 	// FirstTransactionID is the transaction ID of the first transaction in this transaction group.
 	// TODO - make this more secure by making this the hash of the first signed transaction.
