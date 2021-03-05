@@ -585,7 +585,7 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 			continue
 		}
 
-		if wp.receiveMsgTracker.exists(msg.hash) {
+		if wp.receiveMsgTracker.exists(crypto.Hash(msg.data)) {
 			numSkipped++
 			continue
 		}

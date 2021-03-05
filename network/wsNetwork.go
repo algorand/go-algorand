@@ -1368,7 +1368,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		copy(mbytes[len(tbytes):], d)
 		data[i] = mbytes
 		if (msgToTrack(request.tags[i])) || (request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize){
-			digests[i] = crypto.Hash(d)
+			digests[i] = crypto.Hash(mbytes)
 		}
 	}
 
