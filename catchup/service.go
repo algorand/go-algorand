@@ -117,7 +117,8 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 		net,
 		[]peerClass{
 			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn},
-		})
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+		})	
 	return s
 }
 
