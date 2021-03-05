@@ -191,7 +191,9 @@ func (s *syncState) onNewRoundEvent(ent Event) {
 	s.updatePeersRequestParams(peers)
 	s.round = ent.roundSettings.Round
 	s.fetchTransactions = ent.roundSettings.FetchTransactions
-	s.nextOffsetRollingCh = s.clock.TimeoutAt(kickoffTime + 2*s.lastBeta)
+	if !s.isRelay {
+		s.nextOffsetRollingCh = s.clock.TimeoutAt(kickoffTime + 2*s.lastBeta)
+	}
 }
 
 func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
@@ -229,9 +231,43 @@ func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
 	s.sendMessageLoop(currentTimeout, deadlineMonitor, peers)
 }
 
+// rollOffsets rolls the "base" offset for the peers offset selection. This method is only called
+// for non-relays.
 func (s *syncState) rollOffsets() {
 	s.nextOffsetRollingCh = s.clock.TimeoutAt(s.clock.Since() + 2*s.lastBeta)
 	s.requestsOffset++
+
+	if !s.fetchTransactions {
+		return
+	}
+
+	// iterate on the outgoing peers and see if we want to send them an update as needed.
+	// note that because this function is only called for non-relays, then all the connections
+	// are outgoing.
+	peers := s.getPeers()
+	s.updatePeersRequestParams(peers)
+
+	// check when each of these peers is expected to send a message. we might want to promote a message to be sent earlier.
+	currentTimeOffset := s.clock.Since()
+	deadlineMonitor := s.clock.DeadlineMonitorAt(currentTimeOffset + sendMessagesTime)
+
+	for _, peer := range peers {
+		nextSchedule := s.scheduler.peerDuration(peer)
+		if nextSchedule == 0 {
+			// a new peer - ignore for now. This peer would get scheduled on the next new round.
+			continue
+		}
+		if currentTimeOffset+sendMessagesTime > nextSchedule {
+			// there was a message scheudled already in less than 20ms, so keep that one.
+			s.scheduler.schedulerPeer(peer, nextSchedule)
+			continue
+		}
+
+		// otherwise, send a message to that peer. Note that we're passing the `nextSchedule-s.lastBeta` as the currentTime,
+		// so that the time offset would be based on that one. ( i.e. effectively, it would retain the existing timing, and prevent
+		// the peers from getting aligned )
+		s.sendMessageLoop(nextSchedule-s.lastBeta, deadlineMonitor, []*Peer{peer})
+	}
 }
 
 func (s *syncState) getPeers() (result []*Peer) {
@@ -255,13 +291,14 @@ func (s *syncState) getPeers() (result []*Peer) {
 }
 
 func (s *syncState) updatePeersRequestParams(peers []*Peer) {
-	for i, peer := range peers {
-		if s.isRelay {
-			// on relay, ask for all messages.
+	if s.isRelay {
+		for _, peer := range peers {
 			peer.setLocalRequestParams(0, 1)
-		} else {
+		}
+	} else {
+		for i, peer := range peers {
 			// on non-relay, ask for offset/modulator
-			peer.setLocalRequestParams(uint64(i), uint64(len(peers)))
+			peer.setLocalRequestParams(uint64(i)+s.requestsOffset, uint64(len(peers)))
 		}
 	}
 }
