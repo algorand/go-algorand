@@ -967,6 +967,16 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 	const accountsCacheLoadingMessageInterval = 5 * time.Second
 	lastProgressMessage := time.Now().Add(-accountsCacheLoadingMessageInterval / 2)
 
+	// rollbackSynchronousMode ensures that we switch to "fast writing mode" when we start flushing out rounds to disk, and that
+	// we exit this mode when we're done.
+	rollbackSynchronousMode := false
+	defer func() {
+		if rollbackSynchronousMode {
+			// restore default synchronous mode
+			au.dbs.Wdb.SetSynchronousMode(context.Background(), au.synchronousMode, au.synchronousMode >= db.SynchronousModeFull)
+		}
+	}()
+
 	for blk := range blocksStream {
 		delta, err = au.ledger.trackerEvalVerified(blk, &accLedgerEval)
 		if err != nil {
@@ -988,8 +998,13 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
 			au.lastFlushTime = time.Now().Add(-balancesFlushInterval)
 
-			// switch to rebuild synchronous mode to improve performance
-			au.dbs.Wdb.SetSynchronousMode(context.Background(), au.accountsRebuildSynchronousMode, au.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
+			if !rollbackSynchronousMode {
+				// switch to rebuild synchronous mode to improve performance
+				au.dbs.Wdb.SetSynchronousMode(context.Background(), au.accountsRebuildSynchronousMode, au.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
+
+				// flip the switch to rollback the synchronous mode once we're done.
+				rollbackSynchronousMode = true
+			}
 
 			// The unlocking/relocking here isn't very elegant, but it does get the work done :
 			// this method is called on either startup or when fast catchup is complete. In the former usecase, the
@@ -1010,9 +1025,6 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 			roundsBehind := blk.Round() - au.dbRound
 
 			au.accountsMu.Lock()
-
-			// restore default synchronous mode
-			au.dbs.Wdb.SetSynchronousMode(context.Background(), au.synchronousMode, au.synchronousMode >= db.SynchronousModeFull)
 
 			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
 			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(au.catchpointInterval) {
