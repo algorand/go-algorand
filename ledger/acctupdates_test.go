@@ -1575,7 +1575,6 @@ func TestCachesInitialization(t *testing.T) {
 	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
-	defer au.close()
 
 	// cover initialRounds genesis blocks
 	rewardLevel := uint64(0)
@@ -1584,7 +1583,7 @@ func TestCachesInitialization(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	recoveredLedgerRound := basics.Round(initializeCachesRoundFlushInterval * 3)
+	recoveredLedgerRound := basics.Round(initialRounds + initializeCachesRoundFlushInterval + proto.MaxBalLookback + 1)
 
 	for i := basics.Round(initialRounds); i <= recoveredLedgerRound; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
@@ -1632,6 +1631,7 @@ func TestCachesInitialization(t *testing.T) {
 	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
 	err = au.loadFromDisk(ml2)
 	require.NoError(t, err)
+	defer au.close()
 
 	// make sure the deltas array end up containing only the most recent 320 rounds.
 	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
