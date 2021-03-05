@@ -62,8 +62,8 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 			config:  &uf.config}
 	} else if wsPeer, validWSPeer := peer.(network.UnicastPeer); validWSPeer {
 		fetcherClient = &wsFetcherClient{
-			target:      wsPeer,
-			config:      &uf.config,
+			target: wsPeer,
+			config: &uf.config,
 		}
 	} else {
 		return nil, nil, time.Duration(0), fmt.Errorf("FetchBlock: UniversalFetcher only supports HTTPPeer or UnicastPeer")

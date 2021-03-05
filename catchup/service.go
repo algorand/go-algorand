@@ -84,9 +84,6 @@ type Service struct {
 	protocolErrorLogged          bool
 	lastSupportedRound           basics.Round
 	unmatchedPendingCertificates <-chan PendingUnmatchedCertificate
-
-	// blocksDownloadPeerSelector is the peer selector used for downloading blocks.
-	blocksDownloadPeerSelector *peerSelector
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -113,12 +110,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.log = log.With("Context", "sync")
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
-	s.blocksDownloadPeerSelector = makePeerSelector(
-		net,
-		[]peerClass{
-			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn},
-			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-		})	
+
 	return s
 }
 
@@ -159,8 +151,9 @@ func (s *Service) SynchronizingTime() time.Duration {
 }
 
 // function scope to make a bunch of defer statements better
-func (s *Service) innerFetch(fetcher *universalBlockFetcher, r basics.Round) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
+func (s *Service) innerFetch(r basics.Round, peerSelector *peerSelector) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
 	ctx, cf := context.WithCancel(s.ctx)
+	fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
 	defer cf()
 	stopWaitingForLedgerRound := make(chan struct{})
 	defer close(stopWaitingForLedgerRound)
@@ -171,7 +164,7 @@ func (s *Service) innerFetch(fetcher *universalBlockFetcher, r basics.Round) (bl
 			cf()
 		}
 	}()
-	peer, err := s.blocksDownloadPeerSelector.GetNextPeer()
+	peer, err := peerSelector.GetNextPeer()
 	if err != nil {
 		return nil, nil, time.Duration(0), err
 	}
@@ -180,7 +173,7 @@ func (s *Service) innerFetch(fetcher *universalBlockFetcher, r basics.Round) (bl
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
 // Returns false if we couldn't fetch or write (i.e., if we failed even after a given number of retries or if we were told to abort.)
-func (s *Service) fetchAndWrite(fetcher *universalBlockFetcher, r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool) bool {
+func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	i := 0
 	hasLookback := false
 	for true {
@@ -200,7 +193,7 @@ func (s *Service) fetchAndWrite(fetcher *universalBlockFetcher, r basics.Round, 
 
 		// Try to fetch, timing out after retryInterval
 
-		block, cert, _, err := s.innerFetch(fetcher, r)
+		block, cert, _, err := s.innerFetch(r, peerSelector)
 
 		if err != nil {
 			if err == errPeerSelectorNoPeerPoolsAvailable {
@@ -313,9 +306,9 @@ func (s *Service) fetchAndWrite(fetcher *universalBlockFetcher, r basics.Round, 
 
 type task func() basics.Round
 
-func (s *Service) pipelineCallback(fetcher *universalBlockFetcher, r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool) func() basics.Round {
+func (s *Service) pipelineCallback(r basics.Round, thisFetchComplete chan bool, prevFetchCompleteChan chan bool, lookbackChan chan bool, peerSelector *peerSelector) func() basics.Round {
 	return func() basics.Round {
-		fetchResult := s.fetchAndWrite(fetcher, r, prevFetchCompleteChan, lookbackChan)
+		fetchResult := s.fetchAndWrite(r, prevFetchCompleteChan, lookbackChan, peerSelector)
 
 		// the fetch result will be read at most twice (once as the lookback block and once as the prev block, so we write the result twice)
 		thisFetchComplete <- fetchResult
@@ -331,8 +324,6 @@ func (s *Service) pipelineCallback(fetcher *universalBlockFetcher, r basics.Roun
 
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
 func (s *Service) pipelinedFetch(seedLookback uint64) {
-	fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
-
 	parallelRequests := s.parallelBlocks
 	if parallelRequests < seedLookback {
 		parallelRequests = seedLookback
@@ -347,6 +338,23 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 		wg.Wait()
 		close(completed)
 	}()
+
+	var peerSelector *peerSelector
+	if s.cfg.NetAddress != "" {
+		peerSelector = makePeerSelector(
+			s.net,
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			})
+	} else {
+		peerSelector = makePeerSelector(
+			s.net,
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			})
+	}
 
 	// Invariant: len(taskCh) + (# pending writes to completed) <= N
 	wg.Add(int(parallelRequests))
@@ -394,7 +402,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 
 		currentRoundComplete := make(chan bool, 2)
 		// len(taskCh) + (# pending writes to completed) increases by 1
-		taskCh <- s.pipelineCallback(fetcher, nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[len(recentReqs)-int(seedLookback)])
+		taskCh <- s.pipelineCallback(nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[len(recentReqs)-int(seedLookback)], peerSelector)
 		recentReqs = append(recentReqs[1:], currentRoundComplete)
 	}
 
@@ -426,7 +434,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 
 				currentRoundComplete := make(chan bool, 2)
 				// len(taskCh) + (# pending writes to completed) increases by 1
-				taskCh <- s.pipelineCallback(fetcher, nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[0])
+				taskCh <- s.pipelineCallback(nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[0], peerSelector)
 				recentReqs = append(recentReqs[1:], currentRoundComplete)
 				nextRound++
 			}
@@ -560,10 +568,25 @@ func (s *Service) syncCert(cert *PendingUnmatchedCertificate) {
 // TODO this doesn't actually use the digest from cert!
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
-	fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
+	var peerSelector *peerSelector
+	if s.cfg.NetAddress != "" {
+		peerSelector = makePeerSelector(
+			s.net,
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			})
+	} else {
+		peerSelector = makePeerSelector(
+			s.net,
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			})
+	}
 	for s.ledger.LastRound() < cert.Round {
 		// Ask the fetcher to get the block somehow
-		block, fetchedCert, _, err := s.innerFetch(fetcher, cert.Round)
+		block, fetchedCert, _, err := s.innerFetch(cert.Round, peerSelector)
 
 		if err != nil {
 			select {
