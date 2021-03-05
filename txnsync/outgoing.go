@@ -17,10 +17,10 @@
 package txnsync
 
 import (
-	"github.com/algorand/go-algorand/util/timers"
 	"time"
 
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/util/timers"
 )
 
 const messageTimeWindow = 20 * time.Millisecond
@@ -123,7 +123,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions []transa
 	if (msgOps&messageConstBloomFilter == messageConstBloomFilter) && len(pendingTransactions) > 0 {
 		// generate a bloom filter that matches the requests params.
 		metaMessage.filter = makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions, uint32(s.node.Random(0xffffffff)))
-		if !metaMessage.filter.compare(peer.lastSentBloomFilter) {
+		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
 			metaMessage.message.TxnBloomFilter = metaMessage.filter.encode()
 			bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()
 		}

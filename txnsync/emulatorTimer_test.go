@@ -57,6 +57,8 @@ func (g *guidedClock) TimeoutAt(delta time.Duration) <-chan time.Time {
 		close(c)
 		return c
 	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	if g.timers == nil {
 		g.timers = make(map[time.Duration]chan time.Time)
 	}
@@ -92,6 +94,7 @@ func (g *guidedClock) Advance(adv time.Duration) {
 		ch       chan time.Time
 	}
 	expiredClocks := []entryStruct{}
+	g.mu.Lock()
 	// find all the expired clocks.
 	for delta, ch := range g.timers {
 		if delta < g.adv {
@@ -106,6 +109,7 @@ func (g *guidedClock) Advance(adv time.Duration) {
 	for _, entry := range expiredClocks {
 		delete(g.timers, entry.duration)
 	}
+	g.mu.Unlock()
 	// fire expired clocks
 	for _, entry := range expiredClocks {
 		entry.ch <- g.zero.Add(g.adv)
