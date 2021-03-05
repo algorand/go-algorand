@@ -240,8 +240,8 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"),false, nil)
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"),false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
 
 	select {
 	case <-counterDone:
@@ -316,8 +316,8 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"),false, nil)
-	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"),false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
 
 	select {
 	case <-counterDone:
@@ -631,7 +631,7 @@ func TestSlowOutboundPeer(t *testing.T) {
 	tctx, cf := context.WithTimeout(context.Background(), 5*time.Second)
 	for i := 0; i < sendBufferLength; i++ {
 		t.Logf("broadcast %d", i)
-		sent := node.Broadcast(tctx, xtag, []byte{byte(i)},true, nil)
+		sent := node.Broadcast(tctx, xtag, []byte{byte(i)}, true, nil)
 		require.NoError(t, sent)
 	}
 	cf()
@@ -1007,7 +1007,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	}
 	waitReady(t, netA, time.After(time.Second))
 
-	netA.Broadcast(context.Background(), protocol.TxnTag, nil,true, nil)
+	netA.Broadcast(context.Background(), protocol.TxnTag, nil, true, nil)
 
 	select {
 	case <-counterBdone:
@@ -1537,7 +1537,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
-	netB.Broadcast(context.Background(), protocol.MsgOfInterestTag, MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}),true, nil)
+	netB.Broadcast(context.Background(), protocol.MsgOfInterestTag, MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}), true, nil)
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -1588,7 +1588,7 @@ func TestWebsocketDisconnection(t *testing.T) {
 	msgHandlerA := func(msg IncomingMessage) (out OutgoingMessage) {
 		// if we received a message, send a message back.
 		if msg.Data[0]%10 == 2 {
-			netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 8},true, nil)
+			netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 8}, true, nil)
 		}
 		return
 	}

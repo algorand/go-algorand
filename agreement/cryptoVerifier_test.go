@@ -142,8 +142,7 @@ func TestVerifyProposalSetsContext(t *testing.T) {
 
 	verifier := makeCryptoVerifier(ledger, testBlockValidator{}, MakeAsyncVoteVerifier(nil), logging.Base())
 
-	request1 := cryptoProposalRequest{message:
-	makeMessage(1, protocol.ProposalPayloadTag, addresses[1], ledger, selections[1], votings[1], 300, 0, 0),
+	request1 := cryptoProposalRequest{message: makeMessage(1, protocol.ProposalPayloadTag, addresses[1], ledger, selections[1], votings[1], 300, 0, 0),
 		Round: ledger.NextRound()}
 	assert.Nil(t, request1.ctx)
 	assert.Nil(t, request1.UnauthenticatedProposal.ctx)
@@ -151,8 +150,7 @@ func TestVerifyProposalSetsContext(t *testing.T) {
 	assert.NotNil(t, request1.ctx)
 	assert.NotNil(t, request1.UnauthenticatedProposal.ctx)
 
-	request2 := cryptoProposalRequest{message:
-	makeMessage(2, protocol.ProposalPayloadTag, addresses[2], ledger, selections[2], votings[2], 300, 0, 0),
+	request2 := cryptoProposalRequest{message: makeMessage(2, protocol.ProposalPayloadTag, addresses[2], ledger, selections[2], votings[2], 300, 0, 0),
 		Round: ledger.NextRound()}
 	assert.Nil(t, request2.ctx)
 	assert.Nil(t, request2.UnauthenticatedProposal.ctx)

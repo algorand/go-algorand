@@ -93,8 +93,8 @@ type sendMessage struct {
 	enqueued     time.Time             // the time at which the message was first generated
 	peerEnqueued time.Time             // the time at which the peer was attempting to enqueue the message
 	msgTags      map[protocol.Tag]bool // when msgTags is speficied ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
-	hash crypto.Digest
-	ctx context.Context
+	hash         crypto.Digest
+	ctx          context.Context
 }
 
 // wsPeerCore also works for non-connected peers we want to do HTTP GET from
@@ -125,7 +125,7 @@ type Response struct {
 }
 
 type sendMessages struct {
-	msgs []sendMessage
+	msgs  []sendMessage
 	pacer chan int
 }
 
@@ -274,7 +274,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 		digest = crypto.Hash(mbytes)
 	}
 
-	ok := wp.writeNonBlock(mbytes, false, digest, nil, time.Now(), ctx)
+	ok := wp.writeNonBlock(ctx, mbytes, false, digest, nil, time.Now())
 	if !ok {
 		networkBroadcastsDropped.Inc(nil)
 		err = fmt.Errorf("wsPeer failed to unicast: %v", wp.GetAddress())
@@ -303,7 +303,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 		data:         append([]byte(protocol.TopicMsgRespTag), serializedMsg...),
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now(),
-		ctx: context.Background(),
+		ctx:          context.Background(),
 	}
 
 	select {
@@ -504,7 +504,7 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now(),
 		msgTags:      msgTagsMap,
-		ctx: context.Background(),
+		ctx:          context.Background(),
 	}
 	sm := sendMessages{msgs: msgs}
 
@@ -550,16 +550,17 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 }
 
 var emptyHash = crypto.Digest{}
+
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 
 	/*
-	if msgs.pacer != nil {
-		<-msgs.pacer
+		if msgs.pacer != nil {
+			<-msgs.pacer
 
-		defer func (pacer chan int) {
-			pacer <- 1
-		}(msgs.pacer)
-	}
+			defer func (pacer chan int) {
+				pacer <- 1
+			}(msgs.pacer)
+		}
 	*/
 
 	numSkipped := 0
@@ -668,16 +669,16 @@ func (wp *wsPeer) writeLoopCleanup(reason disconnectReason) {
 	wp.wg.Done()
 }
 
-func (wp *wsPeer) writeNonBlock(data []byte, highPrio bool, digest crypto.Digest, pacer chan int, msgEnqueueTime time.Time, ctx context.Context) bool {
+func (wp *wsPeer) writeNonBlock(ctx context.Context, data []byte, highPrio bool, digest crypto.Digest, pacer chan int, msgEnqueueTime time.Time) bool {
 	msgs := make([][]byte, 1, 1)
 	digests := make([]crypto.Digest, 1, 1)
 	msgs[0] = data
 	digests[0] = digest
-	return wp.writeNonBlockMsgs(msgs, highPrio, digests, pacer, msgEnqueueTime, ctx)
+	return wp.writeNonBlockMsgs(ctx, msgs, highPrio, digests, pacer, msgEnqueueTime)
 }
 
 // return true if enqueued/sent
-func (wp *wsPeer) writeNonBlockMsgs(data [][]byte, highPrio bool, digest []crypto.Digest, pacer chan int, msgEnqueueTime time.Time, ctx context.Context) bool {
+func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio bool, digest []crypto.Digest, pacer chan int, msgEnqueueTime time.Time) bool {
 	filteredCount := 0
 	filtered := make([]bool, len(data), len(data))
 	for i := range data {
@@ -739,7 +740,7 @@ func (wp *wsPeer) sendPing() bool {
 	copy(mbytes, tagBytes)
 	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]
-	sent := wp.writeNonBlock(mbytes, false, crypto.Digest{}, nil, time.Now(), context.Background())
+	sent := wp.writeNonBlock(context.Background(), mbytes, false, crypto.Digest{}, nil, time.Now())
 
 	if sent {
 		wp.pingInFlight = true
@@ -831,7 +832,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 		data:         append([]byte(tag), serializedMsg...),
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now(),
-		ctx: context.Background()}
+		ctx:          context.Background()}
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
 	case <-wp.closing:
