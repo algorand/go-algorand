@@ -20,8 +20,6 @@ import (
 	"sort"
 	"time"
 
-	//"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/go-algorand/util/timers"
 )
 
