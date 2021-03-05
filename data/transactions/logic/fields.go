@@ -131,7 +131,7 @@ const (
 	NumAssets
 	// Applications []basics.AppIndex
 	Applications
-	// NumApplication len(ForeignApps)
+	// NumApplications len(ForeignApps)
 	NumApplications
 
 	// GlobalNumUint uint64
@@ -308,6 +308,7 @@ const (
 	GroupSize
 
 	// v2
+
 	// LogicSigVersion ConsensusParams.LogicSigVersion
 	LogicSigVersion
 	// Round basics.Round
@@ -318,6 +319,7 @@ const (
 	CurrentApplicationID
 
 	// v3
+
 	// CreatorAddress [32]byte
 	CreatorAddress
 

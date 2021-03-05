@@ -774,20 +774,20 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 		delta, err := ep.Ledger.GetDelta(&ep.Txn.Txn)
 		require.NoError(t, err)
 		return delta
-	} else {
-		require.Error(t, err, sb.String())
-		for _, problem := range problems {
-			require.Contains(t, err.Error(), problem)
-		}
-		if ep.Ledger != nil {
-			delta, err := ep.Ledger.GetDelta(&ep.Txn.Txn)
-			require.NoError(t, err)
-			require.Empty(t, delta.GlobalDelta)
-			require.Empty(t, delta.LocalDeltas)
-			return delta
-		}
-		return basics.EvalDelta{}
 	}
+
+	require.Error(t, err, sb.String())
+	for _, problem := range problems {
+		require.Contains(t, err.Error(), problem)
+	}
+	if ep.Ledger != nil {
+		delta, err := ep.Ledger.GetDelta(&ep.Txn.Txn)
+		require.NoError(t, err)
+		require.Empty(t, delta.GlobalDelta)
+		require.Empty(t, delta.LocalDeltas)
+		return delta
+	}
+	return basics.EvalDelta{}
 }
 
 func TestMinBalance(t *testing.T) {

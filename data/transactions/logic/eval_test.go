@@ -1002,7 +1002,7 @@ int 1
 &&
 `
 
-const TEST_ADDR = "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU"
+const testAddr = "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU"
 
 const globalV2TestProgram = globalV1TestProgram + `
 global LogicSigVersion
@@ -1024,7 +1024,7 @@ int 42
 `
 const globalV3TestProgram = globalV2TestProgram + `
 global CreatorAddress
-addr ` + TEST_ADDR + `
+addr ` + testAddr + `
 ==
 &&
 `
@@ -1051,7 +1051,7 @@ func TestGlobal(t *testing.T) {
 	}
 	ledger := makeTestLedger(nil)
 	ledger.appID = 42
-	addr, err := basics.UnmarshalChecksumAddress(TEST_ADDR)
+	addr, err := basics.UnmarshalChecksumAddress(testAddr)
 	require.NoError(t, err)
 	ledger.creatorAddr = addr
 	for v := uint64(0); v <= AssemblerMaxVersion; v++ {

@@ -282,7 +282,7 @@ func OpcodesByVersion(version uint64) []OpSpec {
 // direct opcode bytes
 var opsByOpcode [LogicVersion + 1][256]OpSpec
 
-// Opcode map for each each version, mapping opcode name to OpSpec
+// OpsByName map for each each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
 // Migration from TEAL v1 to TEAL v2.

@@ -689,9 +689,9 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.checkArgs(*spec)
 	if len(args) != 1 {
 		return ops.error("branch operation needs label argument")
-	} else {
-		ops.ReferToLabel(ops.pending.Len(), args[0])
 	}
+
+	ops.ReferToLabel(ops.pending.Len(), args[0])
 	ops.pending.WriteByte(spec.Opcode)
 	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.pending.WriteByte(0)
