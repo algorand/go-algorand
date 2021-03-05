@@ -25,7 +25,7 @@ import (
 
 const messageTimeWindow = 20 * time.Millisecond
 
-var outgoingTxSyncMsgFormat = "Outgoing Txsync #%d round %d transacations %d request [%d/%d] bloom %d nextTS %d"
+var outgoingTxSyncMsgFormat = "Outgoing Txsync #%d round %d transacations %d request [%d/%d] bloom %d nextTS %d to '%s'"
 
 type sentMessageMetadata struct {
 	encodedMessageSize  int
@@ -116,7 +116,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions []transa
 		metaMessage.message.UpdatedRequestParams.Modulator = modulator
 		if modulator > 0 {
 			// for relays, the modulator is always one, which means the following would always be zero.
-			metaMessage.message.UpdatedRequestParams.Offset = byte((s.requestsOffset + uint64(offset)) % uint64(modulator))
+			metaMessage.message.UpdatedRequestParams.Offset = byte(uint64(offset) % uint64(modulator))
 		}
 	}
 
@@ -161,8 +161,9 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions []transa
 
 func (s *syncState) evaluateOutgoingMessage(msg *messageSentCallback) {
 	msgData := msg.messageData
+
 	msgData.peer.updateMessageSent(msgData.message, msgData.sentTranscationsIDs, msgData.sentTimestamp, msgData.sequenceNumber, msgData.encodedMessageSize, msgData.filter)
-	s.log.Infof(outgoingTxSyncMsgFormat, msgData.sequenceNumber, msgData.message.Round, len(msgData.sentTranscationsIDs), msgData.message.UpdatedRequestParams.Offset, msgData.message.UpdatedRequestParams.Modulator, len(msgData.message.TxnBloomFilter.BloomFilter), msgData.message.MsgSync.NextMsgMinDelay)
+	s.log.Infof(outgoingTxSyncMsgFormat, msgData.sequenceNumber, msgData.message.Round, len(msgData.sentTranscationsIDs), msgData.message.UpdatedRequestParams.Offset, msgData.message.UpdatedRequestParams.Modulator, len(msgData.message.TxnBloomFilter.BloomFilter), msgData.message.MsgSync.NextMsgMinDelay, msg.messageData.peer.networkAddress())
 	//s.log.Infof("outgoing message %v \n", msgData.message.MsgSync.NextMsgMinDelay)
 }
 

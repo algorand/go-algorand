@@ -564,3 +564,10 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 	}
 	return time.Duration(0), 0
 }
+
+func (p *Peer) networkAddress() string {
+	if peerAddress, supportInterface := p.networkPeer.(networkPeerAddress); supportInterface {
+		return peerAddress.GetAddress()
+	}
+	return ""
+}
