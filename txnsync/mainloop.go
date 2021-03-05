@@ -302,3 +302,55 @@ func (s *syncState) updatePeersRequestParams(peers []*Peer) {
 		}
 	}
 }
+
+func (s *syncState) logMsgStats(mode msgMode, mstat msgStats) {
+	var modeString string
+	var tofrom string
+	switch mode {
+	case modeIncoming:
+		modeString = "Incoming"
+		tofrom = "from"
+	case modeOutgoing:
+		modeString = "Outgoing"
+		tofrom = "to"
+	}
+
+	s.log.Infof(
+		"%s Txsync #%d round %d transacations %d request [%d/%d] bloom %d nextTS %d %s '%s'",
+		modeString,
+		mstat.sequenceNumber,
+		mstat.round,
+		mstat.transactions,
+		mstat.offsetModulator.Offset,
+		mstat.offsetModulator.Modulator,
+		mstat.bloomSize,
+		mstat.nextMsgMinDelay,
+		tofrom,
+		mstat.peerAddress,
+	)
+	if mr, ok := s.log.(msgStatsReceiver); ok {
+		mr.printMsgStats(mode, &mstat)
+	}
+}
+
+type msgMode int
+
+const (
+	modeZero     msgMode = 0
+	modeIncoming msgMode = iota
+	modeOutgoing msgMode = iota
+)
+
+type msgStats struct {
+	sequenceNumber  uint64
+	round           basics.Round
+	transactions    int
+	offsetModulator requestParams
+	bloomSize       int
+	nextMsgMinDelay uint64
+	peerAddress     string
+}
+
+type msgStatsReceiver interface {
+	printMsgStats(mode msgMode, mstat *msgStats)
+}
