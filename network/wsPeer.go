@@ -571,7 +571,8 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 	}
 	*/
 
-	numSkipped := 0
+	numSkippedSender := 0
+	numSkippedReceiver := 0
 	for i, msg := range msgs.msgs {
 		select {
 		case <-msg.ctx.Done():
@@ -580,13 +581,14 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 		default:
 		}
 
-		if wp.sendMsgTracker.existsUnsafe(msg.hash) {
-			numSkipped++
+
+		if len(msg.data) > 2 && wp.receiveMsgTracker.exists(crypto.Hash(msg.data[2:])) {
+			numSkippedReceiver++
 			continue
 		}
 
-		if wp.receiveMsgTracker.exists(crypto.Hash(msg.data)) {
-			numSkipped++
+		if wp.sendMsgTracker.existsUnsafe(msg.hash) {
+			numSkippedSender++
 			continue
 		}
 
@@ -603,7 +605,8 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 	}
 
 	if len(msgs.msgs) > 1 {
-		logging.Base().Infof("num skipped: %v of %v", numSkipped, len(msgs.msgs))
+		logging.Base().Infof("num skipped: %v of %v", numSkippedSender, len(msgs.msgs))
+		logging.Base().Infof("num skipped: %v of %v", numSkippedReceiver, len(msgs.msgs))
 	}
 
 	return disconnectReasonNone
