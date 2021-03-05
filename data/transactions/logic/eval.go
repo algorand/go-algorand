@@ -1623,7 +1623,7 @@ func opGtxnsa(cx *evalContext) {
 	}
 	_, ok = txnaFieldSpecByField[field]
 	if !ok {
-		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
+		cx.err = fmt.Errorf("gtxnsa unsupported field %d", field)
 		return
 	}
 	var sv stackValue
