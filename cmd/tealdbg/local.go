@@ -335,9 +335,12 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			r.runs[i].program = data
 			if IsTextFile(data) {
 				source := string(data)
-				ops, err := logic.AssembleStringWithVersion(source, r.proto.LogicSigVersion)
+				ops, err := logic.AssembleString(source)
 				if err != nil {
 					return err
+				}
+				if ops.Version > r.proto.LogicSigVersion {
+					return fmt.Errorf("program is using version %d, while tealdbg supports only %d", ops.Version, r.proto.LogicSigVersion)
 				}
 				r.runs[i].program = ops.Program
 				if !dp.DisableSourceMap {
