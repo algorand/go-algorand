@@ -26,18 +26,16 @@ var incomingTxSyncMsgFormat = "Incoming Txsync #%d round %d transacations %d req
 var errUnsupportedTransactionSyncMessageVersion = errors.New("unsupported transaction sync message version")
 
 type incomingMessage struct {
-	networkPeer      interface{}
-	message          transactionBlockMessage
-	sequenceNumber   uint64
-	peer             *Peer
-	encodedSize      int
-	receiveTimestamp time.Duration
+	networkPeer    interface{}
+	message        transactionBlockMessage
+	sequenceNumber uint64
+	peer           *Peer
+	encodedSize    int
 }
 
 // incomingMessageHandler
 // note - this message is called by the network go-routine dispatch pool, and is not syncronized with the rest of the transaction syncronizer
 func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64) error {
-	receiveTimestamp := s.clock.Since()
 	var txMsg transactionBlockMessage
 	_, err := txMsg.UnmarshalMsg(message)
 	if err != nil {
@@ -52,7 +50,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		// if we don't have a peer, then we need to enqueue this task to be handled by the main loop since we want to ensure that
 		// all the peer objects are created syncroniously.
 		select {
-		case s.incomingMessagesCh <- incomingMessage{networkPeer: networkPeer, message: txMsg, sequenceNumber: sequenceNumber, encodedSize: len(message), receiveTimestamp: receiveTimestamp}:
+		case s.incomingMessagesCh <- incomingMessage{networkPeer: networkPeer, message: txMsg, sequenceNumber: sequenceNumber, encodedSize: len(message)}:
 		default:
 			// todo - handle the case where we can't write to the channel.
 		}
@@ -64,7 +62,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	}
 
 	select {
-	case s.incomingMessagesCh <- incomingMessage{peer: peer, receiveTimestamp: receiveTimestamp}:
+	case s.incomingMessagesCh <- incomingMessage{peer: peer}:
 	default:
 		// todo - handle the case where we can't write to the channel.
 	}
@@ -134,7 +132,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 			}
 		}
 		peer.updateRequestParams(txMsg.UpdatedRequestParams.Modulator, txMsg.UpdatedRequestParams.Offset)
-		peer.updateIncomingMessageTiming(txMsg.MsgSync, s.round, message.receiveTimestamp, encodedSize)
+		peer.updateIncomingMessageTiming(txMsg.MsgSync, s.round, s.clock.Since(), encodedSize)
 
 		// if the peer's round is more than a single round behind the local node, then we don't want to
 		// try and load the transactions. The other peer should first catch up before getting transactions.
