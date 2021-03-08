@@ -51,24 +51,37 @@ var colors = []int{red, green, yellow, blue, magenta, cyan, hired, higreen, hiye
 var lowColors = []int{red, green, yellow, blue, magenta, cyan}
 
 type emulatorNodeLogger struct {
-	logging.Logger
+	algodlogger
 	node        *emulatedNode
 	longestName int
 }
 
-func makeNodeLogger(l logging.Logger, node *emulatedNode) logging.Logger {
+func makeNodeLogger(l logging.Logger, node *emulatedNode) Logger {
 	return &emulatorNodeLogger{
-		Logger: l,
-		node:   node,
+		algodlogger: l,
+		node:        node,
 	}
 }
 
-func (e emulatorNodeLogger) Infof(s string, args ...interface{}) {
-	e.Logger.Infof(e.node.name+" :"+s, args...)
+type msgMode int
+
+const (
+	modeZero msgMode = iota
+	modeIncoming
+	modeOutgoing
+)
+
+// implement local interface Logger
+func (e *emulatorNodeLogger) outgoingMessage(mstat msgStats) {
+	e.printMsgStats(mstat, modeOutgoing)
 }
 
-// implement local interface msgStatsReceiver
-func (e emulatorNodeLogger) printMsgStats(mode msgMode, mstat *msgStats) {
+// implement local interface Logger
+func (e *emulatorNodeLogger) incomingMessage(mstat msgStats) {
+	e.printMsgStats(mstat, modeIncoming)
+}
+
+func (e emulatorNodeLogger) printMsgStats(mstat msgStats, mode msgMode) {
 	seq := int(mstat.sequenceNumber)
 	round := mstat.round
 	transactions := mstat.transactions
