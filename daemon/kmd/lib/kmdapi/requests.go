@@ -161,6 +161,11 @@ type APIV1POSTKeyListRequest struct {
 type APIV1POSTTransactionSignRequest struct {
 	APIV1RequestEnvelope
 	WalletHandleToken string `json:"wallet_handle_token"`
+	// Base64 encoding of msgpack encoding of a `Transaction` object
+	// Note: SDK and goal usually generate `SignedTxn` objects
+	//   in that case, the field `txn` / `Transaction` of the
+	//   generated `SignedTxn` object needs to be used
+	// 
 	// swagger:strfmt byte
 	Transaction    []byte           `json:"transaction"`
 	PublicKey      crypto.PublicKey `json:"public_key"`
