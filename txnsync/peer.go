@@ -384,7 +384,6 @@ func (p *Peer) advancePeerState(currenTime time.Duration, isRelay bool) (ops pee
 			switch p.state {
 			case peerStateStartup:
 				p.nextStateTimestamp = currenTime + p.lastReceivedMessageNextMsgMinDelay
-
 				messagesCount := p.lastReceivedMessageNextMsgMinDelay / messageTimeWindow
 				if messagesCount <= 2 {
 					// we have time to send only a single message. This message need to include both transactions and bloom filter.
@@ -538,7 +537,15 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 				if p.state == peerStateHoldsoff {
 					// even that we're done now, we need to send another message that would contain the bloom filter
 					p.state = peerStateLateBloom
-					next := p.nextStateTimestamp - 2*messageTimeWindow - currentTime
+
+					bloomMessageExtrapolatedSendingTime := messageTimeWindow
+					// try to improve the sending time by using the last sent bloom filter as the expected message size.
+					if p.lastSentBloomFilter.containedTxnsRange.transactionsCount > 0 {
+						lastBloomFilterSize := uint64(len(p.lastSentBloomFilter.encode().BloomFilter))
+						bloomMessageExtrapolatedSendingTime = time.Duration(lastBloomFilterSize * uint64(p.dataExchangeRate))
+					}
+
+					next := p.nextStateTimestamp - bloomMessageExtrapolatedSendingTime - currentTime
 					p.nextStateTimestamp = 0
 					return next, peerOpsReschedule
 				}

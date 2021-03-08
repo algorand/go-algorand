@@ -296,8 +296,8 @@ func (n *emulatedNode) IncomingTransactionGroups(peer interface{}, groups []tran
 	if duplicateMessage > 0 {
 		fmt.Printf("%s : %d duplicate messages recieved\n", n.name, duplicateMessage)
 	}
-	atomic.AddUint64(&n.emulator.totalDuplicateMessages, uint64(duplicateMessage))
-	atomic.AddUint64(&n.emulator.totalDuplicateMessageSize, uint64(duplicateMessageSize))
+	atomic.AddUint64(&n.emulator.totalDuplicateTransactions, uint64(duplicateMessage))
+	atomic.AddUint64(&n.emulator.totalDuplicateTransactionSize, uint64(duplicateMessageSize))
 	return len(n.txpoolEntries)
 }
 
