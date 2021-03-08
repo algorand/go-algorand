@@ -50,6 +50,9 @@ type basicMsgLogger struct {
 }
 
 func wrapLogger(l logging.Logger) Logger {
+	if ll, ok := l.(Logger); ok {
+		return ll
+	}
 	out := new(basicMsgLogger)
 	out.algodlogger = l
 	return out
