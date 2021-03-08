@@ -12,13 +12,19 @@ if { [catch {
 
     set TEAL_PROG_FILE "$TEST_DIR/trivial.teal"
 
+    # this is ConsensusV25
+    set PROTOCOL_VERSION_2 "https://github.com/algorandfoundation/specs/tree/bea19289bf41217d2c0af30522fa222ef1366466"
+
+    # this is ConsensusV26
+    set PROTOCOL_VERSION_3 "https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff"
+
     # run the test using version 2:
 
     exec printf "#pragma version 2\nint 1\ndup\n+\n" > $TEAL_PROG_FILE
 
     set URL ""
     set PASSED 0
-    spawn tealdbg debug -v $TEAL_PROG_FILE
+    spawn tealdbg debug -v $TEAL_PROG_FILE -p $PROTOCOL_VERSION_2
     expect_background {
         timeout { puts "tealdbg debug timed out"; exit 1 }
         -re {CDT debugger listening on: (ws://[.a-z0-9:/]+)} { set URL $expect_out(1,string); }
@@ -65,7 +71,7 @@ if { [catch {
 
     set URL ""
     set PASSED 0
-    spawn tealdbg debug -v $TEAL_PROG_FILE
+    spawn tealdbg debug -v $TEAL_PROG_FILE -p $PROTOCOL_VERSION_3
     expect_background {
         timeout { puts "tealdbg debug timed out"; exit 1 }
         -re {CDT debugger listening on: (ws://[.a-z0-9:/]+)} { set URL $expect_out(1,string); }

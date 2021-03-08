@@ -1479,7 +1479,7 @@ int 1
 	require.Equal(t, ops1.Program, ops.Program)
 
 	testProg(t, text, 0, expect{1, "version mismatch..."})
-	testProg(t, text, 2)
+	testProg(t, text, 2, expect{1, "version mismatch..."})
 	testProg(t, text, assemblerNoVersion)
 
 	ops, err = AssembleStringWithVersion(text, assemblerNoVersion)
