@@ -336,9 +336,9 @@ func (s *syncState) logMsgStats(mode msgMode, mstat msgStats) {
 type msgMode int
 
 const (
-	modeZero     msgMode = 0
-	modeIncoming msgMode = iota
-	modeOutgoing msgMode = iota
+	modeZero msgMode = iota
+	modeIncoming
+	modeOutgoing
 )
 
 type msgStats struct {
