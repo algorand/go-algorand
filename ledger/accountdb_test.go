@@ -352,8 +352,8 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
-		pad, err := aq.lookup(addr)
-		d := pad.accountData
+		dbad, err := aq.lookup(addr)
+		d := dbad.pad.AccountData
 		require.NoError(t, err)
 		require.Equal(t, d, data)
 
@@ -381,10 +381,10 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-	d, err := aq.lookup(randomAddress())
+	dbad, err := aq.lookup(randomAddress())
 	require.NoError(t, err)
-	require.Equal(t, rnd, d.round)
-	require.Equal(t, d.accountData, basics.AccountData{})
+	require.Equal(t, rnd, dbad.round)
+	require.Equal(t, dbad.pad.AccountData, basics.AccountData{})
 
 	onlineAccounts := make(map[basics.Address]*onlineAccount)
 	for addr, data := range accts {
@@ -1191,7 +1191,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample2, data)
 
-	old1 := persistedAccountData{addr: addr, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old1 := dbAccountData{addr: addr, pad: ledgercore.PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}}
 	ad.upsertOld(old1)
 	a.Equal(1, ad.len())
 	address, data = ad.getByIdx(0)
@@ -1199,7 +1199,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(accountDelta{new: sample2.new, old: old1}, data)
 
 	addr1 := randomAddress()
-	old2 := persistedAccountData{addr: addr1, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old2 := dbAccountData{addr: addr1, pad: ledgercore.PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}}
 	ad.upsertOld(old2)
 	a.Equal(2, ad.len())
 	address, data = ad.getByIdx(0)

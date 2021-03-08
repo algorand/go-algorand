@@ -1009,11 +1009,11 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 }
 
 // accountHashBuilder calculates the hash key used for the trie by combining the account address and the account data
-func accountHashBuilder(addr basics.Address, accountData basics.AccountData, encodedAccountData []byte) []byte {
+func accountHashBuilder(addr basics.Address, rewardsBase uint64, encodedAccountData []byte) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
 	// recent updated to be in-cache, and "older" nodes will be left alone.
-	for i, rewards := 3, accountData.RewardsBase; i >= 0; i, rewards = i-1, rewards>>8 {
+	for i, rewards := 3, rewardsBase; i >= 0; i, rewards = i-1, rewards>>8 {
 		// the following takes the rewards & 255 -> hash[i]
 		hash[i] = byte(rewards)
 	}
@@ -1367,8 +1367,8 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 
 	for i := 0; i < accountsDeltas.len(); i++ {
 		addr, delta := accountsDeltas.getByIdx(i)
-		if !delta.old.accountData.IsZero() {
-			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
+		if !delta.old.pad.IsZero() {
+			deleteHash := accountHashBuilder(addr, delta.old.pad.RewardsBase, protocol.Encode(&delta.old.pad))
 			deleted, err = au.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return err
@@ -1381,7 +1381,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 		}
 
 		if !delta.new.IsZero() {
-			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+			addHash := accountHashBuilder(addr, delta.new.RewardsBase, protocol.Encode(&delta.new))
 			added, err = au.balancesTrie.Add(addHash)
 			if err != nil {
 				return err
@@ -1441,13 +1441,13 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		if latestAcctData, has := au.accounts[addr]; has {
 			previousAccountData = latestAcctData.data
 		} else if baseAccountData, has := au.baseAccounts.read(addr); has {
-			previousAccountData = baseAccountData.accountData
+			previousAccountData = baseAccountData.pad.AccountData
 		} else {
 			// it's missing from the base accounts, so we'll try to load it from disk.
 			if acctData, err := au.accountsq.lookup(addr); err != nil {
 				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
 			} else {
-				previousAccountData = acctData.accountData
+				previousAccountData = acctData.pad.AccountData
 				au.baseAccounts.write(acctData)
 			}
 		}
@@ -1503,7 +1503,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 	var offset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
-	var persistedData persistedAccountData
+	var dbad dbAccountData
 	withRewards := true
 	for {
 		currentDbRound := au.dbRound
@@ -1553,7 +1553,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
-			return macct.accountData, nil
+			return macct.pad.AccountData, nil
 		}
 
 		au.accountsMu.RUnlock()
@@ -1564,15 +1564,15 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, err = au.accountsq.lookup(addr)
-		if persistedData.round == currentDbRound {
-			au.baseAccounts.writePending(persistedData)
-			return persistedData.accountData, err
+		dbad, err = au.accountsq.lookup(addr)
+		if dbad.round == currentDbRound {
+			au.baseAccounts.writePending(dbad)
+			return dbad.pad.AccountData, err
 		}
 
-		if persistedData.round < currentDbRound {
-			au.log.Errorf("accountUpdates.lookupWithRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+		if dbad.round < currentDbRound {
+			au.log.Errorf("accountUpdates.lookupWithRewards: database round %d is behind in-memory round %d", dbad.round, currentDbRound)
+			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: dbad.round, memoryRound: currentDbRound}
 		}
 		au.accountsMu.RLock()
 		needUnlock = true
@@ -1595,7 +1595,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		}
 	}()
 	var offset uint64
-	var persistedData persistedAccountData
+	var dbad dbAccountData
 	for {
 		currentDbRound := au.dbRound
 		currentDeltaLen := len(au.deltas)
@@ -1638,7 +1638,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
-			return macct.accountData, rnd, nil
+			return macct.pad.AccountData, rnd, nil
 		}
 
 		if synchronized {
@@ -1650,15 +1650,15 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, err = au.accountsq.lookup(addr)
-		if persistedData.round == currentDbRound {
-			au.baseAccounts.writePending(persistedData)
-			return persistedData.accountData, rnd, err
+		dbad, err = au.accountsq.lookup(addr)
+		if dbad.round == currentDbRound {
+			au.baseAccounts.writePending(dbad)
+			return dbad.pad.AccountData, rnd, err
 		}
 		if synchronized {
-			if persistedData.round < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
-				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+			if dbad.round < currentDbRound {
+				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", dbad.round, currentDbRound)
+				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: dbad.round, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1667,8 +1667,8 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			}
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
-			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
-			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
+			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", dbad.round, currentDbRound)
+			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: dbad.round, memoryRound: currentDbRound}
 		}
 	}
 }
@@ -1868,7 +1868,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	var updatedPersistedAccounts []persistedAccountData
+	var updatedPersistedAccounts []dbAccountData
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
