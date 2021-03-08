@@ -80,11 +80,6 @@ type OpStream struct {
 
 	// map opcode offsets to source line
 	OffsetToLine map[int]int
-
-	// indicates whether the pragra version was speficied in the source. It allows us to
-	// ensure the pragma version appears only once, as well as allow us to diffrenciate
-	// between default version and requested version.
-	pragmaVersionFound bool
 }
 
 // GetVersion returns the LogicSigVersion we're building to
@@ -1204,9 +1199,6 @@ func (ops *OpStream) pragma(line string) error {
 		if ver < 1 || ver > AssemblerMaxVersion {
 			return ops.errorf("unsupported version: %d", ver)
 		}
-		if ops.pragmaVersionFound {
-			return ops.errorf("pragma version can appear only once in a TEAL program")
-		}
 
 		// We initialize Version with assemblerNoVersion as a marker for
 		// non-specified version because version 0 is valid
@@ -1218,7 +1210,6 @@ func (ops *OpStream) pragma(line string) error {
 		} else {
 			// ops.Version is already correct, or needed to be upped.
 		}
-		ops.pragmaVersionFound = true
 		return nil
 	default:
 		return ops.errorf("unsupported pragma directive: %#v", key)

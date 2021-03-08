@@ -1436,15 +1436,16 @@ func TestPragmas(t *testing.T) {
 	ops = testProg(t, "\n//comment\n#pragma version 2", assemblerNoVersion)
 	require.Equal(t, uint64(2), ops.Version)
 
-	// lowering versions is not allowed
-	testProg(t, "#pragma version 3", 2, expect{1, "version mismatch..."})
+	// changing version is not allowed
+	testProg(t, "#pragma version 1", 2, expect{1, "version mismatch..."})
 	testProg(t, "#pragma version 2", 1, expect{1, "version mismatch..."})
 
 	ops = testProg(t, "#pragma version 2\n#pragma version 1", assemblerNoVersion,
-		expect{2, "pragma version can appear only once in a TEAL program"})
+		expect{2, "version mismatch..."})
 
-	ops = testProg(t, "#pragma version 2\n#pragma version 2", assemblerNoVersion,
-		expect{2, "pragma version can appear only once in a TEAL program"})
+	// repetitive, but fine
+	ops = testProg(t, "#pragma version 2\n#pragma version 2", assemblerNoVersion)
+	require.Equal(t, uint64(2), ops.Version)
 
 	testProg(t, "\nint 1\n#pragma version 2", assemblerNoVersion,
 		expect{3, "#pragma version is only allowed before instructions"})
