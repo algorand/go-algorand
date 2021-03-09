@@ -83,7 +83,7 @@ func (client *mockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txg
 	}
 	return client.client.txgroups, nil
 }
-func (client *mockRPCClient) GetBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
+func (client *mockRPCClient) getBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
 	return nil, nil
 }
 
@@ -123,7 +123,7 @@ type dummyFetcher struct {
 }
 
 // FetcherClient interface
-func (df *dummyFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
+func (df *dummyFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
 	if df.failWithNil {
 		return nil, nil
 	}
