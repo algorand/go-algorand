@@ -473,10 +473,17 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	return pool.statusCache.check(txid)
 }
 
-func (pool *TransactionPool) FindTxn(digest crypto.Digest) (tx transactions.SignedTxn, found bool) {
+func (pool *TransactionPool) FindTxns(digests []crypto.Digest) (txns []transactions.SignedTxn, found []bool) {
 	pool.pendingMu.RLock()
 	pool.pendingMu.RUnlock()
-	tx, found = pool.pendingDigests[digest]
+	txns = make([]transactions.SignedTxn, len(digests))
+	found = make([]bool, len(digests))
+	if pool.pendingDigests == nil {
+		return
+	}
+	for i, digest := range digests {
+		txns[i], found[i] = pool.pendingDigests[digest]
+	}
 	return
 }
 

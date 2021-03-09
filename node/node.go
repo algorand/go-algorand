@@ -1052,10 +1052,14 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 }
 
 func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) {
+	digests := make([]crypto.Digest, len(block.Payset))
 	for i, stib := range block.Payset {
-		tx, found := node.transactionPool.FindTxn(stib.Digest)
-		if found {
-			block.Payset[i].SignedTxn = tx
+		digests[i] = stib.Digest
+	}
+	txns, found := node.transactionPool.FindTxns(digests)
+	for i := range block.Payset {
+		if found[i] {
+			block.Payset[i].SignedTxn = txns[i]
 		}
 		block.Payset[i].Digest = crypto.Digest{}
 		var err error
