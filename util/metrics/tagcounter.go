@@ -19,16 +19,20 @@ package metrics
 import (
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
+
+	"github.com/algorand/go-deadlock"
 )
 
+// NewTagCounter makes a set of metrics under rootName for tagged counting.
+// "{TAG}" in rootName is replaced by the tag, otherwise "_{TAG}" is appended.
 func NewTagCounter(rootName, desc string) *TagCounter {
 	tc := &TagCounter{Name: rootName, Description: desc}
 	DefaultRegistry().Register(tc)
 	return tc
 }
 
+// TagCounter holds a set of counters
 type TagCounter struct {
 	Name        string
 	Description string
@@ -41,9 +45,10 @@ type TagCounter struct {
 	storage    [][]uint64
 	storagePos int
 
-	tagLock sync.Mutex
+	tagLock deadlock.Mutex
 }
 
+// Add t[tag] += val, fast and multithread safe
 func (tc *TagCounter) Add(tag string, val uint64) {
 	for {
 		var tags map[string]*uint64
