@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
@@ -47,6 +45,11 @@ var ErrNoSpace = errors.New("block does not have space for transaction")
 // in the block evaluator, since there cannot reasonably be more than this
 // many transactions in a block.
 const maxPaysetHint = 20000
+
+// asyncAccountLoadingThreadCount controls how many go routines would be used
+// to load the account data before the eval() start processing individual
+// transaction group.
+const asyncAccountLoadingThreadCount = 4
 
 type roundCowBase struct {
 	l ledgerForCowBase
@@ -73,9 +76,6 @@ type roundCowBase struct {
 	// are beyond the scope of this cache.
 	// The account data store here is always the account data without the rewards.
 	accounts map[basics.Address]basics.AccountData
-
-	// accountsMu is the accounts read-write mutex, used to syncronize the access ot the accounts map.
-	accountsMu deadlock.RWMutex
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -86,18 +86,13 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 // first, and if it cannot find it there, it would defer to the underlaying implementation.
 // note that errors in accounts data retrivals are not cached as these typically cause the transaction evaluation to fail.
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	x.accountsMu.RLock()
 	if accountData, found := x.accounts[addr]; found {
-		x.accountsMu.RUnlock()
 		return accountData, nil
 	}
-	x.accountsMu.RUnlock()
 
 	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err == nil {
-		x.accountsMu.Lock()
 		x.accounts[addr] = accountData
-		x.accountsMu.Unlock()
 	}
 	return accountData, err
 }
@@ -1130,7 +1125,7 @@ func (validator *evalTxValidator) run() {
 // Validate: eval(ctx, l, blk, true, txcache, executionPool, true)
 // AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
 // tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, usePrefetch bool) (ledgercore.StateDelta, error) {
+func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
@@ -1143,17 +1138,14 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		wg.Wait()
 	}()
 
-	// If validationCtx or underlying ctx are Done, end prefetch
-	if usePrefetch {
-		wg.Add(1)
-		go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset, &wg)
-	}
-
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}
+
+	paysetgroupsCh := loadAccounts(ctx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+
 	var txvalidator evalTxValidator
 	if validate {
 		_, ok := config.Consensus[blk.CurrentProtocol]
@@ -1171,8 +1163,25 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 
 	}
 
-	for _, txgroup := range paysetgroups {
+	base := eval.state.lookupParent.(*roundCowBase)
+
+transactionGroupLoop:
+	for {
 		select {
+		case txgroup, ok := <-paysetgroupsCh:
+			if !ok {
+				break transactionGroupLoop
+			} else if txgroup.err != nil {
+				return ledgercore.StateDelta{}, err
+			}
+
+			for _, br := range txgroup.balances {
+				base.accounts[br.Addr] = br.AccountData
+			}
+			err = eval.TransactionGroup(txgroup.group)
+			if err != nil {
+				return ledgercore.StateDelta{}, err
+			}
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
 		case err, open := <-txvalidator.done:
@@ -1180,12 +1189,6 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 			if open && err != nil {
 				return ledgercore.StateDelta{}, err
 			}
-		default:
-		}
-
-		err = eval.TransactionGroup(txgroup)
-		if err != nil {
-			return ledgercore.StateDelta{}, err
 		}
 	}
 
@@ -1218,31 +1221,183 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	return eval.state.deltas(), nil
 }
 
-func prefetchThread(ctx context.Context, state roundCowParent, payset []transactions.SignedTxnInBlock, wg *sync.WaitGroup) {
-	defer wg.Done()
-	maybelookup := func(addr basics.Address) {
-		if addr.IsZero() {
-			return
+// loadedTransactionGroup is a helper struct to allow asyncronious loading of the account data needed by the transaction groups
+type loadedTransactionGroup struct {
+	// group is the transaction group
+	group []transactions.SignedTxnWithAD
+	// balances is a list of all the balances that the transaction group refer to and are needed.
+	balances []basics.BalanceRecord
+	// err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
+	// one of the entries in the balances would be uninitialized.
+	err error
+}
+
+// loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
+// The order of the transaction groups returned by the channel is identical to the one in the input array.
+func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
+	outChan := make(chan loadedTransactionGroup, len(groups))
+	go func() {
+		// groupTask helps to organize the account loading for each transaction group.
+		type groupTask struct {
+			// balances contains the loaded balances each transaction group have
+			balances []basics.BalanceRecord
+			// balancesCount is the number of balances that nees to be loaded per transaction group
+			balancesCount int
+			// done is a waiting channel for all the account data for the transaction group to be loaded
+			done chan error
 		}
-		state.lookup(addr)
-	}
-	for _, stxn := range payset {
-		select {
-		case <-ctx.Done():
-			return
-		default:
+		// addrTask manage the loading of a single account address.
+		type addrTask struct {
+			// account address to fetch
+			address basics.Address
+			// a list of transaction group tasks that depends on this address
+			groups []*groupTask
+			// a list of indices into the groupTask.balances where the address would be stored
+			groupIndices []int
 		}
-		state.lookup(stxn.Txn.Sender)
-		maybelookup(stxn.Txn.Receiver)
-		maybelookup(stxn.Txn.CloseRemainderTo)
-		maybelookup(stxn.Txn.AssetSender)
-		maybelookup(stxn.Txn.AssetReceiver)
-		maybelookup(stxn.Txn.AssetCloseTo)
-		maybelookup(stxn.Txn.FreezeAccount)
-		for _, xa := range stxn.Txn.Accounts {
-			maybelookup(xa)
+		defer close(outChan)
+
+		accountTasks := make(map[basics.Address]*addrTask)
+		maxAddressesPerTransaction := 7 + consensusParams.MaxAppTxnAccounts
+		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesPerTransaction)
+		// totalBalances counts the total number of balances over all the transaction groups
+		totalBalances := 0
+
+		initAccount := func(addr basics.Address, wg *groupTask) {
+			if addr.IsZero() {
+				return
+			}
+			if task, have := accountTasks[addr]; !have {
+				task := &addrTask{
+					address:      addr,
+					groups:       make([]*groupTask, 1, 4),
+					groupIndices: make([]int, 1, 4),
+				}
+				task.groups[0] = wg
+				task.groupIndices[0] = wg.balancesCount
+
+				accountTasks[addr] = task
+				addressesCh <- task
+			} else {
+				task.groups = append(task.groups, wg)
+				task.groupIndices = append(task.groupIndices, wg.balancesCount)
+			}
+			wg.balancesCount++
+			totalBalances++
 		}
-	}
+		// add the fee sink address to the accountTasks/addressesCh so that it will be loaded first.
+		if len(groups) > 0 {
+			task := &addrTask{
+				address: feeSinkAddr,
+			}
+			addressesCh <- task
+			accountTasks[feeSinkAddr] = task
+		}
+
+		// iterate over the transaction groups and add all their account addresses to the list
+		groupsReady := make([]*groupTask, len(groups))
+		for i, group := range groups {
+			task := &groupTask{}
+			groupsReady[i] = task
+			for _, stxn := range group {
+				initAccount(stxn.Txn.Sender, task)
+				initAccount(stxn.Txn.Receiver, task)
+				initAccount(stxn.Txn.CloseRemainderTo, task)
+				initAccount(stxn.Txn.AssetSender, task)
+				initAccount(stxn.Txn.AssetReceiver, task)
+				initAccount(stxn.Txn.AssetCloseTo, task)
+				initAccount(stxn.Txn.FreezeAccount, task)
+				for _, xa := range stxn.Txn.Accounts {
+					initAccount(xa, task)
+				}
+			}
+		}
+
+		// Add fee sink to the first group
+		if len(groupsReady) > 0 {
+			initAccount(feeSinkAddr, groupsReady[0])
+		}
+		close(addressesCh)
+
+		// updata all the groups task :
+		// allocate the correct number of balances, as well as
+		// enough space on the "done" channel.
+		allBalances := make([]basics.BalanceRecord, totalBalances)
+		usedBalances := 0
+		for _, gr := range groupsReady {
+			gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
+			gr.done = make(chan error, gr.balancesCount)
+			usedBalances += gr.balancesCount
+		}
+
+		// create few go-routines to load asyncroniously the account data.
+		for i := 0; i < asyncAccountLoadingThreadCount; i++ {
+			go func() {
+				for {
+					select {
+					case task, ok := <-addressesCh:
+						// load the address
+						if !ok {
+							// the channel got closed, which mean we're done.
+							return
+						}
+						// lookup the account data directly from the ledger.
+						acctData, _, err := l.LookupWithoutRewards(rnd, task.address)
+						br := basics.BalanceRecord{
+							Addr:        task.address,
+							AccountData: acctData,
+						}
+						// if there is no error..
+						if err == nil {
+							// update all the group tasks with the new acquired balance.
+							for i, wg := range task.groups {
+								wg.balances[task.groupIndices[i]] = br
+								// write a nil to indicate that we're loaded one entry.
+								wg.done <- nil
+							}
+						} else {
+							// there was an error loading that entry.
+							for _, wg := range task.groups {
+								// notify the channel of the error.
+								wg.done <- err
+							}
+						}
+					case <-ctx.Done():
+						// if the context was canceled, abort right away.
+						return
+					}
+
+				}
+			}()
+		}
+
+		// iterate on the transaction groups tasks. This array retains the original order.
+		for i, wg := range groupsReady {
+			// Wait to receive wg.balancesCount nil error messages, one for each address referenced in this txn group.
+			for j := 0; j < wg.balancesCount; j++ {
+				select {
+				case err := <-wg.done:
+					if err != nil {
+						// if there is an error, report the error to the output channel.
+						outChan <- loadedTransactionGroup{
+							group: groups[i],
+							err:   err,
+						}
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+			// if we had no error, write the result to the output channel.
+			// this write will not block since we preallocated enough space on the channel.
+			outChan <- loadedTransactionGroup{
+				group:    groups[i],
+				balances: wg.balances,
+			}
+		}
+	}()
+	return outChan
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.
@@ -1250,7 +1405,7 @@ func prefetchThread(ctx context.Context, state roundCowParent, payset []transact
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool, true)
+	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
 		return nil, err
 	}
