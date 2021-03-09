@@ -70,8 +70,8 @@ func main() {
 }
 `
 
-func tripleQuoteToBacktick(x string) string {
-	return strings.ReplaceAll(x, "\"\"\"", "`")
+func tripleTickToBacktick(x string) string {
+	return strings.ReplaceAll(x, "'''", "`")
 }
 
 const deadlock_test_src = `package main
@@ -82,7 +82,7 @@ import (
 
 type thing struct {
 	l sync.Mutex
-	r sync.Mutex """algofix:allow sync.Mutex"""
+	r sync.Mutex '''algofix:"allow sync.Mutex"'''
 	x sync.Mutex
 }
 
@@ -110,7 +110,7 @@ import (
 
 type thing struct {
 	l deadlock.Mutex
-	r deadlock.Mutex """algofix:allow sync.Mutex"""
+	r sync.Mutex '''algofix:"allow sync.Mutex"'''
 	x deadlock.Mutex
 }
 
@@ -144,8 +144,8 @@ func testGoFmt(fset *token.FileSet, node interface{}) (out string, err error) {
 }
 
 func testDeadlock(t *testing.T, src, dest string) {
-	src = tripleQuoteToBacktick(src)
-	dest = tripleQuoteToBacktick(dest)
+	src = tripleTickToBacktick(src)
+	dest = tripleTickToBacktick(dest)
 	fset := token.NewFileSet()
 	filename := "testmain.go"
 	file, err := parser.ParseFile(fset, filename, src, parserMode)

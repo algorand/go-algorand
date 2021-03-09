@@ -18,7 +18,6 @@ package main
 
 import (
 	"go/ast"
-	"go/token"
 	"strings"
 )
 
@@ -39,18 +38,24 @@ func deadlock(f *ast.File) bool {
 	}
 
 	fixed := false
-	disable := false
-	commentIndex := 0
 
-	var exceptPos token.Pos
-	var exceptEnd token.Pos
+	var provisionalRewrites []*ast.SelectorExpr
 
 	walk(f, func(n interface{}) {
 		if f, ok := n.(*ast.Field); ok {
 			if f.Tag != nil {
-				if strings.Contains(f.Tag.Value, "algofix:allow sync.Mutex") {
-					exceptPos = f.Pos()
-					exceptEnd = f.End()
+				if strings.Contains(f.Tag.Value, `algofix:"allow sync.Mutex"`) {
+					exceptPos := f.Pos()
+					exceptEnd := f.End()
+					// cancel a provisional rewrite if it winds up being contained in a struct field decl with a tag to allow sync.Mutex
+					for i, e := range provisionalRewrites {
+						if e == nil {
+							continue
+						}
+						if exceptPos <= e.Pos() && e.End() <= exceptEnd {
+							provisionalRewrites[i] = nil
+						}
+					}
 				}
 			}
 			return
@@ -61,27 +66,6 @@ func deadlock(f *ast.File) bool {
 			return
 		}
 
-		// Search comments before the current SelectorExpr for possible enable/disable directives
-		for (commentIndex < len(f.Comments)) && (f.Comments[commentIndex].Pos() < e.Pos()) {
-			cg := f.Comments[commentIndex]
-			for _, c := range cg.List {
-				if strings.Contains(c.Text, "algofix allow sync") {
-					disable = true
-				} else if strings.Contains(c.Text, "algofix require deadlock") {
-					disable = false
-				}
-			}
-			commentIndex++
-		}
-
-		if disable {
-			return
-		}
-
-		if exceptPos <= e.Pos() && e.End() <= exceptEnd {
-			return
-		}
-
 		pkg, ok := e.X.(*ast.Ident)
 		if !ok {
 			return
@@ -89,10 +73,18 @@ func deadlock(f *ast.File) bool {
 
 		estr := pkg.Name + "." + e.Sel.Name
 		if estr == "sync.Mutex" || estr == "sync.RWMutex" {
-			e.X = &ast.Ident{Name: "deadlock"}
-			fixed = true
+			provisionalRewrites = append(provisionalRewrites, e)
 		}
 	})
+
+	// actually apply any provisional rewrites that weren't cancelled
+	for _, e := range provisionalRewrites {
+		if e == nil {
+			continue
+		}
+		e.X = &ast.Ident{Name: "deadlock"}
+		fixed = true
+	}
 
 	if fixed {
 		addImport(f, "github.com/algorand/go-deadlock")

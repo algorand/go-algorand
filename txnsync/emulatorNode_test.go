@@ -48,7 +48,7 @@ type networkPeer struct {
 
 	messageQ []queuedMessage // incoming message queue
 
-	mu sync.Mutex `algofix:allow sync.Mutex`
+	mu sync.Mutex `algofix:"allow sync.Mutex"`
 
 	deferredSentMessages []queuedSentMessageCallback // outgoing messages callback queue
 }
@@ -64,7 +64,7 @@ type emulatedNode struct {
 	txpoolIds          map[transactions.Txid]bool
 	name               string
 	blocked            chan struct{}
-	mu                 sync.Mutex `algofix:allow sync.Mutex`
+	mu                 sync.Mutex `algofix:"allow sync.Mutex"`
 	txpoolGroupCounter uint64
 	blockingEnabled    bool
 	nodeBlocked        chan struct{} // channel is closed when node is blocked.
