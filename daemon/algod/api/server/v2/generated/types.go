@@ -580,6 +580,19 @@ type PostTransactionsResponse struct {
 	TxId string `json:"txId"`
 }
 
+// ProofResponse defines model for ProofResponse.
+type ProofResponse struct {
+
+	// Index of the transaction in the block's payset.
+	Idx uint64 `json:"idx"`
+
+	// Merkle proof of transaction membership.
+	Proof []byte `json:"proof"`
+
+	// Hash of SignedTxnInBlock for verifying proof.
+	Stibhash []byte `json:"stibhash"`
+}
+
 // SupplyResponse defines model for SupplyResponse.
 type SupplyResponse struct {
 
@@ -642,6 +655,13 @@ type GetPendingTransactionsByAddressParams struct {
 
 // GetBlockParams defines parameters for GetBlock.
 type GetBlockParams struct {
+
+	// Configures whether the response object is JSON or MessagePack encoded.
+	Format *string `json:"format,omitempty"`
+}
+
+// GetProofParams defines parameters for GetProof.
+type GetProofParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`

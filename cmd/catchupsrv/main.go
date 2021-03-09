@@ -85,7 +85,7 @@ func main() {
 		requestHeader := make(http.Header)
 		requestHeader.Set(network.GenesisHeader, genesisID)
 		requestHeader.Set(network.NodeRandomHeader, base64.StdEncoding.EncodeToString(rnd[:]))
-		requestHeader.Set(network.ProtocolVersionHeader, "1")
+		requestHeader.Set(network.ProtocolVersionHeader, "2.1")
 
 		conn, err := upgrader.Upgrade(w, r, requestHeader)
 		if err != nil {

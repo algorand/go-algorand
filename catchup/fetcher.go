@@ -54,14 +54,13 @@ type FetcherFactory interface {
 	// Create a new fetcher
 	New() Fetcher
 	// Create a new fetcher that also fetches from backup peers over gossip network utilising given message tag
-	NewOverGossip(requestTag protocol.Tag) Fetcher
+	NewOverGossip() Fetcher
 }
 
 // NetworkFetcherFactory creates network fetchers
 type NetworkFetcherFactory struct {
 	net       network.GossipNode
 	peerLimit int
-	fs        *rpcs.WsFetcherService
 	cfg       *config.Local
 
 	log logging.Logger
@@ -78,12 +77,11 @@ func (factory NetworkFetcherFactory) makeHTTPFetcherFromPeer(log logging.Logger,
 
 // MakeNetworkFetcherFactory returns a network fetcher factory, that associates fetchers with no more than peerLimit peers from the aggregator.
 // WSClientSource can be nil, if no network exists to create clients from (defaults to http clients)
-func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, fs *rpcs.WsFetcherService, cfg *config.Local) NetworkFetcherFactory {
+func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, cfg *config.Local) NetworkFetcherFactory {
 	var factory NetworkFetcherFactory
 	factory.net = net
 	factory.peerLimit = peerLimit
 	factory.log = logging.Base()
-	factory.fs = fs
 	factory.cfg = cfg
 	return factory
 }
@@ -119,19 +117,14 @@ func (factory NetworkFetcherFactory) New() Fetcher {
 // NewOverGossip returns a fetcher using the given message tag.
 // If there are gossip peers, then it returns a fetcher over gossip
 // Otherwise, it returns an HTTP fetcher
-// We should never build two fetchers utilising the same tag. Why?
-func (factory NetworkFetcherFactory) NewOverGossip(tag protocol.Tag) Fetcher {
+func (factory NetworkFetcherFactory) NewOverGossip() Fetcher {
 	gossipPeers := factory.net.GetPeers(network.PeersConnectedIn)
 	factory.log.Debugf("%d gossip peers", len(gossipPeers))
 	if len(gossipPeers) == 0 {
 		factory.log.Info("no gossip peers for NewOverGossip")
 		return factory.New()
 	}
-	if factory.fs == nil {
-		factory.log.Info("WsFetcherService not available; fetch over gossip disabled")
-		return factory.New()
-	}
-	f := MakeWsFetcher(factory.log, tag, gossipPeers, factory.fs, factory.cfg)
+	f := MakeWsFetcher(factory.log, gossipPeers, factory.cfg)
 	return &ComposedFetcher{fetchers: []Fetcher{factory.New(), f}}
 }
 

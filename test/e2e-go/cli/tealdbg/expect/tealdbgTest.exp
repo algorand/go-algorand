@@ -11,15 +11,32 @@ if { [catch {
     exec mkdir -p $TEST_DIR
 
     set TEAL_PROG_FILE "$TEST_DIR/trivial.teal"
+
+    # this is ConsensusV25
+    set PROTOCOL_VERSION_2 "https://github.com/algorandfoundation/specs/tree/bea19289bf41217d2c0af30522fa222ef1366466"
+
+    # this is ConsensusV26
+    set PROTOCOL_VERSION_3 "https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff"
+
+    # run the test using version 2:
+
     exec printf "#pragma version 2\nint 1\ndup\n+\n" > $TEAL_PROG_FILE
 
     set URL ""
     set PASSED 0
-    spawn tealdbg debug -v $TEAL_PROG_FILE
+    spawn tealdbg debug -v $TEAL_PROG_FILE -p $PROTOCOL_VERSION_2
     expect_background {
         timeout { puts "tealdbg debug timed out"; exit 1 }
         -re {CDT debugger listening on: (ws://[.a-z0-9:/]+)} { set URL $expect_out(1,string); }
+        eof {
+            catch wait result
+            if { [lindex $result 3] != 0 } {
+                puts "returned error code is [lindex $result 3]"
+                exit 1
+            }
+        }
     }
+    set tealdbg_spawn_id $spawn_id
 
     # wait until URL is set or timeout
     set it 0
@@ -43,6 +60,56 @@ if { [catch {
         puts "ERROR: have not found 'Debugger.paused' in cdtmock output"
         exit 1
     }
+
+    puts "Shutting down tealdbg"
+    close -i $tealdbg_spawn_id
+    exec rm $TEAL_PROG_FILE
+
+    # run the test using version 3:
+
+    exec printf "#pragma version 3\nint 1\ndup\n+\n" > $TEAL_PROG_FILE
+
+    set URL ""
+    set PASSED 0
+    spawn tealdbg debug -v $TEAL_PROG_FILE -p $PROTOCOL_VERSION_3
+    expect_background {
+        timeout { puts "tealdbg debug timed out"; exit 1 }
+        -re {CDT debugger listening on: (ws://[.a-z0-9:/]+)} { set URL $expect_out(1,string); }
+        eof {
+            catch wait result
+            if { [lindex $result 3] != 0 } {
+                puts "returned error code is [lindex $result 3]"
+                exit 1 
+            }
+        }
+    }
+    set tealdbg_spawn_id $spawn_id
+
+    # wait until URL is set or timeout
+    set it 0
+    while { $it < 10 && $URL == "" } {
+        set it [expr {$it + 1}]
+        sleep 1
+    }
+    if { $URL == "" } {
+        puts "ERROR: URL is not set after timeout"
+        exit 1
+    }
+
+    spawn cdtmock $URL
+    expect {
+        timeout { puts "cdt-mock debug timed out"; exit 1 }
+        -re {Debugger.paused} { set PASSED 1; }
+        eof { catch wait result; if { [lindex $result 3] == 0 } { puts "Expected non-zero exit code"; exit [lindex $result 3] } }
+    }
+
+    if { $PASSED == 0 } {
+        puts "ERROR: have not found 'Debugger.paused' in cdtmock output"
+        exit 1
+    }
+
+    puts "Shutting down tealdbg"
+    close -i $tealdbg_spawn_id
 
 } EXCEPTION ] } {
     puts "ERROR in teadbgTest: $EXCEPTION"

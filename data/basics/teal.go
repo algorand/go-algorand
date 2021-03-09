@@ -285,7 +285,7 @@ func (tk TealKeyValue) Clone() TealKeyValue {
 }
 
 // ToStateSchema calculates the number of each value type in a TealKeyValue and
-// reprsents the result as a StateSchema
+// represents the result as a StateSchema
 func (tk TealKeyValue) ToStateSchema() (schema StateSchema, err error) {
 	for _, value := range tk {
 		switch value.Type {

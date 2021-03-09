@@ -49,11 +49,11 @@ func (v *Verifier) Verify(c *Cert) error {
 	}
 
 	// Verify all of the reveals
-	sigs := make(map[uint64]crypto.Hashable)
-	parts := make(map[uint64]crypto.Hashable)
+	sigs := make(map[uint64]crypto.Digest)
+	parts := make(map[uint64]crypto.Digest)
 	for pos, r := range c.Reveals {
-		sigs[pos] = r.SigSlot
-		parts[pos] = r.Part
+		sigs[pos] = crypto.HashObj(r.SigSlot)
+		parts[pos] = crypto.HashObj(r.Part)
 
 		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
 		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {

@@ -407,7 +407,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling VerifyCatchpoint : %v", err))
 		}
-		// give a rank to the download, as the download was successfull.
+		// give a rank to the download, as the download was successful.
 		peerRank := cs.blocksDownloadPeerSelector.PeerDownloadDurationToRank(peer, blockDownloadDuration)
 		cs.blocksDownloadPeerSelector.RankPeer(peer, peerRank)
 

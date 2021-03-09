@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
@@ -76,19 +77,24 @@ func TestBasicCatchup(t *testing.T) {
 // The current versions are the original v1 and the upgraded to v2.1
 func TestCatchupOverGossip(t *testing.T) {
 	t.Parallel()
+
+	supportedVersions := network.SupportedProtocolVersions
+	require.LessOrEqual(t, len(supportedVersions), 3)
+
 	// ledger node upgraded version, fetcher node upgraded version
-	runCatchupOverGossip(t, false, false)
-	// ledger node older version, fetcher node upgraded version
-	runCatchupOverGossip(t, true, false)
-	// ledger node upgraded older version, fetcher node older version
-	runCatchupOverGossip(t, false, true)
-	// ledger node older version, fetcher node older version
-	runCatchupOverGossip(t, true, true)
+	// Run with the default values. Instead of "", pass the default value
+	// to exercise loading it from the config file. 
+	runCatchupOverGossip(t, supportedVersions[0], supportedVersions[0])
+	for i := 1; i < len(supportedVersions); i++ {
+		runCatchupOverGossip(t, supportedVersions[i], "")
+		runCatchupOverGossip(t, "", supportedVersions[i])
+		runCatchupOverGossip(t, supportedVersions[i], supportedVersions[i])
+	}
 }
 
 func runCatchupOverGossip(t *testing.T,
-	ledgerNodeDowngrade,
-	fetcherNodeDowngrade bool) {
+	ledgerNodeDowngradeTo,
+	fetcherNodeDowngradeTo string) {
 
 	if testing.Short() {
 		t.Skip()
@@ -105,22 +111,24 @@ func runCatchupOverGossip(t *testing.T,
 	// distribution for catchup so this is fine.
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
 
-	if ledgerNodeDowngrade {
+	if ledgerNodeDowngradeTo != ""{
 		// Force the node to only support v1
 		dir, err := fixture.GetNodeDir("Node")
 		a.NoError(err)
 		cfg, err := config.LoadConfigFromDisk(dir)
 		a.NoError(err)
-		cfg.NetworkProtocolVersion = "1"
+		require.Empty(t, cfg.NetworkProtocolVersion)
+		cfg.NetworkProtocolVersion = ledgerNodeDowngradeTo
 		cfg.SaveToDisk(dir)
 	}
 
-	if fetcherNodeDowngrade {
+	if fetcherNodeDowngradeTo != "" {
 		// Force the node to only support v1
 		dir := fixture.PrimaryDataDir()
 		cfg, err := config.LoadConfigFromDisk(dir)
 		a.NoError(err)
-		cfg.NetworkProtocolVersion = "1"
+		require.Empty(t, cfg.NetworkProtocolVersion)
+		cfg.NetworkProtocolVersion = fetcherNodeDowngradeTo
 		cfg.SaveToDisk(dir)
 	}
 
