@@ -29,8 +29,6 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
-// algofix allow sync
-
 type queuedSentMessageCallback struct {
 	callback SendMessageCallback
 	seq      uint64
@@ -40,15 +38,18 @@ type queuedMessage struct {
 	readyAt time.Duration
 }
 type networkPeer struct {
-	peer                 *Peer
-	uploadSpeed          uint64
-	downloadSpeed        uint64
-	isOutgoing           bool
-	outSeq               uint64
-	inSeq                uint64
-	target               int
-	messageQ             []queuedMessage // incoming message queue
-	mu                   sync.Mutex
+	peer          *Peer
+	uploadSpeed   uint64
+	downloadSpeed uint64
+	isOutgoing    bool
+	outSeq        uint64
+	inSeq         uint64
+	target        int
+
+	messageQ []queuedMessage // incoming message queue
+
+	mu sync.Mutex `algofix:allow sync.Mutex`
+
 	deferredSentMessages []queuedSentMessageCallback // outgoing messages callback queue
 }
 
@@ -63,7 +64,7 @@ type emulatedNode struct {
 	txpoolIds          map[transactions.Txid]bool
 	name               string
 	blocked            chan struct{}
-	mu                 sync.Mutex
+	mu                 sync.Mutex `algofix:allow sync.Mutex`
 	txpoolGroupCounter uint64
 	blockingEnabled    bool
 	nodeBlocked        chan struct{} // channel is closed when node is blocked.

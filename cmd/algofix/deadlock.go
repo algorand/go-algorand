@@ -18,6 +18,7 @@ package main
 
 import (
 	"go/ast"
+	"go/token"
 	"strings"
 )
 
@@ -41,7 +42,20 @@ func deadlock(f *ast.File) bool {
 	disable := false
 	commentIndex := 0
 
+	var exceptPos token.Pos
+	var exceptEnd token.Pos
+
 	walk(f, func(n interface{}) {
+		if f, ok := n.(*ast.Field); ok {
+			if f.Tag != nil {
+				if strings.Contains(f.Tag.Value, "algofix:allow sync.Mutex") {
+					exceptPos = f.Pos()
+					exceptEnd = f.End()
+				}
+			}
+			return
+		}
+
 		e, ok := n.(*ast.SelectorExpr)
 		if !ok {
 			return
@@ -61,6 +75,10 @@ func deadlock(f *ast.File) bool {
 		}
 
 		if disable {
+			return
+		}
+
+		if exceptPos <= e.Pos() && e.End() <= exceptEnd {
 			return
 		}
 
