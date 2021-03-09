@@ -69,7 +69,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 		return nil, nil, time.Duration(0), fmt.Errorf("FetchBlock: UniversalFetcher only supports HTTPPeer or UnicastPeer")
 	}
 
-	fetchedBuf, err := fetcherClient.GetBlockBytes(ctx, round)
+	fetchedBuf, err := fetcherClient.getBlockBytes(ctx, round)
 	if err != nil {
 		return nil, nil, time.Duration(0), err
 	}

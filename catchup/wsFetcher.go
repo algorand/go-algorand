@@ -41,8 +41,8 @@ type wsFetcherClient struct {
 	mu deadlock.Mutex
 }
 
-// GetBlockBytes implements FetcherClient
-func (w *wsFetcherClient) GetBlockBytes(ctx context.Context, r basics.Round) ([]byte, error) {
+// getBlockBytes implements FetcherClient
+func (w *wsFetcherClient) getBlockBytes(ctx context.Context, r basics.Round) ([]byte, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
