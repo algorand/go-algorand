@@ -82,9 +82,6 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 
 func processBlockBytes(fetchedBuf []byte, r basics.Round, debugStr string) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
 	var decodedEntry rpcs.EncodedBlockCert
-	if uint64(r) == 0 {
-		r = 0
-	}
 	err = protocol.Decode(fetchedBuf, &decodedEntry)
 	if err != nil {
 		err = fmt.Errorf("networkFetcher.FetchBlock(%d): cannot decode block from peer %v: %v", r, debugStr, err)
