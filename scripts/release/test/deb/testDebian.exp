@@ -33,7 +33,7 @@ if { [catch {
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # Start network
-    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
 
     set TEST_ROOT_DIR_LS_OUTPUT [ eval exec ls $TEST_ROOT_DIR ]
     puts "TEST_ROOT_DIR_LS_OUTPUT ls output: $TEST_ROOT_DIR_LS_OUTPUT"
@@ -93,7 +93,7 @@ if { [catch {
     ::AlgorandGoal::DeleteAccount $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TEST_PRIMARY_NODE_DIR
 
     # Shutdown the network
-    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
 
     puts "Basic Goal Test Successful"
 

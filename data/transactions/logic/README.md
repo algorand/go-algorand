@@ -100,8 +100,6 @@ For one-argument ops, `X` is the last element on the stack, which is typically r
 
 For two-argument ops, `A` is the previous element on the stack and `B` is the last element on the stack. These typically result in popping A and B from the stack and pushing the result.
 
-`ed25519verify` is currently the only 3 argument opcode and is described in detail in the opcode refrence.
-
 | Op | Description |
 | --- | --- |
 | `sha256` | SHA256 hash of value X, yields [32]byte |
@@ -131,9 +129,13 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `~` | bitwise invert value X |
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 | `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
-| `concat` | pop two byte strings A and B and join them, push the result |
-| `substring` | pop a byte string X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the string length, the program fails |
-| `substring3` | pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the string length, the program fails |
+| `getbit` | pop a target A (integer or byte-array), and index B. Push the Bth bit of A. |
+| `setbit` | pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result |
+| `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
+| `setbyte` | pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result |
+| `concat` | pop two byte-arrays A and B and join them, push the result |
+| `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
+| `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
 
 ### Loading Values
 
@@ -143,30 +145,34 @@ Some of these have immediate data in the byte or bytes after the opcode.
 
 | Op | Description |
 | --- | --- |
-| `intcblock` | load block of uint64 constants |
-| `intc` | push value from uint64 constants to stack by index into constants |
+| `intcblock uint ...` | prepare block of uint64 constants for use by intc |
+| `intc i` | push Ith constant from intcblock to stack |
 | `intc_0` | push constant 0 from intcblock to stack |
 | `intc_1` | push constant 1 from intcblock to stack |
 | `intc_2` | push constant 2 from intcblock to stack |
 | `intc_3` | push constant 3 from intcblock to stack |
-| `bytecblock` | load block of byte-array constants |
-| `bytec` | push bytes constant to stack by index into constants |
+| `pushint uint` | push immediate UINT to the stack as an integer |
+| `bytecblock bytes ...` | prepare block of byte-array constants for use by bytec |
+| `bytec i` | push Ith constant from bytecblock to stack |
 | `bytec_0` | push constant 0 from bytecblock to stack |
 | `bytec_1` | push constant 1 from bytecblock to stack |
 | `bytec_2` | push constant 2 from bytecblock to stack |
 | `bytec_3` | push constant 3 from bytecblock to stack |
-| `arg` | push Args[N] value to stack by index |
-| `arg_0` | push Args[0] to stack |
-| `arg_1` | push Args[1] to stack |
-| `arg_2` | push Args[2] to stack |
-| `arg_3` | push Args[3] to stack |
-| `txn` | push field from current transaction to stack |
-| `gtxn` | push field to the stack from a transaction in the current transaction group |
-| `txna` | push value of an array field from current transaction to stack |
-| `gtxna` | push value of a field to the stack from a transaction in the current transaction group |
-| `global` | push value from globals to stack |
-| `load` | copy a value from scratch space to the stack |
-| `store` | pop a value from the stack and store to scratch space |
+| `pushbytes bytes` | push the following program bytes to the stack |
+| `arg n` | push Nth LogicSig argument to stack |
+| `arg_0` | push LogicSig argument 0 to stack |
+| `arg_1` | push LogicSig argument 1 to stack |
+| `arg_2` | push LogicSig argument 2 to stack |
+| `arg_3` | push LogicSig argument 3 to stack |
+| `txn f` | push field F of current transaction to stack |
+| `gtxn t f` | push field F of the Tth transaction in the current group |
+| `txna f i` | push Ith value of the array field F of the current transaction |
+| `gtxna t f i` | push Ith value of the array field F from the Tth transaction in the current group |
+| `gtxns f` | push field F of the Ath transaction in the current group |
+| `gtxnsa f i` | push Ith value of the array field F from the Ath transaction in the current group |
+| `global f` | push value from globals to stack |
+| `load i` | copy a value from scratch space to the stack |
+| `store i` | pop a value from the stack and store to scratch space |
 
 **Transaction Fields**
 
@@ -220,6 +226,14 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 45 | FreezeAsset | uint64 | Asset ID being frozen or un-frozen. LogicSigVersion >= 2. |
 | 46 | FreezeAssetAccount | []byte | 32 byte address of the account whose asset slot is being frozen or un-frozen. LogicSigVersion >= 2. |
 | 47 | FreezeAssetFrozen | uint64 | The new frozen value, 0 or 1. LogicSigVersion >= 2. |
+| 48 | Assets | uint64 | Foreign Assets listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
+| 49 | NumAssets | uint64 | Number of Assets. LogicSigVersion >= 3. |
+| 50 | Applications | uint64 | Foreign Apps listed in the ApplicationCall transaction. LogicSigVersion >= 3. |
+| 51 | NumApplications | uint64 | Number of Applications. LogicSigVersion >= 3. |
+| 52 | GlobalNumUint | uint64 | Number of global state integers in ApplicationCall. LogicSigVersion >= 3. |
+| 53 | GlobalNumByteSlice | uint64 | Number of global state byteslices in ApplicationCall. LogicSigVersion >= 3. |
+| 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
+| 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -239,6 +253,7 @@ Global fields are fields that are common to all the transactions in the group. I
 | 6 | Round | uint64 | Current round number. LogicSigVersion >= 2. |
 | 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
 | 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
+| 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
 
 
 **Asset Fields**
@@ -271,30 +286,35 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | Op | Description |
 | --- | --- |
 | `err` | Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs. |
-| `bnz` | branch if value X is not zero |
-| `bz` | branch if value X is zero |
-| `b` | branch unconditionally to offset |
+| `bnz target` | branch to TARGET if value X is not zero |
+| `bz target` | branch to TARGET if value X is zero |
+| `b target` | branch unconditionally to TARGET |
 | `return` | use last value on stack as success value; end |
 | `pop` | discard value X from stack |
 | `dup` | duplicate last value on stack |
 | `dup2` | duplicate two last values on stack: A, B -> A, B, A, B |
+| `dig n` | push the Nth value from the top of the stack. dig 0 is equivalent to dup |
+| `swap` | swaps two last values on stack: A, B -> B, A |
+| `select` | selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A) |
+| `assert` | immediately fail unless value X is a non-zero number |
 
 ### State Access
 
 | Op | Description |
 | --- | --- |
-| `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender |
+| `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
+| `min_balance` | get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
 | `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
 | `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the current application key B => value |
-| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value} |
+| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C => [*... stack*, value, 0 or 1] |
 | `app_global_get` | read key A from global state of a current application => value |
-| `app_global_get_ex` | read from application Txn.ForeignApps[A] global state key B => {0 or 1 (top), value}. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app |
+| `app_global_get_ex` | read from application Txn.ForeignApps[A] global state key B => [*... stack*, value, 0 or 1]. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app |
 | `app_local_put` | write to account specified by Txn.Accounts[A] to local state of a current application key B with value C |
 | `app_global_put` | write key A and value B to global state of the current application |
 | `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |
 | `app_global_del` | delete key A from a global state of the current application |
-| `asset_holding_get` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value} |
-| `asset_params_get` | read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value} |
+| `asset_holding_get i` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value} |
+| `asset_params_get i` | read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value} |
 
 # Assembler Syntax
 
