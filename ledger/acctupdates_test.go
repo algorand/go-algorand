@@ -251,23 +251,23 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			var totalOnline, totalOffline, totalNotPart uint64
 
 			for addr, data := range accts[rnd] {
-				d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
+				pad, validThrough, err := au.LookupWithoutRewards(rnd, addr)
 				require.NoError(t, err)
-				require.Equal(t, d, data)
+				require.Equal(t, pad.AccountData, data)
 				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 
-				rewardsDelta := rewards[rnd] - d.RewardsBase
-				switch d.Status {
+				rewardsDelta := rewards[rnd] - pad.AccountData.RewardsBase
+				switch pad.AccountData.Status {
 				case basics.Online:
-					totalOnline += d.MicroAlgos.Raw
-					totalOnline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
+					totalOnline += pad.AccountData.MicroAlgos.Raw
+					totalOnline += (pad.AccountData.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
 				case basics.Offline:
-					totalOffline += d.MicroAlgos.Raw
-					totalOffline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
+					totalOffline += pad.AccountData.MicroAlgos.Raw
+					totalOffline += (pad.AccountData.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
 				case basics.NotParticipating:
-					totalNotPart += d.MicroAlgos.Raw
+					totalNotPart += pad.AccountData.MicroAlgos.Raw
 				default:
-					t.Errorf("unknown status %v", d.Status)
+					t.Errorf("unknown status %v", pad.AccountData.Status)
 				}
 			}
 
@@ -283,10 +283,10 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 			require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-			d, validThrough, err := au.LookupWithoutRewards(rnd, randomAddress())
+			pad, validThrough, err := au.LookupWithoutRewards(rnd, randomAddress())
 			require.NoError(t, err)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
-			require.Equal(t, d, basics.AccountData{})
+			require.Equal(t, pad.AccountData, basics.AccountData{})
 		}
 	}
 	checkAcctUpdatesConsistency(t, au)
@@ -766,7 +766,8 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			updates := make(map[basics.Address]basics.AccountData)
 			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 			toAccount := moneyAccounts[0]
-			toAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, toAccount)
+			toPadOld, validThrough, err := au.LookupWithoutRewards(i-1, toAccount)
+			toAccountDataOld := toPadOld.AccountData
 			require.NoError(t, err)
 			require.Equal(t, i-1, validThrough)
 			toAccountDataNew := toAccountDataOld
@@ -774,7 +775,8 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			for j := 1; j < len(moneyAccounts); j++ {
 				fromAccount := moneyAccounts[j]
 
-				fromAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, fromAccount)
+				fromPadOld, validThrough, err := au.LookupWithoutRewards(i-1, fromAccount)
+				fromAccountDataOld := fromPadOld.AccountData
 				require.NoError(t, err)
 				require.Equal(t, i-1, validThrough)
 				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)

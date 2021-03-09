@@ -65,7 +65,7 @@ type roundCowBase struct {
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
+	return x.l.getCreatorForRound(x.rnd, cidx, ctype)
 }
 
 func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData, err error) {
@@ -74,7 +74,7 @@ func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData,
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
-	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, TxLease{txl})
+	return x.l.checkDup(x.proto, x.rnd+1, firstValid, lastValid, txid, TxLease{txl})
 }
 
 func (x *roundCowBase) txnCounter() uint64 {
@@ -333,9 +333,11 @@ type ledgerForEvaluator interface {
 // ledgerForCowBase represents subset of Ledger functionality needed for cow business
 type ledgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
-	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+
+	lookupWithoutRewards(basics.Round, basics.Address) (ledgercore.PersistedAccountData, basics.Round, error)
+	checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
+	getCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
