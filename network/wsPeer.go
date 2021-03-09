@@ -331,8 +331,8 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
-	wp.sendMsgTracker = makeTracker(5 * maxBroadcastArraySize)
-	wp.receiveMsgTracker = makeTracker(7 * maxBroadcastArraySize)
+	wp.sendMsgTracker = makeTracker(3 * maxBroadcastArraySize)
+	wp.receiveMsgTracker = makeTracker(5 * maxBroadcastArraySize)
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue
