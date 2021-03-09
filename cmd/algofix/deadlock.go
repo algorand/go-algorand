@@ -18,6 +18,7 @@ package main
 
 import (
 	"go/ast"
+	"strings"
 )
 
 func init() {
@@ -37,9 +38,29 @@ func deadlock(f *ast.File) bool {
 	}
 
 	fixed := false
+	disable := false
+	commentIndex := 0
+
 	walk(f, func(n interface{}) {
 		e, ok := n.(*ast.SelectorExpr)
 		if !ok {
+			return
+		}
+
+		// Search comments before the current SelectorExpr for possible enable/disable directives
+		for (commentIndex < len(f.Comments)) && (f.Comments[commentIndex].Pos() < e.Pos()) {
+			cg := f.Comments[commentIndex]
+			for _, c := range cg.List {
+				if strings.Contains(c.Text, "algofix allow sync") {
+					disable = true
+				} else if strings.Contains(c.Text, "algofix require deadlock") {
+					disable = false
+				}
+			}
+			commentIndex++
+		}
+
+		if disable {
 			return
 		}
 
