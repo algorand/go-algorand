@@ -106,7 +106,7 @@ const topPageTemplate = `
     <div>
       <p>The dispensed Algos have no monetary value and should only be used to test applications.</p>
       <p>This service is gracefully provided to enable development on the Algorand blockchain test networks.</p>
-      <p>Please do not abuse it by requesting millions of Algos.</p>
+      <p>Please do not abuse it by requesting more Algos than needed.</p>
     </div>
     <div>
       <input id="target" placeholder="target address" size="80">
