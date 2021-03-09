@@ -22,6 +22,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -69,27 +70,34 @@ func main() {
 }
 `
 
+func tripleQuoteToBacktick(x string) string {
+	return strings.ReplaceAll(x, "\"\"\"", "`")
+}
+
 const deadlock_test_src = `package main
 
 import (
 	"sync"
 )
 
+type thing struct {
+	l sync.Mutex
+	r sync.Mutex """algofix:allow sync.Mutex"""
+	x sync.Mutex
+}
+
+func (t *thing) foo() {
+	t.l.Lock()
+	defer t.l.Unlock()
+	t.r.Lock()
+	defer t.r.Unlock()
+	t.x.Lock()
+	defer t.x.Unlock()
+}
+
 func main() {
-	var l sync.Mutex
-
-	// algofix allow sync
-	var r sync.Mutex
-
-	// algofix require deadlock
-	var x sync.Mutex
-
-	l.Lock()
-	defer l.Unlock()
-	r.Lock()
-	defer r.Unlock()
-	x.Lock()
-	defer x.Unlock()
+	var t thing
+	t.foo()
 }
 `
 
@@ -100,21 +108,24 @@ import (
 	"sync"
 )
 
+type thing struct {
+	l deadlock.Mutex
+	r deadlock.Mutex """algofix:allow sync.Mutex"""
+	x deadlock.Mutex
+}
+
+func (t *thing) foo() {
+	t.l.Lock()
+	defer t.l.Unlock()
+	t.r.Lock()
+	defer t.r.Unlock()
+	t.x.Lock()
+	defer t.x.Unlock()
+}
+
 func main() {
-	var l deadlock.Mutex
-
-	// algofix allow sync
-	var r sync.Mutex
-
-	// algofix require deadlock
-	var x deadlock.Mutex
-
-	l.Lock()
-	defer l.Unlock()
-	r.Lock()
-	defer r.Unlock()
-	x.Lock()
-	defer x.Unlock()
+	var t thing
+	t.foo()
 }
 `
 
@@ -133,6 +144,8 @@ func testGoFmt(fset *token.FileSet, node interface{}) (out string, err error) {
 }
 
 func testDeadlock(t *testing.T, src, dest string) {
+	src = tripleQuoteToBacktick(src)
+	dest = tripleQuoteToBacktick(dest)
 	fset := token.NewFileSet()
 	filename := "testmain.go"
 	file, err := parser.ParseFile(fset, filename, src, parserMode)
