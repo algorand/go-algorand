@@ -1009,6 +1009,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 // FinalValidation does the validation that must happen after the block is built and all state updates are computed
 func (eval *BlockEvaluator) finalValidation() error {
+	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
 	if eval.validate {
 		// check commitments
 		txnRoot, err := eval.block.PaysetCommit()
