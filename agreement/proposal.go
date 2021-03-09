@@ -55,10 +55,9 @@ type unauthenticatedProposal struct {
 	bookkeeping.Block
 	SeedProof crypto.VrfProof `codec:"sdpf"`
 
-	OriginalPeriod   period         `codec:"oper"`
-	OriginalProposer basics.Address `codec:"oprop"`
-
-	ctx *context.Context //TODO(yg): set to background?
+	OriginalPeriod   period           `codec:"oper"`
+	OriginalProposer basics.Address   `codec:"oprop"`
+	ctx              *context.Context //TODO(yg): set to background?
 }
 
 // ToBeHashed implements the Hashable interface.

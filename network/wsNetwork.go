@@ -407,7 +407,7 @@ type broadcastRequest struct {
 	except      *wsPeer
 	done        chan struct{}
 	enqueueTime time.Time
-	ctx context.Context
+	ctx         context.Context
 }
 
 func (r broadcastRequest) ToBeHashed() (protocol.HashID, []byte) {
@@ -1381,7 +1381,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer == request.except {
 			continue
 		}
-		ok := peer.writeNonBlockMsgs(data, prio, digests, request.pacer, request.enqueueTime, request.ctx)
+		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.pacer, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -2080,7 +2080,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(mbytes, true, crypto.Digest{}, nil, time.Now(), context.Background())
+				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, nil, time.Now())
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}

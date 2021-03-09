@@ -285,7 +285,6 @@ func (c *poolCryptoVerifier) VerifyProposal(ctx context.Context, request *crypto
 		request.UnauthenticatedProposal.ctx = &request.ctx
 	}
 
-
 	switch request.Tag {
 	case protocol.ProposalPayloadTag:
 		select {

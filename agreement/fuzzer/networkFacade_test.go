@@ -196,7 +196,7 @@ func (n *NetworkFacade) BroadcastArray(ctx context.Context, tag []protocol.Tag, 
 	for i := range data {
 		err := n.broadcast(tag[i], data[i], excludeNode, "NetworkFacade service-%v Broadcast %v %v\n")
 		if err != nil {
-			 return err
+			return err
 		}
 	}
 	return nil
@@ -215,7 +215,6 @@ func (n *NetworkFacade) RelayArray(ctx context.Context, tag []protocol.Tag, data
 	}
 	return nil
 }
-
 
 func (n *NetworkFacade) broadcast(tag protocol.Tag, data []byte, exclude int, debugMsg string) error {
 	n.pendingOutgoingMsgMu.Lock()

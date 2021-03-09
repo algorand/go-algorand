@@ -184,6 +184,8 @@ func (f testBlockFactory) AssembleBlock(r basics.Round, deadline time.Time) (Val
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
+func (f testBlockFactory) ReconstructBlock(block bookkeeping.Block) {}
+
 // If we try to read from high rounds, we panic and do not emit an error to find bugs during testing.
 type testLedger struct {
 	mu deadlock.Mutex
