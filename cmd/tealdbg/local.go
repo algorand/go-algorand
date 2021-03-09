@@ -337,6 +337,13 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				source := string(data)
 				ops, err := logic.AssembleStringWithVersion(source, r.proto.LogicSigVersion)
 				if err != nil {
+					errorLines := ""
+					for _, lineError := range ops.Errors {
+						errorLines = fmt.Sprintf("%s\n%s", errorLines, lineError.Error())
+					}
+					if errorLines != "" {
+						return fmt.Errorf("%w:%s", err, errorLines)
+					}
 					return err
 				}
 				r.runs[i].program = ops.Program

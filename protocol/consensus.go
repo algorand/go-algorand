@@ -138,6 +138,11 @@ const ConsensusV25 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/bea19289bf41217d2c0af30522fa222ef1366466",
 )
 
+// ConsensusV26 adds support for TEAL 3, initial rewards calculation and merkle tree hash commitments
+const ConsensusV26 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -150,7 +155,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV25
+const ConsensusCurrentVersion = ConsensusV26
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

@@ -77,8 +77,6 @@ For one-argument ops, `X` is the last element on the stack, which is typically r
 
 For two-argument ops, `A` is the previous element on the stack and `B` is the last element on the stack. These typically result in popping A and B from the stack and pushing the result.
 
-`ed25519verify` is currently the only 3 argument opcode and is described in detail in the opcode refrence.
-
 @@ Arithmetic.md @@
 
 ### Loading Values
