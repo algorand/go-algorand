@@ -19,16 +19,17 @@ package txnsync
 import (
 	"fmt"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/util/timers"
 )
+
+// algofix allow sync
 
 type queuedSentMessageCallback struct {
 	callback SendMessageCallback
@@ -47,7 +48,7 @@ type networkPeer struct {
 	inSeq                uint64
 	target               int
 	messageQ             []queuedMessage // incoming message queue
-	mu                   deadlock.Mutex
+	mu                   sync.Mutex
 	deferredSentMessages []queuedSentMessageCallback // outgoing messages callback queue
 }
 
@@ -62,7 +63,7 @@ type emulatedNode struct {
 	txpoolIds          map[transactions.Txid]bool
 	name               string
 	blocked            chan struct{}
-	mu                 deadlock.Mutex
+	mu                 sync.Mutex
 	txpoolGroupCounter uint64
 	blockingEnabled    bool
 	nodeBlocked        chan struct{} // channel is closed when node is blocked.
