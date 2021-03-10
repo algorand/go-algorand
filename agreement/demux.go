@@ -125,6 +125,7 @@ func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandl
 			dec := protocol.NewDecoderBytes(stxnData)
 			err := dec.Decode(&stxn)
 			payset[i].SignedTxn = stxn
+			payset[i].Digest = crypto.Digest{}
 			if err != nil {
 				logging.Base().Warnf("Received a non-decodable txn: %v", err)
 				//net.Disconnect(raw.MessageHandle)
