@@ -20,24 +20,25 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
-// transactionLru keeps the most recently accessed transactions ids, allowing to limit the size of the historical kept transactions.
+// transactionCache is a cache of recently accessed transactions ids, allowing to limit the size of the historical kept transactions.
+// transactionCache has FIFO replacement.
 // implementation is a simple cyclic-buffer with a map to accelerate lookups.
-type transactionLru struct {
+type transactionCache struct {
 	size            int
 	transactionsIDs []transactions.Txid
 	transactionsMap map[transactions.Txid]bool
 	oldest          int
 }
 
-func makeTransactionLru(size int) *transactionLru {
-	return &transactionLru{
+func makeTransactionCache(size int) *transactionCache {
+	return &transactionCache{
 		size:            size,
 		transactionsIDs: make([]transactions.Txid, size, size),
 		transactionsMap: make(map[transactions.Txid]bool, size),
 	}
 }
 
-func (lru *transactionLru) add(txid transactions.Txid) {
+func (lru *transactionCache) add(txid transactions.Txid) {
 	if lru.transactionsMap[txid] {
 		return
 	}
@@ -54,11 +55,11 @@ func (lru *transactionLru) add(txid transactions.Txid) {
 	lru.transactionsMap[txid] = true
 }
 
-func (lru *transactionLru) contained(txid transactions.Txid) bool {
+func (lru *transactionCache) contained(txid transactions.Txid) bool {
 	return lru.transactionsMap[txid]
 }
 
-func (lru *transactionLru) reset() {
+func (lru *transactionCache) reset() {
 	lru.transactionsMap = make(map[transactions.Txid]bool, lru.size)
 	lru.oldest = 0
 }
