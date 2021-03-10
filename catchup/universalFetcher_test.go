@@ -124,7 +124,7 @@ func TestUGetBlockUnsupported(t *testing.T) {
 	peer := ""
 	block, cert, duration, err := fetcher.fetchBlock(context.Background(), 1, peer)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "FetchBlock: UniversalFetcher only supports HTTPPeer or UnicastPeer")
+	require.Contains(t, err.Error(), "FetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
