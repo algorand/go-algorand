@@ -126,4 +126,36 @@ echo "#pragma version 100" | ${gcmd} clerk compile - 2>&1 | grep "unsupported ve
 set -o pipefail
 
 
+# Compile a v3 version of same program, fund it, use it to lsig.
+cat >${TEMPDIR}/true3.teal<<EOF
+#pragma version 3
+int 1
+assert
+int 1
+EOF
+
+ACCOUNT_TRUE=$(${gcmd} clerk compile -n ${TEMPDIR}/true3.teal|awk '{ print $2 }')
+${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TRUE}
+${gcmd} clerk send --amount 10 --from-program ${TEMPDIR}/true3.teal --to ${ACCOUNTB}
+
+
+# However, ensure it fails if marked v2.  We have to be tricky here,
+# since the compiler won't let us compile this, we rewrite the first
+# byte to 2, then compute the new account, and try use.  But since it
+# uses assert in a v2 program, it fails.
+
+${gcmd} clerk compile ${TEMPDIR}/true3.teal -o ${TEMPDIR}/true3.lsig
+cp ${TEMPDIR}/true3.lsig ${TEMPDIR}/true2.lsig
+printf '\x02' | dd of=${TEMPDIR}/true2.lsig bs=1 seek=0 count=1 conv=notrunc
+
+# compute the escrow account for the frankenstein program
+ACCOUNT_TRUE=$(python -c 'import algosdk, sys; print(algosdk.logic.address(sys.stdin.buffer.read()))' < ${TEMPDIR}/true2.lsig)
+# fund that escrow account
+${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNT_TRUE}
+# try, and fail, to lsig with it
+set +o pipefail
+${gcmd} clerk send --amount 10 --from-program-bytes ${TEMPDIR}/true2.lsig --to ${ACCOUNTB} 2>&1 | grep "illegal opcode"
+set -o pipefail
+
+
 date '+e2e_teal OK %Y%m%d_%H%M%S'

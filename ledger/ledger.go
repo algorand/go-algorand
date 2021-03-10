@@ -544,8 +544,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 // is returned if this is not the expected next block number.
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
-
-	updates, err := eval(context.Background(), l, &blk, false, l.verifiedTxnCache, nil, true)
+	updates, err := eval(context.Background(), l, &blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
 		return err
 	}
@@ -647,7 +646,7 @@ func (l *Ledger) trackerLog() logging.Logger {
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
-	return eval(context.Background(), accUpdatesLedger, &blk, false, l.verifiedTxnCache, nil, false)
+	return eval(context.Background(), accUpdatesLedger, &blk, false, l.verifiedTxnCache, nil)
 }
 
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
