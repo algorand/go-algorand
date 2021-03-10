@@ -20,6 +20,6 @@ import (
 	"os"
 )
 
-func isDirectorySafe(_ os.FileInfo) bool {
+func (kc *KMDController) isDirectorySafe(_ os.FileInfo) bool {
 	return true
 }
