@@ -450,13 +450,6 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 // periodicSync periodically asks the network for its latest round and syncs if we've fallen behind (also if our ledger stops advancing)
 func (s *Service) periodicSync() {
 	defer close(s.done)
-	// wait until network is ready, or until we're told to quit
-	select {
-	case <-s.net.Ready():
-		s.log.Info("network ready")
-	case <-s.ctx.Done():
-		return
-	}
 	// if the catchup is disabled in the config file, just skip it.
 	if s.parallelBlocks != 0 {
 		s.sync()

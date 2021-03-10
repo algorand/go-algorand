@@ -51,8 +51,12 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 	cert *agreement.Certificate, downloadDuration time.Duration, err error) {
 
 	var fetcherClient FetcherClient
-	httpPeer, validHTTPPeer := peer.(network.HTTPPeer)
-	if validHTTPPeer {
+	if wsPeer, validWSPeer := peer.(network.UnicastPeer); validWSPeer {
+		fetcherClient = &wsFetcherClient{
+			target: wsPeer,
+			config: &uf.config,
+		}
+	} else if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer {
 		fetcherClient = &HTTPFetcher{
 			peer:    httpPeer,
 			rootURL: httpPeer.GetAddress(),
@@ -60,11 +64,6 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 			client:  httpPeer.GetHTTPClient(),
 			log:     uf.log,
 			config:  &uf.config}
-	} else if wsPeer, validWSPeer := peer.(network.UnicastPeer); validWSPeer {
-		fetcherClient = &wsFetcherClient{
-			target: wsPeer,
-			config: &uf.config,
-		}
 	} else {
 		return nil, nil, time.Duration(0), fmt.Errorf("FetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	}
