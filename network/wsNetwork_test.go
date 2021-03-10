@@ -1231,7 +1231,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	var peers []*wsPeer
-	peers = netA.peerSnapshot(peers)
+	peers, _ = netA.peerSnapshot(peers)
 	require.Equalf(t, len(peers), 1, "Expected number of peers should be 1")
 	peer := peers[0]
 	// modify the peer on netA and
@@ -1240,7 +1240,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	// wait up to 10 seconds for the monitor to figure out it needs to disconnect.
 	expire := beforeLoopTime.Add(2 * slowWritingPeerMonitorInterval)
 	for {
-		peers = netA.peerSnapshot(peers)
+		peers, _ = netA.peerSnapshot(peers)
 		if len(peers) == 0 || peers[0] != peer {
 			// make sure it took more than 1 second, and less than 5 seconds.
 			waitTime := time.Now().Sub(beforeLoopTime)
@@ -1425,7 +1425,7 @@ func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
 
 // Set up two nodes, test topics send/recieve is working
 func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
-	var topicMsgReqTag Tag = protocol.UniCatchupReqTag
+	var topicMsgReqTag Tag = protocol.UniEnsBlockReqTag
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.Start()
@@ -1542,7 +1542,6 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil)
-		netA.Broadcast(context.Background(), protocol.UniEnsBlockResTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	}
