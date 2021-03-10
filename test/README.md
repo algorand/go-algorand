@@ -33,16 +33,17 @@ These tests are shell scripts which all run in series against a single private n
 
 Each script is provided with a wallet which contains a large supply of algos to use during the test.
 ```
-usage: e2e_client_runner.py [-h] [--keep-temps] [--timeout TIMEOUT] [--verbose] [scripts [scripts ...]]
+usage: e2e_client_runner.py [-h] [--keep-temps] [--timeout TIMEOUT] [--verbose] [--version Future|vXX] [scripts [scripts ...]]
 
 positional arguments:
   scripts            scripts to run
 
 optional arguments:
-  -h, --help         show this help message and exit
-  --keep-temps       if set, keep all the test files
-  --timeout TIMEOUT  integer seconds to wait for the scripts to run
+  -h, --help             show this help message and exit
+  --keep-temps           if set, keep all the test files
+  --timeout TIMEOUT      integer seconds to wait for the scripts to run
   --verbose
+  --version Future|vXX   selects the network template file
 ```
 
 To run a specific test:
