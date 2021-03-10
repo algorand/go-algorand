@@ -20,10 +20,13 @@ package nodecontrol
 
 import (
 	"os"
+
+	"github.com/algorand/go-algorand/logging"
 )
 
-func isDirectorySafe(dirStats os.FileInfo) bool {
+func (kc *KMDController) isDirectorySafe(dirStats os.FileInfo) bool {
 	if (dirStats.Mode() & 0077) != 0 {
+		logging.Base().Errorf("%s: kmd data dir exists but is too permissive (%o), change to (%o)", kc.kmdDataDir, dataDirStat.Mode()&0777, DefaultKMDDataDirPerms)
 		return false
 	}
 	return true
