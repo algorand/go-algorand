@@ -3671,8 +3671,8 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"app_global_put":    "byte 0x41; dup; app_global_put",
 		"app_local_del":     "int 0; byte 0x41; app_local_del",
 		"app_global_del":    "byte 0x41; app_global_del",
-		"asset_holding_get": "asset_holding_get AssetBalance",
-		"asset_params_get":  "asset_params_get AssetTotal",
+		"asset_holding_get": "int 1; int 1; asset_holding_get AssetBalance",
+		"asset_params_get":  "int 1; asset_params_get AssetTotal",
 	}
 
 	excluded := map[string]bool{
