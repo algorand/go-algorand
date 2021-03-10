@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const deadlock_simple_src = `package main
+const deadlockSimpleSrc = `package main
 
 import (
 	"sync"
@@ -48,7 +48,7 @@ func main() {
 	defer x.Unlock()
 }
 `
-const deadlock_simple_dest = `package main
+const deadlockSimpleDest = `package main
 
 import (
 	"github.com/algorand/go-deadlock"
@@ -74,7 +74,7 @@ func tripleTickToBacktick(x string) string {
 	return strings.ReplaceAll(x, "'''", "`")
 }
 
-const deadlock_test_src = `package main
+const deadlockTestSrc = `package main
 
 import (
 	"sync"
@@ -101,7 +101,7 @@ func main() {
 }
 `
 
-const deadlock_test_fin = `package main
+const deadlockTestFin = `package main
 
 import (
 	"github.com/algorand/go-deadlock"
@@ -130,8 +130,8 @@ func main() {
 `
 
 func TestDeadlockRewrite(t *testing.T) {
-	t.Run("simple", func(t *testing.T) { testDeadlock(t, deadlock_simple_src, deadlock_simple_dest) })
-	t.Run("onoff", func(t *testing.T) { testDeadlock(t, deadlock_test_src, deadlock_test_fin) })
+	t.Run("simple", func(t *testing.T) { testDeadlock(t, deadlockSimpleSrc, deadlockSimpleDest) })
+	t.Run("onoff", func(t *testing.T) { testDeadlock(t, deadlockTestSrc, deadlockTestFin) })
 }
 
 func testGoFmt(fset *token.FileSet, node interface{}) (out string, err error) {
