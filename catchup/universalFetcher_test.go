@@ -42,13 +42,12 @@ func TestUGetBlockWs(t *testing.T) {
 		return
 	}
 
-	version := "2.1"
 	blockServiceConfig := config.GetDefaultLocal()
 	blockServiceConfig.EnableBlockService = true
 
 	net := &httpTestPeerSource{}
 
-	up := makeTestUnicastPeer(net, version, t)
+	up := makeTestUnicastPeer(net, t)
 	ls := rpcs.MakeBlockService(blockServiceConfig, ledger, net, "test genesisID")
 	ls.Start()
 
