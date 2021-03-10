@@ -131,7 +131,10 @@ var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_in
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
 
 // Peer opaque interface for referring to a neighbor in the network
-type Peer interface{}
+type Peer interface {
+	DataGet(key interface{}) (value interface{}, exists bool)
+	DataPut(key, value interface{})
+}
 
 // PeerOption allows users to specify a subset of peers to query
 type PeerOption int

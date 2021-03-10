@@ -28,7 +28,7 @@ func pingHandler(message IncomingMessage) OutgoingMessage {
 	if len(message.Data) > 8 {
 		return OutgoingMessage{}
 	}
-	message.Net.(*WebsocketNetwork).log.Debugf("ping from peer %#v", message.Sender.(*wsPeer).wsPeerCore)
+	message.Net.(*WebsocketNetwork).log.Debugf("ping from peer %#v", &(message.Sender.(*wsPeer).wsPeerCore))
 	peer := message.Sender.(*wsPeer)
 	tbytes := []byte(protocol.PingReplyTag)
 	mbytes := make([]byte, len(tbytes)+len(message.Data))

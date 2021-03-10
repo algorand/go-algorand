@@ -105,6 +105,9 @@ type wsPeerCore struct {
 	rootURL       string
 	originAddress string // incoming connection remote host
 	client        http.Client
+
+	appData     map[interface{}]interface{}
+	appDataLock deadlock.Mutex
 }
 
 type disconnectReason string
@@ -250,6 +253,18 @@ func (wp *wsPeerCore) GetAddress() string {
 // http.Client will maintain a cache of connections with some keepalive.
 func (wp *wsPeerCore) GetHTTPClient() *http.Client {
 	return &wp.client
+}
+
+func (wp *wsPeerCore) DataGet(key interface{}) (value interface{}, exists bool) {
+	wp.appDataLock.Lock()
+	defer wp.appDataLock.Unlock()
+	value, exists = wp.appData[key]
+	return
+}
+func (wp *wsPeerCore) DataPut(key, value interface{}) {
+	wp.appDataLock.Lock()
+	defer wp.appDataLock.Unlock()
+	wp.appData[key] = value
 }
 
 // Version returns the matching version from network.SupportedProtocolVersions
