@@ -337,7 +337,7 @@ func testMatch(t *testing.T, actual, expected string) {
 	} else if strings.HasSuffix(expected, "...") {
 		require.Contains(t, "^"+actual, "^"+expected[:len(expected)-3])
 	} else {
-		require.Equal(t, actual, expected)
+		require.Equal(t, expected, actual)
 	}
 }
 
@@ -371,7 +371,7 @@ func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpSt
 						break
 					}
 				}
-				require.NotNil(t, found)
+				require.NotNil(t, found, "No error on line %d", exp.l)
 				msg := found.Unwrap().Error()
 				testMatch(t, msg, exp.s)
 			}
@@ -1105,8 +1105,18 @@ func TestAssembleAsset(t *testing.T) {
 	t.Parallel()
 	introduction := OpsByName[LogicVersion]["asset_holding_get"].Version
 	for v := introduction; v <= AssemblerMaxVersion; v++ {
-		testLine(t, "asset_holding_get ABC 1", v, "asset_holding_get expects one argument")
-		testLine(t, "asset_holding_get ABC", v, "asset_holding_get unknown arg: ABC")
+		testProg(t, "asset_holding_get ABC 1", v,
+			expect{1, "asset_holding_get arg 1..."})
+		testProg(t, "int 1; asset_holding_get ABC 1", v,
+			expect{2, "asset_holding_get arg 0..."})
+		testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
+			expect{3, "asset_holding_get expects one argument"})
+		testProg(t, "int 1; int 1; asset_holding_get ABC", v,
+			expect{3, "asset_holding_get unknown arg: ABC"})
+
+		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
+			expect{2, "asset_params_get arg 0 wanted type uint64..."})
+
 		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects one argument")
 		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown arg: ABC")
 	}
