@@ -1334,7 +1334,6 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 
 // prio is set if the broadcast is a high-priority broadcast.
 func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, peers []*wsPeer) {
-	//logging.Base().Infof("broadcasting: %v, %v", len(request.data), request.tags)
 	if request.done != nil {
 		defer close(request.done)
 	}

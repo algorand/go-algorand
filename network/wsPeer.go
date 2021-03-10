@@ -563,7 +563,6 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 		}
 	*/
 
-	numSkipped := 0
 	for i, msg := range msgs.msgs {
 		select {
 		case <-msg.ctx.Done():
@@ -573,13 +572,8 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 		}
 
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
-			logging.Base().Infof("bad msg: %v", len(msg.data))
 			return err
 		}
-	}
-
-	if len(msgs.msgs) > 1 {
-		logging.Base().Infof("num skipped: %v of %v", numSkipped, len(msgs.msgs))
 	}
 
 	return disconnectReasonNone
@@ -632,7 +626,6 @@ func (wp *wsPeer) writeLoop() {
 	// the cleanupCloseError sets the default error to disconnectWriteError; depending on the exit reason, the error might get changed.
 	cleanupCloseError := disconnectWriteError
 	defer func() {
-		logging.Base().Info("cleanup")
 		wp.writeLoopCleanup(cleanupCloseError)
 	}()
 	for {
@@ -649,7 +642,6 @@ func (wp *wsPeer) writeLoop() {
 		// if nothing high prio, send anything
 		select {
 		case <-wp.closing:
-			logging.Base().Info("wp.closing")
 			return
 		case data := <-wp.sendBufferHighPrio:
 			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
