@@ -50,6 +50,8 @@ var cryptoSigSecretsVerifyTotal = metrics.MakeCounter(metrics.CryptoSigSecretsVe
 var cryptoSigSecretsVerifyBytesTotal = metrics.MakeCounter(metrics.CryptoSigSecretsVerifyBytesTotal)
 
 const masterDerivationKeyLenBytes = 32
+const ed25519PublicKeyLenBytes = 32
+const ed25519SignatureLenBytes = 64
 
 func init() {
 	if C.sodium_init() < 0 {
@@ -68,8 +70,8 @@ func init() {
 type Seed ed25519Seed
 
 /* Classical signatures */
-type ed25519Signature [64]byte
-type ed25519PublicKey [32]byte
+type ed25519Signature [ed25519SignatureLenBytes]byte
+type ed25519PublicKey [ed25519PublicKeyLenBytes]byte
 type ed25519PrivateKey [64]byte
 type ed25519Seed [32]byte
 
