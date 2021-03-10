@@ -424,11 +424,11 @@ func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.
 	return nil
 }
 
-func makeTestUnicastPeer(gn network.GossipNode, version string, t *testing.T) network.UnicastPeer {
+func makeTestUnicastPeer(gn network.GossipNode, t *testing.T) network.UnicastPeer {
 	wsp := testUnicastPeer{}
 	wsp.gn = gn
 	wsp.t = t
-	wsp.version = version
+	wsp.version = network.ProtocolVersion
 	wsp.responseChannels = make(map[uint64]chan *network.Response)
 	return &wsp
 }
