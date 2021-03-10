@@ -51,7 +51,7 @@ func costly(cost int) opDetails {
 
 func immediates(name string, rest ...string) opDetails {
 	num := 1 + len(rest)
-	immediates := make([]immediate, num, len(rest)+1)
+	immediates := make([]immediate, num, num)
 	immediates[0] = immediate{name, immByte}
 	for i, n := range rest {
 		immediates[i+1] = immediate{n, immByte}
