@@ -475,7 +475,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 
 func (pool *TransactionPool) FindTxns(digests []crypto.Digest) (txns []transactions.SignedTxn, found []bool) {
 	pool.pendingMu.RLock()
-	pool.pendingMu.RUnlock()
+	defer pool.pendingMu.RUnlock()
 	txns = make([]transactions.SignedTxn, len(digests))
 	found = make([]bool, len(digests))
 	if pool.pendingDigests == nil {
