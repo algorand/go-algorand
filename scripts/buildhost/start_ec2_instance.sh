@@ -10,7 +10,7 @@
 #
 # Examples: scripts/buildhost/start_ec2_instance.sh <AWS_REGION> <AWS_AMI> <AWS_INSTANCE_TYPE>
 #
-# Upon successfull execution, the following files would be created:
+# Upon successful execution, the following files would be created:
 # sgid - contain the security group identifier
 # key.pem - contains the certificate required to log on to the server
 # instance - contains the address of the created instance

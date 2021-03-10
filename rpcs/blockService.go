@@ -48,6 +48,15 @@ const blockServerCatchupRequestBufferSize = 10
 // e.g. .Handle(BlockServiceBlockPath, &ls)
 const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
 
+// Constant strings used as keys for topics
+const (
+	RoundKey           = "roundKey"        // Block round-number topic-key in the request
+	RequestDataTypeKey = "requestDataType" // Data-type topic-key in the request (e.g. block, cert, block+cert)
+	BlockDataKey       = "blockData"       // Block-data topic-key in the response
+	CertDataKey        = "certData"        // Cert-data topic-key in the response
+	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
+)
+
 // BlockService represents the Block RPC API
 type BlockService struct {
 	ledger                  *data.Ledger
@@ -102,7 +111,7 @@ func (bs *BlockService) Start() {
 		bs.net.RegisterHandlers(handlers)
 	}
 	bs.stop = make(chan struct{})
-	go bs.ListenForCatchupReq(bs.catchupReqs, bs.stop)
+	go bs.listenForCatchupReq(bs.catchupReqs, bs.stop)
 }
 
 // Stop servicing catchup requests over ws
@@ -201,18 +210,6 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	}
 }
 
-// WsGetBlockRequest is a msgpack message requesting a block
-type WsGetBlockRequest struct {
-	Round uint64 `json:"round"`
-}
-
-// WsGetBlockOut is a msgpack message delivered on responding to a block (not rpc-based though)
-type WsGetBlockOut struct {
-	Round      uint64
-	Error      string
-	BlockBytes []byte `json:"blockbytes"`
-}
-
 func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n network.OutgoingMessage) {
 	// don't block - just stick in a slightly buffered channel if possible
 	select {
@@ -223,8 +220,8 @@ func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n n
 	return
 }
 
-// ListenForCatchupReq handles catchup getblock request
-func (bs *BlockService) ListenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
+// listenForCatchupReq handles catchup getblock request
+func (bs *BlockService) listenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
@@ -245,32 +242,9 @@ const datatypeUnsupportedErrMsg = "requested data type is unsupported"
 
 // a blocking function for handling a catchup request
 func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
-	var res WsGetBlockOut
 	target := reqMsg.Sender.(network.UnicastPeer)
 	var respTopics network.Topics
 
-	if target.Version() == "1" {
-
-		defer func() {
-			bs.sendCatchupRes(ctx, target, reqMsg.Tag, res)
-		}()
-		var req WsGetBlockRequest
-		err := protocol.DecodeReflect(reqMsg.Data, &req)
-		if err != nil {
-			res.Error = err.Error()
-			return
-		}
-		res.Round = req.Round
-		encodedBlob, err := RawBlockBytes(bs.ledger, basics.Round(req.Round))
-
-		if err != nil {
-			res.Error = err.Error()
-			return
-		}
-		res.BlockBytes = encodedBlob
-		return
-	}
-	// Else, if version == 2.1
 	defer func() {
 		target.Respond(ctx, reqMsg, respTopics)
 	}()
@@ -282,7 +256,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 			network.MakeTopic(network.ErrorKey, []byte(err.Error()))}
 		return
 	}
-	roundBytes, found := topics.GetValue(roundKey)
+	roundBytes, found := topics.GetValue(RoundKey)
 	if !found {
 		logging.Base().Infof("BlockService handleCatchupReq: %s", noRoundNumberErrMsg)
 		respTopics = network.Topics{
@@ -290,7 +264,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 				[]byte(noRoundNumberErrMsg))}
 		return
 	}
-	requestType, found := topics.GetValue(requestDataTypeKey)
+	requestType, found := topics.GetValue(RequestDataTypeKey)
 	if !found {
 		logging.Base().Infof("BlockService handleCatchupReq: %s", noDataTypeErrMsg)
 		respTopics = network.Topics{
@@ -311,15 +285,6 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 	return
 }
 
-func (bs *BlockService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
-	t := reqTag.Complement()
-	logging.Base().Infof("catching down peer: %v, round %v. outcome: %v. ledger: %v", target.GetAddress(), outMsg.Round, outMsg.Error, bs.ledger.LastRound())
-	err := target.Unicast(ctx, protocol.EncodeReflect(outMsg), t)
-	if err != nil {
-		logging.Base().Info("failed to respond to catchup req", err)
-	}
-}
-
 func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType string) network.Topics {
 	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
@@ -332,12 +297,12 @@ func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType st
 			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailabeErrMsg))}
 	}
 	switch requestType {
-	case blockAndCertValue:
+	case BlockAndCertValue:
 		return network.Topics{
 			network.MakeTopic(
-				blockDataKey, blk),
+				BlockDataKey, blk),
 			network.MakeTopic(
-				certDataKey, cert),
+				CertDataKey, cert),
 		}
 	default:
 		return network.Topics{

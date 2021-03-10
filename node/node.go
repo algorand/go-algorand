@@ -108,7 +108,6 @@ type AlgorandFullNode struct {
 	catchpointCatchupService *catchup.CatchpointCatchupService
 	blockService             *rpcs.BlockService
 	ledgerService            *rpcs.LedgerService
-	wsFetcherService         *rpcs.WsFetcherService // to handle inbound gossip msgs for fetching over gossip
 	txPoolSyncerService      *rpcs.TxSyncer
 
 	indexer *indexer.Indexer
@@ -230,7 +229,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.blockService = rpcs.MakeBlockService(cfg, node.ledger, p2pNode, node.genesisID)
 	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
-	node.wsFetcherService = rpcs.MakeWsFetcherService(node.log, p2pNode)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
@@ -259,7 +257,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.agreementService = agreement.MakeService(agreementParameters)
 
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
-	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates)
+	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	err = node.loadParticipationKeys()
@@ -351,7 +349,6 @@ func (node *AlgorandFullNode) Start() {
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Start(node.ctx)
 	} else {
-		node.wsFetcherService.Start()
 		node.catchupService.Start()
 		node.agreementService.Start()
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
@@ -426,7 +423,6 @@ func (node *AlgorandFullNode) Stop() {
 		node.txPoolSyncerService.Stop()
 		node.blockService.Stop()
 		node.ledgerService.Stop()
-		node.wsFetcherService.Stop()
 	}
 	node.catchupBlockAuth.Quit()
 	node.highPriorityCryptoVerificationPool.Shutdown()
@@ -487,7 +483,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 		enc = append(enc, protocol.Encode(&tx)...)
 		txids = append(txids, tx.ID())
 	}
-	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, true, nil)
+	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, false, nil)
 	if err != nil {
 		node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
 		return err
@@ -967,7 +963,6 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.txPoolSyncerService.Stop()
 			node.blockService.Stop()
 			node.ledgerService.Stop()
-			node.wsFetcherService.Stop()
 
 			prevNodeCancelFunc := node.cancelCtx
 
@@ -981,7 +976,6 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		defer node.mu.Unlock()
 		// start
 		node.transactionPool.Reset()
-		node.wsFetcherService.Start()
 		node.catchupService.Start()
 		node.agreementService.Start()
 		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)

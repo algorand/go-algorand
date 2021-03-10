@@ -358,6 +358,84 @@
         }
       ]
     },
+    "/v2/blocks/{round}/transactions/{txid}/proof": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a Merkle proof for a transaction in a block.",
+        "operationId": "GetProof",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round in which the transaction appears.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "pattern": "[A-Z0-9]+",
+            "description": "The transaction ID for which to generate a proof.",
+            "name": "txid",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/ProofResponse"
+          },
+          "400": {
+            "description": "Malformed round number or transaction ID",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Non-existent block or transaction",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal error, including protocol not supporting Merkle proofs.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "round",
+          "in": "path",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "txid",
+          "in": "path",
+          "required": true
+        }
+      ]
+    },
     "/v2/ledger/supply": {
       "get": {
         "produces": [
@@ -2004,6 +2082,33 @@
             "description": "Optional certificate object. This is only included when the format is set to message pack.",
             "type": "object",
             "x-algorand-format": "BlockCertificate"
+          }
+        }
+      }
+    },
+    "ProofResponse": {
+      "description": "Proof of transaction in a block.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "proof",
+          "stibhash",
+          "idx"
+        ],
+        "properties": {
+          "proof": {
+            "description": "Merkle proof of transaction membership.",
+            "type": "string",
+            "format": "byte"
+          },
+          "stibhash": {
+            "description": "Hash of SignedTxnInBlock for verifying proof.",
+            "type": "string",
+            "format": "byte"
+          },
+          "idx": {
+            "description": "Index of the transaction in the block's payset.",
+            "type": "integer"
           }
         }
       }

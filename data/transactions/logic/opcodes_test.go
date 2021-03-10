@@ -28,7 +28,7 @@ func TestOpSpecs(t *testing.T) {
 	t.Parallel()
 
 	for _, spec := range OpSpecs {
-		require.NotEmpty(t, spec.opSize, spec)
+		require.NotEmpty(t, spec.Details, spec)
 	}
 }
 
@@ -84,7 +84,7 @@ func TestOpcodesByVersion(t *testing.T) {
 		OpSpecs2[idx] = cp
 	}
 
-	opSpecs := make([][]OpSpec, 2)
+	opSpecs := make([][]OpSpec, LogicVersion)
 	for v := uint64(1); v <= LogicVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			opSpecs[v-1] = OpcodesByVersion(v)
@@ -117,8 +117,8 @@ func TestOpcodesByVersion(t *testing.T) {
 func TestOpcodesVersioningV2(t *testing.T) {
 	t.Parallel()
 
-	require.Equal(t, 3, len(opsByOpcode))
-	require.Equal(t, 3, len(opsByName))
+	require.Equal(t, 4, len(opsByOpcode))
+	require.Equal(t, 4, len(OpsByName))
 
 	// ensure v0 has only v0 opcodes
 	cntv0 := 0
@@ -128,12 +128,12 @@ func TestOpcodesVersioningV2(t *testing.T) {
 			cntv0++
 		}
 	}
-	for _, spec := range opsByName[0] {
+	for _, spec := range OpsByName[0] {
 		if spec.op != nil {
 			require.Equal(t, uint64(0), spec.Version)
 		}
 	}
-	require.Equal(t, cntv0, len(opsByName[0]))
+	require.Equal(t, cntv0, len(OpsByName[0]))
 
 	// ensure v1 has only v1 opcodes
 	cntv1 := 0
@@ -143,12 +143,12 @@ func TestOpcodesVersioningV2(t *testing.T) {
 			cntv1++
 		}
 	}
-	for _, spec := range opsByName[1] {
+	for _, spec := range OpsByName[1] {
 		if spec.op != nil {
 			require.Equal(t, uint64(1), spec.Version)
 		}
 	}
-	require.Equal(t, cntv1, len(opsByName[1]))
+	require.Equal(t, cntv1, len(OpsByName[1]))
 	require.Equal(t, cntv1, cntv0)
 	require.Equal(t, 52, cntv1)
 
@@ -159,25 +159,24 @@ func TestOpcodesVersioningV2(t *testing.T) {
 			reflect.ValueOf(a.dis).Pointer() == reflect.ValueOf(b.dis).Pointer() &&
 			reflect.DeepEqual(a.Args, b.Args) && reflect.DeepEqual(a.Returns, b.Returns) &&
 			a.Modes == b.Modes &&
-			a.opSize.cost == b.opSize.cost && a.opSize.size == b.opSize.size &&
-			reflect.ValueOf(a.opSize.checkFunc).Pointer() == reflect.ValueOf(b.opSize.checkFunc).Pointer()
+			a.Details.Cost == b.Details.Cost && a.Details.Size == b.Details.Size &&
+			reflect.ValueOf(a.Details.checkFunc).Pointer() == reflect.ValueOf(b.Details.checkFunc).Pointer()
 		return
 	}
 	// ensure v0 and v1 are the same
 	require.Equal(t, len(opsByOpcode[1]), len(opsByOpcode[0]))
-	require.Equal(t, len(opsByName[1]), len(opsByName[0]))
+	require.Equal(t, len(OpsByName[1]), len(OpsByName[0]))
 	for op, spec1 := range opsByOpcode[1] {
 		spec0 := opsByOpcode[0][op]
 		msg := fmt.Sprintf("%v\n%v\n", spec0, spec1)
 		require.True(t, eqButVersion(&spec1, &spec0), msg)
 	}
-	for name, spec1 := range opsByName[1] {
-		spec0 := opsByName[0][name]
+	for name, spec1 := range OpsByName[1] {
+		spec0 := OpsByName[0][name]
 		require.True(t, eqButVersion(&spec1, &spec0))
 	}
 
 	// ensure v2 has v1 and v2 opcodes
-	require.Equal(t, len(opsByName[2]), len(opsByName[2]))
 	cntv2 := 0
 	cntAdded := 0
 	for _, spec := range opsByOpcode[2] {
@@ -189,12 +188,12 @@ func TestOpcodesVersioningV2(t *testing.T) {
 			cntv2++
 		}
 	}
-	for _, spec := range opsByName[2] {
+	for _, spec := range OpsByName[2] {
 		if spec.op != nil {
 			require.True(t, spec.Version == 1 || spec.Version == 2)
 		}
 	}
-	require.Equal(t, cntv2, len(opsByName[2]))
+	require.Equal(t, cntv2, len(OpsByName[2]))
 
 	// hardcode and ensure amount of new v2 opcodes
 	newOpcodes := 22
@@ -202,4 +201,29 @@ func TestOpcodesVersioningV2(t *testing.T) {
 	require.Equal(t, newOpcodes+overwritten, cntAdded)
 
 	require.Equal(t, cntv2, cntv1+newOpcodes)
+
+	// ensure v3 has v1, v2, v3 opcodes
+	cntv3 := 0
+	cntAdded = 0
+	for _, spec := range opsByOpcode[3] {
+		if spec.op != nil {
+			require.True(t, spec.Version == 1 || spec.Version == 2 || spec.Version == 3)
+			if spec.Version == 3 {
+				cntAdded++
+			}
+			cntv3++
+		}
+	}
+	for _, spec := range OpsByName[3] {
+		if spec.op != nil {
+			require.True(t, spec.Version == 1 || spec.Version == 2 || spec.Version == 3)
+		}
+	}
+	require.Len(t, OpsByName[3], cntv3)
+
+	// assert, min_balance, {get,set}{bit,byte}, swap, select, dig, stxn, stxna, push{int,bytes}
+	newOpcodes = 13
+	overwritten = 0 // ? none yet
+	require.Equal(t, newOpcodes+overwritten, cntAdded)
+
 }

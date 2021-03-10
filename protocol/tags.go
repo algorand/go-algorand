@@ -35,25 +35,9 @@ const (
 	ProposalPayloadTag Tag = "PP"
 	TopicMsgRespTag    Tag = "TS"
 	TxnTag             Tag = "TX"
-	UniCatchupReqTag   Tag = "UC"
+	UniCatchupReqTag   Tag = "UC" //Replaced by UniEnsBlockReqTag. Only for backward compatibility.
 	UniEnsBlockReqTag  Tag = "UE"
-	UniEnsBlockResTag  Tag = "US"
-	UniCatchupResTag   Tag = "UT"
-	VoteBundleTag      Tag = "VB"
+	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
+	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
+	VoteBundleTag Tag = "VB"
 )
-
-// Complement is a convenience function for returning a corresponding response/request tag
-func (t Tag) Complement() Tag {
-	switch t {
-	case UniCatchupResTag:
-		return UniCatchupReqTag
-	case UniCatchupReqTag:
-		return UniCatchupResTag
-	case UniEnsBlockResTag:
-		return UniEnsBlockReqTag
-	case UniEnsBlockReqTag:
-		return UniEnsBlockResTag
-	default:
-		return UnknownMsgTag
-	}
-}
