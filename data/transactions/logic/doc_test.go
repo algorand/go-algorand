@@ -27,12 +27,12 @@ func TestOpDocs(t *testing.T) {
 	for _, op := range OpSpecs {
 		opsSeen[op.Name] = false
 	}
-	for _, od := range opDocList {
-		_, exists := opsSeen[od.a]
+	for name, _ := range opDocByName {
+		_, exists := opsSeen[name]
 		if !exists {
-			t.Errorf("error: doc for op %#v that does not exist in OpSpecs", od.a)
+			t.Errorf("error: doc for op %#v that does not exist in OpSpecs", name)
 		}
-		opsSeen[od.a] = true
+		opsSeen[name] = true
 	}
 	for op, seen := range opsSeen {
 		if !seen {
@@ -94,15 +94,6 @@ func TestOpAllCosts(t *testing.T) {
 	for _, cost := range a {
 		require.True(t, cost.Cost > 1)
 	}
-}
-
-func TestTypeNameDescription(t *testing.T) {
-	require.Equal(t, len(TxnTypeNames), len(typeEnumDescriptions))
-	for i, a := range TxnTypeNames {
-		b := TypeNameDescription(a)
-		require.Equal(t, b, typeEnumDescriptions[i].b)
-	}
-	require.Equal(t, "invalid type name", TypeNameDescription("invalid type name"))
 }
 
 func TestOnCompletionDescription(t *testing.T) {
