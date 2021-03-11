@@ -39,6 +39,7 @@ type sentMessageMetadata struct {
 type messageSentCallback struct {
 	state       *syncState
 	messageData sentMessageMetadata
+	roundClock  timers.WallClock
 }
 
 // asyncMessageSent called via the network package to inform the txsync that a message was enqueued, and the associated sequence number.
@@ -47,7 +48,7 @@ func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber u
 		return
 	}
 	// record the timestamp here, before placing the entry on the queue
-	msc.messageData.sentTimestamp = msc.state.clock.Since()
+	msc.messageData.sentTimestamp = msc.roundClock.Since()
 	msc.messageData.sequenceNumber = sequenceNumber
 
 	select {
@@ -65,7 +66,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	pendingTransactionGroups := s.node.GetPendingTransactionGroups()
 
 	for _, peer := range peers {
-		msgCallback := &messageSentCallback{state: s}
+		msgCallback := &messageSentCallback{state: s, roundClock: s.clock}
 		msgCallback.messageData = s.assemblePeerMessage(peer, pendingTransactionGroups, currentTime)
 		encodedMessage := msgCallback.messageData.message.MarshalMsg([]byte{})
 		msgCallback.messageData.encodedMessageSize = len(encodedMessage)
