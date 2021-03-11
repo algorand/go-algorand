@@ -54,6 +54,7 @@ func TestRequestLogger(t *testing.T) {
 	}
 	netA.config.EnableRequestLogger = true
 	netA.setup()
+	netA.eventualReadyDelay = time.Second
 
 	netA.config.GossipFanout = 1
 	netA.Start()
@@ -67,6 +68,10 @@ func TestRequestLogger(t *testing.T) {
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
 
 	select {
 	case <-time.After(10 * time.Second):
