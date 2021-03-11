@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/algorand/go-algorand/util/timers"
@@ -25,28 +26,26 @@ import (
 
 // guidedClock implements the WallClock interface
 type guidedClock struct {
-	zero     time.Time
-	adv      time.Duration
-	timers   map[time.Duration]chan time.Time
-	children []*guidedClock
-	lockCh   chan struct{}
+	sync.Mutex `algofix:"allow sync.Mutex"`
+	zero       time.Time
+	adv        time.Duration
+	timers     map[time.Duration]chan time.Time
+	children   []*guidedClock
 }
 
 func makeGuidedClock() *guidedClock {
 	return &guidedClock{
-		zero:   time.Now(),
-		lockCh: make(chan struct{}, 1),
+		zero: time.Now(),
 	}
 }
 func (g *guidedClock) Zero() timers.Clock {
 	// the real monotonic clock doesn't return the same clock object, which is fine.. but for our testing
 	// we want to keep the same clock object so that we can tweak with it.
 	child := &guidedClock{
-		zero:   g.zero.Add(g.adv),
-		lockCh: make(chan struct{}, 1),
+		zero: g.zero.Add(g.adv),
 	}
-	g.lock()
-	defer g.unlock()
+	g.Lock()
+	defer g.Unlock()
 	g.children = append(g.children, child)
 	return child
 }
@@ -57,8 +56,8 @@ func (g *guidedClock) TimeoutAt(delta time.Duration) <-chan time.Time {
 		close(c)
 		return c
 	}
-	g.lock()
-	defer g.unlock()
+	g.Lock()
+	defer g.Unlock()
 	if g.timers == nil {
 		g.timers = make(map[time.Duration]chan time.Time)
 	}
@@ -94,7 +93,7 @@ func (g *guidedClock) Advance(adv time.Duration) {
 		ch       chan time.Time
 	}
 	expiredClocks := []entryStruct{}
-	g.lock()
+	g.Lock()
 	// find all the expired clocks.
 	for delta, ch := range g.timers {
 		if delta < g.adv {
@@ -109,22 +108,14 @@ func (g *guidedClock) Advance(adv time.Duration) {
 	for _, entry := range expiredClocks {
 		delete(g.timers, entry.duration)
 	}
-	g.unlock()
+	g.Unlock()
 	// fire expired clocks
 	for _, entry := range expiredClocks {
 		entry.ch <- g.zero.Add(g.adv)
 	}
-	g.lock()
-	defer g.unlock()
+	g.Lock()
+	defer g.Unlock()
 	for _, child := range g.children {
 		child.Advance(adv)
 	}
-}
-
-func (g *guidedClock) lock() {
-	g.lockCh <- struct{}{}
-}
-
-func (g *guidedClock) unlock() {
-	<-g.lockCh
 }
