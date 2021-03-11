@@ -400,7 +400,7 @@ type WebsocketNetwork struct {
 type broadcastRequest struct {
 	tags        []Tag
 	data        [][]byte
-	pacer       chan int
+	pacer       chan int // used for sending messages to one peer at a time instead of all at once
 	except      *wsPeer
 	done        chan struct{}
 	enqueueTime time.Time
