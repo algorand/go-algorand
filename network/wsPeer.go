@@ -553,15 +553,14 @@ var emptyHash = crypto.Digest{}
 
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 
-	/*
-		if msgs.pacer != nil {
-			<-msgs.pacer
+	// wait for another peer to finish sending before sending
+	if msgs.pacer != nil {
+		<-msgs.pacer
 
-			defer func (pacer chan int) {
-				pacer <- 1
-			}(msgs.pacer)
-		}
-	*/
+		defer func (pacer chan int) {
+			pacer <- 1
+		}(msgs.pacer)
+	}
 
 	for i, msg := range msgs.msgs {
 		select {

@@ -289,6 +289,42 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 	}
 }
 
+// Test sending array of messages
+func TestWebsocketNetworkArray(t *testing.T) {
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+	counter := newMessageCounter(t, 3)
+	counterDone := counter.done
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
+
+	tags := []protocol.Tag{protocol.TxnTag, protocol.TxnTag, protocol.TxnTag}
+	data := [][]byte{[]byte("foo"), []byte("bar"), []byte("algo")}
+	netA.BroadcastArray(context.Background(), tags, data, nil, false, nil)
+
+	select {
+	case <-counterDone:
+	case <-time.After(2 * time.Second):
+		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+	}
+}
+
+
 // Set up two nodes, test that a.Broadcast is received by B, when B has no address.
 func TestWebsocketNetworkNoAddress(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
