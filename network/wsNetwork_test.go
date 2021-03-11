@@ -25,6 +25,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -121,6 +122,7 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local) *Websocket
 		NetworkID: config.Devtestnet,
 	}
 	wn.setup()
+	wn.eventualReadyDelay = time.Second
 	return wn
 }
 
@@ -203,6 +205,17 @@ func TestWebsocketNetworkStartStop(t *testing.T) {
 	netA.Stop()
 }
 
+func waitReady(t testing.TB, wn *WebsocketNetwork, timeout <-chan time.Time) bool {
+	select {
+	case <-wn.Ready():
+		return true
+	case <-timeout:
+		_, file, line, _ := runtime.Caller(1)
+		t.Fatalf("%s:%d timeout waiting for ready", file, line)
+		return false
+	}
+}
+
 // Set up two nodes, test that a.Broadcast is received by B
 func TestWebsocketNetworkBasic(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
@@ -220,6 +233,12 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	counter := newMessageCounter(t, 2)
 	counterDone := counter.done
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
 
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
@@ -249,15 +268,13 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 	counterDone := counter.done
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
 
-	// wait for peers to connect (2 seconds max)
-	for t := 0; t < 200; t++ {
-		if netA.NumPeers() > 0 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
 
-	require.Equal(t, 1, netA.NumPeers())
+	require.Equal(t, 1, len(netA.peers))
 	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	peerB := netA.peers[0]
 	err := peerB.Unicast(context.Background(), []byte("foo"), protocol.TxnTag)
@@ -293,13 +310,11 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	counterDone := counter.done
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
 
-	// Wait for peers to connect
-	for t := 0; t < 200; t++ {
-		if netA.NumPeers() > 0 && netB.NumPeers() > 0 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
 
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("foo"), false, nil)
 	netA.Broadcast(context.Background(), protocol.TxnTag, []byte("bar"), false, nil)
@@ -348,6 +363,17 @@ func closeNodes(nodes []*WebsocketNetwork) {
 	wg.Wait()
 }
 
+func waitNodesReady(t *testing.T, nodes []*WebsocketNetwork, timeout time.Duration) {
+	tc := time.After(timeout)
+	for i, node := range nodes {
+		select {
+		case <-node.Ready():
+		case <-tc:
+			t.Fatalf("node[%d] not ready at timeout", i)
+		}
+	}
+}
+
 const lineNetworkLength = 20
 const lineNetworkNumMessages = 5
 
@@ -357,6 +383,7 @@ const lineNetworkNumMessages = 5
 func TestLineNetwork(t *testing.T) {
 	nodes, counters := lineNetwork(t, lineNetworkLength)
 	t.Logf("line network length: %d", lineNetworkLength)
+	waitNodesReady(t, nodes, 2*time.Second)
 	t.Log("ready")
 	defer closeNodes(nodes)
 	counter := &counters[len(counters)-1]
@@ -580,7 +607,7 @@ func avgSendBufferHighPrioLength(wn *WebsocketNetwork) float64 {
 	for _, peer := range wn.peers {
 		sum += len(peer.sendBufferHighPrio)
 	}
-	return float64(sum) / float64(wn.NumPeers())
+	return float64(sum) / float64(len(wn.peers))
 }
 
 // TestSlowOutboundPeer tests what happens when one outbound peer is slow and the rest are fine. Current logic is to disconnect the one slow peer when its outbound channel is full.
@@ -665,6 +692,7 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 	}
 	require.True(t, wn.config.EnableIncomingMessageFilter)
 	wn.setup()
+	wn.eventualReadyDelay = time.Second
 	require.True(t, wn.config.EnableIncomingMessageFilter)
 	return wn
 }
@@ -698,6 +726,14 @@ func TestDupFilter(t *testing.T) {
 
 	msg := make([]byte, messageFilterSize+1)
 	rand.Read(msg)
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
+	waitReady(t, netC, readyTimeout.C)
+	t.Log("c ready")
 
 	// TODO: this test has two halves that exercise inbound de-dup and outbound non-send due to recieved hash. But it doesn't properly _test_ them as it doesn't measure _why_ it receives each message exactly once. The second half below could actualy be because of the same inbound de-dup as this first half. You can see the actions of either in metrics.
 	// algod_network_duplicate_message_received_total{} 2
@@ -756,14 +792,15 @@ func TestGetPeers(t *testing.T) {
 	netB.Start()
 	defer netB.Stop()
 
-	// Wait for peers to connect
-	for t := 0; t < 200; t++ {
-		if netA.NumPeers() > 0 && netB.NumPeers() > 0 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
+
 	phbMulti.ReplacePeerList([]string{"a", "b", "c"}, "ph", PhoneBookEntryRelayRole)
+
+	//addrB, _ := netB.Address()
 
 	// A has only an inbound connection from B
 	aPeers := netA.GetPeers(PeersConnectedOut)
@@ -821,6 +858,11 @@ func BenchmarkWebsocketNetworkBasic(t *testing.B) {
 	bhandler := benchmarkHandler{returns}
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: &bhandler}})
 
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
 	var ireturned uint64
 
 	t.StartTimer()
@@ -899,11 +941,12 @@ func TestWebsocketNetworkPrio(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Errorf("timeout on netA.prioResponseChan")
 	}
+	waitReady(t, netA, time.After(time.Second))
 
 	// Peek at A's peers
 	netA.peersLock.RLock()
 	defer netA.peersLock.RUnlock()
-	require.Equal(t, netA.NumPeers(), 1)
+	require.Equal(t, len(netA.peers), 1)
 
 	require.Equal(t, netA.peers[0].prioAddress, prioB.addr)
 	require.Equal(t, netA.peers[0].prioWeight, prioB.prio)
@@ -961,6 +1004,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Errorf("timeout on netA.prioResponseChan 2")
 	}
+	waitReady(t, netA, time.After(time.Second))
 
 	netA.Broadcast(context.Background(), protocol.TxnTag, nil, true, nil)
 
@@ -1017,6 +1061,13 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 		defer client.Stop()
 
 		clients = append(clients, client)
+	}
+
+	readyTimeout := time.NewTimer(30 * time.Second)
+	waitReady(t, relay, readyTimeout.C)
+
+	for i := 0; i < numClients; i++ {
+		waitReady(t, clients[i], readyTimeout.C)
 	}
 
 	var r0utime, r1utime int64
@@ -1127,6 +1178,10 @@ func TestDelayedMessageDrop(t *testing.T) {
 	counterDone := counter.done
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
 
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
+
 	currentTime := time.Now()
 	for i := 0; i < 10; i++ {
 		err := netA.broadcastWithTimestamp(protocol.TxnTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
@@ -1152,6 +1207,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 		slowWritingPeerMonitorInterval: time.Millisecond * 50,
 	}
 	wn.setup()
+	wn.eventualReadyDelay = time.Second
 	wn.messagesOfInterest = nil // clear this before starting the network so that we won't be sending a MOI upon connection.
 
 	netA := wn
@@ -1170,13 +1226,9 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
-	// Wait for peers to connect
-	for t := 0; t < 200; t++ {
-		if netA.NumPeers() > 0 && netB.NumPeers() > 0 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
 
 	var peers []*wsPeer
 	peers, _ = netA.peerSnapshot(peers)
@@ -1214,6 +1266,7 @@ func TestForceMessageRelaying(t *testing.T) {
 		NetworkID: config.Devtestnet,
 	}
 	wn.setup()
+	wn.eventualReadyDelay = time.Second
 
 	netA := wn
 	netA.config.GossipFanout = 1
@@ -1241,6 +1294,11 @@ func TestForceMessageRelaying(t *testing.T) {
 	netC.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netC.Start()
 	defer func() { t.Log("stopping C"); netC.Stop(); t.Log("C done") }()
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
+	waitReady(t, netC, readyTimeout.C)
 
 	// send 5 messages from both netB and netC to netA
 	for i := 0; i < 5; i++ {
@@ -1388,13 +1446,11 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 		},
 	})
 
-	// Wait for peers to connect
-	for t := 0; t < 200; t++ {
-		if netA.NumPeers() > 0 && netB.NumPeers() > 0 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
 
 	peerA := netA.peers[0]
 
@@ -1470,6 +1526,10 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 			Tag:            protocol.AgreementVoteTag,
 			MessageHandler: HandlerFunc(waitMessageArriveHandler),
 		}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
 
 	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
 	netB.Broadcast(context.Background(), protocol.MsgOfInterestTag, MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}), true, nil)
@@ -1560,14 +1620,9 @@ func TestWebsocketDisconnection(t *testing.T) {
 	netB.ClearHandlers()
 	netB.RegisterHandlers(taggedHandlersB)
 
-	// Wait for peers to connect
-	for t := 0; t < 200; t++ {
-		if netA.NumPeers() > 0 && netB.NumPeers() > 0 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
 	netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0}, true, nil)
 	// wait until the peers disconnect.
 	for {
@@ -1722,6 +1777,10 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 	netA.RegisterHandlers(taggedHandlersA)
 
 	netB.ClearHandlers()
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
 
 	highestRate := float64(1)
 	sinceHighestRate := 0
