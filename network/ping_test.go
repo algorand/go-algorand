@@ -43,7 +43,7 @@ func TestPing(t *testing.T) {
 
 	// wait for the peer to connect
 	for t := 0; t < 200; t++ {
-		if len(netB.peers) > 0 {
+		if netB.NumPeers() > 0 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
