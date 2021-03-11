@@ -37,7 +37,7 @@ const (
 	// NotParticipating indicates that the associated account neither participates in the consensus, nor recieves rewards.
 	// Accounts that are marked as NotParticipating cannot change their status, but can receive and send Algos to other accounts.
 	// Two special accounts that are defined as NotParticipating are the incentive pool (also know as rewards pool) and the fee sink.
-	// These two accounts also have additional Algo transfer restrictions
+	// These two accounts also have additional Algo transfer restrictions.
 	NotParticipating
 
 	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
