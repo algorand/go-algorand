@@ -154,7 +154,6 @@ type GossipNode interface {
 	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
 	Disconnect(badnode Peer)
 	DisconnectPeers()
-	Ready() chan struct{}
 
 	// RegisterHTTPHandler path accepts gorilla/mux path annotations
 	RegisterHTTPHandler(path string, handler http.Handler)
@@ -321,7 +320,6 @@ type WebsocketNetwork struct {
 	RandomID  string
 
 	ready     int32
-	readyChan chan struct{}
 
 	meshUpdateRequests chan meshRequest
 
@@ -333,8 +331,6 @@ type WebsocketNetwork struct {
 	tryConnectLock  deadlock.Mutex
 
 	incomingMsgFilter *messageFilter // message filter to remove duplicate incoming messages from different peers
-
-	eventualReadyDelay time.Duration
 
 	relayMessages bool // True if we should relay messages from other nodes (nominally true for relays, false otherwise)
 
@@ -518,11 +514,6 @@ func (wn *WebsocketNetwork) DisconnectPeers() {
 	closeGroup.Wait()
 }
 
-// Ready returns a chan that will be closed when we have a minimum number of peer connections active
-func (wn *WebsocketNetwork) Ready() chan struct{} {
-	return wn.readyChan
-}
-
 // RegisterHTTPHandler path accepts gorilla/mux path annotations
 func (wn *WebsocketNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 	wn.router.Handle(path, handler)
@@ -631,9 +622,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.broadcastQueueHighPrio = make(chan broadcastRequest, wn.outgoingMessagesBufferSize)
 	wn.broadcastQueueBulk = make(chan broadcastRequest, 100)
 	wn.meshUpdateRequests = make(chan meshRequest, 5)
-	wn.readyChan = make(chan struct{})
 	wn.tryConnectAddrs = make(map[string]int64)
-	wn.eventualReadyDelay = time.Minute
 	wn.prioTracker = newPrioTracker(wn)
 	if wn.slowWritingPeerMonitorInterval == 0 {
 		wn.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
@@ -2144,30 +2133,6 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
 	atomic.AddInt32(&wn.peersChangeCounter, 1)
 	wn.countPeersSetGauges()
-	if len(wn.peers) >= wn.config.GossipFanout {
-		// we have a quorum of connected peers, if we weren't ready before, we are now
-		if atomic.CompareAndSwapInt32(&wn.ready, 0, 1) {
-			wn.log.Debug("ready")
-			close(wn.readyChan)
-		}
-	} else if atomic.LoadInt32(&wn.ready) == 0 {
-		// but if we're not ready in a minute, call whatever peers we've got as good enough
-		wn.wg.Add(1)
-		go wn.eventualReady()
-	}
-}
-
-func (wn *WebsocketNetwork) eventualReady() {
-	defer wn.wg.Done()
-	minute := time.NewTimer(wn.eventualReadyDelay)
-	select {
-	case <-wn.ctx.Done():
-	case <-minute.C:
-		if atomic.CompareAndSwapInt32(&wn.ready, 0, 1) {
-			wn.log.Debug("ready")
-			close(wn.readyChan)
-		}
-	}
 }
 
 // should be run from inside a context holding wn.peersLock

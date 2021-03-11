@@ -41,11 +41,13 @@ func TestPing(t *testing.T) {
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
-	readyTimeout := time.NewTimer(2 * time.Second)
-	waitReady(t, netA, readyTimeout.C)
-	t.Log("a ready")
-	waitReady(t, netB, readyTimeout.C)
-	t.Log("b ready")
+	// wait for the peer to connect
+	for t := 0; t < 200; t++ {
+		if len(netB.peers) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	bpeers := netB.GetPeers(PeersConnectedOut)
 	require.Equal(t, 1, len(bpeers))
