@@ -251,13 +251,13 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 
 	// wait for peers to connect (2 seconds max)
 	for t := 0; t < 200; t++ {
-		if len(netA.peers) > 0 {
+		if netA.NumPeers() > 0 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	require.Equal(t, 1, len(netA.peers))
+	require.Equal(t, 1, netA.NumPeers())
 	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	peerB := netA.peers[0]
 	err := peerB.Unicast(context.Background(), []byte("foo"), protocol.TxnTag)
@@ -580,7 +580,7 @@ func avgSendBufferHighPrioLength(wn *WebsocketNetwork) float64 {
 	for _, peer := range wn.peers {
 		sum += len(peer.sendBufferHighPrio)
 	}
-	return float64(sum) / float64(len(wn.peers))
+	return float64(sum) / float64(wn.NumPeers())
 }
 
 // TestSlowOutboundPeer tests what happens when one outbound peer is slow and the rest are fine. Current logic is to disconnect the one slow peer when its outbound channel is full.
@@ -903,7 +903,7 @@ func TestWebsocketNetworkPrio(t *testing.T) {
 	// Peek at A's peers
 	netA.peersLock.RLock()
 	defer netA.peersLock.RUnlock()
-	require.Equal(t, len(netA.peers), 1)
+	require.Equal(t, netA.NumPeers(), 1)
 
 	require.Equal(t, netA.peers[0].prioAddress, prioB.addr)
 	require.Equal(t, netA.peers[0].prioWeight, prioB.prio)
