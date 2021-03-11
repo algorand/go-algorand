@@ -47,8 +47,8 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}"/../ostype.sh)
 ARCH=$("${SCRIPTPATH}"/../archtype.sh)
 
-echo "Building libsodium-fork..."
-make crypto/libs/${OS}/${ARCH}/lib/libsodium.a
+echo "Building cryptographic libraries..."
+make crypto_libraries
 
 if [ "${BUILD_TYPE}" = "integration" ]; then
     echo "Skipping vet/gofmt/golint/license_check on integration test"
