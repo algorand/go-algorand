@@ -16,6 +16,26 @@
 
 package crypto
 
+// #cgo CFLAGS: -Wall -std=c99 -Ied25519-donna
+// #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/libs/darwin/amd64/lib/ed25519-donna.o
+// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/libs/linux/amd64/lib/ed25519-donna.o
+// #cgo linux,arm64 LDFLAGS: ${SRCDIR}/libs/linux/arm64/lib/ed25519-donna.o
+// #cgo linux,arm LDFLAGS: ${SRCDIR}/libs/linux/arm/lib/ed25519-donna.o
+// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/libs/windows/amd64/lib/ed25519-donna.o
+// #include "ed25519-donna/ed25519.h"
+// enum {
+//	sizeofPtr = sizeof(void*),
+// };
+import "C"
+import (
+	"unsafe"
+)
+
+//export ed25519_randombytes_unsafe
+func ed25519_randombytes_unsafe(p unsafe.Pointer, len C.size_t) {
+	RandBytes(C.GoBytes(p, C.int(len)))
+}
+
 // BatchVerifier provides faster implementation for verifing a series of independent signatures.
 type BatchVerifier struct {
 	messages   [][]byte // contains the messages to be hashed.
@@ -109,6 +129,8 @@ func (b *BatchVerifier) EnqueueMultisig(addr Digest, message Hashable, sig Multi
 	}
 }
 
+// int ed25519_sign_open_batch(const unsigned char **m, size_t *mlen, const unsigned char **pk, const unsigned char **RS, size_t num, int *valid);
+
 // Verify verifies that the enqueued signatures are good, returning false if a verification of any
 // of them fails.
 func (b *BatchVerifier) Verify() bool {
@@ -116,15 +138,57 @@ func (b *BatchVerifier) Verify() bool {
 		return false
 	}
 
-	// perform a naive implementation for now.
+	// allocate staging memory
+	messages := C.malloc(C.ulong(C.sizeofPtr * len(b.messages)))
+	messagesLen := C.malloc(C.ulong(C.sizeof_size_t * len(b.messages)))
+	publicKeys := C.malloc(C.ulong(C.sizeofPtr * len(b.messages)))
+	signatures := C.malloc(C.ulong(C.sizeofPtr * len(b.messages)))
+	valid := C.malloc(C.ulong(C.sizeof_int * len(b.messages)))
+
+	preallocatedPublicKeys := unsafe.Pointer(&b.publicKeys[0])
+	preallocatedSignatures := unsafe.Pointer(&b.signatures[0])
+
+	// load all the data pointers into the array pointers.
 	for i := 0; i < len(b.messages); i++ {
-		var sigVerifier SignatureVerifier
-		var message []byte
-		var sig Signature
+		*(*uintptr)(unsafe.Pointer(uintptr(messages) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&b.messages[i][0]))
+		*(*C.size_t)(unsafe.Pointer(uintptr(messagesLen) + uintptr(i*C.sizeof_size_t))) = C.size_t(len(b.messages[i]))
+		*(*uintptr)(unsafe.Pointer(uintptr(publicKeys) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(uintptr(preallocatedPublicKeys) + uintptr(i*ed25519PublicKeyLenBytes)))
+		*(*uintptr)(unsafe.Pointer(uintptr(signatures) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(uintptr(preallocatedSignatures) + uintptr(i*ed25519SignatureLenBytes)))
+	}
+
+	// call the batch verifier
+	allValid := C.ed25519_sign_open_batch(
+		(**C.uchar)(unsafe.Pointer(messages)),
+		(*C.size_t)(unsafe.Pointer(messagesLen)),
+		(**C.uchar)(unsafe.Pointer(publicKeys)),
+		(**C.uchar)(unsafe.Pointer(signatures)),
+		C.size_t(len(b.messages)),
+		(*C.int)(unsafe.Pointer(valid))) == 0
+
+	// release staging memory
+	C.free(messages)
+	C.free(messagesLen)
+	C.free(publicKeys)
+	C.free(signatures)
+	C.free(valid)
+
+	return allValid
+}
+
+// VerifySlow verifies that the enqueued signatures are good, returning false if a verification of any
+// of them fails. The implementation is the naive implementation and the entries are being iterated.
+func (b *BatchVerifier) VerifySlow() bool {
+	if b.failed {
+		return false
+	}
+
+	// iterate and verify each of the signatures.
+	var sigVerifier SignatureVerifier
+	var sig Signature
+	for i := 0; i < len(b.messages); i++ {
 		copy(sigVerifier[:], b.publicKeys[i*ed25519PublicKeyLenBytes:])
-		message = b.messages[i]
 		copy(sig[:], b.signatures[i*ed25519SignatureLenBytes:])
-		if !sigVerifier.VerifyBytes(message[:], sig) {
+		if !sigVerifier.VerifyBytes(b.messages[i][:], sig) {
 			return false
 		}
 	}

@@ -120,6 +120,14 @@ crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 		$(MAKE) && \
 		$(MAKE) install
 
+crypto/libs/$(OS_TYPE)/$(ARCH)/lib/ed25519-donna.o:
+	mkdir -p crypto/libs/$(OS_TYPE)/$(ARCH)/lib
+	gcc -Wall -std=c99 -DED25519_REFHASH -DED25519_CUSTOMRANDOM -Wno-macro-redefined -Icrypto/ed25519-donna -Wno-incompatible-pointer-types-discards-qualifiers crypto/ed25519-donna/ed25519.c -m64 -O3 -c -o crypto/libs/$(OS_TYPE)/$(ARCH)/lib/ed25519-donna.o -DED25519_SSE2
+
+# crypto_libraries is a phoney target used to be used as a single dependency target
+# for all the crypto libraries.
+crypto_libraries: crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a crypto/libs/$(OS_TYPE)/$(ARCH)/lib/ed25519-donna.o
+
 deps:
 	./scripts/check_deps.sh
 
@@ -132,7 +140,7 @@ ALGOD_API_FILES := $(shell find daemon/algod/api/server/common daemon/algod/api/
 ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
 
 # Note that swagger.json requires the go-swagger dep.
-$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
+$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto_libraries
 	cd daemon/algod/api && \
 		PATH=$(GOPATH1)/bin:$$PATH \
 		go generate ./...
@@ -146,7 +154,7 @@ KMD_API_FILES := $(shell find daemon/kmd/api/ -type f | grep -v $(KMD_API_SWAGGE
 KMD_API_SWAGGER_WRAPPER := kmdSwaggerWrappers.go
 KMD_API_SWAGGER_INJECT := daemon/kmd/lib/kmdapi/bundledSpecInject.go
 
-$(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
+$(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto_libraries
 	cd daemon/kmd/lib/kmdapi && \
 		python3 genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER)
 	cd daemon/kmd && \
@@ -175,7 +183,7 @@ build: buildsrc gen
 # get around a bug in go build where it will fail
 # to cache binaries from time to time on empty NFS
 # dirs
-buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
+buildsrc: check-go-version crypto_libraries node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
 	mkdir -p tmp/go-cache && \
 	touch tmp/go-cache/file.txt && \
 	GOCACHE=$(SRCPATH)/tmp/go-cache go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
@@ -301,7 +309,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version
+.PHONY: default fmt vet lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version crypto_libraries
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule
