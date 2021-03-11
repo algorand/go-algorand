@@ -118,32 +118,6 @@ func OpDoc(opName string) string {
 	return opDocByName[opName]
 }
 
-// notes on immediate bytes following the opcode
-var opcodeImmediateNote = map[string]string{
-	"intcblock":         "{varuint length} [{varuint value}, ...]",
-	"intc":              "{uint8 int constant index}",
-	"pushint":           "{varuint int}",
-	"bytecblock":        "{varuint length} [({varuint value length} bytes), ...]",
-	"bytec":             "{uint8 byte constant index}",
-	"pushbytes":         "{varuint length} {bytes}",
-	"arg":               "{uint8 arg index N}",
-	"txn":               "{uint8 transaction field index}",
-	"gtxn":              "{uint8 transaction group index} {uint8 transaction field index}",
-	"gtxns":             "{uint8 transaction field index}",
-	"txna":              "{uint8 transaction field index} {uint8 transaction field array index}",
-	"gtxna":             "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
-	"gtxnsa":            "{uint8 transaction field index} {uint8 transaction field array index}",
-	"global":            "{uint8 global field index}",
-	"bnz":               "{0..0x7fff forward branch offset, big endian}",
-	"bz":                "{0..0x7fff forward branch offset, big endian}",
-	"b":                 "{0..0x7fff forward branch offset, big endian}",
-	"load":              "{uint8 position in scratch space to load from}",
-	"store":             "{uint8 position in scratch space to store to}",
-	"substring":         "{uint8 start position} {uint8 end position}",
-	"dig":               "{uint8 depth}",
-	"asset_holding_get": "{uint8 asset holding field index}",
-	"asset_params_get":  "{uint8 asset params field index}",
-}
 var opcodeImmediateNotes = map[string]string{
 	"intcblock":         "{varuint length} [{varuint value}, ...]",
 	"intc":              "{uint8 int constant index}",
