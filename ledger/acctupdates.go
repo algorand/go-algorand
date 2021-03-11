@@ -94,7 +94,7 @@ const initializeCachesRoundFlushInterval = 1000
 const initializingAccountCachesMessageTimeout = 3 * time.Second
 
 // accountsUpdatePerRoundHighWatermark is the warning watermark for updating accounts data that takes
-// longer then expected. We set it up here for one second per round, so that if we're bulk updating
+// longer than expected. We set it up here for one second per round, so that if we're bulk updating
 // four rounds, we would allow up to 4 seconds. This becomes important when supporting balances recovery
 // where we end up batching up to 1000 rounds in a single update.
 const accountsUpdatePerRoundHighWatermark = 1 * time.Second
@@ -993,8 +993,9 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 		// flush to disk if any of the following applies:
 		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
 		// 2. if we completed the loading and we loaded up more than 320 rounds.
-		if blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval ||
-			(lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound) {
+		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
+		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
+		if flushIntervalExceed || loadCompleted {
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
 			au.lastFlushTime = time.Now().Add(-balancesFlushInterval)
 
