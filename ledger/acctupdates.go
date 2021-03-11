@@ -60,6 +60,8 @@ const (
 	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
 	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
 	trieAccumulatedChangesFlush = 256
+	// directory name in which all the catchpoints files are stored
+	catchpointDirName = "catchpoints"
 )
 
 // trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
@@ -793,7 +795,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 	}
 
 	// if the database doesn't know about that round, see if we have that file anyway:
-	fileName := filepath.Join("catchpoints", catchpointRoundToPath(round))
+	fileName := filepath.Join(catchpointDirName, catchpointRoundToPath(round))
 	catchpointPath := filepath.Join(au.dbDirectory, fileName)
 	file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
 	if err == nil && file != nil {
@@ -2074,7 +2076,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		return
 	}
 
-	relCatchpointFileName := filepath.Join("catchpoints", catchpointRoundToPath(committedRound))
+	relCatchpointFileName := filepath.Join(catchpointDirName, catchpointRoundToPath(committedRound))
 	absCatchpointFileName := filepath.Join(au.dbDirectory, relCatchpointFileName)
 
 	more := true
@@ -2213,10 +2215,30 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 			// we can't delete the file, abort -
 			return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 		}
-		err = au.accountsq.storeCatchpoint(context.Background(), round, "", "", 0)
-		if err != nil {
-			return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
+		// we check if the catchpoint dir is empty. if it is, we need to delete the dir as well.
+		catchpointRootDir := filepath.Join(au.dbDirectory, catchpointDirName)
+		currentCatchpointDir := filepath.Dir(absCatchpointFileName)
+
+		for currentCatchpointDir != catchpointRootDir {
+
+			filesInCatchupDir, err := os.ReadDir(currentCatchpointDir)
+			if err != nil {
+				return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", currentCatchpointDir, err)
+			}
+			if len(filesInCatchupDir) == 0 {
+				err = os.Remove(currentCatchpointDir)
+				if err != nil {
+					return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", currentCatchpointDir, err)
+				}
+			}
+
+			err = au.accountsq.storeCatchpoint(context.Background(), round, "", "", 0)
+			if err != nil {
+				return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
+			}
+			currentCatchpointDir = filepath.Dir(currentCatchpointDir)
 		}
+
 	}
 	return
 }
