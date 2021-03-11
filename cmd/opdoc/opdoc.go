@@ -119,7 +119,6 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	if opextra != "" {
 		ws = " "
 	}
-	costs := logic.OpAllCosts(op.Name)
 	fmt.Fprintf(out, "\n## %s%s\n\n- Opcode: 0x%02x%s%s\n", op.Name, immediateMarkdown(op), op.Opcode, ws, opextra)
 	if op.Args == nil {
 		fmt.Fprintf(out, "- Pops: _None_\n")
@@ -148,13 +147,18 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 	}
 	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
 	// if cost changed with versions print all of them
+	costs := logic.OpAllCosts(op.Name)
 	if len(costs) > 1 {
 		fmt.Fprintf(out, "- **Cost**:\n")
-		for v := 1; v < len(costs); v++ {
-			fmt.Fprintf(out, "   - %d (LogicSigVersion = %d)\n", costs[v], v)
+		for _, cost := range costs {
+			if cost.From == cost.To {
+				fmt.Fprintf(out, "   - %d (LogicSigVersion = %d)\n", cost.Cost, cost.To)
+			} else {
+				fmt.Fprintf(out, "   - %d (%d <= LogicSigVersion <= %d)\n", cost.Cost, cost.From, cost.To)
+			}
 		}
 	} else {
-		cost := costs[0]
+		cost := costs[0].Cost
 		if cost != 1 {
 			fmt.Fprintf(out, "- **Cost**: %d\n", cost)
 		}

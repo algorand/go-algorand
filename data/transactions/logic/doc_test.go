@@ -86,13 +86,13 @@ func TestOpDocExtra(t *testing.T) {
 
 func TestOpAllCosts(t *testing.T) {
 	a := OpAllCosts("+")
-	require.Equal(t, 1, len(a))
-	require.Equal(t, 1, a[0])
+	require.Len(t, a, 1)
+	require.Equal(t, 1, a[0].Cost)
 
 	a = OpAllCosts("sha256")
-	require.True(t, len(a) > 1)
-	for v := 1; v <= LogicVersion; v++ {
-		require.True(t, a[v] > 1)
+	require.Len(t, a, 2)
+	for _, cost := range a {
+		require.True(t, cost.Cost > 1)
 	}
 }
 
