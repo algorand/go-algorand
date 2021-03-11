@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/algorand/go-algorand/logging"
@@ -50,37 +51,46 @@ var colors = []int{red, green, yellow, blue, magenta, cyan, hired, higreen, hiye
 var lowColors = []int{red, green, yellow, blue, magenta, cyan}
 
 type emulatorNodeLogger struct {
-	logging.Logger
+	algodlogger
 	node        *emulatedNode
 	longestName int
 }
 
-func makeNodeLogger(l logging.Logger, node *emulatedNode) logging.Logger {
+func makeNodeLogger(l logging.Logger, node *emulatedNode) Logger {
 	return &emulatorNodeLogger{
-		Logger: l,
-		node:   node,
+		algodlogger: l,
+		node:        node,
 	}
 }
 
-func (e emulatorNodeLogger) Infof(s string, args ...interface{}) {
-	if s == incomingTxSyncMsgFormat || s == outgoingTxSyncMsgFormat {
-		// special output.
-		e.printMsg(s, args...)
-	} else {
-		e.Logger.Infof(e.node.name+" :"+s, args...)
-	}
+type msgMode int
+
+const (
+	modeZero msgMode = iota
+	modeIncoming
+	modeOutgoing
+)
+
+// implement local interface Logger
+func (e *emulatorNodeLogger) outgoingMessage(mstat msgStats) {
+	e.printMsgStats(mstat, modeOutgoing)
 }
 
-func (e emulatorNodeLogger) printMsg(s string, args ...interface{}) {
-	// "Incoming Txsync #%d round %d transacations %d request [%d/%d]"
-	var seq int
-	var round int
-	var transactions int
-	var offset, modulator int
-	var bloom int
-	var nextTS int
-	var destIndex int
-	fmt.Sscanf(fmt.Sprintf("%v %v %v %v %v %v %v %v", args...), "%d %d %d %d %d %d %d %d", &seq, &round, &transactions, &offset, &modulator, &bloom, &nextTS, &destIndex)
+// implement local interface Logger
+func (e *emulatorNodeLogger) incomingMessage(mstat msgStats) {
+	e.printMsgStats(mstat, modeIncoming)
+}
+
+func (e emulatorNodeLogger) printMsgStats(mstat msgStats, mode msgMode) {
+	seq := int(mstat.sequenceNumber)
+	round := mstat.round
+	transactions := mstat.transactions
+	offset := mstat.offsetModulator.Offset
+	modulator := mstat.offsetModulator.Modulator
+	bloom := mstat.bloomSize
+	nextTS := mstat.nextMsgMinDelay
+	// emulator peer addresses are just an int
+	destIndex, _ := strconv.Atoi(mstat.peerAddress)
 
 	destName := e.node.emulator.nodes[destIndex].name
 
@@ -94,7 +104,7 @@ func (e emulatorNodeLogger) printMsg(s string, args ...interface{}) {
 
 	elapsed := e.node.emulator.clock.Since().Milliseconds()
 	out := fmt.Sprintf("%3d.%03d ", elapsed/1000, elapsed%1000)
-	if s == outgoingTxSyncMsgFormat {
+	if mode == modeOutgoing {
 		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", e.node.name)
 	} else {
 		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", destName)
@@ -108,24 +118,24 @@ func (e emulatorNodeLogger) printMsg(s string, args ...interface{}) {
 		nextTSColor = higreen
 	}
 	mid := fmt.Sprintf("Round %s Txns %s Req [%3d/%3d] %s %s",
-		wrapRollingColor(round, fmt.Sprintf("%2d", round)),
+		wrapRollingColor(int(round), fmt.Sprintf("%2d", round)),
 		wrapRollingColor(transactions, fmt.Sprintf("%3d", transactions)),
 		offset,
 		modulator,
 		wrapColor(bfColor, "BF"),
 		wrapColor(nextTSColor, "TS"),
 	)
-	if s == incomingTxSyncMsgFormat {
-		out += wrapColor(hiblack, " [ ")
-		out += strings.Repeat(" ", 20) + wrapRollingLowColor(seq, " <-- ") + mid
-		out += wrapRollingLowColor(seq, " ] ")
-	} else {
+	if mode == modeOutgoing {
 		out += wrapRollingLowColor(seq, " [ ")
 		out += mid + wrapRollingLowColor(seq, " --> ") + strings.Repeat(" ", 20)
 		out += wrapColor(hiblack, " ] ")
+	} else {
+		out += wrapColor(hiblack, " [ ")
+		out += strings.Repeat(" ", 20) + wrapRollingLowColor(seq, " <-- ") + mid
+		out += wrapRollingLowColor(seq, " ] ")
 	}
 
-	if s == outgoingTxSyncMsgFormat {
+	if mode == modeOutgoing {
 		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", destName)
 	} else {
 		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", e.node.name)

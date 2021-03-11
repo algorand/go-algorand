@@ -83,7 +83,7 @@ func TestCatchupOverGossip(t *testing.T) {
 
 	// ledger node upgraded version, fetcher node upgraded version
 	// Run with the default values. Instead of "", pass the default value
-	// to exercise loading it from the config file. 
+	// to exercise loading it from the config file.
 	runCatchupOverGossip(t, supportedVersions[0], supportedVersions[0])
 	for i := 1; i < len(supportedVersions); i++ {
 		runCatchupOverGossip(t, supportedVersions[i], "")
@@ -111,7 +111,7 @@ func runCatchupOverGossip(t *testing.T,
 	// distribution for catchup so this is fine.
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
 
-	if ledgerNodeDowngradeTo != ""{
+	if ledgerNodeDowngradeTo != "" {
 		// Force the node to only support v1
 		dir, err := fixture.GetNodeDir("Node")
 		a.NoError(err)
