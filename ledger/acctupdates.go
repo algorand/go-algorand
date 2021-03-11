@@ -932,10 +932,16 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 		close(skipAccountCacheMessage)
 		select {
 		case <-writeAccountCacheMessageCompleted:
-			au.log.Infof("initializeCaches completed initializing account data caches")
+			if err == nil {
+				au.log.Infof("initializeCaches completed initializing account data caches")
+			}
 		default:
 		}
 	}()
+
+	// this goroutine logs a message once if the parent function have not completed in initializingAccountCachesMessageTimeout seconds.
+	// the message is important, since we're blocking on the ledger block database here, and we want to make sure that we log a message
+	// within the above timeout.
 	go func() {
 		select {
 		case <-time.After(initializingAccountCachesMessageTimeout):
