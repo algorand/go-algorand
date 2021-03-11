@@ -226,21 +226,29 @@ var OpGroupList = []OpGroup{
 	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 
-// OpAllCosts returns an array of the relative cost score for an op by version.
-// If all the costs are the same the array is single entry
-// otherwise it has costs by op version
-func OpAllCosts(opName string) []int {
-	cost := OpsByName[LogicVersion][opName].Details.Cost
-	costs := make([]int, LogicVersion+1)
-	isDifferent := false
+type OpCost struct {
+	From int
+	To   int
+	Cost int
+}
+
+// OpAllCosts returns an array of the cost score for an op by version.
+// Each entry indicates the cost over a range of versions, so if the
+// cost has remained constant, there is only one result, otherwise
+// each entry shows the cost for a consecutive range of versions,
+// inclusive.
+func OpAllCosts(opName string) []OpCost {
+	var costs []OpCost
 	for v := 1; v <= LogicVersion; v++ {
-		costs[v] = OpsByName[v][opName].Details.Cost
-		if costs[v] > 0 && costs[v] != cost {
-			isDifferent = true
+		cost := OpsByName[v][opName].Details.Cost
+		if cost == 0 {
+			continue
 		}
-	}
-	if !isDifferent {
-		return []int{cost}
+		if costs == nil || cost != costs[len(costs)-1].Cost {
+			costs = append(costs, OpCost{v, v, cost})
+		} else {
+			costs[len(costs)-1].To = v
+		}
 	}
 
 	return costs
