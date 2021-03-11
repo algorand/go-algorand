@@ -19,6 +19,7 @@ package txnsync
 import (
 	"fmt"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,15 +38,18 @@ type queuedMessage struct {
 	readyAt time.Duration
 }
 type networkPeer struct {
-	peer                 *Peer
-	uploadSpeed          uint64
-	downloadSpeed        uint64
-	isOutgoing           bool
-	outSeq               uint64
-	inSeq                uint64
-	target               int
-	messageQ             []queuedMessage // incoming message queue
-	lockCh               chan struct{}
+	peer          *Peer
+	uploadSpeed   uint64
+	downloadSpeed uint64
+	isOutgoing    bool
+	outSeq        uint64
+	inSeq         uint64
+	target        int
+
+	messageQ []queuedMessage // incoming message queue
+
+	mu sync.Mutex `algofix:"allow sync.Mutex"`
+
 	deferredSentMessages []queuedSentMessageCallback // outgoing messages callback queue
 }
 
@@ -60,7 +64,7 @@ type emulatedNode struct {
 	txpoolIds          map[transactions.Txid]bool
 	name               string
 	blocked            chan struct{}
-	lockCh             chan struct{}
+	mu                 sync.Mutex `algofix:"allow sync.Mutex"`
 	txpoolGroupCounter uint64
 	blockingEnabled    bool
 	nodeBlocked        chan struct{} // channel is closed when node is blocked.
@@ -78,7 +82,6 @@ func makeEmulatedNode(emulator *emulator, nodeIdx int) *emulatedNode {
 		blockingEnabled: true,
 		nodeBlocked:     make(chan struct{}, 1),
 		nodeRunning:     make(chan struct{}, 1),
-		lockCh:          make(chan struct{}, 1),
 	}
 	close(en.nodeRunning)
 
@@ -89,7 +92,6 @@ func makeEmulatedNode(emulator *emulator, nodeIdx int) *emulatedNode {
 			downloadSpeed: conn.downloadSpeed,
 			isOutgoing:    true,
 			target:        conn.target,
-			lockCh:        make(chan struct{}, 1),
 		}
 	}
 	// add incoming connections
@@ -108,7 +110,6 @@ func makeEmulatedNode(emulator *emulator, nodeIdx int) *emulatedNode {
 				downloadSpeed: conn.uploadSpeed,
 				isOutgoing:    false,
 				target:        nodeID,
-				lockCh:        make(chan struct{}, 1),
 			}
 		}
 	}
@@ -121,33 +122,33 @@ func (n *emulatedNode) Events() <-chan Event {
 
 func (n *emulatedNode) NotifyMonitor() chan struct{} {
 	var c chan struct{}
-	n.lock()
+	n.mu.Lock()
 	if n.blockingEnabled {
 		c = make(chan struct{})
 		n.blocked = c
 		close(n.nodeBlocked)
 		n.nodeRunning = make(chan struct{}, 1)
-		n.unlock()
+		n.mu.Unlock()
 		<-c
-		n.lock()
+		n.mu.Lock()
 		close(n.nodeRunning)
 		n.nodeBlocked = make(chan struct{}, 1)
-		n.unlock()
+		n.mu.Unlock()
 		// return a closed channel.
 		return c
 	}
-	n.unlock()
+	n.mu.Unlock()
 	// return an open channel
 	return make(chan struct{})
 }
 func (n *emulatedNode) disableBlocking() {
-	n.lock()
+	n.mu.Lock()
 	n.blockingEnabled = false
-	n.unlock()
+	n.mu.Unlock()
 	n.unblock()
 }
 func (n *emulatedNode) unblock() {
-	n.lock()
+	n.mu.Lock()
 	// wait until the state chages to StateMachineRunning
 	select {
 	case <-n.nodeBlocked:
@@ -157,25 +158,25 @@ func (n *emulatedNode) unblock() {
 			n.blocked = nil
 		}
 		runningCh := n.nodeRunning
-		n.unlock()
+		n.mu.Unlock()
 		<-runningCh
 		return
 	default:
 	}
-	n.unlock()
+	n.mu.Unlock()
 }
 
 func (n *emulatedNode) waitBlocked() {
-	n.lock()
+	n.mu.Lock()
 	select {
 	case <-n.nodeRunning:
 		blockedCh := n.nodeBlocked
-		n.unlock()
+		n.mu.Unlock()
 		<-blockedCh
 		return
 	default:
 	}
-	n.unlock()
+	n.mu.Unlock()
 }
 
 func (n *emulatedNode) GetCurrentRoundSettings() RoundSettings {
@@ -248,7 +249,7 @@ func (n *emulatedNode) UpdatePeers(txPeers []*Peer, netPeers []interface{}) {
 }
 
 func (n *emulatedNode) enqueueMessage(from int, msg queuedMessage) {
-	n.peers[from].lock()
+	n.peers[from].mu.Lock()
 	baseTime := n.emulator.clock.Since()
 	if len(n.peers[from].messageQ) > 0 {
 		if n.peers[from].messageQ[len(n.peers[from].messageQ)-1].readyAt > baseTime {
@@ -256,7 +257,7 @@ func (n *emulatedNode) enqueueMessage(from int, msg queuedMessage) {
 		}
 	}
 	n.peers[from].messageQ = append(n.peers[from].messageQ, queuedMessage{bytes: msg.bytes, readyAt: baseTime + msg.readyAt})
-	n.peers[from].unlock()
+	n.peers[from].mu.Unlock()
 }
 
 func (n *emulatedNode) SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback) {
@@ -307,16 +308,16 @@ func (n *emulatedNode) step() {
 	// check if we have any pending network messages and forward them.
 
 	for _, peer := range n.orderedPeers() {
-		peer.lock()
+		peer.mu.Lock()
 
 		for i := len(peer.deferredSentMessages); i > 0; i-- {
 			dm := peer.deferredSentMessages[0]
 			peer.deferredSentMessages = peer.deferredSentMessages[1:]
-			peer.unlock()
+			peer.mu.Unlock()
 			dm.callback(true, dm.seq)
 			n.unblock()
 			n.waitBlocked()
-			peer.lock()
+			peer.mu.Lock()
 		}
 
 		for i := len(peer.messageQ); i > 0; i-- {
@@ -330,15 +331,15 @@ func (n *emulatedNode) step() {
 			peer.inSeq++
 			peer.messageQ = peer.messageQ[1:]
 
-			peer.unlock()
+			peer.mu.Unlock()
 
 			msgHandler(peer, peer.peer, msgBytes, msgInSeq)
 			n.unblock()
 			n.waitBlocked()
-			peer.lock()
+			peer.mu.Lock()
 
 		}
-		peer.unlock()
+		peer.mu.Unlock()
 	}
 
 }
@@ -364,22 +365,6 @@ func (n *emulatedNode) onNewTransactionPoolEntry() {
 	n.externalEvents <- MakeTranscationPoolChangeEvent(len(n.txpoolEntries))
 }
 
-func (n *emulatedNode) lock() {
-	n.lockCh <- struct{}{}
-}
-
-func (n *emulatedNode) unlock() {
-	<-n.lockCh
-}
-
 func (p *networkPeer) GetAddress() string {
 	return fmt.Sprintf("%d", p.target)
-}
-
-func (p *networkPeer) lock() {
-	p.lockCh <- struct{}{}
-}
-
-func (p *networkPeer) unlock() {
-	<-p.lockCh
 }

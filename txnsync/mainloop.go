@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -35,7 +34,7 @@ const (
 
 type syncState struct {
 	service *Service
-	log     logging.Logger
+	log     Logger
 	node    NodeConnector
 	isRelay bool
 	clock   timers.WallClock
