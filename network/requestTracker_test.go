@@ -91,7 +91,6 @@ func TestRateLimiting(t *testing.T) {
 	wn.config.MaxConnectionsPerIP += int(testConfig.ConnectionsRateLimitingCount) * 5
 
 	wn.setup()
-	wn.eventualReadyDelay = time.Second
 
 	netA := wn
 	netA.config.GossipFanout = 1
@@ -140,19 +139,17 @@ func TestRateLimiting(t *testing.T) {
 		connectedClients = 0
 		time.Sleep(100 * time.Millisecond)
 		for i := 0; i < clientsCount; i++ {
-			// check if the channel is ready.
-			readyCh := networks[i].Ready()
-			select {
-			case <-readyCh:
-				// it's closed, so this client got connected.
-				connectedClients++
-				phonebookLen := len(phonebooks[i].GetAddresses(1, PhoneBookEntryRelayRole))
-				// if this channel is ready, than we should have an address, since it didn't get blocked.
-				require.Equal(t, 1, phonebookLen)
-			default:
-				// not ready yet.
-				// wait abit longer.
+			// Wait for peers to connect
+			for t := 0; t < 200; t++ {
+				if networks[i].NumPeers() > 0 {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
 			}
+			connectedClients++
+			phonebookLen := len(phonebooks[i].GetAddresses(1, PhoneBookEntryRelayRole))
+			// if this channel is ready, than we should have an address, since it didn't get blocked.
+			require.Equal(t, 1, phonebookLen)
 		}
 		if connectedClients >= int(testConfig.ConnectionsRateLimitingCount) {
 			timedOut = time.Now().After(deadline)
