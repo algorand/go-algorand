@@ -227,147 +227,6 @@ func (ops *OpStream) ByteLiteral(val []byte) {
 	ops.Bytec(constIndex)
 }
 
-// Arg writes opcodes for loading from Lsig.Args
-func (ops *OpStream) Arg(val uint64) error {
-	switch val {
-	case 0:
-		ops.pending.WriteByte(0x2d) // arg_0
-	case 1:
-		ops.pending.WriteByte(0x2e) // arg_1
-	case 2:
-		ops.pending.WriteByte(0x2f) // arg_2
-	case 3:
-		ops.pending.WriteByte(0x30) // arg_3
-	default:
-		if val > 0xff {
-			return ops.error("cannot have more than 256 args")
-		}
-		ops.pending.WriteByte(0x2c)
-		ops.pending.WriteByte(uint8(val))
-	}
-	return nil
-}
-
-// Txn writes opcodes for loading a field from the current transaction
-func (ops *OpStream) Txn(val uint64) {
-	if val >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid txn field: %d", val)
-	}
-	ops.pending.WriteByte(0x31)
-	ops.pending.WriteByte(uint8(val))
-	ops.returns(TxnFieldTypes[val])
-}
-
-// Txna writes opcodes for loading array field from the current transaction
-func (ops *OpStream) Txna(fieldNum uint64, arrayFieldIdx uint64) {
-	if fieldNum >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid txn field: %d", fieldNum)
-		return
-	}
-	if arrayFieldIdx > 255 {
-		ops.errorf("txna array index beyond 255: %d", arrayFieldIdx)
-		return
-	}
-	ops.pending.WriteByte(0x36)
-	ops.pending.WriteByte(uint8(fieldNum))
-	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(TxnFieldTypes[fieldNum])
-}
-
-// Gtxn writes opcodes for loading a field from the current transaction
-func (ops *OpStream) Gtxn(gid, val uint64) {
-	if val >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid gtxn field: %d", val)
-		return
-	}
-	if gid > 255 {
-		ops.errorf("gtxn transaction index beyond 255: %d", gid)
-		return
-	}
-	ops.pending.WriteByte(0x33)
-	ops.pending.WriteByte(uint8(gid))
-	ops.pending.WriteByte(uint8(val))
-	ops.returns(TxnFieldTypes[val])
-}
-
-// Gtxna writes opcodes for loading an array field from the current transaction
-func (ops *OpStream) Gtxna(gid, fieldNum uint64, arrayFieldIdx uint64) {
-	if fieldNum >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid txn field: %d", fieldNum)
-		return
-	}
-	if gid > 255 {
-		ops.errorf("gtxna group index beyond 255: %d", gid)
-		return
-	}
-	if arrayFieldIdx > 255 {
-		ops.errorf("gtxna array index beyond 255: %d", arrayFieldIdx)
-		return
-	}
-	ops.pending.WriteByte(0x37)
-	ops.pending.WriteByte(uint8(gid))
-	ops.pending.WriteByte(uint8(fieldNum))
-	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(TxnFieldTypes[fieldNum])
-}
-
-// Gtxns writes opcodes for loading a field from the current transaction
-func (ops *OpStream) Gtxns(fieldNum uint64) {
-	if fieldNum >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid gtxns field: %d", fieldNum)
-		return
-	}
-	ops.pending.WriteByte(0x38)
-	ops.pending.WriteByte(uint8(fieldNum))
-	ops.returns(TxnFieldTypes[fieldNum])
-}
-
-// Gtxnsa writes opcodes for loading an array field from the current transaction
-func (ops *OpStream) Gtxnsa(fieldNum uint64, arrayFieldIdx uint64) {
-	if fieldNum >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid gtxnsa field: %d", fieldNum)
-		return
-	}
-	if arrayFieldIdx > 255 {
-		ops.errorf("gtxnsa array index beyond 255: %d", arrayFieldIdx)
-		return
-	}
-	ops.pending.WriteByte(0x39)
-	ops.pending.WriteByte(uint8(fieldNum))
-	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.returns(TxnFieldTypes[fieldNum])
-}
-
-// Global writes opcodes for loading an evaluator-global field
-func (ops *OpStream) Global(val GlobalField) {
-	ops.pending.WriteByte(0x32)
-	ops.pending.WriteByte(uint8(val))
-	ops.trace("%s (%s)", GlobalFieldNames[val], GlobalFieldTypes[val].String())
-	ops.returns(GlobalFieldTypes[val])
-}
-
-// AssetHolding writes opcodes for accessing data from AssetHolding
-func (ops *OpStream) AssetHolding(val uint64) {
-	if val >= uint64(len(AssetHoldingFieldNames)) {
-		ops.errorf("invalid asset holding field: %d", val)
-		return
-	}
-	ops.pending.WriteByte(OpsByName[ops.Version]["asset_holding_get"].Opcode)
-	ops.pending.WriteByte(uint8(val))
-	ops.returns(AssetHoldingFieldTypes[val], StackUint64)
-}
-
-// AssetParams writes opcodes for accessing data from AssetParams
-func (ops *OpStream) AssetParams(val uint64) {
-	if val >= uint64(len(AssetParamsFieldNames)) {
-		ops.errorf("invalid asset params field: %d", val)
-		return
-	}
-	ops.pending.WriteByte(OpsByName[ops.Version]["asset_params_get"].Opcode)
-	ops.pending.WriteByte(uint8(val))
-	ops.returns(AssetParamsFieldTypes[val], StackUint64)
-}
-
 func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return ops.error("int needs one argument")
@@ -612,7 +471,7 @@ func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.pending.WriteByte(0x20) // intcblock
+	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
 	ops.pending.Write(scratch[:l])
@@ -631,7 +490,7 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.pending.WriteByte(0x26) // bytecblock
+	ops.pending.WriteByte(spec.Opcode)
 	bvals := make([][]byte, 0, len(args))
 	rest := args
 	for len(rest) > 0 {
@@ -682,8 +541,21 @@ func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.error(err)
 	}
-	ops.Arg(val)
-	return nil
+	altSpec := *spec
+	if val < 4 {
+		switch val {
+		case 0:
+			altSpec = OpsByName[ops.Version]["arg_0"]
+		case 1:
+			altSpec = OpsByName[ops.Version]["arg_1"]
+		case 2:
+			altSpec = OpsByName[ops.Version]["arg_2"]
+		case 3:
+			altSpec = OpsByName[ops.Version]["arg_3"]
+		}
+		args = []string{}
+	}
+	return asmDefault(ops, &altSpec, args)
 }
 
 func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
@@ -725,8 +597,9 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if fs.version > ops.Version {
 		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
-	val := fs.field
-	ops.Txn(uint64(val))
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
@@ -736,7 +609,8 @@ func assembleTxn2(ops *OpStream, spec *OpSpec, args []string) error {
 		return assembleTxn(ops, spec, args)
 	}
 	if len(args) == 2 {
-		return assembleTxna(ops, spec, args)
+		txna := OpsByName[ops.Version]["txna"]
+		return assembleTxna(ops, &txna, args)
 	}
 	return ops.error("txn expects one or two arguments")
 }
@@ -760,8 +634,14 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.error(err)
 	}
-	fieldNum := fs.field
-	ops.Txna(uint64(fieldNum), uint64(arrayFieldIdx))
+	if arrayFieldIdx > 255 {
+		return ops.errorf("txna array index beyond 255: %d", arrayFieldIdx)
+	}
+
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.pending.WriteByte(uint8(arrayFieldIdx))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
@@ -769,10 +649,14 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.error("gtxn expects two arguments")
 	}
-	gtid, err := strconv.ParseUint(args[0], 0, 64)
+	slot, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
+	if slot > 255 {
+		return ops.errorf("gtxn transaction index beyond 255: %d", slot)
+	}
+
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
 		return ops.errorf("gtxn unknown field: %v", args[1])
@@ -784,8 +668,11 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if fs.version > ops.Version {
 		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
-	val := fs.field
-	ops.Gtxn(gtid, uint64(val))
+
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(slot))
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
@@ -794,7 +681,8 @@ func assembleGtxn2(ops *OpStream, spec *OpSpec, args []string) error {
 		return assembleGtxn(ops, spec, args)
 	}
 	if len(args) == 3 {
-		return assembleGtxna(ops, spec, args)
+		gtxna := OpsByName[ops.Version]["gtxna"]
+		return assembleGtxna(ops, &gtxna, args)
 	}
 	return ops.error("gtxn expects two or three arguments")
 }
@@ -803,10 +691,14 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 3 {
 		return ops.error("gtxna expects three arguments")
 	}
-	gtid, err := strconv.ParseUint(args[0], 0, 64)
+	slot, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
+	if slot > 255 {
+		return ops.errorf("gtxna group index beyond 255: %d", slot)
+	}
+
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
 		return ops.errorf("gtxna unknown field: %v", args[1])
@@ -822,14 +714,22 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.error(err)
 	}
-	fieldNum := fs.field
-	ops.Gtxna(gtid, uint64(fieldNum), uint64(arrayFieldIdx))
+	if arrayFieldIdx > 255 {
+		return ops.errorf("gtxna array index beyond 255: %d", arrayFieldIdx)
+	}
+
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(slot))
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.pending.WriteByte(uint8(arrayFieldIdx))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
 func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 2 {
-		return assembleGtxnsa(ops, spec, args)
+		gtxnsa := OpsByName[ops.Version]["gtxnsa"]
+		return assembleGtxnsa(ops, &gtxnsa, args)
 	}
 	if len(args) != 1 {
 		return ops.error("gtxns expects one or two immediate arguments")
@@ -845,8 +745,10 @@ func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 	if fs.version > ops.Version {
 		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
-	val := fs.field
-	ops.Gtxns(uint64(val))
+
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
@@ -869,25 +771,34 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.error(err)
 	}
-	fieldNum := fs.field
-	ops.Gtxnsa(uint64(fieldNum), uint64(arrayFieldIdx))
+	if arrayFieldIdx > 255 {
+		return ops.errorf("gtxnsa array index beyond 255: %d", arrayFieldIdx)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.pending.WriteByte(uint8(arrayFieldIdx))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
 func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		ops.error("global expects one argument")
-		args = []string{GlobalFieldNames[0]}
+		return ops.error("global expects one argument")
 	}
 	fs, ok := globalFieldSpecByName[args[0]]
 	if !ok {
-		ops.errorf("global unknown field: %v", args[0])
-		fs, _ = globalFieldSpecByName[GlobalFieldNames[0]]
+		return ops.errorf("global unknown field: %v", args[0])
 	}
 	if fs.version > ops.Version {
+		// no return here. we may as well continue to maintain typestack
 		ops.errorf("global %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
-	ops.Global(fs.gfield)
+
+	val := fs.gfield
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	ops.trace("%s (%s)", GlobalFieldNames[val], GlobalFieldTypes[val].String())
+	ops.returns(GlobalFieldTypes[val])
 	return nil
 }
 
@@ -899,7 +810,9 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if !ok {
 		return ops.errorf("asset_holding_get unknown arg: %v", args[0])
 	}
-	ops.AssetHolding(val)
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	ops.returns(AssetHoldingFieldTypes[val], StackUint64)
 	return nil
 }
 
@@ -911,7 +824,9 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if !ok {
 		return ops.errorf("asset_params_get unknown arg: %v", args[0])
 	}
-	ops.AssetParams(val)
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	ops.returns(AssetParamsFieldTypes[val], StackUint64)
 	return nil
 }
 
@@ -920,7 +835,7 @@ type assembleFunc func(*OpStream, *OpSpec, []string) error
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != spec.Details.Size-1 {
-		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.Size)
+		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.Size-1)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i := 0; i < spec.Details.Size-1; i++ {
