@@ -37,7 +37,7 @@ func MakeTranscationSyncService(log logging.Logger, conn NodeConnector, isRelay 
 	s := &Service{
 		state: syncState{
 			node:    conn,
-			log:     log,
+			log:     wrapLogger(log),
 			isRelay: isRelay,
 		},
 	}

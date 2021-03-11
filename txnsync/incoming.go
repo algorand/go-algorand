@@ -21,8 +21,6 @@ import (
 	"time"
 )
 
-var incomingTxSyncMsgFormat = "Incoming Txsync #%d round %d transacations %d request [%d/%d] bloom %d nextTS %d to '%s'"
-
 var errUnsupportedTransactionSyncMessageVersion = errors.New("unsupported transaction sync message version")
 
 type incomingMessage struct {
@@ -151,7 +149,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		// add the received transaction groups to the peer's recentSentTransactions so that we won't be sending these back to the peer.
 		peer.updateIncomingTransactionGroups(txnGroups)
 
-		s.log.Infof(incomingTxSyncMsgFormat, seq, txMsg.Round, len(txnGroups), txMsg.UpdatedRequestParams.Offset, txMsg.UpdatedRequestParams.Modulator, len(txMsg.TxnBloomFilter.BloomFilter), txMsg.MsgSync.NextMsgMinDelay, peer.networkAddress())
+		s.log.incomingMessage(msgStats{seq, txMsg.Round, len(txnGroups), txMsg.UpdatedRequestParams, len(txMsg.TxnBloomFilter.BloomFilter), txMsg.MsgSync.NextMsgMinDelay, peer.networkAddress()})
 		messageProcessed = true
 	}
 	// if we're a relay, this is an outgoing peer and we've processed a valid message,
