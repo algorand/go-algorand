@@ -50,7 +50,7 @@ func typeEnumTableMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "| Index | \"Type\" string | Description |\n")
 	fmt.Fprintf(out, "| --- | --- | --- |\n")
 	for i, name := range logic.TxnTypeNames {
-		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescription(name))
+		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescriptions[name])
 	}
 	out.Write([]byte("\n"))
 }
@@ -69,7 +69,7 @@ func integerConstantsTableMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "| Value | Constant name | Description |\n")
 	fmt.Fprintf(out, "| --- | --- | --- |\n")
 	for i, name := range logic.TxnTypeNames {
-		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescription(name))
+		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescriptions[name])
 	}
 	out.Write([]byte("\n"))
 }
