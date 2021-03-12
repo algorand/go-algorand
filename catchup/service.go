@@ -358,7 +358,10 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
 			})
 	}
-
+	if _, err := peerSelector.GetNextPeer(); err == errPeerSelectorNoPeerPoolsAvailable {
+		return
+	}
+	
 	// Invariant: len(taskCh) + (# pending writes to completed) <= N
 	wg.Add(int(parallelRequests))
 	for i := uint64(0); i < parallelRequests; i++ {
