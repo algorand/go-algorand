@@ -131,6 +131,7 @@ func (gd *AssetsHoldingGroupData) update(ai int, hodl basics.AssetHolding) {
 	gd.Frozens[ai] = hodl.Frozen
 }
 
+// delete the ai-th element in the group holding array. The method expect the ai to be a valid index.
 func (gd *AssetsHoldingGroupData) delete(ai int) {
 	copy(gd.Amounts[ai:], gd.Amounts[ai+1:])
 	gd.Amounts = gd.Amounts[:len(gd.Amounts)-1]
@@ -186,6 +187,7 @@ func (g *AssetsHoldingGroup) Load(gd AssetsHoldingGroupData) {
 	g.loaded = true
 }
 
+// delete an asset at position ai in this group
 func (g *AssetsHoldingGroup) delete(ai int) {
 	// although a group with only one element is handled by a caller
 	// add a safety check here
@@ -205,6 +207,7 @@ func (g *AssetsHoldingGroup) delete(ai int) {
 	g.Count--
 }
 
+// insert asset aidx into current group. It should not exist in the group
 func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.AssetHolding) {
 	if aidx < g.MinAssetIndex {
 		// prepend
@@ -213,7 +216,7 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 		g.groupData.AssetOffsets[0] = g.MinAssetIndex - aidx
 		g.groupData.AssetOffsets = append([]basics.AssetIndex{0}, g.groupData.AssetOffsets...)
 		g.MinAssetIndex = aidx
-	} else if aidx >= g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
+	} else if aidx > g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
 		// append
 		g.groupData.Amounts = append(g.groupData.Amounts, holding.Amount)
 		g.groupData.Frozens = append(g.groupData.Frozens, holding.Frozen)
@@ -225,7 +228,7 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 		// find position and insert
 		cur := g.MinAssetIndex
 		for ai, d := range g.groupData.AssetOffsets {
-			cur = d + cur
+			cur += d
 			if aidx < cur {
 				g.groupData.AssetOffsets = append(g.groupData.AssetOffsets, 0)
 				copy(g.groupData.AssetOffsets[ai:], g.groupData.AssetOffsets[ai-1:])
@@ -248,11 +251,13 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 	g.Count++
 }
 
-// Delete removes asset by index ai from group gi.
-// It returns true if the group gone and needs to be removed from DB
+// Delete an asset located withing Groups array at index gi and index ai within the group.
+// Both gi and ai must be valid indices.
+// It returns true if the group is gone and needs to be removed from DB.
 func (e *ExtendedAssetHolding) Delete(gi int, ai int) bool {
 	if e.Groups[gi].Count == 1 {
 		copy(e.Groups[gi:], e.Groups[gi+1:])
+		e.Groups[len(e.Groups)-1] = AssetsHoldingGroup{} // release AssetsHoldingGroup data
 		e.Groups = e.Groups[:len(e.Groups)-1]
 		e.Count--
 		return true
@@ -263,7 +268,7 @@ func (e *ExtendedAssetHolding) Delete(gi int, ai int) bool {
 }
 
 // splitInsert splits the group identified by gi
-// and inserts a new asset into appropriate left or right part of the split
+// and inserts a new asset into appropriate left or right part of the split.
 func (e *ExtendedAssetHolding) splitInsert(gi int, aidx basics.AssetIndex, holding basics.AssetHolding) {
 	g := e.Groups[gi]
 	pos := g.Count / 2
@@ -460,7 +465,7 @@ func (e ExtendedAssetHolding) FindAsset(aidx basics.AssetIndex, startIdx int) (i
 			if !g.loaded {
 				// groupData not loaded, but the group boundaries match
 				// return group match and -1 as asset index indicating loading is need
-				return gi, -1
+				return gi + startIdx, -1
 			}
 
 			// TODO: bin search
@@ -563,7 +568,7 @@ func (e *ExtendedAssetHolding) SetLoaded() {
 	e.loaded = true
 }
 
-// Clear removes all the groups, used in tests only
+// Clear removes all the groups data, used in tests only
 func (e *ExtendedAssetHolding) Clear() {
 	e.loaded = false // ignored on serialization
 	for i := 0; i < len(e.Groups); i++ {
