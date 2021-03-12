@@ -22,6 +22,7 @@ import (
 )
 
 var errUnsupportedTransactionSyncMessageVersion = errors.New("unsupported transaction sync message version")
+var errTransactionSyncIncomingMessageQueueFull = errors.New("transaction sync incoming message queue is full")
 
 type incomingMessage struct {
 	networkPeer    interface{}
@@ -50,19 +51,24 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		select {
 		case s.incomingMessagesCh <- incomingMessage{networkPeer: networkPeer, message: txMsg, sequenceNumber: sequenceNumber, encodedSize: len(message)}:
 		default:
-			// todo - handle the case where we can't write to the channel.
+			// if we can't enqueue that, return an error, which would disconnect the peer.
+			// ( we have to disconnect, since otherwise, we would have no way to syncronize the sequence number)
+			return errTransactionSyncIncomingMessageQueueFull
 		}
 		return nil
 	}
 	err = peer.incomingMessages.enqueue(txMsg, sequenceNumber, len(message))
 	if err != nil {
+		// if the incoming message queue for this peer is full, disconnect from this peer.
 		return err
 	}
 
 	select {
 	case s.incomingMessagesCh <- incomingMessage{peer: peer}:
 	default:
-		// todo - handle the case where we can't write to the channel.
+		// if we can't enqueue that, return an error, which would disconnect the peer.
+		//
+		return errTransactionSyncIncomingMessageQueueFull
 	}
 	return nil
 }
@@ -135,12 +141,12 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		// if the peer's round is more than a single round behind the local node, then we don't want to
 		// try and load the transactions. The other peer should first catch up before getting transactions.
 		if (peer.lastRound + 1) < s.round {
-			s.log.Info("Incoming Txsync #%d late round %d", seq, peer.lastRound)
+			s.log.Infof("Incoming Txsync #%d late round %d", seq, peer.lastRound)
 			continue
 		}
 		txnGroups, err := decodeTransactionGroups(txMsg.TransactionGroups.Bytes)
 		if err != nil {
-			s.log.Warn("received transactions groups failed %v\n", err)
+			s.log.Warnf("received transactions groups failed %v\n", err)
 			continue
 		}
 

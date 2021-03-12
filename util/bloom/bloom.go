@@ -18,9 +18,11 @@ const maxHashes = uint32(32)
 
 // Filter represents the state of the Bloom filter
 type Filter struct {
-	numHashes uint32
-	data      []byte
-	prefix    [4]byte
+	numHashes            uint32
+	data                 []byte
+	prefix               [4]byte
+	hashStagingBuffer    []uint32
+	preimagetagingBuffer []byte
 }
 
 // New creates a new Bloom filter
@@ -55,18 +57,24 @@ func Optimal(numElements int, falsePositiveRate float64) (sizeBits int, numHashe
 
 // Set marks x as present in the filter
 func (f *Filter) Set(x []byte) {
-	withPrefix := append(f.prefix[:], x...)
-	hs := hash(withPrefix, f.numHashes)
+	withPrefix := f.preimagetagingBuffer
+	withPrefix = append(withPrefix, f.prefix[:]...)
+	withPrefix = append(withPrefix, x...)
+	hs := f.hash(withPrefix, f.numHashes)
 	n := uint32(len(f.data) * 8)
 	for _, h := range hs {
 		f.set(h % n)
 	}
+	f.preimagetagingBuffer = withPrefix[:0]
 }
 
 // Test checks whether x is present in the filter
 func (f *Filter) Test(x []byte) bool {
-	withPrefix := append(f.prefix[:], x...)
-	hs := hash(withPrefix, f.numHashes)
+	withPrefix := f.preimagetagingBuffer
+	withPrefix = append(withPrefix, f.prefix[:]...)
+	withPrefix = append(withPrefix, x...)
+	hs := f.hash(withPrefix, f.numHashes)
+	f.preimagetagingBuffer = withPrefix[:0]
 	n := uint32(len(f.data) * 8)
 	for _, h := range hs {
 		if !f.test(h % n) {
@@ -140,8 +148,14 @@ func UnmarshalJSON(data []byte) (*Filter, error) {
 // Previously, we used the hashing method described in this paper:
 // http://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
 // but this gave us bad false positive rates for small bloom filters.
-func hash(x []byte, nhash uint32) []uint32 {
-	res := make([]uint32, nhash+3)
+func (f *Filter) hash(x []byte, nhash uint32) []uint32 {
+	res := f.hashStagingBuffer
+	if cap(res) < int(nhash+3) {
+		f.hashStagingBuffer = make([]uint32, nhash+3)
+		res = f.hashStagingBuffer
+	} else {
+		res = res[:nhash+3]
+	}
 
 	for i := uint32(0); i < (nhash+3)/4; i++ {
 		h1, h2 := siphash.Hash128(uint64(i), 666666, x)

@@ -81,7 +81,7 @@ func (e *emulatorNodeLogger) incomingMessage(mstat msgStats) {
 	e.printMsgStats(mstat, modeIncoming)
 }
 
-func (e emulatorNodeLogger) printMsgStats(mstat msgStats, mode msgMode) {
+func (e *emulatorNodeLogger) printMsgStats(mstat msgStats, mode msgMode) {
 	seq := int(mstat.sequenceNumber)
 	round := mstat.round
 	transactions := mstat.transactions

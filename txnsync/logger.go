@@ -59,7 +59,7 @@ func wrapLogger(l logging.Logger) Logger {
 }
 
 func (l *basicMsgLogger) logMessage(mstat msgStats, mode, tofrom string) {
-	l.Infof(
+	l.Debugf(
 		"%s Txsync #%d round %d transacations %d request [%d/%d] bloom %d nextTS %d %s '%s'",
 		mode,
 		mstat.sequenceNumber,

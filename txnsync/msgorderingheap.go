@@ -19,8 +19,6 @@ package txnsync
 import (
 	"container/heap"
 	"errors"
-
-	"github.com/algorand/go-deadlock"
 )
 
 var errHeapEmpty = errors.New("message ordering heap is empty")
@@ -35,8 +33,14 @@ type messageHeapItem struct {
 }
 
 type messageOrderingHeap struct {
-	mu       deadlock.Mutex
-	messages []messageHeapItem
+	messages        []messageHeapItem
+	pendingMessages chan messageHeapItem
+}
+
+func makeMessageOrderingHeap() *messageOrderingHeap {
+	return &messageOrderingHeap{
+		pendingMessages: make(chan messageHeapItem, messageOrderingHeapLimit),
+	}
 }
 
 // Push implements heap.Interface
@@ -70,18 +74,30 @@ func (p *messageOrderingHeap) Less(i, j int) bool {
 }
 
 func (p *messageOrderingHeap) enqueue(blockMsg transactionBlockMessage, sequenceNumber uint64, encodedBlockMsgLength int) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if len(p.messages) > messageOrderingHeapLimit {
+	select {
+	case p.pendingMessages <- messageHeapItem{blockMsg: blockMsg, sequenceNumber: sequenceNumber, encodedBlockMsgLength: encodedBlockMsgLength}:
+		return nil
+	default:
 		return errHeapReachedCapacity
 	}
-	heap.Push(p, messageHeapItem{blockMsg: blockMsg, sequenceNumber: sequenceNumber, encodedBlockMsgLength: encodedBlockMsgLength})
-	return nil
+}
+
+func (p *messageOrderingHeap) processPending() {
+	for {
+		select {
+		case pendingMsg, ok := <-p.pendingMessages:
+			if !ok {
+				return
+			}
+			heap.Push(p, pendingMsg)
+		default:
+			return
+		}
+	}
 }
 
 func (p *messageOrderingHeap) peekSequence() (sequenceNumber uint64, err error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.processPending()
 	if len(p.messages) == 0 {
 		return 0, errHeapEmpty
 	}
@@ -89,8 +105,7 @@ func (p *messageOrderingHeap) peekSequence() (sequenceNumber uint64, err error) 
 }
 
 func (p *messageOrderingHeap) pop() (blockMsg transactionBlockMessage, encodedBlockMsgLength int, err error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.processPending()
 	if len(p.messages) == 0 {
 		return transactionBlockMessage{}, 0, errHeapEmpty
 	}

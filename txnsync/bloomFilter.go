@@ -88,7 +88,7 @@ func (bf *bloomFilter) test(txID transactions.Txid) bool {
 	return false
 }
 
-func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, shuffler uint32) (result bloomFilter) {
+func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, shuffler uint32, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams
 	var filtedTransactionsIDs []transactions.Txid
 	switch {
@@ -121,13 +121,19 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 			result.containedTxnsRange.lastCounter = group.GroupCounter
 		}
 	}
+	result.containedTxnsRange.transactionsCount = uint64(len(filtedTransactionsIDs))
+
+	if hintPrevBloomFilter != nil {
+		if result.sameParams(*hintPrevBloomFilter) {
+			return *hintPrevBloomFilter
+		}
+	}
 
 	sizeBits, numHashes := bloom.Optimal(len(filtedTransactionsIDs), bloomFilterFalsePositiveRate)
 	result.filter = bloom.New(sizeBits, numHashes, shuffler)
 	for _, txid := range filtedTransactionsIDs {
 		result.filter.Set(txid[:])
 	}
-	result.containedTxnsRange.transactionsCount = uint64(len(filtedTransactionsIDs))
 
 	return
 }

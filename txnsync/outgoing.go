@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"errors"
 	"time"
 
 	"github.com/algorand/go-algorand/data/transactions"
@@ -24,6 +25,8 @@ import (
 )
 
 const messageTimeWindow = 20 * time.Millisecond
+
+var errTransactionSyncOutgoingMessageQueueFull = errors.New("transaction sync outgoing message queue is full")
 
 type sentMessageMetadata struct {
 	encodedMessageSize  int
@@ -43,9 +46,9 @@ type messageSentCallback struct {
 }
 
 // asyncMessageSent called via the network package to inform the txsync that a message was enqueued, and the associated sequence number.
-func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber uint64) {
+func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber uint64) error {
 	if !enqueued {
-		return
+		return nil
 	}
 	// record the timestamp here, before placing the entry on the queue
 	msc.messageData.sentTimestamp = msc.roundClock.Since()
@@ -54,8 +57,10 @@ func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber u
 	select {
 	case msc.state.outgoingMessagesCallbackCh <- msc:
 	default:
-		// if we can't place it on the channel, just let it drop and log it.
+		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
+		return errTransactionSyncOutgoingMessageQueueFull
 	}
+	return nil
 }
 
 func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.DeadlineMonitor, peers []*Peer) {
@@ -121,7 +126,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions []transa
 
 	if (msgOps&messageConstBloomFilter == messageConstBloomFilter) && len(pendingTransactions) > 0 {
 		// generate a bloom filter that matches the requests params.
-		metaMessage.filter = makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions, uint32(s.node.Random(0xffffffff)))
+		metaMessage.filter = makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions, uint32(s.node.Random(0xffffffff)), &peer.lastSentBloomFilter)
 		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
 			metaMessage.message.TxnBloomFilter = metaMessage.filter.encode()
 			bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()

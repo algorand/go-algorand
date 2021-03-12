@@ -48,7 +48,7 @@ type Event struct {
 type IncomingMessageHandler func(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64) error
 
 // SendMessageCallback define a message sent feedback for performing message tracking
-type SendMessageCallback func(enqueued bool, sequenceNumber uint64)
+type SendMessageCallback func(enqueued bool, sequenceNumber uint64) error
 
 // PeerInfo describes a single peer returned by GetPeers or GetPeer
 type PeerInfo struct {

@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -629,6 +630,62 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 		step:         1 * time.Millisecond / 10,
 		testDuration: 2000 * time.Millisecond,
 	}
+	// update the expected results to have the correct number of entries.
+	for j := range testScenario.initialAlloc {
+		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
+			for n := range testScenario.expectedResults.nodes {
+				testScenario.expectedResults.nodes[n] = append(testScenario.expectedResults.nodes[n], nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
+			}
+		}
+	}
+
+	emulateScenario(t, testScenario)
+}
+
+func TestEmulatedOneRelayHundredNodes(t *testing.T) {
+	testScenario := scenario{
+		netConfig: networkConfiguration{
+			nodes: []nodeConfiguration{
+				{
+					name:    "relay",
+					isRelay: true,
+				},
+			},
+		},
+		initialAlloc: []initialTransactionsAllocation{},
+		expectedResults: emulatorResult{
+			nodes: []nodeTransactions{
+				{},
+			},
+		},
+		step:         1 * time.Millisecond / 10,
+		testDuration: 10000 * time.Millisecond,
+	}
+
+	for i := 1; i <= 30; i++ {
+		// generate the node
+		testScenario.netConfig.nodes = append(testScenario.netConfig.nodes, nodeConfiguration{
+			name: fmt.Sprintf("node-%d", i),
+			outgoingConnections: []connectionSettings{
+				{
+					uploadSpeed:   1000000,
+					downloadSpeed: 1000000,
+					target:        0,
+				},
+			},
+		})
+
+		// generate initial allocation:
+		testScenario.initialAlloc = append(testScenario.initialAlloc, initialTransactionsAllocation{
+			node:              i, // i.e. node-1
+			transactionsCount: 1000,
+			transactionSize:   200 + i,
+			expirationRound:   basics.Round(5),
+		})
+
+		testScenario.expectedResults.nodes = append(testScenario.expectedResults.nodes, nodeTransactions{})
+	}
+
 	// update the expected results to have the correct number of entries.
 	for j := range testScenario.initialAlloc {
 		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
