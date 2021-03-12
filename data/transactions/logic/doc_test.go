@@ -27,7 +27,7 @@ func TestOpDocs(t *testing.T) {
 	for _, op := range OpSpecs {
 		opsSeen[op.Name] = false
 	}
-	for name, _ := range opDocByName {
+	for name := range opDocByName {
 		_, exists := opsSeen[name]
 		if !exists {
 			t.Errorf("error: doc for op %#v that does not exist in OpSpecs", name)

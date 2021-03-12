@@ -165,7 +165,7 @@ type APIV1POSTTransactionSignRequest struct {
 	// Note: SDK and goal usually generate `SignedTxn` objects
 	//   in that case, the field `txn` / `Transaction` of the
 	//   generated `SignedTxn` object needs to be used
-	// 
+	//
 	// swagger:strfmt byte
 	Transaction    []byte           `json:"transaction"`
 	PublicKey      crypto.PublicKey `json:"public_key"`

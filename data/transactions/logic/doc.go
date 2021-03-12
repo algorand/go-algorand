@@ -198,6 +198,8 @@ var OpGroupList = []OpGroup{
 	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 
+// OpCost indicates the cost of an operation over the range of
+// LogicVersions from From to To.
 type OpCost struct {
 	From int
 	To   int
@@ -226,7 +228,7 @@ func OpAllCosts(opName string) []OpCost {
 	return costs
 }
 
-// TypeNameDescription contains extra description about a low level
+// TypeNameDescriptions contains extra description about a low level
 // protocol transaction Type string, and provide a friendlier type
 // constant name in assembler.
 var TypeNameDescriptions = map[string]string{
@@ -361,6 +363,7 @@ func fieldsDocWithExtra(source map[string]string, ex extractor) map[string]strin
 	return result
 }
 
+// AssetParamsFieldDocs are notes on fields available in `asset_holding_get`
 var AssetHoldingFieldDocs = map[string]string{
 	"AssetBalance": "Amount of the asset unit held by this account",
 	"AssetFrozen":  "Is the asset frozen or not",
