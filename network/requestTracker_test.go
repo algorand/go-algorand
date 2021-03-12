@@ -75,17 +75,20 @@ func TestRateLimiting(t *testing.T) {
 	}
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
+	testConfig := defaultConfig
+	// this test is conducted locally, so we want to treat all hosts the same for counting incoming requests.
+	testConfig.DisableLocalhostConnectionRateLimit = false
 	wn := &WebsocketNetwork{
 		log:       log,
-		config:    defaultConfig,
+		config:    testConfig,
 		phonebook: MakePhonebook(1, 1),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}
 
 	// increase the IncomingConnectionsLimit/MaxConnectionsPerIP limits, since we don't want to test these.
-	wn.config.IncomingConnectionsLimit = int(defaultConfig.ConnectionsRateLimitingCount) * 5
-	wn.config.MaxConnectionsPerIP += int(defaultConfig.ConnectionsRateLimitingCount) * 5
+	wn.config.IncomingConnectionsLimit = int(testConfig.ConnectionsRateLimitingCount) * 5
+	wn.config.MaxConnectionsPerIP += int(testConfig.ConnectionsRateLimitingCount) * 5
 
 	wn.setup()
 	wn.eventualReadyDelay = time.Second
@@ -99,10 +102,10 @@ func TestRateLimiting(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.Truef(t, postListen, "Listening network failed to start")
 
-	noAddressConfig := defaultConfig
+	noAddressConfig := testConfig
 	noAddressConfig.NetAddress = ""
 
-	clientsCount := int(defaultConfig.ConnectionsRateLimitingCount + 5)
+	clientsCount := int(testConfig.ConnectionsRateLimitingCount + 5)
 
 	networks := make([]*WebsocketNetwork, clientsCount)
 	phonebooks := make([]Phonebook, clientsCount)
@@ -121,7 +124,7 @@ func TestRateLimiting(t *testing.T) {
 		}(networks[i], i)
 	}
 
-	deadline := time.Now().Add(time.Duration(defaultConfig.ConnectionsRateLimitingWindowSeconds) * time.Second)
+	deadline := time.Now().Add(time.Duration(testConfig.ConnectionsRateLimitingWindowSeconds) * time.Second)
 
 	for i := 0; i < clientsCount; i++ {
 		networks[i].Start()
@@ -151,13 +154,25 @@ func TestRateLimiting(t *testing.T) {
 				// wait abit longer.
 			}
 		}
-		if connectedClients >= int(defaultConfig.ConnectionsRateLimitingCount) {
+		if connectedClients >= int(testConfig.ConnectionsRateLimitingCount) {
 			timedOut = time.Now().After(deadline)
 			break
 		}
 	}
 	if !timedOut {
 		// test to see that at least some of the clients have seen 429
-		require.Equal(t, int(defaultConfig.ConnectionsRateLimitingCount), connectedClients)
+		require.Equal(t, int(testConfig.ConnectionsRateLimitingCount), connectedClients)
 	}
+}
+
+func TestIsLocalHost(t *testing.T) {
+	require.True(t, isLocalhost("localhost"))
+	require.True(t, isLocalhost("127.0.0.1"))
+	require.True(t, isLocalhost("[::1]"))
+	require.True(t, isLocalhost("::1"))
+	require.True(t, isLocalhost("[::]"))
+	require.False(t, isLocalhost("192.168.0.1"))
+	require.False(t, isLocalhost(""))
+	require.False(t, isLocalhost("0.0.0.0"))
+	require.False(t, isLocalhost("127.0.0.0"))
 }
