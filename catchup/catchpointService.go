@@ -596,8 +596,7 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 		return nil, time.Duration(0), peer, true, cs.abort(fmt.Errorf("fetchBlock: recurring non-HTTP peer was provided by the peer selector"))
 	}
 	fetcher := makeUniversalBlockFetcher(cs.log, cs.net, cs.config)
-	blockDownloadStartTime := time.Now()
-	blk, _, _, err = fetcher.fetchBlock(cs.ctx, round, httpPeer)
+	blk, _, downloadDuration, err = fetcher.fetchBlock(cs.ctx, round, httpPeer)
 	if err != nil {
 		if cs.ctx.Err() != nil {
 			return nil, time.Duration(0), peer, true, cs.stopOrAbort()
@@ -611,7 +610,6 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 		return nil, time.Duration(0), peer, true, cs.abort(fmt.Errorf("fetchBlock failed after multiple blocks download attempts"))
 	}
 	// success
-	downloadDuration = time.Now().Sub(blockDownloadStartTime)
 	return blk, downloadDuration, peer, false, nil
 }
 

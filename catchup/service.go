@@ -151,7 +151,7 @@ func (s *Service) SynchronizingTime() time.Duration {
 }
 
 // function scope to make a bunch of defer statements better
-func (s *Service) innerFetch(r basics.Round, peerSelector *peerSelector) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
+func (s *Service) innerFetch(r basics.Round, peerSelector *peerSelector, peer network.Peer) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
 	ctx, cf := context.WithCancel(s.ctx)
 	fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
 	defer cf()
@@ -164,10 +164,6 @@ func (s *Service) innerFetch(r basics.Round, peerSelector *peerSelector) (blk *b
 			cf()
 		}
 	}()
-	peer, err := peerSelector.GetNextPeer()
-	if err != nil {
-		return nil, nil, time.Duration(0), err
-	}
 	return fetcher.fetchBlock(ctx, r, peer)
 }
 
@@ -191,16 +187,18 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 			return false
 		}
 
-		// Try to fetch, timing out after retryInterval
+		peer, getPeerErr := peerSelector.GetNextPeer()
+		if getPeerErr != nil {
+			s.log.Debugf("fetchAndWrite: was unable to obtain a peer to retrieve the block from")
+			break
+		}
 
-		block, cert, _, err := s.innerFetch(r, peerSelector)
+		// Try to fetch, timing out after retryInterval
+		block, cert, blockDownloadDuration, err := s.innerFetch(r, peerSelector, peer)
 
 		if err != nil {
-			if err == errPeerSelectorNoPeerPoolsAvailable {
-				s.log.Debugf("fetchAndWrite: was unable to obtain a peer to retrieve the block from")
-				break
-			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
+			peerSelector.RankPeer(peer, peerRankDownloadFailed)
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exists and we're making many requests down the chain
 			// for no reason.
@@ -225,6 +223,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 		// Check that the block's contents match the block header (necessary with an untrusted block because b.Hash() only hashes the header)
 		if !block.ContentsMatchHeader() {
+			peerSelector.RankPeer(peer, peerRankInvalidDownload)
 			// Check if this mismatch is due to an unsupported protocol version
 			if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
 				s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
@@ -252,8 +251,12 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		err = s.auth.Authenticate(block, cert)
 		if err != nil {
 			s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
+			peerSelector.RankPeer(peer, peerRankInvalidDownload)
 			continue // retry the fetch
 		}
+
+		peerRank := peerSelector.PeerDownloadDurationToRank(peer, blockDownloadDuration)
+		peerSelector.RankPeer(peer, peerRank)
 
 		// Write to ledger, noting that ledger writes must be in order
 		select {
@@ -588,8 +591,14 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			})
 	}
 	for s.ledger.LastRound() < cert.Round {
+		peer, getPeerErr := peerSelector.GetNextPeer()
+		if getPeerErr != nil {
+			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
+			break
+		}
+
 		// Ask the fetcher to get the block somehow
-		block, fetchedCert, _, err := s.innerFetch(cert.Round, peerSelector)
+		block, fetchedCert, _, err := s.innerFetch(cert.Round, peerSelector, peer)
 
 		if err != nil {
 			select {
@@ -599,6 +608,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			default:
 			}
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
+			peerSelector.RankPeer(peer, peerRankDownloadFailed)
 			continue
 		}
 
@@ -608,6 +618,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		}
 		// Otherwise, fetcher gave us the wrong block
 		logging.Base().Warnf("fetcher gave us bad/wrong block (for round %d): fetched hash %v; want hash %v", cert.Round, block.Hash(), blockHash)
+		peerSelector.RankPeer(peer, peerRankInvalidDownload)
 
 		// As a failsafe, if the cert we fetched is valid but for the wrong block, panic as loudly as possible
 		if cert.Round == fetchedCert.Round &&
