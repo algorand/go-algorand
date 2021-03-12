@@ -359,9 +359,10 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			})
 	}
 	if _, err := peerSelector.GetNextPeer(); err == errPeerSelectorNoPeerPoolsAvailable {
+		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from")
 		return
 	}
-	
+
 	// Invariant: len(taskCh) + (# pending writes to completed) <= N
 	wg.Add(int(parallelRequests))
 	for i := uint64(0); i < parallelRequests; i++ {
