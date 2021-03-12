@@ -33,17 +33,18 @@ import (
 const roundDuration = 4 * time.Second
 
 type emulator struct {
-	scenario                  scenario
-	nodes                     []*emulatedNode
-	syncers                   []*Service
-	nodeCount                 int
-	log                       logging.Logger
-	currentRound              basics.Round
-	clock                     *guidedClock
-	t                         *testing.T
-	totalDuplicateMessages    uint64
-	totalDuplicateMessageSize uint64
-	lastRandom                uint64
+	scenario                      scenario
+	nodes                         []*emulatedNode
+	syncers                       []*Service
+	nodeCount                     int
+	log                           logging.Logger
+	currentRound                  basics.Round
+	clock                         *guidedClock
+	t                             *testing.T
+	totalDuplicateTransactions    uint64
+	totalDuplicateTransactionSize uint64
+	lastRandom                    uint64
+	totalInitialTransactions      uint64
 }
 
 type nodeTransaction struct {
@@ -88,14 +89,22 @@ func emulateScenario(t *testing.T, scenario scenario) {
 	}
 
 	t.Logf("Emulation Statistics:")
-	t.Logf("Total duplicate message count: %d", e.totalDuplicateMessages)
-	t.Logf("Total duplicate message size: %d", e.totalDuplicateMessageSize)
+	t.Logf("Total duplicate transaction count: %d", e.totalDuplicateTransactions)
+	t.Logf("Total duplicate transactions size: %d", e.totalDuplicateTransactionSize)
 	for n := 0; n < e.nodeCount; n++ {
 		t.Logf("%s message count : %d", e.nodes[n].name, len(results.nodes[n]))
 	}
 	for n := 0; n < e.nodeCount; n++ {
 		require.Equalf(t, len(scenario.expectedResults.nodes[n]), len(results.nodes[n]), "node %d", n)
 	}
+
+	// calculating efficiency / overhead :
+	// how many transaction need to be received ?
+	// each node received all the transactions, minus the ones that it start up with.
+	totalNeededSentTransactions := e.totalInitialTransactions*uint64(len(e.nodes)) - e.totalInitialTransactions
+	actualRecievedTransactions := totalNeededSentTransactions + e.totalDuplicateTransactions
+	t.Logf("Total transaction overhead: %d%%", (actualRecievedTransactions-totalNeededSentTransactions)*100/totalNeededSentTransactions)
+
 	require.Equal(t, scenario.expectedResults, results)
 	require.Equal(t, 1, 1)
 }
@@ -182,6 +191,7 @@ func (e *emulator) initNodes() {
 			node.txpoolIds[group.FirstTransactionID] = true
 			node.txpoolEntries = append(node.txpoolEntries, group)
 		}
+		e.totalInitialTransactions += uint64(initAlloc.transactionsCount)
 		node.txpoolGroupCounter += uint64(initAlloc.transactionsCount)
 		node.onNewTransactionPoolEntry()
 	}

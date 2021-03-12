@@ -104,11 +104,8 @@ func (e emulatorNodeLogger) printMsgStats(mstat msgStats, mode msgMode) {
 
 	elapsed := e.node.emulator.clock.Since().Milliseconds()
 	out := fmt.Sprintf("%3d.%03d ", elapsed/1000, elapsed%1000)
-	if mode == modeOutgoing {
-		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", e.node.name)
-	} else {
-		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", destName)
-	}
+	out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", e.node.name)
+
 	bfColor := hiblack
 	if bloom > 0 {
 		bfColor = higreen
@@ -135,11 +132,7 @@ func (e emulatorNodeLogger) printMsgStats(mstat msgStats, mode msgMode) {
 		out += wrapRollingLowColor(seq, " ] ")
 	}
 
-	if mode == modeOutgoing {
-		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", destName)
-	} else {
-		out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", e.node.name)
-	}
+	out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", destName)
 	fmt.Printf("%s\n", out)
 }
 
