@@ -164,3 +164,14 @@ func TestRateLimiting(t *testing.T) {
 		require.Equal(t, int(testConfig.ConnectionsRateLimitingCount), connectedClients)
 	}
 }
+
+func TestIsLocalHost(t *testing.T) {
+	require.True(t, isLocalhost("localhost"))
+	require.True(t, isLocalhost("127.0.0.1"))
+	require.True(t, isLocalhost("[::1]"))
+	require.True(t, isLocalhost("::1"))
+	require.False(t, isLocalhost("192.168.0.1"))
+	require.False(t, isLocalhost(""))
+	require.False(t, isLocalhost("0.0.0.0"))
+	require.False(t, isLocalhost("127.0.0.0"))
+}
