@@ -285,11 +285,11 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 		rt.hostRequests.pruneRequests(rateLimitingWindowStartTime)
 		originConnections := rt.hostRequests.countOriginConnections(trackerRequest.remoteHost, rateLimitingWindowStartTime)
 
-		remoteHostIsNonLocal := (!rt.config.DisableLocalhostConnectionRateLimit) || (!isLocalhost(trackerRequest.remoteHost))
+		rateLimitedRemoteHost := (!rt.config.DisableLocalhostConnectionRateLimit) || (!isLocalhost(trackerRequest.remoteHost))
 		connectionLimitEnabled := rt.config.ConnectionsRateLimitingWindowSeconds > 0 && rt.config.ConnectionsRateLimitingCount > 0
 
 		// check the number of connections
-		if originConnections > rt.config.ConnectionsRateLimitingCount && connectionLimitEnabled && remoteHostIsNonLocal {
+		if originConnections > rt.config.ConnectionsRateLimitingCount && connectionLimitEnabled && rateLimitedRemoteHost {
 			rt.hostRequestsMu.Unlock()
 			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_tcp_rate_limit"})
 			rt.log.With("connection", "tcp").With("count", originConnections).Debugf("Rejected connection due to excessive connections attempt rate")
@@ -451,10 +451,10 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 		delete(rt.httpConnections, localAddr)
 	}()
 
-	remoteHostIsNonLocal := (!rt.config.DisableLocalhostConnectionRateLimit) || (!isLocalhost(trackedRequest.remoteHost))
+	rateLimitedRemoteHost := (!rt.config.DisableLocalhostConnectionRateLimit) || (!isLocalhost(trackedRequest.remoteHost))
 	connectionLimitEnabled := rt.config.ConnectionsRateLimitingWindowSeconds > 0 && rt.config.ConnectionsRateLimitingCount > 0
 
-	if originConnections > rt.config.ConnectionsRateLimitingCount && connectionLimitEnabled && remoteHostIsNonLocal {
+	if originConnections > rt.config.ConnectionsRateLimitingCount && connectionLimitEnabled && rateLimitedRemoteHost {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_rate_limit"})
 		rt.log.With("connection", "http").With("count", originConnections).Debugf("Rejected connection due to excessive connections attempt rate")
 		rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
@@ -510,7 +510,7 @@ func (rt *RequestTracker) getForwardedConnectionAddress(header http.Header) (ip 
 
 // isLocalhost returns true if the given host is a localhost address.
 func isLocalhost(host string) bool {
-	for _, v := range []string{"localhost", "127.0.0.1", "[::1]", "::1"} {
+	for _, v := range []string{"localhost", "127.0.0.1", "[::1]", "::1", "[::]"} {
 		if host == v {
 			return true
 		}

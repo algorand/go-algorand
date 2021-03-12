@@ -170,6 +170,7 @@ func TestIsLocalHost(t *testing.T) {
 	require.True(t, isLocalhost("127.0.0.1"))
 	require.True(t, isLocalhost("[::1]"))
 	require.True(t, isLocalhost("::1"))
+	require.True(t, isLocalhost("[::]"))
 	require.False(t, isLocalhost("192.168.0.1"))
 	require.False(t, isLocalhost(""))
 	require.False(t, isLocalhost("0.0.0.0"))
