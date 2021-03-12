@@ -96,7 +96,7 @@ type Peer struct {
 
 	// recentSentTransactions contains the recently sent transactions. It's needed since we don't want to rely on the other peer's bloom filter while
 	// sending back-to-back messages.
-	recentSentTransactions *transactionLru
+	recentSentTransactions *transactionCache
 	// recentSentTransactionsRound is the round associated with the cache of recently sent transactions. We keep this variable around so that we can
 	// flush the cache on every round so that we can give pending transaction another chance of being transmitted.
 	recentSentTransactionsRound basics.Round
@@ -148,7 +148,7 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *
 	p := &Peer{
 		networkPeer:            networkPeer,
 		isOutgoing:             isOutgoing,
-		recentSentTransactions: makeTransactionLru(recentTransactionsSentBufferLength),
+		recentSentTransactions: makeTransactionCache(recentTransactionsSentBufferLength),
 		dataExchangeRate:       defaultDataExchangeRate,
 	}
 	if isOutgoing {
