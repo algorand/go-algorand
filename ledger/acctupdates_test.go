@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -905,6 +906,71 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	fileNames, err := au.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
+}
+
+func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
+	numberOfCatchpointFiles := 0
+	err := filepath.WalkDir(catchpointDir, func(path string, d fs.DirEntry, err error) error {
+		if !d.IsDir() {
+			numberOfCatchpointFiles++
+		}
+		return nil
+	})
+	return numberOfCatchpointFiles, err
+}
+
+func hasEmptyDir(catchpointDir string) (bool, error) {
+	emptyDirFound := false
+	err := filepath.WalkDir(catchpointDir, func(path string, d fs.DirEntry, err error) error {
+		if !d.IsDir() {
+			return nil
+		}
+		files, err := ioutil.ReadDir(path)
+		if len(files) == 0 {
+			emptyDirFound = true
+		}
+		return nil
+	})
+	return emptyDirFound, err
+}
+
+// The goal in that test is to check that we are saving at most X catchpoint files. If algod needs to create a new catchfile it will delete
+// the oldest. In addtion, when deleting old catchpoint files an empty directory should be deleted as well.
+func TestSaveCatchpointFile(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
+	defer ml.Close()
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+
+	conf.CatchpointFileHistoryLength = 3
+	au.initialize(conf, ".", proto, accts[0])
+	defer au.close()
+
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	au.generateCatchpoint(basics.Round(2000000), "0#ABC1", crypto.Digest{}, time.Second)
+	au.generateCatchpoint(basics.Round(3000010), "0#ABC2", crypto.Digest{}, time.Second)
+	au.generateCatchpoint(basics.Round(3000015), "0#ABC3", crypto.Digest{}, time.Second)
+	au.generateCatchpoint(basics.Round(3000020), "0#ABC4", crypto.Digest{}, time.Second)
+
+	const catchpointDir string = "./catchpoints"
+	defer func() {
+		os.RemoveAll(catchpointDir)
+	}()
+
+	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(catchpointDir)
+	require.NoError(t, err)
+	require.Equal(t, numberOfCatchpointFiles, conf.CatchpointFileHistoryLength)
+
+	retForEmptyDir, err := hasEmptyDir(catchpointDir)
+	require.NoError(t, err)
+	require.Equal(t, retForEmptyDir, false)
+
 }
 
 // listAndCompareComb lists the assets/applications and then compares against the expected
