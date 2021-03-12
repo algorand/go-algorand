@@ -59,6 +59,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 
 	var fetchedBuf []byte
 	var address string
+	blockDownloadStartTime := time.Now()
 	if wsPeer, validWSPeer := peer.(network.UnicastPeer); validWSPeer {
 		fetcherClient := &wsFetcherClient{
 			target: wsPeer,
@@ -79,6 +80,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 	} else {
 		return nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	}
+	downloadDuration = time.Now().Sub(blockDownloadStartTime)	
 	if err != nil {
 		return nil, nil, time.Duration(0), err
 	}
