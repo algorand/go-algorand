@@ -922,6 +922,9 @@ func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 func hasEmptyDir(catchpointDir string) (bool, error) {
 	emptyDirFound := false
 	err := filepath.WalkDir(catchpointDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 		if !d.IsDir() {
 			return nil
 		}
