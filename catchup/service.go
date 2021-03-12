@@ -151,7 +151,7 @@ func (s *Service) SynchronizingTime() time.Duration {
 }
 
 // function scope to make a bunch of defer statements better
-func (s *Service) innerFetch(r basics.Round, peerSelector *peerSelector, peer network.Peer) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
+func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
 	ctx, cf := context.WithCancel(s.ctx)
 	fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
 	defer cf()
@@ -194,7 +194,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		}
 
 		// Try to fetch, timing out after retryInterval
-		block, cert, blockDownloadDuration, err := s.innerFetch(r, peerSelector, peer)
+		block, cert, blockDownloadDuration, err := s.innerFetch(r, peer)
 
 		if err != nil {
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
@@ -598,7 +598,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		}
 
 		// Ask the fetcher to get the block somehow
-		block, fetchedCert, _, err := s.innerFetch(cert.Round, peerSelector, peer)
+		block, fetchedCert, _, err := s.innerFetch(cert.Round, peer)
 
 		if err != nil {
 			select {
