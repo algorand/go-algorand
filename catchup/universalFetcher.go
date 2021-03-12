@@ -53,7 +53,7 @@ func makeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, confi
 		log:    log}
 }
 
-// FetchBlock returns a block from the peer. The peer can be either an http or ws peer.
+// fetchBlock returns a block from the peer. The peer can be either an http or ws peer.
 func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
 	cert *agreement.Certificate, downloadDuration time.Duration, err error) {
 
@@ -77,7 +77,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round)
 		address = fetcherClient.address()
 	} else {
-		return nil, nil, time.Duration(0), fmt.Errorf("FetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
+		return nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	}
 	if err != nil {
 		return nil, nil, time.Duration(0), err
@@ -93,17 +93,17 @@ func processBlockBytes(fetchedBuf []byte, r basics.Round, debugStr string) (blk 
 	var decodedEntry rpcs.EncodedBlockCert
 	err = protocol.Decode(fetchedBuf, &decodedEntry)
 	if err != nil {
-		err = fmt.Errorf("networkFetcher.FetchBlock(%d): cannot decode block from peer %v: %v", r, debugStr, err)
+		err = fmt.Errorf("fetchBlock(%d): cannot decode block from peer %v: %v", r, debugStr, err)
 		return
 	}
 
 	if decodedEntry.Block.Round() != r {
-		err = fmt.Errorf("networkFetcher.FetchBlock(%d): got wrong block from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Block.Round())
+		err = fmt.Errorf("fetchBlock(%d): got wrong block from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Block.Round())
 		return
 	}
 
 	if decodedEntry.Certificate.Round != r {
-		err = fmt.Errorf("networkFetcher.FetchBlock(%d): got wrong cert from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Certificate.Round)
+		err = fmt.Errorf("fetchBlock(%d): got wrong cert from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Certificate.Round)
 		return
 	}
 	return &decodedEntry.Block, &decodedEntry.Certificate, nil
@@ -270,17 +270,3 @@ func (hf *HTTPFetcher) address() string {
 	return hf.rootURL
 }
 
-// FetchBlock is a copy of the functionality in NetworkFetcher.FetchBlock, designed to complete
-// the HTTPFetcher functionality as a standalone fetcher
-func (hf *HTTPFetcher) FetchBlock(ctx context.Context, r basics.Round) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
-	fetchedBuf, err := hf.getBlockBytes(ctx, r)
-	if err != nil {
-		err = fmt.Errorf("Peer %v: %v", hf.address(), err)
-		return
-	}
-	block, cert, err := processBlockBytes(fetchedBuf, r, hf.address())
-	if err != nil {
-		return
-	}
-	return block, cert, nil
-}
