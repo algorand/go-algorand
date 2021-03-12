@@ -262,17 +262,3 @@ func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transa
 
 	return txs, signed, secrets, addresses
 }
-
-func BenchmarkStripSignedTxnWithAD(b *testing.B) {
-	_, signed, _, _ := generateTestObjects(5000, 100, 1)
-	var up unauthenticatedProposal
-	up.Payset = make(transactions.Payset, len(signed), len(signed))
-	for i, stx := range signed {
-		up.Payset[i].SignedTxn = stx
-	}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		up.StripSignedTxnWithAD()
-	}
-}

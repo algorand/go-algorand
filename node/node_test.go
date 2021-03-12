@@ -553,15 +553,12 @@ func BenchmarkReconstructBlock(b *testing.B) {
 	var wn *network.WebsocketNetwork
 	net := gossip.WrapNetwork(wn, nil)
 
-
-
 	_, signed, _, _ := generateTestObjects(100000, 100, 1)
 	var block bookkeeping.Block
 	block.Payset = make(transactions.Payset, len(signed), len(signed))
-	digests := make([]crypto.Digest, len(block.Payset), len(block.Payset))
+	block.PaysetDigest = make([]crypto.Digest, len(block.Payset), len(block.Payset))
 	for i, stx := range signed {
-		digests[i] = crypto.HashObj(stx)
-		block.Payset[i].Digest = digests[i]
+		block.PaysetDigest[i] = crypto.HashObj(stx)
 	}
 
 	encoded := make([][]byte, len(signed), len(signed))
@@ -569,7 +566,7 @@ func BenchmarkReconstructBlock(b *testing.B) {
 		encoded[i] = protocol.Encode(&stx)
 	}
 
-	wp := wn.TestPeer(digests, encoded)
+	wp := wn.TestPeer(block.PaysetDigest, encoded)
 	h := gossip.Metadata(network.IncomingMessage{Sender: wp})
 
 	block.Payset = block.Payset[:5000]
@@ -577,6 +574,6 @@ func BenchmarkReconstructBlock(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		agreement.ReconstructProposal(net, block.Payset, h)
+		agreement.ReconstructProposal(net, &block, h)
 	}
 }

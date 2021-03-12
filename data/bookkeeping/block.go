@@ -216,6 +216,7 @@ type (
 	Block struct {
 		BlockHeader
 		Payset transactions.Payset `codec:"txns"`
+		PaysetDigest transactions.PaysetDigest `codec:"txndigests"`
 	}
 )
 
@@ -265,33 +266,6 @@ func (block Block) WithSeed(s committee.Seed) Block {
 // Seed returns the Block's random seed.
 func (block *Block) Seed() committee.Seed {
 	return block.BlockHeader.Seed
-}
-
-// StripAD returns the Block without ApplyData
-func (block *Block) StripAD() Block {
-	logging.Base().Infof("start compress")
-	var c Block
-	c.BlockHeader = block.BlockHeader
-	c.Payset = make(transactions.Payset, len(block.Payset), len(block.Payset))
-	for i, stb := range block.Payset {
-		c.Payset[i].SignedTxn = stb.SignedTxn
-		c.Payset[i].HasGenesisHash = stb.HasGenesisHash
-		c.Payset[i].HasGenesisID = stb.HasGenesisID
-		c.Payset[i].Digest = stb.Digest
-	}
-	return c
-}
-
-// StripSignedTxnWithAD returns the Block without SignedTxnWithApplyData
-func (block *Block) StripSignedTxnWithAD() Block {
-	logging.Base().Infof("start compress")
-	var c Block
-	c.BlockHeader = block.BlockHeader
-	c.Payset = make(transactions.Payset, len(block.Payset), len(block.Payset))
-	for i, stb := range block.Payset {
-		c.Payset[i].Digest = crypto.Hash(protocol.Encode(&stb.SignedTxn))
-	}
-	return c
 }
 
 // NextRewardsState computes the RewardsState of the subsequent round

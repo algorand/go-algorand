@@ -709,6 +709,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxn) e
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	digests := make([]crypto.Digest, 0, len(txgroup))
 	for gi, tx := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
@@ -718,6 +719,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxn) e
 		}
 
 		txibs = append(txibs, txib)
+		digests = append(digests, crypto.Hash(protocol.Encode(&tx)))
 
 		if eval.validate {
 			groupTxBytes += txib.GetEncodedLength()
@@ -751,6 +753,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxn) e
 	}
 
 	eval.block.Payset = append(eval.block.Payset, txibs...)
+	eval.block.PaysetDigest = append(eval.block.PaysetDigest, digests...)
 	eval.blockTxBytes += groupTxBytes
 	cow.commitToParent()
 

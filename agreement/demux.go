@@ -19,7 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
@@ -107,14 +107,12 @@ func (d *demux) UpdateEventsQueue(queueName string, queueLength int) {
 	d.processingMonitor.UpdateEventsQueue(queueName, queueLength)
 }
 
-func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandle) error {
-	logging.Base().Infof("len %v", len(payset))
-
-	keys := make([]crypto.Digest, len(payset), len(payset))
-	for i, stib := range payset {
-		keys[i] = stib.Digest
+func ReconstructProposal(net Network, b *bookkeeping.Block, h MessageHandle) error {
+	logging.Base().Infof("len %v", len(b.PaysetDigest))
+	stxnsData, _ := net.LoadMessage(h, b.PaysetDigest)
+	if b.Payset == nil {
+		b.Payset = make(transactions.Payset, len(b.PaysetDigest))
 	}
-	stxnsData, _ := net.LoadMessage(h, keys)
 	//if !allPresent {
 	//	return fmt.Errorf("could not recover txns")
 	//}
@@ -124,8 +122,7 @@ func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandl
 			var stxn transactions.SignedTxn
 			dec := protocol.NewDecoderBytes(stxnData)
 			err := dec.Decode(&stxn)
-			payset[i].SignedTxn = stxn
-			payset[i].Digest = crypto.Digest{}
+			b.Payset[i].SignedTxn = stxn
 			if err != nil {
 				logging.Base().Warnf("Received a non-decodable txn: %v", err)
 				//net.Disconnect(raw.MessageHandle)
@@ -134,7 +131,7 @@ func ReconstructProposal(net Network, payset transactions.Payset, h MessageHandl
 		}
 	}
 
-	logging.Base().Infof("done %v", len(payset))
+	logging.Base().Infof("done %v", len(b.Payset))
 	return nil
 }
 
@@ -170,7 +167,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
 				case protocol.ProposalPayloadTag:
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
-					if err := ReconstructProposal(net, msg.CompoundMessage.Proposal.Payset, msg.MessageHandle); err != nil {
+					if err := ReconstructProposal(net, &msg.CompoundMessage.Proposal.Block, msg.MessageHandle); err != nil {
 						logging.Base().Warnf("Failed to reconstruct proposal: %v", err)
 						continue
 					}

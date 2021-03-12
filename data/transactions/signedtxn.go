@@ -44,8 +44,6 @@ type SignedTxnInBlock struct {
 
 	SignedTxnWithAD
 
-	Digest crypto.Digest
-
 	HasGenesisID   bool `codec:"hgi"`
 	HasGenesisHash bool `codec:"hgh"`
 }

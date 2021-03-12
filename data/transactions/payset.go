@@ -25,6 +25,10 @@ type (
 	// A Payset represents a common, unforgeable, consistent, ordered set of SignedTxn objects.
 	//msgp:allocbound Payset 100000
 	Payset []SignedTxnInBlock
+
+	// A PaysetDigest contains the corresponding Digests of a block's payset
+	//msgp:allocbound PaysetDigest 100000
+	PaysetDigest []crypto.Digest
 )
 
 // CommitFlat returns a commitment to the Payset, as a flat array.

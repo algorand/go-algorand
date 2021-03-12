@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -74,17 +75,13 @@ func (p unauthenticatedProposal) value() proposalValue {
 		OriginalPeriod:   p.OriginalPeriod,
 		OriginalProposer: p.OriginalProposer,
 		BlockDigest:      p.Digest(),
-		EncodingDigest:   crypto.HashObj(p),
+		EncodingDigest:   crypto.HashObj(p.WithoutPayset()),
 	}
 }
 
-func (p unauthenticatedProposal) StripAD() unauthenticatedProposal {
-	p.Block = p.Block.StripAD()
-	return p
-}
-
-func (p unauthenticatedProposal) StripSignedTxnWithAD() unauthenticatedProposal {
-	p.Block = p.Block.StripSignedTxnWithAD()
+func (p unauthenticatedProposal) WithoutPayset() unauthenticatedProposal {
+	var emptyPayset transactions.Payset
+	p.Block.Payset = emptyPayset
 	return p
 }
 
@@ -98,8 +95,6 @@ type proposal struct {
 	// to disk, so after a crash, we will fall back to applying the
 	// raw Block to the ledger (and re-computing the state delta).
 	ve ValidatedBlock
-
-	pv proposalValue
 }
 
 func makeProposal(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
@@ -254,8 +249,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 
 	ve = ve.WithSeed(newSeed)
 	proposal := makeProposal(ve, seedProof, period, address)
-	value := proposal.StripAD().value()
-	proposal.pv = value
+	value := proposal.value()
 	return proposal, value, nil
 }
 
@@ -280,7 +274,6 @@ func (p unauthenticatedProposal) validate(ctx context.Context, current round, le
 	}
 
 	pr = makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer)
-	pr.pv = p.value()
 
 	return pr, nil
 }
