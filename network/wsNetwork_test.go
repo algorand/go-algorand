@@ -367,7 +367,6 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	}
 }
 
-
 // Set up two nodes, test that a.Broadcast is received by B, when B has no address.
 func TestWebsocketNetworkNoAddress(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
