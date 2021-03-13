@@ -43,18 +43,14 @@ func (tracker *msgTracker) exists(key crypto.Digest) bool {
 }
 
 // LoadMessage retrieves an entry from the corresponding peer's key-value store
-func (tracker *msgTracker) LoadMessage(keys []crypto.Digest) ([][]byte, bool) {
+func (tracker *msgTracker) LoadMessage(keys []crypto.Digest) ([][]byte, []bool) {
 	tracker.mu.RLock()
 	defer tracker.mu.RUnlock()
 
-	ok := true
+	ok := make([]bool, len(keys), len(keys))
 	values := make([][]byte, len(keys), len(keys))
 	for i, k := range keys {
-		var found bool
-		values[i], found = tracker.store[k]
-		if !found {
-			ok = false
-		}
+		values[i], ok[i] = tracker.store[k]
 
 	}
 	return values, ok

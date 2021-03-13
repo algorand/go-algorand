@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -162,9 +161,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		if err != nil {
 			logging.Base().Warnf("failed to decode payset: %v", err)
 		}
-		msg.Proposal.Payset = make(transactions.Payset, len(payset))
-		for i := range msg.Proposal.Payset {
-			msg.Proposal.Payset[i].SignedTxnWithAD = payset[i]
+		for i := range payset {
 			stxn := payset[i].SignedTxn
 			txnData[i] = protocol.Encode(&stxn)
 			tags[i] = protocol.TxnTag

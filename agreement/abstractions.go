@@ -90,7 +90,7 @@ type BlockFactory interface {
 	// lose liveness.
 	AssembleBlock(basics.Round, time.Time) (ValidatedBlock, error)
 
-	ReconstructBlock(bookkeeping.Block)
+	ReconstructBlock(*bookkeeping.Block, MessageHandle) error
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.
@@ -293,7 +293,7 @@ type Network interface {
 	Start()
 
 	// LoadMessage retrieves an entry from the corresponding peer's key-value store
-	LoadMessage(MessageHandle, []crypto.Digest) ([][]byte, bool)
+	LoadMessage(MessageHandle, []crypto.Digest) ([][]byte, []bool)
 }
 
 // RandomSource is an abstraction over the random number generator.
