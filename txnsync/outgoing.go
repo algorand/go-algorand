@@ -198,16 +198,19 @@ func (s *syncState) evaluateOutgoingMessage(msg *messageSentCallback) {
 
 // locallyGeneratedTransactions return a subset of the given transactionGroups array by filtering out transactions that are not locally generated.
 func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTransactionGroupsSnapshot) (result []transactions.SignedTxGroup) {
-	if pendingTransactions.latestLocallyOriginatedGroupCounter == transactions.InvalidSignedTxGroupCounter {
+	if pendingTransactions.latestLocallyOriginatedGroupCounter == transactions.InvalidSignedTxGroupCounter || len(pendingTransactions.pendingTransactionsGroups) == 0 {
 		return []transactions.SignedTxGroup{}
 	}
 	n := sort.Search(len(pendingTransactions.pendingTransactionsGroups), func(i int) bool {
 		return pendingTransactions.pendingTransactionsGroups[i].GroupCounter >= pendingTransactions.latestLocallyOriginatedGroupCounter
 	})
-	result = make([]transactions.SignedTxGroup, n)
+	if n == len(pendingTransactions.pendingTransactionsGroups) {
+		n--
+	}
+	result = make([]transactions.SignedTxGroup, n+1)
 
 	count := 0
-	for i := 0; i < n; i++ {
+	for i := 0; i <= n; i++ {
 		txnGroup := pendingTransactions.pendingTransactionsGroups[i]
 		if txnGroup.LocallyOriginated {
 			result[count] = txnGroup

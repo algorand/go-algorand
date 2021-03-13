@@ -90,7 +90,7 @@ func (bf *bloomFilter) test(txID transactions.Txid) bool {
 
 func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, shuffler uint32, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams
-	var filtedTransactionsIDs []transactions.Txid
+
 	switch {
 	case encodingParams.Modulator == 0:
 		// we want none.
@@ -109,14 +109,16 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 			}
 		}
 
-		filtedTransactionsIDs = make([]transactions.Txid, 0, len(txnGroups))
+		sizeBits, numHashes := bloom.Optimal(len(txnGroups), bloomFilterFalsePositiveRate)
+		result.filter = bloom.New(sizeBits, numHashes, shuffler)
 		for _, group := range txnGroups {
-			filtedTransactionsIDs = append(filtedTransactionsIDs, group.FirstTransactionID)
+			result.filter.Set(group.FirstTransactionID[:])
 		}
+
 	default:
 		// we want subset.
 		result.containedTxnsRange.firstCounter = math.MaxUint64
-		filtedTransactionsIDs = make([]transactions.Txid, 0, len(txnGroups))
+		filtedTransactionsIDs := make([]transactions.Txid, 0, len(txnGroups))
 		for _, group := range txnGroups {
 			txID := group.FirstTransactionID
 			if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {
@@ -135,12 +137,12 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 				return *hintPrevBloomFilter
 			}
 		}
-	}
 
-	sizeBits, numHashes := bloom.Optimal(len(filtedTransactionsIDs), bloomFilterFalsePositiveRate)
-	result.filter = bloom.New(sizeBits, numHashes, shuffler)
-	for _, txid := range filtedTransactionsIDs {
-		result.filter.Set(txid[:])
+		sizeBits, numHashes := bloom.Optimal(len(filtedTransactionsIDs), bloomFilterFalsePositiveRate)
+		result.filter = bloom.New(sizeBits, numHashes, shuffler)
+		for _, txid := range filtedTransactionsIDs {
+			result.filter.Set(txid[:])
+		}
 	}
 
 	return
