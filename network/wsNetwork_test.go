@@ -289,6 +289,84 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 	}
 }
 
+// Test sending array of messages
+func TestWebsocketNetworkArray(t *testing.T) {
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+	counter := newMessageCounter(t, 3)
+	counterDone := counter.done
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
+
+	tags := []protocol.Tag{protocol.TxnTag, protocol.TxnTag, protocol.TxnTag}
+	data := [][]byte{[]byte("foo"), []byte("bar"), []byte("algo")}
+	netA.BroadcastArray(context.Background(), tags, data, nil, false, nil)
+
+	select {
+	case <-counterDone:
+	case <-time.After(2 * time.Second):
+		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+	}
+}
+
+// Test cancelling message sends
+func TestWebsocketNetworkCancel(t *testing.T) {
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+	counter := newMessageCounter(t, 100)
+	counterDone := counter.done
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
+
+	tags := make([]protocol.Tag, 100)
+	data := make([][]byte, 100)
+	for i := range data {
+		tags[i] = protocol.TxnTag
+		data[i] = []byte(string(i))
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	netA.BroadcastArray(ctx, tags, data, nil, false, nil)
+	cancel()
+
+	select {
+	case <-counterDone:
+		t.Errorf("All messages were sent, send not cancelled")
+	case <-time.After(2 * time.Second):
+	}
+}
+
 // Set up two nodes, test that a.Broadcast is received by B, when B has no address.
 func TestWebsocketNetworkNoAddress(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
@@ -621,8 +699,8 @@ func TestSlowOutboundPeer(t *testing.T) {
 	for i := range destPeers {
 		destPeers[i].closing = make(chan struct{})
 		destPeers[i].net = node
-		destPeers[i].sendBufferHighPrio = make(chan sendMessage, sendBufferLength)
-		destPeers[i].sendBufferBulk = make(chan sendMessage, sendBufferLength)
+		destPeers[i].sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
+		destPeers[i].sendBufferBulk = make(chan sendMessages, sendBufferLength)
 		destPeers[i].conn = &nopConnSingleton
 		destPeers[i].rootURL = fmt.Sprintf("fake %d", i)
 		node.addPeer(&destPeers[i])
@@ -759,7 +837,7 @@ func TestDupFilter(t *testing.T) {
 	rand.Read(msg)
 	t.Log("A send, C non-dup-send")
 	netA.Broadcast(context.Background(), debugTag2, msg, true, nil)
-	// B should broadcast its non-desire to recieve the message again
+	// B should broadcast its non-desire to receive the message again
 	time.Sleep(500 * time.Millisecond)
 
 	// C should now not send these
@@ -774,6 +852,7 @@ func TestDupFilter(t *testing.T) {
 	assert.Equal(t, 1, counter2.count)
 
 	debugMetrics(t)
+
 }
 
 func TestGetPeers(t *testing.T) {
@@ -1143,10 +1222,14 @@ func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
 }
 
 func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte, when time.Time) error {
-	request := broadcastRequest{tag: tag, data: data, enqueueTime: when}
+	msgArr := make([][]byte, 1, 1)
+	msgArr[0] = data
+	tagArr := make([]protocol.Tag, 1, 1)
+	tagArr[0] = tag
+	request := broadcastRequest{tags: tagArr, data: msgArr, enqueueTime: when, ctx: context.Background()}
 
 	broadcastQueue := wn.broadcastQueueBulk
-	if highPriorityTag(tag) {
+	if highPriorityTag(tagArr) {
 		broadcastQueue = wn.broadcastQueueHighPrio
 	}
 	// no wait
@@ -1184,7 +1267,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 
 	currentTime := time.Now()
 	for i := 0; i < 10; i++ {
-		err := netA.broadcastWithTimestamp(protocol.TxnTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
+		err := netA.broadcastWithTimestamp(protocol.TxnTag, []byte(string(i)), currentTime.Add(time.Hour*time.Duration(i-5)))
 		require.NoErrorf(t, err, "No error was expected")
 	}
 
@@ -1302,9 +1385,9 @@ func TestForceMessageRelaying(t *testing.T) {
 
 	// send 5 messages from both netB and netC to netA
 	for i := 0; i < 5; i++ {
-		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{byte(i), 2, 3}, true, nil)
 		require.NoError(t, err)
-		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
+		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{byte(i), 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
 
@@ -1326,7 +1409,7 @@ func TestForceMessageRelaying(t *testing.T) {
 	netB.relayMessages = true
 	// send additional 10 messages from netB
 	for i := 0; i < 10; i++ {
-		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{byte(i), 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
 
