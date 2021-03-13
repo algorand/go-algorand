@@ -166,6 +166,9 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *
 }
 
 // outgoing related methods :
+func (p *Peer) isWithinMessageSeries() bool {
+	return len(p.messageSeriesPendingTransactions) > 0
+}
 
 func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTranscationsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )
@@ -272,12 +275,12 @@ func (p *Peer) getLocalRequestParams() (offset, modulator byte) {
 }
 
 // update the peer once the message was sent successfully.
-func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs []transactions.Txid, timestamp time.Duration, sequenceNumber uint64, messageSize int, filter bloomFilter) {
+func (p *Peer) updateMessageSent(sentMessageRound basics.Round, selectedTxnIDs []transactions.Txid, timestamp time.Duration, sequenceNumber uint64, messageSize int, filter bloomFilter) {
 	for _, txid := range selectedTxnIDs {
 		p.recentSentTransactions.add(txid)
 	}
 	p.lastSentMessageSequenceNumber = sequenceNumber
-	p.lastSentMessageRound = txMsg.Round
+	p.lastSentMessageRound = sentMessageRound
 	p.lastSentMessageTimestamp = timestamp
 	p.lastSentMessageSize = messageSize
 	if filter.filter != nil {
@@ -487,7 +490,18 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 	} else {
 		ops |= messageConstTransactions
 		if fetchTransactions {
-			ops |= messageConstBloomFilter | messageConstUpdateRequestParams
+			if p.localTransactionsModulator == 1 {
+				// special optimization if we have just one relay that we're connected to:
+				// generate the bloom filter only once per 2*beta message.
+				// this would reduce the number of unneeded bloom filters generation dramatically.
+				// that single relay would know which messages it previously sent us, and would refrain from
+				// sending these again.
+				if p.nextStateTimestamp == 0 {
+					ops |= messageConstBloomFilter | messageConstUpdateRequestParams
+				}
+			} else {
+				ops |= messageConstBloomFilter | messageConstUpdateRequestParams
+			}
 		}
 	}
 	return

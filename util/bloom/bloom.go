@@ -18,11 +18,11 @@ const maxHashes = uint32(32)
 
 // Filter represents the state of the Bloom filter
 type Filter struct {
-	numHashes            uint32
-	data                 []byte
-	prefix               [4]byte
-	hashStagingBuffer    []uint32
-	preimagetagingBuffer []byte
+	numHashes             uint32
+	data                  []byte
+	prefix                [4]byte
+	hashStagingBuffer     []uint32
+	preimageStagingBuffer []byte
 }
 
 // New creates a new Bloom filter
@@ -57,7 +57,7 @@ func Optimal(numElements int, falsePositiveRate float64) (sizeBits int, numHashe
 
 // Set marks x as present in the filter
 func (f *Filter) Set(x []byte) {
-	withPrefix := f.preimagetagingBuffer
+	withPrefix := f.preimageStagingBuffer
 	withPrefix = append(withPrefix, f.prefix[:]...)
 	withPrefix = append(withPrefix, x...)
 	hs := f.hash(withPrefix, f.numHashes)
@@ -65,16 +65,16 @@ func (f *Filter) Set(x []byte) {
 	for _, h := range hs {
 		f.set(h % n)
 	}
-	f.preimagetagingBuffer = withPrefix[:0]
+	f.preimageStagingBuffer = withPrefix[:0]
 }
 
 // Test checks whether x is present in the filter
 func (f *Filter) Test(x []byte) bool {
-	withPrefix := f.preimagetagingBuffer
+	withPrefix := f.preimageStagingBuffer
 	withPrefix = append(withPrefix, f.prefix[:]...)
 	withPrefix = append(withPrefix, x...)
 	hs := f.hash(withPrefix, f.numHashes)
-	f.preimagetagingBuffer = withPrefix[:0]
+	f.preimageStagingBuffer = withPrefix[:0]
 	n := uint32(len(f.data) * 8)
 	for _, h := range hs {
 		if !f.test(h % n) {

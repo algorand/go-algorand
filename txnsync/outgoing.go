@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/algorand/go-algorand/data/transactions"
@@ -63,16 +64,23 @@ func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber u
 	return nil
 }
 
+type pendingTransactionGroupsSnapshot struct {
+	pendingTransactionsGroups           []transactions.SignedTxGroup
+	latestLocallyOriginatedGroupCounter uint64
+}
+
 func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.DeadlineMonitor, peers []*Peer) {
 	if len(peers) == 0 {
 		// no peers - no messages that need to be sent.
 		return
 	}
-	pendingTransactionGroups := s.node.GetPendingTransactionGroups()
+
+	var pendingTransactions pendingTransactionGroupsSnapshot
+	pendingTransactions.pendingTransactionsGroups, pendingTransactions.latestLocallyOriginatedGroupCounter = s.node.GetPendingTransactionGroups()
 
 	for _, peer := range peers {
 		msgCallback := &messageSentCallback{state: s, roundClock: s.clock}
-		msgCallback.messageData = s.assemblePeerMessage(peer, pendingTransactionGroups, currentTime)
+		msgCallback.messageData = s.assemblePeerMessage(peer, &pendingTransactions, currentTime)
 		encodedMessage := msgCallback.messageData.message.MarshalMsg([]byte{})
 		msgCallback.messageData.encodedMessageSize = len(encodedMessage)
 		s.node.SendPeerMessage(peer.networkPeer, encodedMessage, msgCallback.asyncMessageSent)
@@ -101,7 +109,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	}
 }
 
-func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions []transactions.SignedTxGroup, currentTime time.Duration) (metaMessage sentMessageMetadata) {
+func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot, currentTime time.Duration) (metaMessage sentMessageMetadata) {
 	metaMessage = sentMessageMetadata{
 		peer: peer,
 		message: &transactionBlockMessage{
@@ -124,23 +132,39 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions []transa
 		}
 	}
 
-	if (msgOps&messageConstBloomFilter == messageConstBloomFilter) && len(pendingTransactions) > 0 {
+	if (msgOps&messageConstBloomFilter == messageConstBloomFilter) && len(pendingTransactions.pendingTransactionsGroups) > 0 {
+		var lastBloomFilter *bloomFilter
+		// for relays, where we send a full bloom filter to everyone, we want to coordinate that with a single
+		// copy of the bloom filter, to prevent re-creation.
+		if s.isRelay {
+			lastBloomFilter = &s.lastBloomFilter
+		} else {
+			// for peers, we want to make sure we don't regenerate the same bloom filter as before.
+			lastBloomFilter = &peer.lastSentBloomFilter
+		}
 		// generate a bloom filter that matches the requests params.
-		metaMessage.filter = makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions, uint32(s.node.Random(0xffffffff)), &peer.lastSentBloomFilter)
+		metaMessage.filter = makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, uint32(s.node.Random(0xffffffff)), lastBloomFilter)
 		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
 			metaMessage.message.TxnBloomFilter = metaMessage.filter.encode()
 			bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()
+			if s.isRelay && s.lastBloomFilter.containedTxnsRange.transactionsCount != metaMessage.filter.containedTxnsRange.transactionsCount {
+				s.log.Debugf("relay made bloom filter with %d entries", len(pendingTransactions.pendingTransactionsGroups))
+			}
 		}
+		s.lastBloomFilter = metaMessage.filter
 	}
 
 	if msgOps&messageConstTransactions == messageConstTransactions {
+		transactionGroups := pendingTransactions.pendingTransactionsGroups
 		if !s.isRelay {
-			// on non-relay, we need to filter out the non-locally originated messages since we don't want
-			// non-relays to send transcation that they received via the transaction sync back.
-			pendingTransactions = locallyGeneratedTransactions(pendingTransactions)
+			if !peer.isWithinMessageSeries() {
+				// on non-relay, we need to filter out the non-locally originated transactions since we don't want
+				// non-relays to send transcation that they received via the transaction sync back.
+				transactionGroups = s.locallyGeneratedTransactions(pendingTransactions)
+			}
 		}
 		var txnGroups []transactions.SignedTxGroup
-		txnGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(pendingTransactions, messageTimeWindow, s.round, bloomFilterSize)
+		txnGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
 		metaMessage.message.TransactionGroups.Bytes = encodeTransactionGroups(txnGroups)
 
 		// clear the last sent bloom filter on the end of a series of partial messages.
@@ -166,15 +190,25 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions []transa
 func (s *syncState) evaluateOutgoingMessage(msg *messageSentCallback) {
 	msgData := msg.messageData
 
-	msgData.peer.updateMessageSent(msgData.message, msgData.sentTranscationsIDs, msgData.sentTimestamp, msgData.sequenceNumber, msgData.encodedMessageSize, msgData.filter)
+	msgData.peer.updateMessageSent(msgData.message.Round, msgData.sentTranscationsIDs, msgData.sentTimestamp, msgData.sequenceNumber, msgData.encodedMessageSize, msgData.filter)
 	s.log.outgoingMessage(msgStats{msgData.sequenceNumber, msgData.message.Round, len(msgData.sentTranscationsIDs), msgData.message.UpdatedRequestParams, len(msgData.message.TxnBloomFilter.BloomFilter), msgData.message.MsgSync.NextMsgMinDelay, msg.messageData.peer.networkAddress()})
+	releaseEncodedTransactionGroups(msgData.message.TransactionGroups.Bytes)
+
 }
 
 // locallyGeneratedTransactions return a subset of the given transactionGroups array by filtering out transactions that are not locally generated.
-func locallyGeneratedTransactions(transactionGroups []transactions.SignedTxGroup) (result []transactions.SignedTxGroup) {
-	result = make([]transactions.SignedTxGroup, len(transactionGroups))
+func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTransactionGroupsSnapshot) (result []transactions.SignedTxGroup) {
+	if pendingTransactions.latestLocallyOriginatedGroupCounter == transactions.InvalidSignedTxGroupCounter {
+		return []transactions.SignedTxGroup{}
+	}
+	n := sort.Search(len(pendingTransactions.pendingTransactionsGroups), func(i int) bool {
+		return pendingTransactions.pendingTransactionsGroups[i].GroupCounter >= pendingTransactions.latestLocallyOriginatedGroupCounter
+	})
+	result = make([]transactions.SignedTxGroup, n)
+
 	count := 0
-	for _, txnGroup := range transactionGroups {
+	for i := 0; i < n; i++ {
+		txnGroup := pendingTransactions.pendingTransactionsGroups[i]
 		if txnGroup.LocallyOriginated {
 			result[count] = txnGroup
 			count++

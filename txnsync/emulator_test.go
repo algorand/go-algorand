@@ -643,6 +643,9 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 }
 
 func TestEmulatedOneRelayHundredNodes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping long executing unit test")
+	}
 	testScenario := scenario{
 		netConfig: networkConfiguration{
 			nodes: []nodeConfiguration{
@@ -659,10 +662,10 @@ func TestEmulatedOneRelayHundredNodes(t *testing.T) {
 			},
 		},
 		step:         1 * time.Millisecond / 10,
-		testDuration: 10000 * time.Millisecond,
+		testDuration: 2000 * time.Millisecond,
 	}
 
-	for i := 1; i <= 30; i++ {
+	for i := 1; i <= 100; i++ {
 		// generate the node
 		testScenario.netConfig.nodes = append(testScenario.netConfig.nodes, nodeConfiguration{
 			name: fmt.Sprintf("node-%d", i),
@@ -678,7 +681,7 @@ func TestEmulatedOneRelayHundredNodes(t *testing.T) {
 		// generate initial allocation:
 		testScenario.initialAlloc = append(testScenario.initialAlloc, initialTransactionsAllocation{
 			node:              i, // i.e. node-1
-			transactionsCount: 1000,
+			transactionsCount: 333,
 			transactionSize:   200 + i,
 			expirationRound:   basics.Round(5),
 		})

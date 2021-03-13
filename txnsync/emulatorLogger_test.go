@@ -71,6 +71,12 @@ const (
 	modeOutgoing
 )
 
+// implement the logging.Logger interface, so that we can avoid printing
+// non markup info messages.
+func (e *emulatorNodeLogger) Infof(msg string, args ...interface{}) {
+
+}
+
 // implement local interface Logger
 func (e *emulatorNodeLogger) outgoingMessage(mstat msgStats) {
 	e.printMsgStats(mstat, modeOutgoing)

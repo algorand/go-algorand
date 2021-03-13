@@ -97,13 +97,21 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 		return
 	case encodingParams.Modulator == 1:
 		// we want all.
-		filtedTransactionsIDs = make([]transactions.Txid, 0, len(txnGroups))
-		for _, group := range txnGroups {
-			filtedTransactionsIDs = append(filtedTransactionsIDs, group.FirstTransactionID)
-		}
 		if len(txnGroups) > 0 {
 			result.containedTxnsRange.firstCounter = txnGroups[0].GroupCounter
 			result.containedTxnsRange.lastCounter = txnGroups[len(txnGroups)-1].GroupCounter
+			result.containedTxnsRange.transactionsCount = uint64(len(txnGroups))
+		}
+
+		if hintPrevBloomFilter != nil {
+			if result.sameParams(*hintPrevBloomFilter) {
+				return *hintPrevBloomFilter
+			}
+		}
+
+		filtedTransactionsIDs = make([]transactions.Txid, 0, len(txnGroups))
+		for _, group := range txnGroups {
+			filtedTransactionsIDs = append(filtedTransactionsIDs, group.FirstTransactionID)
 		}
 	default:
 		// we want subset.
@@ -120,12 +128,12 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 			}
 			result.containedTxnsRange.lastCounter = group.GroupCounter
 		}
-	}
-	result.containedTxnsRange.transactionsCount = uint64(len(filtedTransactionsIDs))
+		result.containedTxnsRange.transactionsCount = uint64(len(filtedTransactionsIDs))
 
-	if hintPrevBloomFilter != nil {
-		if result.sameParams(*hintPrevBloomFilter) {
-			return *hintPrevBloomFilter
+		if hintPrevBloomFilter != nil {
+			if result.sameParams(*hintPrevBloomFilter) {
+				return *hintPrevBloomFilter
+			}
 		}
 	}
 

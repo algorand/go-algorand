@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+const peerScheduleGranularity = time.Millisecond / 1000000
+
 //msgp:ignore peerBuckets
 type peerBuckets []peerBucket
 
@@ -91,9 +93,11 @@ func (p *peerScheduler) nextDuration() time.Duration {
 
 func (p *peerScheduler) nextPeers() (outPeers []*Peer) {
 	next := p.nextDuration()
+	next -= next % peerScheduleGranularity
 
 	// pull out of the heap all the entries that have next smaller or equal to the above next.
-	for len(p.peers) > 0 && p.peers[0].next <= next {
+	// make scheduling more granular, so that we can produce a single bloom filter for multiple outgoing messages.
+	for len(p.peers) > 0 && (p.peers[0].next-p.peers[0].next%peerScheduleGranularity) <= next {
 		bucket := heap.Remove(p, 0).(peerBucket)
 		outPeers = append(outPeers, bucket.peer)
 	}
