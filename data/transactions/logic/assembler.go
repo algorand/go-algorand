@@ -80,6 +80,8 @@ type OpStream struct {
 
 	// map opcode offsets to source line
 	OffsetToLine map[int]int
+
+	HasStatefulOps bool
 }
 
 // GetVersion returns the LogicSigVersion we're building to
@@ -1133,6 +1135,9 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			ops.RecordSourceLine()
+			if spec.Modes == runModeApplication {
+				ops.HasStatefulOps = true
+			}
 			spec.asm(ops, &spec, fields[1:])
 			ops.trace("\n")
 			continue
