@@ -145,7 +145,7 @@ func (tsnc *transcationSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 
 // TODO : add description.
 func (tsnc *transcationSyncNodeConnector) GetPendingTransactionGroups() ([]transactions.SignedTxGroup, uint64) {
-	return tsnc.node.transactionPool.PendingTxGroups(), 0
+	return tsnc.node.transactionPool.PendingTxGroups()
 }
 
 func (tsnc *transcationSyncNodeConnector) onNewTransactionPoolEntry(transcationPoolSize int) {

@@ -550,7 +550,7 @@ func TestRememberForget(t *testing.T) {
 		}
 	}
 
-	pending := transactionPool.PendingTxGroups()
+	pending, _ := transactionPool.PendingTxGroups()
 	numberOfTxns := numOfAccounts*numOfAccounts - numOfAccounts
 	require.Len(t, pending, numberOfTxns)
 
@@ -561,7 +561,7 @@ func TestRememberForget(t *testing.T) {
 	require.NoError(t, err)
 	transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 
-	pending = transactionPool.PendingTxGroups()
+	pending, _ = transactionPool.PendingTxGroups()
 	require.Len(t, pending, 0)
 }
 
@@ -624,7 +624,7 @@ func TestCleanUp(t *testing.T) {
 		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 	}
 
-	pending := transactionPool.PendingTxGroups()
+	pending, _ := transactionPool.PendingTxGroups()
 	require.Zero(t, len(pending))
 	require.Zero(t, transactionPool.NumExpired(4))
 	require.Equal(t, issuedTransactions, transactionPool.NumExpired(5))
@@ -696,7 +696,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 			}
 		}
 	}
-	pending := transactionPool.PendingTxGroups()
+	pending, _ := transactionPool.PendingTxGroups()
 	require.Len(t, pending, savedTransactions)
 
 	secret := keypair()
@@ -732,7 +732,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 
 	transactionPool.OnNewBlock(block.Block(), ledgercore.StateDelta{})
 
-	pending = transactionPool.PendingTxGroups()
+	pending, _ = transactionPool.PendingTxGroups()
 	// only one transaction is missing
 	require.Len(t, pending, savedTransactions-1)
 }
@@ -836,7 +836,8 @@ func TestRemove(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 	require.NoError(t, transactionPool.RememberOne(signedTx))
-	require.Equal(t, transactionPool.PendingTxGroups(), []transactions.SignedTxGroup{
+	pendingTxGroups, _ := transactionPool.PendingTxGroups()
+	require.Equal(t, pendingTxGroups, []transactions.SignedTxGroup{
 		{
 			Transactions:       []transactions.SignedTxn{signedTx},
 			GroupCounter:       1,
