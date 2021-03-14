@@ -913,6 +913,17 @@ func assembleFile(fname string) (program []byte) {
 		ops.ReportProblems(fname)
 		reportErrorf("%s: %s", fname, err)
 	}
+	_, params := getProto(protoVersion)
+	if ops.HasStatefulOps {
+		if len(ops.Program) > params.MaxAppProgramLen {
+			reportErrorf("%s: app program size too large: %d > %d", fname, len(ops.Program), params.MaxAppProgramLen)
+		}
+	} else {
+		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
+			reportErrorf("%s: logsig program size too large: %d > %d", fname, len(ops.Program), params.LogicSigMaxSize)
+		}
+	}
+
 	return ops.Program
 }
 
@@ -1056,10 +1067,16 @@ var dryrunCmd = &cobra.Command{
 			if txn.Lsig.Blank() {
 				continue
 			}
+			if uint64(txn.Lsig.Len()) > params.LogicSigMaxSize {
+				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
+			}
 			ep := logic.EvalParams{Txn: &txn, Proto: &params, GroupIndex: i, TxnGroup: txgroup}
 			cost, err := logic.Check(txn.Lsig.Logic, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
+			}
+			if uint64(cost) > params.LogicSigMaxCost {
+				reportErrorf("program cost too large: %d > %d", cost, params.LogicSigMaxCost)
 			}
 			sb := strings.Builder{}
 			ep = logic.EvalParams{
