@@ -834,20 +834,23 @@ int 2`
 
 func TestAssembleDisassemble(t *testing.T) {
 	// Specifically constructed program text that should be recreated by Disassemble()
-	// TODO: disassemble to int/byte psuedo-ops instead of raw intcblock/bytecblock/intc/bytec
 	t.Parallel()
-	text := fmt.Sprintf(`// version %d
+	text := fmt.Sprintf(`#pragma version %d
 intcblock 0 1 2 3 4 5
-bytecblock 0xcafed00d 0x1337 0x2001 0xdeadbeef 0x70077007
-intc_1
-intc_0
+bytecblock 0xcafed00d 0x1337 0x68656c6c6f 0xdeadbeef 0x70077007 0x0102030405060708091011121314151617181920212223242526272829303132
+bytec_2 // "hello"
+pop
+bytec 5 // addr AEBAGBAFAYDQQCIQCEJBGFAVCYLRQGJAEERCGJBFEYTSQKJQGEZHVJ5ZZY
+pop
+intc_1 // 1
+intc_0 // 0
 +
-intc 4
+intc 4 // 4
 *
-bytec_1
-bytec_0
+bytec_1 // 0x1337
+bytec_0 // 0xcafed00d
 ==
-bytec 4
+bytec 4 // 0x70077007
 len
 +
 arg_0
@@ -944,7 +947,7 @@ gtxn 12 Fee
 
 func TestAssembleDisassembleCycle(t *testing.T) {
 	// Test that disassembly re-assembles to the same program bytes.
-	// It disassembly won't necessarily perfectly recreate the source text, but assembling the result of Disassemble() should be the same program bytes.
+	// Disassembly won't necessarily perfectly recreate the source text, but assembling the result of Disassemble() should be the same program bytes.
 	t.Parallel()
 
 	tests := map[uint64]string{
@@ -955,22 +958,54 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 
 	// This confirms that each program compiles to the same bytes
 	// (except the leading version indicator), when compiled under
-	// original and max versions. That doesn't *have* to be true,
-	// as we can introduce optimizations in later versions that
-	// change the bytecode emitted. But currently it is, so we
-	// test it for now to catch any suprises.
+	// original version, unspecified version (so it should pick up
+	// the pragma) and current version with pragma removed. That
+	// doesn't *have* to be true, as we can introduce
+	// optimizations in later versions that change the bytecode
+	// emitted. But currently it is, so we test it for now to
+	// catch any suprises.
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, source, v)
 			t2, err := Disassemble(ops.Program)
 			require.NoError(t, err)
-			ops2 := testProg(t, t2, AssemblerMaxVersion)
-			if err != nil {
-				t.Log(t2)
-			}
-			require.Equal(t, ops.Program[1:], ops2.Program[1:])
+			none := testProg(t, t2, assemblerNoVersion)
+			require.Equal(t, ops.Program[1:], none.Program[1:])
+			t3 := "// " + t2 // This comments out the #pragma version
+			current := testProg(t, t3, AssemblerMaxVersion)
+			require.Equal(t, ops.Program[1:], current.Program[1:])
 		})
 	}
+}
+
+func TestConstantDisassembly(t *testing.T) {
+	t.Parallel()
+
+	ops := testProg(t, "int 47", AssemblerMaxVersion)
+	out, err := Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Contains(t, out, "// 47")
+
+	ops = testProg(t, "byte \"john\"", AssemblerMaxVersion)
+	out, err = Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Contains(t, out, "// \"john\"")
+
+	ops = testProg(t, "byte \"!&~\"", AssemblerMaxVersion)
+	out, err = Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Contains(t, out, "// \"!&~\"")
+
+	ops = testProg(t, "byte 0x010720", AssemblerMaxVersion)
+	out, err = Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Contains(t, out, "// 0x010720")
+
+	ops = testProg(t, "addr AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ", AssemblerMaxVersion)
+	out, err = Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Contains(t, out, "// addr AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
+
 }
 
 func TestAssembleDisassembleErrors(t *testing.T) {
@@ -1113,7 +1148,7 @@ func TestAssembleAsset(t *testing.T) {
 func TestDisassembleSingleOp(t *testing.T) {
 	t.Parallel()
 	// test ensures no double arg_0 entries in disassembly listing
-	sample := fmt.Sprintf("// version %d\narg_0\n", AssemblerMaxVersion)
+	sample := fmt.Sprintf("#pragma version %d\narg_0\n", AssemblerMaxVersion)
 	ops, err := AssembleStringWithVersion(sample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(ops.Program))
@@ -1122,24 +1157,40 @@ func TestDisassembleSingleOp(t *testing.T) {
 	require.Equal(t, sample, disassembled)
 }
 
+func TestDisassembleInt(t *testing.T) {
+	t.Parallel()
+	txnSample := fmt.Sprintf("#pragma version %d\nint 17\nint 27\nint 37\nint 47\nint 5\n", AssemblerMaxVersion)
+	ops := testProg(t, txnSample, AssemblerMaxVersion)
+	disassembled, err := Disassemble(ops.Program)
+	require.NoError(t, err)
+	// Would ne nice to check that these appear in the
+	// disassembled output in the right order, but I don't want to
+	// hardcode checks that they are in certain intc slots.
+	require.Contains(t, disassembled, "// 17")
+	require.Contains(t, disassembled, "// 27")
+	require.Contains(t, disassembled, "// 37")
+	require.Contains(t, disassembled, "// 47")
+	require.Contains(t, disassembled, "// 5")
+}
+
 func TestDisassembleTxna(t *testing.T) {
 	t.Parallel()
 	// check txn and txna are properly disassembled
-	txnSample := fmt.Sprintf("// version %d\ntxn Sender\n", AssemblerMaxVersion)
+	txnSample := fmt.Sprintf("#pragma version %d\ntxn Sender\n", AssemblerMaxVersion)
 	ops, err := AssembleStringWithVersion(txnSample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err := Disassemble(ops.Program)
 	require.NoError(t, err)
 	require.Equal(t, txnSample, disassembled)
 
-	txnaSample := fmt.Sprintf("// version %d\ntxna Accounts 0\n", AssemblerMaxVersion)
+	txnaSample := fmt.Sprintf("#pragma version %d\ntxna Accounts 0\n", AssemblerMaxVersion)
 	ops, err = AssembleStringWithVersion(txnaSample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)
 	require.NoError(t, err)
 	require.Equal(t, txnaSample, disassembled)
 
-	txnSample2 := fmt.Sprintf("// version %d\ntxn Accounts 0\n", AssemblerMaxVersion)
+	txnSample2 := fmt.Sprintf("#pragma version %d\ntxn Accounts 0\n", AssemblerMaxVersion)
 	ops, err = AssembleStringWithVersion(txnSample2, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)
@@ -1151,21 +1202,21 @@ func TestDisassembleTxna(t *testing.T) {
 func TestDisassembleGtxna(t *testing.T) {
 	t.Parallel()
 	// check gtxn and gtxna are properly disassembled
-	gtxnSample := fmt.Sprintf("// version %d\ngtxn 0 Sender\n", AssemblerMaxVersion)
+	gtxnSample := fmt.Sprintf("#pragma version %d\ngtxn 0 Sender\n", AssemblerMaxVersion)
 	ops, err := AssembleStringWithVersion(gtxnSample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err := Disassemble(ops.Program)
 	require.NoError(t, err)
 	require.Equal(t, gtxnSample, disassembled)
 
-	gtxnaSample := fmt.Sprintf("// version %d\ngtxna 0 Accounts 0\n", AssemblerMaxVersion)
+	gtxnaSample := fmt.Sprintf("#pragma version %d\ngtxna 0 Accounts 0\n", AssemblerMaxVersion)
 	ops, err = AssembleStringWithVersion(gtxnaSample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)
 	require.NoError(t, err)
 	require.Equal(t, gtxnaSample, disassembled)
 
-	gtxnSample2 := fmt.Sprintf("// version %d\ngtxn 0 Accounts 0\n", AssemblerMaxVersion)
+	gtxnSample2 := fmt.Sprintf("#pragma version %d\ngtxn 0 Accounts 0\n", AssemblerMaxVersion)
 	ops, err = AssembleStringWithVersion(gtxnSample2, AssemblerMaxVersion)
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)
@@ -1180,9 +1231,9 @@ func TestDisassembleLastLabel(t *testing.T) {
 	// starting from TEAL v2 branching to the last line are legal
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			source := fmt.Sprintf(`// version %d
+			source := fmt.Sprintf(`#pragma version %d
 intcblock 1
-intc_0
+intc_0 // 1
 bnz label1
 label1:
 `, v)

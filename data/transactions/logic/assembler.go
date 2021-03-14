@@ -1389,6 +1389,9 @@ type disassembleState struct {
 
 	nextpc int
 	err    error
+
+	intConstants  []uint64
+	byteConstants [][]byte
 }
 
 func (dis *disassembleState) putLabel(label string, target int) {
@@ -1585,12 +1588,41 @@ func disIntcblock(dis *disassembleState, spec *OpSpec) {
 		return
 	}
 	for _, iv := range intc {
+		dis.intConstants = append(dis.intConstants, iv)
 		_, dis.err = fmt.Fprintf(dis.out, " %d", iv)
 		if dis.err != nil {
 			return
 		}
 	}
 	_, dis.err = dis.out.Write([]byte("\n"))
+}
+
+func disIntc(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + spec.Details.Size - 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
+	dis.nextpc = dis.pc + spec.Details.Size
+	var b uint
+	switch spec.Opcode {
+	case 0x22:
+		b = 0
+		_, dis.err = fmt.Fprintf(dis.out, "intc_%d // %d\n", b, dis.intConstants[b])
+	case 0x23:
+		b = 1
+		_, dis.err = fmt.Fprintf(dis.out, "intc_%d // %d\n", b, dis.intConstants[b])
+	case 0x24:
+		b = 2
+		_, dis.err = fmt.Fprintf(dis.out, "intc_%d // %d\n", b, dis.intConstants[b])
+	case 0x25:
+		b = 3
+		_, dis.err = fmt.Fprintf(dis.out, "intc_%d // %d\n", b, dis.intConstants[b])
+	case 0x21:
+		b = uint(dis.program[dis.pc+1])
+		_, dis.err = fmt.Fprintf(dis.out, "intc %d // %d\n", b, dis.intConstants[b])
+	}
 }
 
 func disBytecblock(dis *disassembleState, spec *OpSpec) {
@@ -1604,12 +1636,64 @@ func disBytecblock(dis *disassembleState, spec *OpSpec) {
 		return
 	}
 	for _, bv := range bytec {
+		dis.byteConstants = append(dis.byteConstants, bv)
 		_, dis.err = fmt.Fprintf(dis.out, " 0x%s", hex.EncodeToString(bv))
 		if dis.err != nil {
 			return
 		}
 	}
 	_, dis.err = dis.out.Write([]byte("\n"))
+}
+
+func allPrintableAscii(bytes []byte) bool {
+	for _, b := range bytes {
+		if b < 32 || b > 126 {
+			return false
+		}
+	}
+	return true
+}
+func guessByteFormat(bytes []byte) string {
+	var short basics.Address
+
+	if len(bytes) == len(short) {
+		copy(short[:], bytes[:])
+		return fmt.Sprintf("addr %s", short.String())
+	}
+	if allPrintableAscii(bytes) {
+		return fmt.Sprintf("\"%s\"", string(bytes))
+	}
+	return "0x" + hex.EncodeToString(bytes)
+}
+
+func disBytec(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + spec.Details.Size - 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
+	dis.nextpc = dis.pc + spec.Details.Size
+	var suffix string
+	var b uint
+	switch spec.Opcode {
+	case 0x28:
+		suffix = "_0"
+		b = 0
+	case 0x29:
+		suffix = "_1"
+		b = 1
+	case 0x2a:
+		suffix = "_2"
+		b = 2
+	case 0x2b:
+		suffix = "_3"
+		b = 3
+	case 0x27:
+		b = uint(dis.program[dis.pc+1])
+		suffix = fmt.Sprintf(" %d", b)
+	}
+	_, dis.err = fmt.Fprintf(dis.out, "bytec%s // %s\n", suffix, guessByteFormat(dis.byteConstants[b]))
 }
 
 func disPushInt(dis *disassembleState, spec *OpSpec) {
@@ -1809,7 +1893,7 @@ func disassembleInstrumented(program []byte) (text string, ds disInfo, err error
 		text = out.String()
 		return
 	}
-	fmt.Fprintf(dis.out, "// version %d\n", version)
+	fmt.Fprintf(dis.out, "#pragma version %d\n", version)
 	dis.pc = vlen
 	for dis.pc < len(program) {
 		err = dis.outputLabelIfNeeded()
