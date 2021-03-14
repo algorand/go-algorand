@@ -2179,6 +2179,39 @@ func catchpointRoundToPath(rnd basics.Round) string {
 	return outStr
 }
 
+// This function remove a single catchpoint file from the disk. this funcion does not leave empty directories
+func (au *accountUpdates) removeSingleCatchpointFileFromDisk(round basics.Round, fileToDelete string) (err error) {
+	absCatchpointFileName := filepath.Join(au.dbDirectory, fileToDelete)
+	err = os.Remove(absCatchpointFileName)
+	if err == nil || os.IsNotExist(err) {
+		// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
+		err = nil
+	} else {
+		// we can't delete the file, abort -
+		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+	}
+	// we check if the catchpoint dir is empty. if it is, we need to delete the dir as well.
+	catchpointRootDir := filepath.Join(au.dbDirectory, catchpointDirName)
+	currentCatchpointDir := filepath.Dir(absCatchpointFileName)
+
+	for currentCatchpointDir != catchpointRootDir {
+
+		filesInCatchupDir, err := os.ReadDir(currentCatchpointDir)
+		if err != nil {
+			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", currentCatchpointDir, err)
+		}
+		if len(filesInCatchupDir) == 0 {
+			err = os.Remove(currentCatchpointDir)
+			if err != nil {
+				return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", currentCatchpointDir, err)
+			}
+		}
+
+		currentCatchpointDir = filepath.Dir(currentCatchpointDir)
+	}
+	return nil
+}
+
 // saveCatchpointFile stores the provided fileName as the stored catchpoint for the given round.
 // after a successful insert operation to the database, it would delete up to 2 old entries, as needed.
 // deleting 2 entries while inserting single entry allow us to adjust the size of the backing storage and have the
@@ -2206,39 +2239,14 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 		return fmt.Errorf("unable to delete catchpoint file, getOldestCatchpointFiles failed : %v", err)
 	}
 	for round, fileToDelete := range filesToDelete {
-		absCatchpointFileName := filepath.Join(au.dbDirectory, fileToDelete)
-		err = os.Remove(absCatchpointFileName)
-		if err == nil || os.IsNotExist(err) {
-			// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
-			err = nil
-		} else {
-			// we can't delete the file, abort -
-			return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+		err = au.accountsq.storeCatchpoint(context.Background(), round, "", "", 0)
+		if err != nil {
+			return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
 		}
-		// we check if the catchpoint dir is empty. if it is, we need to delete the dir as well.
-		catchpointRootDir := filepath.Join(au.dbDirectory, catchpointDirName)
-		currentCatchpointDir := filepath.Dir(absCatchpointFileName)
-
-		for currentCatchpointDir != catchpointRootDir {
-
-			filesInCatchupDir, err := os.ReadDir(currentCatchpointDir)
-			if err != nil {
-				return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", currentCatchpointDir, err)
-			}
-			if len(filesInCatchupDir) == 0 {
-				err = os.Remove(currentCatchpointDir)
-				if err != nil {
-					return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", currentCatchpointDir, err)
-				}
-			}
-
-			err = au.accountsq.storeCatchpoint(context.Background(), round, "", "", 0)
-			if err != nil {
-				return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
-			}
-			currentCatchpointDir = filepath.Dir(currentCatchpointDir)
+		err = au.removeSingleCatchpointFileFromDisk(round, fileToDelete)
+		if err != nil {
+			return err
 		}
-
 	}
 	return
 }
