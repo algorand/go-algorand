@@ -147,9 +147,6 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
 			metaMessage.message.TxnBloomFilter = metaMessage.filter.encode()
 			bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()
-			if s.isRelay && s.lastBloomFilter.containedTxnsRange.transactionsCount != metaMessage.filter.containedTxnsRange.transactionsCount {
-				s.log.Debugf("relay made bloom filter with %d entries", len(pendingTransactions.pendingTransactionsGroups))
-			}
 		}
 		s.lastBloomFilter = metaMessage.filter
 	}

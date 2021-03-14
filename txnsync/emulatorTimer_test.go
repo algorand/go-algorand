@@ -31,18 +31,21 @@ type guidedClock struct {
 	adv        time.Duration
 	timers     map[time.Duration]chan time.Time
 	children   []*guidedClock
+	emulator   *emulator
 }
 
-func makeGuidedClock() *guidedClock {
+func makeGuidedClock(e *emulator) *guidedClock {
 	return &guidedClock{
-		zero: time.Now(),
+		zero:     time.Now(),
+		emulator: e,
 	}
 }
 func (g *guidedClock) Zero() timers.Clock {
 	// the real monotonic clock doesn't return the same clock object, which is fine.. but for our testing
 	// we want to keep the same clock object so that we can tweak with it.
 	child := &guidedClock{
-		zero: g.zero.Add(g.adv),
+		zero:     g.zero.Add(g.adv),
+		emulator: g.emulator,
 	}
 	g.Lock()
 	defer g.Unlock()
@@ -82,7 +85,10 @@ func (g *guidedClock) Since() time.Duration {
 }
 
 func (g *guidedClock) DeadlineMonitorAt(at time.Duration) timers.DeadlineMonitor {
-	return timers.MakeMonotonicDeadlineMonitor(g, at)
+	return &guidedDeadlineMonitor{
+		clock:      g,
+		expiration: at,
+	}
 }
 
 func (g *guidedClock) Advance(adv time.Duration) {
@@ -118,4 +124,26 @@ func (g *guidedClock) Advance(adv time.Duration) {
 	for _, child := range g.children {
 		child.Advance(adv)
 	}
+}
+
+type guidedDeadlineMonitor struct {
+	clock      *guidedClock
+	expiration time.Duration
+	expired    bool
+}
+
+// Expired return true if the deadline has passed, or false otherwise.
+func (m *guidedDeadlineMonitor) Expired() bool {
+	if m.expired {
+		return true
+	}
+
+	// adjust the clock's advance , so that we can emulate more time passing
+	// on each Expired query. On "real" clock, this wouldn't be the case, of course.
+	m.clock.adv += m.clock.emulator.scenario.messageAssemblyDuration
+
+	if m.clock.Since() >= m.expiration {
+		m.expired = true
+	}
+	return m.expired
 }

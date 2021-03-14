@@ -49,6 +49,7 @@ type syncState struct {
 	outgoingMessagesCallbackCh chan *messageSentCallback
 	nextOffsetRollingCh        <-chan time.Time
 	requestsOffset             uint64
+	throttler                  *throttler
 
 	// The lastBloomFilter allows us to share the same bloom filter across multiples messages,
 	// and compute it only once. Since this bloom filter could contain many hashes ( especially on relays )
@@ -63,6 +64,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	s.node.NotifyMonitor()
 
 	s.clock = s.node.Clock()
+	s.throttler = makeThrottler(s.clock, 50, time.Millisecond/10, 10*time.Millisecond)
 	s.incomingMessagesCh = make(chan incomingMessage, 1024)
 	s.outgoingMessagesCallbackCh = make(chan *messageSentCallback, 1024)
 	s.interruptablePeersMap = make(map[*Peer]int)
@@ -73,6 +75,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 
 	externalEvents := s.node.Events()
 	var nextPeerStateCh <-chan time.Time
+	s.throttler.workStarts()
 	for {
 		nextPeerStateTime := s.scheduler.nextDuration()
 		if nextPeerStateTime != time.Duration(0) {
@@ -107,8 +110,10 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 		default:
 		}
 
+		s.throttler.workEnds()
 		select {
 		case ent := <-externalEvents:
+			s.throttler.workStarts()
 			switch ent.eventType {
 			case transactionPoolChangedEvent:
 				s.onTransactionPoolChangedEvent(ent)
@@ -116,16 +121,21 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 				s.onNewRoundEvent(ent)
 			}
 		case <-nextPeerStateCh:
+			s.throttler.workStarts()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 		case incomingMsg := <-s.incomingMessagesCh:
+			s.throttler.workStarts()
 			s.evaluateIncomingMessage(incomingMsg)
 		case msgSent := <-s.outgoingMessagesCallbackCh:
+			s.throttler.workStarts()
 			s.evaluateOutgoingMessage(msgSent)
 		case <-s.nextOffsetRollingCh:
+			s.throttler.workStarts()
 			s.rollOffsets()
 		case <-serviceCtx.Done():
 			return
 		case <-s.node.NotifyMonitor():
+			s.throttler.workStarts()
 		}
 	}
 }
@@ -152,7 +162,8 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 	// reset the interruptablePeers array, since all it's members were made into holdsoff
 	s.interruptablePeers = nil
 	s.interruptablePeersMap = make(map[*Peer]int)
-	deadlineMonitor := s.clock.DeadlineMonitorAt(s.clock.Since() + sendMessagesTime)
+
+	deadlineMonitor := s.throttler.getWindowDeadlineMonitor()
 	s.sendMessageLoop(s.clock.Since(), deadlineMonitor, peers)
 
 	currentTimeout := s.clock.Since()
@@ -201,7 +212,7 @@ func (s *syncState) onNewRoundEvent(ent Event) {
 }
 
 func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
-	peers := s.scheduler.nextPeers()
+	peers := s.scheduler.nextPeers(s.throttler.getWindow())
 	if len(peers) == 0 {
 		return
 	}
@@ -231,7 +242,7 @@ func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
 	}
 
 	peers = peers[:sendMessagePeers]
-	deadlineMonitor := s.clock.DeadlineMonitorAt(currentTimeout + sendMessagesTime)
+	deadlineMonitor := s.throttler.getWindowDeadlineMonitor()
 	s.sendMessageLoop(currentTimeout, deadlineMonitor, peers)
 }
 
@@ -253,8 +264,7 @@ func (s *syncState) rollOffsets() {
 
 	// check when each of these peers is expected to send a message. we might want to promote a message to be sent earlier.
 	currentTimeOffset := s.clock.Since()
-	deadlineMonitor := s.clock.DeadlineMonitorAt(currentTimeOffset + sendMessagesTime)
-
+	deadlineMonitor := s.throttler.getWindowDeadlineMonitor()
 	for _, peer := range peers {
 		nextSchedule := s.scheduler.peerDuration(peer)
 		if nextSchedule == 0 {

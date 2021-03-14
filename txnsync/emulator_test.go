@@ -53,11 +53,12 @@ type initialTransactionsAllocation struct {
 // initial transaction distribution, test duration, dynamic transactions creation as well
 // as expected test outcomes.
 type scenario struct {
-	netConfig       networkConfiguration
-	testDuration    time.Duration
-	step            time.Duration
-	initialAlloc    []initialTransactionsAllocation
-	expectedResults emulatorResult
+	netConfig               networkConfiguration
+	testDuration            time.Duration
+	step                    time.Duration
+	messageAssemblyDuration time.Duration
+	initialAlloc            []initialTransactionsAllocation
+	expectedResults         emulatorResult
 }
 
 func TestEmulatedTrivialTransactionsExchange(t *testing.T) {

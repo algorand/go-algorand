@@ -110,7 +110,7 @@ func emulateScenario(t *testing.T, scenario scenario) {
 }
 
 func (e *emulator) run() {
-	guidedClock := makeGuidedClock()
+	guidedClock := makeGuidedClock(e)
 	lastRoundStarted := guidedClock.Since()
 	e.clock = guidedClock
 	e.start()
