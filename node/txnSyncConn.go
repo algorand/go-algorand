@@ -131,16 +131,22 @@ func (tsnc *transcationSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 	if unicastPeer == nil {
 		return
 	}
-	var callbackError error
+
 	if err := unicastPeer.Unicast(msg, protocol.Txn2Tag, func(enqueued bool, sequenceNumber uint64) {
-		callbackError = callback(enqueued, sequenceNumber)
+		callbackError := callback(enqueued, sequenceNumber)
+		if callbackError != nil {
+			// disconnect on a separate go routine, since we don't want to disconnect from the
+			// network-callback go-routine.
+			go tsnc.node.net.Disconnect(unicastPeer)
+		}
 	}); err != nil {
-		callbackError = callback(false, 0)
+		callbackError := callback(false, 0)
+		if callbackError != nil {
+			// disconnect from peer - the transaction sync wasn't able to process message sending confirmation
+			tsnc.node.net.Disconnect(unicastPeer)
+		}
 	}
-	if callbackError != nil {
-		// disconnect from peer - the transaction sync wasn't able to process message sending confirmation
-		tsnc.node.net.Disconnect(unicastPeer)
-	}
+
 }
 
 // TODO : add description.
