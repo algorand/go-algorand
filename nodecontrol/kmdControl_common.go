@@ -16,19 +16,18 @@
 
 // +build !windows
 
-package util
+package nodecontrol
 
 import (
 	"os"
-	"syscall"
+
+	"github.com/algorand/go-algorand/logging"
 )
 
-// FindProcess looks for a running process by its pid
-func FindProcess(pid int) (*os.Process, error) {
-	return os.FindProcess(pid)
-}
-
-// KillProcess kills a running OS process
-func KillProcess(pid int, sig syscall.Signal) error {
-	return syscall.Kill(pid, sig)
+func (kc *KMDController) isDirectorySafe(dirStats os.FileInfo) bool {
+	if (dirStats.Mode() & 0077) != 0 {
+		logging.Base().Errorf("%s: kmd data dir exists but is too permissive (%o), change to (%o)", kc.kmdDataDir, dirStats.Mode()&0777, DefaultKMDDataDirPerms)
+		return false
+	}
+	return true
 }

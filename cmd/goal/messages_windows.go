@@ -14,21 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// +build !windows
+package main
 
-package util
-
-import (
-	"os"
-	"syscall"
+const (
+	// Wallet
+	infoBackupPhrase = "\n%s"
 )
-
-// FindProcess looks for a running process by its pid
-func FindProcess(pid int) (*os.Process, error) {
-	return os.FindProcess(pid)
-}
-
-// KillProcess kills a running OS process
-func KillProcess(pid int, sig syscall.Signal) error {
-	return syscall.Kill(pid, sig)
-}

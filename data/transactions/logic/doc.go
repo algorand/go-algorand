@@ -65,52 +65,65 @@ var opDocList = []stringString{
 	{"~", "bitwise invert value X"},
 	{"mulw", "A times B out to 128-bit long result as low (top) and high uint64 values on the stack"},
 	{"addw", "A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack"},
-	{"intcblock", "load block of uint64 constants"},
-	{"intc", "push value from uint64 constants to stack by index into constants"},
+	{"intcblock", "prepare block of uint64 constants for use by intc"},
+	{"intc", "push Ith constant from intcblock to stack"},
 	{"intc_0", "push constant 0 from intcblock to stack"},
 	{"intc_1", "push constant 1 from intcblock to stack"},
 	{"intc_2", "push constant 2 from intcblock to stack"},
 	{"intc_3", "push constant 3 from intcblock to stack"},
-	{"bytecblock", "load block of byte-array constants"},
-	{"bytec", "push bytes constant to stack by index into constants"},
+	{"pushint", "push immediate UINT to the stack as an integer"},
+	{"bytecblock", "prepare block of byte-array constants for use by bytec"},
+	{"bytec", "push Ith constant from bytecblock to stack"},
 	{"bytec_0", "push constant 0 from bytecblock to stack"},
 	{"bytec_1", "push constant 1 from bytecblock to stack"},
 	{"bytec_2", "push constant 2 from bytecblock to stack"},
 	{"bytec_3", "push constant 3 from bytecblock to stack"},
-	{"arg", "push Args[N] value to stack by index"},
-	{"arg_0", "push Args[0] to stack"},
-	{"arg_1", "push Args[1] to stack"},
-	{"arg_2", "push Args[2] to stack"},
-	{"arg_3", "push Args[3] to stack"},
-	{"txn", "push field from current transaction to stack"},
-	{"gtxn", "push field to the stack from a transaction in the current transaction group"},
-	{"txna", "push value of an array field from current transaction to stack"},
-	{"gtxna", "push value of a field to the stack from a transaction in the current transaction group"},
+	{"pushbytes", "push the following program bytes to the stack"},
+	{"arg", "push Nth LogicSig argument to stack"},
+	{"arg_0", "push LogicSig argument 0 to stack"},
+	{"arg_1", "push LogicSig argument 1 to stack"},
+	{"arg_2", "push LogicSig argument 2 to stack"},
+	{"arg_3", "push LogicSig argument 3 to stack"},
+	{"txn", "push field F of current transaction to stack"},
+	{"gtxn", "push field F of the Tth transaction in the current group"},
+	{"gtxns", "push field F of the Ath transaction in the current group"},
+	{"txna", "push Ith value of the array field F of the current transaction"},
+	{"gtxna", "push Ith value of the array field F from the Tth transaction in the current group"},
+	{"gtxnsa", "push Ith value of the array field F from the Ath transaction in the current group"},
 	{"global", "push value from globals to stack"},
 	{"load", "copy a value from scratch space to the stack"},
 	{"store", "pop a value from the stack and store to scratch space"},
-	{"bnz", "branch if value X is not zero"},
-	{"bz", "branch if value X is zero"},
-	{"b", "branch unconditionally to offset"},
+	{"bnz", "branch to TARGET if value X is not zero"},
+	{"bz", "branch to TARGET if value X is zero"},
+	{"b", "branch unconditionally to TARGET"},
 	{"return", "use last value on stack as success value; end"},
 	{"pop", "discard value X from stack"},
 	{"dup", "duplicate last value on stack"},
 	{"dup2", "duplicate two last values on stack: A, B -> A, B, A, B"},
-	{"concat", "pop two byte strings A and B and join them, push the result"},
-	{"substring", "pop a byte string X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the string length, the program fails"},
-	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the string length, the program fails"},
-	{"balance", "get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender"},
+	{"dig", "push the Nth value from the top of the stack. dig 0 is equivalent to dup"},
+	{"swap", "swaps two last values on stack: A, B -> B, A"},
+	{"select", "selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A)"},
+	{"concat", "pop two byte-arrays A and B and join them, push the result"},
+	{"substring", "pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails"},
+	{"substring3", "pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails"},
+	{"getbit", "pop a target A (integer or byte-array), and index B. Push the Bth bit of A."},
+	{"setbit", "pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result"},
+	{"getbyte", "pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer"},
+	{"setbyte", "pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result"},
+	{"balance", "get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted."},
+	{"min_balance", "get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes."},
 	{"app_opted_in", "check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1}"},
 	{"app_local_get", "read from account specified by Txn.Accounts[A] from local state of the current application key B => value"},
-	{"app_local_get_ex", "read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value}"},
+	{"app_local_get_ex", "read from account specified by Txn.Accounts[A] from local state of the application B key C => [*... stack*, value, 0 or 1]"},
 	{"app_global_get", "read key A from global state of a current application => value"},
-	{"app_global_get_ex", "read from application Txn.ForeignApps[A] global state key B => {0 or 1 (top), value}. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app"},
+	{"app_global_get_ex", "read from application Txn.ForeignApps[A] global state key B => [*... stack*, value, 0 or 1]. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app"},
 	{"app_local_put", "write to account specified by Txn.Accounts[A] to local state of a current application key B with value C"},
 	{"app_global_put", "write key A and value B to global state of the current application"},
 	{"app_local_del", "delete from account specified by Txn.Accounts[A] local state key B of the current application"},
 	{"app_global_del", "delete key A from a global state of the current application"},
 	{"asset_holding_get", "read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}"},
 	{"asset_params_get", "read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value}"},
+	{"assert", "immediately fail unless value X is a non-zero number"},
 }
 
 var opDocByName map[string]string
@@ -127,20 +140,25 @@ func OpDoc(opName string) string {
 var opcodeImmediateNoteList = []stringString{
 	{"intcblock", "{varuint length} [{varuint value}, ...]"},
 	{"intc", "{uint8 int constant index}"},
+	{"pushint", "{varuint int}"},
 	{"bytecblock", "{varuint length} [({varuint value length} bytes), ...]"},
 	{"bytec", "{uint8 byte constant index}"},
+	{"pushbytes", "{varuint length} {bytes}"},
 	{"arg", "{uint8 arg index N}"},
 	{"txn", "{uint8 transaction field index}"},
-	{"gtxn", "{uint8 transaction group index}{uint8 transaction field index}"},
-	{"txna", "{uint8 transaction field index}{uint8 transaction field array index}"},
-	{"gtxna", "{uint8 transaction group index}{uint8 transaction field index}{uint8 transaction field array index}"},
+	{"gtxn", "{uint8 transaction group index} {uint8 transaction field index}"},
+	{"gtxns", "{uint8 transaction field index}"},
+	{"txna", "{uint8 transaction field index} {uint8 transaction field array index}"},
+	{"gtxna", "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}"},
+	{"gtxnsa", "{uint8 transaction field index} {uint8 transaction field array index}"},
 	{"global", "{uint8 global field index}"},
 	{"bnz", "{0..0x7fff forward branch offset, big endian}"},
 	{"bz", "{0..0x7fff forward branch offset, big endian}"},
 	{"b", "{0..0x7fff forward branch offset, big endian}"},
 	{"load", "{uint8 position in scratch space to load from}"},
 	{"store", "{uint8 position in scratch space to store to}"},
-	{"substring", "{uint8 start position}{uint8 end position}"},
+	{"substring", "{uint8 start position} {uint8 end position}"},
+	{"dig", "{uint8 depth}"},
 	{"asset_holding_get", "{uint8 asset holding field index}"},
 	{"asset_params_get", "{uint8 asset params field index}"},
 }
@@ -161,18 +179,21 @@ var opDocExtraList = []stringString{
 	{"bz", "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`."},
 	{"b", "See `bnz` for details on how branches work. `b` always jumps to the offset."},
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script."},
-	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script."},
+	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte-array constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script."},
 	{"*", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`."},
 	{"+", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`."},
 	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
 	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`."},
+	{"gtxns", "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction."},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes."},
 	{"concat", "`concat` panics if the result would be greater than 4096 bytes."},
+	{"getbit", "see explanation of bit ordering in setbit"},
+	{"setbit", "bit indexing begins with low-order bits in integers. Setting bit 4 to 1 on the integer 0 yields 16 (`int 0x0010`, or 2^4). Indexing begins in the first bytes of a byte-string (as seen in getbyte and substring). Setting bits 0 through 11 to 1 in a 4 byte-array of 0s yields `byte 0xfff00000`"},
 	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise."},
-	{"app_local_get", "params: account index, state key. Return: value. The value is zero if the key does not exist."},
-	{"app_local_get_ex", "params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value."},
-	{"app_global_get_ex", "params: application index, state key. Return: value. Application index is"},
-	{"app_global_get", "params: state key. Return: value. The value is zero if the key does not exist."},
+	{"app_local_get", "params: account index, state key. Return: value. The value is zero (of type uint64) if the key does not exist."},
+	{"app_local_get_ex", "params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist."},
+	{"app_global_get_ex", "params: application index, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist."},
+	{"app_global_get", "params: state key. Return: value. The value is zero (of type uint64) if the key does not exist."},
 	{"app_local_put", "params: account index, state key, value."},
 	{"app_local_del", "params: account index, state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)"},
 	{"app_global_del", "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)"},
@@ -199,26 +220,21 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "concat", "substring", "substring3"}},
-	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
-	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2"}},
-	{"State Access", []string{"balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
-}
-
-// OpCost returns the relative cost score for an op
-func OpCost(opName string) int {
-	return opsByName[LogicVersion][opName].opSize.cost
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"}},
+	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store"}},
+	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert"}},
+	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 
 // OpAllCosts returns an array of the relative cost score for an op by version.
 // If all the costs are the same the array is single entry
 // otherwise it has costs by op version
 func OpAllCosts(opName string) []int {
-	cost := opsByName[LogicVersion][opName].opSize.cost
+	cost := OpsByName[LogicVersion][opName].Details.Cost
 	costs := make([]int, LogicVersion+1)
 	isDifferent := false
 	for v := 1; v <= LogicVersion; v++ {
-		costs[v] = opsByName[v][opName].opSize.cost
+		costs[v] = OpsByName[v][opName].Details.Cost
 		if costs[v] > 0 && costs[v] != cost {
 			isDifferent = true
 		}
@@ -228,11 +244,6 @@ func OpAllCosts(opName string) []int {
 	}
 
 	return costs
-}
-
-// OpSize returns the number of bytes for an op. 0 for variable.
-func OpSize(opName string) int {
-	return opsByName[LogicVersion][opName].opSize.size
 }
 
 // see assembler.go TxnTypeNames
@@ -307,6 +318,14 @@ var txnFieldDocList = []stringString{
 	{"NumAppArgs", "Number of ApplicationArgs"},
 	{"Accounts", "Accounts listed in the ApplicationCall transaction"},
 	{"NumAccounts", "Number of Accounts"},
+	{"Assets", "Foreign Assets listed in the ApplicationCall transaction"},
+	{"NumAssets", "Number of Assets"},
+	{"Applications", "Foreign Apps listed in the ApplicationCall transaction"},
+	{"NumApplications", "Number of Applications"},
+	{"GlobalNumUint", "Number of global state integers in ApplicationCall"},
+	{"GlobalNumByteSlice", "Number of global state byteslices in ApplicationCall"},
+	{"LocalNumUint", "Number of local state integers in ApplicationCall"},
+	{"LocalNumByteSlice", "Number of local state byteslices in ApplicationCall"},
 	{"ApprovalProgram", "Approval program"},
 	{"ClearStateProgram", "Clear state program"},
 	{"RekeyTo", "32 byte Sender's new AuthAddr"},
@@ -345,6 +364,7 @@ var globalFieldDocList = []stringString{
 	{"Round", "Current round number"},
 	{"LatestTimestamp", "Last confirmed block UNIX timestamp. Fails if negative"},
 	{"CurrentApplicationID", "ID of current application executing. Fails if no such application is executing"},
+	{"CreatorAddress", "Address of the creator of the current application. Fails if no such application is executing"},
 }
 
 // globalFieldDocs are notes on fields available in `global`
