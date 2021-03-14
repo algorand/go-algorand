@@ -25,6 +25,7 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -882,30 +883,42 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 
-	dummyCatchpointFilesToCreate := 42
+	const dummyCatchpointFilesToCreate = 43
+	const catchpointDir string = "./catchpoints"
 
+	dummyCatchpointFiles := make([]string, dummyCatchpointFilesToCreate)
 	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
-		f, err := os.Create(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		file := fmt.Sprintf("./%v/%v/%v/dummy_catchpoint_file-%d", catchpointDir, i/10, i/2, i)
+		dummyCatchpointFiles[i] = file
+		err := os.MkdirAll(path.Dir(file), 0755)
+		require.NoError(t, err)
+		f, err := os.Create(file)
 		require.NoError(t, err)
 		err = f.Close()
 		require.NoError(t, err)
-	}
-
-	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
-		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
+		err = au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), file, "", 0)
 		require.NoError(t, err)
 	}
+
+	defer func() {
+		os.RemoveAll(catchpointDir)
+	}()
+
 	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
 	require.NoError(t, err)
 
-	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
-		// ensure that all the files were deleted.
-		_, err := os.Open(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+	// ensure that all the files were deleted.
+	for _, file := range dummyCatchpointFiles {
+		_, err := os.Open(file)
 		require.True(t, os.IsNotExist(err))
 	}
+
 	fileNames, err := au.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
+
+	_, err = os.Open(catchpointDir)
+	require.True(t, os.IsNotExist(err))
 }
 
 func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
@@ -921,14 +934,17 @@ func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 
 func hasEmptyDir(catchpointDir string) (bool, error) {
 	emptyDirFound := false
-	err := filepath.WalkDir(catchpointDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	err := filepath.WalkDir(catchpointDir, func(path string, d fs.DirEntry, funcErr error) error {
+		if funcErr != nil {
+			return funcErr
 		}
 		if !d.IsDir() {
 			return nil
 		}
 		files, err := ioutil.ReadDir(path)
+		if err != nil {
+			return err
+		}
 		if len(files) == 0 {
 			emptyDirFound = true
 		}

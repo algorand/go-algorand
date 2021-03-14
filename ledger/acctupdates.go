@@ -1340,20 +1340,16 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 		}
 
 		for round, fileName := range fileNames {
-			absCatchpointFileName := filepath.Join(au.dbDirectory, fileName)
-			err = os.Remove(absCatchpointFileName)
-			if err == nil || os.IsNotExist(err) {
-				// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
-				err = nil
-			} else {
-				// we can't delete the file, abort -
-				return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
-			}
 			// clear the entry from the database
 			err = dbQueries.storeCatchpoint(ctx, round, "", "", 0)
 			if err != nil {
 				return err
 			}
+			err = au.removeSingleCatchpointFileFromDisk(round, fileName)
+			if err != nil {
+				return err
+			}
+
 		}
 	}
 	return nil
@@ -2191,10 +2187,10 @@ func (au *accountUpdates) removeSingleCatchpointFileFromDisk(round basics.Round,
 		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 	}
 	// we check if the catchpoint dir is empty. if it is, we need to delete the dir as well.
-	catchpointRootDir := filepath.Join(au.dbDirectory, catchpointDirName)
 	currentCatchpointDir := filepath.Dir(absCatchpointFileName)
 
-	for currentCatchpointDir != catchpointRootDir {
+	// this loop also includes the root dir itself
+	for currentCatchpointDir != "." {
 
 		filesInCatchupDir, err := os.ReadDir(currentCatchpointDir)
 		if err != nil {
