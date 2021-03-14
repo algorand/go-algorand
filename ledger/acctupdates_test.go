@@ -917,8 +917,9 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 
-	_, err = os.Open(catchpointDir)
-	require.True(t, os.IsNotExist(err))
+	files, err := ioutil.ReadDir(catchpointDir)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(files))
 }
 
 func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {

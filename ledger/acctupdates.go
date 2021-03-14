@@ -2187,11 +2187,10 @@ func (au *accountUpdates) removeSingleCatchpointFileFromDisk(round basics.Round,
 		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 	}
 	// we check if the catchpoint dir is empty. if it is, we need to delete the dir as well.
+	catchpointRootDir := filepath.Join(au.dbDirectory, catchpointDirName)
 	currentCatchpointDir := filepath.Dir(absCatchpointFileName)
 
-	// this loop also includes the root dir itself
-	for currentCatchpointDir != "." {
-
+	for currentCatchpointDir != catchpointRootDir {
 		filesInCatchupDir, err := os.ReadDir(currentCatchpointDir)
 		if err != nil {
 			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", currentCatchpointDir, err)
@@ -2234,6 +2233,7 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 	if err != nil {
 		return fmt.Errorf("unable to delete catchpoint file, getOldestCatchpointFiles failed : %v", err)
 	}
+
 	for round, fileToDelete := range filesToDelete {
 		err = au.accountsq.storeCatchpoint(context.Background(), round, "", "", 0)
 		if err != nil {
