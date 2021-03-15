@@ -852,7 +852,6 @@ func TestDupFilter(t *testing.T) {
 	assert.Equal(t, 1, counter2.count)
 
 	debugMetrics(t)
-
 }
 
 func TestGetPeers(t *testing.T) {

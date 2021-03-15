@@ -53,7 +53,6 @@ var networkSentBytesByTag = metrics.NewTagCounter("algod_network_sent_bytes_{TAG
 var networkReceivedBytesTotal = metrics.MakeCounter(metrics.NetworkReceivedBytesTotal)
 var networkReceivedBytesByTag = metrics.NewTagCounter("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network per message tag")
 
-
 var networkMessageReceivedTotal = metrics.MakeCounter(metrics.NetworkMessageReceivedTotal)
 var networkMessageReceivedByTag = metrics.NewTagCounter("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network per message tag")
 var networkMessageSentTotal = metrics.MakeCounter(metrics.NetworkMessageSentTotal)
@@ -131,7 +130,7 @@ type Response struct {
 }
 
 type sendMessages struct {
-	msgs  []sendMessage
+	msgs []sendMessage
 }
 
 type wsPeer struct {
