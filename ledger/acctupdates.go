@@ -23,6 +23,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -1220,6 +1222,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
+			case 4:
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1473,6 +1481,72 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 3 to 4: %v", err)
 	}
 	return 4, nil
+}
+
+
+// upgradeDatabaseSchema4 upgrades the database schema from version 4 to version 5,
+// cleaning old empty catchpoint directories.
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	//validate no empty dirs
+	err = removeEmptyDirsOnSchemaUpgrade()
+	if err != nil {
+		return 0, err
+	}
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 5)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 4 to 5: %v", err)
+	}
+	return 5, nil
+}
+
+func  removeEmptyDirsOnSchemaUpgrade() (err error) {
+	f, err := os.Open(catchpointDirName)
+	isNotExists := os.IsNotExist(err)
+	f.Close()
+	if isNotExists {
+		return nil
+	}
+	for {
+		emptyDir, err := GetEmptyDirs()
+		if err != nil {
+			return err
+		}
+		// There are no empty dirs
+		if len(emptyDir) == 0 {
+			break
+		}
+		// only left with the catchpoint root dir
+		if len(emptyDir) == 1 && emptyDir[0] == catchpointDirName {
+			break
+		}
+		for _, emptyDirPath := range emptyDir {
+			os.Remove(emptyDirPath)
+		}
+	}
+	return nil
+}
+
+func GetEmptyDirs() (emptyDir []string, err error) {
+	emptyDir = make([]string, 0)
+	err = filepath.WalkDir(catchpointDirName, func(path string, d fs.DirEntry, errIn error) error {
+		if errIn != nil {
+			return errIn
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		files, err := ioutil.ReadDir(path)
+		if err != nil {
+			return err
+		}
+		if len(files) == 0 {
+			emptyDir = append(emptyDir, path)
+		}
+		return nil
+	})
+	return emptyDir,err
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
