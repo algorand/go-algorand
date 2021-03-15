@@ -342,25 +342,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 		close(completed)
 	}()
 
-	var peerSelector *peerSelector
-	if s.cfg.NetAddress != "" { // Relay node
-		peerSelector = makePeerSelector(
-			s.net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers},
-				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-				{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn},
-			})
-	} else {
-		peerSelector = makePeerSelector(
-			s.net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedOut},
-				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-			})
-	}
+	peerSelector := s.createPeerSelector(true)
+
 	if _, err := peerSelector.GetNextPeer(); err == errPeerSelectorNoPeerPoolsAvailable {
 		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from")
 		return
@@ -571,25 +554,7 @@ func (s *Service) syncCert(cert *PendingUnmatchedCertificate) {
 // TODO this doesn't actually use the digest from cert!
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
-	var peerSelector *peerSelector
-	if s.cfg.NetAddress != "" { // Relay node
-		peerSelector = makePeerSelector(
-			s.net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
-				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-				{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookArchivers},
-			})
-	} else {
-		peerSelector = makePeerSelector(
-			s.net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivers},
-			})
-	}
+	peerSelector := s.createPeerSelector(false)
 	for s.ledger.LastRound() < cert.Round {
 		peer, getPeerErr := peerSelector.GetNextPeer()
 		if getPeerErr != nil {
@@ -687,4 +652,40 @@ func (s *Service) handleUnsupportedRound(nextUnsupportedRound basics.Round) {
 			lr)
 		s.cancel()
 	}
+}
+
+func (s *Service) createPeerSelector(pipelineFetch bool) *peerSelector {
+	var peerClasses []peerClass
+	if pipelineFetch {
+		if s.cfg.NetAddress != "" { // Relay node
+			peerClasses = []peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers},
+				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
+				{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn},
+			}
+		} else {
+			peerClasses = []peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedOut},
+				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
+			}
+		}
+	} else {
+		if s.cfg.NetAddress != "" { // Relay node
+			peerClasses = []peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
+				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
+				{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookArchivers},
+			}
+		} else {
+			peerClasses = []peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivers},
+			}
+		}
+	}
+	return makePeerSelector(s.net, peerClasses)
 }
