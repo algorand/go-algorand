@@ -46,13 +46,18 @@ package require Tcl 8.0
 proc ::AlgorandGoal::Abort { ERROR } {
     puts "Aborting with Error: $ERROR"
 
-    if { "$::GLOBAL_TEST_ALGO_DIR" != "" && "$::GLOBAL_TEST_ROOT_DIR" != "" } {
+    if { [info exists ::GLOBAL_TEST_ROOT_DIR] } {
         # terminate child algod processes, if there are active child processes the test will hang on a test failure
-        puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
         puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
         puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
         ::AlgorandGoal::StopNetwork $::GLOBAL_NETWORK_NAME $::GLOBAL_TEST_ROOT_DIR
     }
+
+    if { [info exists ::GLOBAL_TEST_ALGO_DIR] } {
+        puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
+        ::AlgorandGoal::StopNode $::GLOBAL_TEST_ROOT_DIR
+    }
+
     exit 1
 }
 
