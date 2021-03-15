@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                 15,
+	Version:                                 16,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
 	Archival:                                false,
@@ -41,6 +41,7 @@ var defaultLocal = Local{
 	DNSBootstrapID:                          "<network>.algorand.network",
 	DNSSecurityFlags:                        1,
 	DeadlockDetection:                       0,
+	DisableLocalhostConnectionRateLimit:     true,
 	DisableOutgoingConnectionThrottling:     false,
 	EnableAgreementReporting:                false,
 	EnableAgreementTimeMetrics:              false,
