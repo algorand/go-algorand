@@ -366,6 +366,7 @@ def main():
     ap.add_argument('--keep-temps', default=False, action='store_true', help='if set, keep all the test files')
     ap.add_argument('--timeout', default=500, type=int, help='integer seconds to wait for the scripts to run')
     ap.add_argument('--verbose', default=False, action='store_true')
+    ap.add_argument('--version', default="Future")
     args = ap.parse_args()
 
     if args.verbose:
@@ -392,7 +393,8 @@ def main():
     env['NETDIR'] = netdir
 
     retcode = 0
-    xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, 'test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=90)
+    capv = args.version.capitalize()
+    xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, f'test/testdata/nettemplates/TwoNodes50Each{capv}.json')], timeout=90)
     xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
     atexit.register(goal_network_stop, netdir, env)
 

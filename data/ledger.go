@@ -322,7 +322,7 @@ func (l *Ledger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, er
 		return blockhdr.UpgradeState.CurrentProtocol, nil
 	}
 	// try to see if we can figure out what the version would be.
-	latestRound := l.Latest()
+	latestCommittedRound, latestRound := l.LatestCommitted()
 	// if the request round was for an older round, then just say the we don't know.
 	if r < latestRound {
 		return "", err
@@ -344,7 +344,7 @@ func (l *Ledger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, er
 				return latestBlockhdr.CurrentProtocol, nil
 			}
 			// otherwise, we can't really tell.
-			return "", ledgercore.ErrNoEntry{Round: r, Latest: latestRound, Committed: latestRound}
+			return "", ledgercore.ErrNoEntry{Round: r, Latest: latestRound, Committed: latestCommittedRound}
 		}
 		// in this case, we do have a protocol upgrade taking place.
 		if r < latestBlockhdr.NextProtocolSwitchOn {
@@ -356,7 +356,7 @@ func (l *Ledger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, er
 		if r == latestBlockhdr.NextProtocolSwitchOn && latestBlockhdr.Round >= latestBlockhdr.NextProtocolVoteBefore {
 			return latestBlockhdr.NextProtocol, nil
 		}
-		err = ledgercore.ErrNoEntry{Round: r, Latest: latestRound, Committed: latestRound}
+		err = ledgercore.ErrNoEntry{Round: r, Latest: latestRound, Committed: latestCommittedRound}
 	}
 	// otherwise, we can't really tell what the protocol version would be at round r.
 	return "", err

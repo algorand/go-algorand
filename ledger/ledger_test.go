@@ -362,7 +362,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnRoot = crypto.Digest{}
+	badBlock.BlockHeader.TxnRoot = crypto.Hash([]byte{0})
 	a.Error(l.appendUnvalidated(badBlock), "added block header with empty transaction root")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
@@ -1409,8 +1409,8 @@ func TestLedgerReload(t *testing.T) {
 			require.NoError(t, err)
 
 			// if we reloaded it before it got committed, we need to roll back the round counter.
-			if l.LatestCommitted() != blk.BlockHeader.Round {
-				blk.BlockHeader.Round = l.LatestCommitted()
+			if latestCommitted, _ := l.LatestCommitted(); latestCommitted != blk.BlockHeader.Round {
+				blk.BlockHeader.Round = latestCommitted
 			}
 		}
 		if i%13 == 0 {
