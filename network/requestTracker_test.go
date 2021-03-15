@@ -76,7 +76,7 @@ func TestRateLimiting(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	testConfig := defaultConfig
-	// this test is conducted locally, so we want to treat all hosts the same for counting incoming requests.
+	// This test is conducted locally, so we want to treat all hosts the same for counting incoming requests.
 	testConfig.DisableLocalhostConnectionRateLimit = false
 	wn := &WebsocketNetwork{
 		log:       log,

@@ -26,7 +26,8 @@ The ledger exposes the following functions for managing the blocks:
 
 - `Latest()` returns the last block added to the ledger.
 
-- `LatestCommitted()` returns the last block written to durable storage.
+- `LatestCommitted()` returns the last block written to durable storage
+  as well as the round of the latest block added to the ledger.
 
 - `Block(round)` returns the block for `round`, or `ErrNoEntry` if no
   such block has been added.  Similarly, `BlockCert(round)` will return

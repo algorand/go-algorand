@@ -173,10 +173,10 @@ func (bq *blockQueue) latest() basics.Round {
 	return bq.lastCommitted + basics.Round(len(bq.q))
 }
 
-func (bq *blockQueue) latestCommitted() basics.Round {
+func (bq *blockQueue) latestCommitted() (basics.Round, basics.Round) {
 	bq.mu.Lock()
 	defer bq.mu.Unlock()
-	return bq.lastCommitted
+	return bq.lastCommitted, bq.lastCommitted + basics.Round(len(bq.q))
 }
 
 func (bq *blockQueue) putBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
