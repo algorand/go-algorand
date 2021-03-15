@@ -922,6 +922,49 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	require.Equal(t, 0, len(files))
 }
 
+// The test validate that when algod boots up it cleans empty catchpoint directories.
+// it is done be creating empty directories in the catchpoint root directory.
+// When algod boots up it should remove those directories
+func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	const catchpointDir string = "./catchpoints"
+
+	// creating empty catchpoint directories
+	emptyDirPath := path.Join(catchpointDir, "2f", "e1")
+	err := os.MkdirAll(emptyDirPath, 0755)
+	require.NoError(t, err)
+	emptyDirPath = path.Join(catchpointDir, "2e", "e1")
+	err = os.MkdirAll(emptyDirPath, 0755)
+	require.NoError(t, err)
+	emptyDirPath = path.Join(catchpointDir, "14", "2e", "e1")
+	err = os.MkdirAll(emptyDirPath, 0755)
+	require.NoError(t, err)
+
+	// creating catchpoint file
+	catchpointFilePath := path.Join(catchpointDir, "14", "2e", "e4", "dummy_catchpoint_file")
+	err = os.MkdirAll(path.Dir(catchpointFilePath), 0755)
+	require.NoError(t, err)
+	f, err := os.Create(catchpointFilePath)
+	require.NoError(t, err)
+	f.Close()
+	defer func() {
+		os.RemoveAll(catchpointDir)
+	}()
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
+	defer ml.Close()
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	au.initialize(conf, ".", proto, accts[0])
+	defer au.close()
+
+	err = au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+}
+
 func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 	numberOfCatchpointFiles := 0
 	err := filepath.WalkDir(catchpointDir, func(path string, d fs.DirEntry, err error) error {
