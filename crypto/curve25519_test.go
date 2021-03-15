@@ -104,3 +104,19 @@ func BenchmarkVerify(b *testing.B) {
 		_ = c.Verify(strs[i], sigs[i])
 	}
 }
+
+func BenchmarkVerifyBytes(b *testing.B) {
+	c := makeCurve25519Secret()
+	bytes := make([][]byte, b.N)
+	sigs := make([]Signature, b.N)
+	for i := 0; i < b.N; i++ {
+		str := randString()
+		sigs[i] = c.Sign(str)
+		bytes[i] = hashRep(str)
+	}
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = c.VerifyBytes(bytes[i], sigs[i])
+	}
+}

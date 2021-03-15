@@ -122,7 +122,8 @@ crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 
 crypto/libs/$(OS_TYPE)/$(ARCH)/lib/ed25519-donna.o:
 	mkdir -p crypto/libs/$(OS_TYPE)/$(ARCH)/lib
-	gcc -Wall -std=c99 -DED25519_REFHASH -DED25519_CUSTOMRANDOM -Wno-macro-redefined -Icrypto/ed25519-donna -Wno-incompatible-pointer-types-discards-qualifiers crypto/ed25519-donna/ed25519.c -m64 -O3 -c -o crypto/libs/$(OS_TYPE)/$(ARCH)/lib/ed25519-donna.o -DED25519_SSE2
+	gcc -Wall -std=c99 -DED25519_REFHASH -DED25519_CUSTOMRANDOM -Wno-macro-redefined -Icrypto/ed25519-donna -Wno-incompatible-pointer-types-discards-qualifiers crypto/ed25519-donna/ed25519.c -m64 -O3 -c -o crypto/libs/$(OS_TYPE)/$(ARCH)/lib/ed25519-donna.o
+#	gcc -Wall -std=c99 -DED25519_REFHASH -DED25519_CUSTOMRANDOM -Wno-macro-redefined -Icrypto/ed25519-donna -Wno-incompatible-pointer-types-discards-qualifiers crypto/ed25519-donna/ed25519.c -m64 -O3 -c -o crypto/libs/$(OS_TYPE)/$(ARCH)/lib/ed25519-donna.o -DED25519_SSE2
 
 # crypto_libraries is a phoney target used to be used as a single dependency target
 # for all the crypto libraries.

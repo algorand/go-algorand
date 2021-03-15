@@ -74,3 +74,34 @@ func BenchmarkBatchVerifier(b *testing.B) {
 	b.ResetTimer()
 	require.True(b, bv.Verify())
 }
+
+func BenchmarkVerifyDonna(b *testing.B) {
+	c := makeCurve25519Secret()
+	strs := make([]TestingHashable, b.N)
+	sigs := make([]Signature, b.N)
+	for i := 0; i < b.N; i++ {
+		strs[i] = randString()
+		sigs[i] = c.Sign(strs[i])
+	}
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = VerifyDonna(c.SignatureVerifier, strs[i], sigs[i])
+	}
+}
+
+func BenchmarkVerifyBytesDonna(b *testing.B) {
+	c := makeCurve25519Secret()
+	sigs := make([]Signature, b.N)
+	bytes := make([][]byte, b.N)
+	for i := 0; i < b.N; i++ {
+		str := randString()
+		sigs[i] = c.Sign(str)
+		bytes[i] = hashRep(str)
+	}
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = VerifyBytesDonna(c.SignatureVerifier, bytes[i], sigs[i])
+	}
+}

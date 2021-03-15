@@ -207,3 +207,14 @@ func (b *BatchVerifier) expand() {
 	b.publicKeys = publicKeys
 	b.signatures = signatures
 }
+
+// VerifyDonna bla bla bla
+func VerifyDonna(v SignatureVerifier, message Hashable, sig Signature) bool {
+	msg := hashRep(message)
+	return 1 == C.ed25519_sign_open((*C.uchar)(&msg[0]), C.size_t(len(msg)), (*C.uchar)(&v[0]), (*C.uchar)(&sig[0]))
+}
+
+// VerifyBytesDonna bla bla bla
+func VerifyBytesDonna(v SignatureVerifier, msg []byte, sig Signature) bool {
+	return 1 == C.ed25519_sign_open((*C.uchar)(&msg[0]), C.size_t(len(msg)), (*C.uchar)(&v[0]), (*C.uchar)(&sig[0]))
+}
