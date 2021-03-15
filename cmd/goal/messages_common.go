@@ -16,19 +16,9 @@
 
 // +build !windows
 
-package util
+package main
 
-import (
-	"os"
-	"syscall"
+const (
+	// Wallet
+	infoBackupPhrase = "\n\x1B[32m%s\033[0m"
 )
-
-// FindProcess looks for a running process by its pid
-func FindProcess(pid int) (*os.Process, error) {
-	return os.FindProcess(pid)
-}
-
-// KillProcess kills a running OS process
-func KillProcess(pid int, sig syscall.Signal) error {
-	return syscall.Kill(pid, sig)
-}

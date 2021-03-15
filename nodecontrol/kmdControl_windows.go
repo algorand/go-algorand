@@ -14,21 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// +build !windows
-
-package util
+package nodecontrol
 
 import (
 	"os"
-	"syscall"
 )
 
-// FindProcess looks for a running process by its pid
-func FindProcess(pid int) (*os.Process, error) {
-	return os.FindProcess(pid)
-}
-
-// KillProcess kills a running OS process
-func KillProcess(pid int, sig syscall.Signal) error {
-	return syscall.Kill(pid, sig)
+func (kc *KMDController) isDirectorySafe(_ os.FileInfo) bool {
+	return true
 }
