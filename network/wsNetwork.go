@@ -151,7 +151,7 @@ const (
 type GossipNode interface {
 	Address() (string, bool)
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, pacer chan int, wait bool, except Peer) error
+	BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except Peer) error
 	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
 	RelayArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except Peer) error
 	Disconnect(badnode Peer)
@@ -400,7 +400,6 @@ type WebsocketNetwork struct {
 type broadcastRequest struct {
 	tags        []Tag
 	data        [][]byte
-	pacer       chan int // used for sending messages to one peer at a time instead of all at once
 	except      *wsPeer
 	done        chan struct{}
 	enqueueTime time.Time
@@ -441,19 +440,19 @@ func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 	dataArray[0] = data
 	tagArray := make([]protocol.Tag, 1, 1)
 	tagArray[0] = tag
-	return wn.BroadcastArray(ctx, tagArray, dataArray, nil, wait, except)
+	return wn.BroadcastArray(ctx, tagArray, dataArray, wait, except)
 }
 
 // BroadcastArray sends an array of messages.
 // If except is not nil then we will not send it to that neighboring Peer.
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 // TODO: add `priority` argument so that we don't have to guess it based on tag
-func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, pacer chan int, wait bool, except Peer) error {
+func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
 	if len(tags) != len(data) {
 		return errBcastInvalidArray
 	}
 
-	request := broadcastRequest{tags: tags, data: data, pacer: pacer, enqueueTime: time.Now(), ctx: ctx}
+	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
 		request.except = except.(*wsPeer)
 	}
@@ -507,7 +506,7 @@ func (wn *WebsocketNetwork) Relay(ctx context.Context, tag protocol.Tag, data []
 // RelayArray relays array of messages
 func (wn *WebsocketNetwork) RelayArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
 	if wn.relayMessages {
-		return wn.BroadcastArray(ctx, tags, data, nil, wait, except)
+		return wn.BroadcastArray(ctx, tags, data, wait, except)
 	}
 	return nil
 }
@@ -1369,7 +1368,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer == request.except {
 			continue
 		}
-		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.pacer, request.enqueueTime)
+		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -2068,7 +2067,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, nil, time.Now())
+				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}
