@@ -104,7 +104,12 @@ const topPageTemplate = `
     <div class="g-recaptcha" data-sitekey="{{.RecaptchaSiteKey}}">
     </div>
     <div>
-      <input id="target" placeholder="target address">
+      <p>The dispensed Algos have no monetary value and should only be used to test applications.</p>
+      <p>This service is gracefully provided to enable development on the Algorand blockchain test networks.</p>
+      <p>Please do not abuse it by requesting more Algos than needed.</p>
+    </div>
+    <div>
+      <input id="target" placeholder="target address" size="80">
       <button id="dispense">Dispense</button>
     </div>
     <div>

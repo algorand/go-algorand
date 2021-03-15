@@ -162,9 +162,11 @@ int 1
 	a.NoError(err)
 	round, err = client.CurrentRound()
 	a.NoError(err)
-	_, err = client.BroadcastTransaction(signedTxn)
+	txid, err := client.BroadcastTransaction(signedTxn)
 	a.NoError(err)
-	client.WaitForRound(round + 2)
+	// ensure transaction is accepted into a block within 5 rounds.
+	confirmed := fixture.WaitForAllTxnsToConfirm(round+5, map[string]string{txid: signedTxn.Txn.Sender.String()})
+	a.True(confirmed)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
@@ -207,7 +209,7 @@ int 1
 	a.NoError(err)
 	round, err = client.CurrentRound()
 	a.NoError(err)
-	_, err = client.BroadcastTransaction(signedTxn)
+	txid, err = client.BroadcastTransaction(signedTxn)
 	a.NoError(err)
 	_, err = client.WaitForRound(round + 3)
 	a.NoError(err)
@@ -215,6 +217,9 @@ int 1
 	resp, err := client.GetPendingTransactions(2)
 	a.NoError(err)
 	a.Equal(uint64(0), resp.TotalTxns)
+	txinfo, err := client.TransactionInformation(signedTxn.Txn.Sender.String(), txid)
+	a.NoError(err)
+	a.True(txinfo.ConfirmedRound != 0)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
@@ -257,7 +262,7 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	// 2 global state update in total, 1 local state updates
-	checkEvalDelta(t, &client, round, round+5, 2, 1)
+	checkEvalDelta(t, &client, round+2, round+5, 2, 1)
 
 	a.Equal(basics.MicroAlgos{Raw: 10000000000 - fee}, ad.MicroAlgos)
 
