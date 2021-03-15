@@ -591,6 +591,9 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		for addr, data := range initAccounts {
 			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
 				addr[:], protocol.Encode(&data))
+			if err != nil {
+				return err
+			}
 			totals.AddAccount(proto, data, &ot)
 		}
 
@@ -671,11 +674,7 @@ func createAccountExtTable(tx *sql.Tx) error {
 		id integer primary key,
 		data blob)`
 	_, err := tx.Exec(tableCreate)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // accountDataToOnline returns the part of the AccountData that matters
@@ -1086,12 +1085,14 @@ func loadHoldings(stmt *sql.Stmt, eah ledgercore.ExtendedAssetHolding) (map[basi
 	}
 	var err error
 	holdings := make(map[basics.AssetIndex]basics.AssetHolding, eah.Count)
-	for gi, g := range eah.Groups {
-		holdings, eah.Groups[gi], err = loadHoldingGroup(stmt, g, holdings)
+	groups := make([]ledgercore.AssetsHoldingGroup, len(eah.Groups), len(eah.Groups))
+	for gi := range eah.Groups {
+		holdings, groups[gi], err = loadHoldingGroup(stmt, eah.Groups[gi], holdings)
 		if err != nil {
 			return nil, ledgercore.ExtendedAssetHolding{}, err
 		}
 	}
+	eah.Groups = groups
 	eah.SetLoaded()
 	return holdings, eah, nil
 }
@@ -1124,7 +1125,7 @@ func loadAssetHoldingGroupData(stmt *sql.Stmt, key int64) (group ledgercore.Asse
 	return
 }
 
-func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, ad basics.AccountData, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
+func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, ad basics.AccountData, genesisProto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
 	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 	var pad ledgercore.PersistedAccountData
 	if len(ad.Assets) <= assetsThreshold {
@@ -1149,7 +1150,7 @@ func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, ad b
 	}
 
 	if err == nil {
-		normBalance := ad.NormalizedOnlineBalance(proto)
+		normBalance := ad.NormalizedOnlineBalance(genesisProto)
 		result, err = qabi.Exec(addr[:], normBalance, protocol.Encode(&pad))
 		if err == nil {
 			updatedAccounts[updateIdx].rowid, err = result.LastInsertId()
@@ -1161,21 +1162,23 @@ func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, ad b
 
 func accountsNewDelete(qabd *sql.Stmt, qaed *sql.Stmt, addr basics.Address, dbad dbAccountData, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
 	result, err := qabd.Exec(dbad.rowid)
-	if err == nil {
-		// we deleted the entry successfully.
-		updatedAccounts[updateIdx].rowid = 0
-		updatedAccounts[updateIdx].pad = ledgercore.PersistedAccountData{}
-		var rowsAffected int64
-		rowsAffected, err = result.RowsAffected()
-		if rowsAffected != 1 {
-			err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, dbad.rowid)
-		} else {
-			// if no error delete extension records
-			for _, g := range dbad.pad.ExtendedAssetHolding.Groups {
-				result, err = qaed.Exec(g.AssetGroupKey)
-				if err != nil {
-					break
-				}
+	if err != nil {
+		return updatedAccounts, err
+	}
+
+	// we deleted the entry successfully.
+	updatedAccounts[updateIdx].rowid = 0
+	updatedAccounts[updateIdx].pad = ledgercore.PersistedAccountData{}
+	var rowsAffected int64
+	rowsAffected, err = result.RowsAffected()
+	if rowsAffected != 1 {
+		err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, dbad.rowid)
+	} else {
+		// if no error delete extension records
+		for _, g := range dbad.pad.ExtendedAssetHolding.Groups {
+			result, err = qaed.Exec(g.AssetGroupKey)
+			if err != nil {
+				break
 			}
 		}
 	}
@@ -1184,7 +1187,7 @@ func accountsNewDelete(qabd *sql.Stmt, qaed *sql.Stmt, addr basics.Address, dbad
 
 // accountsNewUpdate reconciles old and new AccountData in delta.
 // Precondition: all modified assets must be loaded into old's groupData and cached into Assets
-func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Address, delta accountDelta, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
+func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Address, delta accountDelta, genesisProto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
 	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 
 	// need to reconcile asset holdings
@@ -1336,7 +1339,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 	}
 	if err == nil {
 		var rowsAffected int64
-		normBalance := delta.new.NormalizedOnlineBalance(proto)
+		normBalance := delta.new.NormalizedOnlineBalance(genesisProto)
 		result, err := qabu.Exec(normBalance, protocol.Encode(&pad), delta.old.rowid)
 		if err == nil {
 			// rowid doesn't change on update.
@@ -1363,38 +1366,37 @@ type accountsNewQueries struct {
 }
 
 func makeAccountsNewQueries(db db.Queryable) (q accountsNewQueries, err error) {
+	defer func() {
+		if err != nil {
+			q.close()
+		}
+	}()
+
 	if q.insertStmt, err = db.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)"); err != nil {
-		q.close()
 		return
 	}
 
 	if q.updateStmt, err = db.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?"); err != nil {
-		q.close()
 		return
 	}
 
 	if q.deleteByRowIDStmt, err = db.Prepare("DELETE FROM accountbase WHERE rowid=?"); err != nil {
-		q.close()
 		return
 	}
 
 	if q.insertGroupDataStmt, err = db.Prepare("INSERT INTO accountext (data) VALUES (?)"); err != nil {
-		q.close()
 		return
 	}
 
 	if q.updateGroupDataStmt, err = db.Prepare("UPDATE accountext SET data = ? WHERE id = ?"); err != nil {
-		q.close()
 		return
 	}
 
 	if q.deleteGroupDataStmt, err = db.Prepare("DELETE FROM accountext WHERE id=?"); err != nil {
-		q.close()
 		return
 	}
 
 	if q.queryGroupDataStmt, err = db.Prepare("SELECT data FROM accountext WHERE id = ?"); err != nil {
-		q.close()
 		return
 	}
 

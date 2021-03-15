@@ -1349,7 +1349,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 	// update version
 	_, err = db.SetUserVersion(ctx, tx, upgraded)
 	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from %d to %d: %v", err, current, upgraded)
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from %d to %d: %v", current, upgraded, err)
 	}
 	return upgraded, nil
 }
