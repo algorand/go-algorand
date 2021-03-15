@@ -1489,16 +1489,15 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 		}
 
 		for round, fileName := range fileNames {
+			err = au.removeSingleCatchpointFileFromDisk(fileName)
+			if err != nil {
+				return err
+			}
 			// clear the entry from the database
 			err = dbQueries.storeCatchpoint(ctx, round, "", "", 0)
 			if err != nil {
 				return err
 			}
-			err = au.removeSingleCatchpointFileFromDisk(round, fileName)
-			if err != nil {
-				return err
-			}
-
 		}
 	}
 	return nil
@@ -2326,18 +2325,17 @@ func catchpointRoundToPath(rnd basics.Round) string {
 	return outStr
 }
 
-// This function remove a single catchpoint file from the disk. this funcion does not leave empty directories
-func (au *accountUpdates) removeSingleCatchpointFileFromDisk(round basics.Round, fileToDelete string) (err error) {
+// This function remove a single catchpoint file from the disk. this function does not leave empty directories
+func (au *accountUpdates) removeSingleCatchpointFileFromDisk(fileToDelete string) (err error) {
 	absCatchpointFileName := filepath.Join(au.dbDirectory, fileToDelete)
 	err = os.Remove(absCatchpointFileName)
 	if err == nil || os.IsNotExist(err) {
-		// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
+		// it's ok if the file doesn't exist.
 		err = nil
 	} else {
 		// we can't delete the file, abort -
 		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 	}
-	// we check if the catchpoint dir is empty. if it is, we need to delete the dir as well.
 	catchpointRootDir := filepath.Join(au.dbDirectory, catchpointDirName)
 	currentCatchpointDir := filepath.Dir(absCatchpointFileName)
 
@@ -2386,14 +2384,15 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 	}
 
 	for round, fileToDelete := range filesToDelete {
+		err = au.removeSingleCatchpointFileFromDisk(fileToDelete)
+		if err != nil {
+			return err
+		}
 		err = au.accountsq.storeCatchpoint(context.Background(), round, "", "", 0)
 		if err != nil {
 			return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
 		}
-		err = au.removeSingleCatchpointFileFromDisk(round, fileToDelete)
-		if err != nil {
-			return err
-		}
+
 	}
 	return
 }
