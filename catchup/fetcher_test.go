@@ -169,7 +169,7 @@ func (df *dummyFetcher) Close() error {
 	return nil
 }
 
-func buildTestLedger(t *testing.T) (ledger *data.Ledger, next basics.Round, b bookkeeping.Block, err error) {
+func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, next basics.Round, b bookkeeping.Block, err error) {
 	var user basics.Address
 	user[0] = 123
 
@@ -223,6 +223,7 @@ func buildTestLedger(t *testing.T) (ledger *data.Ledger, next basics.Round, b bo
 
 	prev, err := ledger.Block(ledger.LastRound())
 	require.NoError(t, err)
+	b = blk
 	b.BlockHeader.RewardsState.RewardsPool = poolAddr
 	b.RewardsLevel = prev.RewardsLevel
 	b.BlockHeader.Round = next

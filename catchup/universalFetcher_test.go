@@ -36,7 +36,7 @@ func TestUGetBlockWs(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.EnableCatchupFromArchiveServers = true
 
-	ledger, next, b, err := buildTestLedger(t)
+	ledger, next, b, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -78,7 +78,7 @@ func TestUGetBlockHttp(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.EnableCatchupFromArchiveServers = true
 
-	ledger, next, b, err := buildTestLedger(t)
+	ledger, next, b, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
