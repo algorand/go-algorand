@@ -774,6 +774,23 @@ func opAddw(cx *evalContext) {
 	cx.stack[last].Uint = sum
 }
 
+func opDivwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
+	return 1, 2, 3, 4
+}
+
+func opDivw(cx *evalContext) {
+	loDen := len(cx.stack) - 1
+	hiDen := loDen - 1
+	loNum := hiDen - 1
+	hiNum := loDen - 1
+	hiQuo, loQuo, hiRem, loRem :=
+		opDivwImpl(cx.stack[hiNum].Uint, cx.stack[loNum].Uint, cx.stack[hiDen].Uint, cx.stack[loDen].Uint)
+	cx.stack[hiNum].Uint = hiQuo
+	cx.stack[loNum].Uint = loQuo
+	cx.stack[hiDen].Uint = hiRem
+	cx.stack[loDen].Uint = loRem
+}
+
 func opMinus(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1

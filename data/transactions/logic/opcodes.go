@@ -21,7 +21,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 3
+const LogicVersion = 4
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -151,6 +151,7 @@ var OpSpecs = []OpSpec{
 	{0x1c, "~", opBitNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opDefault},
 	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opDefault},
 	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opDefault},
+	{0x1f, "divw", opDivw, asmDefault, disDefault, twoInts.plus(twoInts), twoInts.plus(twoInts), 4, modeAny, opDefault},
 
 	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, varies(checkIntConstBlock, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, immediates("i")},

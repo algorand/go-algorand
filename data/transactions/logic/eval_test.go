@@ -1029,6 +1029,10 @@ addr ` + testAddr + `
 &&
 `
 
+const globalV4TestProgram = globalV3TestProgram + `
+// No new globals in v4
+`
+
 func TestGlobal(t *testing.T) {
 	t.Parallel()
 	type desc struct {
@@ -1046,6 +1050,10 @@ func TestGlobal(t *testing.T) {
 		},
 		3: {
 			CreatorAddress, globalV3TestProgram,
+			EvalStateful, CheckStateful,
+		},
+		4: {
+			CreatorAddress, globalV4TestProgram,
 			EvalStateful, CheckStateful,
 		},
 	}
