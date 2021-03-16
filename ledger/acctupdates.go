@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -1501,6 +1500,19 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 	return 5, nil
 }
 
+
+func IsDirectoryEmpty(path string) (bool, error){
+	dir, err := os.Open(path)
+	if err != nil{
+		return false, err
+	}
+	defer dir.Close()
+	_,err = dir.Readdirnames(1)
+	if err != io.EOF{
+		return false,err
+	}
+	return true,nil
+}
 func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
 	f, err := os.Open(au.dbDirectory)
 	isNotExists := os.IsNotExist(err)
@@ -1509,7 +1521,7 @@ func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
 		return nil
 	}
 	for {
-		emptyDirs, err := GetEmptyDirs()
+		emptyDirs, err := GetEmptyDirs(au.dbDirectory)
 		if err != nil {
 			return err
 		}
@@ -1528,20 +1540,20 @@ func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
 	return nil
 }
 
-func GetEmptyDirs() (emptyDir []string, err error) {
+func GetEmptyDirs(PathToScan string) (emptyDir []string, err error) {
 	emptyDir = make([]string, 0)
-	err = filepath.WalkDir(CatchpointDirName, func(path string, d fs.DirEntry, errIn error) error {
+	err = filepath.WalkDir(PathToScan,func(path string, d fs.DirEntry, errIn error) error {
 		if errIn != nil {
 			return errIn
 		}
 		if !d.IsDir() {
 			return nil
 		}
-		files, err := ioutil.ReadDir(path)
+		isEmpty, err := IsDirectoryEmpty(path)
 		if err != nil {
 			return err
 		}
-		if len(files) == 0 {
+		if isEmpty {
 			emptyDir = append(emptyDir, path)
 		}
 		return nil
@@ -2414,11 +2426,11 @@ func (au *accountUpdates) removeSingleCatchpointFileFromDisk(fileToDelete string
 	currentCatchpointDir := filepath.Dir(absCatchpointFileName)
 
 	for currentCatchpointDir != catchpointRootDir {
-		filesInCatchupDir, err := os.ReadDir(currentCatchpointDir)
+		isEmpty, err:= IsDirectoryEmpty(currentCatchpointDir)
 		if err != nil {
 			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", currentCatchpointDir, err)
 		}
-		if len(filesInCatchupDir) == 0 {
+		if isEmpty{
 			err = os.Remove(currentCatchpointDir)
 			if err != nil {
 				return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", currentCatchpointDir, err)

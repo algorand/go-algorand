@@ -916,9 +916,10 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 
-	files, err := ioutil.ReadDir(CatchpointDirName)
+
+	isEmpty, err := IsDirectoryEmpty(CatchpointDirName)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(files))
+	require.Equal(t, isEmpty, true)
 }
 
 // The test validate that when algod boots up it cleans empty catchpoint directories.
@@ -961,9 +962,10 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 
 	err = au.loadFromDisk(ml)
 	require.NoError(t, err)
-	retForEmptyDir, err := hasEmptyDir(CatchpointDirName)
+	emptyDirs, err := GetEmptyDirs(CatchpointDirName)
 	require.NoError(t, err)
-	require.Equal(t, retForEmptyDir, false)
+	onlyCatchpointDirEmpty := len(emptyDirs) ==0 || ( len(emptyDirs) == 1  && emptyDirs[0] == CatchpointDirName)
+	require.Equal(t,  onlyCatchpointDirEmpty , true)
 
 }
 
@@ -978,26 +980,7 @@ func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 	return numberOfCatchpointFiles, err
 }
 
-func hasEmptyDir(catchpointDir string) (bool, error) {
-	emptyDirFound := false
-	err := filepath.WalkDir(catchpointDir, func(path string, d fs.DirEntry, funcErr error) error {
-		if funcErr != nil {
-			return funcErr
-		}
-		if !d.IsDir() {
-			return nil
-		}
-		files, err := ioutil.ReadDir(path)
-		if err != nil {
-			return err
-		}
-		if len(files) == 0 {
-			emptyDirFound = true
-		}
-		return nil
-	})
-	return emptyDirFound, err
-}
+
 
 // The goal in this test is to check that we are saving at most X catchpoint files. If algod needs to create a new catchfile it will delete
 // the oldest. In addtion, when deleting old catchpoint files an empty directory should be deleted as well.
@@ -1031,9 +1014,10 @@ func TestSaveCatchpointFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, numberOfCatchpointFiles, conf.CatchpointFileHistoryLength)
 
-	retForEmptyDir, err := hasEmptyDir(CatchpointDirName)
+	emptyDirs, err := GetEmptyDirs(CatchpointDirName)
 	require.NoError(t, err)
-	require.Equal(t, retForEmptyDir, false)
+	onlyCatchpointDirEmpty := len(emptyDirs) ==0 || emptyDirs[0] == CatchpointDirName
+	require.Equal(t,  onlyCatchpointDirEmpty , true)
 
 }
 
