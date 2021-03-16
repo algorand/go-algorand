@@ -961,6 +961,9 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 
 	err = au.loadFromDisk(ml)
 	require.NoError(t, err)
+	retForEmptyDir, err := hasEmptyDir(CatchpointDirName)
+	require.NoError(t, err)
+	require.Equal(t, retForEmptyDir, false)
 
 }
 
@@ -1020,16 +1023,15 @@ func TestSaveCatchpointFile(t *testing.T) {
 	au.generateCatchpoint(basics.Round(3000015), "0#ABC3", crypto.Digest{}, time.Second)
 	au.generateCatchpoint(basics.Round(3000020), "0#ABC4", crypto.Digest{}, time.Second)
 
-	const catchpointDir string = "./catchpoints"
 	defer func() {
-		os.RemoveAll(catchpointDir)
+		os.RemoveAll(CatchpointDirName)
 	}()
 
-	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(catchpointDir)
+	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(CatchpointDirName)
 	require.NoError(t, err)
 	require.Equal(t, numberOfCatchpointFiles, conf.CatchpointFileHistoryLength)
 
-	retForEmptyDir, err := hasEmptyDir(catchpointDir)
+	retForEmptyDir, err := hasEmptyDir(CatchpointDirName)
 	require.NoError(t, err)
 	require.Equal(t, retForEmptyDir, false)
 

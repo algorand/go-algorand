@@ -1488,7 +1488,7 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 // cleaning old empty catchpoint directories.
 func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
 	//validate no empty dirs
-	err = removeEmptyDirsOnSchemaUpgrade()
+	err = au.removeEmptyDirsOnSchemaUpgrade()
 	if err != nil {
 		return 0, err
 	}
@@ -1501,27 +1501,27 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 	return 5, nil
 }
 
-func  removeEmptyDirsOnSchemaUpgrade() (err error) {
-	f, err := os.Open(CatchpointDirName)
+func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
+	f, err := os.Open(au.dbDirectory)
 	isNotExists := os.IsNotExist(err)
 	f.Close()
 	if isNotExists {
 		return nil
 	}
 	for {
-		emptyDir, err := GetEmptyDirs()
+		emptyDirs, err := GetEmptyDirs()
 		if err != nil {
 			return err
 		}
 		// There are no empty dirs
-		if len(emptyDir) == 0 {
+		if len(emptyDirs) == 0 {
 			break
 		}
 		// only left with the catchpoint root dir
-		if len(emptyDir) == 1 && emptyDir[0] == CatchpointDirName {
+		if len(emptyDirs) == 1 && emptyDirs[0] == CatchpointDirName {
 			break
 		}
-		for _, emptyDirPath := range emptyDir {
+		for _, emptyDirPath := range emptyDirs {
 			os.Remove(emptyDirPath)
 		}
 	}
