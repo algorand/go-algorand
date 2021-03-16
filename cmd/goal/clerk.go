@@ -916,11 +916,11 @@ func assembleFile(fname string) (program []byte) {
 	_, params := getProto(protoVersion)
 	if ops.HasStatefulOps {
 		if len(ops.Program) > params.MaxAppProgramLen {
-			reportErrorf("%s: app program size too large: %d > %d", fname, len(ops.Program), params.MaxAppProgramLen)
+			reportErrorf(tealAppSize, fname, len(ops.Program), params.MaxAppProgramLen)
 		}
 	} else {
 		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
-			reportErrorf("%s: logsig program size too large: %d > %d", fname, len(ops.Program), params.LogicSigMaxSize)
+			reportErrorf(tealLogicSigSize, fname, len(ops.Program), params.LogicSigMaxSize)
 		}
 	}
 
