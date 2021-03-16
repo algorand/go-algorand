@@ -22,7 +22,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
@@ -889,7 +888,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 
 	dummyCatchpointFiles := make([]string, dummyCatchpointFilesToCreate)
 	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
-		file := fmt.Sprintf("./%s/%d/%d/dummy_catchpoint_file-%d", CatchpointDirName, i/10, i/2, i)
+		file := fmt.Sprintf("%s/%d/%d/dummy_catchpoint_file-%d", CatchpointDirName, i/10, i/2, i)
 		dummyCatchpointFiles[i] = file
 		err := os.MkdirAll(path.Dir(file), 0755)
 		require.NoError(t, err)
@@ -919,9 +918,9 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	require.Equal(t, 0, len(fileNames))
 
 
-	isEmpty, err := IsDirectoryEmpty(CatchpointDirName)
-	require.NoError(t, err)
-	require.Equal(t, isEmpty, true)
+
+	_,err = os.Stat(CatchpointDirName)
+	require.Equal(t, os.IsNotExist(err), true)
 }
 
 // The test validate that when algod boots up it cleans empty catchpoint directories.
@@ -973,7 +972,7 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 
 func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 	numberOfCatchpointFiles := 0
-	err := filepath.WalkDir(catchpointDir, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.Walk(catchpointDir, func(path string, d os.FileInfo, err error) error {
 		if !d.IsDir() {
 			numberOfCatchpointFiles++
 		}

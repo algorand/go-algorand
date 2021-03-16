@@ -23,11 +23,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1542,11 +1542,11 @@ func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
 
 func GetEmptyDirs(PathToScan string) ([]string, error) {
 	var emptyDir []string
-	err := filepath.WalkDir(PathToScan,func(path string, d fs.DirEntry, errIn error) error {
+	err := filepath.Walk(PathToScan,func(path string, f os.FileInfo, errIn error) error {
 		if errIn != nil {
 			return errIn
 		}
-		if !d.IsDir() {
+		if !f.IsDir() {
 			return nil
 		}
 		isEmpty, err := IsDirectoryEmpty(path)
@@ -2422,23 +2422,36 @@ func (au *accountUpdates) removeSingleCatchpointFileFromDisk(fileToDelete string
 		// we can't delete the file, abort -
 		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 	}
-	catchpointRootDir := filepath.Join(au.dbDirectory, CatchpointDirName)
-	currentCatchpointDir := filepath.Dir(absCatchpointFileName)
+	splitedDirName := strings.Split(fileToDelete,string(os.PathSeparator))
 
-	for currentCatchpointDir != catchpointRootDir {
-		isEmpty, err:= IsDirectoryEmpty(currentCatchpointDir)
+	var subDirectoriesToScan  []string
+	//build a list of all the subdirs
+	currentSubDir := ""
+	for _,element :=  range splitedDirName{
+		currentSubDir = filepath.Join(currentSubDir, element)
+		subDirectoriesToScan = append(subDirectoriesToScan, currentSubDir)
+	}
+
+	// iterating over the list of directories. starting from the sub dirs and moving up.
+	// skipping the file itself.
+	for i := len(subDirectoriesToScan)-2; i >= 0; i-- {
+		if _, err := os.Stat(subDirectoriesToScan[i]); os.IsNotExist(err){
+			break
+		}
+
+		isEmpty, err:= IsDirectoryEmpty(subDirectoriesToScan[i])
 		if err != nil {
-			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", currentCatchpointDir, err)
+			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
 		}
 		if isEmpty{
-			err = os.Remove(currentCatchpointDir)
+			err = os.Remove(subDirectoriesToScan[i])
 			if err != nil {
-				return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", currentCatchpointDir, err)
+				return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
 			}
 		}
-
-		currentCatchpointDir = filepath.Dir(currentCatchpointDir)
 	}
+
+
 	return nil
 }
 
