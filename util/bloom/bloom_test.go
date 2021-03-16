@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/crypto"
 )
 
 func TestBitset(t *testing.T) {
@@ -246,4 +248,64 @@ func TestBinaryMarshalLength(t *testing.T) {
 			require.Equal(t, calculatedBytesLength, int64(len(bytes)))
 		}
 	}
+}
+
+func TestBloomFilterMemoryConsumption(t *testing.T) {
+	t.Run("Set", func(t *testing.T) {
+		result := testing.Benchmark(func(b *testing.B) {
+			// start this test with 10K iterations.
+			if b.N < 10000 {
+				b.N = 10000
+			}
+			sizeBits, numHashes := Optimal(b.N, 0.01)
+			prefix := uint32(0)
+			bf := New(sizeBits, numHashes, prefix)
+
+			dataset := make([][]byte, b.N)
+			for n := 0; n < b.N; n++ {
+				hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+				dataset[n] = hash[:]
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				bf.Set(dataset[n])
+			}
+		})
+
+		// make sure the memory allocated is less than 1 byte / iteration.
+		require.LessOrEqual(t, uint64(result.MemBytes), uint64(result.N))
+	})
+	t.Run("Test", func(t *testing.T) {
+		result := testing.Benchmark(func(b *testing.B) {
+			// start this test with 10K iterations.
+			if b.N < 10000 {
+				b.N = 10000
+			}
+			sizeBits, numHashes := Optimal(b.N, 0.01)
+			prefix := uint32(0)
+			bf := New(sizeBits, numHashes, prefix)
+
+			dataset := make([][]byte, b.N)
+			for n := 0; n < b.N; n++ {
+				hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+				dataset[n] = hash[:]
+			}
+
+			// set half of them.
+			for n := 0; n < b.N/2; n++ {
+				bf.Set(dataset[n])
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				bf.Test(dataset[n])
+			}
+		})
+
+		// make sure the memory allocated is less than 1 byte / iteration.
+		require.LessOrEqual(t, uint64(result.MemBytes), uint64(result.N))
+	})
 }
