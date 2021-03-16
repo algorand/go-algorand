@@ -63,7 +63,7 @@ const (
 	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
 	trieAccumulatedChangesFlush = 256
 	// directory name in which all the catchpoints files are stored
-	catchpointDirName = "catchpoints"
+	CatchpointDirName = "catchpoints"
 )
 
 // trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
@@ -825,7 +825,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 	}
 
 	// if the database doesn't know about that round, see if we have that file anyway:
-	fileName := filepath.Join(catchpointDirName, catchpointRoundToPath(round))
+	fileName := filepath.Join(CatchpointDirName, catchpointRoundToPath(round))
 	catchpointPath := filepath.Join(au.dbDirectory, fileName)
 	file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
 	if err == nil && file != nil {
@@ -1502,7 +1502,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 }
 
 func  removeEmptyDirsOnSchemaUpgrade() (err error) {
-	f, err := os.Open(catchpointDirName)
+	f, err := os.Open(CatchpointDirName)
 	isNotExists := os.IsNotExist(err)
 	f.Close()
 	if isNotExists {
@@ -1518,7 +1518,7 @@ func  removeEmptyDirsOnSchemaUpgrade() (err error) {
 			break
 		}
 		// only left with the catchpoint root dir
-		if len(emptyDir) == 1 && emptyDir[0] == catchpointDirName {
+		if len(emptyDir) == 1 && emptyDir[0] == CatchpointDirName {
 			break
 		}
 		for _, emptyDirPath := range emptyDir {
@@ -1530,7 +1530,7 @@ func  removeEmptyDirsOnSchemaUpgrade() (err error) {
 
 func GetEmptyDirs() (emptyDir []string, err error) {
 	emptyDir = make([]string, 0)
-	err = filepath.WalkDir(catchpointDirName, func(path string, d fs.DirEntry, errIn error) error {
+	err = filepath.WalkDir(CatchpointDirName, func(path string, d fs.DirEntry, errIn error) error {
 		if errIn != nil {
 			return errIn
 		}
@@ -2296,7 +2296,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		return
 	}
 
-	relCatchpointFileName := filepath.Join(catchpointDirName, catchpointRoundToPath(committedRound))
+	relCatchpointFileName := filepath.Join(CatchpointDirName, catchpointRoundToPath(committedRound))
 	absCatchpointFileName := filepath.Join(au.dbDirectory, relCatchpointFileName)
 
 	more := true
@@ -2410,7 +2410,7 @@ func (au *accountUpdates) removeSingleCatchpointFileFromDisk(fileToDelete string
 		// we can't delete the file, abort -
 		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 	}
-	catchpointRootDir := filepath.Join(au.dbDirectory, catchpointDirName)
+	catchpointRootDir := filepath.Join(au.dbDirectory, CatchpointDirName)
 	currentCatchpointDir := filepath.Dir(absCatchpointFileName)
 
 	for currentCatchpointDir != catchpointRootDir {

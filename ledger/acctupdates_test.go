@@ -618,7 +618,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll("./catchpoints")
+		os.RemoveAll(CatchpointDirName)
 	}()
 
 	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
@@ -884,11 +884,10 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	require.NoError(t, err)
 
 	const dummyCatchpointFilesToCreate = 43
-	const catchpointDir string = "./catchpoints"
 
 	dummyCatchpointFiles := make([]string, dummyCatchpointFilesToCreate)
 	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
-		file := fmt.Sprintf("./%v/%v/%v/dummy_catchpoint_file-%d", catchpointDir, i/10, i/2, i)
+		file := fmt.Sprintf("./%v/%v/%v/dummy_catchpoint_file-%d", CatchpointDirName, i/10, i/2, i)
 		dummyCatchpointFiles[i] = file
 		err := os.MkdirAll(path.Dir(file), 0755)
 		require.NoError(t, err)
@@ -901,7 +900,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	}
 
 	defer func() {
-		os.RemoveAll(catchpointDir)
+		os.RemoveAll(CatchpointDirName)
 	}()
 
 	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
@@ -917,7 +916,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 
-	files, err := ioutil.ReadDir(catchpointDir)
+	files, err := ioutil.ReadDir(CatchpointDirName)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(files))
 }
@@ -927,28 +926,28 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 // When algod boots up it should remove those directories
 func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	const catchpointDir string = "./catchpoints"
+
 
 	// creating empty catchpoint directories
-	emptyDirPath := path.Join(catchpointDir, "2f", "e1")
+	emptyDirPath := path.Join(CatchpointDirName, "2f", "e1")
 	err := os.MkdirAll(emptyDirPath, 0755)
 	require.NoError(t, err)
-	emptyDirPath = path.Join(catchpointDir, "2e", "e1")
+	emptyDirPath = path.Join(CatchpointDirName, "2e", "e1")
 	err = os.MkdirAll(emptyDirPath, 0755)
 	require.NoError(t, err)
-	emptyDirPath = path.Join(catchpointDir, "14", "2e", "e1")
+	emptyDirPath = path.Join(CatchpointDirName, "14", "2e", "e1")
 	err = os.MkdirAll(emptyDirPath, 0755)
 	require.NoError(t, err)
 
 	// creating catchpoint file
-	catchpointFilePath := path.Join(catchpointDir, "14", "2e", "e4", "dummy_catchpoint_file")
+	catchpointFilePath := path.Join(CatchpointDirName, "14", "2e", "e4", "dummy_catchpoint_file")
 	err = os.MkdirAll(path.Dir(catchpointFilePath), 0755)
 	require.NoError(t, err)
 	f, err := os.Create(catchpointFilePath)
 	require.NoError(t, err)
 	f.Close()
 	defer func() {
-		os.RemoveAll(catchpointDir)
+		os.RemoveAll(CatchpointDirName)
 	}()
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.Close()
@@ -1246,12 +1245,12 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	filesToCreate := 4
 
-	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), "catchpoints")
+	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 	require.NoError(t, err)
 	defer func() {
 		os.RemoveAll(temporaryDirectroy)
 	}()
-	catchpointsDirectory := filepath.Join(temporaryDirectroy, "catchpoints")
+	catchpointsDirectory := filepath.Join(temporaryDirectroy, CatchpointDirName)
 	err = os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 
@@ -1259,7 +1258,7 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	// Create the catchpoint files with dummy data
 	for i := 0; i < filesToCreate; i++ {
-		fileName := filepath.Join("catchpoints", fmt.Sprintf("%d.catchpoint", i))
+		fileName := filepath.Join(CatchpointDirName, fmt.Sprintf("%d.catchpoint", i))
 		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
 		err = ioutil.WriteFile(filepath.Join(temporaryDirectroy, fileName), data, 0666)
 		require.NoError(t, err)
@@ -1284,7 +1283,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Equal(t, int64(3), len)
 
 	// File deleted, but record in the database
-	err = os.Remove(filepath.Join(temporaryDirectroy, "catchpoints", "2.catchpoint"))
+	err = os.Remove(filepath.Join(temporaryDirectroy, CatchpointDirName, "2.catchpoint"))
 	reader, err = au.GetCatchpointStream(basics.Round(2))
 	require.Equal(t, ledgercore.ErrNoEntry{}, err)
 	require.Nil(t, reader)
@@ -1422,12 +1421,12 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	au.initialize(cfg, ".", proto, accts[0])
 	defer au.close()
 
-	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), "catchpoints")
+	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
 	require.NoError(b, err)
 	defer func() {
 		os.RemoveAll(temporaryDirectroy)
 	}()
-	catchpointsDirectory := filepath.Join(temporaryDirectroy, "catchpoints")
+	catchpointsDirectory := filepath.Join(temporaryDirectroy,  CatchpointDirName)
 	err = os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(b, err)
 
