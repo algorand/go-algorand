@@ -65,8 +65,8 @@ func (i entryFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time) 
 	return validatedBlock{blk: &b}, nil
 }
 
-func (i entryFactoryImpl) ReconstructBlock(block *bookkeeping.Block, handle agreement.MessageHandle) error {
-	return nil
+func (i entryFactoryImpl) ReconstructBlock(block bookkeeping.Block){
+	return
 }
 
 // WithSeed implements the agreement.ValidatedBlock interface.

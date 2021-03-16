@@ -208,12 +208,12 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 	i.net.Disconnect(metadata.raw.Sender)
 }
 
-func (i *networkImpl) LoadMessage(h agreement.MessageHandle, keys []crypto.Digest) ([][]byte, []bool) {
+func (i *networkImpl) LoadMessage(h agreement.MessageHandle, keys []crypto.Digest) ([][]byte, bool) {
 	metadata := messageMetadataFromHandle(h)
 
 	if metadata == nil { // synthentic loopback
 		// TODO warn
-		return nil, nil
+		return nil, true
 	}
 
 	return i.net.LoadMessage(metadata.raw.Sender, keys)

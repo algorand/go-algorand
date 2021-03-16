@@ -1051,33 +1051,16 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 	return validatedBlock{vb: lvb}, nil
 }
 
-func (node *AlgorandFullNode) ReconstructBlock(block *bookkeeping.Block, h agreement.MessageHandle) error {
-	logging.Base().Infof("start ReconstructBlock")
-	defer logging.Base().Infof("done ReconstructBlock")
-	if block.Payset == nil {
-		block.Payset = make(transactions.Payset, len(block.PaysetDigest))
-	}
-	stxnsData, _ := node.agreementService.Network.LoadMessage(h, block.PaysetDigest)
+func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) {
 	txns, found := node.transactionPool.FindTxns(block.PaysetDigest)
 	for i := range block.Payset {
 		if found[i] {
 			block.Payset[i].SignedTxn = txns[i]
-		} else if stxnsData[i] != nil {
-			var stxn transactions.SignedTxn
-			dec := protocol.NewDecoderBytes(stxnsData[i])
-			err := dec.Decode(&stxn)
-			block.Payset[i].SignedTxn = stxn
-			if err != nil {
-				return err
-			}
-		} else {
-			return fmt.Errorf("failed to find txn with hash: %v", block.PaysetDigest[i])
 		}
 		var err error
 		block.Payset[i], err = block.EncodeSignedTxn(block.Payset[i].SignedTxn, transactions.ApplyData{})
 		if err != nil {
-			return err
+			logging.Base().Warnf("failed to reconstruct block: %v", err)
 		}
 	}
-	return nil
 }
