@@ -225,13 +225,13 @@ type LanguageSpec struct {
 }
 
 func argEnum(name string) []string {
-	if name == "txn" || name == "gtxn" {
+	if name == "txn" || name == "gtxn" || name == "gtxns" {
 		return logic.TxnFieldNames
 	}
 	if name == "global" {
 		return logic.GlobalFieldNames
 	}
-	if name == "txna" || name == "gtxna" {
+	if name == "txna" || name == "gtxna" || name == "gtxnsa" {
 		return logic.TxnaFieldNames
 	}
 	if name == "asset_holding_get" {
@@ -266,13 +266,13 @@ func typeString(types []logic.StackType) string {
 }
 
 func argEnumTypes(name string) string {
-	if name == "txn" || name == "gtxn" {
+	if name == "txn" || name == "gtxn" || name == "gtxns" {
 		return typeString(logic.TxnFieldTypes)
 	}
 	if name == "global" {
 		return typeString(logic.GlobalFieldTypes)
 	}
-	if name == "txna" || name == "gtxna" {
+	if name == "txna" || name == "gtxna" || name == "gtxnsa" {
 		return typeString(logic.TxnaFieldTypes)
 	}
 	if name == "asset_holding_get" {
