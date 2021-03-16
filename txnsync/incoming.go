@@ -39,10 +39,12 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	_, err := txMsg.UnmarshalMsg(message)
 	if err != nil {
 		// if we recieved a message that we cannot parse, disconnect.
+		s.log.Infof("received unparsable transaction sync message from peer. disconnecting from peer.")
 		return err
 	}
 	if txMsg.Version != txnBlockMessageVersion {
 		// we receive a message from a version that we don't support, disconnect.
+		s.log.Infof("received unsupported transaction sync message version from peer. disconnecting from peer.")
 		return errUnsupportedTransactionSyncMessageVersion
 	}
 	if peer == nil {
@@ -53,6 +55,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		default:
 			// if we can't enqueue that, return an error, which would disconnect the peer.
 			// ( we have to disconnect, since otherwise, we would have no way to syncronize the sequence number)
+			s.log.Infof("unable to enqueue incoming message from a peer without txsync allocated data; incomingMessagesCh is full. disconnecting from peer.")
 			return errTransactionSyncIncomingMessageQueueFull
 		}
 		return nil
@@ -60,6 +63,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	err = peer.incomingMessages.enqueue(txMsg, sequenceNumber, len(message))
 	if err != nil {
 		// if the incoming message queue for this peer is full, disconnect from this peer.
+		s.log.Infof("unable to enqueue incoming message into peer incoming message backlog. disconnecting from peer.")
 		return err
 	}
 
@@ -68,6 +72,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	default:
 		// if we can't enqueue that, return an error, which would disconnect the peer.
 		//
+		s.log.Infof("unable to enqueue incoming message from a peer with txsync allocated data; incomingMessagesCh is full. disconnecting from peer.")
 		return errTransactionSyncIncomingMessageQueueFull
 	}
 	return nil

@@ -59,6 +59,7 @@ func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber u
 	case msc.state.outgoingMessagesCallbackCh <- msc:
 	default:
 		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
+		msc.state.log.Infof("unable to enqueue outgoing message confirmation; outgoingMessagesCallbackCh is full. disconnecting from peer.")
 		return errTransactionSyncOutgoingMessageQueueFull
 	}
 	return nil
