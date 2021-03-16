@@ -1540,9 +1540,9 @@ func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
 	return nil
 }
 
-func GetEmptyDirs(PathToScan string) (emptyDir []string, err error) {
-	emptyDir = make([]string, 0)
-	err = filepath.WalkDir(PathToScan,func(path string, d fs.DirEntry, errIn error) error {
+func GetEmptyDirs(PathToScan string) ([]string, error) {
+	var emptyDir []string
+	err := filepath.WalkDir(PathToScan,func(path string, d fs.DirEntry, errIn error) error {
 		if errIn != nil {
 			return errIn
 		}
@@ -1558,7 +1558,7 @@ func GetEmptyDirs(PathToScan string) (emptyDir []string, err error) {
 		}
 		return nil
 	})
-	return emptyDir,err
+	return emptyDir, err
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.

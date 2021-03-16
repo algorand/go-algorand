@@ -45,6 +45,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+
 type mockLedgerForTracker struct {
 	dbs             db.Pair
 	blocks          []blockEntry
@@ -54,6 +55,7 @@ type mockLedgerForTracker struct {
 	inMemory        bool
 	consensusParams config.ConsensusParams
 }
+
 
 func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion) *mockLedgerForTracker {
 	dbs, fileName := dbOpenTest(t, inMemory)
@@ -887,7 +889,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 
 	dummyCatchpointFiles := make([]string, dummyCatchpointFilesToCreate)
 	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
-		file := fmt.Sprintf("./%v/%v/%v/dummy_catchpoint_file-%d", CatchpointDirName, i/10, i/2, i)
+		file := fmt.Sprintf("./%s/%d/%d/dummy_catchpoint_file-%d", CatchpointDirName, i/10, i/2, i)
 		dummyCatchpointFiles[i] = file
 		err := os.MkdirAll(path.Dir(file), 0755)
 		require.NoError(t, err)
