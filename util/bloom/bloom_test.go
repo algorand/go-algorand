@@ -252,25 +252,27 @@ func TestBinaryMarshalLength(t *testing.T) {
 
 func TestBloomFilterMemoryConsumption(t *testing.T) {
 	t.Run("Set", func(t *testing.T) {
+		N := 1000000
+		sizeBits, numHashes := Optimal(N, 0.01)
+		prefix := uint32(0)
+		bf := New(sizeBits, numHashes, prefix)
+
+		dataset := make([][]byte, N)
+		for n := 0; n < N; n++ {
+			hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+			dataset[n] = hash[:]
+		}
+
 		result := testing.Benchmark(func(b *testing.B) {
 			// start this test with 10K iterations.
 			if b.N < 10000 {
 				b.N = 10000
 			}
-			sizeBits, numHashes := Optimal(b.N, 0.01)
-			prefix := uint32(0)
-			bf := New(sizeBits, numHashes, prefix)
-
-			dataset := make([][]byte, b.N)
-			for n := 0; n < b.N; n++ {
-				hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
-				dataset[n] = hash[:]
-			}
 
 			b.ReportAllocs()
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				bf.Set(dataset[n])
+				bf.Set(dataset[n%N])
 			}
 		})
 
@@ -278,30 +280,31 @@ func TestBloomFilterMemoryConsumption(t *testing.T) {
 		require.LessOrEqual(t, uint64(result.MemBytes), uint64(result.N))
 	})
 	t.Run("Test", func(t *testing.T) {
+		N := 1000000
+		sizeBits, numHashes := Optimal(N, 0.01)
+		prefix := uint32(0)
+		bf := New(sizeBits, numHashes, prefix)
+
+		dataset := make([][]byte, N)
+		for n := 0; n < N; n++ {
+			hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+			dataset[n] = hash[:]
+		}
+
+		// set half of them.
+		for n := 0; n < N/2; n++ {
+			bf.Set(dataset[n])
+		}
 		result := testing.Benchmark(func(b *testing.B) {
 			// start this test with 10K iterations.
-			if b.N < 10000 {
-				b.N = 10000
-			}
-			sizeBits, numHashes := Optimal(b.N, 0.01)
-			prefix := uint32(0)
-			bf := New(sizeBits, numHashes, prefix)
-
-			dataset := make([][]byte, b.N)
-			for n := 0; n < b.N; n++ {
-				hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
-				dataset[n] = hash[:]
-			}
-
-			// set half of them.
-			for n := 0; n < b.N/2; n++ {
-				bf.Set(dataset[n])
+			if b.N < 1000000 {
+				b.N = 1000000
 			}
 
 			b.ReportAllocs()
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				bf.Test(dataset[n])
+				bf.Test(dataset[n%N])
 			}
 		})
 
