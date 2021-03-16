@@ -34,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -551,17 +550,15 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 	}
 	var digest crypto.Digest
 	copy(digest[:], msg.Data)
-	wp.net.log.Debugf("add filter %v", digest)
+	//wp.net.log.Debugf("add filter %v", digest)
 	wp.outgoingMsgFilter.CheckDigest(digest, true, true)
 }
 
-var emptyHash = crypto.Digest{}
-
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
-	for i, msg := range msgs.msgs {
+	for _, msg := range msgs.msgs {
 		select {
 		case <-msg.ctx.Done():
-			logging.Base().Infof("cancelled large send, msg %v out of %v", i, len(msgs.msgs))
+			//logging.Base().Infof("cancelled large send, msg %v out of %v", i, len(msgs.msgs))
 			return disconnectReasonNone
 		default:
 		}
