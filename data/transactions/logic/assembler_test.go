@@ -1174,6 +1174,24 @@ func TestDisassembleGtxna(t *testing.T) {
 	require.Equal(t, gtxnaSample, disassembled)
 }
 
+func TestDisassemblePushConst(t *testing.T) {
+	t.Parallel()
+	// check pushint and pushbytes are properly disassembled
+	intSample := fmt.Sprintf("// version %d\npushint 1\n", AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(intSample, AssemblerMaxVersion)
+	require.NoError(t, err)
+	disassembled, err := Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Equal(t, intSample, disassembled)
+
+	bytesSample := fmt.Sprintf("// version %d\npushbytes 0x01\n", AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(bytesSample, AssemblerMaxVersion)
+	require.NoError(t, err)
+	disassembled, err = Disassemble(ops.Program)
+	require.NoError(t, err)
+	require.Equal(t, bytesSample, disassembled)
+}
+
 func TestDisassembleLastLabel(t *testing.T) {
 	t.Parallel()
 
