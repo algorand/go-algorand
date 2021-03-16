@@ -548,7 +548,7 @@ func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*pro
 		EncodingDigest: crypto.HashObj(payload),
 	}
 
-	return &proposal{unauthenticatedProposal: payload, ve: ve, pv: propVal}, &propVal
+	return &proposal{unauthenticatedProposal: payload, ve: ve}, &propVal
 }
 
 // make a vote for a fixed proposal value
