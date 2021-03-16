@@ -363,7 +363,7 @@ func fieldsDocWithExtra(source map[string]string, ex extractor) map[string]strin
 	return result
 }
 
-// AssetParamsFieldDocs are notes on fields available in `asset_holding_get`
+// AssetHoldingFieldDocs are notes on fields available in `asset_holding_get`
 var AssetHoldingFieldDocs = map[string]string{
 	"AssetBalance": "Amount of the asset unit held by this account",
 	"AssetFrozen":  "Is the asset frozen or not",
