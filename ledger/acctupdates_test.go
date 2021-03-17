@@ -927,8 +927,6 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 
-	err = au.loadFromDisk(ml)
-	require.NoError(t, err)
 	emptyDirs, err := GetEmptyDirs(temporaryDirectroy)
 	require.NoError(t, err)
 	onlyTempDirEmpty := len(emptyDirs) == 1  && emptyDirs[0] == temporaryDirectroy
