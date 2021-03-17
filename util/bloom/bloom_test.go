@@ -312,3 +312,41 @@ func TestBloomFilterMemoryConsumption(t *testing.T) {
 		require.LessOrEqual(t, uint64(result.MemBytes), uint64(result.N))
 	})
 }
+
+func BenchmarkBloomFilterSet(b *testing.B) {
+	bfElements := 1000000
+	sizeBits, numHashes := Optimal(bfElements, 0.01)
+	prefix := uint32(0)
+	bf := New(sizeBits, numHashes, prefix)
+	dataset := make([][]byte, bfElements)
+	for n := 0; n < bfElements; n++ {
+		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+		dataset[n] = hash[:]
+	}
+
+	b.ResetTimer()
+	for x := 0; x < b.N; x++ {
+		bf.Set(dataset[x%bfElements])
+	}
+}
+
+func BenchmarkBloomFilterTest(b *testing.B) {
+	bfElements := 1000000
+	sizeBits, numHashes := Optimal(bfElements, 0.01)
+	prefix := uint32(0)
+	bf := New(sizeBits, numHashes, prefix)
+	dataset := make([][]byte, bfElements)
+	for n := 0; n < bfElements; n++ {
+		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+		dataset[n] = hash[:]
+	}
+	// set half of them.
+	for n := 0; n < bfElements/2; n++ {
+		bf.Set(dataset[n])
+	}
+
+	b.ResetTimer()
+	for x := 0; x < b.N; x++ {
+		bf.Test(dataset[x%bfElements])
+	}
+}
