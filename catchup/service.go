@@ -559,7 +559,8 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		peer, getPeerErr := peerSelector.GetNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
-			break
+			s.net.RequestConnectOutgoing(true, s.ctx.Done())			
+			continue
 		}
 
 		// Ask the fetcher to get the block somehow
