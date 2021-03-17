@@ -96,7 +96,7 @@ type sendMessage struct {
 	data         []byte
 	enqueued     time.Time             // the time at which the message was first generated
 	peerEnqueued time.Time             // the time at which the peer was attempting to enqueue the message
-	msgTags      map[protocol.Tag]bool // when msgTags is speficied ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
+	msgTags      map[protocol.Tag]bool // when msgTags is specified ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
 	hash         crypto.Digest
 	ctx          context.Context
 }
