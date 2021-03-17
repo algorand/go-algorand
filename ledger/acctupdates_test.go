@@ -871,6 +871,13 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
+
+	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+
+	require.NoError(t, err)
+	defer func() {
+		os.RemoveAll(temporaryDirectroy)
+	}()
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.Close()
 
@@ -881,28 +888,31 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	au.initialize(conf, ".", proto, accts[0])
 	defer au.close()
 
-	err := au.loadFromDisk(ml)
+	au.dbDirectory = temporaryDirectroy
+
+	err = au.loadFromDisk(ml)
 	require.NoError(t, err)
 
 	const dummyCatchpointFilesToCreate = 43
 
 	dummyCatchpointFiles := make([]string, dummyCatchpointFilesToCreate)
 	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
-		file := fmt.Sprintf("%s/%d/%d/dummy_catchpoint_file-%d", CatchpointDirName, i/10, i/2, i)
-		dummyCatchpointFiles[i] = file
-		err := os.MkdirAll(path.Dir(file), 0755)
+		file := fmt.Sprintf("%s%c%d%c%d%cdummy_catchpoint_file-%d",
+							CatchpointDirName,os.PathSeparator,
+							i/10,os.PathSeparator,
+							i/2,os.PathSeparator,
+							i)
+		absFile := filepath.Join(temporaryDirectroy,file)
+		dummyCatchpointFiles[i] = absFile
+		err := os.MkdirAll(path.Dir(absFile), 0755)
 		require.NoError(t, err)
-		f, err := os.Create(file)
+		f, err := os.Create(absFile)
 		require.NoError(t, err)
 		err = f.Close()
 		require.NoError(t, err)
 		err = au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), file, "", 0)
 		require.NoError(t, err)
 	}
-
-	defer func() {
-		os.RemoveAll(CatchpointDirName)
-	}()
 
 	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
 	require.NoError(t, err)
@@ -917,10 +927,13 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 
+	err = au.loadFromDisk(ml)
+	require.NoError(t, err)
+	emptyDirs, err := GetEmptyDirs(temporaryDirectroy)
+	require.NoError(t, err)
+	onlyTempDirEmpty := len(emptyDirs) == 1  && emptyDirs[0] == temporaryDirectroy
+	require.Equal(t,  onlyTempDirEmpty , true)
 
-
-	_,err = os.Stat(CatchpointDirName)
-	require.Equal(t, os.IsNotExist(err), true)
 }
 
 // The test validate that when algod boots up it cleans empty catchpoint directories.
@@ -929,28 +942,32 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
+	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	require.NoError(t, err)
+	defer func() {
+		os.RemoveAll(temporaryDirectroy)
+	}()
+
+	tempCatchpointDir := filepath.Join(temporaryDirectroy,CatchpointDirName)
 
 	// creating empty catchpoint directories
-	emptyDirPath := path.Join(CatchpointDirName, "2f", "e1")
-	err := os.MkdirAll(emptyDirPath, 0755)
-	require.NoError(t, err)
-	emptyDirPath = path.Join(CatchpointDirName, "2e", "e1")
+	emptyDirPath := path.Join(tempCatchpointDir, "2f", "e1")
 	err = os.MkdirAll(emptyDirPath, 0755)
 	require.NoError(t, err)
-	emptyDirPath = path.Join(CatchpointDirName, "14", "2e", "e1")
+	emptyDirPath = path.Join(tempCatchpointDir, "2e", "e1")
+	err = os.MkdirAll(emptyDirPath, 0755)
+	require.NoError(t, err)
+	emptyDirPath = path.Join(tempCatchpointDir, "14", "2e", "e1")
 	err = os.MkdirAll(emptyDirPath, 0755)
 	require.NoError(t, err)
 
 	// creating catchpoint file
-	catchpointFilePath := path.Join(CatchpointDirName, "14", "2e", "e4", "dummy_catchpoint_file")
+	catchpointFilePath := path.Join(tempCatchpointDir, "14", "2e", "e4", "dummy_catchpoint_file")
 	err = os.MkdirAll(path.Dir(catchpointFilePath), 0755)
 	require.NoError(t, err)
 	f, err := os.Create(catchpointFilePath)
 	require.NoError(t, err)
 	f.Close()
-	defer func() {
-		os.RemoveAll(CatchpointDirName)
-	}()
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.Close()
 
@@ -960,12 +977,13 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	conf.CatchpointInterval = 1
 	au.initialize(conf, ".", proto, accts[0])
 	defer au.close()
+	au.dbDirectory = temporaryDirectroy
 
 	err = au.loadFromDisk(ml)
 	require.NoError(t, err)
-	emptyDirs, err := GetEmptyDirs(CatchpointDirName)
+	emptyDirs, err := GetEmptyDirs(temporaryDirectroy)
 	require.NoError(t, err)
-	onlyCatchpointDirEmpty := len(emptyDirs) ==0 || ( len(emptyDirs) == 1  && emptyDirs[0] == CatchpointDirName)
+	onlyCatchpointDirEmpty := len(emptyDirs) == 0
 	require.Equal(t,  onlyCatchpointDirEmpty , true)
 
 }
@@ -988,6 +1006,13 @@ func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 func TestSaveCatchpointFile(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
+	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), CatchpointDirName)
+	require.NoError(t, err)
+	defer func() {
+		os.RemoveAll(temporaryDirectroy)
+	}()
+
+
 	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.Close()
 
@@ -998,8 +1023,9 @@ func TestSaveCatchpointFile(t *testing.T) {
 	conf.CatchpointFileHistoryLength = 3
 	au.initialize(conf, ".", proto, accts[0])
 	defer au.close()
+	au.dbDirectory = temporaryDirectroy
 
-	err := au.loadFromDisk(ml)
+	err = au.loadFromDisk(ml)
 	require.NoError(t, err)
 
 	au.generateCatchpoint(basics.Round(2000000), "0#ABC1", crypto.Digest{}, time.Second)
@@ -1007,17 +1033,14 @@ func TestSaveCatchpointFile(t *testing.T) {
 	au.generateCatchpoint(basics.Round(3000015), "0#ABC3", crypto.Digest{}, time.Second)
 	au.generateCatchpoint(basics.Round(3000020), "0#ABC4", crypto.Digest{}, time.Second)
 
-	defer func() {
-		os.RemoveAll(CatchpointDirName)
-	}()
-
-	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(CatchpointDirName)
+	numberOfCatchpointFiles, err := getNumberOfCatchpointFilesInDir(temporaryDirectroy)
 	require.NoError(t, err)
 	require.Equal(t, numberOfCatchpointFiles, conf.CatchpointFileHistoryLength)
 
-	emptyDirs, err := GetEmptyDirs(CatchpointDirName)
+	emptyDirs, err := GetEmptyDirs(temporaryDirectroy)
 	require.NoError(t, err)
-	onlyCatchpointDirEmpty := len(emptyDirs) ==0 || emptyDirs[0] == CatchpointDirName
+	onlyCatchpointDirEmpty := len(emptyDirs) ==0 ||
+		( len(emptyDirs) == 1  && emptyDirs[0] == temporaryDirectroy)
 	require.Equal(t,  onlyCatchpointDirEmpty , true)
 
 }

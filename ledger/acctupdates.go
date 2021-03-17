@@ -1514,10 +1514,7 @@ func IsDirectoryEmpty(path string) (bool, error){
 	return true,nil
 }
 func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
-	f, err := os.Open(au.dbDirectory)
-	isNotExists := os.IsNotExist(err)
-	f.Close()
-	if isNotExists {
+	if _,err := os.Stat(au.dbDirectory); os.IsNotExist(err) {
 		return nil
 	}
 	for {
@@ -1529,8 +1526,8 @@ func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
 		if len(emptyDirs) == 0 {
 			break
 		}
-		// only left with the catchpoint root dir
-		if len(emptyDirs) == 1 && emptyDirs[0] == CatchpointDirName {
+		// only left with the root dir
+		if len(emptyDirs) == 1 && emptyDirs[0] == au.dbDirectory {
 			break
 		}
 		for _, emptyDirPath := range emptyDirs {
@@ -2435,16 +2432,17 @@ func (au *accountUpdates) removeSingleCatchpointFileFromDisk(fileToDelete string
 	// iterating over the list of directories. starting from the sub dirs and moving up.
 	// skipping the file itself.
 	for i := len(subDirectoriesToScan)-2; i >= 0; i-- {
-		if _, err := os.Stat(subDirectoriesToScan[i]); os.IsNotExist(err){
-			break
+		absSubdir := filepath.Join(au.dbDirectory, subDirectoriesToScan[i])
+		if _, err := os.Stat(absSubdir); os.IsNotExist(err){
+			continue
 		}
 
-		isEmpty, err:= IsDirectoryEmpty(subDirectoriesToScan[i])
+		isEmpty, err:= IsDirectoryEmpty(absSubdir)
 		if err != nil {
 			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
 		}
 		if isEmpty{
-			err = os.Remove(subDirectoriesToScan[i])
+			err = os.Remove(absSubdir)
 			if err != nil {
 				return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
 			}
