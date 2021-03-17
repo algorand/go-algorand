@@ -388,7 +388,10 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 func setupCompoundMessage(l LedgerReader, m message, s *Service) (res externalEvent) {
 	compound := m.CompoundMessage
 	if s.BlockFactory != nil {
-		s.BlockFactory.ReconstructBlock(compound.Proposal.Block)
+		if err := s.BlockFactory.ReconstructBlock(compound.Proposal.Block); err != nil {
+			logging.Base().Warnf("failed to reconstruct block: %v", err)
+			return emptyEvent{}
+		}
 	} else {
 		logging.Base().Warnf("failed to reconstruct block: service was nil")
 	}

@@ -113,7 +113,7 @@ func (f testBlockFactory) AssembleBlock(r basics.Round, deadline time.Time) (agr
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
-func (f testBlockFactory) ReconstructBlock(block bookkeeping.Block) {}
+func (f testBlockFactory) ReconstructBlock(block bookkeeping.Block) error {return nil}
 
 type testLedgerSyncFunc func(l *testLedger, r basics.Round, c agreement.Certificate) bool
 

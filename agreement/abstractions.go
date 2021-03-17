@@ -90,7 +90,7 @@ type BlockFactory interface {
 	// lose liveness.
 	AssembleBlock(basics.Round, time.Time) (ValidatedBlock, error)
 
-	ReconstructBlock(bookkeeping.Block)
+	ReconstructBlock(bookkeeping.Block) error
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.
