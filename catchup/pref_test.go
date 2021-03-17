@@ -20,10 +20,10 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 func BenchmarkServiceFetchBlocks(b *testing.B) {
@@ -43,9 +44,17 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 
 	require.NotNil(b, remote)
 	require.NotNil(b, local)
-
-	net := &mocks.MockNetwork{}
-
+	
+	// Create a network and block service
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(config.GetDefaultLocal(), remote, net, "test genesisID")
+	nodeA := basicRPCNode{}
+	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+	net.addPeer(rootURL)
+	
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 
@@ -58,6 +67,12 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 		syncer := MakeService(logging.Base(), defaultConfig, net, local, new(mockedAuthenticator), nil)
 		b.StartTimer()
 		syncer.Start()
+		for w := 0; w < 1000; w++ {
+			if remote.LastRound() == local.LastRound() {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 		b.StopTimer()
 		syncer.Stop()
 		require.Equal(b, remote.LastRound(), local.LastRound())
