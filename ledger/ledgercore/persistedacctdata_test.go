@@ -675,7 +675,7 @@ func TestAssetHoldingDelete(t *testing.T) {
 	}
 
 	// delete a group with only one item
-	e.Delete(1, 0)
+	e.delete(1, 0)
 	a.Equal(oldCount-1, e.Count)
 	a.Equal(len(spec)-1, len(e.Groups))
 
@@ -684,7 +684,7 @@ func TestAssetHoldingDelete(t *testing.T) {
 	// delete first entry in a group
 	e = genExtendedHolding(t, spec)
 	aidx = assetByIndex(0, 0, e)
-	e.Delete(0, 0)
+	e.delete(0, 0)
 	a.Equal(oldCount-1, e.Count)
 	a.Equal(len(spec), len(e.Groups))
 	a.Equal(spec[0].start+basics.AssetIndex(gap), e.Groups[0].MinAssetIndex)
@@ -694,7 +694,7 @@ func TestAssetHoldingDelete(t *testing.T) {
 	// delete last entry in a group
 	e = genExtendedHolding(t, spec)
 	aidx = assetByIndex(0, spec[0].count-1, e)
-	e.Delete(0, spec[0].count-1)
+	e.delete(0, spec[0].count-1)
 	a.Equal(oldCount-1, e.Count)
 	a.Equal(len(spec), len(e.Groups))
 	a.Equal(spec[0].start, e.Groups[0].MinAssetIndex)
@@ -707,7 +707,7 @@ func TestAssetHoldingDelete(t *testing.T) {
 	// delete some middle entry
 	e = genExtendedHolding(t, spec)
 	aidx = assetByIndex(0, 1, e)
-	e.Delete(0, 1)
+	e.delete(0, 1)
 	a.Equal(oldCount-1, e.Count)
 	a.Equal(len(spec), len(e.Groups))
 	a.Equal(spec[0].start, e.Groups[0].MinAssetIndex)
@@ -738,11 +738,26 @@ func TestAssetHoldingDeleteRepeat(t *testing.T) {
 	maxReps := rand.Intn(30)
 	for c := 0; c < maxReps; c++ {
 		maxIdx := rand.Intn(MaxHoldingGroupSize)
-		delOrder := rand.Perm(maxIdx)
-		for _, i := range delOrder {
-			if i < int(e.Groups[0].Count) {
-				e.Delete(0, i)
+		if c%2 == 0 {
+			delOrder := rand.Perm(maxIdx)
+			for _, i := range delOrder {
+				if i < int(e.Groups[0].Count) {
+					e.delete(0, i)
+				}
 			}
+		} else {
+			delOrder := make([]basics.AssetIndex, 0, maxIdx)
+			for i := 1; i <= maxIdx; i++ {
+				if i >= int(e.Groups[0].Count) {
+					break
+				}
+				gi, ai := e.FindAsset(basics.AssetIndex(i), 0)
+				if gi != -1 && ai != -1 {
+					delOrder = append(delOrder, basics.AssetIndex(i))
+				}
+			}
+			_, err := e.Delete(delOrder)
+			a.NoError(err)
 		}
 
 		// validate the group after deletion

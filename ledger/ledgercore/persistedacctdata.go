@@ -17,6 +17,7 @@
 package ledgercore
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -173,7 +174,7 @@ func (g AssetsHoldingGroup) TestGetGroupData() AssetsHoldingGroupData {
 }
 
 // Update an asset holding by index
-func (g *AssetsHoldingGroup) Update(ai int, holdings basics.AssetHolding) {
+func (g *AssetsHoldingGroup) update(ai int, holdings basics.AssetHolding) {
 	g.groupData.update(ai, holdings)
 }
 
@@ -254,10 +255,45 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 	g.Count++
 }
 
-// Delete an asset located withing Groups array at index gi and index ai within the group.
-// Both gi and ai must be valid indices.
-// It returns true if the group is gone and needs to be removed from DB.
-func (e *ExtendedAssetHolding) Delete(gi int, ai int) bool {
+// Update an asset holding by index
+func (e *ExtendedAssetHolding) Update(updated []basics.AssetIndex, assets map[basics.AssetIndex]basics.AssetHolding) error {
+	sort.SliceStable(updated, func(i, j int) bool { return updated[i] < updated[j] })
+	gi, ai := 0, 0
+	for _, aidx := range updated {
+		gi, ai = e.FindAsset(aidx, gi)
+		if gi == -1 || ai == -1 {
+			return fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
+		}
+		// group data is loaded in accountsLoadOld
+		e.Groups[gi].update(ai, assets[aidx])
+	}
+	return nil
+}
+
+// Delete asset holdings identified by asset indexes in assets list
+// Function returns list of group keys that needs to be removed from DB
+func (e *ExtendedAssetHolding) Delete(assets []basics.AssetIndex) (deleted []int64, err error) {
+	// TODO: possible optimizations:
+	// 1. pad.NumAssetHoldings() == len(deleted)
+	// 2. deletion of entire group
+	sort.SliceStable(assets, func(i, j int) bool { return assets[i] < assets[j] })
+	gi, ai := 0, 0
+	for _, aidx := range assets {
+		gi, ai = e.FindAsset(aidx, gi)
+		if gi == -1 || ai == -1 {
+			err = fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
+			return
+		}
+		// group data is loaded in accountsLoadOld
+		key := e.Groups[gi].AssetGroupKey
+		if e.delete(gi, ai) {
+			deleted = append(deleted, key)
+		}
+	}
+	return
+}
+
+func (e *ExtendedAssetHolding) delete(gi int, ai int) bool {
 	if e.Groups[gi].Count == 1 {
 		if gi < len(e.Groups)-1 {
 			copy(e.Groups[gi:], e.Groups[gi+1:])
@@ -332,6 +368,7 @@ func (e *ExtendedAssetHolding) splitInsert(gi int, aidx basics.AssetIndex, holdi
 // Insert takes an array of asset holdings into ExtendedAssetHolding.
 // The input sequence must be sorted.
 func (e *ExtendedAssetHolding) Insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetHolding) {
+	sort.SliceStable(input, func(i, j int) bool { return input[i] < input[j] })
 	gi := 0
 	for _, aidx := range input {
 		result := e.findGroup(aidx, gi)

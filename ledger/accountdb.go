@@ -21,7 +21,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -1454,44 +1453,26 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 
 			pad.ExtendedAssetHolding = oldPad.ExtendedAssetHolding
 			if len(updated) > 0 {
-				sort.SliceStable(updated, func(i, j int) bool { return updated[i] < updated[j] })
-				gi, ai := 0, 0
-				for _, aidx := range updated {
-					gi, ai = pad.ExtendedAssetHolding.FindAsset(aidx, gi)
-					if gi == -1 || ai == -1 {
-						return updatedAccounts, fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
-					}
-					// group data is loaded in accountsLoadOld
-					pad.ExtendedAssetHolding.Groups[gi].Update(ai, delta.new.Assets[aidx])
+				err = pad.ExtendedAssetHolding.Update(updated, delta.new.Assets)
+				if err != nil {
+					return updatedAccounts, err
 				}
 			}
 
 			if len(deleted) > 0 {
-				// TODO: possible optimizations:
-				// 1. pad.NumAssetHoldings() == len(deleted)
-				// 2. deletion of entire group
-				sort.SliceStable(deleted, func(i, j int) bool { return deleted[i] < deleted[j] })
-				gi, ai := 0, 0
-				for _, aidx := range deleted {
-					gi, ai = pad.ExtendedAssetHolding.FindAsset(aidx, gi)
-					if gi == -1 || ai == -1 {
-						return updatedAccounts, fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
-					}
-					// group data is loaded in accountsLoadOld
-					key := pad.ExtendedAssetHolding.Groups[gi].AssetGroupKey
-					if pad.ExtendedAssetHolding.Delete(gi, ai) {
-						// the only one asset was in the group, delete the group
-						_, err = qaed.Exec(key)
-						if err != nil {
-							return updatedAccounts, err
-						}
+				keysToDelete, err := pad.ExtendedAssetHolding.Delete(deleted)
+				if err != nil {
+					return updatedAccounts, err
+				}
+				for _, key := range keysToDelete {
+					_, err = qaed.Exec(key)
+					if err != nil {
+						return updatedAccounts, err
 					}
 				}
 			}
 
 			if len(created) > 0 {
-				// sort created, they do not exist in old
-				sort.SliceStable(created, func(i, j int) bool { return created[i] < created[j] })
 				pad.ExtendedAssetHolding.Insert(created, delta.new.Assets)
 			}
 
