@@ -113,16 +113,12 @@ def _script_thread_inner(runset, scriptname):
     runset.running(scriptname, p)
     timeout = read_script_for_timeout(scriptname)
     try:
-        # Popen return code: https://docs.python.org/3/library/subprocess.html#subprocess.Popen.returncode
-        # 0 means success. A negative value -N indicates that the child was terminated by signal N (POSIX only).
         retcode = p.wait(timeout)
     except subprocess.TimeoutExpired as te:
         sys.stderr.write('{}\n'.format(te))
         retcode = -1
     dt = time.time() - start
 
-    if retcode != 0:
-        logger.debug("script file: ", scriptname, "retcode: ", retcode)
 
     if runset.terminated:
         logger.info('Program terminated before %s finishes.', scriptname)
