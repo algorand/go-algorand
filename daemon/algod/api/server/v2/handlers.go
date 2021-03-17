@@ -572,7 +572,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
-	txns, err := v2.Node.GetPendingTxnsFromPool()
+	txnPool, err := v2.Node.GetPendingTxnsFromPool()
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpTransactionPool, v2.Log)
 	}
@@ -584,10 +584,10 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	}
 
 	// Convert transactions to msgp / json strings
-	txnArray := make([]transactions.SignedTxn, 0)
-	for _, txn := range txns {
+	topTxns := make([]transactions.SignedTxn, 0)
+	for _, txn := range txnPool {
 		// break out if we've reached the max number of transactions
-		if max != nil && uint64(len(txnArray)) >= *max {
+		if max != nil && *max != 0 && uint64(len(topTxns)) >= *max {
 			break
 		}
 
@@ -596,7 +596,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 			continue
 		}
 
-		txnArray = append(txnArray, txn)
+		topTxns = append(topTxns, txn)
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
@@ -604,8 +604,8 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		TopTransactions   []transactions.SignedTxn `json:"top-transactions"`
 		TotalTransactions uint64                   `json:"total-transactions"`
 	}{
-		TopTransactions:   txnArray,
-		TotalTransactions: uint64(len(txnArray)),
+		TopTransactions:   topTxns,
+		TotalTransactions: uint64(len(txnPool)),
 	}
 
 	data, err := encode(handle, response)
