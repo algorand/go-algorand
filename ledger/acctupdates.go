@@ -61,7 +61,7 @@ const (
 	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
 	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
 	trieAccumulatedChangesFlush = 256
-	// directory name in which all the catchpoints files are stored
+	// CatchpointDirName directory name in which all the catchpoints files are stored
 	CatchpointDirName = "catchpoints"
 )
 
@@ -1501,6 +1501,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 }
 
 
+// IsDirectoryEmpty returns if a given directory is empty or not.
 func IsDirectoryEmpty(path string) (bool, error){
 	dir, err := os.Open(path)
 	if err != nil{
@@ -1513,6 +1514,7 @@ func IsDirectoryEmpty(path string) (bool, error){
 	}
 	return true,nil
 }
+
 func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
 	if _,err := os.Stat(au.dbDirectory); os.IsNotExist(err) {
 		return nil
@@ -1537,6 +1539,7 @@ func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
 	return nil
 }
 
+// GetEmptyDirs returns a slice of paths for empty directories which are located in PathToScan arg
 func GetEmptyDirs(PathToScan string) ([]string, error) {
 	var emptyDir []string
 	err := filepath.Walk(PathToScan,func(path string, f os.FileInfo, errIn error) error {
