@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"time"
 
@@ -583,11 +584,16 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		RewardsPool: basics.Address{},
 	}
 
+	txnLimit := uint64(math.MaxUint64)
+	if max != nil && *max != 0 {
+		txnLimit = *max
+	}
+
 	// Convert transactions to msgp / json strings
 	topTxns := make([]transactions.SignedTxn, 0)
 	for _, txn := range txnPool {
 		// break out if we've reached the max number of transactions
-		if max != nil && *max != 0 && uint64(len(topTxns)) >= *max {
+		if uint64(len(topTxns)) >= txnLimit {
 			break
 		}
 
