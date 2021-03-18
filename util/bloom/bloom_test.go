@@ -350,3 +350,20 @@ func BenchmarkBloomFilterTest(b *testing.B) {
 		bf.Test(dataset[x%bfElements])
 	}
 }
+
+// TestBloomFilterReferenceHash ensure that we generate a bloom filter in a consistent way. This is important since we want to ensure that
+// this code is backward compatible.
+func TestBloomFilterReferenceHash(t *testing.T) {
+	N := 3
+	sizeBits, numHashes := Optimal(N, 0.01)
+	prefix := uint32(0x11223344)
+	bf := New(sizeBits, numHashes, prefix)
+
+	for n := 0; n < N; n++ {
+		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+		bf.Set(hash[:])
+	}
+	bytes, err := bf.MarshalBinary()
+	require.NoError(t, err)
+	require.Equal(t, []byte{0x0, 0x0, 0x0, 0x7, 0x11, 0x22, 0x33, 0x44, 0x62, 0xf0, 0xe, 0x2c, 0x8c}, bytes)
+}
