@@ -1501,8 +1501,8 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 }
 
 
-// IsDirectoryEmpty returns if a given directory is empty or not.
-func IsDirectoryEmpty(path string) (bool, error){
+// IsDirEmpty returns if a given directory is empty or not.
+func IsDirEmpty(path string) (bool, error){
 	dir, err := os.Open(path)
 	if err != nil{
 		return false, err
@@ -1550,8 +1550,11 @@ func GetEmptyDirs(PathToScan string) ([]string, error) {
 		if !f.IsDir() {
 			return nil
 		}
-		isEmpty, err := IsDirectoryEmpty(path)
+		isEmpty, err := IsDirEmpty(path)
 		if err != nil {
+			if os.IsNotExist(err){
+				return filepath.SkipDir
+			}
 			return err
 		}
 		if isEmpty {
@@ -2441,13 +2444,16 @@ func (au *accountUpdates) removeSingleCatchpointFileFromDisk(fileToDelete string
 			continue
 		}
 
-		isEmpty, err:= IsDirectoryEmpty(absSubdir)
+		isEmpty, err:= IsDirEmpty(absSubdir)
 		if err != nil {
 			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
 		}
 		if isEmpty{
 			err = os.Remove(absSubdir)
 			if err != nil {
+				if os.IsNotExist(err){
+					continue
+				}
 				return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
 			}
 		}
