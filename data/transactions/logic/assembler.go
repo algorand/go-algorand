@@ -1616,9 +1616,8 @@ func disIntc(dis *disassembleState, spec *OpSpec) (string, error) {
 	}
 	if b < len(dis.intc) {
 		return fmt.Sprintf("intc%s // %d", suffix, dis.intc[b]), nil
-	} else {
-		return fmt.Sprintf("intc%s", suffix), nil
 	}
+	return fmt.Sprintf("intc%s", suffix), nil
 }
 
 func disBytecblock(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -1635,7 +1634,7 @@ func disBytecblock(dis *disassembleState, spec *OpSpec) (string, error) {
 	return out, nil
 }
 
-func allPrintableAscii(bytes []byte) bool {
+func allPrintableASCII(bytes []byte) bool {
 	for _, b := range bytes {
 		if b < 32 || b > 126 {
 			return false
@@ -1650,7 +1649,7 @@ func guessByteFormat(bytes []byte) string {
 		copy(short[:], bytes[:])
 		return fmt.Sprintf("addr %s", short.String())
 	}
-	if allPrintableAscii(bytes) {
+	if allPrintableASCII(bytes) {
 		return fmt.Sprintf("\"%s\"", string(bytes))
 	}
 	return "0x" + hex.EncodeToString(bytes)
@@ -1684,9 +1683,8 @@ func disBytec(dis *disassembleState, spec *OpSpec) (string, error) {
 	}
 	if b < len(dis.bytec) {
 		return fmt.Sprintf("bytec%s // %s", suffix, guessByteFormat(dis.bytec[b])), nil
-	} else {
-		return fmt.Sprintf("bytec%s", suffix), nil
 	}
+	return fmt.Sprintf("bytec%s", suffix), nil
 }
 
 func disPushInt(dis *disassembleState, spec *OpSpec) (string, error) {
