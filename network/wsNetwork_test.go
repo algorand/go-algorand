@@ -356,15 +356,53 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
-	netA.BroadcastArray(ctx, tags, data, false, nil)
 	cancel()
+
+	// try calling BroadcastArray
+	netA.BroadcastArray(ctx, tags, data, true, nil)
 
 	select {
 	case <-counterDone:
 		t.Errorf("All messages were sent, send not cancelled")
 	case <-time.After(2 * time.Second):
 	}
+	assert.Equal(t, 0, counter.count)
+
+	// try calling innerBroadcast
+	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
+	peers, _ := netA.peerSnapshot([]*wsPeer{})
+	netA.innerBroadcast(request, true, peers)
+
+	select {
+	case <-counterDone:
+		t.Errorf("All messages were sent, send not cancelled")
+	case <-time.After(2 * time.Second):
+	}
+	assert.Equal(t, 0, counter.count)
+
+	// try calling writeLoopSend
+	msgs := make([]sendMessage, 0, len(data))
+	enqueueTime := time.Now()
+	for i, msg := range data {
+		tbytes := []byte(tags[i])
+		mbytes := make([]byte, len(tbytes)+len(msg))
+		copy(mbytes, tbytes)
+		copy(mbytes[len(tbytes):], msg)
+		msgs = append(msgs, sendMessage{data: mbytes, enqueued: time.Now(), peerEnqueued: enqueueTime, hash: crypto.Hash(mbytes), ctx: context.Background()})
+	}
+
+	msgs[50].ctx = ctx
+
+	for _, peer := range peers {
+		peer.writeLoopSend(sendMessages{msgs})
+	}
+
+	select {
+	case <-counterDone:
+		t.Errorf("All messages were sent, send not cancelled")
+	case <-time.After(2 * time.Second):
+	}
+	assert.Equal(t, 50, counter.count)
 }
 
 // Set up two nodes, test that a.Broadcast is received by B, when B has no address.
