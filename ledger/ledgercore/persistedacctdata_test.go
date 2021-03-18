@@ -180,7 +180,10 @@ func genExtendedHolding(t *testing.T, spec []groupSpec) (e ExtendedAssetHolding)
 			ao[s.count-1] = s.end - aidx + gap
 			am[s.count-1] = uint64(s.end)
 		}
-		e.Groups[i].groupData = AssetsHoldingGroupData{AssetOffsets: ao, Amounts: am, Frozens: make([]bool, len(ao))}
+		e.Groups[i].groupData = AssetsHoldingGroupData{
+			AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: ao},
+			Amounts:               am, Frozens: make([]bool, len(ao)),
+		}
 		e.Groups[i].loaded = true
 		e.Count += uint32(s.count)
 	}
@@ -785,7 +788,9 @@ func genExtendedHoldingGroups(spec []groupLayout) (e ExtendedAssetHolding) {
 	}
 	e.Groups = make([]AssetsHoldingGroup, len(spec), len(spec))
 	for i, s := range spec {
-		e.Groups[i] = AssetsHoldingGroup{Count: uint32(s.count), loaded: s.loaded}
+		e.Groups[i] = AssetsHoldingGroup{
+			AssetGroupDesc: AssetGroupDesc{Count: uint32(s.count)},
+			loaded:         s.loaded}
 	}
 	return
 }

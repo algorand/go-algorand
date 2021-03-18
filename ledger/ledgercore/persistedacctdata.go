@@ -27,9 +27,8 @@ import (
 // MaxHoldingGroupSize specifies maximum size of AssetsHoldingGroup
 const MaxHoldingGroupSize = 256
 
-// AssetsHoldingGroup is a metadata for asset group data (AssetsHoldingGroupData)
-// that is stored separately
-type AssetsHoldingGroup struct {
+// AssetGroupDesc is asset group descriptor
+type AssetGroupDesc struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// assets count in the group
@@ -44,30 +43,70 @@ type AssetsHoldingGroup struct {
 	// A foreign key to the accountext table to the appropriate AssetsHoldingGroupData entry
 	// AssetGroupKey is 0 for newly created entries and filled after persisting to DB
 	AssetGroupKey int64 `codec:"k"`
+}
 
+// AssetsHoldingGroup is a metadata for asset group data (AssetsHoldingGroupData)
+// that is stored separately
+type AssetsHoldingGroup struct {
+	AssetGroupDesc
 	// groupData is an actual group data
 	groupData AssetsHoldingGroupData
-
 	// loaded indicates either groupData loaded or not
 	loaded bool
 }
 
-// AssetsHoldingGroupData is an actual asset holding data
-type AssetsHoldingGroupData struct {
+// AssetsParamGroup is a metadata for asset group data (AssetsParamGroupData)
+// that is stored separately
+type AssetsParamGroup struct {
+	AssetGroupDesc
+	// groupData is an actual group data
+	groupData AssetsParamGroupData
+	// loaded indicates either groupData loaded or not
+	loaded bool
+}
+
+type AssetsCommonGroupData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// offset relative to MinAssetIndex and differential afterward
-	// assetId1 = AmountsAssetIndicesOffsets[0] + MinAssetIndex and assetIdx1 == MinAssetIndex
-	// assetId2 = AmountsAssetIndicesOffsets[1] + assetIdx1
-	// assetId3 = AmountsAssetIndicesOffsets[2] + assetIdx2
+	// assetId1 = AssetOffsets[0] + MinAssetIndex and assetIdx1 == MinAssetIndex
+	// assetId2 = AssetOffsets[1] + assetIdx1
+	// assetId3 = AssetOffsets[2] + assetIdx2
 	AssetOffsets []basics.AssetIndex `codec:"ao,allocbound=MaxHoldingGroupSize"`
+}
+
+// AssetsParamGroupData is an actual asset param data
+type AssetsParamGroupData struct {
+	AssetsCommonGroupData
+
+	// Param Total
+	// same number of elements as in AssetOffsets
+	Totals []uint64 `codec:"t,allocbound=MaxHoldingGroupSize"`
+
+	// Param DefaultFrozen
+	// same number of elements as in AssetOffsets
+	DefaultFrozens []bool `codec:"f,allocbound=MaxHoldingGroupSize"`
+
+	UnitNames    []string         `codec:"u,allocbound=MaxHoldingGroupSize"`
+	AssetNames   []string         `codec:"n,allocbound=MaxHoldingGroupSize"`
+	URLs         []string         `codec:"l,allocbound=MaxHoldingGroupSize"`
+	MetadataHash [][32]byte       `codec:"h,allocbound=MaxHoldingGroupSize"`
+	Managers     []basics.Address `codec:"m,allocbound=MaxHoldingGroupSize"`
+	Reserves     []basics.Address `codec:"r,allocbound=MaxHoldingGroupSize"`
+	Freezes      []basics.Address `codec:"z,allocbound=MaxHoldingGroupSize"`
+	Clawbacks    []basics.Address `codec:"c,allocbound=MaxHoldingGroupSize"`
+}
+
+// AssetsHoldingGroupData is an actual asset holding data
+type AssetsHoldingGroupData struct {
+	AssetsCommonGroupData
 
 	// Holding amount
-	// same number of elements as in AmountsAssetIndicesOffsets
+	// same number of elements as in AssetOffsets
 	Amounts []uint64 `codec:"a,allocbound=MaxHoldingGroupSize"`
 
 	// Holding "frozen" flag
-	// same number of elements as in AmountsAssetIndicesOffsets
+	// same number of elements as in AssetOffsets
 	Frozens []bool `codec:"f,allocbound=MaxHoldingGroupSize"`
 }
 
@@ -81,12 +120,25 @@ type ExtendedAssetHolding struct {
 	Groups []AssetsHoldingGroup `codec:"gs,allocbound=maxEncodedGroupsSize"` // 1M asset holdings
 }
 
+// ExtendedAssetParam is AccountData's extension for storing asset params
+type ExtendedAssetParam struct {
+	_struct struct{}           `codec:",omitempty,omitemptyarray"`
+	Count   uint32             `codec:"c"`
+	Groups  []AssetsParamGroup `codec:"gs,allocbound=4096"` // 1M asset holdings
+}
+
+// extendedAsset is a support type to hold some common methods for both ExtendedAssetHolding and ExtendedAssetParam
+type extendedAsset struct {
+}
+
 // PersistedAccountData represents actual data stored in DB
 type PersistedAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	basics.AccountData
-	ExtendedAssetHolding ExtendedAssetHolding `codec:"eash"`
+	ExtendedAssetHolding ExtendedAssetHolding `codec:"eah"`
+	ExtendedAssetParam   ExtendedAssetParam   `codec:"eap"`
+	extendedAsset
 }
 
 // SortAssetIndex is a copy from data/basics/sort.go
@@ -107,12 +159,16 @@ func (a SortAppIndex) Len() int           { return len(a) }
 func (a SortAppIndex) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortAppIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
+type AbstractAssetGroupData interface {
+	Find(aidx basics.AssetIndex, base basics.AssetIndex) int
+}
+
 type AbstractAssetGroup interface {
 	MinAsset() basics.AssetIndex
 	MaxAsset() basics.AssetIndex
 	HasSpace() bool
 	Loaded() bool
-	Find(aidx basics.AssetIndex) int
+	GroupData() AbstractAssetGroupData
 }
 type AbstractAssetGroupList interface {
 	// Get returns abstract group
@@ -138,6 +194,14 @@ func (pad PersistedAccountData) NumAssetHoldings() int {
 		return int(pad.ExtendedAssetHolding.Count)
 	}
 	return len(pad.AccountData.Assets)
+}
+
+// NumAssetParams returns number of assets in the account
+func (pad PersistedAccountData) NumAssetParams() int {
+	if pad.ExtendedAssetParam.Count > 0 {
+		return int(pad.ExtendedAssetParam.Count)
+	}
+	return len(pad.AccountData.AssetParams)
 }
 
 func (gd *AssetsHoldingGroupData) update(ai int, hodl basics.AssetHolding) {
@@ -271,28 +335,41 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 	g.Count++
 }
 
-func (g *AssetsHoldingGroup) HasSpace() bool {
-	return g.Count < MaxHoldingGroupSize
+// Loaded return a boolean flag indicated if the group loaded or not
+func (g AssetsParamGroup) Loaded() bool {
+	return g.loaded
 }
 
-func (g *AssetsHoldingGroup) MinAsset() basics.AssetIndex {
-	return g.MinAssetIndex
-}
-
-func (g *AssetsHoldingGroup) MaxAsset() basics.AssetIndex {
-	return g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex)
-}
-
-func (g *AssetsHoldingGroup) Find(aidx basics.AssetIndex) int {
+func (g *AssetsCommonGroupData) Find(aidx basics.AssetIndex, base basics.AssetIndex) int {
 	// linear search because AssetOffsets is delta-encoded, not values
-	cur := g.MinAssetIndex
-	for ai, d := range g.groupData.AssetOffsets {
+	cur := base
+	for ai, d := range g.AssetOffsets {
 		cur = d + cur
 		if aidx == cur {
 			return ai
 		}
 	}
 	return -1
+}
+
+func (g *AssetGroupDesc) HasSpace() bool {
+	return g.Count < MaxHoldingGroupSize
+}
+
+func (g *AssetGroupDesc) MinAsset() basics.AssetIndex {
+	return g.MinAssetIndex
+}
+
+func (g *AssetGroupDesc) MaxAsset() basics.AssetIndex {
+	return g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex)
+}
+
+func (g *AssetsHoldingGroup) GroupData() AbstractAssetGroupData {
+	return &g.groupData.AssetsCommonGroupData
+}
+
+func (g *AssetsParamGroup) GroupData() AbstractAssetGroupData {
+	return &g.groupData.AssetsCommonGroupData
 }
 
 // Update an asset holding by index
@@ -370,28 +447,30 @@ func (e *ExtendedAssetHolding) splitInsert(gi int, aidx basics.AssetIndex, holdi
 		rgCap++
 	}
 	rgd := AssetsHoldingGroupData{
-		Amounts:      make([]uint64, rgCount, rgCap),
-		Frozens:      make([]bool, rgCount, rgCap),
-		AssetOffsets: make([]basics.AssetIndex, rgCount, rgCap),
+		Amounts:               make([]uint64, rgCount, rgCap),
+		Frozens:               make([]bool, rgCount, rgCap),
+		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, rgCount, rgCap)},
 	}
 	copy(rgd.Amounts, g.groupData.Amounts[pos:])
 	copy(rgd.Frozens, g.groupData.Frozens[pos:])
 	copy(rgd.AssetOffsets, g.groupData.AssetOffsets[pos:])
 	rightGroup := AssetsHoldingGroup{
-		Count:              rgCount,
-		MinAssetIndex:      rgMinAssetIndex,
-		DeltaMaxAssetIndex: uint64(rgDeltaMaxIndex),
-		groupData:          rgd,
-		loaded:             true,
+		AssetGroupDesc: AssetGroupDesc{
+			Count:              rgCount,
+			MinAssetIndex:      rgMinAssetIndex,
+			DeltaMaxAssetIndex: uint64(rgDeltaMaxIndex),
+		},
+		groupData: rgd,
+		loaded:    true,
 	}
 	rightGroup.groupData.AssetOffsets[0] = 0
 
 	e.Groups[gi].Count = lgCount
 	e.Groups[gi].DeltaMaxAssetIndex = uint64(lgDeltaMaxIndex)
 	e.Groups[gi].groupData = AssetsHoldingGroupData{
-		Amounts:      g.groupData.Amounts[:pos],
-		Frozens:      g.groupData.Frozens[:pos],
-		AssetOffsets: g.groupData.AssetOffsets[:pos],
+		Amounts:               g.groupData.Amounts[:pos],
+		Frozens:               g.groupData.Frozens[:pos],
+		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: g.groupData.AssetOffsets[:pos]},
 	}
 	if aidx < lgMinAssetIndex+lgDeltaMaxIndex {
 		e.Groups[gi].insert(aidx, holding)
@@ -424,14 +503,16 @@ func (e *ExtendedAssetHolding) Insert(input []basics.AssetIndex, data map[basics
 			insertAfter := result.gi
 			holding := data[aidx]
 			g := AssetsHoldingGroup{
-				Count:              1,
-				MinAssetIndex:      aidx,
-				DeltaMaxAssetIndex: 0,
-				AssetGroupKey:      0,
+				AssetGroupDesc: AssetGroupDesc{
+					Count:              1,
+					MinAssetIndex:      aidx,
+					DeltaMaxAssetIndex: 0,
+					AssetGroupKey:      0,
+				},
 				groupData: AssetsHoldingGroupData{
-					AssetOffsets: []basics.AssetIndex{0},
-					Amounts:      []uint64{holding.Amount},
-					Frozens:      []bool{holding.Frozen},
+					AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: []basics.AssetIndex{0}},
+					Amounts:               []uint64{holding.Amount},
+					Frozens:               []bool{holding.Frozen},
 				},
 				loaded: true,
 			}
@@ -547,10 +628,28 @@ func (e ExtendedAssetHolding) FindGroup(aidx basics.AssetIndex, startIdx int) in
 }
 
 // FindAsset returns group index and asset index if found and (-1, -1) otherwise.
-// If a matching group found but the group is not loaded yet, it returns (gi, -1)
+// If a matching group found but the group is not loaded yet, it returns (groupIdx, -1)
 func (e ExtendedAssetHolding) FindAsset(aidx basics.AssetIndex, startIdx int) (int, int) {
 	return findAsset(aidx, startIdx, &e)
 }
+
+// FindGroup returns a group suitable for asset insertion
+func (e ExtendedAssetParam) FindGroup(aidx basics.AssetIndex, startIdx int) int {
+	res := findGroup(aidx, startIdx, &e)
+	if res.found {
+		return res.gi
+	}
+	return -1
+}
+
+// FindAsset returns group index and asset index if found and (-1, -1) otherwise.
+// If a matching group found but the group is not loaded yet, it returns (groupIdx, -1)
+func (e ExtendedAssetParam) FindAsset(aidx basics.AssetIndex, startIdx int) (int, int) {
+	return findAsset(aidx, startIdx, &e)
+}
+
+// findAsset returns group index and asset index if found and (-1, -1) otherwise.
+// If a matching group found but the group is not loaded yet, it returns (groupIdx, -1)
 func findAsset(aidx basics.AssetIndex, startIdx int, agl AbstractAssetGroupList) (int, int) {
 	if agl.Total() == 0 {
 		return -1, -1
@@ -564,7 +663,8 @@ func findAsset(aidx basics.AssetIndex, startIdx int, agl AbstractAssetGroupList)
 				// return group match and -1 as asset index indicating loading is need
 				return i, -1
 			}
-			if ai := g.Find(aidx); ai != -1 {
+
+			if ai := g.GroupData().Find(aidx, g.MinAsset()); ai != -1 {
 				return i, ai
 			}
 
@@ -609,9 +709,9 @@ func (e *ExtendedAssetHolding) ConvertToGroups(assets map[basics.AssetIndex]basi
 		end := min((i+1)*MaxHoldingGroupSize, len(assets))
 		size := end - start
 		gd := AssetsHoldingGroupData{
-			AssetOffsets: make([]basics.AssetIndex, size, size),
-			Amounts:      make([]uint64, size, size),
-			Frozens:      make([]bool, size, size),
+			AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, size, size)},
+			Amounts:               make([]uint64, size, size),
+			Frozens:               make([]bool, size, size),
 		}
 		first := flatten[start].aidx
 		prev := first
@@ -622,11 +722,13 @@ func (e *ExtendedAssetHolding) ConvertToGroups(assets map[basics.AssetIndex]basi
 			prev = flatten[j].aidx
 		}
 		e.Groups[i] = AssetsHoldingGroup{
-			Count:              uint32(size),
-			MinAssetIndex:      first,
-			DeltaMaxAssetIndex: uint64(prev - first),
-			groupData:          gd,
-			loaded:             true,
+			AssetGroupDesc: AssetGroupDesc{
+				Count:              uint32(size),
+				MinAssetIndex:      first,
+				DeltaMaxAssetIndex: uint64(prev - first),
+			},
+			groupData: gd,
+			loaded:    true,
 		}
 	}
 }
@@ -785,5 +887,17 @@ func (e *ExtendedAssetHolding) Len() int {
 }
 
 func (e *ExtendedAssetHolding) Total() uint32 {
+	return e.Count
+}
+
+func (e *ExtendedAssetParam) Get(idx int) AbstractAssetGroup {
+	return &(e.Groups[idx])
+}
+
+func (e *ExtendedAssetParam) Len() int {
+	return len(e.Groups)
+}
+
+func (e *ExtendedAssetParam) Total() uint32 {
 	return e.Count
 }
