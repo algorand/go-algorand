@@ -471,6 +471,7 @@ func (handler *solicitedAyncTxHandler) loop(ctx context.Context) {
 		disconnect := handler.txHandler.processDecodedArray(groups.txGroups)
 		if disconnect {
 			handler.txHandler.net.Disconnect(groups.networkPeer)
+			handler.txHandler.net.RequestConnectOutgoing(false, make(chan struct{}))
 		}
 	}
 }
