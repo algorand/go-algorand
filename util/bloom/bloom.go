@@ -34,7 +34,7 @@ func New(sizeBits int, numHashes uint32, prefix uint32) *Filter {
 		hashStagingBuffer: make([]uint32, numHashes+3),
 	}
 	binary.BigEndian.PutUint32(filter.prefix[:], prefix)
-	filter.preimageStagingBuffer = make([]byte, 0, len(filter.prefix)+32)
+	filter.preimageStagingBuffer = make([]byte, len(filter.prefix), len(filter.prefix)+32)
 	copy(filter.preimageStagingBuffer, filter.prefix[:])
 	return &filter
 }
