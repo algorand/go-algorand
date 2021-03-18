@@ -453,6 +453,32 @@ func (pool *TransactionPool) Remember(txgroup transactions.SignedTxGroup) error 
 	return nil
 }
 
+// RememberArray stores the provided transaction group.
+// Precondition: Only RememberArray() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
+// The function is called by the transaction handler ( i.e. txsync )
+func (pool *TransactionPool) RememberArray(txgroups []transactions.SignedTxGroup) error {
+	totalSize := 0
+	for _, txGroup := range txgroups {
+		totalSize += len(txGroup.Transactions)
+	}
+	if err := pool.checkPendingQueueSize(totalSize); err != nil {
+		return err
+	}
+
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	for _, txGroup := range txgroups {
+		err := pool.remember(txGroup)
+		if err != nil {
+			return fmt.Errorf("TransactionPool.RememberArray: %v", err)
+		}
+	}
+
+	pool.rememberCommit(false)
+	return nil
+}
+
 // Lookup returns the error associated with a transaction that used
 // to be in the pool.  If no status information is available (e.g., because
 // it was too long ago, or the transaction committed successfully), then

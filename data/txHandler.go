@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -263,12 +264,6 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 // Note that this also checks the consistency of the transaction's group hash,
 // which is required for safe transaction signature caching behavior.
 func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDone bool) {
-	txids := make([]transactions.Txid, len(tx.unverifiedTxGroup))
-	for i := range tx.unverifiedTxGroup {
-		txids[i] = tx.unverifiedTxGroup[i].ID()
-	}
-	logging.Base().Debugf("got a tx group with IDs %v", txids)
-
 	// do a quick test to check that this transaction could potentially be committed, to reject dup pending transactions
 	err := handler.txPool.Test(tx.unverifiedTxGroup)
 	if err != nil {
@@ -278,12 +273,12 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 	return false
 }
 
-func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.SignedTxn) (outmsg network.OutgoingMessage, processingDone bool) {
+func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.SignedTxn) (disconnect bool) {
 	tx := &txBacklogMsg{
 		unverifiedTxGroup: unverifiedTxGroup,
 	}
 	if handler.checkAlreadyCommitted(tx) {
-		return network.OutgoingMessage{}, true
+		return false
 	}
 
 	// build the transaction verification context
@@ -291,7 +286,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	latestHdr, err := handler.ledger.BlockHdr(latest)
 	if err != nil {
 		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
-		return network.OutgoingMessage{}, true
+		return false
 	}
 
 	unverifiedTxnGroups := bookkeeping.SignedTxnsToGroups(unverifiedTxGroup)
@@ -299,7 +294,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	if err != nil {
 		// transaction is invalid
 		logging.Base().Warnf("One or more transactions were malformed: %v", err)
-		return network.OutgoingMessage{Action: network.Disconnect}, true
+		return true
 	}
 
 	// at this point, we've verified the transaction group,
@@ -310,7 +305,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	err = handler.txPool.Remember(transactions.SignedTxGroup{Transactions: verifiedTxGroup})
 	if err != nil {
 		logging.Base().Debugf("could not remember tx: %v", err)
-		return network.OutgoingMessage{}, true
+		return false
 	}
 
 	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
@@ -319,7 +314,75 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 		logging.Base().Warnf("unable to pin transaction: %v", err)
 	}
 
-	return network.OutgoingMessage{}, false
+	return false
+}
+
+func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []transactions.SignedTxGroup) (filteredGroups []transactions.SignedTxGroup) {
+	var duplicateTxnGroups []int
+	for idx, utxng := range unverifiedTxGroups {
+		err := handler.txPool.Test(utxng.Transactions)
+		if err != nil {
+			// transaction group migth be a dup. We dynamically allocate this here since this is the "non-typical" use case.
+			duplicateTxnGroups = append(duplicateTxnGroups, idx)
+		}
+	}
+	if len(duplicateTxnGroups) == 0 {
+		// no duplicate transactions
+		filteredGroups = unverifiedTxGroups
+		return
+	}
+	filteredGroups = make([]transactions.SignedTxGroup, len(duplicateTxnGroups))
+	for i, idx := range duplicateTxnGroups {
+		filteredGroups[i] = unverifiedTxGroups[idx]
+	}
+	return
+}
+
+func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.SignedTxGroup) (disconnect bool) {
+	unverifiedTxGroups = handler.filterAlreadyCommitted(unverifiedTxGroups)
+
+	if len(unverifiedTxGroups) == 0 {
+		return false
+	}
+
+	// build the transaction verification context
+	latest := handler.ledger.Latest()
+	latestHdr, err := handler.ledger.BlockHdr(latest)
+	if err != nil {
+		logging.Base().Warnf("Could not get header for previous block %v: %v", latest, err)
+		return false
+	}
+
+	unverifiedTxnGroups := make([][]transactions.SignedTxn, len(unverifiedTxGroups))
+	for i, unverifiedGroup := range unverifiedTxGroups {
+		unverifiedTxnGroups[i] = unverifiedGroup.Transactions
+	}
+
+	err = verify.PaysetGroups(context.Background(), unverifiedTxnGroups, latestHdr, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
+	if err != nil {
+		// transaction is invalid
+		logging.Base().Warnf("One or more transactions were malformed: %v", err)
+		return true
+	}
+
+	// at this point, we've verified the transaction group,
+	// so we can safely treat the transaction as a verified transaction.
+	verifiedTxGroup := unverifiedTxGroups
+
+	// save the transaction, if it has high enough fee and not already in the cache
+	err = handler.txPool.RememberArray(verifiedTxGroup)
+	if err != nil {
+		logging.Base().Debugf("could not remember tx: %v", err)
+		return false
+	}
+
+	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
+	err = handler.ledger.VerifiedTransactionCache().PinGroups(verifiedTxGroup)
+	if err != nil {
+		logging.Base().Warnf("unable to pin transaction: %v", err)
+	}
+
+	return false
 }
 
 // SolicitedTxHandler handles messages received through channels other than the gossip network.
@@ -328,19 +391,87 @@ type SolicitedTxHandler interface {
 	Handle(txgroup []transactions.SignedTxn) error
 }
 
+type solicitedTxHandler struct {
+	txHandler *TxHandler
+}
+
 // SolicitedTxHandler converts a transaction handler to a SolicitedTxHandler
 func (handler *TxHandler) SolicitedTxHandler() SolicitedTxHandler {
 	return &solicitedTxHandler{txHandler: handler}
 }
 
-type solicitedTxHandler struct {
-	txHandler *TxHandler
-}
-
 func (handler *solicitedTxHandler) Handle(txgroup []transactions.SignedTxn) error {
-	outmsg, _ := handler.txHandler.processDecoded(txgroup)
-	if outmsg.Action == network.Disconnect {
+	disconnect := handler.txHandler.processDecoded(txgroup)
+	if disconnect {
 		return fmt.Errorf("invlid transaction")
 	}
 	return nil
+}
+
+// SolicitedAsyncTxHandler handles messages received through channels other than the gossip network.
+// It therefore circumvents the notion of incoming/outgoing messages
+type SolicitedAsyncTxHandler interface {
+	HandleTransactionGroups(networkPeer interface{}, txGroups []transactions.SignedTxGroup)
+	Start()
+	Stop()
+}
+
+type solicitedAyncTxHandler struct {
+	txHandler     *TxHandler
+	backlogGroups chan txGroups
+	stopped       sync.WaitGroup
+	stopCtxFunc   context.CancelFunc
+}
+
+type txGroups struct {
+	networkPeer interface{}
+	txGroups    []transactions.SignedTxGroup
+}
+
+// SolicitedAsyncTxHandler converts a transaction handler to a SolicitedTxHandler
+func (handler *TxHandler) SolicitedAsyncTxHandler() SolicitedAsyncTxHandler {
+	return &solicitedAyncTxHandler{
+		txHandler:     handler,
+		backlogGroups: make(chan txGroups, txBacklogSize),
+	}
+}
+
+func (handler *solicitedAyncTxHandler) HandleTransactionGroups(networkPeer interface{}, groups []transactions.SignedTxGroup) {
+	select {
+	case handler.backlogGroups <- txGroups{networkPeer: networkPeer, txGroups: groups}:
+	default:
+		logging.Base().Warnf("solicitedAyncTxHandler exhusted groups backlog")
+	}
+}
+
+func (handler *solicitedAyncTxHandler) Start() {
+	if handler.stopCtxFunc == nil {
+		var ctx context.Context
+		ctx, handler.stopCtxFunc = context.WithCancel(context.Background())
+		handler.stopped.Add(1)
+		go handler.loop(ctx)
+	}
+}
+
+func (handler *solicitedAyncTxHandler) Stop() {
+	if handler.stopCtxFunc != nil {
+		handler.stopCtxFunc()
+		handler.stopped.Wait()
+		handler.stopCtxFunc = nil
+	}
+}
+func (handler *solicitedAyncTxHandler) loop(ctx context.Context) {
+	defer handler.stopped.Done()
+	var groups txGroups
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case groups = <-handler.backlogGroups:
+		}
+		disconnect := handler.txHandler.processDecodedArray(groups.txGroups)
+		if disconnect {
+			handler.txHandler.net.Disconnect(groups.networkPeer)
+		}
+	}
 }
