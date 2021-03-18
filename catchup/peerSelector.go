@@ -38,6 +38,14 @@ const (
 	peerRank1LowBlockTime         = 201
 	peerRank1HighBlockTime        = 399
 
+	peerRankInitialThirdPriority = 400
+	peerRank2LowBlockTime        = 401
+	peerRank2HighBlockTime       = 599
+
+	peerRankInitialFourthPriority = 600
+	peerRank3LowBlockTime         = 601
+	peerRank3HighBlockTime        = 799
+
 	// peerRankDownloadFailed is used for responses which could be temporary, such as missing files, or such that we don't
 	// have clear resolution
 	peerRankDownloadFailed = 900
@@ -170,8 +178,14 @@ func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownl
 	switch ps.pools[poolIdx].peers[peerIdx].class.initialRank {
 	case peerRankInitialFirstPriority:
 		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank0LowBlockTime, peerRank0HighBlockTime)
-	default: // i.e. peerRankInitialSecondPriority
+	case peerRankInitialSecondPriority:
 		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank1LowBlockTime, peerRank1HighBlockTime)
+	case peerRankInitialThirdPriority:
+		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank2LowBlockTime, peerRank2HighBlockTime)
+	default: // i.e. peerRankInitialFourthPriority
+		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank3LowBlockTime, peerRank3HighBlockTime)
+
+		
 	}
 }
 

@@ -90,11 +90,11 @@ type FrontendFactory interface {
 	Make(router *mux.Router, appAddress string) (da DebugAdapter)
 }
 
-func makeDebugServer(port int, ff FrontendFactory, dp *DebugParams) DebugServer {
+func makeDebugServer(iface string, port int, ff FrontendFactory, dp *DebugParams) DebugServer {
 	debugger := MakeDebugger()
 
 	router := mux.NewRouter()
-	appAddress := fmt.Sprintf("127.0.0.1:%d", port)
+	appAddress := fmt.Sprintf("%s:%d", iface, port)
 
 	da := ff.Make(router, appAddress)
 	debugger.AddAdapter(da)

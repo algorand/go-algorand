@@ -118,6 +118,13 @@ def _script_thread_inner(runset, scriptname):
         sys.stderr.write('{}\n'.format(te))
         retcode = -1
     dt = time.time() - start
+
+
+    if runset.terminated:
+        logger.info('Program terminated before %s finishes.', scriptname)
+        runset.done(scriptname, False, dt)
+        return
+
     if retcode != 0:
         with runset.lock:
             logger.error('%s failed in %f seconds', scriptname, dt)
