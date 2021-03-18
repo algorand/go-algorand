@@ -1642,7 +1642,7 @@ func disPushBytes(dis *disassembleState, spec *OpSpec) {
 		return
 	}
 	bytes := dis.program[pos:end]
-	_, dis.err = fmt.Fprintf(dis.out, "%s 0x%s", spec.Name, hex.EncodeToString(bytes))
+	_, dis.err = fmt.Fprintf(dis.out, "%s 0x%s\n", spec.Name, hex.EncodeToString(bytes))
 	dis.nextpc = int(end)
 }
 func checkPushBytes(cx *evalContext) int {
