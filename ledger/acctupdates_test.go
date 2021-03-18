@@ -945,7 +945,6 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	defer func() {
 		os.RemoveAll(temporaryDirectroy)
 	}()
-
 	tempCatchpointDir := filepath.Join(temporaryDirectroy,CatchpointDirName)
 
 	// creating empty catchpoint directories
@@ -960,6 +959,7 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 	require.NoError(t, err)
 
 	// creating catchpoint file
+
 	catchpointFilePath := path.Join(tempCatchpointDir, "14", "2e", "e4", "dummy_catchpoint_file")
 	err = os.MkdirAll(path.Dir(catchpointFilePath), 0755)
 	require.NoError(t, err)
@@ -979,12 +979,13 @@ func TestSchemaUpdateDeleteStoredCatchpoints(t *testing.T) {
 
 	err = au.loadFromDisk(ml)
 	require.NoError(t, err)
-	emptyDirs, err := GetEmptyDirs(temporaryDirectroy)
+	emptyDirs, err := GetEmptyDirs(tempCatchpointDir)
 	require.NoError(t, err)
-	onlyCatchpointDirEmpty := len(emptyDirs) == 0
-	require.Equal(t,  onlyCatchpointDirEmpty , true)
-
+	onlyTempDirEmpty := len(emptyDirs) == 0
+	require.Equal(t,  onlyTempDirEmpty , true)
 }
+
+
 
 func getNumberOfCatchpointFilesInDir(catchpointDir string) (int, error) {
 	numberOfCatchpointFiles := 0

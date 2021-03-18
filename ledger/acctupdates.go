@@ -1516,11 +1516,12 @@ func IsDirectoryEmpty(path string) (bool, error){
 }
 
 func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
-	if _,err := os.Stat(au.dbDirectory); os.IsNotExist(err) {
+	catchpointRootDir := filepath.Join(au.dbDirectory,CatchpointDirName)
+	if _,err := os.Stat(catchpointRootDir); os.IsNotExist(err) {
 		return nil
 	}
 	for {
-		emptyDirs, err := GetEmptyDirs(au.dbDirectory)
+		emptyDirs, err := GetEmptyDirs(catchpointRootDir)
 		if err != nil {
 			return err
 		}
@@ -1529,7 +1530,7 @@ func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
 			break
 		}
 		// only left with the root dir
-		if len(emptyDirs) == 1 && emptyDirs[0] == au.dbDirectory {
+		if len(emptyDirs) == 1 && emptyDirs[0] == catchpointRootDir {
 			break
 		}
 		for _, emptyDirPath := range emptyDirs {
@@ -1543,7 +1544,7 @@ func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
 func GetEmptyDirs(PathToScan string) ([]string, error) {
 	var emptyDir []string
 	err := filepath.Walk(PathToScan,func(path string, f os.FileInfo, errIn error) error {
-		if errIn != nil {
+		if errIn != nil  {
 			return errIn
 		}
 		if !f.IsDir() {
