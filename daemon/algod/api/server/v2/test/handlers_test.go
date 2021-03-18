@@ -189,21 +189,45 @@ func TestPendingTransactionInformation(t *testing.T) {
 	pendingTransactionInformationTest(t, 0, "bad format", 400)
 }
 
-func getPendingTransactionsTest(t *testing.T, format string, expectedCode int) {
+func getPendingTransactionsTest(t *testing.T, format string, max uint64, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	params := generatedV2.GetPendingTransactionsParams{Format: &format}
+	params := generatedV2.GetPendingTransactionsParams{Format: &format, Max: &max}
 	err := handler.GetPendingTransactions(c, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+	if format == "json" && rec.Code == 200 {
+		var response generatedV2.PendingTransactionsResponse
+
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+
+		if max == 0 || max >= uint64(len(txnPoolGolden)) {
+			// all pending txns should be returned
+			require.Equal(t, uint64(len(response.TopTransactions)), uint64(len(txnPoolGolden)))
+		} else {
+			// only max txns should be returned
+			require.Equal(t, uint64(len(response.TopTransactions)), max)
+		}
+
+		require.Equal(t, response.TotalTransactions, uint64(len(txnPoolGolden)))
+		require.GreaterOrEqual(t, response.TotalTransactions, uint64(len(response.TopTransactions)))
+	}
 }
 
 func TestPendingTransactions(t *testing.T) {
 	t.Parallel()
 
-	getPendingTransactionsTest(t, "json", 200)
-	getPendingTransactionsTest(t, "msgpack", 200)
-	getPendingTransactionsTest(t, "bad format", 400)
+	getPendingTransactionsTest(t, "json", 0, 200)
+	getPendingTransactionsTest(t, "json", 1, 200)
+	getPendingTransactionsTest(t, "json", 2, 200)
+	getPendingTransactionsTest(t, "json", 3, 200)
+	getPendingTransactionsTest(t, "msgpack", 0, 200)
+	getPendingTransactionsTest(t, "msgpack", 1, 200)
+	getPendingTransactionsTest(t, "msgpack", 2, 200)
+	getPendingTransactionsTest(t, "msgpack", 3, 200)
+	getPendingTransactionsTest(t, "bad format", 0, 400)
 }
 
 func pendingTransactionsByAddressTest(t *testing.T, rootkeyToUse int, format string, expectedCode int) {
