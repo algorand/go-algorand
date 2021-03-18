@@ -366,7 +366,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 		t.Errorf("All messages were sent, send not cancelled")
 	case <-time.After(2 * time.Second):
 	}
-	assert.Equal(t, 0, counter.count)
+	assert.Equal(t, 0, counter.Count())
 
 	// try calling innerBroadcast
 	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
@@ -378,7 +378,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 		t.Errorf("All messages were sent, send not cancelled")
 	case <-time.After(2 * time.Second):
 	}
-	assert.Equal(t, 0, counter.count)
+	assert.Equal(t, 0, counter.Count())
 
 	// try calling writeLoopSend
 	msgs := make([]sendMessage, 0, len(data))
@@ -394,7 +394,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	msgs[50].ctx = ctx
 
 	for _, peer := range peers {
-		peer.writeLoopSend(sendMessages{msgs})
+		peer.sendBufferHighPrio <- sendMessages{msgs}
 	}
 
 	select {
@@ -402,7 +402,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 		t.Errorf("All messages were sent, send not cancelled")
 	case <-time.After(2 * time.Second):
 	}
-	assert.Equal(t, 50, counter.count)
+	assert.Equal(t, 50, counter.Count())
 }
 
 // Set up two nodes, test that a.Broadcast is received by B, when B has no address.
