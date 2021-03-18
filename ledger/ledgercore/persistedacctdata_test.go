@@ -886,7 +886,7 @@ func TestFindLoadedSiblings(t *testing.T) {
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			e := genExtendedHoldingGroups(test.i)
-			l, c := e.findLoadedSiblings()
+			l, c := findLoadedSiblings(&e)
 			if test.seed != 0 {
 				fmt.Printf("seed = %d\n", test.seed)
 			}

@@ -169,6 +169,7 @@ type AbstractAssetGroup interface {
 	HasSpace() bool
 	Loaded() bool
 	GroupData() AbstractAssetGroupData
+	AssetCount() uint32
 }
 type AbstractAssetGroupList interface {
 	// Get returns abstract group
@@ -362,6 +363,10 @@ func (g *AssetGroupDesc) MinAsset() basics.AssetIndex {
 
 func (g *AssetGroupDesc) MaxAsset() basics.AssetIndex {
 	return g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex)
+}
+
+func (g *AssetGroupDesc) AssetCount() uint32 {
+	return g.Count
 }
 
 func (g *AssetsHoldingGroup) GroupData() AbstractAssetGroupData {
@@ -649,7 +654,8 @@ func (e ExtendedAssetParam) FindAsset(aidx basics.AssetIndex, startIdx int) (int
 }
 
 // findAsset returns group index and asset index if found and (-1, -1) otherwise.
-// If a matching group found but the group is not loaded yet, it returns (groupIdx, -1)
+// If a matching group found but the group is not loaded yet, it returns (groupIdx, -1).
+// It is suitable for searchin within AbstractAssetGroupList that is either holdings or params types.
 func findAsset(aidx basics.AssetIndex, startIdx int, agl AbstractAssetGroupList) (int, int) {
 	if agl.Total() == 0 {
 		return -1, -1
@@ -740,11 +746,12 @@ type continuosRange struct {
 	count int // total holdings
 }
 
-func (e ExtendedAssetHolding) findLoadedSiblings() (loaded []int, crs []continuosRange) {
+func findLoadedSiblings(agl AbstractAssetGroupList) (loaded []int, crs []continuosRange) {
 	// find candidates for merging
-	loaded = make([]int, 0, len(e.Groups))
-	for i := 0; i < len(e.Groups); i++ {
-		if !e.Groups[i].Loaded() {
+	loaded = make([]int, 0, agl.Len())
+	for i := 0; i < agl.Len(); i++ {
+		g := agl.Get(i)
+		if !g.Loaded() {
 			continue
 		}
 		if len(loaded) > 0 && loaded[len(loaded)-1] == i-1 {
@@ -754,12 +761,13 @@ func (e ExtendedAssetHolding) findLoadedSiblings() (loaded []int, crs []continuo
 				last := &crs[len(crs)-1]
 				if last.start+last.size == i {
 					last.size++
-					last.count += int(e.Groups[i].Count)
+					last.count += int(g.AssetCount())
 					exists = true
 				}
 			}
 			if !exists {
-				count := int(e.Groups[i-1].Count + e.Groups[i].Count)
+				pg := agl.Get(i - 1)
+				count := int(pg.AssetCount() + g.AssetCount())
 				crs = append(crs, continuosRange{i - 1, 2, count})
 			}
 		}
@@ -834,7 +842,7 @@ func (e *ExtendedAssetHolding) merge(start int, size int, hint int) (deleted []i
 // - loaded list group indices that are loaded and needs to flushed
 // - deleted list of group data keys that needs to be deleted
 func (e *ExtendedAssetHolding) Merge() (loaded []int, deleted []int64) {
-	loaded, crs := e.findLoadedSiblings()
+	loaded, crs := findLoadedSiblings(e)
 	if len(crs) == 0 {
 		return
 	}
