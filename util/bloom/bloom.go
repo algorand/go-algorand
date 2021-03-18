@@ -29,14 +29,13 @@ type Filter struct {
 func New(sizeBits int, numHashes uint32, prefix uint32) *Filter {
 	m := (sizeBits + 7) / 8
 	filter := Filter{
-		numHashes:             numHashes,
-		data:                  make([]byte, m),
-		preimageStagingBuffer: make([]byte, 0, 4+32),
-		hashStagingBuffer:     make([]uint32, numHashes+3),
+		numHashes:         numHashes,
+		data:              make([]byte, m),
+		hashStagingBuffer: make([]uint32, numHashes+3),
 	}
 	binary.BigEndian.PutUint32(filter.prefix[:], prefix)
+	filter.preimageStagingBuffer = make([]byte, 0, len(filter.prefix)+32)
 	copy(filter.preimageStagingBuffer, filter.prefix[:])
-	filter.preimageStagingBuffer = filter.preimageStagingBuffer[:len(filter.prefix)]
 	return &filter
 }
 
@@ -131,10 +130,9 @@ func UnmarshalBinary(data []byte) (*Filter, error) {
 	}
 	copy(f.prefix[:], data[4:8])
 	f.data = data[8:]
-	f.preimageStagingBuffer = make([]byte, 0, 4+32)
+	f.preimageStagingBuffer = make([]byte, len(f.prefix), len(f.prefix)+32)
 	f.hashStagingBuffer = make([]uint32, f.numHashes+3)
 	copy(f.preimageStagingBuffer, f.prefix[:])
-	f.preimageStagingBuffer = f.preimageStagingBuffer[:len(f.prefix)]
 	return f, nil
 }
 
