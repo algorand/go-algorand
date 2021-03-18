@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -141,9 +140,6 @@ func (client *mockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txg
 		txgroups[i] = client.client.txgroups[i].Transactions
 	}
 	return txgroups, nil
-}
-func (client *mockRPCClient) GetBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
-	return nil, nil
 }
 
 // network.HTTPPeer interface

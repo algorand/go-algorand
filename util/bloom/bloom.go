@@ -29,10 +29,13 @@ type Filter struct {
 func New(sizeBits int, numHashes uint32, prefix uint32) *Filter {
 	m := (sizeBits + 7) / 8
 	filter := Filter{
-		numHashes: numHashes,
-		data:      make([]byte, m),
+		numHashes:         numHashes,
+		data:              make([]byte, m),
+		hashStagingBuffer: make([]uint32, numHashes+3),
 	}
 	binary.BigEndian.PutUint32(filter.prefix[:], prefix)
+	filter.preimageStagingBuffer = make([]byte, len(filter.prefix), len(filter.prefix)+32)
+	copy(filter.preimageStagingBuffer, filter.prefix[:])
 	return &filter
 }
 
@@ -55,12 +58,18 @@ func Optimal(numElements int, falsePositiveRate float64) (sizeBits int, numHashe
 	return int(math.Ceil(m)), numHashes
 }
 
+// makePreimage creates the preimage we use for a byte-array before hashing it.
+func (f *Filter) makePreimage(x []byte) (preimage []byte) {
+	preimage = f.preimageStagingBuffer
+	preimage = append(preimage, x...)
+	return
+}
+
 // Set marks x as present in the filter
 func (f *Filter) Set(x []byte) {
-	withPrefix := f.preimageStagingBuffer
-	withPrefix = append(withPrefix, f.prefix[:]...)
-	withPrefix = append(withPrefix, x...)
-	hs := f.hash(withPrefix, f.numHashes)
+	withPrefix := f.makePreimage(x)
+	hs := f.hash(withPrefix)
+	f.preimageStagingBuffer = withPrefix[:len(f.prefix)]
 	n := uint32(len(f.data) * 8)
 	for _, h := range hs {
 		f.set(h % n)
@@ -70,11 +79,9 @@ func (f *Filter) Set(x []byte) {
 
 // Test checks whether x is present in the filter
 func (f *Filter) Test(x []byte) bool {
-	withPrefix := f.preimageStagingBuffer
-	withPrefix = append(withPrefix, f.prefix[:]...)
-	withPrefix = append(withPrefix, x...)
-	hs := f.hash(withPrefix, f.numHashes)
-	f.preimageStagingBuffer = withPrefix[:0]
+	withPrefix := f.makePreimage(x)
+	hs := f.hash(withPrefix)
+	f.preimageStagingBuffer = withPrefix[:len(f.prefix)]
 	n := uint32(len(f.data) * 8)
 	for _, h := range hs {
 		if !f.test(h % n) {
@@ -124,6 +131,9 @@ func UnmarshalBinary(data []byte) (*Filter, error) {
 	}
 	copy(f.prefix[:], data[4:8])
 	f.data = data[8:]
+	f.preimageStagingBuffer = make([]byte, len(f.prefix), len(f.prefix)+32)
+	f.hashStagingBuffer = make([]uint32, f.numHashes+3)
+	copy(f.preimageStagingBuffer, f.prefix[:])
 	return f, nil
 }
 
@@ -148,16 +158,10 @@ func UnmarshalJSON(data []byte) (*Filter, error) {
 // Previously, we used the hashing method described in this paper:
 // http://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
 // but this gave us bad false positive rates for small bloom filters.
-func (f *Filter) hash(x []byte, nhash uint32) []uint32 {
+func (f *Filter) hash(x []byte) []uint32 {
 	res := f.hashStagingBuffer
-	if cap(res) < int(nhash+3) {
-		f.hashStagingBuffer = make([]uint32, nhash+3)
-		res = f.hashStagingBuffer
-	} else {
-		res = res[:nhash+3]
-	}
 
-	for i := uint32(0); i < (nhash+3)/4; i++ {
+	for i := uint32(0); i < (f.numHashes+3)/4; i++ {
 		h1, h2 := siphash.Hash128(uint64(i), 666666, x)
 
 		res[i*4] = uint32(h1)
@@ -166,7 +170,7 @@ func (f *Filter) hash(x []byte, nhash uint32) []uint32 {
 		res[i*4+3] = uint32(h2 >> 32)
 	}
 
-	return res[:nhash]
+	return res[:f.numHashes]
 }
 
 func (f *Filter) test(bit uint32) bool {
