@@ -74,6 +74,7 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	AppsTotalSchema:             &appsTotalSchema,
 	CreatedApps:                 &appCreatedApps,
 }
+var txnPoolGolden = make([]transactions.SignedTxn, 2)
 
 // ordinarily mockNode would live in `components/mocks`
 // but doing this would create an import cycle, as mockNode needs
@@ -120,7 +121,7 @@ func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWit
 }
 
 func (m mockNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
-	return nil, m.err
+	return txnPoolGolden, m.err
 }
 
 func (m mockNode) SuggestedFee() basics.MicroAlgos {
