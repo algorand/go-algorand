@@ -107,6 +107,22 @@ func (a SortAppIndex) Len() int           { return len(a) }
 func (a SortAppIndex) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortAppIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
+type AbstractAssetGroup interface {
+	MinAsset() basics.AssetIndex
+	MaxAsset() basics.AssetIndex
+	HasSpace() bool
+	Loaded() bool
+	Find(aidx basics.AssetIndex) int
+}
+type AbstractAssetGroupList interface {
+	// Get returns abstract group
+	Get(idx int) AbstractAssetGroup
+	// Len returns number of groups in the list
+	Len() int
+	// Totals returns number of assets inside all the the groups
+	Total() uint32
+}
+
 // EncodedMaxAssetsPerAccount is a copy from basics package to resolve deps in msgp-generated file
 var EncodedMaxAssetsPerAccount = basics.EncodedMaxAssetsPerAccount
 
@@ -255,6 +271,30 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 	g.Count++
 }
 
+func (g *AssetsHoldingGroup) HasSpace() bool {
+	return g.Count < MaxHoldingGroupSize
+}
+
+func (g *AssetsHoldingGroup) MinAsset() basics.AssetIndex {
+	return g.MinAssetIndex
+}
+
+func (g *AssetsHoldingGroup) MaxAsset() basics.AssetIndex {
+	return g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex)
+}
+
+func (g *AssetsHoldingGroup) Find(aidx basics.AssetIndex) int {
+	// linear search because AssetOffsets is delta-encoded, not values
+	cur := g.MinAssetIndex
+	for ai, d := range g.groupData.AssetOffsets {
+		cur = d + cur
+		if aidx == cur {
+			return ai
+		}
+	}
+	return -1
+}
+
 // Update an asset holding by index
 func (e *ExtendedAssetHolding) Update(updated []basics.AssetIndex, assets map[basics.AssetIndex]basics.AssetHolding) error {
 	sort.SliceStable(updated, func(i, j int) bool { return updated[i] < updated[j] })
@@ -371,7 +411,7 @@ func (e *ExtendedAssetHolding) Insert(input []basics.AssetIndex, data map[basics
 	sort.SliceStable(input, func(i, j int) bool { return input[i] < input[j] })
 	gi := 0
 	for _, aidx := range input {
-		result := e.findGroup(aidx, gi)
+		result := findGroup(aidx, gi, e)
 		if result.found {
 			if result.split {
 				e.splitInsert(result.gi, aidx, data[aidx])
@@ -449,55 +489,57 @@ type fgres struct {
 //   [1, 2, 3, 5], [7, 10, 12, 15]
 //   aidx = 6 -> new group after 0
 
-func (e ExtendedAssetHolding) findGroup(aidx basics.AssetIndex, startIdx int) fgres {
-	if e.Count == 0 {
+// func (e ExtendedAssetHolding) findGroup(aidx basics.AssetIndex, startIdx int) fgres {
+func findGroup(aidx basics.AssetIndex, startIdx int, agl AbstractAssetGroupList) fgres {
+	if agl.Total() == 0 {
 		return fgres{false, -1, false}
 	}
-	for i, g := range e.Groups[startIdx:] {
+	for i := startIdx; i < agl.Len(); i++ {
+		g := agl.Get(i)
 		// check exact boundaries
-		if aidx >= g.MinAssetIndex && aidx <= g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
+		if aidx >= g.MinAsset() && aidx <= g.MaxAsset() {
 			// found a group that is a right place for the asset
 			// if it has space, insert into it
-			if g.Count < MaxHoldingGroupSize {
-				return fgres{found: true, gi: i + startIdx, split: false}
+			if g.HasSpace() {
+				return fgres{found: true, gi: i, split: false}
 			}
 			// otherwise split into two groups
-			return fgres{found: true, gi: i + startIdx, split: true}
+			return fgres{found: true, gi: i, split: true}
 		}
 		// check upper bound
-		if aidx >= g.MinAssetIndex && aidx > g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
+		if aidx >= g.MinAsset() && aidx > g.MaxAsset() {
 			// the asset still might fit into a group if it has space and does not break groups order
-			if g.Count < MaxHoldingGroupSize {
+			if g.HasSpace() {
 				// ensure next group starts with the asset greater than current one
-				if i+startIdx < len(e.Groups)-1 && aidx < e.Groups[i+startIdx+1].MinAssetIndex {
-					return fgres{found: true, gi: i + startIdx, split: false}
+				if i < agl.Len()-1 && aidx < agl.Get(i+1).MinAsset() {
+					return fgres{found: true, gi: i, split: false}
 				}
 				// the last group, ok to add more
-				if i+startIdx == len(e.Groups)-1 {
-					return fgres{found: true, gi: i + startIdx, split: false}
+				if i == agl.Len()-1 {
+					return fgres{found: true, gi: i, split: false}
 				}
 			}
 		}
 
 		// check bottom bound
-		if aidx < g.MinAssetIndex {
+		if aidx < g.MinAsset() {
 			// found a group that is a right place for the asset
 			// if it has space, insert into it
-			if g.Count < MaxHoldingGroupSize {
-				return fgres{found: true, gi: i + startIdx, split: false}
+			if g.HasSpace() {
+				return fgres{found: true, gi: i, split: false}
 			}
 			// otherwise insert group before the current one
-			return fgres{found: false, gi: i + startIdx - 1, split: false}
+			return fgres{found: false, gi: i - 1, split: false}
 		}
 	}
 
 	// no matching groups then add a new group at the end
-	return fgres{found: false, gi: len(e.Groups) - 1, split: false}
+	return fgres{found: false, gi: agl.Len() - 1, split: false}
 }
 
 // FindGroup returns a group suitable for asset insertion
 func (e ExtendedAssetHolding) FindGroup(aidx basics.AssetIndex, startIdx int) int {
-	res := e.findGroup(aidx, startIdx)
+	res := findGroup(aidx, startIdx, &e)
 	if res.found {
 		return res.gi
 	}
@@ -507,32 +549,29 @@ func (e ExtendedAssetHolding) FindGroup(aidx basics.AssetIndex, startIdx int) in
 // FindAsset returns group index and asset index if found and (-1, -1) otherwise.
 // If a matching group found but the group is not loaded yet, it returns (gi, -1)
 func (e ExtendedAssetHolding) FindAsset(aidx basics.AssetIndex, startIdx int) (int, int) {
-	if e.Count == 0 {
+	return findAsset(aidx, startIdx, &e)
+}
+func findAsset(aidx basics.AssetIndex, startIdx int, agl AbstractAssetGroupList) (int, int) {
+	if agl.Total() == 0 {
 		return -1, -1
 	}
 
-	for gi, g := range e.Groups[startIdx:] {
-		if aidx >= g.MinAssetIndex && aidx <= g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
-			if !g.loaded {
+	for i := startIdx; i < agl.Len(); i++ {
+		g := agl.Get(i)
+		if aidx >= g.MinAsset() && aidx <= g.MaxAsset() {
+			if !g.Loaded() {
 				// groupData not loaded, but the group boundaries match
 				// return group match and -1 as asset index indicating loading is need
-				return gi + startIdx, -1
+				return i, -1
 			}
-
-			// linear search because AssetOffsets is delta-encoded, not values
-			cur := g.MinAssetIndex
-			for ai, d := range g.groupData.AssetOffsets {
-				cur = d + cur
-				if aidx == cur {
-					return gi + startIdx, ai
-				}
+			if ai := g.Find(aidx); ai != -1 {
+				return i, ai
 			}
 
 			// the group is loaded and the asset not found
 			return -1, -1
 		}
 	}
-
 	return -1, -1
 }
 
@@ -735,4 +774,16 @@ func (e *ExtendedAssetHolding) TestClearGroupData() {
 		e.Groups[i].groupData = AssetsHoldingGroupData{}
 		e.Groups[i].loaded = false
 	}
+}
+
+func (e *ExtendedAssetHolding) Get(idx int) AbstractAssetGroup {
+	return &(e.Groups[idx])
+}
+
+func (e *ExtendedAssetHolding) Len() int {
+	return len(e.Groups)
+}
+
+func (e *ExtendedAssetHolding) Total() uint32 {
+	return e.Count
 }

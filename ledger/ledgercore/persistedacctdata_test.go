@@ -409,62 +409,62 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 
 	// new group at the beginning
 	aidx := basics.AssetIndex(1)
-	res := e.findGroup(aidx, 0)
+	res := findGroup(aidx, 0, &e)
 	a.False(res.found)
 	a.False(res.split)
 	a.Equal(-1, res.gi)
 
 	// split group 0
 	aidx = basics.AssetIndex(spec1[0].start + 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.True(res.split)
 	a.Equal(0, res.gi)
 
 	// insert into group 1 if skipping 0
-	res = e.findGroup(aidx, 1)
+	res = findGroup(aidx, 1, &e)
 	a.True(res.found)
 	a.False(res.split)
 	a.Equal(1, res.gi)
 
 	// prepend into group 1
 	aidx = basics.AssetIndex(spec1[0].end + 10)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.False(res.split)
 	a.Equal(1, res.gi)
 
 	// append into group 1
 	aidx = basics.AssetIndex(spec1[1].end + 10)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.False(res.split)
 	a.Equal(1, res.gi)
 
 	// insert into group 1
 	aidx = basics.AssetIndex(spec1[1].start + 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.False(res.split)
 	a.Equal(1, res.gi)
 
 	// split group 2
 	aidx = basics.AssetIndex(spec1[2].start + 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.True(res.split)
 	a.Equal(2, res.gi)
 
 	// new group after group 2
 	aidx = basics.AssetIndex(spec1[2].end + 100)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.False(res.found)
 	a.False(res.split)
 	a.Equal(2, res.gi)
 
 	// new group after group 3
 	aidx = basics.AssetIndex(spec1[3].end + 100)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.False(res.found)
 	a.False(res.split)
 	a.Equal(3, res.gi)
@@ -547,35 +547,35 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 
 	// insert into group 0
 	aidx = basics.AssetIndex(1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.False(res.split)
 	a.Equal(0, res.gi)
 
 	// insert into group 0
 	aidx = basics.AssetIndex(spec2[0].start + 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.False(res.split)
 	a.Equal(0, res.gi)
 
 	// insert into group 0
 	aidx = basics.AssetIndex(spec2[0].end + 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.False(res.split)
 	a.Equal(0, res.gi)
 
 	// split group 1
 	aidx = basics.AssetIndex(spec2[1].start + 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.True(res.split)
 	a.Equal(1, res.gi)
 
 	// new group after group 1
 	aidx = basics.AssetIndex(spec2[1].end + 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.False(res.found)
 	a.False(res.split)
 	a.Equal(1, res.gi)
@@ -589,21 +589,21 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 
 	// split group 0
 	aidx = basics.AssetIndex(spec3[0].start + 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.True(res.split)
 	a.Equal(0, res.gi)
 
 	// insert into group 1
 	aidx = basics.AssetIndex(spec3[1].start - 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.False(res.split)
 	a.Equal(1, res.gi)
 
 	// insert into group 1
 	aidx = basics.AssetIndex(spec3[1].end + 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.True(res.found)
 	a.False(res.split)
 	a.Equal(1, res.gi)
@@ -617,7 +617,7 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 
 	// new group after 0
 	aidx = basics.AssetIndex(spec4[0].end + 1)
-	res = e.findGroup(aidx, 0)
+	res = findGroup(aidx, 0, &e)
 	a.False(res.found)
 	a.False(res.split)
 	a.Equal(0, res.gi)
