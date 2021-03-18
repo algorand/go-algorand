@@ -145,7 +145,6 @@ func main() {
 		}
 		err = cmd.Wait()
 		if err != nil {
-			captureErrorLogs(algohConfig, errorOutput, output, absolutePath, true)
 			reportErrorf("error waiting for algod: %v", err)
 		}
 		close(done)
@@ -363,7 +362,7 @@ func captureErrorLogs(algohConfig algoh.HostConfig, errorOutput stdCollector, ou
 
 func reportErrorf(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, args...)
-	logging.Base().Fatalf(format, args...)
+	logging.Base().Warnf(format, args...)
 }
 
 func sendLogs() {
