@@ -362,7 +362,7 @@ func captureErrorLogs(algohConfig algoh.HostConfig, errorOutput stdCollector, ou
 
 func reportErrorf(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, args...)
-	logging.Base().Fatalf(format, args...)
+	logging.Base().Warnf(format, args...)
 }
 
 func sendLogs() {
