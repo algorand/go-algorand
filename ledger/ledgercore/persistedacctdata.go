@@ -127,10 +127,6 @@ type ExtendedAssetParam struct {
 	Groups  []AssetsParamGroup `codec:"gs,allocbound=4096"` // 1M asset holdings
 }
 
-// extendedAsset is a support type to hold some common methods for both ExtendedAssetHolding and ExtendedAssetParam
-type extendedAsset struct {
-}
-
 // PersistedAccountData represents actual data stored in DB
 type PersistedAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -138,7 +134,6 @@ type PersistedAccountData struct {
 	basics.AccountData
 	ExtendedAssetHolding ExtendedAssetHolding `codec:"eah"`
 	ExtendedAssetParam   ExtendedAssetParam   `codec:"eap"`
-	extendedAsset
 }
 
 // SortAssetIndex is a copy from data/basics/sort.go
@@ -178,6 +173,22 @@ type AbstractAssetGroupList interface {
 	Len() int
 	// Totals returns number of assets inside all the the groups
 	Total() uint32
+	// Reset initializes group to hold count assets in length groups
+	Reset(count uint32, length int)
+	// Assign assigns to value group to group[idx]
+	Assign(idx int, group interface{})
+}
+
+type GroupBuilder interface {
+	NewGroup(size int)
+	NewElement(offset basics.AssetIndex, data interface{})
+	Build(desc AssetGroupDesc) interface{}
+}
+
+type Flattener interface {
+	Count() uint32
+	Data(idx int) interface{}
+	AssetIndex(idx int) basics.AssetIndex
 }
 
 // EncodedMaxAssetsPerAccount is a copy from basics package to resolve deps in msgp-generated file
@@ -681,25 +692,103 @@ func findAsset(aidx basics.AssetIndex, startIdx int, agl AbstractAssetGroupList)
 	return -1, -1
 }
 
-// ConvertToGroups converts asset holdings map to groups/group data
+type AssetHoldingGroupBuilder struct {
+	gd  AssetsHoldingGroupData
+	idx int
+}
+
+func (b *AssetHoldingGroupBuilder) NewGroup(size int) {
+	b.gd = AssetsHoldingGroupData{
+		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, size, size)},
+		Amounts:               make([]uint64, size, size),
+		Frozens:               make([]bool, size, size),
+	}
+	b.idx = 0
+}
+func (b *AssetHoldingGroupBuilder) Build(desc AssetGroupDesc) interface{} {
+	defer func() {
+		b.gd = AssetsHoldingGroupData{}
+		b.idx = 0
+	}()
+
+	return AssetsHoldingGroup{
+		AssetGroupDesc: desc,
+		groupData:      b.gd,
+		loaded:         true,
+	}
+}
+
+func (b *AssetHoldingGroupBuilder) NewElement(offset basics.AssetIndex, data interface{}) {
+	b.gd.AssetOffsets[b.idx] = offset
+	holding := data.(basics.AssetHolding)
+	b.gd.Amounts[b.idx] = holding.Amount
+	b.gd.Frozens[b.idx] = holding.Frozen
+	b.idx++
+}
+
+type AssetFlattener struct {
+	assets []flattenAsset
+}
+
+type flattenAsset struct {
+	aidx basics.AssetIndex
+	data interface{}
+}
+
+func newAssetHoldingFlattener(assets map[basics.AssetIndex]basics.AssetHolding) *AssetFlattener {
+	flatten := make([]flattenAsset, len(assets), len(assets))
+	i := 0
+	for k, v := range assets {
+		flatten[i] = flattenAsset{k, v}
+		i++
+	}
+	sort.SliceStable(flatten, func(i, j int) bool { return flatten[i].aidx < flatten[j].aidx })
+	return &AssetFlattener{flatten}
+}
+
+func newAssetParamFlattener(assets map[basics.AssetIndex]basics.AssetParams) *AssetFlattener {
+	flatten := make([]flattenAsset, len(assets), len(assets))
+	i := 0
+	for k, v := range assets {
+		flatten[i] = flattenAsset{k, v}
+		i++
+	}
+	sort.SliceStable(flatten, func(i, j int) bool { return flatten[i].aidx < flatten[j].aidx })
+	return &AssetFlattener{flatten}
+}
+
+func (f *AssetFlattener) Count() uint32 {
+	return uint32(len(f.assets))
+}
+
+func (f *AssetFlattener) AssetIndex(idx int) basics.AssetIndex {
+	return f.assets[idx].aidx
+}
+
+func (f *AssetFlattener) Data(idx int) interface{} {
+	return f.assets[idx].data
+}
+
 func (e *ExtendedAssetHolding) ConvertToGroups(assets map[basics.AssetIndex]basics.AssetHolding) {
 	if len(assets) == 0 {
 		return
 	}
+	b := AssetHoldingGroupBuilder{}
+	flt := newAssetHoldingFlattener(assets)
+	convertToGroups(e, flt, &b)
+}
 
-	type asset struct {
-		aidx     basics.AssetIndex
-		holdings basics.AssetHolding
+func (e *ExtendedAssetParam) ConvertToGroups(assets map[basics.AssetIndex]basics.AssetParams) {
+	if len(assets) == 0 {
+		return
 	}
-	flatten := make([]asset, len(assets), len(assets))
-	i := 0
-	for k, v := range assets {
-		flatten[i] = asset{k, v}
-		i++
-	}
-	sort.SliceStable(flatten, func(i, j int) bool { return flatten[i].aidx < flatten[j].aidx })
+	b := AssetHoldingGroupBuilder{}
+	flt := newAssetParamFlattener(assets)
+	convertToGroups(e, flt, &b)
+}
 
-	numGroups := (len(assets) + MaxHoldingGroupSize - 1) / MaxHoldingGroupSize
+// convertToGroups converts data from Flattener into groups produced by GroupBuilder and assigns into AbstractAssetGroupList
+func convertToGroups(agl AbstractAssetGroupList, flt Flattener, builder GroupBuilder) {
 	min := func(a, b int) int {
 		if a < b {
 			return a
@@ -707,35 +796,29 @@ func (e *ExtendedAssetHolding) ConvertToGroups(assets map[basics.AssetIndex]basi
 		return b
 	}
 
-	e.Count = uint32(len(assets))
-	e.Groups = make([]AssetsHoldingGroup, numGroups)
+	numGroups := int(flt.Count()+MaxHoldingGroupSize-1) / MaxHoldingGroupSize
+	agl.Reset(flt.Count(), numGroups)
 
 	for i := 0; i < numGroups; i++ {
 		start := i * MaxHoldingGroupSize
-		end := min((i+1)*MaxHoldingGroupSize, len(assets))
+		end := min((i+1)*MaxHoldingGroupSize, int(flt.Count()))
 		size := end - start
-		gd := AssetsHoldingGroupData{
-			AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, size, size)},
-			Amounts:               make([]uint64, size, size),
-			Frozens:               make([]bool, size, size),
-		}
-		first := flatten[start].aidx
+		builder.NewGroup(size)
+
+		first := flt.AssetIndex(start)
 		prev := first
 		for j, di := start, 0; j < end; j, di = j+1, di+1 {
-			gd.AssetOffsets[di] = flatten[j].aidx - prev
-			gd.Amounts[di] = flatten[j].holdings.Amount
-			gd.Frozens[di] = flatten[j].holdings.Frozen
-			prev = flatten[j].aidx
+			offset := flt.AssetIndex(j) - prev
+			builder.NewElement(offset, flt.Data(j))
+			prev = flt.AssetIndex(j)
 		}
-		e.Groups[i] = AssetsHoldingGroup{
-			AssetGroupDesc: AssetGroupDesc{
-				Count:              uint32(size),
-				MinAssetIndex:      first,
-				DeltaMaxAssetIndex: uint64(prev - first),
-			},
-			groupData: gd,
-			loaded:    true,
+
+		desc := AssetGroupDesc{
+			Count:              uint32(size),
+			MinAssetIndex:      first,
+			DeltaMaxAssetIndex: uint64(prev - first),
 		}
+		agl.Assign(i, builder.Build(desc))
 	}
 }
 
@@ -898,6 +981,15 @@ func (e *ExtendedAssetHolding) Total() uint32 {
 	return e.Count
 }
 
+func (e *ExtendedAssetHolding) Reset(count uint32, length int) {
+	e.Count = count
+	e.Groups = make([]AssetsHoldingGroup, length)
+}
+
+func (e *ExtendedAssetHolding) Assign(idx int, group interface{}) {
+	e.Groups[idx] = group.(AssetsHoldingGroup)
+}
+
 func (e *ExtendedAssetParam) Get(idx int) AbstractAssetGroup {
 	return &(e.Groups[idx])
 }
@@ -908,4 +1000,13 @@ func (e *ExtendedAssetParam) Len() int {
 
 func (e *ExtendedAssetParam) Total() uint32 {
 	return e.Count
+}
+
+func (e *ExtendedAssetParam) Reset(count uint32, length int) {
+	e.Count = count
+	e.Groups = make([]AssetsParamGroup, length)
+}
+
+func (e *ExtendedAssetParam) Assign(idx int, group interface{}) {
+	e.Groups[idx] = group.(AssetsParamGroup)
 }
