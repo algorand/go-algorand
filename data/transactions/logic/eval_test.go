@@ -536,34 +536,46 @@ int 1                   // ret 1
 `, 2)
 }
 
+func TestUint128(t *testing.T) {
+	x := uint128(0, 3)
+	require.Equal(t, x.String(), "3")
+	x = uint128(1, 3)
+	require.Equal(t, x.String(), "18446744073709551619")
+	x = uint128(1, 5)
+	require.Equal(t, x.String(), "18446744073709551621")
+}
+
+func TestDivw(t *testing.T) {
+	t.Parallel()
+	// 2:0 / 1:0 == 2r0 == 0:2,0:0
+	testAccepts(t, `int 2; int 0; int 1; int 0; divw;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 2; ==; assert;
+                        int 0; ==; assert; int 1`, 4)
+
+	// 2:0 / 0:1 == 2:0r0 == 2:0,0:0
+	testAccepts(t, `int 2; int 0; int 0; int 1; divw;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 2; ==; assert; int 1`, 4)
+
+	// 0:7777 / 1:0 == 0:0r7777 == 0:0,0:7777
+	testAccepts(t, `int 0; int 7777; int 1; int 0; divw;
+                        int 7777; ==; assert;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 0; ==; assert; int 1`, 4)
+
+	// 10:0 / 0:0 ==> panic
+	testPanics(t, `int 10; int 0; int 0; int 0; divw;
+	               pop; pop; pop; pop; int 1`, 4)
+}
+
 func TestDivZero(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 0x111111111
-int 0
-/
-pop
-int 1`, v)
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			cost, err := Check(ops.Program, defaultEvalParams(&sb, nil))
-			if err != nil {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, cost < 1000)
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			require.Error(t, err)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "int 0x11; int 0; /; pop; int 1", 1)
 }
 
 func TestModZero(t *testing.T) {

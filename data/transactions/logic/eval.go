@@ -774,15 +774,33 @@ func opAddw(cx *evalContext) {
 	cx.stack[last].Uint = sum
 }
 
+func uint128(hi uint64, lo uint64) *big.Int {
+	whole := new(big.Int).SetUint64(hi)
+	whole.Lsh(whole, 64)
+	whole.Add(whole, new(big.Int).SetUint64(lo))
+	return whole
+}
+
 func opDivwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
-	return 1, 2, 3, 4
+	dividend := uint128(hiNum, loNum)
+	divisor := uint128(hiDen, loDen)
+
+	quo, rem := new(big.Int).QuoRem(dividend, divisor, new(big.Int))
+	return new(big.Int).Rsh(quo, 64).Uint64(),
+		quo.Uint64(),
+		new(big.Int).Rsh(rem, 64).Uint64(),
+		rem.Uint64()
 }
 
 func opDivw(cx *evalContext) {
 	loDen := len(cx.stack) - 1
 	hiDen := loDen - 1
-	loNum := hiDen - 1
-	hiNum := loDen - 1
+	if cx.stack[loDen].Uint == 0 && cx.stack[hiDen].Uint == 0 {
+		cx.err = errors.New("/ 0")
+		return
+	}
+	loNum := loDen - 2
+	hiNum := loDen - 3
 	hiQuo, loQuo, hiRem, loRem :=
 		opDivwImpl(cx.stack[hiNum].Uint, cx.stack[loNum].Uint, cx.stack[hiDen].Uint, cx.stack[loDen].Uint)
 	cx.stack[hiNum].Uint = hiQuo
