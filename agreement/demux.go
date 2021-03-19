@@ -19,6 +19,8 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -105,6 +107,34 @@ func (d *demux) UpdateEventsQueue(queueName string, queueLength int) {
 	d.processingMonitor.UpdateEventsQueue(queueName, queueLength)
 }
 
+func ReconstructProposal(net Network, b *bookkeeping.Block, h MessageHandle) error {
+	logging.Base().Infof("len %v", len(b.PaysetDigest))
+	stxnsData, _ := net.LoadMessage(h, b.PaysetDigest)
+	if b.Payset == nil {
+		b.Payset = make(transactions.Payset, len(b.PaysetDigest))
+	}
+	//if !allPresent {
+	//	return fmt.Errorf("could not recover txns")
+	//}
+
+	for i, stxnData := range stxnsData {
+		if stxnData != nil {
+			var stxn transactions.SignedTxn
+			dec := protocol.NewDecoderBytes(stxnData)
+			err := dec.Decode(&stxn)
+			b.Payset[i].SignedTxn = stxn
+			if err != nil {
+				logging.Base().Warnf("Received a non-decodable txn: %v", err)
+				//net.Disconnect(raw.MessageHandle)
+				return err
+			}
+		}
+	}
+
+	logging.Base().Infof("done %v", len(b.Payset))
+	return nil
+}
+
 // tokenizeMessages tokenizes a raw message stream
 func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.Tag, tokenize streamTokenizer) <-chan message {
 	networkMessages := net.Messages(tag)
@@ -137,6 +167,10 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
 				case protocol.ProposalPayloadTag:
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
+					if err := ReconstructProposal(net, &msg.CompoundMessage.Proposal.Block, msg.MessageHandle); err != nil {
+						logging.Base().Warnf("Failed to reconstruct proposal: %v", err)
+						continue
+					}
 				default:
 					err := fmt.Errorf("bad message tag: %v", tag)
 					d.UpdateEventsQueue(fmt.Sprintf("Tokenizing-%s", tag), 0)
@@ -169,7 +203,7 @@ func (d *demux) verifyVote(ctx context.Context, m message, taskIndex int, r roun
 func (d *demux) verifyPayload(ctx context.Context, m message, r round, p period, pinned bool) {
 	d.UpdateEventsQueue(eventQueueCryptoVerifierProposal, 1)
 	d.monitor.inc(cryptoVerifierCoserviceType)
-	d.crypto.VerifyProposal(ctx, cryptoProposalRequest{message: m, Round: r, Period: p, Pinned: pinned})
+	d.crypto.VerifyProposal(ctx, &cryptoProposalRequest{message: m, Round: r, Period: p, Pinned: pinned})
 }
 
 // verifyBundle enqueues a bundle message to be verified.
@@ -318,7 +352,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		if !open {
 			return emptyEvent{}, false
 		}
-		e = setupCompoundMessage(d.ledger, m)
+		e = setupCompoundMessage(d.ledger, m, s)
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.UpdateEventsQueue(eventQueueTokenized[protocol.ProposalPayloadTag], 0)
 		d.monitor.inc(demuxCoserviceType)
@@ -358,8 +392,13 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 }
 
 // setupCompoundMessage processes compound messages: distinct messages which are delivered together
-func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
+func setupCompoundMessage(l LedgerReader, m message, s *Service) (res externalEvent) {
 	compound := m.CompoundMessage
+	if s.BlockFactory != nil {
+		s.BlockFactory.ReconstructBlock(compound.Proposal.Block)
+	} else {
+		logging.Base().Warnf("failed to reconstruct block: service was nil")
+	}
 	if compound.Vote == (unauthenticatedVote{}) {
 		m.Tag = protocol.ProposalPayloadTag
 		m.UnauthenticatedProposal = compound.Proposal

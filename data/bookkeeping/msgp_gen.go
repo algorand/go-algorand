@@ -80,8 +80,8 @@ import (
 func (z *Block) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(24)
-	var zb0003Mask uint32 /* 27 bits */
+	zb0003Len := uint32(25)
+	var zb0003Mask uint32 /* 28 bits */
 	if len((*z).BlockHeader.CompactCert) == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x8
@@ -162,21 +162,25 @@ func (z *Block) MarshalMsg(b []byte) (o []byte) {
 		zb0003Len--
 		zb0003Mask |= 0x400000
 	}
-	if (*z).Payset.MsgIsZero() {
+	if (*z).PaysetDigest.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x800000
 	}
-	if (*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero() {
+	if (*z).Payset.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x1000000
 	}
-	if (*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero() {
+	if (*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x2000000
 	}
-	if (*z).BlockHeader.UpgradeVote.UpgradeApprove == false {
+	if (*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x4000000
+	}
+	if (*z).BlockHeader.UpgradeVote.UpgradeApprove == false {
+		zb0003Len--
+		zb0003Mask |= 0x8000000
 	}
 	// variable map header, size zb0003Len
 	o = msgp.AppendMapHeader(o, zb0003Len)
@@ -297,21 +301,26 @@ func (z *Block) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).BlockHeader.TxnRoot.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x800000) == 0 { // if not empty
+			// string "txndigests"
+			o = append(o, 0xaa, 0x74, 0x78, 0x6e, 0x64, 0x69, 0x67, 0x65, 0x73, 0x74, 0x73)
+			o = (*z).PaysetDigest.MarshalMsg(o)
+		}
+		if (zb0003Mask & 0x1000000) == 0 { // if not empty
 			// string "txns"
 			o = append(o, 0xa4, 0x74, 0x78, 0x6e, 0x73)
 			o = (*z).Payset.MarshalMsg(o)
 		}
-		if (zb0003Mask & 0x1000000) == 0 { // if not empty
+		if (zb0003Mask & 0x2000000) == 0 { // if not empty
 			// string "upgradedelay"
 			o = append(o, 0xac, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x64, 0x65, 0x6c, 0x61, 0x79)
 			o = (*z).BlockHeader.UpgradeVote.UpgradeDelay.MarshalMsg(o)
 		}
-		if (zb0003Mask & 0x2000000) == 0 { // if not empty
+		if (zb0003Mask & 0x4000000) == 0 { // if not empty
 			// string "upgradeprop"
 			o = append(o, 0xab, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x70, 0x72, 0x6f, 0x70)
 			o = (*z).BlockHeader.UpgradeVote.UpgradePropose.MarshalMsg(o)
 		}
-		if (zb0003Mask & 0x4000000) == 0 { // if not empty
+		if (zb0003Mask & 0x8000000) == 0 { // if not empty
 			// string "upgradeyes"
 			o = append(o, 0xaa, 0x75, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65, 0x79, 0x65, 0x73)
 			o = msgp.AppendBool(o, (*z).BlockHeader.UpgradeVote.UpgradeApprove)
@@ -559,6 +568,14 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0003 > 0 {
+			zb0003--
+			bts, err = (*z).PaysetDigest.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PaysetDigest")
+				return
+			}
+		}
+		if zb0003 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0003)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -753,6 +770,12 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Payset")
 					return
 				}
+			case "txndigests":
+				bts, err = (*z).PaysetDigest.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "PaysetDigest")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -781,13 +804,13 @@ func (z *Block) Msgsize() (s int) {
 			s += 0 + zb0001.Msgsize() + zb0002.Msgsize()
 		}
 	}
-	s += 5 + (*z).Payset.Msgsize()
+	s += 5 + (*z).Payset.Msgsize() + 11 + (*z).PaysetDigest.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Block) MsgIsZero() bool {
-	return ((*z).BlockHeader.Round.MsgIsZero()) && ((*z).BlockHeader.Branch.MsgIsZero()) && ((*z).BlockHeader.Seed.MsgIsZero()) && ((*z).BlockHeader.TxnRoot.MsgIsZero()) && ((*z).BlockHeader.TimeStamp == 0) && ((*z).BlockHeader.GenesisID == "") && ((*z).BlockHeader.GenesisHash.MsgIsZero()) && ((*z).BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).BlockHeader.RewardsState.RewardsRate == 0) && ((*z).BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).BlockHeader.TxnCounter == 0) && (len((*z).BlockHeader.CompactCert) == 0) && ((*z).Payset.MsgIsZero())
+	return ((*z).BlockHeader.Round.MsgIsZero()) && ((*z).BlockHeader.Branch.MsgIsZero()) && ((*z).BlockHeader.Seed.MsgIsZero()) && ((*z).BlockHeader.TxnRoot.MsgIsZero()) && ((*z).BlockHeader.TimeStamp == 0) && ((*z).BlockHeader.GenesisID == "") && ((*z).BlockHeader.GenesisHash.MsgIsZero()) && ((*z).BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).BlockHeader.RewardsState.RewardsRate == 0) && ((*z).BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).BlockHeader.TxnCounter == 0) && (len((*z).BlockHeader.CompactCert) == 0) && ((*z).Payset.MsgIsZero()) && ((*z).PaysetDigest.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

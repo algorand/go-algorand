@@ -48,6 +48,7 @@ const (
 	ProgramData       HashID = "ProgData"
 	ProposerSeed      HashID = "PS"
 	Seed              HashID = "SD"
+	SignedTxn         HashID = "STX"
 	SpecialAddr       HashID = "SpecialAddr"
 	SignedTxnInBlock  HashID = "STIB"
 	TestHashable      HashID = "TE"
@@ -55,4 +56,6 @@ const (
 	TxnMerkleLeaf     HashID = "TL"
 	Transaction       HashID = "TX"
 	Vote              HashID = "VO"
+
+	Info HashID = "in"
 )

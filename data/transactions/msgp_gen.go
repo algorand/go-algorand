@@ -114,6 +114,14 @@ import (
 //    |-----> Msgsize
 //    |-----> MsgIsZero
 //
+// PaysetDigest
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
 // SignedTxn
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
@@ -2723,6 +2731,79 @@ func (z Payset) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z Payset) MsgIsZero() bool {
+	return len(z) == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z PaysetDigest) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	if z == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendArrayHeader(o, uint32(len(z)))
+	}
+	for za0001 := range z {
+		o = z[za0001].MarshalMsg(o)
+	}
+	return
+}
+
+func (_ PaysetDigest) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(PaysetDigest)
+	if !ok {
+		_, ok = (z).(*PaysetDigest)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PaysetDigest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 > 100000 {
+		err = msgp.ErrOverflow(uint64(zb0002), uint64(100000))
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = nil
+	} else if (*z) != nil && cap((*z)) >= zb0002 {
+		(*z) = (*z)[:zb0002]
+	} else {
+		(*z) = make(PaysetDigest, zb0002)
+	}
+	for zb0001 := range *z {
+		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
+		if err != nil {
+			err = msgp.WrapError(err, zb0001)
+			return
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *PaysetDigest) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PaysetDigest)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z PaysetDigest) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize
+	for za0001 := range z {
+		s += z[za0001].Msgsize()
+	}
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z PaysetDigest) MsgIsZero() bool {
 	return len(z) == 0
 }
 

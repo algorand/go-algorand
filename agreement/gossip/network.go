@@ -20,6 +20,7 @@ package gossip
 
 import (
 	"context"
+	"github.com/algorand/go-algorand/crypto"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -156,6 +157,14 @@ func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) (err error) {
 	return
 }
 
+func (i *networkImpl) BroadcastArray(ctx context.Context, t []protocol.Tag, data [][]byte, pacer chan int) (err error) {
+	err = i.net.BroadcastArray(ctx, t, data, pacer, false, nil)
+	if err != nil {
+		i.log.Infof("agreement: could not broadcast message with tag %v: %v", t, err)
+	}
+	return
+}
+
 func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
 	if metadata == nil { // synthentic loopback
@@ -172,6 +181,22 @@ func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []by
 	return
 }
 
+func (i *networkImpl) RelayArray(ctx context.Context, h agreement.MessageHandle, t []protocol.Tag, data [][]byte) (err error) {
+	metadata := messageMetadataFromHandle(h)
+	if metadata == nil { // synthentic loopback
+		err = i.net.BroadcastArray(ctx, t, data, nil, false, nil)
+		if err != nil {
+			i.log.Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
+		}
+	} else {
+		err = i.net.RelayArray(ctx, t, data, false, metadata.raw.Sender)
+		if err != nil {
+			i.log.Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
+		}
+	}
+	return
+}
+
 func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 	metadata := messageMetadataFromHandle(h)
 
@@ -181,6 +206,21 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 	}
 
 	i.net.Disconnect(metadata.raw.Sender)
+}
+
+func (i *networkImpl) LoadMessage(h agreement.MessageHandle, keys []crypto.Digest) ([][]byte, bool) {
+	metadata := messageMetadataFromHandle(h)
+
+	if metadata == nil { // synthentic loopback
+		// TODO warn
+		return nil, true
+	}
+
+	return i.net.LoadMessage(metadata.raw.Sender, keys)
+}
+
+func Metadata(raw network.IncomingMessage) *messageMetadata {
+	return &messageMetadata{raw: raw}
 }
 
 // broadcastTimeout is currently only used by test code.

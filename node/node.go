@@ -1050,3 +1050,17 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 	}
 	return validatedBlock{vb: lvb}, nil
 }
+
+func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) {
+	txns, found := node.transactionPool.FindTxns(block.PaysetDigest)
+	for i := range block.Payset {
+		if found[i] {
+			block.Payset[i].SignedTxn = txns[i]
+		}
+		var err error
+		block.Payset[i], err = block.EncodeSignedTxn(block.Payset[i].SignedTxn, transactions.ApplyData{})
+		if err != nil {
+			logging.Base().Warnf("failed to reconstruct block: %v", err)
+		}
+	}
+}

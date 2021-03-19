@@ -18,6 +18,7 @@ package network
 
 import (
 	"bytes"
+	"context"
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -35,7 +36,7 @@ func pingHandler(message IncomingMessage) OutgoingMessage {
 	copy(mbytes, tbytes)
 	copy(mbytes[len(tbytes):], message.Data)
 	var digest crypto.Digest // leave blank, ping message too short
-	peer.writeNonBlock(mbytes, false, digest, time.Now())
+	peer.writeNonBlock(context.Background(), mbytes, false, digest, nil, time.Now())
 	return OutgoingMessage{}
 }
 

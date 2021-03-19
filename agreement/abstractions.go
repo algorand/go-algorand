@@ -89,6 +89,8 @@ type BlockFactory interface {
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
 	AssembleBlock(basics.Round, time.Time) (ValidatedBlock, error)
+
+	ReconstructBlock(bookkeeping.Block)
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.
@@ -262,6 +264,8 @@ type Network interface {
 	// otherwise, a nil is returned.
 	Broadcast(protocol.Tag, []byte) error
 
+	BroadcastArray(context.Context, []protocol.Tag, [][]byte, chan int) error
+
 	// Relay attempts to send a slice of bytes under some protocol.Tag to
 	// all neighbors, except for the neighbor associated with the given
 	// MessageHandle.
@@ -278,6 +282,8 @@ type Network interface {
 	// otherwise, a nil is returned.
 	Relay(MessageHandle, protocol.Tag, []byte) error
 
+	RelayArray(context.Context, MessageHandle, []protocol.Tag, [][]byte) error
+
 	// Disconnect sends the Network a hint to disconnect to the peer
 	// associated with the given MessageHandle.
 	Disconnect(MessageHandle)
@@ -285,6 +291,9 @@ type Network interface {
 	// Start notifies the network that the agreement service is ready
 	// to start receiving messages.
 	Start()
+
+	// LoadMessage retrieves an entry from the corresponding peer's key-value store
+	LoadMessage(MessageHandle, []crypto.Digest) ([][]byte, bool)
 }
 
 // RandomSource is an abstraction over the random number generator.

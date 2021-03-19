@@ -19,11 +19,11 @@ package agreement
 import (
 	"context"
 	"fmt"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -56,8 +56,9 @@ type unauthenticatedProposal struct {
 	bookkeeping.Block
 	SeedProof crypto.VrfProof `codec:"sdpf"`
 
-	OriginalPeriod   period         `codec:"oper"`
-	OriginalProposer basics.Address `codec:"oprop"`
+	OriginalPeriod   period           `codec:"oper"`
+	OriginalProposer basics.Address   `codec:"oprop"`
+	ctx              *context.Context //TODO(yg): set to background?
 }
 
 // ToBeHashed implements the Hashable interface.
@@ -66,13 +67,22 @@ func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // value returns the proposal-value associated with this proposal.
+// EncodingDigest contains the hash of the compressed proposal
+// since when sending proposals we send the version that is
+// compressed.
 func (p unauthenticatedProposal) value() proposalValue {
 	return proposalValue{
 		OriginalPeriod:   p.OriginalPeriod,
 		OriginalProposer: p.OriginalProposer,
 		BlockDigest:      p.Digest(),
-		EncodingDigest:   crypto.HashObj(p),
+		EncodingDigest:   crypto.HashObj(p.WithoutPayset()),
 	}
+}
+
+func (p unauthenticatedProposal) WithoutPayset() unauthenticatedProposal {
+	var emptyPayset transactions.Payset
+	p.Block.Payset = emptyPayset
+	return p
 }
 
 // A proposal is an Block along with everything needed to validate it.
@@ -239,34 +249,31 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 
 	ve = ve.WithSeed(newSeed)
 	proposal := makeProposal(ve, seedProof, period, address)
-	value := proposalValue{
-		OriginalPeriod:   period,
-		OriginalProposer: address,
-		BlockDigest:      proposal.Block.Digest(),
-		EncodingDigest:   crypto.HashObj(proposal),
-	}
+	value := proposal.value()
 	return proposal, value, nil
 }
 
 // validate returns true if the proposal is valid.
 // It checks the proposal seed and then calls validator.Validate.
 func (p unauthenticatedProposal) validate(ctx context.Context, current round, ledger LedgerReader, validator BlockValidator) (proposal, error) {
-	var invalid proposal
+	var pr proposal
 	entry := p.Block
 
 	if entry.Round() != current {
-		return invalid, fmt.Errorf("proposed entry from wrong round: entry.Round() != current: %v != %v", entry.Round(), current)
+		return pr, fmt.Errorf("proposed entry from wrong round: entry.Round() != current: %v != %v", entry.Round(), current)
 	}
 
 	err := verifyNewSeed(p, ledger)
 	if err != nil {
-		return invalid, fmt.Errorf("proposal has bad seed: %v", err)
+		return pr, fmt.Errorf("proposal has bad seed: %v", err)
 	}
 
 	ve, err := validator.Validate(ctx, entry)
 	if err != nil {
-		return invalid, fmt.Errorf("EntryValidator rejected entry: %v", err)
+		return pr, fmt.Errorf("EntryValidator rejected entry: %v", err)
 	}
 
-	return makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
+	pr = makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer)
+
+	return pr, nil
 }

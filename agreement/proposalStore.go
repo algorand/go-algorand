@@ -217,6 +217,7 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		pv := up.value()
 		ea, ok := store.Assemblers[pv]
 		if !ok {
+			logging.Base().Infof("payloadignored")
 			return payloadProcessedEvent{
 				T:   payloadRejected,
 				Err: makeSerErrStr("proposalStore: no accepting blockAssembler found on payloadPresent"),
@@ -243,7 +244,7 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 	case payloadVerified:
 		pp := e.(messageEvent).Input.Proposal
 		pv := pp.value()
-		ea, ok := store.Assemblers[pp.value()]
+		ea, ok := store.Assemblers[pv]
 		if !ok {
 			return payloadProcessedEvent{
 				T:   payloadRejected,

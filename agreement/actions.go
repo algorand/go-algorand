@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -143,6 +145,8 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	}
 
 	var data []byte
+	var txnData [][]byte
+	var tags []protocol.Tag
 	switch a.Tag {
 	case protocol.AgreementVoteTag:
 		data = protocol.Encode(&a.UnauthenticatedVote)
@@ -150,18 +154,62 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		data = protocol.Encode(&a.UnauthenticatedBundle)
 	case protocol.ProposalPayloadTag:
 		msg := a.CompoundMessage
+
+		numtxns := len(msg.Proposal.Payset)
+		txnData = make([][]byte, numtxns+1, numtxns+1)
+		tags = make([]protocol.Tag, numtxns+1)
+		payset, err := msg.Proposal.Block.DecodePaysetFlat()
+		if err != nil {
+			logging.Base().Warnf("failed to decode payset: %v", err)
+		}
+		msg.Proposal.Payset = make(transactions.Payset, len(payset))
+		for i := range msg.Proposal.Payset {
+			msg.Proposal.Payset[i].SignedTxnWithAD = payset[i]
+			stxn := payset[i].SignedTxn
+			txnData[i] = protocol.Encode(&stxn)
+			tags[i] = protocol.TxnTag
+		}
 		payload := transmittedPayload{
-			unauthenticatedProposal: msg.Proposal,
+			unauthenticatedProposal: msg.Proposal.WithoutPayset(),
 			PriorVote:               msg.Vote,
 		}
-		data = protocol.Encode(&payload)
+		txnData[len(txnData)-1] = protocol.Encode(&payload)
+		tags[len(txnData)-1] = protocol.ProposalPayloadTag
 	}
 
 	switch a.T {
 	case broadcast:
-		s.Network.Broadcast(a.Tag, data)
+		if txnData != nil {
+			//protocol.TxnTag
+			if a.CompoundMessage.Proposal.ctx == nil || *a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
+				logging.Base().Warnf("broadcast: context is nil")
+				backgroundctx := context.Background()
+				a.CompoundMessage.Proposal.ctx = &backgroundctx
+			}
+
+			logging.Base().Infof("broadcast: txncount %v", len(txnData))
+			// sending a large message. Send to one peer at a time to get another peer propagating it as soon as we can.
+			pacer := make(chan int, 1)
+			pacer <- 1
+			s.Network.BroadcastArray(*a.CompoundMessage.Proposal.ctx, tags, txnData, pacer)
+		} else if data != nil {
+			s.Network.Broadcast(a.Tag, data)
+		}
 	case relay:
-		s.Network.Relay(a.h, a.Tag, data)
+		if txnData != nil {
+			if a.CompoundMessage.Proposal.ctx == nil || *a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
+				logging.Base().Warnf("relay: context is nil")
+				backgroundctx := context.Background()
+				a.CompoundMessage.Proposal.ctx = &backgroundctx
+			} else if a.h == nil {
+				logging.Base().Infof("was proposer")
+			}
+
+			logging.Base().Infof("relay: txncount %v", len(txnData))
+			s.Network.RelayArray(*a.CompoundMessage.Proposal.ctx, a.h, tags, txnData)
+		} else if data != nil {
+			s.Network.Relay(a.h, a.Tag, data)
+		}
 	case disconnect:
 		s.Network.Disconnect(a.h)
 	case ignore:

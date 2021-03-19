@@ -61,6 +61,11 @@ func (s SignedTxn) ID() Txid {
 	return s.Txn.ID()
 }
 
+// ToBeHashed implements the crypto.Hashable interface.
+func (s SignedTxn) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.SignedTxn, protocol.Encode(&s)
+}
+
 // ID on SignedTxnInBlock should never be called, because the ID depends
 // on the block from which this transaction will be decoded.  By having
 // a different return value from SignedTxn.ID(), we will catch errors at
