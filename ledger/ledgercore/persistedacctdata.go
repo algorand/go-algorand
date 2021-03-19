@@ -165,6 +165,7 @@ type AbstractAssetGroup interface {
 	Loaded() bool
 	GroupData() AbstractAssetGroupData
 	AssetCount() uint32
+	Update(idx int, data interface{})
 }
 type AbstractAssetGroupList interface {
 	// Get returns abstract group
@@ -221,7 +222,19 @@ func (gd *AssetsHoldingGroupData) update(ai int, hodl basics.AssetHolding) {
 	gd.Frozens[ai] = hodl.Frozen
 }
 
-// delete the ai-th element in the group holding array. The method expect the ai to be a valid index.
+func (gd *AssetsParamGroupData) update(ai int, params basics.AssetParams) {
+	gd.Totals[ai] = params.Total
+	gd.DefaultFrozens[ai] = params.DefaultFrozen
+	gd.UnitNames[ai] = params.UnitName
+	gd.AssetNames[ai] = params.AssetName
+	gd.URLs[ai] = params.URL
+	copy(gd.MetadataHash[ai][:], params.MetadataHash[:])
+	copy(gd.Managers[ai][:], params.Manager[:])
+	copy(gd.Reserves[ai][:], params.Reserve[:])
+	copy(gd.Freezes[ai][:], params.Freeze[:])
+	copy(gd.Clawbacks[ai][:], params.Clawback[:])
+}
+
 func (gd *AssetsHoldingGroupData) delete(ai int) {
 	if ai == 0 {
 		gd.AssetOffsets = gd.AssetOffsets[1:]
@@ -352,6 +365,10 @@ func (g AssetsParamGroup) Loaded() bool {
 	return g.loaded
 }
 
+func (g *AssetsParamGroup) update(ai int, params basics.AssetParams) {
+	g.groupData.update(ai, params)
+}
+
 func (g *AssetsCommonGroupData) Find(aidx basics.AssetIndex, base basics.AssetIndex) int {
 	// linear search because AssetOffsets is delta-encoded, not values
 	cur := base
@@ -388,17 +405,54 @@ func (g *AssetsParamGroup) GroupData() AbstractAssetGroupData {
 	return &g.groupData.AssetsCommonGroupData
 }
 
+func (g *AssetsHoldingGroup) Update(ai int, data interface{}) {
+	g.update(ai, data.(basics.AssetHolding))
+}
+
+func (g *AssetsParamGroup) Update(ai int, data interface{}) {
+	g.update(ai, data.(basics.AssetParams))
+}
+
+type AssetDataGetter interface {
+	Get(aidx basics.AssetIndex) interface{}
+}
+
+type AssetHoldingGetter struct {
+	assets map[basics.AssetIndex]basics.AssetHolding
+}
+
+func (g AssetHoldingGetter) Get(aidx basics.AssetIndex) interface{} {
+	return g.assets[aidx]
+}
+
+type AssetParamsGetter struct {
+	assets map[basics.AssetIndex]basics.AssetParams
+}
+
+func (g AssetParamsGetter) Get(aidx basics.AssetIndex) interface{} {
+	return g.assets[aidx]
+}
+
 // Update an asset holding by index
 func (e *ExtendedAssetHolding) Update(updated []basics.AssetIndex, assets map[basics.AssetIndex]basics.AssetHolding) error {
+	g := AssetHoldingGetter{assets}
+	return update(updated, e, &g)
+}
+
+func (e *ExtendedAssetParam) Update(updated []basics.AssetIndex, assets map[basics.AssetIndex]basics.AssetParams) error {
+	g := AssetParamsGetter{assets}
+	return update(updated, e, &g)
+}
+
+func update(updated []basics.AssetIndex, agl AbstractAssetGroupList, assets AssetDataGetter) error {
 	sort.SliceStable(updated, func(i, j int) bool { return updated[i] < updated[j] })
 	gi, ai := 0, 0
 	for _, aidx := range updated {
-		gi, ai = e.FindAsset(aidx, gi)
+		gi, ai = findAsset(aidx, gi, agl)
 		if gi == -1 || ai == -1 {
 			return fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
 		}
-		// group data is loaded in accountsLoadOld
-		e.Groups[gi].update(ai, assets[aidx])
+		agl.Get(gi).Update(ai, assets.Get(aidx))
 	}
 	return nil
 }
