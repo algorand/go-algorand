@@ -804,8 +804,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 	}
 
-	// in case of a CompactCertTx transaction, we want to validate it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of
+	// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of
 	// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
+	// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
+	// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
+	// performing the validation during catchup, which is another performance boost.
 	if (eval.validate || eval.generate) && txn.Txn.Type == protocol.CompactCertTx {
 		if err := cow.compactCert(txn.Txn.CertRound, txn.Txn.CertType, txn.Txn.Cert, txn.Txn.Header.FirstValid, eval.validate); err != nil {
 			return err
