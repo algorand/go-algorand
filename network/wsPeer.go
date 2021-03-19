@@ -209,6 +209,11 @@ type wsPeer struct {
 	// throttledOutgoingConnection determines if this outgoing connection will be throttled bassed on it's
 	// performance or not. Throttled connections are more likely to be short-lived connections.
 	throttledOutgoingConnection bool
+
+	// clientDataStore is a generic key/value store used to store client-side data entries associated with a particular peer.
+	clientDataStore map[string]interface{}
+
+	clientDataStoreMu deadlock.Mutex
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -318,6 +323,7 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
+	wp.clientDataStore = make(map[string]interface{})
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue
@@ -789,6 +795,21 @@ func (wp *wsPeer) getAndRemoveResponseChannel(key uint64) (respChan chan *Respon
 	defer wp.responseChannelsMutex.Unlock()
 	respChan, found = wp.responseChannels[key]
 	delete(wp.responseChannels, key)
-
 	return
+}
+
+func (wp *wsPeer) getPeerData(key string) interface{} {
+	wp.clientDataStoreMu.Lock()
+	defer wp.clientDataStoreMu.Unlock()
+	return wp.clientDataStore[key]
+}
+
+func (wp *wsPeer) setPeerData(key string, value interface{}) {
+	wp.clientDataStoreMu.Lock()
+	defer wp.clientDataStoreMu.Unlock()
+	if value == nil {
+		delete(wp.clientDataStore, key)
+	} else {
+		wp.clientDataStore[key] = value
+	}
 }
