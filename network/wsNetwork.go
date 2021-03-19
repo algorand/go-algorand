@@ -202,8 +202,11 @@ type GossipNode interface {
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
 
+	// GetPeerData returns a value stored by SetPeerData
 	GetPeerData(peer Peer, key string) interface{}
 
+	// SetPeerData attaches a piece of data to a peer.
+	// Other services inside go-algorand may attach data to a peer that gets garbage collected when the peer is closed.
 	SetPeerData(peer Peer, key string, value interface{})
 }
 

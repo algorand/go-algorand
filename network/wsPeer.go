@@ -211,8 +211,10 @@ type wsPeer struct {
 	throttledOutgoingConnection bool
 
 	// clientDataStore is a generic key/value store used to store client-side data entries associated with a particular peer.
+	// Locked by clientDataStoreMu.
 	clientDataStore map[string]interface{}
 
+	// clientDataStoreMu synchronizes access to clientDataStore
 	clientDataStoreMu deadlock.Mutex
 }
 
