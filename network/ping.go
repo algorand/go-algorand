@@ -36,7 +36,7 @@ func pingHandler(message IncomingMessage) OutgoingMessage {
 	copy(mbytes, tbytes)
 	copy(mbytes[len(tbytes):], message.Data)
 	var digest crypto.Digest // leave blank, ping message too short
-	peer.writeNonBlock(context.Background(), mbytes, false, digest, nil, time.Now())
+	peer.writeNonBlock(context.Background(), mbytes, false, digest, time.Now())
 	return OutgoingMessage{}
 }
 

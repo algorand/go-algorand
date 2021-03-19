@@ -460,7 +460,7 @@ int 100
 		ProgramBlobs:    [][]byte{[]byte(source)},
 		BalanceBlob:     balanceBlob,
 		TxnBlob:         txnBlob,
-		Proto:           "future",
+		Proto:           string(protocol.ConsensusCurrentVersion),
 		Round:           222,
 		LatestTimestamp: 333,
 		GroupIndex:      0,

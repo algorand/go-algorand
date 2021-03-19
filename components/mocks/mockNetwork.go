@@ -41,7 +41,7 @@ func (network *MockNetwork) Relay(ctx context.Context, tag protocol.Tag, data []
 }
 
 // BroadcastArray - unused function
-func (network *MockNetwork) BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, pacer chan int, wait bool, except network.Peer) error {
+func (network *MockNetwork) BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except network.Peer) error {
 	return nil
 }
 

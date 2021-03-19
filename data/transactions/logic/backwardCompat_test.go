@@ -222,7 +222,7 @@ gtxn 0 TxID
 ==
 &&
 pop
-// check global
+// check global (these are set equal in defaultEvalProto())
 global MinTxnFee
 global MinBalance
 ==
@@ -334,24 +334,24 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 // ensure v2 fields error in v1 program
 func TestBackwardCompatGlobalFields(t *testing.T) {
 	t.Parallel()
-	var fields []string
+	var fields []globalFieldSpec
 	for _, fs := range globalFieldSpecs {
 		if fs.version > 1 {
-			fields = append(fields, fs.gfield.String())
+			fields = append(fields, fs)
 		}
 	}
 	require.Greater(t, len(fields), 1)
 
 	ledger := makeTestLedger(nil)
 	for _, field := range fields {
-		text := fmt.Sprintf("global %s", field)
-		// check V1 assembler fails
-		testLine(t, text, assemblerNoVersion, "...available in version 2. Missed #pragma version?")
-		testLine(t, text, 0, "...available in version 2. Missed #pragma version?")
-		testLine(t, text, 1, "...available in version 2. Missed #pragma version?")
+		text := fmt.Sprintf("global %s", field.gfield.String())
+		// check assembler fails if version before introduction
+		testLine(t, text, assemblerNoVersion, "...available in version...")
+		for v := uint64(0); v < field.version; v++ {
+			testLine(t, text, v, "...available in version...")
+		}
 
-		ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-		require.NoError(t, err)
+		ops := testProg(t, text, AssemblerMaxVersion)
 
 		proto := config.Consensus[protocol.ConsensusV23]
 		require.False(t, proto.Application)
@@ -360,7 +360,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		ep.Ledger = ledger
 
 		// check failure with version check
-		_, err = Eval(ops.Program, ep)
+		_, err := Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 		_, err = Eval(ops.Program, ep)
@@ -414,16 +414,17 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 		field := fs.field.String()
 		for _, command := range tests {
 			text := fmt.Sprintf(command, field)
-			asmError := "...available in version 2..."
+			asmError := "...available in version ..."
 			if _, ok := txnaFieldSpecByField[fs.field]; ok {
 				parts := strings.Split(text, " ")
 				op := parts[0]
-				asmError = fmt.Sprintf("found %sa field %s in %s op", op, field, op)
+				asmError = fmt.Sprintf("found array field %s in %s op", field, op)
 			}
-			// check V1 assembler fails
+			// check assembler fails if version before introduction
 			testLine(t, text, assemblerNoVersion, asmError)
-			testLine(t, text, 0, asmError)
-			testLine(t, text, 1, asmError)
+			for v := uint64(0); v < fs.version; v++ {
+				testLine(t, text, v, asmError)
+			}
 
 			ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 			if _, ok := txnaFieldSpecByField[fs.field]; ok {
