@@ -304,7 +304,7 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert compactcert.Cert, atRound basics.Round) error {
+func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert compactcert.Cert, atRound basics.Round, validate bool) error {
 	if certType != protocol.CompactCertBasic {
 		return fmt.Errorf("compact cert type %d not supported", certType)
 	}
@@ -317,15 +317,18 @@ func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.Com
 	}
 
 	proto := config.Consensus[certHdr.CurrentProtocol]
-	votersRnd := certRnd.SubSaturate(basics.Round(proto.CompactCertRounds))
-	votersHdr, err := cs.blockHdr(votersRnd)
-	if err != nil {
-		return err
-	}
 
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
-	if err != nil {
-		return err
+	if validate {
+		votersRnd := certRnd.SubSaturate(basics.Round(proto.CompactCertRounds))
+		votersHdr, err := cs.blockHdr(votersRnd)
+		if err != nil {
+			return err
+		}
+
+		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+		if err != nil {
+			return err
+		}
 	}
 
 	cs.setCompactCertNext(certRnd + basics.Round(proto.CompactCertRounds))
@@ -801,6 +804,14 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 	}
 
+	// in case of a CompactCertTx transaction, we want to validate it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of
+	// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
+	if (eval.validate || eval.generate) && txn.Txn.Type == protocol.CompactCertTx {
+		if err := cow.compactCert(txn.Txn.CertRound, txn.Txn.CertType, txn.Txn.Cert, txn.Txn.Header.FirstValid, eval.validate); err != nil {
+			return err
+		}
+	}
+
 	spec := transactions.SpecialAddresses{
 		FeeSink:     eval.block.BlockHeader.FeeSink,
 		RewardsPool: eval.block.BlockHeader.RewardsPool,
@@ -928,7 +939,9 @@ func applyTransaction(tx transactions.Transaction, balances *roundCowState, eval
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, evalParams, ctr)
 
 	case protocol.CompactCertTx:
-		err = balances.compactCert(tx.CertRound, tx.CertType, tx.Cert, tx.Header.FirstValid)
+		// don't do anything in the case of compact certificate transaction. This transaction type is explicitly handled in transaction(), since
+		// we want to conduct the testing of it only in the case of a validation or generation.
+		// Note that this means that the cow's CompactCertNext field would not be updated unless we're in either generate or validate mode.
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
