@@ -140,7 +140,7 @@ func (m *guidedDeadlineMonitor) Expired() bool {
 
 	// adjust the clock's advance , so that we can emulate more time passing
 	// on each Expired query. On "real" clock, this wouldn't be the case, of course.
-	m.clock.adv += m.clock.emulator.scenario.messageAssemblyDuration
+	//m.clock.adv += m.clock.emulator.scenario.messageAssemblyDuration
 
 	if m.clock.Since() >= m.expiration {
 		m.expired = true

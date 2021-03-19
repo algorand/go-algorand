@@ -41,7 +41,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 		stub.TxnGroups[i] = inTxnGroups[i].Transactions
 	}
 
-	return stub.MarshalMsg(protocol.GetEncodingBuf())
+	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
 }
 
 func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGroup, err error) {

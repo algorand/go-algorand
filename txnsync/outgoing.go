@@ -25,8 +25,6 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
-const messageTimeWindow = 20 * time.Millisecond
-
 var errTransactionSyncOutgoingMessageQueueFull = errors.New("transaction sync outgoing message queue is full")
 
 type sentMessageMetadata struct {
@@ -70,7 +68,7 @@ type pendingTransactionGroupsSnapshot struct {
 	latestLocallyOriginatedGroupCounter uint64
 }
 
-func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.DeadlineMonitor, peers []*Peer) {
+func (s *syncState) sendMessageLoop(deadline timers.DeadlineMonitor, peers []*Peer) {
 	if len(peers) == 0 {
 		// no peers - no messages that need to be sent.
 		return
@@ -78,15 +76,19 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 
 	var pendingTransactions pendingTransactionGroupsSnapshot
 	pendingTransactions.pendingTransactionsGroups, pendingTransactions.latestLocallyOriginatedGroupCounter = s.node.GetPendingTransactionGroups()
-
+	seenPeers := make(map[*Peer]bool)
 	for _, peer := range peers {
+		if seenPeers[peer] {
+			continue
+		}
+		seenPeers[peer] = true
 		msgCallback := &messageSentCallback{state: s, roundClock: s.clock}
-		msgCallback.messageData = s.assemblePeerMessage(peer, &pendingTransactions, currentTime)
+		msgCallback.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
 		encodedMessage := msgCallback.messageData.message.MarshalMsg([]byte{})
 		msgCallback.messageData.encodedMessageSize = len(encodedMessage)
 		s.node.SendPeerMessage(peer.networkPeer, encodedMessage, msgCallback.asyncMessageSent)
 
-		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, msgCallback.messageData.partialMessage, currentTime)
+		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, msgCallback.messageData.partialMessage, s.clock.Since())
 		if (ops & peerOpsSetInterruptible) == peerOpsSetInterruptible {
 			if _, has := s.interruptablePeersMap[peer]; !has {
 				s.interruptablePeers = append(s.interruptablePeers, peer)
@@ -100,7 +102,11 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 			}
 		}
 		if (ops & peerOpsReschedule) == peerOpsReschedule {
-			s.scheduler.schedulerPeer(peer, currentTime+scheduleOffset)
+			s.scheduler.schedulerPeer(peer, s.clock.Since()+scheduleOffset)
+			if scheduleOffset < 20*time.Millisecond {
+				s.log.Debugf("rescheduling for %v", s.clock.Since()+scheduleOffset)
+				panic(nil)
+			}
 		}
 
 		if deadline.Expired() {
@@ -110,7 +116,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	}
 }
 
-func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot, currentTime time.Duration) (metaMessage sentMessageMetadata) {
+func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata) {
 	metaMessage = sentMessageMetadata{
 		peer: peer,
 		message: &transactionBlockMessage{
@@ -175,7 +181,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 
 	metaMessage.message.MsgSync.RefTxnBlockMsgSeq = peer.nextReceivedMessageSeq - 1
 	if peer.lastReceivedMessageTimestamp != 0 && peer.lastReceivedMessageLocalRound == s.round {
-		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((currentTime - peer.lastReceivedMessageTimestamp).Nanoseconds())
+		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((s.clock.Since() - peer.lastReceivedMessageTimestamp).Nanoseconds())
 	}
 
 	if msgOps&messageConstNextMinDelay == messageConstNextMinDelay {

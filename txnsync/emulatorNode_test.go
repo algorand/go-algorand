@@ -252,9 +252,22 @@ func (n *emulatedNode) UpdatePeers(txPeers []*Peer, netPeers []interface{}) {
 func (n *emulatedNode) enqueueMessage(from int, msg queuedMessage) {
 	n.peers[from].mu.Lock()
 	baseTime := n.emulator.clock.Since()
+	//
 	if len(n.peers[from].messageQ) > 0 {
-		if n.peers[from].messageQ[len(n.peers[from].messageQ)-1].readyAt > baseTime {
-			baseTime = n.peers[from].messageQ[len(n.peers[from].messageQ)-1].readyAt
+		lastQueuedMessageReadyAt := n.peers[from].messageQ[len(n.peers[from].messageQ)-1].readyAt
+		if lastQueuedMessageReadyAt > baseTime {
+			if lastQueuedMessageReadyAt-baseTime > 25*time.Millisecond {
+				//
+				fmt.Printf("%v: message of send time %v was queued on %s from %s\n", baseTime, msg.readyAt, n.name, n.emulator.nodes[from].name)
+				fmt.Printf("%v: message was queued %v into the future on %s from %s\n", baseTime, lastQueuedMessageReadyAt-baseTime, n.name, n.emulator.nodes[from].name)
+				if lastQueuedMessageReadyAt-baseTime > 30*time.Millisecond {
+					panic(nil)
+				}
+			}
+			baseTime = lastQueuedMessageReadyAt
+		} else if lastQueuedMessageReadyAt < baseTime-n.emulator.scenario.step {
+			fmt.Printf("%v: stale message on %s from %s with expiration of %v\n", baseTime, n.name, n.emulator.nodes[from].name, lastQueuedMessageReadyAt)
+			panic(nil)
 		}
 	}
 	n.peers[from].messageQ = append(n.peers[from].messageQ, queuedMessage{bytes: msg.bytes, readyAt: baseTime + msg.readyAt})
@@ -296,7 +309,7 @@ func (n *emulatedNode) IncomingTransactionGroups(peer interface{}, groups []tran
 		n.txpoolEntries = append(n.txpoolEntries, group)
 	}
 	if duplicateMessage > 0 {
-		fmt.Printf("%s : %d duplicate messages recieved\n", n.name, duplicateMessage)
+		n.emulator.t.Logf("%s : %d duplicate messages recieved\n", n.name, duplicateMessage)
 	}
 	atomic.AddUint64(&n.emulator.totalDuplicateTransactions, uint64(duplicateMessage))
 	atomic.AddUint64(&n.emulator.totalDuplicateTransactionSize, uint64(duplicateMessageSize))
@@ -307,7 +320,6 @@ func (n *emulatedNode) step() {
 	msgHandler := n.emulator.syncers[n.nodeIndex].GetIncomingMessageHandler()
 	now := n.emulator.clock.Since()
 	// check if we have any pending network messages and forward them.
-
 	for _, peer := range n.orderedPeers() {
 		peer.mu.Lock()
 

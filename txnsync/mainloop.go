@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	kickoffTime      = 200 * time.Millisecond
-	randomRange      = 100 * time.Millisecond
-	sendMessagesTime = 10 * time.Millisecond
+	kickoffTime       = 200 * time.Millisecond
+	randomRange       = 100 * time.Millisecond
+	messageTimeWindow = 20 * time.Millisecond
 )
 
 type syncState struct {
@@ -150,6 +150,10 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 	// yes, the number of transactions in the pool have changed dramatically since the last time.
 	s.lastBeta = newBeta
 
+	if s.isRelay {
+		return
+	}
+
 	peers := make([]*Peer, 0, len(s.interruptablePeers))
 	for _, peer := range s.interruptablePeers {
 		if peer == nil {
@@ -163,21 +167,25 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 	s.interruptablePeers = nil
 	s.interruptablePeersMap = make(map[*Peer]int)
 
-	deadlineMonitor := s.throttler.getWindowDeadlineMonitor()
-	s.sendMessageLoop(s.clock.Since(), deadlineMonitor, peers)
-
+	// reschedule the peers to have their message sent within the coming 20ms, depending
+	// on their relative timing ( to avoid aligning their timings )
 	currentTimeout := s.clock.Since()
+	var nextSchedule time.Duration
 	for _, peer := range peers {
-		peerNext := s.scheduler.peerDuration(peer)
-		if peerNext < currentTimeout {
+		currentSchedule := s.scheduler.peerDuration(peer)
+		if currentSchedule < currentTimeout {
 			// shouldn't be, but let's reschedule it if this is the case.
-			s.scheduler.schedulerPeer(peer, currentTimeout+s.lastBeta)
-			continue
+			nextSchedule = currentTimeout + (currentTimeout-currentSchedule)%messageTimeWindow
+		} else {
+			// the extra messageTimeWindow is to ensure we account for pending messages in queue.
+			nextSchedule = currentTimeout + messageTimeWindow + (currentSchedule-currentTimeout)%messageTimeWindow
+
+			// if we already have a message scehduled before that, leave it as is.
+			if currentSchedule < nextSchedule {
+				nextSchedule = currentSchedule
+			}
 		}
-		// given that peerNext is after currentTimeout, find out what's the difference, and divide by the beta.
-		betaCount := (peerNext - currentTimeout) / s.lastBeta
-		peerNext = currentTimeout + s.lastBeta*betaCount
-		s.scheduler.schedulerPeer(peer, peerNext)
+		s.scheduler.schedulerPeer(peer, nextSchedule)
 	}
 }
 
@@ -216,9 +224,14 @@ func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
 	if len(peers) == 0 {
 		return
 	}
-
+	//s.log.Debugf("%v eval time %v real time", currentTimeout, s.clock.Since())
+	//seenPeers := make(map[*Peer]bool)
 	sendMessagePeers := 0
 	for _, peer := range peers {
+		//if seenPeers[peer] {
+		//	continue
+		//}
+		//seenPeers[peer] = true
 		ops := peer.advancePeerState(currentTimeout, s.isRelay)
 		if (ops & peerOpsSendMessage) == peerOpsSendMessage {
 			peers[sendMessagePeers] = peer
@@ -238,12 +251,15 @@ func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
 		}
 		if (ops & peerOpsReschedule) == peerOpsReschedule {
 			s.scheduler.schedulerPeer(peer, currentTimeout+s.lastBeta)
+			if currentTimeout+s.lastBeta < s.clock.Since() {
+				panic(nil)
+			}
 		}
 	}
 
 	peers = peers[:sendMessagePeers]
 	deadlineMonitor := s.throttler.getWindowDeadlineMonitor()
-	s.sendMessageLoop(currentTimeout, deadlineMonitor, peers)
+	s.sendMessageLoop(deadlineMonitor, peers)
 }
 
 // rollOffsets rolls the "base" offset for the peers offset selection. This method is only called
@@ -271,16 +287,21 @@ func (s *syncState) rollOffsets() {
 			// a new peer - ignore for now. This peer would get scheduled on the next new round.
 			continue
 		}
-		if currentTimeOffset+sendMessagesTime > nextSchedule {
+		if currentTimeOffset+messageTimeWindow > nextSchedule {
 			// there was a message scheudled already in less than 20ms, so keep that one.
 			s.scheduler.schedulerPeer(peer, nextSchedule)
 			continue
 		}
 
-		// otherwise, send a message to that peer. Note that we're passing the `nextSchedule-s.lastBeta` as the currentTime,
-		// so that the time offset would be based on that one. ( i.e. effectively, it would retain the existing timing, and prevent
-		// the peers from getting aligned )
-		s.sendMessageLoop(nextSchedule-s.lastBeta, deadlineMonitor, []*Peer{peer})
+		// this would send the message to the peer, but would also reschedule it. that's a problem since
+		// it would realign the peers. that's why we're going to follow up with rescheduling this one
+		s.sendMessageLoop(deadlineMonitor, []*Peer{peer})
+
+		// this would remove the current scheduling for the peer
+		s.scheduler.peerDuration(peer)
+
+		// and restore the original scheduling
+		s.scheduler.schedulerPeer(peer, nextSchedule)
 	}
 }
 

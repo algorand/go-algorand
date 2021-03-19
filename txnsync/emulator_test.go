@@ -289,6 +289,7 @@ func TestEmulatedLargeSetTransactionsExchange(t *testing.T) {
 		testScenario.netConfig.nodes[1].name = "node"
 		testScenario.initialAlloc[0].node = 0
 		emulateScenario(t, testScenario)
+
 	})
 
 	t.Run("OutgoingRelay_To_IncomingRelay", func(t *testing.T) {
@@ -543,7 +544,7 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 						{
 							uploadSpeed:   1000000,
 							downloadSpeed: 1000000,
-							target:        1,
+							target:        2,
 						},
 						{
 							uploadSpeed:   1000000,
@@ -629,7 +630,7 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 			},
 		},
 		step:         1 * time.Millisecond / 10,
-		testDuration: 2000 * time.Millisecond,
+		testDuration: 2500 * time.Millisecond,
 	}
 	// update the expected results to have the correct number of entries.
 	for j := range testScenario.initialAlloc {

@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -375,7 +376,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 			}
 			// clamp data exchange rate to realistic metrics
 			p.dataExchangeRate = dataExchangeRate
-			//fmt.Printf("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
+			fmt.Printf("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
 		}
 	}
 	p.lastReceivedMessageLocalRound = currentRound
@@ -428,7 +429,7 @@ func (p *Peer) advancePeerState(currenTime time.Duration, isRelay bool) (ops pee
 				// todo : log
 			}
 		} else {
-			// non-outgoing
+			// non-outgoing ( i.e. incoming peer )
 			switch p.state {
 			case peerStateStartup:
 				p.state = peerStateHoldsoff
@@ -497,11 +498,12 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 				// that single relay would know which messages it previously sent us, and would refrain from
 				// sending these again.
 				if p.nextStateTimestamp == 0 {
-					ops |= messageConstBloomFilter | messageConstUpdateRequestParams
+					ops |= messageConstBloomFilter
 				}
 			} else {
-				ops |= messageConstBloomFilter | messageConstUpdateRequestParams
+				ops |= messageConstBloomFilter
 			}
+			ops |= messageConstUpdateRequestParams
 		}
 	}
 	return
@@ -520,7 +522,7 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 			} else {
 				// a partial message was sent to an incoming peer
 				if p.nextStateTimestamp > time.Duration(0) {
-					if currentTime+messageTimeWindow < p.nextStateTimestamp {
+					if currentTime+messageTimeWindow*2 < p.nextStateTimestamp {
 						// we have enough time to send another message
 						return messageTimeWindow, peerOpsReschedule
 					}
@@ -534,7 +536,7 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 			}
 		} else {
 			if p.nextStateTimestamp > time.Duration(0) {
-				if currentTime+messageTimeWindow < p.nextStateTimestamp {
+				if currentTime+messageTimeWindow*2 < p.nextStateTimestamp {
 					// we have enough time to send another message
 					return messageTimeWindow, peerOpsReschedule
 				}

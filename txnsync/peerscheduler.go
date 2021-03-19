@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"container/heap"
+	//"fmt"
 	"time"
 )
 
@@ -105,6 +106,10 @@ func (p *peerScheduler) nextPeers(granularityWindow time.Duration) (outPeers []*
 func (p *peerScheduler) schedulerPeer(peer *Peer, next time.Duration) {
 	bucket := peerBucket{peer: peer, next: next}
 	heap.Push(p, bucket)
+	/*fmt.Printf("scheduling for %v\n", next.Nanoseconds())
+	if next == 787500000 {
+		panic(nil)
+	}*/
 }
 
 func (p *peerScheduler) peerDuration(peer *Peer) time.Duration {

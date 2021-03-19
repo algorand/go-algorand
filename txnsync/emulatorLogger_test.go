@@ -77,6 +77,14 @@ func (e *emulatorNodeLogger) Infof(msg string, args ...interface{}) {
 
 }
 
+// implement the logging.Logger interface, so that we can avoid printing
+// non markup info messages.
+func (e *emulatorNodeLogger) Debugf(msg string, args ...interface{}) {
+	fmt.Printf("%s :", e.node.name)
+	fmt.Printf(msg, args...)
+	fmt.Printf("\n")
+}
+
 // implement local interface Logger
 func (e *emulatorNodeLogger) outgoingMessage(mstat msgStats) {
 	e.printMsgStats(mstat, modeOutgoing)
@@ -108,8 +116,8 @@ func (e *emulatorNodeLogger) printMsgStats(mstat msgStats, mode msgMode) {
 		}
 	}
 
-	elapsed := e.node.emulator.clock.Since().Milliseconds()
-	out := fmt.Sprintf("%3d.%03d ", elapsed/1000, elapsed%1000)
+	elapsed := e.node.emulator.clock.Since().Microseconds()
+	out := fmt.Sprintf("%3d.%06d ", elapsed/1000000, elapsed%1000000)
 	out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", e.node.name)
 
 	bfColor := hiblack
@@ -139,7 +147,7 @@ func (e *emulatorNodeLogger) printMsgStats(mstat msgStats, mode msgMode) {
 	}
 
 	out += fmt.Sprintf("%"+fmt.Sprintf("%d", e.longestName)+"s", destName)
-	fmt.Printf("%s\n", out)
+	e.node.emulator.t.Logf("%s\n", out)
 }
 
 func wrapRollingLowColor(color int, s string) (out string) {

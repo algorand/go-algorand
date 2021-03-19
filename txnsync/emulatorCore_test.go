@@ -115,7 +115,7 @@ func (e *emulator) run() {
 	e.clock = guidedClock
 	e.start()
 	// start the nodes
-	for e.clock.Since() < e.scenario.testDuration {
+	for guidedClock.Since()+e.scenario.step < e.scenario.testDuration {
 		if guidedClock.Since() > lastRoundStarted+roundDuration {
 			e.nextRound()
 			lastRoundStarted = guidedClock.Since()
