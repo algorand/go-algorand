@@ -491,6 +491,7 @@ func (wn *WebsocketNetwork) Disconnect(node Peer) {
 }
 
 // Disconnect from a peer, probably due to protocol errors.
+//go:noinline
 func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 	if badnode == nil {
 		return
@@ -1522,6 +1523,7 @@ func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
 
 // checkExistingConnectionsNeedDisconnecting check to see if existing connection need to be dropped due to
 // performance issues and/or network being stalled.
+//go:noinline
 func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting() bool {
 	// we already connected ( or connecting.. ) to  GossipFanout peers.
 	// get the actual peers.
@@ -1565,6 +1567,7 @@ func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting() bool {
 
 // checkNetworkAdvanceDisconnect is using the lastNetworkAdvance indicator to see if the network is currently "stuck".
 // if it's seems to be "stuck", a randomally picked peer would be disconnected.
+//go:noinline
 func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
 	lastNetworkAdvance := wn.getLastNetworkAdvance()
 	if time.Now().UTC().Sub(lastNetworkAdvance) < cliqueResolveInterval {
@@ -1589,6 +1592,7 @@ func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
 	return true
 }
 
+//go:noinline
 func (wn *WebsocketNetwork) getLastNetworkAdvance() time.Time {
 	wn.lastNetworkAdvanceMu.Lock()
 	defer wn.lastNetworkAdvanceMu.Unlock()
@@ -1599,6 +1603,7 @@ func (wn *WebsocketNetwork) getLastNetworkAdvance() time.Time {
 // this is the only indication that we have that we haven't formed a clique, where all incoming messages
 // arrive very quickly, but might be missing some votes. The usage of this call is expected to have similar
 // characteristics as with a watchdog timer.
+//go:noinline
 func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	wn.lastNetworkAdvanceMu.Lock()
 	defer wn.lastNetworkAdvanceMu.Unlock()
