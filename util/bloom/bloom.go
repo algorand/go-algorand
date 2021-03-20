@@ -74,7 +74,6 @@ func (f *Filter) Set(x []byte) {
 	for _, h := range hs {
 		f.set(h % n)
 	}
-	f.preimageStagingBuffer = withPrefix[:0]
 }
 
 // Test checks whether x is present in the filter
