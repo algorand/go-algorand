@@ -83,7 +83,7 @@ func TestCompactCerts(t *testing.T) {
 
 		fixture.WaitForRound(rnd, 30*time.Second)
 		blk, err := libgoal.Block(rnd)
-		r.NoError(err)
+		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
 		t.Logf("Round %d, block %v\n", rnd, blk)
 
