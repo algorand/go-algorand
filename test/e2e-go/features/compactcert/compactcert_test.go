@@ -46,6 +46,7 @@ func TestCompactCerts(t *testing.T) {
 	consensusParams.CompactCertVotersLookback = 2
 	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	consensusParams.CompactCertSecKQ = 128
+	consensusParams.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -56,9 +57,30 @@ func TestCompactCerts(t *testing.T) {
 	restClient, err := fixture.NC.AlgodClient()
 	r.NoError(err)
 
+	node0Client := fixture.GetLibGoalClientForNamedNode("Node0")
+	node0Wallet, err := node0Client.GetUnencryptedWalletHandle()
+	r.NoError(err)
+	node0AccountList, err := node0Client.ListAddresses(node0Wallet)
+	r.NoError(err)
+	node0Account := node0AccountList[0]
+
+	node1Client := fixture.GetLibGoalClientForNamedNode("Node1")
+	node1Wallet, err := node1Client.GetUnencryptedWalletHandle()
+	r.NoError(err)
+	node1AccountList, err := node1Client.ListAddresses(node1Wallet)
+	r.NoError(err)
+	node1Account := node1AccountList[0]
+
 	var lastCertBlock v1.Block
 	libgoal := fixture.LibGoalClient
 	for rnd := uint64(1); rnd <= consensusParams.CompactCertRounds*4; rnd++ {
+		// send a dummy payment transaction.
+		minTxnFee, _, err := fixture.CurrentMinFeeAndBalance()
+		r.NoError(err)
+
+		_, err = node0Client.SendPaymentFromUnencryptedWallet(node0Account, node1Account, minTxnFee, rnd, nil)
+		r.NoError(err)
+
 		fixture.WaitForRound(rnd, 30*time.Second)
 		blk, err := libgoal.Block(rnd)
 		r.NoError(err)
