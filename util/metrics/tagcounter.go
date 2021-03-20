@@ -93,6 +93,11 @@ func (tc *TagCounter) Add(tag string, val uint64) {
 
 // WriteMetric is part of the Metric interface
 func (tc *TagCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
+	tagptr := tc.tagptr.Load()
+	if tagptr == nil {
+		// no values, nothing to say.
+		return
+	}
 	// TODO: what to do with "parentLabels"? obsolete part of interface?
 	buf.WriteString("# ")
 	buf.WriteString(tc.Name)
@@ -100,7 +105,7 @@ func (tc *TagCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
 	buf.WriteString(tc.Description)
 	buf.WriteString("\n")
 	isTemplate := strings.Contains(tc.Name, "{TAG}")
-	tags := tc.tagptr.Load().(map[string]*uint64)
+	tags := tagptr.(map[string]*uint64)
 	for tag, tagcount := range tags {
 		if tagcount == nil {
 			continue
