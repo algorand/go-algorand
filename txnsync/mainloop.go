@@ -251,9 +251,9 @@ func (s *syncState) evaluatePeerStateChanges(currentTimeout time.Duration) {
 		}
 		if (ops & peerOpsReschedule) == peerOpsReschedule {
 			s.scheduler.schedulerPeer(peer, currentTimeout+s.lastBeta)
-			if currentTimeout+s.lastBeta < s.clock.Since() {
+			/*if currentTimeout+s.lastBeta < s.clock.Since() {
 				panic(nil)
-			}
+			}*/
 		}
 	}
 

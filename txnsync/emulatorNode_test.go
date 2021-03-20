@@ -258,16 +258,15 @@ func (n *emulatedNode) enqueueMessage(from int, msg queuedMessage) {
 		if lastQueuedMessageReadyAt > baseTime {
 			if lastQueuedMessageReadyAt-baseTime > 25*time.Millisecond {
 				//
-				fmt.Printf("%v: message of send time %v was queued on %s from %s\n", baseTime, msg.readyAt, n.name, n.emulator.nodes[from].name)
+				/*fmt.Printf("%v: message of send time %v was queued on %s from %s\n", baseTime, msg.readyAt, n.name, n.emulator.nodes[from].name)
 				fmt.Printf("%v: message was queued %v into the future on %s from %s\n", baseTime, lastQueuedMessageReadyAt-baseTime, n.name, n.emulator.nodes[from].name)
 				if lastQueuedMessageReadyAt-baseTime > 30*time.Millisecond {
 					panic(nil)
-				}
+				}*/
 			}
 			baseTime = lastQueuedMessageReadyAt
 		} else if lastQueuedMessageReadyAt < baseTime-n.emulator.scenario.step {
-			fmt.Printf("%v: stale message on %s from %s with expiration of %v\n", baseTime, n.name, n.emulator.nodes[from].name, lastQueuedMessageReadyAt)
-			panic(nil)
+			n.emulator.t.Fatalf("%v: stale message on %s from %s with expiration of %v\n", baseTime, n.name, n.emulator.nodes[from].name, lastQueuedMessageReadyAt)
 		}
 	}
 	n.peers[from].messageQ = append(n.peers[from].messageQ, queuedMessage{bytes: msg.bytes, readyAt: baseTime + msg.readyAt})

@@ -103,10 +103,10 @@ func (s *syncState) sendMessageLoop(deadline timers.DeadlineMonitor, peers []*Pe
 		}
 		if (ops & peerOpsReschedule) == peerOpsReschedule {
 			s.scheduler.schedulerPeer(peer, s.clock.Since()+scheduleOffset)
-			if scheduleOffset < 20*time.Millisecond {
+			/*if scheduleOffset < 20*time.Millisecond {
 				s.log.Debugf("rescheduling for %v", s.clock.Since()+scheduleOffset)
 				panic(nil)
-			}
+			}*/
 		}
 
 		if deadline.Expired() {
