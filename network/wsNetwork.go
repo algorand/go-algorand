@@ -201,6 +201,13 @@ type GossipNode interface {
 
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
+
+	// GetPeerData returns a value stored by SetPeerData
+	GetPeerData(peer Peer, key string) interface{}
+
+	// SetPeerData attaches a piece of data to a peer.
+	// Other services inside go-algorand may attach data to a peer that gets garbage collected when the peer is closed.
+	SetPeerData(peer Peer, key string, value interface{})
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -491,7 +498,6 @@ func (wn *WebsocketNetwork) Disconnect(node Peer) {
 }
 
 // Disconnect from a peer, probably due to protocol errors.
-//go:noinline
 func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 	if badnode == nil {
 		return
@@ -1523,7 +1529,6 @@ func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
 
 // checkExistingConnectionsNeedDisconnecting check to see if existing connection need to be dropped due to
 // performance issues and/or network being stalled.
-//go:noinline
 func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting() bool {
 	// we already connected ( or connecting.. ) to  GossipFanout peers.
 	// get the actual peers.
@@ -1567,7 +1572,6 @@ func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting() bool {
 
 // checkNetworkAdvanceDisconnect is using the lastNetworkAdvance indicator to see if the network is currently "stuck".
 // if it's seems to be "stuck", a randomally picked peer would be disconnected.
-//go:noinline
 func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
 	lastNetworkAdvance := wn.getLastNetworkAdvance()
 	if time.Now().UTC().Sub(lastNetworkAdvance) < cliqueResolveInterval {
@@ -1592,7 +1596,6 @@ func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
 	return true
 }
 
-//go:noinline
 func (wn *WebsocketNetwork) getLastNetworkAdvance() time.Time {
 	wn.lastNetworkAdvanceMu.Lock()
 	defer wn.lastNetworkAdvanceMu.Unlock()
@@ -1603,7 +1606,6 @@ func (wn *WebsocketNetwork) getLastNetworkAdvance() time.Time {
 // this is the only indication that we have that we haven't formed a clique, where all incoming messages
 // arrive very quickly, but might be missing some votes. The usage of this call is expected to have similar
 // characteristics as with a watchdog timer.
-//go:noinline
 func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	wn.lastNetworkAdvanceMu.Lock()
 	defer wn.lastNetworkAdvanceMu.Unlock()
@@ -2041,6 +2043,26 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 				}
 			}
 		}
+	}
+}
+
+// GetPeerData returns the peer data associated with a particular key.
+func (wn *WebsocketNetwork) GetPeerData(peer Peer, key string) interface{} {
+	switch p := peer.(type) {
+	case *wsPeer:
+		return p.getPeerData(key)
+	default:
+		return nil
+	}
+}
+
+// SetPeerData sets the peer data associated with a particular key.
+func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}) {
+	switch p := peer.(type) {
+	case *wsPeer:
+		p.setPeerData(key, value)
+	default:
+		return
 	}
 }
 
