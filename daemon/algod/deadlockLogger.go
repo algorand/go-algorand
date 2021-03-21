@@ -50,7 +50,7 @@ func (logger *deadlockLogger) Write(p []byte) (n int, err error) {
 }
 
 // captureCallstack captures the callstack and return a byte array of the output.
-func (logger *deadlockLogger) captureCallstack() []byte {
+func captureCallstack() []byte {
 	// Capture all goroutine stacks
 	var buf []byte
 	bufferSize := 256 * 1024
@@ -70,7 +70,7 @@ func (logger *deadlockLogger) onPotentialDeadlock() {
 	// in practive, once we report the deadlock, we panic and abort anyway, so it won't be an issue.
 	logger.reportDeadlock.Do(func() {
 		// Capture all goroutine stacks
-		buf := logger.captureCallstack()
+		buf := captureCallstack()
 
 		logger.bufferSync <- struct{}{}
 		loggedString := logger.String()
