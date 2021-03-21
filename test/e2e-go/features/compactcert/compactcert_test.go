@@ -148,5 +148,5 @@ func TestCompactCerts(t *testing.T) {
 		}
 	}
 
-	r.True(lastCertBlock.Round == consensusParams.CompactCertRounds*3)
+	r.Equalf(consensusParams.CompactCertRounds*3, lastCertBlock.Round, "the expected last certificate block wasn't the one that was observed")
 }
