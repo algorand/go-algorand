@@ -86,6 +86,10 @@ func (s *syncState) sendMessageLoop(deadline timers.DeadlineMonitor, peers []*Pe
 		msgCallback.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
 		encodedMessage := msgCallback.messageData.message.MarshalMsg([]byte{})
 		msgCallback.messageData.encodedMessageSize = len(encodedMessage)
+		// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
+		releaseEncodedTransactionGroups(msgCallback.messageData.message.TransactionGroups.Bytes)
+		msgCallback.messageData.message.TransactionGroups.Bytes = nil
+
 		s.node.SendPeerMessage(peer.networkPeer, encodedMessage, msgCallback.asyncMessageSent)
 
 		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, msgCallback.messageData.partialMessage, s.clock.Since())
@@ -192,12 +196,10 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 }
 
 func (s *syncState) evaluateOutgoingMessage(msg *messageSentCallback) {
-	msgData := msg.messageData
+	msgData := &msg.messageData
 
 	msgData.peer.updateMessageSent(msgData.message.Round, msgData.sentTranscationsIDs, msgData.sentTimestamp, msgData.sequenceNumber, msgData.encodedMessageSize, msgData.filter)
 	s.log.outgoingMessage(msgStats{msgData.sequenceNumber, msgData.message.Round, len(msgData.sentTranscationsIDs), msgData.message.UpdatedRequestParams, len(msgData.message.TxnBloomFilter.BloomFilter), msgData.message.MsgSync.NextMsgMinDelay, msg.messageData.peer.networkAddress()})
-	releaseEncodedTransactionGroups(msgData.message.TransactionGroups.Bytes)
-
 }
 
 // locallyGeneratedTransactions return a subset of the given transactionGroups array by filtering out transactions that are not locally generated.

@@ -664,7 +664,7 @@ func TestEmulatedOneRelayHundredNodes(t *testing.T) {
 			},
 		},
 		step:         1 * time.Millisecond / 10,
-		testDuration: 13000 * time.Millisecond,
+		testDuration: 18000 * time.Millisecond,
 	}
 
 	for i := 1; i <= 100; i++ {

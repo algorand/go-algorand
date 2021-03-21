@@ -24,28 +24,36 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
+type expiredClockEntryStruct struct {
+	duration time.Duration
+	ch       chan time.Time
+}
+
 // guidedClock implements the WallClock interface
 type guidedClock struct {
-	sync.Mutex `algofix:"allow sync.Mutex"`
-	zero       time.Time
-	adv        time.Duration
-	timers     map[time.Duration]chan time.Time
-	children   []*guidedClock
-	emulator   *emulator
+	sync.Mutex    `algofix:"allow sync.Mutex"`
+	zero          time.Time
+	adv           time.Duration
+	timers        map[time.Duration]chan time.Time
+	children      []*guidedClock
+	emulator      *emulator
+	expiredClocks []expiredClockEntryStruct
 }
 
 func makeGuidedClock(e *emulator) *guidedClock {
 	return &guidedClock{
-		zero:     time.Now(),
-		emulator: e,
+		zero:          time.Now(),
+		emulator:      e,
+		expiredClocks: make([]expiredClockEntryStruct, 0),
 	}
 }
 func (g *guidedClock) Zero() timers.Clock {
 	// the real monotonic clock doesn't return the same clock object, which is fine.. but for our testing
 	// we want to keep the same clock object so that we can tweak with it.
 	child := &guidedClock{
-		zero:     g.zero.Add(g.adv),
-		emulator: g.emulator,
+		zero:          g.zero.Add(g.adv),
+		emulator:      g.emulator,
+		expiredClocks: make([]expiredClockEntryStruct, 0),
 	}
 	g.Lock()
 	defer g.Unlock()
@@ -94,33 +102,33 @@ func (g *guidedClock) DeadlineMonitorAt(at time.Duration) timers.DeadlineMonitor
 func (g *guidedClock) Advance(adv time.Duration) {
 	g.adv += adv
 
-	type entryStruct struct {
-		duration time.Duration
-		ch       chan time.Time
-	}
-	expiredClocks := []entryStruct{}
 	g.Lock()
+	defer g.Unlock()
+
 	// find all the expired clocks.
 	for delta, ch := range g.timers {
 		if delta < g.adv {
-			expiredClocks = append(expiredClocks, entryStruct{delta, ch})
+			g.expiredClocks = append(g.expiredClocks, expiredClockEntryStruct{delta, ch})
 		}
 	}
-	sort.SliceStable(expiredClocks, func(i, j int) bool {
-		return expiredClocks[i].duration < expiredClocks[j].duration
+	sort.SliceStable(g.expiredClocks, func(i, j int) bool {
+		return g.expiredClocks[i].duration < g.expiredClocks[j].duration
 	})
 
 	// remove from map
-	for _, entry := range expiredClocks {
+	for _, entry := range g.expiredClocks {
 		delete(g.timers, entry.duration)
 	}
-	g.Unlock()
+
 	// fire expired clocks
-	for _, entry := range expiredClocks {
+	for _, entry := range g.expiredClocks {
 		entry.ch <- g.zero.Add(g.adv)
+		close(entry.ch)
 	}
-	g.Lock()
-	defer g.Unlock()
+
+	// reset expired clocks content.
+	g.expiredClocks = g.expiredClocks[:0]
+
 	for _, child := range g.children {
 		child.Advance(adv)
 	}
