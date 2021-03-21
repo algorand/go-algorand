@@ -32,7 +32,6 @@ var (
 	errFailedToGetAssetCreator             = "failed to retrieve asset creator from the ledger"
 	errFailedToGetAppCreator               = "failed to retrieve app creator from the ledger"
 	errAppDoesNotExist                     = "application does not exist"
-	errRequestedBlockRoundIsNotAvailable   = "requested block for round %d is not available"
 	errFailedRetrievingApp                 = "failed to retrieve application information"
 	errFailedToParseAddress                = "failed to parse the address"
 	errFailedToParseTransaction            = "failed to parse transaction"
