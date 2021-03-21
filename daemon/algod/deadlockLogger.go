@@ -30,29 +30,13 @@ import (
 type dumpLogger struct {
 	logging.Logger
 	*bytes.Buffer
-	bufferSync chan struct{}
 }
 
 func (logger *dumpLogger) dump() {
-	logger.bufferSync <- struct{}{}
-	outBuffer := logger.String()
-	<-logger.bufferSync
-	logger.Error(outBuffer)
+	logger.Error(logger.String())
 }
 
-// we need to implement the io.Writer interface so that we can syncronize access to underlying buffer/
-func (logger *dumpLogger) Write(p []byte) (n int, err error) {
-	logger.bufferSync <- struct{}{}
-	n, err = logger.Buffer.Write(p)
-	<-logger.bufferSync
-	return
-}
-
-var logger = &dumpLogger{
-	Logger:     logging.Base(),
-	Buffer:     bytes.NewBuffer(make([]byte, 0)),
-	bufferSync: make(chan struct{}, 1),
-}
+var logger = dumpLogger{Logger: logging.Base(), Buffer: bytes.NewBuffer(make([]byte, 0))}
 
 var deadlockPanic func()
 
