@@ -46,7 +46,6 @@ func TestCompactCerts(t *testing.T) {
 	consensusParams.CompactCertVotersLookback = 2
 	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	consensusParams.CompactCertSecKQ = 128
-	consensusParams.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
