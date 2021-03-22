@@ -35,10 +35,10 @@ func TestDeadlockLogging(t *testing.T) {
 	logWriter := logging.MakeCyclicFileWriter(logFn, archiveFn, 65536, time.Hour)
 	l.SetOutput(logWriter)
 
-	setupDeadlockLogger()
+	logger := setupDeadlockLogger()
 
 	deadlockCh := make(chan struct{})
-	deadlockPanic = func() {
+	logger.panic = func() {
 		close(deadlockCh)
 	}
 
@@ -52,6 +52,39 @@ func TestDeadlockLogging(t *testing.T) {
 
 	mu.RLock()
 	mu.RLock()
+
+	_ = <-deadlockCh
+}
+
+func TestDeadlockOnPotentialDeadlock(t *testing.T) {
+	logFn := fmt.Sprintf("/tmp/test.%s.%d.log", t.Name(), crypto.RandUint64())
+	archiveFn := fmt.Sprintf("%s.archive", logFn)
+
+	l := logging.Base()
+	logWriter := logging.MakeCyclicFileWriter(logFn, archiveFn, 65536, time.Hour)
+	l.SetOutput(logWriter)
+
+	logger := setupDeadlockLogger()
+
+	deadlockCh := make(chan struct{})
+	logger.panic = func() {
+		close(deadlockCh)
+	}
+
+	defer func() {
+		r := recover()
+		if r != nil {
+			fmt.Printf("Recovered: %v\n", r)
+		}
+	}()
+
+	for linenum := 0; linenum < 10; linenum++ {
+		fmt.Fprintf(logger, "line %d", linenum)
+	}
+	logger.onPotentialDeadlock()
+	for linenum := 10; linenum < 20; linenum++ {
+		fmt.Fprintf(logger, "line %d", linenum)
+	}
 
 	_ = <-deadlockCh
 }

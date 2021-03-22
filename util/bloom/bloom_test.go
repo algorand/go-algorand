@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/crypto"
 )
 
 func TestBitset(t *testing.T) {
@@ -246,4 +248,122 @@ func TestBinaryMarshalLength(t *testing.T) {
 			require.Equal(t, calculatedBytesLength, int64(len(bytes)))
 		}
 	}
+}
+
+func TestBloomFilterMemoryConsumption(t *testing.T) {
+	t.Run("Set", func(t *testing.T) {
+		N := 1000000
+		sizeBits, numHashes := Optimal(N, 0.01)
+		prefix := uint32(0)
+		bf := New(sizeBits, numHashes, prefix)
+
+		dataset := make([][]byte, N)
+		for n := 0; n < N; n++ {
+			hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+			dataset[n] = hash[:]
+		}
+
+		result := testing.Benchmark(func(b *testing.B) {
+			// start this test with 10K iterations.
+			if b.N < 10000 {
+				b.N = 10000
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				bf.Set(dataset[n%N])
+			}
+		})
+
+		// make sure the memory allocated is less than 1 byte / iteration.
+		require.LessOrEqual(t, uint64(result.MemBytes), uint64(result.N))
+	})
+	t.Run("Test", func(t *testing.T) {
+		N := 1000000
+		sizeBits, numHashes := Optimal(N, 0.01)
+		prefix := uint32(0)
+		bf := New(sizeBits, numHashes, prefix)
+
+		dataset := make([][]byte, N)
+		for n := 0; n < N; n++ {
+			hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+			dataset[n] = hash[:]
+		}
+
+		// set half of them.
+		for n := 0; n < N/2; n++ {
+			bf.Set(dataset[n])
+		}
+		result := testing.Benchmark(func(b *testing.B) {
+			// start this test with 10K iterations.
+			if b.N < 1000000 {
+				b.N = 1000000
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				bf.Test(dataset[n%N])
+			}
+		})
+
+		// make sure the memory allocated is less than 1 byte / iteration.
+		require.LessOrEqual(t, uint64(result.MemBytes), uint64(result.N))
+	})
+}
+
+func BenchmarkBloomFilterSet(b *testing.B) {
+	bfElements := 1000000
+	sizeBits, numHashes := Optimal(bfElements, 0.01)
+	prefix := uint32(0)
+	bf := New(sizeBits, numHashes, prefix)
+	dataset := make([][]byte, bfElements)
+	for n := 0; n < bfElements; n++ {
+		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+		dataset[n] = hash[:]
+	}
+
+	b.ResetTimer()
+	for x := 0; x < b.N; x++ {
+		bf.Set(dataset[x%bfElements])
+	}
+}
+
+func BenchmarkBloomFilterTest(b *testing.B) {
+	bfElements := 1000000
+	sizeBits, numHashes := Optimal(bfElements, 0.01)
+	prefix := uint32(0)
+	bf := New(sizeBits, numHashes, prefix)
+	dataset := make([][]byte, bfElements)
+	for n := 0; n < bfElements; n++ {
+		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+		dataset[n] = hash[:]
+	}
+	// set half of them.
+	for n := 0; n < bfElements/2; n++ {
+		bf.Set(dataset[n])
+	}
+
+	b.ResetTimer()
+	for x := 0; x < b.N; x++ {
+		bf.Test(dataset[x%bfElements])
+	}
+}
+
+// TestBloomFilterReferenceHash ensure that we generate a bloom filter in a consistent way. This is important since we want to ensure that
+// this code is backward compatible.
+func TestBloomFilterReferenceHash(t *testing.T) {
+	N := 3
+	sizeBits, numHashes := Optimal(N, 0.01)
+	prefix := uint32(0x11223344)
+	bf := New(sizeBits, numHashes, prefix)
+
+	for n := 0; n < N; n++ {
+		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+		bf.Set(hash[:])
+	}
+	bytes, err := bf.MarshalBinary()
+	require.NoError(t, err)
+	require.Equal(t, []byte{0x0, 0x0, 0x0, 0x7, 0x11, 0x22, 0x33, 0x44, 0x62, 0xf0, 0xe, 0x2c, 0x8c}, bytes)
 }
