@@ -216,6 +216,20 @@ func (i *networkImpl) LoadMessage(h agreement.MessageHandle, keys []crypto.Diges
 		return nil, true
 	}
 
+	if metadata.raw.MsgTracker != nil {
+		ok := true
+		values := make([][]byte, len(keys), len(keys))
+		for i, k := range keys {
+			var found bool
+			values[i], found = metadata.raw.MsgTracker[k]
+			if !found {
+				ok = false
+			}
+
+		}
+		return values, ok
+	}
+
 	return i.net.LoadMessage(metadata.raw.Sender, keys)
 }
 

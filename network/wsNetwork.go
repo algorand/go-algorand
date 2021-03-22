@@ -224,6 +224,8 @@ type IncomingMessage struct {
 	// is used to ensure fairness across peers in terms of processing
 	// messages.
 	processing chan struct{}
+
+	MsgTracker map[crypto.Digest][]byte
 }
 
 // Tag is a short string (2 bytes) marking a type of message

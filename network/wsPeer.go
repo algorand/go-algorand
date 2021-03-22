@@ -434,6 +434,15 @@ func (wp *wsPeer) readLoop() {
 			wp.receiveMsgTracker.storeMsg(msg.Data)
 		}
 
+		if msg.Tag == protocol.ProposalPayloadTag {
+			wp.receiveMsgTracker.mu.RLock()
+			msg.MsgTracker = make(map[crypto.Digest][]byte, len(wp.receiveMsgTracker.store))
+			for k, v := range wp.receiveMsgTracker.store {
+				msg.MsgTracker[k] = v
+			}
+			wp.receiveMsgTracker.mu.RUnlock()
+		}
+
 		// for outgoing connections, we want to notify the connection monitor that we've received
 		// a message. The connection monitor would update it's statistics accordingly.
 		if wp.connMonitor != nil {
