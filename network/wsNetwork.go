@@ -203,6 +203,13 @@ type GossipNode interface {
 
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
+
+	// GetPeerData returns a value stored by SetPeerData
+	GetPeerData(peer Peer, key string) interface{}
+
+	// SetPeerData attaches a piece of data to a peer.
+	// Other services inside go-algorand may attach data to a peer that gets garbage collected when the peer is closed.
+	SetPeerData(peer Peer, key string, value interface{})
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -2073,6 +2080,26 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 				}
 			}
 		}
+	}
+}
+
+// GetPeerData returns the peer data associated with a particular key.
+func (wn *WebsocketNetwork) GetPeerData(peer Peer, key string) interface{} {
+	switch p := peer.(type) {
+	case *wsPeer:
+		return p.getPeerData(key)
+	default:
+		return nil
+	}
+}
+
+// SetPeerData sets the peer data associated with a particular key.
+func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}) {
+	switch p := peer.(type) {
+	case *wsPeer:
+		p.setPeerData(key, value)
+	default:
+		return
 	}
 }
 
