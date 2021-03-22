@@ -75,11 +75,16 @@ type TransactionPool struct {
 	assemblyResults poolAsmResults
 
 	// pendingMu protects pendingTxGroups, pendingTxids, pendingCounter and pendingLastestLocal
-	pendingMu           deadlock.RWMutex
-	pendingTxGroups     []transactions.SignedTxGroup
-	pendingTxids        map[transactions.Txid]transactions.SignedTxn
-	pendingCounter      uint64
-	pendingLastestLocal uint64 // this is the latest transaction group counter which was locally originated.
+	pendingMu deadlock.RWMutex
+	// pendingTxGroups is a slice of the pending transaction groups.
+	pendingTxGroups []transactions.SignedTxGroup
+	// pendingTxids is a map of the pending *transaction ids* included in the pendingTxGroups array.
+	pendingTxids map[transactions.Txid]transactions.SignedTxn
+	// pendingCounter is a monotomic counter, indicating the next pending transaction group counter value.
+	pendingCounter uint64
+	// pendingLastestLocal is the value of the last transaction group counter which is associated with a transaction that was
+	// locally originated ( i.e. posted to this node via the REST API )
+	pendingLastestLocal uint64
 
 	// Calls to remember() add transactions to rememberedTxGroups and
 	// rememberedTxids.  Calling rememberCommit() adds them to the
@@ -224,8 +229,10 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 		pool.pendingTxGroups = pool.rememberedTxGroups
 		pool.pendingTxids = pool.rememberedTxids
 		pool.ledger.VerifiedTransactionCache().UpdatePinned(pool.pendingTxids)
-		if len(pool.pendingTxGroups) > 0 && pool.pendingTxGroups[0].GroupCounter > pool.pendingLastestLocal {
+		if len(pool.pendingTxGroups) == 0 || pool.pendingTxGroups[0].GroupCounter > pool.pendingLastestLocal {
 			pool.pendingLastestLocal = transactions.InvalidSignedTxGroupCounter
+		} else {
+			// some of the entries in the
 		}
 	} else {
 		// update the GroupCounter on all the transaction groups we're going to add.
@@ -418,6 +425,11 @@ func (pool *TransactionPool) ingest(txgroup transactions.SignedTxGroup, params p
 		if err != nil {
 			return err
 		}
+
+		// since this is the first time the transaction was added to the transaction pool, it would
+		// be a good time now to figure the group's FirstTransactionID and group counter.
+		txgroup.FirstTransactionID = txgroup.Transactions[0].ID()
+		txgroup.GroupCounter = pool.pendingCounter
 	}
 
 	err := pool.addToPendingBlockEvaluator(txgroup, params.recomputing, params.stats)
