@@ -804,24 +804,13 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 	}
 
-	// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of
-	// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
-	// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
-	// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
-	// performing the validation during catchup, which is another performance boost.
-	if (eval.validate || eval.generate) && txn.Txn.Type == protocol.CompactCertTx {
-		if err := cow.compactCert(txn.Txn.CertRound, txn.Txn.CertType, txn.Txn.Cert, txn.Txn.Header.FirstValid, eval.validate); err != nil {
-			return err
-		}
-	}
-
 	spec := transactions.SpecialAddresses{
 		FeeSink:     eval.block.BlockHeader.FeeSink,
 		RewardsPool: eval.block.BlockHeader.RewardsPool,
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := applyTransaction(txn.Txn, cow, evalParams, spec, cow.txnCounter())
+	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -892,7 +881,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 }
 
 // applyTransaction changes the balances according to this transaction.
-func applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
+func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -942,9 +931,14 @@ func applyTransaction(tx transactions.Transaction, balances *roundCowState, eval
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, evalParams, ctr)
 
 	case protocol.CompactCertTx:
-		// don't do anything in the case of compact certificate transaction. This transaction type is explicitly handled in transaction(), since
-		// we want to conduct the testing of it only in the case of a validation or generation.
-		// Note that this means that the cow's CompactCertNext field would not be updated unless we're in either generate or validate mode.
+		// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of
+		// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
+		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
+		// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
+		// performing the validation during catchup, which is another performance boost.
+		if eval.validate || eval.generate {
+			err = balances.compactCert(tx.CertRound, tx.CertType, tx.Cert, tx.Header.FirstValid, eval.validate)
+		}
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
