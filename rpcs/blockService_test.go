@@ -18,10 +18,20 @@ package rpcs
 
 import (
 	"context"
+	"net/http"
+	"path"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -98,4 +108,138 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 	val, found = respTopics.GetValue(network.ErrorKey)
 	require.Equal(t, true, found)
 	require.Equal(t, roundNumberParseErrMsg, string(val))
+}
+
+// TestRedirect tests the case when the block service redirects the request to elsewhere
+func TestRedirect(t *testing.T) {
+	ledger1 := makeLedger(t)
+	ledger2 := makeLedger(t)
+	addBlock(t, ledger1)
+	addBlock(t, ledger2)
+	addBlock(t, ledger2)
+
+	net1 := &httpTestPeerSource{}
+	net2 := &httpTestPeerSource{}
+
+	config := config.GetDefaultLocal()
+	bs1 := MakeBlockService(config, ledger1, net1, "{genesisID}")
+	bs2 := MakeBlockService(config, ledger2, net2, "{genesisID}")
+
+	nodeA := &basicRPCNode{}
+	nodeB := &basicRPCNode{}
+
+	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	nodeA.start()
+	defer nodeA.stop()
+
+	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
+	nodeB.start()
+	defer nodeB.stop()
+
+	net1.addPeer(nodeB.rootURL())
+	net2.addPeer(nodeA.rootURL())
+
+	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
+	require.NoError(t, err)
+
+	client := http.Client{}
+
+	ctx := context.Background()
+	parsedURL.Path = net1.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(2), 36)))
+	blockURL := parsedURL.String()
+	request, err := http.NewRequest("GET", blockURL, nil)
+	require.NoError(t, err)
+	requestCtx, requestCancel := context.WithTimeout(ctx, time.Duration(config.CatchupHTTPBlockFetchTimeoutSec)*time.Second)
+	defer requestCancel()
+	request = request.WithContext(requestCtx)
+	network.SetUserAgentHeader(request.Header)
+	response, err := client.Do(request)
+	require.NoError(t, err)
+
+	require.Equal(t, response.StatusCode, http.StatusOK)
+}
+
+// TestRedirect tests the case when the block service keeps redirecting and cannot get a block
+func TestRedirectMaxLimit(t *testing.T) {
+	ledger1 := makeLedger(t)
+	addBlock(t, ledger1)
+
+	net1 := &httpTestPeerSource{}
+
+	config := config.GetDefaultLocal()
+	bs1 := MakeBlockService(config, ledger1, net1, "{genesisID}")
+
+	nodeA := &basicRPCNode{}
+
+	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	nodeA.start()
+	defer nodeA.stop()
+
+	net1.addPeer(nodeA.rootURL())
+
+	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
+	require.NoError(t, err)
+
+	client := http.Client{}
+
+	ctx := context.Background()
+	parsedURL.Path = net1.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(2), 36)))
+	blockURL := parsedURL.String()
+	request, err := http.NewRequest("GET", blockURL, nil)
+	require.NoError(t, err)
+	requestCtx, requestCancel := context.WithTimeout(ctx, time.Duration(config.CatchupHTTPBlockFetchTimeoutSec)*time.Second)
+	defer requestCancel()
+	request = request.WithContext(requestCtx)
+	network.SetUserAgentHeader(request.Header)
+	_, err = client.Do(request)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "stopped after 10 redirects")
+}
+
+var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+var sinkAddr = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
+
+func makeLedger(t *testing.T) *data.Ledger {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesis := make(map[basics.Address]basics.AccountData)
+	genesis[sinkAddr] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
+	}
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.Online,
+		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
+	}
+
+	log := logging.TestingLog(t)
+	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genHash := crypto.Digest{0x42}
+	cfg := config.GetDefaultLocal()
+	const inMem = true
+
+	ledger, err := data.LoadLedger(
+		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
+		nil, cfg,
+	)
+	require.NoError(t, err)
+	return ledger
+}
+
+func addBlock(t *testing.T, ledger *data.Ledger) {
+	blk, err := ledger.Block(ledger.LastRound())
+	require.NoError(t, err)
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+	blk.TxnRoot, err = blk.PaysetCommit()
+	require.NoError(t, err)
+
+	var cert agreement.Certificate
+	cert.Proposal.BlockDigest = blk.Digest()
+
+	err = ledger.AddBlock(blk, cert)
+	require.NoError(t, err)
+
+	hdr, err := ledger.BlockHdr(blk.BlockHeader.Round)
+	require.NoError(t, err)
+	require.Equal(t, blk.BlockHeader, hdr)
 }

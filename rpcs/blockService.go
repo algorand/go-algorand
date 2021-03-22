@@ -19,7 +19,9 @@ package rpcs
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"net/http"
+	"path"
 	"strconv"
 
 	"github.com/gorilla/mux"
@@ -189,8 +191,12 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
 			// entry cound not be found.
-			response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
-			response.WriteHeader(http.StatusNotFound)
+			err := bs.redirectRequest(round, response, request)
+			if err != nil {
+				logging.Base().Info(err.Error())
+				response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
+				response.WriteHeader(http.StatusNotFound)
+			}
 			return
 		default:
 			// unexpected error.
@@ -283,6 +289,27 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 	}
 	respTopics = topicBlockBytes(bs.ledger, basics.Round(round), string(requestType))
 	return
+}
+
+func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWriter, request *http.Request) (err error) {
+
+	peers := bs.net.GetPeers(network.PeersPhonebookArchivers)
+	if len(peers) == 0 {
+		return fmt.Errorf("redirecRequest: no arcihver peers found")
+	}
+	peer := peers[0]
+	httpPeer, validHTTPPeer := peer.(network.HTTPPeer)
+	if !validHTTPPeer {
+		return fmt.Errorf("redirecRequest: error getting an http peer")
+	}
+	parsedURL, err := network.ParseHostOrURL(httpPeer.GetAddress())
+	if err != nil {
+		return err
+	}
+	parsedURL.Path = bs.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(round, 36)))
+	http.Redirect(response, request, parsedURL.String(), http.StatusTemporaryRedirect)
+	logging.Base().Debugf("redirectRequest: redirected block request to %s", parsedURL.String())
+	return nil
 }
 
 func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType string) network.Topics {
