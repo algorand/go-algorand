@@ -36,7 +36,7 @@ type transcationSyncNodeConnector struct {
 	eventsCh       chan txnsync.Event
 	clock          timers.WallClock
 	messageHandler txnsync.IncomingMessageHandler
-	txHandler      data.SolicitedTxHandler
+	txHandler      data.SolicitedAsyncTxHandler
 	openStateCh    chan struct{}
 }
 
@@ -45,7 +45,7 @@ func makeTranscationSyncNodeConnector(node *AlgorandFullNode) transcationSyncNod
 		node:        node,
 		eventsCh:    make(chan txnsync.Event, 1),
 		clock:       timers.MakeMonotonicClock(time.Now()),
-		txHandler:   node.txHandler.SolicitedTxHandler(),
+		txHandler:   node.txHandler.SolicitedAsyncTxHandler(),
 		openStateCh: make(chan struct{}),
 	}
 }
@@ -139,7 +139,8 @@ func (tsnc *transcationSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 	}
 }
 
-func (tsnc *transcationSyncNodeConnector) GetPendingTransactionGroups() []transactions.SignedTxGroup {
+// TODO : add description.
+func (tsnc *transcationSyncNodeConnector) GetPendingTransactionGroups() ([]transactions.SignedTxGroup, uint64) {
 	return tsnc.node.transactionPool.PendingTxGroups()
 }
 
@@ -169,6 +170,7 @@ func (tsnc *transcationSyncNodeConnector) start() {
 		{Tag: protocol.Txn2Tag, MessageHandler: tsnc},
 	}
 	tsnc.node.net.RegisterHandlers(handlers)
+	tsnc.txHandler.Start()
 }
 
 func (tsnc *transcationSyncNodeConnector) Handle(raw network.IncomingMessage) network.OutgoingMessage {
@@ -199,19 +201,15 @@ func (tsnc *transcationSyncNodeConnector) Handle(raw network.IncomingMessage) ne
 }
 
 func (tsnc *transcationSyncNodeConnector) stop() {
-
+	tsnc.txHandler.Stop()
 }
 
 func (tsnc *transcationSyncNodeConnector) IncomingTransactionGroups(networkPeer interface{}, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
-	defer func() {
-		transactionPoolSize = tsnc.node.transactionPool.PendingCount()
-	}()
+	// count the transactions that we are adding.
+	txCount := 0
 	for _, txGroup := range txGroups {
-		if err := tsnc.txHandler.Handle(txGroup.Transactions); err != nil {
-			// we had some failuire, disconnect from peer.
-			tsnc.node.net.Disconnect(networkPeer)
-			break
-		}
+		txCount += len(txGroup.Transactions)
 	}
-	return
+	tsnc.txHandler.HandleTransactionGroups(networkPeer, txGroups)
+	return tsnc.node.transactionPool.PendingCount() + txCount
 }
