@@ -362,7 +362,9 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 	for field, name := range logic.TxnFieldNames {
 		if field == int(logic.FirstValidTime) ||
 			field == int(logic.Accounts) ||
-			field == int(logic.ApplicationArgs) {
+			field == int(logic.ApplicationArgs) ||
+			field == int(logic.Assets) ||
+			field == int(logic.Applications) {
 			continue
 		}
 		var value string
@@ -716,7 +718,7 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 		desc = append(desc, makePrimitive(field))
 	}
 
-	for _, fieldIdx := range []logic.TxnField{logic.ApplicationArgs, logic.Accounts} {
+	for _, fieldIdx := range []logic.TxnField{logic.ApplicationArgs, logic.Accounts, logic.Assets, logic.Applications} {
 		fieldID := encodeTxnArrayField(groupIndex, int(fieldIdx))
 		var length int
 		switch logic.TxnField(fieldIdx) {
@@ -724,6 +726,10 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 			length = len(txn.Accounts) + 1
 		case logic.ApplicationArgs:
 			length = len(txn.ApplicationArgs)
+		case logic.Assets:
+			length = len(txn.ForeignAssets)
+		case logic.Applications:
+			length = len(txn.ForeignApps) + 1
 		}
 		field := makeArray(logic.TxnFieldNames[fieldIdx], length, fieldID)
 		if preview {
@@ -768,6 +774,10 @@ func makeTxnArrayField(s *cdtState, groupIndex int, fieldIdx int) (desc []cdt.Ru
 			length = len(txn.Accounts) + 1
 		case logic.ApplicationArgs:
 			length = len(txn.ApplicationArgs)
+		case logic.Assets:
+			length = len(txn.ForeignAssets)
+		case logic.Applications:
+			length = len(txn.ForeignApps) + 1
 		}
 
 		elems := txnFieldToArrayFieldDesc(&txn, groupIndex, logic.TxnField(fieldIdx), length)
