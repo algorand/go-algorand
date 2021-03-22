@@ -46,7 +46,8 @@ export TEMPDIR=${SRCROOT}/tmp/out/e2e/${TEST_RUN_ID}
 echo "Test output can be found in ${TEMPDIR}"
 
 
-# some ARM64 testing machines have memory issues which cause some tests to fail . 
+# ARM64 has an unoptimized scrypt() which can cause tests to timeout.
+# Run kmd with scrypt() configured to run less secure and fast to go through the motions for test.
 # thus, on those platforms we launch kmd with unsafe_scrypt = true to speed up the tests.
 RUN_KMD_WITH_UNSAFE_SCRYPT=""
 PLATFORM_ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
