@@ -430,7 +430,7 @@ func (wp *wsPeer) readLoop() {
 		networkMessageReceivedByTag.Add(string(tag[:]), 1)
 		msg.Sender = wp
 
-		if msgToTrack(protocol.TxnTag)  {
+		if msgToTrack(msg.Tag)  {
 			wp.receiveMsgTracker.storeMsg(msg.Data)
 		}
 
