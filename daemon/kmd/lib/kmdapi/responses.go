@@ -54,7 +54,7 @@ type VersionsResponse struct {
 	Versions []string `json:"versions"`
 }
 
-// swagger:response versionsResponse
+// swagger:response VersionsResponse
 type versionsResponse struct {
 	//in:body
 	Body *VersionsResponse
@@ -67,7 +67,7 @@ type APIV1GETWalletsResponse struct {
 	Wallets []APIV1Wallet `json:"wallets"`
 }
 
-// swagger:response listWalletsResponse
+// swagger:response ListWalletsResponse
 type listWalletsResponse struct {
 	//in: body
 	Body *APIV1GETWalletsResponse
@@ -80,7 +80,7 @@ type APIV1POSTWalletResponse struct {
 	Wallet APIV1Wallet `json:"wallet"`
 }
 
-// swagger:response createWalletResponse
+// swagger:response CreateWalletResponse
 type createWalletResponse struct {
 	//	in:body
 	Body *APIV1POSTWalletResponse
@@ -93,7 +93,7 @@ type APIV1POSTWalletInitResponse struct {
 	WalletHandleToken string `json:"wallet_handle_token"`
 }
 
-// swagger:response initWalletHandleTokenResponse
+// swagger:response InitWalletHandleTokenResponse
 type initWalletHandleTokenResponse struct {
 	//	in:body
 	Body *APIV1POSTWalletInitResponse
@@ -105,7 +105,7 @@ type APIV1POSTWalletReleaseResponse struct {
 	APIV1ResponseEnvelope
 }
 
-// swagger:response releaseWalletHandleTokenResponse
+// swagger:response ReleaseWalletHandleTokenResponse
 type releaseWalletHandleTokenResponse struct {
 	//	in:body
 	Body *APIV1POSTWalletReleaseResponse
@@ -118,7 +118,7 @@ type APIV1POSTWalletRenewResponse struct {
 	WalletHandle APIV1WalletHandle `json:"wallet_handle"`
 }
 
-// swagger:response renewWalletHandleTokenResponse
+// swagger:response RenewWalletHandleTokenResponse
 type renewWalletHandleTokenResponse struct {
 	//	in:body
 	Body *APIV1POSTWalletRenewResponse
@@ -131,7 +131,7 @@ type APIV1POSTWalletRenameResponse struct {
 	Wallet APIV1Wallet `json:"wallet"`
 }
 
-// swagger:response renameWalletResponse
+// swagger:response RenameWalletResponse
 type renameWalletResponse struct {
 	//	in:body
 	Body *APIV1POSTWalletRenameResponse
@@ -144,7 +144,7 @@ type APIV1POSTWalletInfoResponse struct {
 	WalletHandle APIV1WalletHandle `json:"wallet_handle"`
 }
 
-// swagger:response walletInfoResponse
+// swagger:response WalletInfoResponse
 type walletInfoResponse struct {
 	//	in:body
 	Body *APIV1POSTWalletInfoResponse
@@ -157,7 +157,7 @@ type APIV1POSTMasterKeyExportResponse struct {
 	MasterDerivationKey APIV1MasterDerivationKey `json:"master_derivation_key"`
 }
 
-// swagger:response exportMasterKeyResponse
+// swagger:response ExportMasterKeyResponse
 type exportMasterKeyResponse struct {
 	//	in:body
 	Body *APIV1POSTMasterKeyExportResponse
@@ -170,7 +170,7 @@ type APIV1POSTKeyImportResponse struct {
 	Address string `json:"address"`
 }
 
-// swagger:response importKeyResponse
+// swagger:response ImportKeyResponse
 type importKeyResponse struct {
 	//	in:body
 	Body *APIV1POSTKeyImportResponse
@@ -183,7 +183,7 @@ type APIV1POSTKeyExportResponse struct {
 	PrivateKey APIV1PrivateKey `json:"private_key"`
 }
 
-// swagger:response exportKeyResponse
+// swagger:response ExportKeyResponse
 type exportKeyResponse struct {
 	//	in:body
 	Body *APIV1POSTKeyExportResponse
@@ -196,7 +196,7 @@ type APIV1POSTKeyResponse struct {
 	Address string `json:"address"`
 }
 
-// swagger:response generateKeyResponse
+// swagger:response GenerateKeyResponse
 type generateKeyResponse struct {
 	//	in:body
 	Body *APIV1POSTKeyResponse
@@ -208,7 +208,7 @@ type APIV1DELETEKeyResponse struct {
 	APIV1ResponseEnvelope
 }
 
-// swagger:response deleteKeyResponse
+// swagger:response DeleteKeyResponse
 type deleteKeyResponse struct {
 	//	in:body
 	Body *APIV1DELETEKeyResponse
@@ -221,7 +221,7 @@ type APIV1POSTKeyListResponse struct {
 	Addresses []string `json:"addresses"`
 }
 
-// swagger:response listKeysResponse
+// swagger:response ListKeysResponse
 type listKeysResponse struct {
 	//in: body
 	Body *APIV1POSTKeyListResponse
@@ -236,7 +236,7 @@ type APIV1POSTTransactionSignResponse struct {
 	SignedTransaction []byte `json:"signed_transaction"`
 }
 
-// swagger:response signTransactionResponse
+// swagger:response SignTransactionResponse
 type signTransactionResponse struct {
 	//	in:body
 	Body *APIV1POSTTransactionSignResponse
@@ -251,7 +251,7 @@ type APIV1POSTProgramSignResponse struct {
 	Signature []byte `json:"sig"`
 }
 
-// swagger:response signProgramResponse
+// swagger:response SignProgramResponse
 type signProgramResponse struct {
 	//	in:body
 	Body *APIV1POSTProgramSignResponse
@@ -264,7 +264,7 @@ type APIV1POSTMultisigListResponse struct {
 	Addresses []string `json:"addresses"`
 }
 
-// swagger:response listMultisigResponse
+// swagger:response ListMultisigResponse
 type listMultisigResponse struct {
 	//	in:body
 	Body *APIV1POSTMultisigListResponse
@@ -277,7 +277,7 @@ type APIV1POSTMultisigImportResponse struct {
 	Address string `json:"address"`
 }
 
-// swagger:response importMultisigResponse
+// swagger:response ImportMultisigResponse
 type importMultisigResponse struct {
 	//	in:body
 	Body *APIV1POSTMultisigImportResponse
@@ -292,7 +292,7 @@ type APIV1POSTMultisigExportResponse struct {
 	PKs       []APIV1PublicKey `json:"pks"`
 }
 
-// swagger:response exportMultisigResponse
+// swagger:response ExportMultisigResponse
 type exportMultisigResponse struct {
 	//	in:body
 	Body *APIV1POSTMultisigExportResponse
@@ -304,7 +304,7 @@ type APIV1DELETEMultisigResponse struct {
 	APIV1ResponseEnvelope
 }
 
-// swagger:response deleteMultisigResponse
+// swagger:response DeleteMultisigResponse
 type deleteMultisigResponse struct {
 	//in:body
 	Body *APIV1DELETEMultisigResponse
@@ -319,7 +319,7 @@ type APIV1POSTMultisigTransactionSignResponse struct {
 	Multisig []byte `json:"multisig"`
 }
 
-// swagger:response signMultisigResponse
+// swagger:response SignMultisigResponse
 type signMultisigResponse struct {
 	//	in:body
 	Body *APIV1POSTMultisigTransactionSignResponse
@@ -334,7 +334,7 @@ type APIV1POSTMultisigProgramSignResponse struct {
 	Multisig []byte `json:"multisig"`
 }
 
-// swagger:response signProgramMultisigResponse
+// swagger:response SignProgramMultisigResponse
 type signProgramMultisigResponse struct {
 	//	in:body
 	Body *APIV1POSTMultisigProgramSignResponse
