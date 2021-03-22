@@ -111,7 +111,7 @@ func serverTestImpl(t *testing.T, run func(t *testing.T, ds *DebugServer) bool, 
 	var ds DebugServer
 	for attempt < 5 && !started {
 		port = rand.Intn(maxPortNum-minPortNum) + minPortNum
-		ds = makeDebugServer(port, &mockFactory{}, dp)
+		ds = makeDebugServer("127.0.0.1", port, &mockFactory{}, dp)
 		started = run(t, &ds)
 		attempt++
 	}

@@ -1924,11 +1924,14 @@ func opSetBit(cx *evalContext) {
 		// we're thinking of the bits in the byte itself as
 		// being big endian. So this looks "reversed"
 		mask := byte(0x80) >> bitIdx
+		// Copy to avoid modifying shared slice
+		scratch := append([]byte(nil), target.Bytes...)
 		if bit == uint64(1) {
-			target.Bytes[byteIdx] |= mask
+			scratch[byteIdx] |= mask
 		} else {
-			target.Bytes[byteIdx] &^= mask
+			scratch[byteIdx] &^= mask
 		}
+		cx.stack[pprev].Bytes = scratch
 	}
 	cx.stack = cx.stack[:prev]
 }
@@ -1961,6 +1964,8 @@ func opSetByte(cx *evalContext) {
 		cx.err = errors.New("setbyte index > byte length")
 		return
 	}
+	// Copy to avoid modifying shared slice
+	cx.stack[pprev].Bytes = append([]byte(nil), cx.stack[pprev].Bytes...)
 	cx.stack[pprev].Bytes[cx.stack[prev].Uint] = byte(cx.stack[last].Uint)
 	cx.stack = cx.stack[:prev]
 }
