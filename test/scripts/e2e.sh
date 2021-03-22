@@ -45,6 +45,19 @@ TEST_RUN_ID=$(${SCRIPT_PATH}/testrunid.py)
 export TEMPDIR=${SRCROOT}/tmp/out/e2e/${TEST_RUN_ID}
 echo "Test output can be found in ${TEMPDIR}"
 
+
+# some ARM64 testing machines have memory issues which cause some tests to fail . 
+# thus, on those platforms we launch kmd with unsafe_scrypt = true to speed up the tests.
+RUN_KMD_IN_UNSAFE_SCRYPT=""
+ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
+
+echo "ARCHTYPE:    ${ARCHTYPE}"
+if [[ "${ARCHTYPE}" = arm* ]]; then
+    RUN_KMD_IN_UNSAFE_SCRYPT="--unsafe_scrypt"
+fi
+
+echo "RUN_KMD_IN_UNSAFE_SCRYPT = ${RUN_KMD_IN_UNSAFE_SCRYPT}"
+
 export BINDIR=${TEMPDIR}/bin
 export DATADIR=${TEMPDIR}/data
 
@@ -85,9 +98,9 @@ python3 -m venv "${TEMPDIR}/ve"
 . "${TEMPDIR}/ve/bin/activate"
 "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
 "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
-"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py "$SRCROOT"/test/scripts/e2e_subs/*.sh
+"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_IN_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
 for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py --version "$(basename "$vdir")" "$vdir"/*.sh
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_IN_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
 done
 deactivate
 
