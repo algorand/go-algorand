@@ -48,15 +48,15 @@ echo "Test output can be found in ${TEMPDIR}"
 
 # some ARM64 testing machines have memory issues which cause some tests to fail . 
 # thus, on those platforms we launch kmd with unsafe_scrypt = true to speed up the tests.
-RUN_KMD_IN_UNSAFE_SCRYPT=""
-ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
+RUN_KMD_WITH_UNSAFE_SCRYPT=""
+PLATFORM_ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
 
-echo "ARCHTYPE:    ${ARCHTYPE}"
-if [[ "${ARCHTYPE}" = arm* ]]; then
-    RUN_KMD_IN_UNSAFE_SCRYPT="--unsafe_scrypt"
+echo "ARCHTYPE:    ${PLATFORM_ARCHTYPE}"
+if [[ "${PLATFORM_ARCHTYPE}" = arm* ]]; then
+    RUN_KMD_WITH_UNSAFE_SCRYPT="--unsafe_scrypt"
 fi
 
-echo "RUN_KMD_IN_UNSAFE_SCRYPT = ${RUN_KMD_IN_UNSAFE_SCRYPT}"
+echo "RUN_KMD_WITH_UNSAFE_SCRYPT = ${RUN_KMD_IN_UNSAFE_SCRYPT}"
 
 export BINDIR=${TEMPDIR}/bin
 export DATADIR=${TEMPDIR}/data
