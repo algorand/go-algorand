@@ -336,8 +336,8 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
-	wp.sendMsgTracker = makeTracker(5 * maxBroadcastArraySize)
-	wp.receiveMsgTracker = makeTracker(7 * maxBroadcastArraySize)
+	wp.sendMsgTracker = makeTracker(3 * maxBroadcastArraySize)
+	wp.receiveMsgTracker = makeTracker(5 * maxBroadcastArraySize)
 
 	// processed is a channel that messageHandlerThread writes to
 	// when it's done with one of our messages, so that we can queue
@@ -435,15 +435,16 @@ func (wp *wsPeer) readLoop() {
 		}
 
 		if msg.Tag == protocol.ProposalPayloadTag {
-			msg.MsgTracker = make(map[crypto.Digest][]byte, len(wp.receiveMsgTracker.store))
+			mt := make(map[crypto.Digest][]byte, len(wp.receiveMsgTracker.store))
+			msg.MsgTracker = &mt
 			wp.sendMsgTracker.mu.RLock()
 			for k, v := range wp.sendMsgTracker.store {
-				msg.MsgTracker[k] = v
+				mt[k] = v
 			}
 			wp.sendMsgTracker.mu.RUnlock()
 			wp.receiveMsgTracker.mu.RLock()
 			for k, v := range wp.receiveMsgTracker.store {
-				msg.MsgTracker[k] = v
+				mt[k] = v
 			}
 			wp.receiveMsgTracker.mu.RUnlock()
 		}
