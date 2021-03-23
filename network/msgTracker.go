@@ -61,6 +61,9 @@ func (tracker *msgTracker) LoadMessage(keys []crypto.Digest) ([][]byte, bool) {
 }
 
 func (tracker *msgTracker) remember(msgHash crypto.Digest) {
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	
 	tracker.insert(msgHash, nil)
 }
 
