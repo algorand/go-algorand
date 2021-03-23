@@ -59,6 +59,12 @@ const (
 	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
 )
 
+// Constant error messages
+const (
+	errorNoRedirectPeers = "redirecRequest: no arcihver peers found"
+	errorNotHTTPPeer     = "redirecRequest: error getting an http peer"
+)
+
 // BlockService represents the Block RPC API
 type BlockService struct {
 	ledger                  *data.Ledger
@@ -295,18 +301,27 @@ func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWrit
 
 	peers := bs.net.GetPeers(network.PeersPhonebookArchivers)
 	if len(peers) == 0 {
-		return fmt.Errorf("redirecRequest: no arcihver peers found")
+		return fmt.Errorf(errorNoRedirectPeers)
 	}
-	peer := peers[0]
-	httpPeer, validHTTPPeer := peer.(network.HTTPPeer)
+
+	// Get an http peer
+	var httpPeer network.HTTPPeer
+	var validHTTPPeer bool
+	for _, peer := range peers {
+		httpPeer, validHTTPPeer = peer.(network.HTTPPeer)
+		if validHTTPPeer {
+			break
+		}
+	}
 	if !validHTTPPeer {
-		return fmt.Errorf("redirecRequest: error getting an http peer")
+		return fmt.Errorf(errorNotHTTPPeer)
 	}
+
 	parsedURL, err := network.ParseHostOrURL(httpPeer.GetAddress())
 	if err != nil {
 		return err
 	}
-	parsedURL.Path = bs.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(round, 36)))
+	parsedURL.Path = FormatBlockQuery(round, parsedURL.Path, bs.net)
 	http.Redirect(response, request, parsedURL.String(), http.StatusTemporaryRedirect)
 	logging.Base().Debugf("redirectRequest: redirected block request to %s", parsedURL.String())
 	return nil
@@ -352,4 +367,8 @@ func RawBlockBytes(l *data.Ledger, round basics.Round) ([]byte, error) {
 		Block:       blk,
 		Certificate: cert,
 	}), nil
+}
+
+func FormatBlockQuery(round uint64, parsedURL string, net network.GossipNode) string {
+	return net.SubstituteGenesisID(path.Join(parsedURL, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(round), 36)))
 }

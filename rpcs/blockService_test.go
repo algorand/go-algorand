@@ -110,8 +110,8 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 	require.Equal(t, roundNumberParseErrMsg, string(val))
 }
 
-// TestRedirect tests the case when the block service redirects the request to elsewhere
-func TestRedirect(t *testing.T) {
+// TestRedirectBasic tests the case when the block service redirects the request to elsewhere
+func TestRedirectBasic(t *testing.T) {
 	ledger1 := makeLedger(t)
 	ledger2 := makeLedger(t)
 	addBlock(t, ledger1)
@@ -156,11 +156,13 @@ func TestRedirect(t *testing.T) {
 	response, err := client.Do(request)
 	require.NoError(t, err)
 
-	require.Equal(t, response.StatusCode, http.StatusOK)
+	require.Equal(t, http.StatusOK, response.StatusCode)
 }
 
-// TestRedirect tests the case when the block service keeps redirecting and cannot get a block
-func TestRedirectMaxLimit(t *testing.T) {
+// TestRedirectExceptions tests exception cases:
+// - the case when the peer is not a valid http peer
+// - the case when the block service keeps redirecting and cannot get a block
+func TestRedirectExceptions(t *testing.T) {
 	ledger1 := makeLedger(t)
 	addBlock(t, ledger1)
 
@@ -175,7 +177,7 @@ func TestRedirectMaxLimit(t *testing.T) {
 	nodeA.start()
 	defer nodeA.stop()
 
-	net1.addPeer(nodeA.rootURL())
+	net1.peers = append(net1.peers, "invalidPeer")
 
 	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
@@ -191,6 +193,12 @@ func TestRedirectMaxLimit(t *testing.T) {
 	defer requestCancel()
 	request = request.WithContext(requestCtx)
 	network.SetUserAgentHeader(request.Header)
+
+	response, err := client.Do(request)
+	require.NoError(t, err)
+	require.Equal(t, response.StatusCode, http.StatusNotFound)
+	
+	net1.addPeer(nodeA.rootURL())
 	_, err = client.Do(request)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "stopped after 10 redirects")
