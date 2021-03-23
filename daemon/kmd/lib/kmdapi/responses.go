@@ -152,7 +152,7 @@ type APIV1POSTWalletInfoResponse struct {
 	WalletHandle APIV1WalletHandle `json:"wallet_handle"`
 }
 
-// Response to `POST /v1/wallet/rename`
+// Response to `POST /v1/wallet/info`
 // swagger:response WalletInfoResponse
 type walletInfoResponse struct {
 	//	in:body
