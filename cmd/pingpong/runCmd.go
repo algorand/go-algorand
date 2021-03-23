@@ -305,8 +305,10 @@ var runCmd = &cobra.Command{
 		reportInfof("Preparing to initialize PingPong with config:\n")
 		cfg.Dump(os.Stdout)
 
+		pps := pingpong.NewPingpong(cfg)
+
 		// Initialize accounts if necessary
-		accounts, cinfo, cfg, err := pingpong.PrepareAccounts(ac, cfg)
+		err = pps.PrepareAccounts(ac)
 		if err != nil {
 			reportErrorf("Error preparing accounts for transfers: %v\n", err)
 		}
@@ -319,7 +321,7 @@ var runCmd = &cobra.Command{
 		cfg.Dump(os.Stdout)
 
 		// Kick off the real processing
-		pingpong.RunPingPong(context.Background(), ac, accounts, cinfo, cfg)
+		pps.RunPingPong(context.Background(), ac)
 	},
 }
 
