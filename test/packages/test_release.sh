@@ -48,7 +48,7 @@ build_images () {
     # We'll use this simple tokenized Dockerfile.
     # https://serverfault.com/a/72511
     IFS='' read -r -d '' TOKENIZED <<EOF
-FROM {{OS}}
+FROM public.ecr.aws/i3h3n7g0/{{OS}}
 
 ENV AWS_ACCESS_KEY_ID=""
 ENV AWS_SECRET_ACCESS_KEY=""

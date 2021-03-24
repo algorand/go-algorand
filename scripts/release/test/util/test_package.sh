@@ -35,7 +35,7 @@ build_images () {
     # We'll use this simple tokenized Dockerfile.
     # https://serverfault.com/a/72511
     TOKENIZED=$(echo -e "\
-FROM {{OS}}\n\n\
+FROM public.ecr.aws/i3h3n7g0/{{OS}}\n\n\
 WORKDIR /root\n\
 COPY . .\n\
 CMD [\"/bin/bash\"]")
