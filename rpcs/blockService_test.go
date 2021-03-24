@@ -113,7 +113,9 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 // TestRedirectBasic tests the case when the block service redirects the request to elsewhere
 func TestRedirectBasic(t *testing.T) {
 	ledger1 := makeLedger(t)
+	defer ledger1.Close()
 	ledger2 := makeLedger(t)
+	defer ledger2.Close()
 	addBlock(t, ledger1)
 	addBlock(t, ledger2)
 	addBlock(t, ledger2)
@@ -164,6 +166,7 @@ func TestRedirectBasic(t *testing.T) {
 // - the case when the block service keeps redirecting and cannot get a block
 func TestRedirectExceptions(t *testing.T) {
 	ledger1 := makeLedger(t)
+	defer ledger1.Close()
 	addBlock(t, ledger1)
 
 	net1 := &httpTestPeerSource{}

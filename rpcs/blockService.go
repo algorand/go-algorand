@@ -19,7 +19,7 @@ package rpcs
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"net/http"
 	"path"
 	"strconv"
@@ -59,11 +59,9 @@ const (
 	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
 )
 
-// Constant error messages
-const (
-	errorNoRedirectPeers = "redirecRequest: no arcihver peers found"
-	errorNotHTTPPeer     = "redirecRequest: error getting an http peer"
-)
+// const error messages
+var errorNoRedirectPeers = errors.New("redirectRequest: no archiver peers found")
+var errorNotHTTPPeer = errors.New("redirectRequest: error getting an http peer")
 
 // BlockService represents the Block RPC API
 type BlockService struct {
@@ -301,7 +299,7 @@ func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWrit
 
 	peers := bs.net.GetPeers(network.PeersPhonebookArchivers)
 	if len(peers) == 0 {
-		return fmt.Errorf(errorNoRedirectPeers)
+		return errorNoRedirectPeers
 	}
 
 	// Get an http peer
@@ -314,7 +312,7 @@ func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWrit
 		}
 	}
 	if !validHTTPPeer {
-		return fmt.Errorf(errorNotHTTPPeer)
+		return errorNotHTTPPeer
 	}
 
 	parsedURL, err := network.ParseHostOrURL(httpPeer.GetAddress())
