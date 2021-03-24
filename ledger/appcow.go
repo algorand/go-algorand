@@ -410,7 +410,7 @@ func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.Co
 // Execution happens in a child cow and all modifications are merged into parent if the program passes
 func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta basics.EvalDelta, err error) {
 	// Make a child cow to eval our program in
-	calf := cb.child()
+	calf := cb.fullChild()
 	params.Ledger, err = newLogicLedger(calf, aidx)
 	if err != nil {
 		return false, basics.EvalDelta{}, err

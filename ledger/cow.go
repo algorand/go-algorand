@@ -61,16 +61,34 @@ type roundCowState struct {
 	// 2. Stateful TEAL evaluation (see SetKey/DelKey)
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
+
+	isLeaf                   bool
+	childState               *roundCowState
+	includedTransactions     [16]txnLeaseValidityPair
+	usedIncludedTransactions int
+}
+type txnLeaseValidityPair struct {
+	txid      transactions.Txid
+	lastValid basics.Round
+	lease     ledgercore.Txlease
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
-	return &roundCowState{
+	rcs := &roundCowState{
 		lookupParent: b,
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
+		isLeaf:       false,
 	}
+	rcs.childState = &roundCowState{
+		isLeaf:       true,
+		lookupParent: rcs,
+		commitParent: rcs,
+		proto:        config.Consensus[hdr.CurrentProtocol],
+	}
+	return rcs
 }
 
 func (cb *roundCowState) deltas() ledgercore.StateDelta {
@@ -136,6 +154,24 @@ func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, e
 }
 
 func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	if cb.isLeaf {
+		for txIdx := 0; txIdx < cb.usedIncludedTransactions; txIdx++ {
+			if cb.includedTransactions[txIdx].txid == txid {
+				return &ledgercore.TransactionInLedgerError{Txid: txid}
+			}
+		}
+		if cb.proto.SupportTransactionLeases && (txl.Lease != [32]byte{}) {
+			for txIdx := 0; txIdx < cb.usedIncludedTransactions; txIdx++ {
+				if cb.includedTransactions[txIdx].lease == txl {
+					if cb.mods.Hdr.Round <= cb.includedTransactions[txIdx].lastValid {
+						return ledgercore.MakeLeaseInLedgerError(txid, txl)
+					}
+				}
+			}
+		}
+		return cb.lookupParent.checkDup(firstValid, lastValid, txid, txl)
+	}
+
 	_, present := cb.mods.Txids[txid]
 	if present {
 		return &ledgercore.TransactionInLedgerError{Txid: txid}
@@ -187,6 +223,16 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 }
 
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
+	if cb.isLeaf {
+		cb.includedTransactions[cb.usedIncludedTransactions] =
+			txnLeaseValidityPair{
+				txid:      txid,
+				lastValid: txn.LastValid,
+				lease:     ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease},
+			}
+		cb.usedIncludedTransactions++
+		return
+	}
 	cb.mods.Txids[txid] = txn.LastValid
 	cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
 }
@@ -196,6 +242,29 @@ func (cb *roundCowState) setCompactCertNext(rnd basics.Round) {
 }
 
 func (cb *roundCowState) child() *roundCowState {
+	// reset child
+	if !cb.isLeaf {
+		cb.childState.mods = ledgercore.MakeChildStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, 1, 0)
+		cb.childState.sdeltas = make(map[basics.Address]map[storagePtr]*storageDelta)
+		cb.childState.usedIncludedTransactions = 0
+		cb.childState.isLeaf = true
+		return cb.childState
+	}
+	panic(nil)
+}
+
+func (cb *roundCowState) fullChild() *roundCowState {
+	if cb.isLeaf {
+		cb.isLeaf = false
+		// perform conversion.
+		mods := ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, 1, 0)
+		cb.mods.Txids = mods.Txids
+		cb.mods.Txleases = mods.Txleases
+		for txIdx := 0; txIdx < cb.usedIncludedTransactions; txIdx++ {
+			cb.mods.Txids[cb.includedTransactions[txIdx].txid] = cb.includedTransactions[txIdx].lastValid
+			cb.mods.Txleases[cb.includedTransactions[txIdx].lease] = cb.includedTransactions[txIdx].lastValid
+		}
+	}
 	return &roundCowState{
 		lookupParent: cb,
 		commitParent: cb,
@@ -208,15 +277,23 @@ func (cb *roundCowState) child() *roundCowState {
 func (cb *roundCowState) commitToParent() {
 	cb.commitParent.mods.Accts.MergeAccounts(cb.mods.Accts)
 
-	for txid, lv := range cb.mods.Txids {
-		cb.commitParent.mods.Txids[txid] = lv
-	}
-	for txl, expires := range cb.mods.Txleases {
-		cb.commitParent.mods.Txleases[txl] = expires
+	if cb.isLeaf {
+		for txIdx := 0; txIdx < cb.usedIncludedTransactions; txIdx++ {
+			cb.commitParent.mods.Txids[cb.includedTransactions[txIdx].txid] = cb.includedTransactions[txIdx].lastValid
+			cb.commitParent.mods.Txleases[cb.includedTransactions[txIdx].lease] = cb.includedTransactions[txIdx].lastValid
+		}
+	} else {
+		for txid, lv := range cb.mods.Txids {
+			cb.commitParent.mods.Txids[txid] = lv
+		}
+		for txl, expires := range cb.mods.Txleases {
+			cb.commitParent.mods.Txleases[txl] = expires
+		}
 	}
 	for cidx, delta := range cb.mods.Creatables {
 		cb.commitParent.mods.Creatables[cidx] = delta
 	}
+
 	for addr, smod := range cb.sdeltas {
 		for aapp, nsd := range smod {
 			lsd, ok := cb.commitParent.sdeltas[addr][aapp]

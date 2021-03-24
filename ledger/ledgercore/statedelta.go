@@ -107,6 +107,21 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 	}
 }
 
+// MakeChildStateDelta creates a new instance of StateDelta
+func MakeChildStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
+	return StateDelta{
+		Accts: AccountDeltas{
+			accts:      make([]basics.BalanceRecord, 0, hint*2),
+			acctsCache: make(map[basics.Address]int, hint*2),
+		},
+		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable, hint),
+		Hdr:                      hdr,
+		PrevTimestamp:            prevTimestamp,
+		initialTransactionsCount: hint,
+		CompactCertNext:          compactCertNext,
+	}
+}
+
 // Get lookups AccountData by address
 func (ad *AccountDeltas) Get(addr basics.Address) (basics.AccountData, bool) {
 	idx, ok := ad.acctsCache[addr]

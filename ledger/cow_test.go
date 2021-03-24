@@ -17,10 +17,12 @@
 package ledger
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -105,7 +107,7 @@ func TestCowBalance(t *testing.T) {
 	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
 	checkCow(t, c0, accts0)
 
-	c1 := c0.child()
+	c1 := c0.fullChild()
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts0)
 
@@ -114,7 +116,7 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)
 
-	c2 := c1.child()
+	c2 := c1.fullChild()
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)
 	checkCow(t, c2, accts1)
@@ -132,3 +134,70 @@ func TestCowBalance(t *testing.T) {
 	c1.commitToParent()
 	checkCow(t, c0, accts2)
 }
+func BenchmarkRoundCowStateMemroyAllocations(b *testing.B) {
+	accts0 := randomAccounts(2000, true)
+	ml := mockLedger{balanceMap: accts0}
+	addresses := make([]basics.Address, 0, len(accts0))
+	for addr := range accts0 {
+		addresses = append(addresses, addr)
+	}
+
+	transactionsCount := 10000
+
+	txn := make([]transactions.Transaction, transactionsCount, transactionsCount)
+	txid := make([]transactions.Txid, transactionsCount, transactionsCount)
+
+	for i := 0; i < transactionsCount; i++ {
+		txn[i].LastValid = basics.Round(i + 50)
+		txn[i].Sender = addresses[i%len(addresses)]
+		txn[i].Lease = crypto.Hash([]byte{byte(i), byte(i >> 8), byte(i >> 16), byte(i >> 24)})
+		txid[i] = txn[i].ID()
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		rcs := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, transactionsCount)
+		for txIdx := 0; txIdx < transactionsCount; txIdx++ {
+			child := rcs.child()
+			child.addTx(txn[txIdx], txid[txIdx])
+			child.commitToParent()
+		}
+	}
+}
+
+func mapCheckHelper(cs *roundCowState) {
+	/*for k := range cs.mods.Txids {
+		if int(k[0]) == 300 {
+			k[0] = 1
+		}
+	}*/
+	cs.commitToParent()
+}
+func BenchmarkMapRangeMemoryAllocs(b *testing.B) {
+	transactionsCount := 10000
+	cowStates := make([]*roundCowState, 0, transactionsCount)
+	parent := &roundCowState{}
+	parent.mods.Txids = make(map[transactions.Txid]basics.Round, transactionsCount)
+	for i := 0; i < transactionsCount; i++ {
+		txid := transactions.Txid(crypto.Hash([]byte{byte(i), byte(i >> 8), byte(i >> 16), byte(i >> 24)}))
+		cs := &roundCowState{}
+		cs.mods.Txids = make(map[transactions.Txid]basics.Round, 1)
+		cs.mods.Txids[txid] = basics.Round(i)
+		cs.commitParent = parent
+		cowStates = append(cowStates, cs)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < len(cowStates); j++ {
+			mapCheckHelper(cowStates[j])
+		}
+	}
+	require.Equal(b, 10000, len(cowStates))
+}
+
+var _ = fmt.Printf

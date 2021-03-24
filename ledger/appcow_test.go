@@ -198,7 +198,7 @@ func TestCowStorage(t *testing.T) {
 	st := makeStateTracker()
 
 	var lastParent *roundCowState
-	const maxChildDepth = 10
+	const maxChildDepth = 1
 	childDepth := 0
 
 	allKeys := make([]string, 10)
@@ -305,7 +305,7 @@ func TestCowStorage(t *testing.T) {
 		// Make a child
 		if childDepth < maxChildDepth && rand.Float32() < 0.1 {
 			lastParent = cow
-			cow = cow.child()
+			cow = cow.fullChild()
 			childDepth++
 		}
 
