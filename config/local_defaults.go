@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                 17,
+	Version:                                 16,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
 	Archival:                                false,
