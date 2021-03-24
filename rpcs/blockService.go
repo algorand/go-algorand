@@ -19,10 +19,10 @@ package rpcs
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 
@@ -30,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -59,10 +60,6 @@ const (
 	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
 )
 
-// const error messages
-var errorNoRedirectPeers = errors.New("redirectRequest: no archiver peers found")
-var errorNotHTTPPeer = errors.New("redirectRequest: error getting an http peer")
-
 // BlockService represents the Block RPC API
 type BlockService struct {
 	ledger                  *data.Ledger
@@ -72,6 +69,8 @@ type BlockService struct {
 	net                     network.GossipNode
 	enableService           bool
 	enableServiceOverGossip bool
+	fallbackEndpoints       fallbackEndpoints
+	enableArchiverFallback  bool
 }
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
@@ -90,6 +89,11 @@ type PreEncodedBlockCert struct {
 	Certificate codec.Raw `codec:"cert"`
 }
 
+type fallbackEndpoints struct {
+	endpoints []string
+	lastUsed  int
+}
+
 // MakeBlockService creates a BlockService around the provider Ledger and registers it for HTTP callback on the block serving path
 func MakeBlockService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *BlockService {
 	service := &BlockService{
@@ -99,6 +103,8 @@ func MakeBlockService(config config.Local, ledger *data.Ledger, net network.Goss
 		net:                     net,
 		enableService:           config.EnableBlockService,
 		enableServiceOverGossip: config.EnableGossipBlockService,
+		fallbackEndpoints:       makeFallbackEndpoints(config.BlockServiceCustomFallbackEndpoints),
+		enableArchiverFallback:  config.EnableBlockServiceFallbackToArchiver,
 	}
 	if service.enableService {
 		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
@@ -195,9 +201,8 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
 			// entry cound not be found.
-			err := bs.redirectRequest(round, response, request)
-			if err != nil {
-				logging.Base().Info(err.Error())
+			ok := bs.redirectRequest(round, response, request)
+			if !ok {
 				response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
 				response.WriteHeader(http.StatusNotFound)
 			}
@@ -295,34 +300,59 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 	return
 }
 
-func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWriter, request *http.Request) (err error) {
+// redirectRequest redirects the request to the next round robin fallback endpoing if available, otherwise,
+// if EnableBlockServiceFallbackToArchiver is enabled, redirects to a random archiver.
+func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWriter, request *http.Request) (ok bool) {
 
-	peers := bs.net.GetPeers(network.PeersPhonebookArchivers)
-	if len(peers) == 0 {
-		return errorNoRedirectPeers
+	peerAddress := bs.getNextCustomFallbackEndpoint()
+	if peerAddress == "" && bs.enableArchiverFallback {
+		peerAddress = bs.getRandomArchiver()
+	}
+	if peerAddress == "" {
+		return false
 	}
 
-	// Get an http peer
-	var httpPeer network.HTTPPeer
-	var validHTTPPeer bool
-	for _, peer := range peers {
-		httpPeer, validHTTPPeer = peer.(network.HTTPPeer)
-		if validHTTPPeer {
-			break
-		}
-	}
-	if !validHTTPPeer {
-		return errorNotHTTPPeer
-	}
-
-	parsedURL, err := network.ParseHostOrURL(httpPeer.GetAddress())
+	parsedURL, err := network.ParseHostOrURL(peerAddress)
 	if err != nil {
-		return err
+		logging.Base().Debugf("redirectRequest: %s", err.Error())
+		return false
 	}
 	parsedURL.Path = FormatBlockQuery(round, parsedURL.Path, bs.net)
 	http.Redirect(response, request, parsedURL.String(), http.StatusTemporaryRedirect)
 	logging.Base().Debugf("redirectRequest: redirected block request to %s", parsedURL.String())
-	return nil
+	return true
+}
+
+// getNextCustomFallbackEndpoint returns the next custorm fallback endpoint in RR ordering
+func (bs *BlockService) getNextCustomFallbackEndpoint() (endpointAddress string) {
+	if len(bs.fallbackEndpoints.endpoints) == 0 {
+		return
+	}
+	endpointAddress = bs.fallbackEndpoints.endpoints[bs.fallbackEndpoints.lastUsed]
+	bs.fallbackEndpoints.lastUsed++
+	if bs.fallbackEndpoints.lastUsed == len(bs.fallbackEndpoints.endpoints) {
+		bs.fallbackEndpoints.lastUsed = 0
+	}
+	return
+}
+
+// getRandomArchiver returns a random archiver address
+func (bs *BlockService) getRandomArchiver() (endpointAddress string) {
+	peers := bs.net.GetPeers(network.PeersPhonebookArchivers)
+	httpPeers := make([]network.HTTPPeer, 0)
+
+	for _, peer := range peers {
+		httpPeer, validHTTPPeer := peer.(network.HTTPPeer)
+		if validHTTPPeer {
+			httpPeers = append(httpPeers, httpPeer)
+		}
+	}
+	if len(httpPeers) == 0 {
+		return
+	}
+	randIndex := crypto.RandUint64() % uint64(len(httpPeers))
+	endpointAddress = httpPeers[randIndex].GetAddress()
+	return
 }
 
 func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType string) network.Topics {
@@ -369,4 +399,12 @@ func RawBlockBytes(l *data.Ledger, round basics.Round) ([]byte, error) {
 
 func FormatBlockQuery(round uint64, parsedURL string, net network.GossipNode) string {
 	return net.SubstituteGenesisID(path.Join(parsedURL, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(round), 36)))
+}
+
+func makeFallbackEndpoints(customFallbackEndpoints string) (fe fallbackEndpoints) {
+	if customFallbackEndpoints == "" {
+		return
+	}
+	fe = fallbackEndpoints{endpoints: strings.Split(customFallbackEndpoints, ",")}
+	return
 }

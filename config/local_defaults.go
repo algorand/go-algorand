@@ -20,11 +20,12 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                 16,
+	Version:                                 17,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
 	Archival:                                false,
 	BaseLoggerDebugLevel:                    4,
+	BlockServiceCustomFallbackEndpoints:     "",
 	BroadcastConnectionsLimit:               -1,
 	CadaverSizeTarget:                       1073741824,
 	CatchpointFileHistoryLength:             365,
@@ -47,6 +48,7 @@ var defaultLocal = Local{
 	EnableAgreementTimeMetrics:              false,
 	EnableAssembleStats:                     false,
 	EnableBlockService:                      false,
+	EnableBlockServiceFallbackToArchiver:    true,
 	EnableCatchupFromArchiveServers:         false,
 	EnableDeveloperAPI:                      false,
 	EnableGossipBlockService:                true,
