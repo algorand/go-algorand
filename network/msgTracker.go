@@ -68,14 +68,12 @@ func (tracker *msgTracker) remember(msgHash crypto.Digest) {
 }
 
 func (tracker *msgTracker) insert(key crypto.Digest, msg []byte) {
-	if !tracker.existsUnsafe(key) {
-		tracker.store[key] = msg
-		tracker.orderedMsgs.PushBack(key)
-		for tracker.orderedMsgs.Len() > tracker.limit {
-			key := tracker.orderedMsgs.Front()
-			delete(tracker.store, key.Value.(crypto.Digest))
-			tracker.orderedMsgs.Remove(key)
-		}
+	tracker.store[key] = msg
+	tracker.orderedMsgs.PushBack(key)
+	for tracker.orderedMsgs.Len() > tracker.limit {
+		key := tracker.orderedMsgs.Front()
+		delete(tracker.store, key.Value.(crypto.Digest))
+		tracker.orderedMsgs.Remove(key)
 	}
 }
 

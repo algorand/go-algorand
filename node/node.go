@@ -1052,18 +1052,22 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 }
 
 func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) error {
+	count := 0
 	txns, found := node.transactionPool.FindTxns(block.PaysetDigest)
 	for i := range block.Payset {
 		if found[i] {
 			block.Payset[i].SignedTxn = txns[i]
+			var err error
+			block.Payset[i], err = block.EncodeSignedTxn(block.Payset[i].SignedTxn, transactions.ApplyData{})
+			if err != nil {
+				return err
+			}
 		} else if block.Payset[i].SignedTxn.MsgIsZero() {
-			return fmt.Errorf("failed to find txn: %v", block.PaysetDigest[i])
+			count += 1
 		}
-		var err error
-		block.Payset[i], err = block.EncodeSignedTxn(block.Payset[i].SignedTxn, transactions.ApplyData{})
-		if err != nil {
-			return err
-		}
+	}
+	if count > 0 {
+		return fmt.Errorf("failed to %v txns", count)
 	}
 	return nil
 }
