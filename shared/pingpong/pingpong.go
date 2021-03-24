@@ -364,7 +364,7 @@ func (pps *PingpongState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 }
 
 func NewPingpong(cfg PpConfig) *PingpongState {
-	return &PingpongState{cfg: cfg}
+	return &PingpongState{cfg: cfg, nftHolders: make(map[string]int)}
 }
 
 func getCreatableID(cfg PpConfig, cinfo CreatablesInfo) (aidx uint64) {
