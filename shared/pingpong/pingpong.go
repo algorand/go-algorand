@@ -620,20 +620,19 @@ func (pps *PingpongState) constructTxn(from, to string, fee, amt, aidx uint64, c
 			if err != nil {
 				return
 			}
+			// enough for the per-asa minbalance and more than enough for the txns to create them
 			toSend := proto.MinBalance * uint64(pps.cfg.NftAsaPerAccount+1) * 2
 			pps.nftHolders[addr] = 0
 			_, err = sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
 			if err != nil {
 				return
 			}
-			txn, err = client.ConstructPayment(from, addr, fee, amt, noteField[:], "", lease, 0, 0)
-			if !cfg.Quiet {
-				_, _ = fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
-			}
+			// we ran one txn above already to fund the new addr,
+			// we'll run a second txn below
 		}
+		// pick a random sender from nft holder sub accounts
 		pick := rand.Intn(len(pps.nftHolders))
 		pos := 0
-		// pick a random sender from nft holder sub accounts
 		var sender string
 		var senderNftCount int
 		for addr, nftCount := range pps.nftHolders {
@@ -649,13 +648,12 @@ func (pps *PingpongState) constructTxn(from, to string, fee, amt, aidx uint64, c
 		rand.Read(meta[:])
 		assetName := pps.nftSpamAssetName()
 		const totalSupply = 1
-		tx, createErr := client.MakeUnsignedAssetCreateTx(totalSupply, false, sender, sender, sender, sender, "ping", assetName, "", meta[:], 0)
-		if createErr != nil {
+		txn, err = client.MakeUnsignedAssetCreateTx(totalSupply, false, sender, sender, sender, sender, "ping", assetName, "", meta[:], 0)
+		if err != nil {
 			fmt.Printf("Cannot make asset create txn with meta %v\n", meta)
-			err = createErr
 			return
 		}
-		tx, err = client.FillUnsignedTxTemplate(sender, 0, 0, cfg.MaxFee, tx)
+		txn, err = client.FillUnsignedTxTemplate(sender, 0, 0, cfg.MaxFee, txn)
 		if err != nil {
 			fmt.Printf("Cannot fill asset creation txn\n")
 			return
@@ -665,7 +663,6 @@ func (pps *PingpongState) constructTxn(from, to string, fee, amt, aidx uint64, c
 		} else {
 			pps.nftHolders[sender] = senderNftCount + 1
 		}
-
 	} else if cfg.NumApp > 0 { // Construct app transaction
 		// select opted-in accounts for Txn.Accounts field
 		var accounts []string

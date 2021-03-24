@@ -95,6 +95,7 @@ var DefaultConfig = PpConfig{
 	MaxRuntime:      0,
 
 	NftAsaAccountInFlight: 5,
+	NftAsaPerAccount:      900,
 }
 
 // LoadConfigFromFile reads and loads Ping Pong configuration
