@@ -91,7 +91,7 @@ type AccountDeltas struct {
 }
 
 // MakeStateDelta creates a new instance of StateDelta
-func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int) StateDelta {
+func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
 	return StateDelta{
 		Accts: AccountDeltas{
 			accts:      make([]basics.BalanceRecord, 0, hint*2),
@@ -103,6 +103,7 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int)
 		Hdr:                      hdr,
 		PrevTimestamp:            prevTimestamp,
 		initialTransactionsCount: hint,
+		CompactCertNext:          compactCertNext,
 	}
 }
 
