@@ -66,6 +66,7 @@ var appProgGlobKeys uint32
 var appProgLocalKeys uint32
 var duration uint32
 var rekey bool
+var nftAsaPerSecond uint32
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -105,6 +106,7 @@ func init() {
 	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
 	runCmd.Flags().BoolVar(&rekey, "rekey", false, "Create RekeyTo transactions. Requires groupsize=2 and any of random flags exc random dst")
 	runCmd.Flags().Uint32Var(&duration, "duration", 0, "The number of seconds to run the pingpong test, forever if 0")
+	runCmd.Flags().Uint32Var(&nftAsaPerSecond, "nftasapersecond", 0, "The number of NFT-style ASAs to create per second")
 
 }
 
@@ -301,6 +303,8 @@ var runCmd = &cobra.Command{
 				reportErrorf("Rekeying requires txn groups of size 2\n")
 			}
 		}
+
+		cfg.NftAsaPerSecond = nftAsaPerSecond
 
 		reportInfof("Preparing to initialize PingPong with config:\n")
 		cfg.Dump(os.Stdout)
