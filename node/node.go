@@ -1057,13 +1057,15 @@ func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) error {
 	for i := range block.Payset {
 		if found[i] {
 			block.Payset[i].SignedTxn = txns[i]
+		}
+		if block.Payset[i].SignedTxn.MsgIsZero() {
+			count += 1
+		} else {
 			var err error
 			block.Payset[i], err = block.EncodeSignedTxn(block.Payset[i].SignedTxn, transactions.ApplyData{})
 			if err != nil {
 				return err
 			}
-		} else if block.Payset[i].SignedTxn.MsgIsZero() {
-			count += 1
 		}
 	}
 	if count > 0 {
