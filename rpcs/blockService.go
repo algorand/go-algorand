@@ -397,6 +397,7 @@ func RawBlockBytes(l *data.Ledger, round basics.Round) ([]byte, error) {
 	}), nil
 }
 
+// FormatBlockQuery formats a block request query for the given network and round number
 func FormatBlockQuery(round uint64, parsedURL string, net network.GossipNode) string {
 	return net.SubstituteGenesisID(path.Join(parsedURL, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(round), 36)))
 }
