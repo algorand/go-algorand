@@ -312,6 +312,11 @@ func (pps *PingpongState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 	restTime := cfg.RestTime
 	refreshTime := time.Now().Add(cfg.RefreshTime)
 
+	var nftThrottler *throttler
+	if pps.cfg.NftAsaPerSecond > 0 {
+		nftThrottler = newThrottler(20, float64(pps.cfg.NftAsaPerSecond))
+	}
+
 	for {
 		if ctx.Err() != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "error bad context in RunPingPong: %v\n", ctx.Err())
@@ -325,6 +330,16 @@ func (pps *PingpongState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 			if cfg.MaxRuntime > 0 && time.Now().After(endTime) {
 				fmt.Printf("Terminating after max run time of %.f seconds\n", cfg.MaxRuntime.Seconds())
 				return
+			}
+
+			if pps.cfg.NftAsaPerSecond > 0 {
+				sent, err := pps.makeNftTraffic(ac)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "error sending nft transactions: %v\n", err)
+				}
+				nftThrottler.maybeSleep(int(sent))
+				totalSent += sent
+				continue
 			}
 
 			minimumAmount := cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*2
@@ -392,6 +407,88 @@ func getCreatableID(cfg PpConfig, cinfo CreatablesInfo) (aidx uint64) {
 	return
 }
 
+func (pps *PingpongState) fee() uint64 {
+	cfg := pps.cfg
+	fee := cfg.MaxFee
+	if cfg.RandomizeFee {
+		fee = rand.Uint64()%(cfg.MaxFee-cfg.MinFee) + cfg.MinFee
+	}
+	return fee
+}
+
+func (pps *PingpongState) makeNftTraffic(client libgoal.Client) (sentCount uint64, err error) {
+	fee := pps.fee()
+	if (len(pps.nftHolders) == 0) || ((float64(int(pps.cfg.NftAsaAccountInFlight)-len(pps.nftHolders)) / float64(pps.cfg.NftAsaAccountInFlight)) >= rand.Float64()) {
+		var addr string
+		var wallet []byte
+		wallet, err = client.GetUnencryptedWalletHandle()
+		if err != nil {
+			return
+		}
+		addr, err = client.GenerateAddress(wallet)
+		if err != nil {
+			return
+		}
+		fmt.Printf("new NFT holder %s\n", addr)
+		var proto config.ConsensusParams
+		proto, err = getProto(client)
+		if err != nil {
+			return
+		}
+		// enough for the per-asa minbalance and more than enough for the txns to create them
+		toSend := proto.MinBalance * uint64(pps.cfg.NftAsaPerAccount+1) * 2
+		pps.nftHolders[addr] = 0
+		_, err = sendPaymentFromUnencryptedWallet(client, pps.cfg.SrcAccount, addr, fee, toSend, nil)
+		if err != nil {
+			return
+		}
+		sentCount++
+		// we ran one txn above already to fund the new addr,
+		// we'll run a second txn below
+	}
+	// pick a random sender from nft holder sub accounts
+	pick := rand.Intn(len(pps.nftHolders))
+	pos := 0
+	var sender string
+	var senderNftCount int
+	for addr, nftCount := range pps.nftHolders {
+		sender = addr
+		senderNftCount = nftCount
+		if pos == pick {
+			break
+		}
+		pos++
+
+	}
+	var meta [32]byte
+	rand.Read(meta[:])
+	assetName := pps.nftSpamAssetName()
+	const totalSupply = 1
+	txn, err := client.MakeUnsignedAssetCreateTx(totalSupply, false, sender, sender, sender, sender, "ping", assetName, "", meta[:], 0)
+	if err != nil {
+		fmt.Printf("Cannot make asset create txn with meta %v\n", meta)
+		return
+	}
+	txn, err = client.FillUnsignedTxTemplate(sender, 0, 0, pps.cfg.MaxFee, txn)
+	if err != nil {
+		fmt.Printf("Cannot fill asset creation txn\n")
+		return
+	}
+	if senderNftCount+1 >= int(pps.cfg.NftAsaPerAccount) {
+		delete(pps.nftHolders, sender)
+	} else {
+		pps.nftHolders[sender] = senderNftCount + 1
+	}
+	stxn, err := signTxn(sender, txn, client, pps.cfg)
+	if err != nil {
+		return
+	}
+	sentCount++
+	_, err = client.BroadcastTransaction(stxn)
+	fmt.Printf("create asset %v\n", assetName)
+	return
+}
+
 func (pps *PingpongState) sendFromTo(
 	fromList, toList []string,
 	client libgoal.Client,
@@ -401,7 +498,6 @@ func (pps *PingpongState) sendFromTo(
 	cfg := pps.cfg
 
 	amt := cfg.MaxAmt
-	fee := cfg.MaxFee
 
 	assetsByCreator := make(map[string][]*v1.AssetParams)
 	for _, p := range cinfo.AssetParams {
@@ -413,9 +509,7 @@ func (pps *PingpongState) sendFromTo(
 			amt = rand.Uint64()%cfg.MaxAmt + 1
 		}
 
-		if cfg.RandomizeFee {
-			fee = rand.Uint64()%(cfg.MaxFee-cfg.MinFee) + cfg.MinFee
-		}
+		fee := pps.fee()
 
 		to := toList[i]
 		if cfg.RandomizeDst {
@@ -603,67 +697,7 @@ func (pps *PingpongState) constructTxn(from, to string, fee, amt, aidx uint64, c
 		crypto.RandBytes(lease[:])
 	}
 
-	if cfg.NftAsaPerAccount > 0 { // construct NFT creation transaction
-		if (len(pps.nftHolders) == 0) || ((float64(int(pps.cfg.NftAsaAccountInFlight)-len(pps.nftHolders)) / float64(pps.cfg.NftAsaAccountInFlight)) >= rand.Float64()) {
-			var addr string
-			var wallet []byte
-			wallet, err = client.GetUnencryptedWalletHandle()
-			if err != nil {
-				return
-			}
-			addr, err = client.GenerateAddress(wallet)
-			if err != nil {
-				return
-			}
-			var proto config.ConsensusParams
-			proto, err = getProto(client)
-			if err != nil {
-				return
-			}
-			// enough for the per-asa minbalance and more than enough for the txns to create them
-			toSend := proto.MinBalance * uint64(pps.cfg.NftAsaPerAccount+1) * 2
-			pps.nftHolders[addr] = 0
-			_, err = sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
-			if err != nil {
-				return
-			}
-			// we ran one txn above already to fund the new addr,
-			// we'll run a second txn below
-		}
-		// pick a random sender from nft holder sub accounts
-		pick := rand.Intn(len(pps.nftHolders))
-		pos := 0
-		var sender string
-		var senderNftCount int
-		for addr, nftCount := range pps.nftHolders {
-			sender = addr
-			senderNftCount = nftCount
-			if pos == pick {
-				break
-			}
-			pos++
-
-		}
-		var meta [32]byte
-		rand.Read(meta[:])
-		assetName := pps.nftSpamAssetName()
-		const totalSupply = 1
-		txn, err = client.MakeUnsignedAssetCreateTx(totalSupply, false, sender, sender, sender, sender, "ping", assetName, "", meta[:], 0)
-		if err != nil {
-			fmt.Printf("Cannot make asset create txn with meta %v\n", meta)
-			return
-		}
-		txn, err = client.FillUnsignedTxTemplate(sender, 0, 0, cfg.MaxFee, txn)
-		if err != nil {
-			fmt.Printf("Cannot fill asset creation txn\n")
-			return
-		}
-		if senderNftCount+1 >= int(cfg.NftAsaPerAccount) {
-			delete(pps.nftHolders, sender)
-		} else {
-			pps.nftHolders[sender] = senderNftCount + 1
-		}
-	} else if cfg.NumApp > 0 { // Construct app transaction
+	if cfg.NumApp > 0 { // Construct app transaction
 		// select opted-in accounts for Txn.Accounts field
 		var accounts []string
 		if len(cinfo.OptIns[aidx]) > 0 {
@@ -763,4 +797,55 @@ func signTxn(signer string, txn transactions.Transaction, client libgoal.Client,
 		stxn, err = client.SignTransactionWithWallet(h, nil, txn)
 	}
 	return
+}
+
+type timeCount struct {
+	when  time.Time
+	count int
+}
+
+type throttler struct {
+	times []timeCount
+
+	next int
+
+	// target x per-second
+	xps float64
+
+	// rough proportional + integral control
+	iterm float64
+}
+
+func newThrottler(windowSize int, targetPerSecond float64) *throttler {
+	return &throttler{times: make([]timeCount, windowSize), xps: targetPerSecond, iterm: 0.0}
+}
+
+func (t *throttler) maybeSleep(count int) {
+	now := time.Now()
+	t.times[t.next].when = now
+	t.times[t.next].count = count
+	nn := (t.next + 1) % len(t.times)
+	t.next = nn
+	if t.times[nn].when.IsZero() {
+		return
+	}
+	dt := now.Sub(t.times[nn].when)
+	countsum := 0
+	for i, tc := range t.times {
+		if i != nn {
+			countsum += tc.count
+		}
+	}
+	rate := float64(countsum) / dt.Seconds()
+	if rate > t.xps {
+		// rate too high, slow down
+		desiredSeconds := float64(countsum) / t.xps
+		extraSeconds := desiredSeconds - dt.Seconds()
+		fmt.Printf("%d / %s => %0.2f /s; %d / %0.2fs => %0.2f /s\n", countsum, dt.String(), rate, countsum, desiredSeconds, t.xps)
+		t.iterm += 0.1 * extraSeconds / float64(len(t.times))
+		time.Sleep(time.Duration(int64(1000000000.0 * (extraSeconds + t.iterm) / float64(len(t.times)))))
+
+	} else {
+		t.iterm *= 0.95
+	}
 }
