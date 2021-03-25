@@ -91,20 +91,23 @@ type AccountDeltas struct {
 }
 
 // MakeStateDelta creates a new instance of StateDelta
-func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
-	return StateDelta{
+func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round, child bool) StateDelta {
+	sd := StateDelta{
 		Accts: AccountDeltas{
 			accts:      make([]basics.BalanceRecord, 0, hint*2),
 			acctsCache: make(map[basics.Address]int, hint*2),
 		},
-		Txids:                    make(map[transactions.Txid]basics.Round, hint),
-		Txleases:                 make(map[Txlease]basics.Round, hint),
-		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable, hint),
 		Hdr:                      hdr,
 		PrevTimestamp:            prevTimestamp,
 		initialTransactionsCount: hint,
 		CompactCertNext:          compactCertNext,
 	}
+	if !child {
+		sd.Txids = make(map[transactions.Txid]basics.Round, hint)
+		sd.Txleases = make(map[Txlease]basics.Round, hint)
+		sd.Creatables = make(map[basics.CreatableIndex]ModifiedCreatable, hint)
+	}
+	return sd
 }
 
 // Get lookups AccountData by address

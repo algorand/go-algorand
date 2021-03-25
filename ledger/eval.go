@@ -352,6 +352,9 @@ type BlockEvaluator struct {
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
 	l ledgerForEvaluator
+
+	// staging buffer for the transaction ids. Used duing transaction group evaluator to avoid dynamic buffer allocation.
+	transactionIdsStaging []transactions.Txid
 }
 
 type ledgerForEvaluator interface {
@@ -395,12 +398,13 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 	}
 
 	eval := &BlockEvaluator{
-		validate:    validate,
-		generate:    generate,
-		block:       bookkeeping.Block{BlockHeader: hdr},
-		proto:       proto,
-		genesisHash: l.GenesisHash(),
-		l:           l,
+		validate:              validate,
+		generate:              generate,
+		block:                 bookkeeping.Block{BlockHeader: hdr},
+		proto:                 proto,
+		genesisHash:           l.GenesisHash(),
+		l:                     l,
+		transactionIdsStaging: make([]transactions.Txid, proto.MaxTxGroupSize),
 	}
 
 	// Preallocate space for the payset so that we don't have to
@@ -718,13 +722,20 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	// Prepare eval params for any ApplicationCall transactions in the group
 	evalParams := eval.prepareEvalParams(txgroup)
 
+	cowRollback := func(transactionIdx int) {
+		for gi := 0; gi < transactionIdx; gi++ {
+			eval.state.rollbackTx(txgroup[gi].Txn, eval.transactionIdsStaging[gi])
+		}
+	}
+
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
-
-		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
+		eval.transactionIdsStaging[gi] = txad.Txn.ID()
+		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib, eval.transactionIdsStaging[gi])
 		if err != nil {
+			cowRollback(gi)
 			return err
 		}
 
@@ -733,12 +744,14 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		if eval.validate {
 			groupTxBytes += txib.GetEncodedLength()
 			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
+				cowRollback(gi)
 				return ErrNoSpace
 			}
 		}
 
 		// Make sure all transactions in group have the same group value
 		if txad.SignedTxn.Txn.Group != txgroup[0].SignedTxn.Txn.Group {
+			cowRollback(gi)
 			return fmt.Errorf("transactionGroup: inconsistent group values: %v != %v",
 				txad.SignedTxn.Txn.Group, txgroup[0].SignedTxn.Txn.Group)
 		}
@@ -749,13 +762,18 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txWithoutGroup))
 		} else if len(txgroup) > 1 {
+			cowRollback(gi)
 			return fmt.Errorf("transactionGroup: [%d] had zero Group but was submitted in a group of %d", gi, len(txgroup))
 		}
+
+		// Remember this txn
+		eval.state.addTx(txad.Txn, eval.transactionIdsStaging[gi])
 	}
 
 	// If we had a non-zero Group value, check that all group members are present.
 	if group.TxGroupHashes != nil {
 		if txgroup[0].SignedTxn.Txn.Group != crypto.HashObj(group) {
+			cowRollback(len(txgroup))
 			return fmt.Errorf("transactionGroup: incomplete group: %v != %v (%v)",
 				txgroup[0].SignedTxn.Txn.Group, crypto.HashObj(group), group)
 		}
@@ -771,11 +789,8 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock, txid transactions.Txid) error {
 	var err error
-
-	// Only compute the TxID once
-	txid := txn.ID()
 
 	if eval.validate {
 		err = txn.Txn.Alive(eval.block)
@@ -873,9 +888,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 			}
 		}
 	}
-
-	// Remember this txn
-	cow.addTx(txn.Txn, txid)
 
 	return nil
 }

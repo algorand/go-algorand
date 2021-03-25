@@ -68,7 +68,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		lookupParent: b,
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
-		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
+		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0, false),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 }
@@ -170,6 +170,10 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 	cb.mods.Accts.Upsert(addr, new)
 
 	if newCreatable != nil {
+		if cb.mods.Creatables == nil {
+			// allocate dynamically, since most child roundCowState doesn't really need this.
+			cb.mods.Creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1)
+		}
 		cb.mods.Creatables[newCreatable.Index] = ledgercore.ModifiedCreatable{
 			Ctype:   newCreatable.Type,
 			Creator: newCreatable.Creator,
@@ -178,6 +182,10 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 	}
 
 	if deletedCreatable != nil {
+		if cb.mods.Creatables == nil {
+			// allocate dynamically, since most child roundCowState doesn't really need this.
+			cb.mods.Creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1)
+		}
 		cb.mods.Creatables[deletedCreatable.Index] = ledgercore.ModifiedCreatable{
 			Ctype:   deletedCreatable.Type,
 			Creator: deletedCreatable.Creator,
@@ -191,6 +199,11 @@ func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.T
 	cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
 }
 
+func (cb *roundCowState) rollbackTx(txn transactions.Transaction, txid transactions.Txid) {
+	delete(cb.mods.Txids, txid)
+	delete(cb.mods.Txleases, ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease})
+}
+
 func (cb *roundCowState) setCompactCertNext(rnd basics.Round) {
 	cb.mods.CompactCertNext = rnd
 }
@@ -200,7 +213,7 @@ func (cb *roundCowState) child() *roundCowState {
 		lookupParent: cb,
 		commitParent: cb,
 		proto:        cb.proto,
-		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, 1, cb.mods.CompactCertNext),
+		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, 1, cb.mods.CompactCertNext, true),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 }

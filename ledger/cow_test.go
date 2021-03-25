@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -131,4 +132,13 @@ func TestCowBalance(t *testing.T) {
 
 	c1.commitToParent()
 	checkCow(t, c0, accts2)
+}
+
+func TestTimeout(t *testing.T) {
+	for i := 0; i < 10000000; i++ {
+		bwTimeout := time.NewTimer(0)
+		if !bwTimeout.Stop() {
+			<-bwTimeout.C
+		}
+	}
 }
