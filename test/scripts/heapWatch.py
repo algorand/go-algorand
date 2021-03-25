@@ -68,6 +68,13 @@ class algodDir:
         self.token = token
         self.admin_token = admin_token
         self.headers = {}
+        self._pid = None
+
+    def pid(self):
+        if self._pid is None:
+            with open(os.path.join(self.path, 'algod.pid')) as fin:
+                self._pid = int(fin.read())
+        return self._pid
 
     def get_heap_snapshot(self, snapshot_name=None, outdir=None):
         url = 'http://' + self.net + '/urlAuth/' + self.admin_token + '/debug/pprof/heap'
@@ -85,8 +92,19 @@ class algodDir:
         return outpath
 
     def psHeap(self):
+        # return rss, vsz
         # ps -o rss,vsz $(cat ${ALGORAND_DATA}/algod.pid)
-        pass
+        subp = subprocess.Popen(['ps', '-o', 'rss,vsz', str(self.pid())], stdout=subprocess.PIPE)
+        try:
+            outs, errs = subp.communicate(timeout=2)
+            for line in outs.decode().splitlines():
+                try:
+                    rss,vsz = [int(x) for x in line.strip().split()]
+                    return rss,vsz
+                except:
+                    pass
+        except:
+            return None, None
 
 class watcher:
     def __init__(self, args):
@@ -104,11 +122,20 @@ class watcher:
 
     def do_snap(self, now):
         snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime(now))
+        snapshot_isotime = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(now))
         logger.debug('begin snapshot %s', snapshot_name)
+        psheaps = {}
         newsnapshots = {}
         for ad in self.they:
             snappath = ad.get_heap_snapshot(snapshot_name, outdir=self.args.out)
             newsnapshots[ad.path] = snappath
+            rss, vsz = ad.psHeap()
+            if rss and vsz:
+                psheaps[ad.nick] = (rss, vsz)
+        for nick, rssvsz in psheaps.items():
+            rss, vsz = rssvsz
+            with open(os.path.join(self.args.out, nick + '.heap.csv'), 'at') as fout:
+                fout.write('{},{},{},{}\n'.format(snapshot_name,snapshot_isotime,rss, vsz))
         logger.debug('snapped, processing...')
         # make absolute and differential plots
         for path, snappath in newsnapshots.items():
