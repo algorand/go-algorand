@@ -24,7 +24,7 @@ import (
 )
 
 func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
-	res := make(map[basics.AssetIndex]basics.AssetHolding)
+	res := make(map[basics.AssetIndex]basics.AssetHolding, len(m))
 	for id, val := range m {
 		res[id] = val
 	}
@@ -32,7 +32,7 @@ func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.
 }
 
 func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
-	res := make(map[basics.AssetIndex]basics.AssetParams)
+	res := make(map[basics.AssetIndex]basics.AssetParams, len(m))
 	for id, val := range m {
 		res[id] = val
 	}
