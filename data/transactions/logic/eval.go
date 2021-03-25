@@ -1218,7 +1218,7 @@ func opDig(cx *evalContext) {
 	depth := int(uint(cx.program[cx.pc+1]))
 	idx := len(cx.stack) - 1 - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
-	// so we can't expect out stack to be prechecked.
+	// so we can't expect our stack to be prechecked.
 	if idx < 0 {
 		cx.err = fmt.Errorf("dig %d with stack size = %d", depth, len(cx.stack))
 		return

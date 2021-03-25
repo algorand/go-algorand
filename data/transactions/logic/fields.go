@@ -518,7 +518,7 @@ func init() {
 
 	txnTypeConstToUint64 = make(map[string]uint64, len(TxnTypeNames))
 	for tt, v := range txnTypeIndexes {
-		symbol := TypeNameDescription(tt)
+		symbol := TypeNameDescriptions[tt]
 		txnTypeConstToUint64[symbol] = v
 	}
 
