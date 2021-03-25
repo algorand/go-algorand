@@ -69,6 +69,33 @@ def read_script_for_timeout(fname):
             logger.debug('read timeout match err', exc_info=True)
     return 200
 
+
+def create_kmd_config_with_unsafe_scrypt(working_dir):
+
+    kmd_config_dir = os.path.join(working_dir,"kmd-v0.5")
+    with open(os.path.join(kmd_config_dir,"kmd_config.json.example")) as f:
+        kmd_conf_data = json.load(f)
+    if "drivers" not in kmd_conf_data:
+        raise Exception("kmd_conf example does not contian drivers attribute")
+    if "sqlite" not in kmd_conf_data["drivers"]:
+        raise Exception("kmd_conf example does not contian sqlite attribute")
+    if "allow_unsafe_scrypt" not in kmd_conf_data["drivers"]["sqlite"]:
+        raise Exception("kmd_conf example does not contian allow_unsafe_scrypt attribute")
+    if "scrypt" not in kmd_conf_data["drivers"]["sqlite"]:
+        raise Exception("kmd_conf example does not contian scrypt attribute")
+    if "scrypt_n" not in kmd_conf_data["drivers"]["sqlite"]["scrypt"]:
+        raise Exception("kmd_conf example does not contian scrypt_n attribute")
+    if "scrypt_r" not in kmd_conf_data["drivers"]["sqlite"]["scrypt"]:
+        raise Exception("kmd_conf example does not contian scrypt_r attribute")
+
+    kmd_conf_data["drivers"]["sqlite"]["allow_unsafe_scrypt"] = True
+    kmd_conf_data["drivers"]["sqlite"]["scrypt"]["scrypt_n"] = 4096
+    with open(os.path.join(kmd_config_dir,"kmd_config.json"),"w") as f:
+        json.dump(kmd_conf_data,f)
+
+
+    
+
 def _script_thread_inner(runset, scriptname):
     start = time.time()
     algod, kmd = runset.connect()
@@ -118,6 +145,13 @@ def _script_thread_inner(runset, scriptname):
         sys.stderr.write('{}\n'.format(te))
         retcode = -1
     dt = time.time() - start
+
+
+    if runset.terminated:
+        logger.info('Program terminated before %s finishes.', scriptname)
+        runset.done(scriptname, False, dt)
+        return
+
     if retcode != 0:
         with runset.lock:
             logger.error('%s failed in %f seconds', scriptname, dt)
@@ -183,8 +217,11 @@ class RunSet:
     def _connect(self):
         if self.algod and self.kmd:
             return
+
+
         # should run from inside self.lock
         algodata = self.env['ALGORAND_DATA']
+        
         xrun(['goal', 'kmd', 'start', '-t', '3600','-d', algodata], env=self.env, timeout=5)
         self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
@@ -367,6 +404,8 @@ def main():
     ap.add_argument('--timeout', default=500, type=int, help='integer seconds to wait for the scripts to run')
     ap.add_argument('--verbose', default=False, action='store_true')
     ap.add_argument('--version', default="Future")
+    ap.add_argument('--unsafe_scrypt', default=False, action='store_true', help="allows kmd to run with unsafe scrypt attribute. This will speed up tests time")
+    
     args = ap.parse_args()
 
     if args.verbose:
@@ -400,6 +439,11 @@ def main():
 
     env['ALGORAND_DATA'] = os.path.join(netdir, 'Node')
     env['ALGORAND_DATA2'] = os.path.join(netdir, 'Primary')
+
+    if args.unsafe_scrypt:
+        create_kmd_config_with_unsafe_scrypt(env['ALGORAND_DATA'])
+        create_kmd_config_with_unsafe_scrypt(env['ALGORAND_DATA2'])
+
 
     xrun(['goal', '-v'], env=env, timeout=5)
     xrun(['goal', 'node', 'status'], env=env, timeout=5)

@@ -18,8 +18,11 @@ package metrics
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestTagCounter(t *testing.T) {
@@ -34,6 +37,16 @@ func TestTagCounter(t *testing.T) {
 	}
 
 	tc := NewTagCounter("tc", "wat")
+
+	// check that empty TagCounter cleanly returns no results
+	var sb strings.Builder
+	tc.WriteMetric(&sb, "")
+	require.Equal(t, "", sb.String())
+
+	result := make(map[string]string)
+	tc.AddMetric(result)
+	require.Equal(t, 0, len(result))
+
 	var wg sync.WaitGroup
 	wg.Add(len(tags))
 
