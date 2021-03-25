@@ -165,7 +165,7 @@ jobs:
 cache:
   directories:
     - crypto/lib
-    - docker_cache
+    - $HOME/docker_cache
 
 before_install:
 - |-
@@ -190,7 +190,7 @@ before_install:
      export MAKE=mingw32-make  # so that Autotools can find it
      ;;
    esac
-   docker load -i docker_cache/images.tar || true
+   docker load -i $HOME/docker_cache/images.tar || true
 
 before_cache:
 - |-
@@ -200,7 +200,7 @@ before_cache:
      $msys2 pacman --sync --clean --noconfirm
      ;;
    esac
-   docker save -o docker_cache/images.tar $(docker images -a -q)
+   docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
 
 addons:
   apt:
