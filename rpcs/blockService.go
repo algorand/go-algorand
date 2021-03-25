@@ -329,17 +329,14 @@ func (bs *BlockService) getNextCustomFallbackEndpoint() (endpointAddress string)
 		return
 	}
 	endpointAddress = bs.fallbackEndpoints.endpoints[bs.fallbackEndpoints.lastUsed]
-	bs.fallbackEndpoints.lastUsed++
-	if bs.fallbackEndpoints.lastUsed == len(bs.fallbackEndpoints.endpoints) {
-		bs.fallbackEndpoints.lastUsed = 0
-	}
+	bs.fallbackEndpoints.lastUsed = (bs.fallbackEndpoints.lastUsed + 1) % len(bs.fallbackEndpoints.endpoints)
 	return
 }
 
 // getRandomArchiver returns a random archiver address
 func (bs *BlockService) getRandomArchiver() (endpointAddress string) {
 	peers := bs.net.GetPeers(network.PeersPhonebookArchivers)
-	httpPeers := make([]network.HTTPPeer, 0)
+	httpPeers := make([]network.HTTPPeer, 0, len(peers))
 
 	for _, peer := range peers {
 		httpPeer, validHTTPPeer := peer.(network.HTTPPeer)
@@ -406,6 +403,14 @@ func makeFallbackEndpoints(customFallbackEndpoints string) (fe fallbackEndpoints
 	if customFallbackEndpoints == "" {
 		return
 	}
-	fe = fallbackEndpoints{endpoints: strings.Split(customFallbackEndpoints, ",")}
+	endpoints := strings.Split(customFallbackEndpoints, ",")
+	for _, ep := range endpoints {
+		parsed, err := network.ParseHostOrURL(ep)
+		if err != nil {
+			logging.Base().Warnf("makeFallbackEndpoints: error parsing %s %s", ep, err.Error())
+			continue
+		}
+		fe.endpoints = append(fe.endpoints, parsed.String())
+	}
 	return
 }

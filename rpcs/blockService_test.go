@@ -179,8 +179,9 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 	defer nodeB.stop()
 	
 	config := config.GetDefaultLocal()
-	// Set the first node to be self, and the second to one that has the block. If RR is right, should succeed. 
-	config.BlockServiceCustomFallbackEndpoints=fmt.Sprintf("%s,%s", nodeA.rootURL(), nodeB.rootURL())
+	// Set the first to a bad address, the second to self, and the third to the one that has the block.
+	// If RR is right, should succeed. 
+	config.BlockServiceCustomFallbackEndpoints=fmt.Sprintf("://badaddress,%s,%s", nodeA.rootURL(), nodeB.rootURL())
 	bs1 := MakeBlockService(config, ledger1, net1, "{genesisID}")
 	bs2 := MakeBlockService(config, ledger2, net2, "{genesisID}")
 
