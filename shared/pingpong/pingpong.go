@@ -280,6 +280,8 @@ func listSufficientAccounts(accounts map[string]uint64, minimumAmount uint64, ex
 	return out
 }
 
+var logPeriod = 5 * time.Second
+
 // RunPingPong starts ping pong process
 func (pps *PingpongState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 	// Infinite loop given:
@@ -317,6 +319,9 @@ func (pps *PingpongState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 		nftThrottler = newThrottler(20, float64(pps.cfg.NftAsaPerSecond))
 	}
 
+	lastLog := time.Now()
+	nextLog := lastLog.Add(logPeriod)
+
 	for {
 		if ctx.Err() != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "error bad context in RunPingPong: %v\n", ctx.Err())
@@ -325,8 +330,22 @@ func (pps *PingpongState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 		startTime := time.Now()
 		stopTime := startTime.Add(runTime)
 
-		var totalSent, totalSucceeded uint64
-		for !time.Now().After(stopTime) {
+		var totalSent, totalSucceeded, lastTotalSent uint64
+		for {
+			now := time.Now()
+			if now.After(stopTime) {
+				break
+			}
+			if now.After(nextLog) {
+				dt := now.Sub(lastLog)
+				fmt.Printf("%d sent, %0.2f/s (%d total)\n", totalSent-lastTotalSent, float64(totalSent-lastTotalSent)/dt.Seconds(), totalSent)
+				lastTotalSent = totalSent
+				for now.After(nextLog) {
+					nextLog = nextLog.Add(logPeriod)
+				}
+				lastLog = now
+			}
+
 			if cfg.MaxRuntime > 0 && time.Now().After(endTime) {
 				fmt.Printf("Terminating after max run time of %.f seconds\n", cfg.MaxRuntime.Seconds())
 				return
@@ -485,7 +504,6 @@ func (pps *PingpongState) makeNftTraffic(client libgoal.Client) (sentCount uint6
 	}
 	sentCount++
 	_, err = client.BroadcastTransaction(stxn)
-	fmt.Printf("create asset %v\n", assetName)
 	return
 }
 
@@ -841,7 +859,6 @@ func (t *throttler) maybeSleep(count int) {
 		// rate too high, slow down
 		desiredSeconds := float64(countsum) / t.xps
 		extraSeconds := desiredSeconds - dt.Seconds()
-		fmt.Printf("%d / %s => %0.2f /s; %d / %0.2fs => %0.2f /s\n", countsum, dt.String(), rate, countsum, desiredSeconds, t.xps)
 		t.iterm += 0.1 * extraSeconds / float64(len(t.times))
 		time.Sleep(time.Duration(int64(1000000000.0 * (extraSeconds + t.iterm) / float64(len(t.times)))))
 
