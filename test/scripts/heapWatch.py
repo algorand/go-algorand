@@ -76,20 +76,26 @@ class algodDir:
                 self._pid = int(fin.read())
         return self._pid
 
-    def get_heap_snapshot(self, snapshot_name=None, outdir=None):
-        url = 'http://' + self.net + '/urlAuth/' + self.admin_token + '/debug/pprof/heap'
+    def get_pprof_snapshot(self, name, snapshot_name=None, outdir=None):
+        url = 'http://' + self.net + '/urlAuth/' + self.admin_token + '/debug/pprof/' + name
         response = urllib.request.urlopen(urllib.request.Request(url, headers=self.headers))
         if response.code != 200:
-            logger.error('could not fetch heap from %s via %r', self.path. url)
+            logger.error('could not fetch %s from %s via %r', name, self.path. url)
             return
         blob = response.read()
         if snapshot_name is None:
             snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
-        outpath = os.path.join(outdir or '.', self.nick + '.' + snapshot_name + '.heap')
+        outpath = os.path.join(outdir or '.', self.nick + '.' + snapshot_name + '.' + name)
         with open(outpath, 'wb') as fout:
             fout.write(blob)
         logger.debug('%s -> %s', self.nick, outpath)
         return outpath
+
+    def get_heap_snapshot(self, snapshot_name=None, outdir=None):
+        return self.get_pprof_snapshot('heap', snapshot_name, outdir)
+
+    def get_goroutine_snapshot(self, snapshot_name=None, outdir=None):
+        return self.get_pprof_snapshot('goroutine', snapshot_name, outdir)
 
     def psHeap(self):
         # return rss, vsz
@@ -136,6 +142,9 @@ class watcher:
             rss, vsz = rssvsz
             with open(os.path.join(self.args.out, nick + '.heap.csv'), 'at') as fout:
                 fout.write('{},{},{},{}\n'.format(snapshot_name,snapshot_isotime,rss, vsz))
+        if self.args.goroutine:
+            for ad in self.they:
+                ad.get_goroutine_snapshot(snapshot_name, outdir=self.args.out)
         logger.debug('snapped, processing...')
         # make absolute and differential plots
         for path, snappath in newsnapshots.items():
@@ -150,6 +159,7 @@ class watcher:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('data_dirs', nargs='*', help='list paths to algorand datadirs to grab heap profile from')
+    ap.add_argument('--goroutine', default=False, action='store_true', help='also capture goroutine profile')
     ap.add_argument('--period', default=None, help='seconds between automatically capturing')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
     ap.add_argument('--verbose', default=False, action='store_true')
