@@ -1,3 +1,5 @@
+chmod 700 kmd-v0.5
+chmod 700 kmd-v0.5/sqlite_wallets
 rm -rf net-v1 relay/net-v1;
 find . -name "*.log" -delete;
 find . -name "algod*" -delete;
