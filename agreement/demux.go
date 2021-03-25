@@ -238,12 +238,19 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	deadlineCh := s.Clock.TimeoutAt(deadline)
 	var fastDeadlineCh <-chan time.Time
 
-	proto, err := d.ledger.ConsensusVersion(ParamsRound(currentRound))
-	if err == nil && config.Consensus[proto].FastPartitionRecovery {
-		fastDeadlineCh = s.Clock.TimeoutAt(fastDeadline)
+	fastPartitionRecoveryEnabled := false
+	if proto, err := d.ledger.ConsensusVersion(ParamsRound(currentRound)); err != nil {
+		logging.Base().Warnf("demux: could not get consensus parameters for round %d: %v", ParamsRound(currentRound), err)
+		// this might happen during catchup, since the Ledger.Wait fires as soon as a new block is recieved by the ledger, which could be
+		// far before it's being committed. In these cases, it should be safe to default to the current consensus version. On subsequent
+		// iterations, it will get "corrected" since the ledger would finish flushing the blocks to disk.
+		fastPartitionRecoveryEnabled = config.Consensus[protocol.ConsensusCurrentVersion].FastPartitionRecovery
+	} else {
+		fastPartitionRecoveryEnabled = config.Consensus[proto].FastPartitionRecovery
 	}
-	if err != nil {
-		logging.Base().Errorf("could not get consensus parameters for round %d: %v", ParamsRound(currentRound), err)
+
+	if fastPartitionRecoveryEnabled {
+		fastDeadlineCh = s.Clock.TimeoutAt(fastDeadline)
 	}
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
