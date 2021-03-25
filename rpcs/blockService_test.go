@@ -18,9 +18,8 @@ package rpcs
 
 import (
 	"context"
+	"fmt"
 	"net/http"
-	"path"
-	"strconv"
 	"testing"
 	"time"
 
@@ -111,10 +110,10 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 }
 
 // TestRedirectBasic tests the case when the block service redirects the request to elsewhere
-func TestRedirectBasic(t *testing.T) {
-	ledger1 := makeLedger(t)
+func TestRedirectFallbackArchiver(t *testing.T) {
+	ledger1 := makeLedger(t, "l1")
 	defer ledger1.Close()
-	ledger2 := makeLedger(t)
+	ledger2 := makeLedger(t, "l2")
 	defer ledger2.Close()
 	addBlock(t, ledger1)
 	addBlock(t, ledger2)
@@ -139,7 +138,6 @@ func TestRedirectBasic(t *testing.T) {
 	defer nodeB.stop()
 
 	net1.addPeer(nodeB.rootURL())
-	net2.addPeer(nodeA.rootURL())
 
 	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
@@ -147,7 +145,55 @@ func TestRedirectBasic(t *testing.T) {
 	client := http.Client{}
 
 	ctx := context.Background()
-	parsedURL.Path = net1.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(2), 36)))
+ 	parsedURL.Path = FormatBlockQuery(uint64(2), parsedURL.Path, net1)
+	blockURL := parsedURL.String()
+	request, err := http.NewRequest("GET", blockURL, nil)
+	require.NoError(t, err)
+	requestCtx, requestCancel := context.WithTimeout(ctx, time.Duration(config.CatchupHTTPBlockFetchTimeoutSec)*time.Second)
+	defer requestCancel()
+	request = request.WithContext(requestCtx)
+	network.SetUserAgentHeader(request.Header)
+	response, err := client.Do(request)
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusOK, response.StatusCode)
+}
+
+
+// TestRedirectBasic tests the case when the block service redirects the request to elsewhere
+func TestRedirectFallbackEndpoints(t *testing.T) {
+	ledger1 := makeLedger(t, "l1")
+	defer ledger1.Close()
+	ledger2 := makeLedger(t, "l2")
+	defer ledger2.Close()
+	addBlock(t, ledger2)
+
+	net1 := &httpTestPeerSource{}
+	net2 := &httpTestPeerSource{}
+
+	nodeA := &basicRPCNode{}
+	nodeB := &basicRPCNode{}	
+	nodeA.start()
+	defer nodeA.stop()
+	nodeB.start()
+	defer nodeB.stop()
+	
+	config := config.GetDefaultLocal()
+	// Set the first node to be self, and the second to one that has the block. If RR is right, should succeed. 
+	config.BlockServiceCustomFallbackEndpoints=fmt.Sprintf("%s,%s", nodeA.rootURL(), nodeB.rootURL())
+	bs1 := MakeBlockService(config, ledger1, net1, "{genesisID}")
+	bs2 := MakeBlockService(config, ledger2, net2, "{genesisID}")
+
+	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
+
+	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
+	require.NoError(t, err)
+
+	client := http.Client{}
+
+	ctx := context.Background()
+	parsedURL.Path = FormatBlockQuery(uint64(1), parsedURL.Path, net1)
 	blockURL := parsedURL.String()
 	request, err := http.NewRequest("GET", blockURL, nil)
 	require.NoError(t, err)
@@ -165,7 +211,7 @@ func TestRedirectBasic(t *testing.T) {
 // - the case when the peer is not a valid http peer
 // - the case when the block service keeps redirecting and cannot get a block
 func TestRedirectExceptions(t *testing.T) {
-	ledger1 := makeLedger(t)
+	ledger1 := makeLedger(t, "l1")
 	defer ledger1.Close()
 	addBlock(t, ledger1)
 
@@ -188,7 +234,7 @@ func TestRedirectExceptions(t *testing.T) {
 	client := http.Client{}
 
 	ctx := context.Background()
-	parsedURL.Path = net1.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(2), 36)))
+	parsedURL.Path = FormatBlockQuery(uint64(2), parsedURL.Path, net1)
 	blockURL := parsedURL.String()
 	request, err := http.NewRequest("GET", blockURL, nil)
 	require.NoError(t, err)
@@ -210,7 +256,7 @@ func TestRedirectExceptions(t *testing.T) {
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var sinkAddr = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 
-func makeLedger(t *testing.T) *data.Ledger {
+func makeLedger(t *testing.T, namePostfix string) *data.Ledger {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	genesis := make(map[basics.Address]basics.AccountData)
 	genesis[sinkAddr] = basics.AccountData{
@@ -229,7 +275,7 @@ func makeLedger(t *testing.T) *data.Ledger {
 	const inMem = true
 
 	ledger, err := data.LoadLedger(
-		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
+		log, t.Name()+namePostfix, inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
 		nil, cfg,
 	)
 	require.NoError(t, err)
