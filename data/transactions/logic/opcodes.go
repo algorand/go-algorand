@@ -51,7 +51,7 @@ func costly(cost int) opDetails {
 
 func immediates(name string, rest ...string) opDetails {
 	num := 1 + len(rest)
-	immediates := make([]immediate, num, len(rest)+1)
+	immediates := make([]immediate, num)
 	immediates[0] = immediate{name, immByte}
 	for i, n := range rest {
 		immediates[i+1] = immediate{n, immByte}
@@ -111,7 +111,8 @@ var anyIntInt = StackTypes{StackAny, StackUint64, StackUint64}
 //
 // Any changes should be reflected in README_in.md which serves as the language spec.
 //
-// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
+// Note: assembly can specialize an Any return type if known at
+// assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{
 	{0x00, "err", opErr, asmDefault, disDefault, nil, nil, 1, modeAny, opDefault},
 	{0x01, "sha256", opSHA256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(7)},

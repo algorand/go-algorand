@@ -372,7 +372,7 @@ func TestAcctUpdates(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		au.newBlock(blk, delta)
@@ -455,7 +455,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -544,7 +544,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocolVersion
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -671,7 +671,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = testProtocolVersion
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -832,7 +832,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			blk.RewardsLevel = rewardLevel
 			blk.CurrentProtocol = testProtocolVersion
 
-			delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, len(updates))
+			delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, len(updates), 0)
 			for addr, ad := range updates {
 				delta.Accts.Upsert(addr, ad)
 			}
@@ -1498,7 +1498,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		}
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = testProtocolVersion
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		au.newBlock(blk, delta)
@@ -1607,7 +1607,7 @@ func TestCachesInitialization(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocolVersion
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		ml.addMockBlock(blockEntry{block: blk}, delta)
 		au.newBlock(blk, delta)

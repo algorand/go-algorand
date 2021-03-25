@@ -337,7 +337,7 @@ func testMatch(t *testing.T, actual, expected string) {
 	} else if strings.HasSuffix(expected, "...") {
 		require.Contains(t, "^"+actual, "^"+expected[:len(expected)-3])
 	} else {
-		require.Equal(t, actual, expected)
+		require.Equal(t, expected, actual)
 	}
 }
 
@@ -371,7 +371,7 @@ func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpSt
 						break
 					}
 				}
-				require.NotNil(t, found)
+				require.NotNil(t, found, "No error on line %d", exp.l)
 				msg := found.Unwrap().Error()
 				testMatch(t, msg, exp.s)
 			}
@@ -1138,23 +1138,38 @@ int 1
 
 func TestAssembleAsset(t *testing.T) {
 	t.Parallel()
+	introduction := OpsByName[LogicVersion]["asset_holding_get"].Version
+	for v := introduction; v <= AssemblerMaxVersion; v++ {
+		testProg(t, "asset_holding_get ABC 1", v,
+			expect{1, "asset_holding_get arg 1..."})
+		testProg(t, "int 1; asset_holding_get ABC 1", v,
+			expect{2, "asset_holding_get arg 0..."})
+		testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
+			expect{3, "asset_holding_get expects one argument"})
+		testProg(t, "int 1; int 1; asset_holding_get ABC", v,
+			expect{3, "asset_holding_get unknown arg: ABC"})
 
-	testLine(t, "asset_holding_get ABC 1", AssemblerMaxVersion, "asset_holding_get expects one argument")
-	testLine(t, "asset_holding_get ABC", AssemblerMaxVersion, "asset_holding_get unknown arg: ABC")
-	testLine(t, "asset_params_get ABC 1", AssemblerMaxVersion, "asset_params_get expects one argument")
-	testLine(t, "asset_params_get ABC", AssemblerMaxVersion, "asset_params_get unknown arg: ABC")
+		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
+			expect{2, "asset_params_get arg 0 wanted type uint64..."})
+
+		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects one argument")
+		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown arg: ABC")
+	}
 }
 
 func TestDisassembleSingleOp(t *testing.T) {
 	t.Parallel()
-	// test ensures no double arg_0 entries in disassembly listing
-	sample := fmt.Sprintf("#pragma version %d\narg_0\n", AssemblerMaxVersion)
-	ops, err := AssembleStringWithVersion(sample, AssemblerMaxVersion)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(ops.Program))
-	disassembled, err := Disassemble(ops.Program)
-	require.NoError(t, err)
-	require.Equal(t, sample, disassembled)
+
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+		// test ensures no double arg_0 entries in disassembly listing
+		sample := fmt.Sprintf("#pragma version %d\narg_0\n", v)
+		ops, err := AssembleStringWithVersion(sample, v)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(ops.Program))
+		disassembled, err := Disassemble(ops.Program)
+		require.NoError(t, err)
+		require.Equal(t, sample, disassembled)
+	}
 }
 
 func TestDisassembleInt(t *testing.T) {
@@ -1175,54 +1190,56 @@ func TestDisassembleInt(t *testing.T) {
 
 func TestDisassembleTxna(t *testing.T) {
 	t.Parallel()
-	// check txn and txna are properly disassembled
-	txnSample := fmt.Sprintf("#pragma version %d\ntxn Sender\n", AssemblerMaxVersion)
-	ops, err := AssembleStringWithVersion(txnSample, AssemblerMaxVersion)
-	require.NoError(t, err)
-	disassembled, err := Disassemble(ops.Program)
-	require.NoError(t, err)
-	require.Equal(t, txnSample, disassembled)
+	// txn was 1, but this tests both
+	introduction := OpsByName[LogicVersion]["gtxna"].Version
+	for v := introduction; v <= AssemblerMaxVersion; v++ {
+		// check txn and txna are properly disassembled
+		txnSample := fmt.Sprintf("#pragma version %d\ntxn Sender\n", v)
+		ops := testProg(t, txnSample, v)
+		disassembled, err := Disassemble(ops.Program)
+		require.NoError(t, err)
+		require.Equal(t, txnSample, disassembled)
 
-	txnaSample := fmt.Sprintf("#pragma version %d\ntxna Accounts 0\n", AssemblerMaxVersion)
-	ops, err = AssembleStringWithVersion(txnaSample, AssemblerMaxVersion)
-	require.NoError(t, err)
-	disassembled, err = Disassemble(ops.Program)
-	require.NoError(t, err)
-	require.Equal(t, txnaSample, disassembled)
+		txnaSample := fmt.Sprintf("#pragma version %d\ntxna Accounts 0\n", v)
+		ops = testProg(t, txnaSample, v)
+		disassembled, err = Disassemble(ops.Program)
+		require.NoError(t, err)
+		require.Equal(t, txnaSample, disassembled)
 
-	txnSample2 := fmt.Sprintf("#pragma version %d\ntxn Accounts 0\n", AssemblerMaxVersion)
-	ops, err = AssembleStringWithVersion(txnSample2, AssemblerMaxVersion)
-	require.NoError(t, err)
-	disassembled, err = Disassemble(ops.Program)
-	require.NoError(t, err)
-	// compare with txnaSample, not txnSample2
-	require.Equal(t, txnaSample, disassembled)
+		txnSample2 := fmt.Sprintf("#pragma version %d\ntxn Accounts 0\n", v)
+		ops = testProg(t, txnSample2, v)
+		disassembled, err = Disassemble(ops.Program)
+		require.NoError(t, err)
+		// compare with txnaSample, not txnSample2
+		require.Equal(t, txnaSample, disassembled)
+	}
 }
 
 func TestDisassembleGtxna(t *testing.T) {
 	t.Parallel()
 	// check gtxn and gtxna are properly disassembled
-	gtxnSample := fmt.Sprintf("#pragma version %d\ngtxn 0 Sender\n", AssemblerMaxVersion)
-	ops, err := AssembleStringWithVersion(gtxnSample, AssemblerMaxVersion)
-	require.NoError(t, err)
-	disassembled, err := Disassemble(ops.Program)
-	require.NoError(t, err)
-	require.Equal(t, gtxnSample, disassembled)
 
-	gtxnaSample := fmt.Sprintf("#pragma version %d\ngtxna 0 Accounts 0\n", AssemblerMaxVersion)
-	ops, err = AssembleStringWithVersion(gtxnaSample, AssemblerMaxVersion)
-	require.NoError(t, err)
-	disassembled, err = Disassemble(ops.Program)
-	require.NoError(t, err)
-	require.Equal(t, gtxnaSample, disassembled)
+	introduction := OpsByName[LogicVersion]["gtxna"].Version
+	for v := introduction; v <= AssemblerMaxVersion; v++ {
+		gtxnSample := fmt.Sprintf("#pragma version %d\ngtxn 0 Sender\n", v)
+		ops := testProg(t, gtxnSample, v)
+		disassembled, err := Disassemble(ops.Program)
+		require.NoError(t, err)
+		require.Equal(t, gtxnSample, disassembled)
 
-	gtxnSample2 := fmt.Sprintf("#pragma version %d\ngtxn 0 Accounts 0\n", AssemblerMaxVersion)
-	ops, err = AssembleStringWithVersion(gtxnSample2, AssemblerMaxVersion)
-	require.NoError(t, err)
-	disassembled, err = Disassemble(ops.Program)
-	require.NoError(t, err)
-	// comapre with gtxnaSample, not gtxnSample2
-	require.Equal(t, gtxnaSample, disassembled)
+		gtxnaSample := fmt.Sprintf("#pragma version %d\ngtxna 0 Accounts 0\n", v)
+		ops = testProg(t, gtxnaSample, v)
+		disassembled, err = Disassemble(ops.Program)
+		require.NoError(t, err)
+		require.Equal(t, gtxnaSample, disassembled)
+
+		gtxnSample2 := fmt.Sprintf("#pragma version %d\ngtxn 0 Accounts 0\n", v)
+		ops = testProg(t, gtxnSample2, v)
+		disassembled, err = Disassemble(ops.Program)
+		require.NoError(t, err)
+		// compare with gtxnaSample, not gtxnSample2
+		require.Equal(t, gtxnaSample, disassembled)
+	}
 }
 
 func TestDisassemblePushConst(t *testing.T) {
