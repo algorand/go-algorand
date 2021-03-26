@@ -90,16 +90,19 @@ type AccountDeltas struct {
 	acctsCache map[basics.Address]int
 }
 
-// MakeStateDelta creates a new instance of StateDelta
-func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int) StateDelta {
+// MakeStateDelta creates a new instance of StateDelta.
+// hint is amount of transactions for evaluation, 2 * hint is for sender and receiver balance records.
+// This does not play well for AssetConfig and ApplicationCall transactions on scale
+func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
 	return StateDelta{
 		Accts: AccountDeltas{
 			accts:      make([]basics.BalanceRecord, 0, hint*2),
 			acctsCache: make(map[basics.Address]int, hint*2),
 		},
-		Txids:                    make(map[transactions.Txid]basics.Round, hint),
-		Txleases:                 make(map[Txlease]basics.Round, hint),
-		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable, hint),
+		Txids:    make(map[transactions.Txid]basics.Round, hint),
+		Txleases: make(map[Txlease]basics.Round, hint),
+		// asset or application creation are considered as rare events so do not pre-allocate space for them
+		Creatables:               make(map[basics.CreatableIndex]ModifiedCreatable),
 		Hdr:                      hdr,
 		PrevTimestamp:            prevTimestamp,
 		initialTransactionsCount: hint,
@@ -167,14 +170,16 @@ func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
 // For each data structure, reallocate if it would save us at least 50MB aggregate
 func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 	// accts takes up 232 bytes per entry, and is saved for 320 rounds
-	if uint64(2*sd.initialTransactionsCount-len(sd.Accts.accts))*accountArrayEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
+	if uint64(cap(sd.Accts.accts)-len(sd.Accts.accts))*accountArrayEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
 		accts := make([]basics.BalanceRecord, len(sd.Accts.acctsCache))
 		copy(accts, sd.Accts.accts)
 		sd.Accts.accts = accts
 	}
 
 	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
-	if uint64(2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
+	// realloc if original allocation capacity greater than length of data, and space difference is significant
+	if 2*sd.initialTransactionsCount > len(sd.Accts.acctsCache) &&
+		uint64(2*sd.initialTransactionsCount-len(sd.Accts.acctsCache))*accountMapCacheEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
 		acctsCache := make(map[basics.Address]int, len(sd.Accts.acctsCache))
 		for k, v := range sd.Accts.acctsCache {
 			acctsCache[k] = v
@@ -183,7 +188,8 @@ func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 	}
 
 	// TxLeases takes up 112 bytes per entry, and is saved for 1000 rounds
-	if uint64(sd.initialTransactionsCount-len(sd.Txleases))*txleasesEntrySize*proto.MaxTxnLife > stateDeltaTargetOptimizationThreshold {
+	if sd.initialTransactionsCount > len(sd.Txleases) &&
+		uint64(sd.initialTransactionsCount-len(sd.Txleases))*txleasesEntrySize*proto.MaxTxnLife > stateDeltaTargetOptimizationThreshold {
 		txLeases := make(map[Txlease]basics.Round, len(sd.Txleases))
 		for k, v := range sd.Txleases {
 			txLeases[k] = v
@@ -192,7 +198,7 @@ func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 	}
 
 	// Creatables takes up 100 bytes per entry, and is saved for 320 rounds
-	if uint64(sd.initialTransactionsCount-len(sd.Creatables))*creatablesEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
+	if uint64(len(sd.Creatables))*creatablesEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
 		creatableDeltas := make(map[basics.CreatableIndex]ModifiedCreatable, len(sd.Creatables))
 		for k, v := range sd.Creatables {
 			creatableDeltas[k] = v
