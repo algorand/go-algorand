@@ -65,6 +65,7 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 	}
 	ls := BlockService{
 		ledger: nil,
+		log:    logging.TestingLog(t),
 	}
 
 	// case where topics is nil
@@ -111,6 +112,8 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 
 // TestRedirectBasic tests the case when the block service redirects the request to elsewhere
 func TestRedirectFallbackArchiver(t *testing.T) {
+	log := logging.TestingLog(t)
+
 	ledger1 := makeLedger(t, "l1")
 	defer ledger1.Close()
 	ledger2 := makeLedger(t, "l2")
@@ -123,8 +126,8 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	net2 := &httpTestPeerSource{}
 
 	config := config.GetDefaultLocal()
-	bs1 := MakeBlockService(config, ledger1, net1, "{genesisID}")
-	bs2 := MakeBlockService(config, ledger2, net2, "{genesisID}")
+	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
+	bs2 := MakeBlockService(log, config, ledger2, net2, "{genesisID}")
 
 	nodeA := &basicRPCNode{}
 	nodeB := &basicRPCNode{}
@@ -145,7 +148,7 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	client := http.Client{}
 
 	ctx := context.Background()
- 	parsedURL.Path = FormatBlockQuery(uint64(2), parsedURL.Path, net1)
+	parsedURL.Path = FormatBlockQuery(uint64(2), parsedURL.Path, net1)
 	blockURL := parsedURL.String()
 	request, err := http.NewRequest("GET", blockURL, nil)
 	require.NoError(t, err)
@@ -159,9 +162,10 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	require.Equal(t, http.StatusOK, response.StatusCode)
 }
 
-
 // TestRedirectBasic tests the case when the block service redirects the request to elsewhere
 func TestRedirectFallbackEndpoints(t *testing.T) {
+	log := logging.TestingLog(t)
+
 	ledger1 := makeLedger(t, "l1")
 	defer ledger1.Close()
 	ledger2 := makeLedger(t, "l2")
@@ -172,18 +176,18 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 	net2 := &httpTestPeerSource{}
 
 	nodeA := &basicRPCNode{}
-	nodeB := &basicRPCNode{}	
+	nodeB := &basicRPCNode{}
 	nodeA.start()
 	defer nodeA.stop()
 	nodeB.start()
 	defer nodeB.stop()
-	
+
 	config := config.GetDefaultLocal()
 	// Set the first to a bad address, the second to self, and the third to the one that has the block.
-	// If RR is right, should succeed. 
-	config.BlockServiceCustomFallbackEndpoints=fmt.Sprintf("://badaddress,%s,%s", nodeA.rootURL(), nodeB.rootURL())
-	bs1 := MakeBlockService(config, ledger1, net1, "{genesisID}")
-	bs2 := MakeBlockService(config, ledger2, net2, "{genesisID}")
+	// If RR is right, should succeed.
+	config.BlockServiceCustomFallbackEndpoints = fmt.Sprintf("://badaddress,%s,%s", nodeA.rootURL(), nodeB.rootURL())
+	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
+	bs2 := MakeBlockService(log, config, ledger2, net2, "{genesisID}")
 
 	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
 	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
@@ -212,6 +216,8 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 // - the case when the peer is not a valid http peer
 // - the case when the block service keeps redirecting and cannot get a block
 func TestRedirectExceptions(t *testing.T) {
+	log := logging.TestingLog(t)
+
 	ledger1 := makeLedger(t, "l1")
 	defer ledger1.Close()
 	addBlock(t, ledger1)
@@ -219,7 +225,7 @@ func TestRedirectExceptions(t *testing.T) {
 	net1 := &httpTestPeerSource{}
 
 	config := config.GetDefaultLocal()
-	bs1 := MakeBlockService(config, ledger1, net1, "{genesisID}")
+	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
 
 	nodeA := &basicRPCNode{}
 
@@ -247,7 +253,7 @@ func TestRedirectExceptions(t *testing.T) {
 	response, err := client.Do(request)
 	require.NoError(t, err)
 	require.Equal(t, response.StatusCode, http.StatusNotFound)
-	
+
 	net1.addPeer(nodeA.rootURL())
 	_, err = client.Do(request)
 	require.Error(t, err)

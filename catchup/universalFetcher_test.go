@@ -47,7 +47,7 @@ func TestUGetBlockWs(t *testing.T) {
 	net := &httpTestPeerSource{}
 
 	up := makeTestUnicastPeer(net, t)
-	ls := rpcs.MakeBlockService(blockServiceConfig, ledger, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 	ls.Start()
 
 	fetcher := makeUniversalBlockFetcher(logging.TestingLog(t), net, cfg)
@@ -87,7 +87,7 @@ func TestUGetBlockHttp(t *testing.T) {
 	blockServiceConfig.EnableBlockServiceFallbackToArchiver = false
 
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(blockServiceConfig, ledger, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
