@@ -34,7 +34,6 @@ import (
 func TestUGetBlockWs(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
-	cfg.EnableCatchupFromArchiveServers = true
 
 	ledger, next, b, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
@@ -48,7 +47,7 @@ func TestUGetBlockWs(t *testing.T) {
 	net := &httpTestPeerSource{}
 
 	up := makeTestUnicastPeer(net, t)
-	ls := rpcs.MakeBlockService(blockServiceConfig, ledger, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 	ls.Start()
 
 	fetcher := makeUniversalBlockFetcher(logging.TestingLog(t), net, cfg)
@@ -76,7 +75,6 @@ func TestUGetBlockWs(t *testing.T) {
 func TestUGetBlockHttp(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
-	cfg.EnableCatchupFromArchiveServers = true
 
 	ledger, next, b, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
@@ -86,9 +84,10 @@ func TestUGetBlockHttp(t *testing.T) {
 
 	blockServiceConfig := config.GetDefaultLocal()
 	blockServiceConfig.EnableBlockService = true
+	blockServiceConfig.EnableBlockServiceFallbackToArchiver = false
 
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(blockServiceConfig, ledger, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
