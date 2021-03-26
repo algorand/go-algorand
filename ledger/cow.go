@@ -200,7 +200,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 		lookupParent: cb,
 		commitParent: cb,
 		proto:        cb.proto,
-		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.CompactCertNext),
+		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 }
