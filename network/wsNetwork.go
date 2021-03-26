@@ -598,6 +598,17 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 	return outPeers
 }
 
+// find the max value across the given uint64 numbers.
+func max(numbers ...uint64) (maxNum uint64) {
+	maxNum = 0 // this is the lowest uint64 value.
+	for _, num := range numbers {
+		if num > maxNum {
+			maxNum = num
+		}
+	}
+	return
+}
+
 func (wn *WebsocketNetwork) setup() {
 	var preferredResolver dnssec.ResolverIf
 	if wn.config.DNSSecurityRelayAddrEnforced() {
@@ -626,14 +637,18 @@ func (wn *WebsocketNetwork) setup() {
 	wn.server.MaxHeaderBytes = httpServerMaxHeaderBytes
 	wn.ctx, wn.ctxCancel = context.WithCancel(context.Background())
 	wn.relayMessages = wn.config.NetAddress != "" || wn.config.ForceRelayMessages
-	// roughly estimate the number of messages that could be sent over the lifespan of a single round.
-	wn.outgoingMessagesBufferSize = int(config.Consensus[protocol.ConsensusCurrentVersion].NumProposers*2 +
-		config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].CertCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].NextCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].LateCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].RedoCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize)
+	// roughly estimate the number of messages that could be seen at any given moment.
+	// For the late/redo/down committee, which happen in parallel, we need to allocate
+	// extra space there.
+	wn.outgoingMessagesBufferSize = int(
+		max(config.Consensus[protocol.ConsensusCurrentVersion].NumProposers,
+			config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize,
+			config.Consensus[protocol.ConsensusCurrentVersion].CertCommitteeSize,
+			config.Consensus[protocol.ConsensusCurrentVersion].NextCommitteeSize) +
+			max(config.Consensus[protocol.ConsensusCurrentVersion].LateCommitteeSize,
+				config.Consensus[protocol.ConsensusCurrentVersion].RedoCommitteeSize,
+				config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize),
+	)
 
 	wn.broadcastQueueHighPrio = make(chan broadcastRequest, wn.outgoingMessagesBufferSize)
 	wn.broadcastQueueBulk = make(chan broadcastRequest, 100)
