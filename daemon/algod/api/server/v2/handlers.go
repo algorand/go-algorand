@@ -183,6 +183,17 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
+// Create a speculation context starting at the given block.
+// (POST /v2/blocks/{round}/speculate)
+func (v2 *Handlers) CreateSpeculation(ctx echo.Context, round uint64) error {
+	//	ledger := v2.Node.Ledger()
+	//	basics.Round(round),
+	return ctx.JSON(http.StatusOK, generated.SpeculationResponse{
+		Base:  round,
+		Token: "6f45b",
+	})
+}
+
 // GetProof generates a Merkle proof for a transaction in a block.
 // (GET /v2/blocks/{round}/transactions/{txid}/proof)
 func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params generated.GetProofParams) error {
@@ -334,7 +345,7 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 
 // RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
-func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
+func (v2 *Handlers) RawTransaction(ctx echo.Context, params generated.RawTransactionParams) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -673,8 +684,8 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 
 // GetApplicationByID returns application information by app idx.
 // (GET /v2/applications/{application-id})
-func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) error {
-	appIdx := basics.AppIndex(applicationID)
+func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationId uint64, params generated.GetApplicationByIDParams) error {
+	appIdx := basics.AppIndex(applicationId)
 	ledger := v2.Node.Ledger()
 	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
 	if err != nil {
@@ -701,8 +712,8 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 
 // GetAssetByID returns application information by app idx.
 // (GET /v2/assets/{asset-id})
-func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
-	assetIdx := basics.AssetIndex(assetID)
+func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetId uint64, params generated.GetAssetByIDParams) error {
+	assetIdx := basics.AssetIndex(assetId)
 	ledger := v2.Node.Ledger()
 	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
 	if err != nil {

@@ -416,6 +416,9 @@ type RoundNumber uint64
 // SigType defines model for sig-type.
 type SigType string
 
+// Speculation defines model for speculation.
+type Speculation string
+
 // TxId defines model for tx-id.
 type TxId string
 
@@ -593,6 +596,16 @@ type ProofResponse struct {
 	Stibhash []byte `json:"stibhash"`
 }
 
+// SpeculationResponse defines model for SpeculationResponse.
+type SpeculationResponse struct {
+
+	// The round at which speculation begins
+	Base uint64 `json:"base"`
+
+	// The persistent token by which the speculation can be referenced
+	Token string `json:"token"`
+}
+
 // SupplyResponse defines model for SupplyResponse.
 type SupplyResponse struct {
 
@@ -639,6 +652,9 @@ type VersionsResponse Version
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
 
+	// The speculative context in which to perform the query or operation.
+	Speculation *string `json:"speculation,omitempty"`
+
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
 }
@@ -651,6 +667,20 @@ type GetPendingTransactionsByAddressParams struct {
 
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
+}
+
+// GetApplicationByIDParams defines parameters for GetApplicationByID.
+type GetApplicationByIDParams struct {
+
+	// The speculative context in which to perform the query or operation.
+	Speculation *string `json:"speculation,omitempty"`
+}
+
+// GetAssetByIDParams defines parameters for GetAssetByID.
+type GetAssetByIDParams struct {
+
+	// The speculative context in which to perform the query or operation.
+	Speculation *string `json:"speculation,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.
@@ -669,6 +699,13 @@ type GetProofParams struct {
 
 // TealDryrunJSONBody defines parameters for TealDryrun.
 type TealDryrunJSONBody DryrunRequest
+
+// RawTransactionParams defines parameters for RawTransaction.
+type RawTransactionParams struct {
+
+	// The speculative context in which to perform the query or operation.
+	Speculation *string `json:"speculation,omitempty"`
+}
 
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
 type GetPendingTransactionsParams struct {

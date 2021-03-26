@@ -165,6 +165,9 @@
             "required": true
           },
           {
+            "$ref": "#/parameters/speculation"
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -194,24 +197,7 @@
             "description": "Unknown Error"
           }
         }
-      },
-      "parameters": [
-        {
-          "type": "string",
-          "name": "address",
-          "in": "path",
-          "required": true
-        },
-        {
-          "enum": [
-            "json",
-            "msgpack"
-          ],
-          "type": "string",
-          "name": "format",
-          "in": "query"
-        }
-      ]
+      }
     },
     "/v2/accounts/{address}/transactions/pending": {
       "get": {
@@ -357,6 +343,58 @@
           "in": "query"
         }
       ]
+    },
+    "/v2/blocks/{round}/speculation": {
+      "tags": [
+        "private"
+      ],
+      "post": {
+        "produces": ["application/json"],
+        "summary": "Create a speculation context starting at the given block.",
+        "operationId": "CreateSpeculation",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to begin speculation.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/SpeculationResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "None existing block ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
     },
     "/v2/blocks/{round}/transactions/{txid}/proof": {
       "get": {
@@ -662,6 +700,9 @@
               "type": "string",
               "format": "binary"
             }
+          },
+          {
+            "$ref": "#/parameters/speculation"
           }
         ],
         "responses": {
@@ -863,6 +904,9 @@
             "name": "application-id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/speculation"
           }
         ],
         "responses": {
@@ -898,15 +942,7 @@
             "description": "Unknown Error"
           }
         }
-      },
-      "parameters": [
-        {
-          "type": "integer",
-          "name": "application-id",
-          "in": "path",
-          "required": true
       }
-      ]
     },
     "/v2/assets/{asset-id}": {
       "get": {
@@ -926,6 +962,9 @@
             "name": "asset-id",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/speculation"
           }
         ],
         "responses": {
@@ -961,15 +1000,7 @@
             "description": "Unknown Error"
           }
         }
-      },
-      "parameters": [
-        {
-          "type": "integer",
-          "name": "asset-id",
-          "in": "path",
-          "required": true
       }
-      ]
     },
     "/v2/teal/compile": {
       "post": {
@@ -2037,6 +2068,12 @@
       "name": "sig-type",
       "in": "query"
     },
+    "speculation": {
+      "type": "string",
+      "description": "The speculative context in which to perform the query or operation.",
+      "name": "speculation",
+      "in": "query"
+    },
     "tx-id": {
       "type": "string",
       "x-algorand-format": "Address",
@@ -2082,6 +2119,24 @@
             "description": "Optional certificate object. This is only included when the format is set to message pack.",
             "type": "object",
             "x-algorand-format": "BlockCertificate"
+          }
+        }
+      }
+    },
+    "SpeculationResponse": {
+      "description": "Speculation information",
+      "schema": {
+        "description": "Specifies the base round and token for speculation execution.",
+        "type": "object",
+        "required": ["base", "token"],
+        "properties": {
+          "base": {
+            "description": "The round at which speculation begins",
+            "type": "integer"
+          },
+          "token": {
+            "description": "The persistent token by which the speculation can be referenced",
+            "type": "string"
           }
         }
       }

@@ -194,6 +194,14 @@
           "type": "string"
         }
       },
+      "speculation": {
+        "description": "The speculative context in which to perform the query or operation.",
+        "in": "query",
+        "name": "speculation",
+        "schema": {
+          "type": "string"
+        }
+      },
       "tx-id": {
         "description": "Lookup the specific transaction by ID.",
         "in": "query",
@@ -603,6 +611,31 @@
           }
         },
         "description": "Proof of transaction in a block."
+      },
+      "SpeculationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "description": "Specifies the base round and token for speculation execution.",
+              "properties": {
+                "base": {
+                  "description": "The round at which speculation begins",
+                  "type": "integer"
+                },
+                "token": {
+                  "description": "The persistent token by which the speculation can be referenced",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "base",
+                "token"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Speculation information"
       },
       "SupplyResponse": {
         "content": {
@@ -1503,6 +1536,24 @@
         "operationId": "AccountInformation",
         "parameters": [
           {
+            "description": "An account public key",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The speculative context in which to perform the query or operation.",
+            "in": "query",
+            "name": "speculation",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "Configures whether the response object is JSON or MessagePack encoded.",
             "in": "query",
             "name": "format",
@@ -1511,16 +1562,6 @@
                 "json",
                 "msgpack"
               ],
-              "type": "string"
-            }
-          },
-          {
-            "description": "An account public key",
-            "in": "path",
-            "name": "address",
-            "required": true,
-            "schema": {
-              "pattern": "[A-Z0-9]{58}",
               "type": "string"
             }
           }
@@ -1766,6 +1807,14 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "description": "The speculative context in which to perform the query or operation.",
+            "in": "query",
+            "name": "speculation",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1839,6 +1888,14 @@
             "required": true,
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "description": "The speculative context in which to perform the query or operation.",
+            "in": "query",
+            "name": "speculation",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -2044,6 +2101,95 @@
           }
         },
         "summary": "Get the block for the given round."
+      }
+    },
+    "/v2/blocks/{round}/speculation": {
+      "post": {
+        "operationId": "CreateSpeculation",
+        "parameters": [
+          {
+            "description": "The round from which to begin speculation.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Specifies the base round and token for speculation execution.",
+                  "properties": {
+                    "base": {
+                      "description": "The round at which speculation begins",
+                      "type": "integer"
+                    },
+                    "token": {
+                      "description": "The persistent token by which the speculation can be referenced",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "base",
+                    "token"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Speculation information"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Non integer number"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "None existing block "
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Create a speculation context starting at the given block."
       }
     },
     "/v2/blocks/{round}/transactions/{txid}/proof": {
@@ -2939,6 +3085,16 @@
     "/v2/transactions": {
       "post": {
         "operationId": "RawTransaction",
+        "parameters": [
+          {
+            "description": "The speculative context in which to perform the query or operation.",
+            "in": "query",
+            "name": "speculation",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/x-binary": {

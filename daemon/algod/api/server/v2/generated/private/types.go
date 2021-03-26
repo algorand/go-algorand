@@ -416,6 +416,9 @@ type RoundNumber uint64
 // SigType defines model for sig-type.
 type SigType string
 
+// Speculation defines model for speculation.
+type Speculation string
+
 // TxId defines model for tx-id.
 type TxId string
 
@@ -591,6 +594,16 @@ type ProofResponse struct {
 
 	// Hash of SignedTxnInBlock for verifying proof.
 	Stibhash []byte `json:"stibhash"`
+}
+
+// SpeculationResponse defines model for SpeculationResponse.
+type SpeculationResponse struct {
+
+	// The round at which speculation begins
+	Base uint64 `json:"base"`
+
+	// The persistent token by which the speculation can be referenced
+	Token string `json:"token"`
 }
 
 // SupplyResponse defines model for SupplyResponse.
