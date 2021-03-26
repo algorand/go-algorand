@@ -161,8 +161,14 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		if err != nil {
 			logging.Base().Warnf("failed to decode payset: %v", err)
 		}
+		if len(payset) != len(msg.Proposal.PaysetDigest) {
+			logging.Base().Warnf("payset mismatch: %v vs %v", len(payset), len(msg.Proposal.PaysetDigest))
+		}
 		for i := range msg.Proposal.Payset {
 			stxn := payset[i].SignedTxn
+			if stxn.MsgIsZero() {
+				logging.Base().Warnf("logging zero transaction")
+			}
 			txnData[i] = protocol.Encode(&stxn)
 			tags[i] = protocol.TxnTag
 		}

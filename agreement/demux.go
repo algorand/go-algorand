@@ -109,13 +109,13 @@ func (d *demux) UpdateEventsQueue(queueName string, queueLength int) {
 
 func ReconstructProposal(net Network, b *bookkeeping.Block, h MessageHandle) error {
 	logging.Base().Infof("len %v", len(b.PaysetDigest))
-	stxnsData, _ := net.LoadMessage(h, b.PaysetDigest)
+	stxnsData, allPresent := net.LoadMessage(h, b.PaysetDigest)
 	if b.Payset == nil {
 		b.Payset = make(transactions.Payset, len(b.PaysetDigest))
 	}
-	//if !allPresent {
-	//	return fmt.Errorf("could not recover txns")
-	//}
+	if !allPresent {
+		logging.Base().Warnf("could not recover txns")
+	}
 
 	for i, stxnData := range stxnsData {
 		if stxnData != nil {
