@@ -17,6 +17,7 @@
 package network
 
 import (
+	"container/list"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -435,7 +436,7 @@ func (wp *wsPeer) readLoop() {
 		}
 
 		if msg.Tag == protocol.ProposalPayloadTag {
-			mt := make(map[crypto.Digest][]byte, len(wp.receiveMsgTracker.store))
+			mt := make(map[crypto.Digest]*list.Element, len(wp.receiveMsgTracker.store))
 			msg.MsgTracker = &mt
 			wp.sendMsgTracker.mu.RLock()
 			for k, v := range wp.sendMsgTracker.store {

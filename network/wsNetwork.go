@@ -18,6 +18,7 @@ package network
 
 import (
 	"container/heap"
+	"container/list"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -225,7 +226,7 @@ type IncomingMessage struct {
 	// messages.
 	processing chan struct{}
 
-	MsgTracker *map[crypto.Digest][]byte
+	MsgTracker *map[crypto.Digest]*list.Element
 }
 
 // Tag is a short string (2 bytes) marking a type of message

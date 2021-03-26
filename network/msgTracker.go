@@ -12,8 +12,13 @@ func msgToTrack(tag protocol.Tag) bool {
 	return tag == protocol.TxnTag
 }
 
+type KeyValue struct {
+	Key crypto.Digest
+	Value []byte
+}
+
 type msgTracker struct {
-	store       map[crypto.Digest][]byte
+	store       map[crypto.Digest]*list.Element
 	orderedMsgs *list.List
 	mu          deadlock.RWMutex
 	limit       int
@@ -21,7 +26,7 @@ type msgTracker struct {
 
 func makeTracker(limit int) *msgTracker {
 	tracker := msgTracker{}
-	tracker.store = make(map[crypto.Digest][]byte)
+	tracker.store = make(map[crypto.Digest]*list.Element)
 	tracker.orderedMsgs = list.New()
 	tracker.limit = limit
 	return &tracker
@@ -51,11 +56,11 @@ func (tracker *msgTracker) LoadMessage(keys []crypto.Digest) ([][]byte, bool) {
 	values := make([][]byte, len(keys), len(keys))
 	for i, k := range keys {
 		var found bool
-		values[i], found = tracker.store[k]
+		element, found := tracker.store[k]
 		if !found {
 			ok = false
 		}
-
+		values[i] = element.Value.(KeyValue).Value
 	}
 	return values, ok
 }
@@ -68,12 +73,17 @@ func (tracker *msgTracker) remember(msgHash crypto.Digest) {
 }
 
 func (tracker *msgTracker) insert(key crypto.Digest, msg []byte) {
-	tracker.store[key] = msg
-	tracker.orderedMsgs.PushBack(key)
-	for tracker.orderedMsgs.Len() > tracker.limit {
-		key := tracker.orderedMsgs.Front()
-		delete(tracker.store, key.Value.(crypto.Digest))
-		tracker.orderedMsgs.Remove(key)
+	element, found := tracker.store[key]
+	if found {
+		tracker.orderedMsgs.MoveToBack(element)
+	} else {
+		element := tracker.orderedMsgs.PushBack(KeyValue{key, msg})
+		tracker.store[key] = element
+		for tracker.orderedMsgs.Len() > tracker.limit {
+			key := tracker.orderedMsgs.Front()
+			delete(tracker.store, key.Value.(KeyValue).Key)
+			tracker.orderedMsgs.Remove(key)
+		}
 	}
 }
 
