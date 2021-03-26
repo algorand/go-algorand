@@ -195,12 +195,12 @@ func (cb *roundCowState) setCompactCertNext(rnd basics.Round) {
 	cb.mods.CompactCertNext = rnd
 }
 
-func (cb *roundCowState) child() *roundCowState {
+func (cb *roundCowState) child(hint int) *roundCowState {
 	return &roundCowState{
 		lookupParent: cb,
 		commitParent: cb,
 		proto:        cb.proto,
-		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, 1),
+		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.CompactCertNext),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 }
