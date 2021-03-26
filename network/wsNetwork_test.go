@@ -771,7 +771,7 @@ func TestDupFilter(t *testing.T) {
 	waitReady(t, netC, readyTimeout.C)
 	t.Log("c ready")
 
-	// TODO: this test has two halves that exercise inbound de-dup and outbound non-send due to recieved hash. But it doesn't properly _test_ them as it doesn't measure _why_ it receives each message exactly once. The second half below could actualy be because of the same inbound de-dup as this first half. You can see the actions of either in metrics.
+	// TODO: this test has two halves that exercise inbound de-dup and outbound non-send due to received hash. But it doesn't properly _test_ them as it doesn't measure _why_ it receives each message exactly once. The second half below could actualy be because of the same inbound de-dup as this first half. You can see the actions of either in metrics.
 	// algod_network_duplicate_message_received_total{} 2
 	// algod_outgoing_network_message_filtered_out_total{} 2
 	// Maybe we should just .Set(0) those counters and use them in this test?
