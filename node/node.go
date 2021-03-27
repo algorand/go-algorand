@@ -1070,7 +1070,7 @@ func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) error {
 		}
 	}
 	if count > 0 {
-		return fmt.Errorf("failed to %v txns", count)
+		return fmt.Errorf("%v txns missing from %v", count, len(block.PaysetDigest))
 	}
 	return nil
 }

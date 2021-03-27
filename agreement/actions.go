@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
@@ -170,6 +171,9 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 				logging.Base().Warnf("logging zero transaction")
 			}
 			txnData[i] = protocol.Encode(&stxn)
+			if crypto.Hash(txnData[i]) != msg.Proposal.PaysetDigest[i] {
+				logging.Base().Warnf("digest mismatch")
+			}
 			tags[i] = protocol.TxnTag
 		}
 		payload := transmittedPayload{
