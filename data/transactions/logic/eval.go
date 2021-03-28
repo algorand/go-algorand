@@ -1218,7 +1218,7 @@ func opDig(cx *evalContext) {
 	depth := int(uint(cx.program[cx.pc+1]))
 	idx := len(cx.stack) - 1 - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
-	// so we can't expect out stack to be prechecked.
+	// so we can't expect our stack to be prechecked.
 	if idx < 0 {
 		cx.err = fmt.Errorf("dig %d with stack size = %d", depth, len(cx.stack))
 		return
@@ -1924,11 +1924,14 @@ func opSetBit(cx *evalContext) {
 		// we're thinking of the bits in the byte itself as
 		// being big endian. So this looks "reversed"
 		mask := byte(0x80) >> bitIdx
+		// Copy to avoid modifying shared slice
+		scratch := append([]byte(nil), target.Bytes...)
 		if bit == uint64(1) {
-			target.Bytes[byteIdx] |= mask
+			scratch[byteIdx] |= mask
 		} else {
-			target.Bytes[byteIdx] &^= mask
+			scratch[byteIdx] &^= mask
 		}
+		cx.stack[pprev].Bytes = scratch
 	}
 	cx.stack = cx.stack[:prev]
 }
@@ -1961,6 +1964,8 @@ func opSetByte(cx *evalContext) {
 		cx.err = errors.New("setbyte index > byte length")
 		return
 	}
+	// Copy to avoid modifying shared slice
+	cx.stack[pprev].Bytes = append([]byte(nil), cx.stack[pprev].Bytes...)
 	cx.stack[pprev].Bytes[cx.stack[prev].Uint] = byte(cx.stack[last].Uint)
 	cx.stack = cx.stack[:prev]
 }

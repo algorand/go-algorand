@@ -98,7 +98,7 @@ func BenchmarkMakeStateDelta(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		MakeStateDelta(nil, 0, hint)
+		MakeStateDelta(nil, 0, hint, 0)
 	}
 }
 

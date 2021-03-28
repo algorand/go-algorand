@@ -105,7 +105,7 @@ func TestCowBalance(t *testing.T) {
 	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
 	checkCow(t, c0, accts0)
 
-	c1 := c0.child()
+	c1 := c0.child(0)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts0)
 
@@ -114,7 +114,7 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)
 
-	c2 := c1.child()
+	c2 := c1.child(0)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)
 	checkCow(t, c2, accts1)

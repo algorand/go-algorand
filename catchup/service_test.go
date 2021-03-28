@@ -140,7 +140,7 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(blockServiceConfig, remote, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
@@ -173,7 +173,7 @@ func TestPeriodicSync(t *testing.T) {
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(blockServiceConfig, remote, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
@@ -226,7 +226,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(blockServiceConfig, remote, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
@@ -285,7 +285,7 @@ func TestAbruptWrites(t *testing.T) {
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(blockServiceConfig, remote, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
@@ -341,7 +341,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(blockServiceConfig, remote, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
@@ -394,7 +394,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(blockServiceConfig, remote, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
@@ -541,7 +541,7 @@ func helperTestOnSwitchToUnSupportedProtocol(
 
 	// Create a network and block service
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(config, remote, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), config, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
@@ -729,7 +729,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(blockServiceConfig, remote, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)

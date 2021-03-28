@@ -58,7 +58,7 @@ func TestTxTailCheckdup(t *testing.T) {
 		txleases := make(map[ledgercore.Txlease]basics.Round, 1)
 		txleases[ledgercore.Txlease{Sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), Lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}] = rnd + leasevalidity
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 1)
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 1, 0)
 		delta.Txids = txids
 		delta.Txleases = txleases
 		tail.newBlock(blk, delta)

@@ -289,6 +289,42 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 	}
 }
 
+// Like a basic test, but really we just want to have SetPeerData()/GetPeerData()
+func TestWebsocketPeerData(t *testing.T) {
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+	counter := newMessageCounter(t, 2)
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	t.Log("a ready")
+	waitReady(t, netB, readyTimeout.C)
+	t.Log("b ready")
+
+	require.Equal(t, 1, len(netA.peers))
+	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	peerB := netA.peers[0]
+
+	require.Equal(t, nil, netA.GetPeerData(peerB, "not there"))
+	netA.SetPeerData(peerB, "foo", "bar")
+	require.Equal(t, "bar", netA.GetPeerData(peerB, "foo"))
+	netA.SetPeerData(peerB, "foo", "qux")
+	require.Equal(t, "qux", netA.GetPeerData(peerB, "foo"))
+	netA.SetPeerData(peerB, "foo", nil)
+	require.Equal(t, nil, netA.GetPeerData(peerB, "foo"))
+}
+
 // Set up two nodes, test that a.Broadcast is received by B, when B has no address.
 func TestWebsocketNetworkNoAddress(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
@@ -735,7 +771,7 @@ func TestDupFilter(t *testing.T) {
 	waitReady(t, netC, readyTimeout.C)
 	t.Log("c ready")
 
-	// TODO: this test has two halves that exercise inbound de-dup and outbound non-send due to recieved hash. But it doesn't properly _test_ them as it doesn't measure _why_ it receives each message exactly once. The second half below could actualy be because of the same inbound de-dup as this first half. You can see the actions of either in metrics.
+	// TODO: this test has two halves that exercise inbound de-dup and outbound non-send due to received hash. But it doesn't properly _test_ them as it doesn't measure _why_ it receives each message exactly once. The second half below could actualy be because of the same inbound de-dup as this first half. You can see the actions of either in metrics.
 	// algod_network_duplicate_message_received_total{} 2
 	// algod_outgoing_network_message_filtered_out_total{} 2
 	// Maybe we should just .Set(0) those counters and use them in this test?

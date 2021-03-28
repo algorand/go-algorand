@@ -47,7 +47,7 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 	
 	// Create a network and block service
 	net := &httpTestPeerSource{}
-	ls := rpcs.MakeBlockService(config.GetDefaultLocal(), remote, net, "test genesisID")
+	ls := rpcs.MakeBlockService(logging.TestingLog(b), config.GetDefaultLocal(), remote, net, "test genesisID")
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
 	nodeA.start()
@@ -60,11 +60,11 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		inMem := true
-		local, err := data.LoadLedger(logging.Base(), b.Name()+"empty"+strconv.Itoa(i), inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
+		local, err := data.LoadLedger(logging.TestingLog(b), b.Name()+"empty"+strconv.Itoa(i), inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
 		require.NoError(b, err)
 
 		// Make Service
-		syncer := MakeService(logging.Base(), defaultConfig, net, local, new(mockedAuthenticator), nil)
+		syncer := MakeService(logging.TestingLog(b), defaultConfig, net, local, new(mockedAuthenticator), nil)
 		b.StartTimer()
 		syncer.Start()
 		for w := 0; w < 1000; w++ {
@@ -146,10 +146,10 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	emptyLedger, err = data.LoadLedger(logging.Base(), t.Name()+"empty", inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
+	emptyLedger, err = data.LoadLedger(logging.TestingLog(t), t.Name()+"empty", inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
 	require.NoError(t, err)
 
-	ledger, err = datatest.FabricateLedger(logging.Base(), t.Name(), parts, genesisBalances, emptyLedger.LastRound()+basics.Round(numBlocks))
+	ledger, err = datatest.FabricateLedger(logging.TestingLog(t), t.Name(), parts, genesisBalances, emptyLedger.LastRound()+basics.Round(numBlocks))
 	require.NoError(t, err)
 	require.Equal(t, ledger.LastRound(), emptyLedger.LastRound()+basics.Round(numBlocks))
 	return ledger, emptyLedger, release, genesisBalances
