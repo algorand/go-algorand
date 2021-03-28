@@ -54,7 +54,7 @@ func TestMetricGauge(t *testing.T) {
 		time.Sleep(test.sampleRate / 2)
 	}
 
-	// wait two reporting cycles to ensure we recieved all the messages.
+	// wait two reporting cycles to ensure we received all the messages.
 	time.Sleep(test.sampleRate * 2)
 
 	metricService.Shutdown()

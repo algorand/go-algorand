@@ -233,7 +233,7 @@ func (pm *connectionPerformanceMonitor) notifyPresync(msg *IncomingMessage) {
 		return
 	}
 	pm.lastIncomingMsgTime = msg.Received
-	// otherwise, once we recieved a message from each of the peers, move to the sync stage.
+	// otherwise, once we received a message from each of the peers, move to the sync stage.
 	pm.advanceStage(pmStageSync, msg.Received)
 }
 

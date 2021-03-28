@@ -97,7 +97,7 @@ type modsData struct {
 
 func getCow(creatables []modsData) *roundCowState {
 	cs := &roundCowState{
-		mods:  ledgercore.MakeStateDelta(&bookkeeping.BlockHeader{}, 0, 2),
+		mods:  ledgercore.MakeStateDelta(&bookkeeping.BlockHeader{}, 0, 2, 0),
 		proto: config.Consensus[protocol.ConsensusCurrentVersion],
 	}
 	for _, e := range creatables {
@@ -305,7 +305,7 @@ func TestCowStorage(t *testing.T) {
 		// Make a child
 		if childDepth < maxChildDepth && rand.Float32() < 0.1 {
 			lastParent = cow
-			cow = cow.child()
+			cow = cow.child(1)
 			childDepth++
 		}
 

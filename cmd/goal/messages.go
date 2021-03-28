@@ -156,6 +156,9 @@ const (
 	tealsignTooManyArg    = "--set-lsig-arg-idx too large, maximum of %d arguments"
 	tealsignInfoWroteSig  = "Wrote signature for %s to LSig.Args[%d]"
 
+	tealLogicSigSize = "%s: logicsig program size too large: %d > %d"
+	tealAppSize      = "%s: app program size too large: %d > %d"
+
 	// Wallet
 	infoRecoveryPrompt           = "Please type your recovery mnemonic below, and hit return when you are done: "
 	infoChoosePasswordPrompt     = "Please choose a password for wallet '%s': "
