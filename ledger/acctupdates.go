@@ -651,7 +651,6 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 			au.committedOffset <- dc
 		}
 	}()
-
 	retRound = basics.Round(0)
 	var pendingDeltas int
 
@@ -717,6 +716,8 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	if au.versions[1] != au.versions[offset] {
 		// find the tip point.
 		tipPoint := sort.Search(int(offset), func(i int) bool {
+			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
+			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
 			return au.versions[1] != au.versions[1+i]
 		})
 		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
@@ -2002,7 +2003,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		au.log.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 		return
 	}
-	version := au.versions[1]
+	consensusVersion := au.versions[1]
 
 	var committedRoundDigest crypto.Digest
 
@@ -2062,7 +2063,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
-		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[version])
+		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
 		if err != nil {
 			return err
 		}
