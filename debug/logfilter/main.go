@@ -88,5 +88,8 @@ func main() {
 		currentTest.outputBuffer += "\r\n" + line
 		tests[currentTestName] = currentTest
 	}
-
+	scannerErr := scanner.Err()
+	if scannerErr != nil {
+		os.Exit(1)
+	}
 }

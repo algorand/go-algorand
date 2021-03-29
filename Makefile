@@ -210,11 +210,11 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
+	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s | logfilter
 
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
-		go test $(GOTAGS) -timeout 2500s -race $$PACKAGE_DIRECTORY; \
+		go test $(GOTAGS) -timeout 2500s -race $$PACKAGE_DIRECTORY | logfilter; \
 	done
 
 shorttest: build-race $(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
