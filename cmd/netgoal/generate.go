@@ -44,6 +44,12 @@ var walletsToGenerate int
 var nodeTemplatePath string
 var nonParticipatingNodeTemplatePath string
 var relayTemplatePath string
+var sourceWallet string
+var rounds int
+var roundTrxCount int
+var accountsCount int
+var assetsCount int
+var applicationCount int
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
@@ -61,6 +67,12 @@ func init() {
 	generateCmd.Flags().StringVarP(&nodeTemplatePath, "node-template", "", "", "json for one node")
 	generateCmd.Flags().StringVarP(&nonParticipatingNodeTemplatePath, "non-participating-node-template", "", "", "json for non participating node")
 	generateCmd.Flags().StringVarP(&relayTemplatePath, "relay-template", "", "", "json for a relay node")
+	generateCmd.Flags().StringVarP(&sourceWallet, "wallet-name", "", "", "Source wallet name")
+	generateCmd.Flags().IntVarP(&rounds, "rounds", "", 5000, "Number of rounds")
+	generateCmd.Flags().IntVarP(&roundTrxCount, "ntrx", "", 1000, "Transaction count")
+	generateCmd.Flags().IntVarP(&accountsCount, "naccounts", "", 100000, "Account count")
+	generateCmd.Flags().IntVarP(&assetsCount, "nassets", "", 100000, "Asset count")
+	generateCmd.Flags().IntVarP(&applicationCount, "napps", "", 100000, "Application Count")
 
 	longParts := make([]string, len(generateTemplateLines)+1)
 	longParts[0] = generateCmd.Long
@@ -75,6 +87,7 @@ var generateTemplateLines = []string{
 	"otwt => OneThousandWallets network template",
 	"otwg => OneThousandWallets genesis data",
 	"ohwg => OneHundredWallets genesis data",
+	"loadingFile => create accounts database file according to -wallet-name -rounds -ntrxs -naccts -nassets -napps options",
 }
 
 var generateCmd = &cobra.Command{
@@ -157,6 +170,30 @@ template modes for -t:`,
 			err = generateWalletGenesis(outputFilename, 1000, 0)
 		case "ohwg":
 			err = generateWalletGenesis(outputFilename, 100, 0)
+		case "loadingfile":
+			if sourceWallet == "" {
+				reportErrorf("must specify source wallet name with -wname.")
+			}
+			if rounds < 0 {
+				reportErrorf("must specify number of rounds with -rounds")
+			}
+			if roundTrxCount < 0 {
+				reportErrorf("must specify round transaction count with -wname.")
+			}
+
+			if accountsCount < 0 {
+				reportErrorf("must specify number of accounts with -naccts.")
+			}
+
+			if assetsCount < 0 {
+				reportErrorf("must specify number of assets with -nassets.")
+			}
+
+			if applicationCount < 0 {
+				reportErrorf("must specify number of applications with -napps.")
+			}
+
+			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTrxCount, accountsCount, assetsCount, applicationCount)
 		default:
 			reportInfoln("Please specify a valid template name.\nSupported templates are:")
 			for _, line := range generateTemplateLines {
@@ -469,6 +506,30 @@ func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
 
 		enc := codecs.NewFormattedJSONEncoder(f)
 		err = enc.Encode(genesisData)
+	}
+	return err
+}
+
+func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTrxCount, accountsCount, assetsCount, applicationCount int) error {
+
+	var data = loadingFile{
+		NumRounds:                 rounds,
+		RoundTransactionsCount:    roundTrxCount,
+		GeneratedAccountsCount:    accountsCount,
+		GeneratedAssetsCount:      assetsCount,
+		GeneratedApplicationCount: applicationCount,
+		SourceWalletName:          sourceWallet,
+	}
+	return saveLoadingFileDataToDisk(data, templateFilename)
+}
+
+func saveLoadingFileDataToDisk(data loadingFile, filename string) error {
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err == nil {
+		defer f.Close()
+
+		enc := codecs.NewFormattedJSONEncoder(f)
+		err = enc.Encode(data)
 	}
 	return err
 }
