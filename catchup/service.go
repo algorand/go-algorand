@@ -559,7 +559,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		peer, getPeerErr := peerSelector.GetNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
-			s.net.RequestConnectOutgoing(true, s.ctx.Done())			
+			s.net.RequestConnectOutgoing(true, s.ctx.Done())
 			continue
 		}
 
@@ -657,34 +657,64 @@ func (s *Service) handleUnsupportedRound(nextUnsupportedRound basics.Round) {
 
 func (s *Service) createPeerSelector(pipelineFetch bool) *peerSelector {
 	var peerClasses []peerClass
-	if pipelineFetch {
-		if s.cfg.NetAddress != "" { // Relay node
-			peerClasses = []peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers},
-				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-				{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn},
+	if s.cfg.EnableCatchupFromArchiveServers {
+		if pipelineFetch {
+			if s.cfg.NetAddress != "" { // Relay node
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
+					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn},
+				}
+			} else {
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
+				}
 			}
 		} else {
-			peerClasses = []peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedOut},
-				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
+			if s.cfg.NetAddress != "" { // Relay node
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
+					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookArchivers},
+				}
+			} else {
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivers},
+				}
 			}
 		}
 	} else {
-		if s.cfg.NetAddress != "" { // Relay node
-			peerClasses = []peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
-				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-				{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookArchivers},
+		if pipelineFetch {
+			if s.cfg.NetAddress != "" { // Relay node
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedIn},
+				}
+			} else {
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+				}
 			}
 		} else {
-			peerClasses = []peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-				{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivers},
+			if s.cfg.NetAddress != "" { // Relay node
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
+				}
+			} else {
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+				}
 			}
 		}
 	}

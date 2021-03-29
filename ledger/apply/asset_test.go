@@ -17,6 +17,7 @@
 package apply
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -95,5 +96,21 @@ func TestAssetTransfer(t *testing.T) {
 		require.Equal(t, dstAmount-toSend, ad.AssetClosingAmount)
 		require.Equal(t, total-dstAmount+toSend, addrs[src].Assets[1].Amount)
 		require.Equal(t, dstAmount-toSend, addrs[cls].Assets[1].Amount)
+	}
+}
+
+var benchTotal int = 0
+
+func BenchmarkAssetCloning(b *testing.B) {
+	const numAssets = 800
+	assets := make(map[basics.AssetIndex]basics.AssetHolding, numAssets)
+	for j := 0; j < numAssets; j++ {
+		aidx := basics.AssetIndex(rand.Int63n(100000000))
+		assets[aidx] = basics.AssetHolding{Amount: uint64(aidx)}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		clone := cloneAssetHoldings(assets)
+		benchTotal += len(clone) // make sure the compiler does not optimize out cloneAssetHoldings call
 	}
 }

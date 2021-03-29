@@ -24,6 +24,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -55,7 +56,9 @@ func (ef *ExpectFixture) initialize(t *testing.T) (err error) {
 	}
 	ef.testDataDir = os.Getenv("TESTDATADIR")
 	if ef.testDataDir == "" {
-		ef.testDataDir = os.ExpandEnv("${GOPATH}/src/github.com/algorand/go-algorand/test/testdata")
+		// Default to test/testdata in the source tree being tested
+		_, path, _, _ := runtime.Caller(0)
+		ef.testDataDir = filepath.Join(filepath.Dir(path), "../../testdata")
 	}
 
 	ef.testFilter = os.Getenv("TESTFILTER")
