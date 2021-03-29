@@ -604,15 +604,15 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 		default:
 		}
 
-		//if len(msg.data) > 2 && msgToTrack(protocol.Tag(msg.data[:2])) && wp.receiveMsgTracker.exists(crypto.Hash(msg.data[2:])) {
-		//	numSkippedReceiver++
-		//	continue
-		//}
-
-		if len(msg.data) > 2 && wp.sendMsgTracker.exists(crypto.Hash(msg.data[2:])) {
-			numSkippedSender++
+		if len(msg.data) > 2 && msgToTrack(protocol.Tag(msg.data[:2])) && wp.receiveMsgTracker.exists(crypto.Hash(msg.data[2:])) {
+			numSkippedReceiver++
 			continue
 		}
+
+		//if len(msg.data) > 2 && wp.sendMsgTracker.exists(crypto.Hash(msg.data[2:])) {
+		//	numSkippedSender++
+		//	continue
+		//}
 
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
 			logging.Base().Infof("bad msg: %v", len(msg.data))
