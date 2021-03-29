@@ -127,7 +127,7 @@ type accountUpdates struct {
 	// initAccounts specifies initial account values for database.
 	initAccounts map[basics.Address]basics.AccountData
 
-	// initProto specifies the initial consensus parameters.
+	// initProto specifies the initial consensus parameters at the genesis block.
 	initProto config.ConsensusParams
 
 	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directroy for the catchup files to be generated
@@ -172,9 +172,9 @@ type accountUpdates struct {
 	// appears in creatableDeltas
 	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	// protos stores consensus parameters dbRound and every
-	// round after it; i.e., protos is one longer than deltas.
-	protos []config.ConsensusParams
+	// versions stores consensus version dbRound and every
+	// round after it; i.e., versions is one longer than deltas.
+	versions []protocol.ConsensusVersion
 
 	// totals stores the totals for dbRound and every round after it;
 	// i.e., totals is one longer than deltas.
@@ -655,7 +655,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	retRound = basics.Round(0)
 	var pendingDeltas int
 
-	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
+	lookback := basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
 	if committedRound < lookback {
 		return
 	}
@@ -711,6 +711,17 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	}
 
 	offset = uint64(newBase - au.dbRound)
+
+	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
+	// consensus version.
+	if au.versions[1] != au.versions[offset] {
+		// find the tip point.
+		tipPoint := sort.Search(int(offset)-1, func(i int) bool {
+			return au.versions[1] != au.versions[1+i]
+		})
+		// no need to handle the case of "no found", or tipPoint==int(offset)-1, since we already know that it's there.
+		offset = uint64(tipPoint)
+	}
 
 	// check to see if this is a catchpoint round
 	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
@@ -1134,7 +1145,8 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	if err != nil {
 		return
 	}
-	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
+
+	au.versions = []protocol.ConsensusVersion{hdr.CurrentProtocol}
 	au.deltas = nil
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
@@ -1572,7 +1584,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
 	}
 	au.deltas = append(au.deltas, delta.Accts)
-	au.protos = append(au.protos, proto)
+	au.versions = append(au.versions, blk.CurrentProtocol)
 	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
 	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
@@ -1662,7 +1674,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			return
 		}
 
-		rewardsProto = au.protos[offset]
+		rewardsProto = config.Consensus[au.versions[offset]]
 		rewardsLevel = au.roundTotals[offset].RewardsLevel
 
 		// we're testing the withRewards here and setting the defer function only once, and only if withRewards is true.
@@ -1981,11 +1993,16 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	deltas := make([]ledgercore.AccountDeltas, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset, offset)
 	roundTotals := make([]ledgercore.AccountTotals, offset+1, offset+1)
-	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])
 	copy(roundTotals, au.roundTotals[:offset+1])
-	copy(protos, au.protos[:offset+1])
+
+	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
+	if au.versions[1] != au.versions[offset] {
+		au.log.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
+		return
+	}
+	version := au.versions[1]
 
 	var committedRoundDigest crypto.Digest
 
@@ -2045,7 +2062,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
-		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], protos[1:offset+1])
+		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[version])
 		if err != nil {
 			return err
 		}
@@ -2145,7 +2162,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.deltas = au.deltas[offset:]
 	au.deltasAccum = au.deltasAccum[offset:]
 	au.roundDigest = au.roundDigest[offset:]
-	au.protos = au.protos[offset:]
+	au.versions = au.versions[offset:]
 	au.roundTotals = au.roundTotals[offset:]
 	au.creatableDeltas = au.creatableDeltas[offset:]
 	au.dbRound = newBase
