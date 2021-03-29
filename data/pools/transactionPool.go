@@ -240,7 +240,6 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 		for i, txGroup := range pool.rememberedTxGroups {
 			pool.pendingCounter++
 			txGroup.GroupCounter = pool.pendingCounter
-			txGroup.FirstTransactionID = txGroup.Transactions[0].ID()
 			pool.rememberedTxGroups[i] = txGroup
 			if txGroup.LocallyOriginated {
 				pool.pendingLastestLocal = txGroup.GroupCounter
@@ -436,7 +435,6 @@ func (pool *TransactionPool) ingest(txgroup transactions.SignedTxGroup, params p
 		// since this is the first time the transaction was added to the transaction pool, it would
 		// be a good time now to figure the group's FirstTransactionID and group counter.
 		txgroup.FirstTransactionID = txgroup.Transactions[0].ID()
-		txgroup.GroupCounter = pool.pendingCounter
 	}
 
 	err := pool.addToPendingBlockEvaluator(txgroup, params.recomputing, params.stats)
@@ -445,8 +443,12 @@ func (pool *TransactionPool) ingest(txgroup transactions.SignedTxGroup, params p
 	}
 
 	pool.rememberedTxGroups = append(pool.rememberedTxGroups, txgroup)
-	for _, t := range txgroup.Transactions {
-		pool.rememberedTxids[t.ID()] = t
+	for i, t := range txgroup.Transactions {
+		if i == 0 {
+			pool.rememberedTxids[txgroup.FirstTransactionID] = t
+		} else {
+			pool.rememberedTxids[t.ID()] = t
+		}
 	}
 
 	return nil
