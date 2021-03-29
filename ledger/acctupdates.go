@@ -716,10 +716,10 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	// consensus version.
 	if au.versions[1] != au.versions[offset] {
 		// find the tip point.
-		tipPoint := sort.Search(int(offset)-1, func(i int) bool {
+		tipPoint := sort.Search(int(offset), func(i int) bool {
 			return au.versions[1] != au.versions[1+i]
 		})
-		// no need to handle the case of "no found", or tipPoint==int(offset)-1, since we already know that it's there.
+		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
 		offset = uint64(tipPoint)
 	}
 
