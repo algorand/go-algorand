@@ -377,6 +377,17 @@ type Local struct {
 	// connections that are originating from the local machine. Setting this to "true", allow to create large
 	// local-machine networks that won't trip the incoming connection limit observed by relays.
 	DisableLocalhostConnectionRateLimit bool `version[16]:"true"`
+
+	// BlockServiceCustomFallbackEndpoints is a comma delimited list of endpoints which the block service uses to
+	// redirect the http requests to in case it does not have the round. If it is not specified, will check
+	// EnableBlockServiceFallbackToArchiver.
+	BlockServiceCustomFallbackEndpoints string `version[16]:""`
+
+	// EnableBlockServiceFallbackToArchiver controls whether the block service redirects the http requests to
+	// an archiver or return StatusNotFound (404) when in does not have the requested round, and
+	// BlockServiceCustomFallbackEndpoints is empty.
+	// The archiver is randomly selected, if none is available, will return StatusNotFound (404).
+	EnableBlockServiceFallbackToArchiver bool `version[16]:"true"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
