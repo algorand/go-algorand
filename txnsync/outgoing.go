@@ -59,10 +59,14 @@ func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber u
 	}
 }
 
+// pendingTransactionGroupsSnapshot is used to represent a snapshot of a pending transcation groups along with the latestLocallyOriginatedGroupCounter value.
+// The goal is to ensure we're "capturing"  this only once per `sendMessageLoop` call. In order to do so, we allocate that structure on the stack, and passing
+// a pointer to that structure downstream.
 type pendingTransactionGroupsSnapshot struct {
 	pendingTransactionsGroups           []transactions.SignedTxGroup
 	latestLocallyOriginatedGroupCounter uint64
 }
+
 func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.DeadlineMonitor, peers []*Peer) {
 	if len(peers) == 0 {
 		// no peers - no messages that need to be sent.
@@ -138,7 +142,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		if !s.isRelay {
 			// on non-relay, we need to filter out the non-locally originated messages since we don't want
 			// non-relays to send transcation that they received via the transaction sync back.
-				transactionGroups = s.locallyGeneratedTransactions(pendingTransactions)
+			transactionGroups = s.locallyGeneratedTransactions(pendingTransactions)
 		}
 		var txnGroups []transactions.SignedTxGroup
 		txnGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
