@@ -80,7 +80,9 @@ func TestCompactCerts(t *testing.T) {
 		_, err = node0Client.SendPaymentFromUnencryptedWallet(node0Account, node1Account, minTxnFee, rnd, nil)
 		r.NoError(err)
 
-		fixture.WaitForRound(rnd, 30*time.Second)
+		err = fixture.WaitForRound(rnd, 30*time.Second)
+		r.NoError(err)
+
 		blk, err := libgoal.Block(rnd)
 		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
