@@ -317,6 +317,13 @@ func TestAbruptWrites(t *testing.T) {
 	s.testStart()
 
 	s.sync()
+
+	for try:=0; try < 100; try++ {
+		if remote.LastRound() == local.LastRound() {
+			break
+		}
+		time.Sleep(10*time.Millisecond)
+	}
 	require.Equal(t, remote.LastRound(), local.LastRound())
 }
 
