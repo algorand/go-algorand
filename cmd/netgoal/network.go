@@ -37,6 +37,7 @@ var miscStringStringTokens []string
 
 var networkUseGenesisFiles bool
 var networkIgnoreExistingDir bool
+var bootstrappedLoadingFile bool
 
 func init() {
 	rootCmd.AddCommand(networkBuildCmd)
@@ -50,6 +51,7 @@ func init() {
 	networkBuildCmd.MarkFlagRequired("recipe")
 
 	networkBuildCmd.Flags().BoolVarP(&networkUseGenesisFiles, "use-existing-files", "e", false, "Use existing genesis files.")
+	networkBuildCmd.Flags().BoolVarP(&bootstrappedLoadingFile, "gen-db-files", "d", false, "Generate database files.")
 	networkBuildCmd.Flags().BoolVarP(&networkIgnoreExistingDir, "force", "f", false, "Force generation into existing directory.")
 	networkBuildCmd.Flags().StringSliceVarP(&miscStringStringTokens, "val", "v", nil, "name=value, may be reapeated")
 
@@ -141,6 +143,7 @@ func runBuildNetwork() (err error) {
 	}
 
 	net.SetUseExistingGenesisFiles(networkUseGenesisFiles)
+	net.SetUseBoostrappedFiles(bootstrappedLoadingFile)
 	err = net.Validate(buildConfig, networkRootDir)
 	if err != nil {
 		return fmt.Errorf("error validating Network Config file: %v", err)

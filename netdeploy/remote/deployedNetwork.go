@@ -33,6 +33,7 @@ import (
 
 const genesisFolderName = "genesisdata"
 const hostFolderName = "hosts"
+const dbFilesFolderName = "databasefiles"
 const networkConfigFileName = "network.config"
 const topologySpecFileName = "cloudspec.config"
 
@@ -63,10 +64,10 @@ type DeployedNetworkConfig struct {
 // DeployedNetwork represents the complete configuration specification for a deployed network
 type DeployedNetwork struct {
 	useExistingGenesis bool
-
-	GenesisData gen.GenesisData
-	Topology    topology
-	Hosts       []HostConfig
+	useBoostrappedFile bool
+	GenesisData        gen.GenesisData
+	Topology           topology
+	Hosts              []HostConfig
 }
 
 // InitDeployedNetworkConfig loads the DeployedNetworkConfig from a file
@@ -199,6 +200,15 @@ func (cfg *DeployedNetwork) SetUseExistingGenesisFiles(useExisting bool) bool {
 	return old
 }
 
+// SetUseBoostrappedFiles sets the override flag indicating we should use existing genesis
+// files instead of generating new ones.  This is useful for permanent networks like devnet and testnet.
+// Returns the previous value.
+func (cfg *DeployedNetwork) SetUseBoostrappedFiles(boostrappedFile bool) bool {
+	old := cfg.useBoostrappedFile
+	cfg.useBoostrappedFile = boostrappedFile
+	return old
+}
+
 // Validate uses the specified template to deploy a new private network
 // under the specified root directory.
 func (cfg DeployedNetwork) Validate(buildCfg BuildConfig, rootDir string) (err error) {
@@ -281,6 +291,11 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 
 	if err = cfg.copyWalletsToNodes(genesisFolder, walletNameToDataMap); err != nil {
 		return
+	}
+
+	if cfg.useBoostrappedFile {
+		dbFilesFolder := filepath.Join(rootDir, dbFilesFolderName)
+		fmt.Printf("generate database files to %s \n", dbFilesFolder)
 	}
 
 	return
