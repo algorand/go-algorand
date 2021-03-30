@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"io"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -117,12 +118,28 @@ func ReconstructProposal(net Network, b *bookkeeping.Block, h MessageHandle) err
 		logging.Base().Warnf("could not recover txns")
 	}
 
-	var dec protocol.Decoder
+	totalLength := 0
+	for _, stxnData := range stxnsData {
+		if stxnData != nil {
+			totalLength += len(stxnData)
+		}
+	}
+
+	data := make([]byte, 0, totalLength)
+	for _, stxnData := range stxnsData {
+		if stxnData != nil {
+			data = append(data, stxnData...)
+		}
+	}
+
+	dec := protocol.NewDecoderBytes(data)
 
 	for i, stxnData := range stxnsData {
 		if stxnData != nil {
-			dec = protocol.NewDecoderBytes(stxnData)
 			err := dec.Decode(&b.Payset[i].SignedTxn)
+			if err == io.EOF {
+				break
+			}
 			if err != nil {
 				logging.Base().Warnf("Received a non-decodable txn: %v", err)
 				//net.Disconnect(raw.MessageHandle)
