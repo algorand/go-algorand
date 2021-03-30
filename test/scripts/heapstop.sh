@@ -11,10 +11,10 @@ if [ -f .heapWatch.pid ]; then
     kill $(cat .heapWatch.pid) || true
 fi
 
-if [ -f .pingpong.pid ]; then
-    kill $(cat .pingpong.pid) || true
-    rm -f .pingpong.pid
-fi
+for i in .pingpong*.pid; do
+    kill $(cat $i) || true
+    rm -f "${i}"
+done
 
 TESTDIR=$1
 if [ -z "${TESTDIR}" ]; then
