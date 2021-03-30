@@ -36,6 +36,9 @@ func main() {
 	currentTestName := ""
 	for scanner.Scan() {
 		line := scanner.Text()
+		if len(line) == 0 {
+			continue
+		}
 		if strings.HasPrefix(line, "=== RUN") {
 			var testName string
 			fmt.Sscanf(line, "=== RUN   %s", &testName)
@@ -70,6 +73,7 @@ func main() {
 				panic(fmt.Errorf("test '%s' is missing, when parsing '%s'", testName, line))
 			}
 			fmt.Fprintf(os.Stdout, line+"\r\n")
+			delete(tests, testName)
 			continue
 		}
 		if idx := strings.Index(line, "--- FAIL:"); idx >= 0 {
@@ -81,15 +85,36 @@ func main() {
 			}
 			fmt.Fprintf(os.Stdout, test.outputBuffer+"\r\n")
 			fmt.Fprintf(os.Stdout, line+"\r\n")
+			test.outputBuffer = ""
+			tests[testName] = test
 			continue
 		}
-		// otherwise, add the line to the current test.
-		currentTest := tests[currentTestName]
-		currentTest.outputBuffer += "\r\n" + line
-		tests[currentTestName] = currentTest
+		// otherwise, add the line to the current test ( if there is such )
+		currentTest, have := tests[currentTestName]
+		if have {
+			currentTest.outputBuffer += "\r\n" + line
+			tests[currentTestName] = currentTest
+			continue
+		}
+		// no current test is only legit if we're PASS, FAIL or package test line summary.
+		if line == "PASS" || line == "FAIL" {
+			continue
+		}
+		if strings.HasPrefix(line, "ok  	") {
+			fmt.Fprintf(os.Stdout, line+"\r\n")
+			continue
+		}
+		if strings.HasPrefix(line, "FAIL	") {
+			fmt.Fprintf(os.Stdout, line+"\r\n")
+			continue
+		}
+		panic(fmt.Errorf("unexpected text output from test : '%s'", line))
 	}
 	scannerErr := scanner.Err()
 	if scannerErr != nil {
+		if currentTestName != "" && tests[currentTestName].outputBuffer != "" {
+			fmt.Fprint(os.Stdout, tests[currentTestName].outputBuffer)
+		}
 		os.Exit(1)
 	}
 }
