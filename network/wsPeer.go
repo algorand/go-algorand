@@ -337,7 +337,7 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
-	wp.sendMsgTracker = makeTracker(3 * maxBroadcastArraySize)
+	wp.sendMsgTracker = makeTracker(4 * maxBroadcastArraySize)
 	wp.receiveMsgTracker = makeTracker(5 * maxBroadcastArraySize)
 
 	// processed is a channel that messageHandlerThread writes to
@@ -604,15 +604,20 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 		default:
 		}
 
-		if len(msg.data) > 2 && msgToTrack(protocol.Tag(msg.data[:2])) && wp.receiveMsgTracker.exists(crypto.Hash(msg.data[2:])) {
+		var msgHash crypto.Digest
+		if len(msg.data) > 2 {
+			msgHash = crypto.Hash(msg.data[2:])
+		}
+
+		if len(msg.data) > 2 && msgToTrack(protocol.Tag(msg.data[:2])) && wp.receiveMsgTracker.exists(msgHash) {
 			numSkippedReceiver++
 			continue
 		}
 
-		//if len(msg.data) > 2 && wp.sendMsgTracker.exists(crypto.Hash(msg.data[2:])) {
-		//	numSkippedSender++
-		//	continue
-		//}
+		if len(msg.data) > 2 && wp.sendMsgTracker.exists(msgHash) {
+			numSkippedSender++
+			continue
+		}
 
 		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
 			logging.Base().Infof("bad msg: %v", len(msg.data))
@@ -733,7 +738,7 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	filteredCount := 0
 	filtered := make([]bool, len(data), len(data))
 	for i := range data {
-		if wp.outgoingMsgFilter != nil && len(data[i]) > messageFilterSize && wp.outgoingMsgFilter.CheckDigest(digest[i], false, false) {
+		if wp.outgoingMsgFilter != nil && len(data[i]) > messageFilterSize && !msgToTrack(protocol.Tag(data[i][:2])) && wp.outgoingMsgFilter.CheckDigest(digest[i], false, false) {
 			//wp.net.log.Debugf("msg drop as outbound dup %s(%d) %v", string(data[:2]), len(data)-2, digest)
 			// peer has notified us it doesn't need this message
 			outgoingNetworkMessageFilteredOutTotal.Inc(nil)
