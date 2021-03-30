@@ -138,7 +138,7 @@ func (status CommandStatus) String() string {
 
 // ProcessRequest processes the command received via the CC Service
 func (agent *Agent) ProcessRequest(managementServiceRequest lib.CCServiceRequest) (err error) {
-	log.Infof("recieved command for %s\n", managementServiceRequest.Component)
+	log.Infof("received command for %s\n", managementServiceRequest.Component)
 	err = agent.ServiceConnection.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("received request %+v ", managementServiceRequest)))
 	if err != nil {
 		log.Errorf("problem sending ack to client , %v", err)
