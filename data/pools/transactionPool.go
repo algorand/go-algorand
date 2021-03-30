@@ -93,7 +93,7 @@ type TransactionPool struct {
 	// to PendingTxGroups().
 	rememberedTxGroups []transactions.SignedTxGroup
 	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
-	// pendingLastestLocal is the value of the last transaction group counter which is associated with a transaction that was
+	// rememberedLatestLocal is the value of the last transaction group counter which is associated with a transaction that was
 	// locally originated ( i.e. posted to this node via the REST API ). This variable is used when OnNewBlock is called and
 	// we filter out the pending transaction through the evaluator.
 	rememberedLatestLocal uint64
