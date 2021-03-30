@@ -569,7 +569,8 @@ func BenchmarkReconstructBlock(b *testing.B) {
 	wp := wn.TestPeer(block.PaysetDigest, encoded)
 	h := gossip.Metadata(network.IncomingMessage{Sender: wp})
 
-	block.Payset = block.Payset[:5000]
+	block.Payset = block.Payset[:25000]
+	block.PaysetDigest = block.PaysetDigest[:25000]
 
 	b.ReportAllocs()
 	b.ResetTimer()

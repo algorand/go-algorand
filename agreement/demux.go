@@ -117,12 +117,12 @@ func ReconstructProposal(net Network, b *bookkeeping.Block, h MessageHandle) err
 		logging.Base().Warnf("could not recover txns")
 	}
 
+	var dec protocol.Decoder
+
 	for i, stxnData := range stxnsData {
 		if stxnData != nil {
-			var stxn transactions.SignedTxn
-			dec := protocol.NewDecoderBytes(stxnData)
-			err := dec.Decode(&stxn)
-			b.Payset[i].SignedTxn = stxn
+			dec = protocol.NewDecoderBytes(stxnData)
+			err := dec.Decode(&b.Payset[i].SignedTxn)
 			if err != nil {
 				logging.Base().Warnf("Received a non-decodable txn: %v", err)
 				//net.Disconnect(raw.MessageHandle)
