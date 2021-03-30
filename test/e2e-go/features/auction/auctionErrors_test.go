@@ -35,7 +35,7 @@ func TestInvalidDeposit(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
@@ -123,7 +123,7 @@ func TestNoDepositAssociatedWithBid(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
@@ -192,7 +192,7 @@ func TestNoDepositAssociatedWithBid(t *testing.T) {
 func TestDeadbeatBid(t *testing.T) {
 	// an error is expected when an account attempts to overbid
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
@@ -290,7 +290,7 @@ func TestStartAndPartitionAuctionTenUsersTenBidsEach(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
 	auctionParamFile := filepath.Join("auctions", "AuctionParams_1.json")

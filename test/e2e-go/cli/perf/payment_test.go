@@ -35,21 +35,23 @@ func BenchmarkSendPayment(b *testing.B) {
 	defer fixture.Shutdown()
 	binDir := fixture.GetBinDir()
 
+	a := require.New(fixtures.SynchronizedTest(b))
+
 	c, err := libgoal.MakeClientWithBinDir(binDir, fixture.PrimaryDataDir(), fixture.PrimaryDataDir(), libgoal.FullClient)
-	require.NoError(b, err)
+	a.NoError(err)
 
 	wallet, err := c.GetUnencryptedWalletHandle()
-	require.NoError(b, err)
+	a.NoError(err)
 
 	addrs, err := c.ListAddresses(wallet)
-	require.NoError(b, err)
+	a.NoError(err)
 	require.True(b, len(addrs) > 0)
 	addr := addrs[0]
 
 	b.Run("getwallet", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, err = c.GetUnencryptedWalletHandle()
-			require.NoError(b, err)
+			a.NoError(err)
 		}
 	})
 
@@ -59,14 +61,14 @@ func BenchmarkSendPayment(b *testing.B) {
 			var nonce [8]byte
 			crypto.RandBytes(nonce[:])
 			tx, err = c.ConstructPayment(addr, addr, 1, 1, nonce[:], "", [32]byte{}, 0, 0)
-			require.NoError(b, err)
+			a.NoError(err)
 		}
 	})
 
 	b.Run("signtxn", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, err = c.SignTransactionWithWallet(wallet, nil, tx)
-			require.NoError(b, err)
+			a.NoError(err)
 		}
 	})
 
@@ -75,7 +77,7 @@ func BenchmarkSendPayment(b *testing.B) {
 			var nonce [8]byte
 			crypto.RandBytes(nonce[:])
 			_, err := c.SendPaymentFromWallet(wallet, nil, addr, addr, 1, 1, nonce[:], "", 0, 0)
-			require.NoError(b, err)
+			a.NoError(err)
 		}
 	})
 }

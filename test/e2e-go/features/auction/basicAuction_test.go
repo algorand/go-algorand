@@ -43,7 +43,7 @@ func TestStartAndEndAuctionNoBids(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "ThreeNodesEvenDist.json")
 	auctionParamFile := filepath.Join("auctions", "AuctionParams_1.json")
@@ -84,7 +84,7 @@ func TestStartAndEndAuctionOneUserOneBid(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
 	auctionParamFile := filepath.Join("auctions", "AuctionParams_1.json")
@@ -153,7 +153,7 @@ func TestStartAndEndAuctionOneUserTenBids(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
 	auctionParamFile := filepath.Join("auctions", "AuctionParams_1.json")
@@ -222,7 +222,7 @@ func TestStartAndEndAuctionOneUserTenBids(t *testing.T) {
 
 func TestStartAndEndAuctionTenUsersOneBidEach(t *testing.T) {
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
 	auctionParamFile := filepath.Join("auctions", "AuctionParams_1.json")
@@ -317,7 +317,7 @@ func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
 	auctionParamFile := filepath.Join("auctions", "AuctionParams_1.json")
@@ -414,7 +414,7 @@ func TestDecayingPrice(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
 	// "price goes from 10 to 1, decreasing by 1 each block for 10 blocks."

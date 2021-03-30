@@ -82,7 +82,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 	log := logging.TestingLog(t)
 
 	// Overview of this test:

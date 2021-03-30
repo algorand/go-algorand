@@ -29,7 +29,7 @@ import (
 
 // TestRekeyUpgrade tests that we rekey does not work before the upgrade and works well after
 func TestRekeyUpgrade(t *testing.T) {
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	smallLambdaMs := 500
 	consensus := makeApplicationUpgradeConsensus(t)

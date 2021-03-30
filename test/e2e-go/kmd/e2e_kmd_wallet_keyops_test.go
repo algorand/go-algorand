@@ -376,7 +376,7 @@ func BenchmarkSignTransaction(b *testing.B) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyImportResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(b, err)
+	a.NoError(err)
 
 	// Make a transaction
 	tx := transactions.Transaction{
@@ -404,7 +404,7 @@ func BenchmarkSignTransaction(b *testing.B) {
 			}
 			resp1 := kmdapi.APIV1POSTTransactionSignResponse{}
 			err = f.Client.DoV1Request(req1, &resp1)
-			require.NoError(b, err)
+			a.NoError(err)
 		}
 	})
 }

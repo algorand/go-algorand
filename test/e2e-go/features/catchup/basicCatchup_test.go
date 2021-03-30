@@ -35,7 +35,7 @@ func TestBasicCatchup(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	// Overview of this test:
 	// Start a two-node network (primary has 0%, secondary has 100%)
@@ -99,7 +99,7 @@ func runCatchupOverGossip(t *testing.T,
 	if testing.Short() {
 		t.Skip()
 	}
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 	// Overview of this test:
 	// Start a two-node network (Primary with 0% stake, Secondary with 100% stake)
 	// Kill the primary for a few blocks. (Note that primary only has incoming connections)
@@ -198,7 +198,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := make(config.ConsensusProtocols)
 	// The following two protocols: testUnupgradedProtocol and testUnupgradedToProtocol

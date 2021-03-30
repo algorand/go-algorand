@@ -75,7 +75,7 @@ func spendToNonParticipating(t *testing.T, fixture *fixtures.RestClientFixture, 
 
 func TestOnlineOfflineRewards(t *testing.T) {
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "FourNodes.json"))
@@ -137,7 +137,7 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "FourNodes.json"))
@@ -180,7 +180,7 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 
 func TestRewardUnitThreshold(t *testing.T) {
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "FourNodes.json"))
@@ -299,7 +299,7 @@ var defaultPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0
 
 func TestRewardRateRecalculation(t *testing.T) {
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	// consensusTestRapidRewardRecalculation is a version of ConsensusCurrentVersion
 	// that decreases the RewardsRateRefreshInterval greatly.
