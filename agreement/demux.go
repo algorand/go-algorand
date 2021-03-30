@@ -116,6 +116,8 @@ func ReconstructProposal(net Network, b *bookkeeping.Block, h MessageHandle) err
 	}
 	if !allPresent {
 		logging.Base().Warnf("could not recover txns")
+	} else {
+		logging.Base().Warnf("could recover txns")
 	}
 
 	totalLength := 0
