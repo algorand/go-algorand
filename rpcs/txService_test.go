@@ -51,6 +51,11 @@ func (s *httpTestPeerSource) GetPeers(options ...network.PeerOption) []network.P
 	return s.peers
 }
 
+func (s *httpTestPeerSource) addPeer(rootURL string) {
+	peer := testHTTPPeer(rootURL)
+	s.peers = append(s.peers, &peer)
+}
+
 // implement network.HTTPPeer
 type testHTTPPeer string
 

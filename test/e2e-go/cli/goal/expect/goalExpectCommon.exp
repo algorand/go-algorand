@@ -55,7 +55,7 @@ proc ::AlgorandGoal::Abort { ERROR } {
 
     if { [info exists ::GLOBAL_TEST_ALGO_DIR] } {
         puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
-        ::AlgorandGoal::StopNode $::GLOBAL_TEST_ROOT_DIR
+        ::AlgorandGoal::StopNode $::GLOBAL_TEST_ALGO_DIR
     }
 
     exit 1

@@ -101,12 +101,6 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 		net:            net,
 		ledger:         l,
 		config:         cfg,
-		blocksDownloadPeerSelector: makePeerSelector(
-			net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-			}),
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
@@ -116,7 +110,7 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 	if err != nil {
 		return nil, err
 	}
-
+	service.initDownloadPeerSelector()
 	return service, nil
 }
 
@@ -138,17 +132,12 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 		net:            net,
 		ledger:         l,
 		config:         cfg,
-		blocksDownloadPeerSelector: makePeerSelector(
-			net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-			}),
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
 		return nil, err
 	}
+	service.initDownloadPeerSelector()
 	return service, nil
 }
 
@@ -712,4 +701,21 @@ func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(aquiredBlocks
 	defer cs.statsMu.Unlock()
 	cs.stats.AcquiredBlocks = uint64(int64(cs.stats.AcquiredBlocks) + aquiredBlocksDelta)
 	cs.stats.VerifiedBlocks = uint64(int64(cs.stats.VerifiedBlocks) + verifiedBlocksDelta)
+}
+
+func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
+	if cs.config.EnableCatchupFromArchiveServers {
+		cs.blocksDownloadPeerSelector = makePeerSelector(
+			cs.net,
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			})
+	} else {
+		cs.blocksDownloadPeerSelector = makePeerSelector(
+			cs.net,
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
+			})
+	}
 }

@@ -77,7 +77,7 @@ func (s *LimitedReaderSlurper) Read(reader io.Reader) error {
 					// if we received err == nil and n == 0, we should retry calling the Read function.
 					continue
 				default:
-					// if we recieved a non-io.EOF error, return it.
+					// if we received a non-io.EOF error, return it.
 					return err
 				}
 			}
