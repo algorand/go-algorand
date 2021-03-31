@@ -59,6 +59,7 @@ func queuePayments(b *testing.B, wg *sync.WaitGroup, c libgoal.Client, q <-chan 
 }
 
 func signer(b *testing.B, wg *sync.WaitGroup, c libgoal.Client, wh []byte, txnChan <-chan *transactions.Transaction, sigTxnChan chan<- *transactions.SignedTxn) {
+	a := require.New(fixtures.SynchronizedTest(b))
 	for {
 		txn := <-txnChan
 		if txn == nil {
@@ -84,6 +85,7 @@ func BenchmarkPaymentsThroughput(b *testing.B) {
 }
 
 func doBenchTemplate(b *testing.B, template string, moneynode string) {
+	a := require.New(fixtures.SynchronizedTest(b))
 	fmt.Printf("Starting to benchmark template %s\n", template)
 
 	// consensusTestBigBlocks is a version of ConsensusV0 used for testing

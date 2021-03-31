@@ -359,6 +359,7 @@ func TestSignProgram(t *testing.T) {
 }
 
 func BenchmarkSignTransaction(b *testing.B) {
+	a := require.New(fixtures.SynchronizedTest(b))
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(b)
 	defer f.Shutdown()
