@@ -39,7 +39,8 @@ type CreatablesInfo struct {
 	OptIns      map[uint64][]string
 }
 
-type PingpongState struct {
+// WorkerState object holds a running pingpong worker
+type WorkerState struct {
 	cfg      PpConfig
 	accounts map[string]uint64
 	cinfo    CreatablesInfo
@@ -50,7 +51,7 @@ type PingpongState struct {
 }
 
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
-func (pps *PingpongState) PrepareAccounts(ac libgoal.Client) (err error) {
+func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 	pps.accounts, pps.cfg, err = ensureAccounts(ac, pps.cfg)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "ensure accounts failed %v\n", err)
@@ -283,7 +284,7 @@ func listSufficientAccounts(accounts map[string]uint64, minimumAmount uint64, ex
 var logPeriod = 5 * time.Second
 
 // RunPingPong starts ping pong process
-func (pps *PingpongState) RunPingPong(ctx context.Context, ac libgoal.Client) {
+func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 	// Infinite loop given:
 	//  - accounts -> map of accounts to include in transfers (including src account, which we don't want to use)
 	//  - cfg      -> configuration for how to proceed
@@ -397,8 +398,9 @@ func (pps *PingpongState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 	}
 }
 
-func NewPingpong(cfg PpConfig) *PingpongState {
-	return &PingpongState{cfg: cfg, nftHolders: make(map[string]int)}
+// NewPingpong creates a new pingpong WorkerState
+func NewPingpong(cfg PpConfig) *WorkerState {
+	return &WorkerState{cfg: cfg, nftHolders: make(map[string]int)}
 }
 
 func getCreatableID(cfg PpConfig, cinfo CreatablesInfo) (aidx uint64) {
@@ -426,7 +428,7 @@ func getCreatableID(cfg PpConfig, cinfo CreatablesInfo) (aidx uint64) {
 	return
 }
 
-func (pps *PingpongState) fee() uint64 {
+func (pps *WorkerState) fee() uint64 {
 	cfg := pps.cfg
 	fee := cfg.MaxFee
 	if cfg.RandomizeFee {
@@ -435,7 +437,7 @@ func (pps *PingpongState) fee() uint64 {
 	return fee
 }
 
-func (pps *PingpongState) makeNftTraffic(client libgoal.Client) (sentCount uint64, err error) {
+func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64, err error) {
 	fee := pps.fee()
 	if (len(pps.nftHolders) == 0) || ((float64(int(pps.cfg.NftAsaAccountInFlight)-len(pps.nftHolders)) / float64(pps.cfg.NftAsaAccountInFlight)) >= rand.Float64()) {
 		var addr string
@@ -507,7 +509,7 @@ func (pps *PingpongState) makeNftTraffic(client libgoal.Client) (sentCount uint6
 	return
 }
 
-func (pps *PingpongState) sendFromTo(
+func (pps *WorkerState) sendFromTo(
 	fromList, toList []string,
 	client libgoal.Client,
 ) (sentCount, successCount uint64, err error) {
@@ -684,7 +686,7 @@ func (pps *PingpongState) sendFromTo(
 	return
 }
 
-func (pps *PingpongState) nftSpamAssetName() string {
+func (pps *WorkerState) nftSpamAssetName() string {
 	if pps.nftStartTime == 0 {
 		pps.nftStartTime = time.Now().Unix()
 	}
@@ -692,7 +694,7 @@ func (pps *PingpongState) nftSpamAssetName() string {
 	return fmt.Sprintf("nft%d_%d", pps.nftStartTime, pps.localNftIndex)
 }
 
-func (pps *PingpongState) constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client) (txn transactions.Transaction, err error) {
+func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client) (txn transactions.Transaction, err error) {
 	cfg := pps.cfg
 	cinfo := pps.cinfo
 	var noteField []byte

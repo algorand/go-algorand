@@ -130,7 +130,7 @@ func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64
 // Step 1) Create X assets for each of the participant accounts
 // Step 2) For each participant account, opt-in to assets of all other participant accounts
 // Step 3) Evenly distribute the assets across all participant accounts
-func (pps *PingpongState) prepareAssets(assetAccounts map[string]uint64, client libgoal.Client) (resultAssetMaps map[uint64]v1.AssetParams, optIns map[uint64][]string, err error) {
+func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client libgoal.Client) (resultAssetMaps map[uint64]v1.AssetParams, optIns map[uint64][]string, err error) {
 	accounts := assetAccounts
 	cfg := pps.cfg
 	proto, err := getProto(client)
