@@ -54,9 +54,20 @@ type Handlers struct {
 	Shutdown <-chan struct{}
 }
 
+// ledgerForApiHandlers represents the subset of Ledger functionality
+// needed by the handler functions. It exists so that a
+// SpeculationLedger can implement it and substitute in.
+type ledgerForApiHandlers interface {
+	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	Latest() basics.Round
+	Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error)
+	LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error)
+}
+
 // NodeInterface represents node fns used by the handlers.
 type NodeInterface interface {
 	Ledger() *data.Ledger
+	SpeculationLedger(token string) *data.SpeculationLedger
 	Status() (s node.StatusReport, err error)
 	GenesisID() string
 	GenesisHash() crypto.Digest
@@ -96,9 +107,14 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
 	}
 
-	myLedger := v2.Node.Ledger()
-	lastRound := myLedger.Latest()
-	record, err := myLedger.Lookup(lastRound, addr)
+	var ledger ledgerForApiHandlers
+	if params.Speculation == nil {
+		ledger = v2.Node.Ledger()
+	} else {
+		ledger = v2.Node.SpeculationLedger(*params.Speculation)
+	}
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -111,7 +127,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
 
-	recordWithoutPendingRewards, _, err := myLedger.LookupWithoutRewards(lastRound, addr)
+	recordWithoutPendingRewards, _, err := ledger.LookupWithoutRewards(lastRound, addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -122,7 +138,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		//assets = make(map[uint64]v1.AssetHolding)
 		for curid := range record.Assets {
 			var creator string
-			creatorAddr, ok, err := myLedger.GetCreator(basics.CreatableIndex(curid), basics.AssetCreatable)
+			creatorAddr, ok, err := ledger.GetCreator(basics.CreatableIndex(curid), basics.AssetCreatable)
 			if err == nil && ok {
 				creator = creatorAddr.String()
 			} else {

@@ -462,6 +462,12 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 	return node.ledger
 }
 
+// SpeculationLedger gives out a virtual ledger for speculation that
+// had previously be created by NewSpeculationLedger()
+func (node *AlgorandFullNode) SpeculationLedger(token string) *data.SpeculationLedger {
+	return &data.SpeculationLedger{ConcreteLedger: node.ledger}
+}
+
 // BroadcastSignedTxGroup broadcasts a transaction group that has already been signed.
 func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
 	lastRound := node.ledger.Latest()
