@@ -142,6 +142,14 @@ func runBuildNetwork() (err error) {
 		net.GenesisData.VersionModifier = networkGenesisVersionModifier
 	}
 
+	if bootstrappedLoadingFile {
+		bootstrappedFile, err := remote.LoadBootstrappedData(resolveFile(r.BootstrappedFile, templateBaseDir))
+		if err != nil {
+			return fmt.Errorf("error resolving bootstrap file: %v", err)
+		}
+		net.BootstrappedFile = bootstrappedFile
+	}
+
 	net.SetUseExistingGenesisFiles(networkUseGenesisFiles)
 	net.SetUseBoostrappedFiles(bootstrappedLoadingFile)
 	err = net.Validate(buildConfig, networkRootDir)

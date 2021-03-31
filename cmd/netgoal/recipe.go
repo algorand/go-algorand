@@ -22,5 +22,5 @@ type recipe struct {
 	HostTemplatesFile string
 	NetworkFile       string
 	TopologyFile      string
-	LoadingFile       string
+	BootstrappedFile  string
 }

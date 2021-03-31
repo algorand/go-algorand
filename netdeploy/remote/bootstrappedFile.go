@@ -14,13 +14,31 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package remote
 
-type loadingFile struct {
+import (
+	"encoding/json"
+	"os"
+)
+
+type bootstrappedFile struct {
 	NumRounds                 int
 	RoundTransactionsCount    int
 	GeneratedAccountsCount    int
 	GeneratedAssetsCount      int
 	GeneratedApplicationCount int
 	SourceWalletName          string
+}
+
+// LoadBootstrappedData loads a bootstrappedFile structure from a json file
+func LoadBootstrappedData(file string) (data bootstrappedFile, err error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	dec := json.NewDecoder(f)
+	err = dec.Decode(&data)
+	return data, err
 }

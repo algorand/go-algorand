@@ -68,6 +68,7 @@ type DeployedNetwork struct {
 	GenesisData        gen.GenesisData
 	Topology           topology
 	Hosts              []HostConfig
+	BootstrappedFile   bootstrappedFile
 }
 
 // InitDeployedNetworkConfig loads the DeployedNetworkConfig from a file
