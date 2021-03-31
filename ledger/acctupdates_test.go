@@ -1712,7 +1712,8 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 	newVersionBlocksCount := uint64(47)
 	newVersion := protocol.ConsensusV21
 	// add 47 more rounds that contains blocks using a newer consensus version, and stuff it with MaxBalLookback
-	for i := basics.Round(initialRounds + extraRounds); i < basics.Round(initialRounds+initialProtoParams.MaxBalLookback+extraRounds+newVersionBlocksCount); i++ {
+	lastRoundToWrite := basics.Round(initialRounds + initialProtoParams.MaxBalLookback + extraRounds + newVersionBlocksCount)
+	for i := basics.Round(initialRounds + extraRounds); i < lastRoundToWrite; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1742,7 +1743,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 	// now, commit and verify that the committedUpTo method broken the range correctly.
-	au.committedUpTo(basics.Round(initialRounds + initialProtoParams.MaxBalLookback + extraRounds + newVersionBlocksCount))
+	au.committedUpTo(lastRoundToWrite)
 	au.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.dbRound)
 
@@ -1822,7 +1823,8 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 	newVersion := protocol.ConsensusV21
 	// add MaxBalLookback-extraRounds more rounds that contains blocks using a newer consensus version.
-	for i := basics.Round(initialRounds + extraRounds); i <= basics.Round(initialRounds+extraRounds+initialProtoParams.MaxBalLookback); i++ {
+	endOfFirstNewProtocolSegment := basics.Round(initialRounds + extraRounds + initialProtoParams.MaxBalLookback)
+	for i := basics.Round(initialRounds + extraRounds); i <= endOfFirstNewProtocolSegment; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1852,12 +1854,12 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 	// now, commit and verify that the committedUpTo method broken the range correctly.
-	au.committedUpTo(basics.Round(initialRounds + extraRounds + initialProtoParams.MaxBalLookback))
+	au.committedUpTo(endOfFirstNewProtocolSegment)
 	au.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.dbRound)
 
 	// write additional extraRounds elements and verify these can be flushed.
-	for i := basics.Round(initialRounds + extraRounds + initialProtoParams.MaxBalLookback + 1); i <= basics.Round(initialRounds+2*extraRounds+initialProtoParams.MaxBalLookback); i++ {
+	for i := endOfFirstNewProtocolSegment + 1; i <= basics.Round(initialRounds+2*extraRounds+initialProtoParams.MaxBalLookback); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1886,7 +1888,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
-	au.committedUpTo(basics.Round(initialRounds + 2*extraRounds + initialProtoParams.MaxBalLookback))
+	au.committedUpTo(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
 	au.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.dbRound)
 }
