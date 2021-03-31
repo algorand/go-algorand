@@ -112,7 +112,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 
 	addrs, err := c.ListAddresses(wallet)
 	a.NoError(err)
-	require.True(b, len(addrs) > 0)
+	a.True(len(addrs) > 0)
 	addr := addrs[0]
 
 	suggest, err := c.SuggestedParams()

@@ -112,14 +112,14 @@ func (f *KMDFixture) Initialize(t TestingTB) {
 	f.dataDir = filepath.Join(f.testDir, t.Name())
 	// Remove any existing tests in this dataDir + recreate
 	err := os.RemoveAll(f.dataDir)
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 	err = os.Mkdir(f.dataDir, 0750)
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 
 	// Set up the kmd data dir within the main datadir
 	f.kmdDir = filepath.Join(f.dataDir, nodecontrol.DefaultKMDDataDir)
 	err = os.Mkdir(f.kmdDir, nodecontrol.DefaultKMDDataDirPerms)
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 }
 
 // SetupWithConfig starts a kmd node with the passed config or default test
@@ -134,14 +134,14 @@ func (f *KMDFixture) SetupWithConfig(t TestingTB, config string) {
 	f.APIToken = defaultAPIToken
 	tokenFilepath := filepath.Join(f.kmdDir, "kmd.token")
 	err := ioutil.WriteFile(tokenFilepath, f.APIToken, 0640)
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 
 	if config == "" {
 		config = defaultConfig
 	}
 	configFilepath := filepath.Join(f.kmdDir, "kmd_config.json")
 	err = ioutil.WriteFile(configFilepath, []byte(config), 0640)
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 
 	// Start kmd
 	nc := nodecontrol.MakeNodeController(f.binDir, f.dataDir)
@@ -149,17 +149,17 @@ func (f *KMDFixture) SetupWithConfig(t TestingTB, config string) {
 	_, err = nc.StartKMD(nodecontrol.KMDStartArgs{
 		TimeoutSecs: defaultTimeoutSecs,
 	})
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 
 	// Mark ourselves as initialized so we know to shut down server
 	f.initialized = true
 
 	// Build a client
 	sock, err := util.GetFirstLineFromFile(filepath.Join(f.kmdDir, "kmd.net"))
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 	f.Sock = sock
 	client, err := client.MakeKMDClient(f.Sock, string(f.APIToken))
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 	f.Client = &client
 }
 

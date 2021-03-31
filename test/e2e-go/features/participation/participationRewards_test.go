@@ -42,14 +42,15 @@ func getFirstAccountFromNamedNode(fixture *fixtures.RestClientFixture, r *requir
 
 func waitUntilRewards(t *testing.T, fixture *fixtures.RestClientFixture, round uint64) (uint64, error) {
 	block, err := fixture.AlgodClient.Block(round)
-	require.NoError(t, err)
+	a := require.New(fixtures.SynchronizedTest(t))
+	a.NoError(err)
 
 	for {
 		round++
 		err := fixture.WaitForRoundWithTimeout(round + 1)
-		require.NoError(t, err)
+		a.NoError(err)
 		nextBlock, err := fixture.AlgodClient.Block(round)
-		require.NoError(t, err)
+		a.NoError(err)
 
 		if nextBlock.RewardsLevel > block.RewardsLevel {
 			// reward level increased, rewards were granted
@@ -64,11 +65,12 @@ func waitUntilRewards(t *testing.T, fixture *fixtures.RestClientFixture, round u
 }
 
 func spendToNonParticipating(t *testing.T, fixture *fixtures.RestClientFixture, lastRound uint64, account string, balance uint64, minFee uint64) uint64 {
+	a := require.New(fixtures.SynchronizedTest(t))
 	// move a lot of Algos to a non participating account -- the incentive pool
 	poolAddr := basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff} // hardcoded; change if the pool address changes
 	pd := poolAddr
 	drainTx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(account, pd.String(), minFee, balance-balance/100-minFee, nil)
-	require.NoError(t, err)
+	a.NoError(err)
 	fixture.WaitForAllTxnsToConfirm(lastRound+uint64(10), map[string]string{drainTx.ID().String(): account})
 	return balance / 100
 }

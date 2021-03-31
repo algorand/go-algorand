@@ -117,7 +117,7 @@ func runCatchupOverGossip(t *testing.T,
 		a.NoError(err)
 		cfg, err := config.LoadConfigFromDisk(dir)
 		a.NoError(err)
-		require.Empty(t, cfg.NetworkProtocolVersion)
+		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = ledgerNodeDowngradeTo
 		cfg.SaveToDisk(dir)
 	}
@@ -127,7 +127,7 @@ func runCatchupOverGossip(t *testing.T,
 		dir := fixture.PrimaryDataDir()
 		cfg, err := config.LoadConfigFromDisk(dir)
 		a.NoError(err)
-		require.Empty(t, cfg.NetworkProtocolVersion)
+		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = fetcherNodeDowngradeTo
 		cfg.SaveToDisk(dir)
 	}
@@ -177,7 +177,7 @@ func runCatchupOverGossip(t *testing.T,
 
 		if time.Now().Sub(waitStart) > time.Minute {
 			// it's taking too long.
-			require.FailNow(t, "Waiting too long for catchup to complete")
+			a.FailNow("Waiting too long for catchup to complete")
 		}
 
 		time.Sleep(50 * time.Millisecond)

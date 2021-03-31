@@ -326,7 +326,7 @@ func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
 	libGoalClient := fixture.GetLibGoalClient()
 
 	minTxnFee, minAcctBalance, err := fixture.CurrentMinFeeAndBalance()
-	require.NoError(t, err)
+	r.NoError(err)
 
 	// create wallets to bid with, and note their balances before the auction.
 	wallets, _ := fixture.GetWalletsSortedByBalance()

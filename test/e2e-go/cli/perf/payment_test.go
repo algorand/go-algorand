@@ -45,7 +45,7 @@ func BenchmarkSendPayment(b *testing.B) {
 
 	addrs, err := c.ListAddresses(wallet)
 	a.NoError(err)
-	require.True(b, len(addrs) > 0)
+	a.True(len(addrs) > 0)
 	addr := addrs[0]
 
 	b.Run("getwallet", func(b *testing.B) {
