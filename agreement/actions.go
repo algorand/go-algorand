@@ -170,7 +170,6 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 			if stxn.MsgIsZero() {
 				logging.Base().Warnf("logging zero transaction")
 			}
-			//s.BlockFactory
 			txnData[i] = protocol.Encode(&stxn)
 			if crypto.Hash(txnData[i]) != msg.Proposal.PaysetDigest[i] {
 				logging.Base().Warnf("digest mismatch")

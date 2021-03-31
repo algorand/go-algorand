@@ -19,7 +19,6 @@ package datatest
 import (
 	"context"
 	"fmt"
-	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -69,8 +68,6 @@ func (i entryFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time) 
 func (i entryFactoryImpl) ReconstructBlock(block bookkeeping.Block) error {
 	return nil
 }
-
-func (i entryFactoryImpl) RememberTxn(txn transactions.SignedTxn) {}
 
 // WithSeed implements the agreement.ValidatedBlock interface.
 func (ve validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
