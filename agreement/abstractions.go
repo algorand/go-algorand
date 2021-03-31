@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"errors"
+	"github.com/algorand/go-algorand/data/transactions"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -91,6 +92,8 @@ type BlockFactory interface {
 	AssembleBlock(basics.Round, time.Time) (ValidatedBlock, error)
 
 	ReconstructBlock(bookkeeping.Block) error
+
+	RememberTxn(txn transactions.SignedTxn)
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.

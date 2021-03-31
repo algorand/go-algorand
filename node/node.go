@@ -1053,12 +1053,12 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 
 func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) error {
 	count := 0
-	//txns, found := node.transactionPool.FindTxns(block.PaysetDigest)
+	txns, found := node.transactionPool.FindTxns(block.PaysetDigest)
 	logging.Base().Infof("found txns")
 	for i := range block.Payset {
-		//if found[i] {
-		//	block.Payset[i].SignedTxn = txns[i]
-		//}
+		if found[i] {
+			block.Payset[i].SignedTxn = txns[i]
+		}
 		if block.Payset[i].SignedTxn.MsgIsZero() {
 			count += 1
 		} else {
@@ -1073,4 +1073,8 @@ func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) error {
 		return fmt.Errorf("%v txns missing from %v", count, len(block.PaysetDigest))
 	}
 	return nil
+}
+
+func (node *AlgorandFullNode) RememberTxn(txn transactions.SignedTxn) {
+
 }
