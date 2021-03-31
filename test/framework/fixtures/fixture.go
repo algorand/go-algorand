@@ -40,7 +40,6 @@ type TestingTB interface {
 	SkipNow()
 	Skipf(format string, args ...interface{})
 	Skipped() bool
-	//TempDir() string
 }
 
 // Fixture provides the base interface for all E2E test fixtures
@@ -170,9 +169,3 @@ func (st *synchTest) Skipped() bool {
 	defer st.Unlock()
 	return st.t.Skipped()
 }
-
-/*func (st *synchTest) TempDir() string {
-	st.Lock()
-	defer st.Unlock()
-	return st.t.TempDir()
-}*/

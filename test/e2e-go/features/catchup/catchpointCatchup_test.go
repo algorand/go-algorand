@@ -41,7 +41,7 @@ type nodeExitErrorCollector struct {
 	errors   []error
 	messages []string
 	mu       deadlock.Mutex
-	t        *testing.T
+	t        fixtures.TestingTB
 }
 
 func (ec *nodeExitErrorCollector) nodeExitWithError(nc *nodecontrol.NodeController, err error) {
@@ -115,7 +115,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
 
-	errorsCollector := nodeExitErrorCollector{t: t}
+	errorsCollector := nodeExitErrorCollector{t: fixtures.SynchronizedTest(t)}
 	defer errorsCollector.Print()
 
 	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,

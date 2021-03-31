@@ -78,13 +78,14 @@ func TestBasicCatchup(t *testing.T) {
 func TestCatchupOverGossip(t *testing.T) {
 	t.Parallel()
 
+	syncTest := fixtures.SynchronizedTest(t)
 	supportedVersions := network.SupportedProtocolVersions
-	require.LessOrEqual(t, len(supportedVersions), 3)
+	require.LessOrEqual(syncTest, len(supportedVersions), 3)
 
 	// ledger node upgraded version, fetcher node upgraded version
 	// Run with the default values. Instead of "", pass the default value
 	// to exercise loading it from the config file.
-	runCatchupOverGossip(t, supportedVersions[0], supportedVersions[0])
+	runCatchupOverGossip(syncTest, supportedVersions[0], supportedVersions[0])
 	for i := 1; i < len(supportedVersions); i++ {
 		runCatchupOverGossip(t, supportedVersions[i], "")
 		runCatchupOverGossip(t, "", supportedVersions[i])
@@ -92,14 +93,14 @@ func TestCatchupOverGossip(t *testing.T) {
 	}
 }
 
-func runCatchupOverGossip(t *testing.T,
+func runCatchupOverGossip(t fixtures.TestingTB,
 	ledgerNodeDowngradeTo,
 	fetcherNodeDowngradeTo string) {
 
 	if testing.Short() {
 		t.Skip()
 	}
-	a := require.New(fixtures.SynchronizedTest(t))
+	a := require.New(t)
 	// Overview of this test:
 	// Start a two-node network (Primary with 0% stake, Secondary with 100% stake)
 	// Kill the primary for a few blocks. (Note that primary only has incoming connections)
