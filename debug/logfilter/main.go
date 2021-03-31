@@ -20,6 +20,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -29,8 +30,8 @@ type test struct {
 	outputBuffer string
 }
 
-func main() {
-	scanner := bufio.NewScanner(os.Stdin)
+func logFilter(inFile io.Reader, outFile io.Writer) int {
+	scanner := bufio.NewScanner(inFile)
 
 	tests := make(map[string]test)
 	currentTestName := ""
@@ -72,7 +73,7 @@ func main() {
 			if _, have := tests[testName]; !have {
 				panic(fmt.Errorf("test '%s' is missing, when parsing '%s'", testName, line))
 			}
-			fmt.Fprintf(os.Stdout, line+"\r\n")
+			fmt.Fprintf(outFile, line+"\r\n")
 			delete(tests, testName)
 			continue
 		}
@@ -83,8 +84,8 @@ func main() {
 			if !have {
 				panic(fmt.Errorf("test %s is missing", testName))
 			}
-			fmt.Fprintf(os.Stdout, test.outputBuffer+"\r\n")
-			fmt.Fprintf(os.Stdout, line+"\r\n")
+			fmt.Fprintf(outFile, test.outputBuffer+"\r\n")
+			fmt.Fprintf(outFile, line+"\r\n")
 			test.outputBuffer = ""
 			tests[testName] = test
 			continue
@@ -101,20 +102,27 @@ func main() {
 			continue
 		}
 		if strings.HasPrefix(line, "ok  	") {
-			fmt.Fprintf(os.Stdout, line+"\r\n")
+			fmt.Fprintf(outFile, line+"\r\n")
 			continue
 		}
 		if strings.HasPrefix(line, "FAIL	") {
-			fmt.Fprintf(os.Stdout, line+"\r\n")
+			fmt.Fprintf(outFile, line+"\r\n")
 			continue
 		}
-		panic(fmt.Errorf("unexpected text output from test : '%s'", line))
+		// this shouldn't happen.. but if it does, just print out the text:
+		fmt.Fprintf(outFile, line+"\r\n")
 	}
 	scannerErr := scanner.Err()
 	if scannerErr != nil {
 		if currentTestName != "" && tests[currentTestName].outputBuffer != "" {
-			fmt.Fprint(os.Stdout, tests[currentTestName].outputBuffer)
+			fmt.Fprint(outFile, tests[currentTestName].outputBuffer)
 		}
-		os.Exit(1)
+		return 1
 	}
+	return 0
+}
+
+func main() {
+	retCode := logFilter(os.Stdin, os.Stdout)
+	os.Exit(retCode)
 }
