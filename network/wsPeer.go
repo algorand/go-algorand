@@ -327,8 +327,6 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	return nil
 }
 
-const maxBroadcastArraySize = 30000
-
 // setup values not trivially assigned
 func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.net.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.rootURL)
