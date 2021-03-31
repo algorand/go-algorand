@@ -121,9 +121,15 @@ func (kc *KMDController) StopKMD() (alreadyStopped bool, err error) {
 	kmdPID, err := kc.GetKMDPID()
 	if err == nil {
 		// Kill kmd by PID
-		err = killPID(int(kmdPID))
-		if err != nil {
-			return
+		killed, killErr := killPID(int(kmdPID))
+		if killErr != nil {
+			return false, killErr
+		}
+		// if we ended up killing the process, make sure to delete the pid file to avoid
+		// potential downstream issues.
+		if killed {
+			// delete the pid file.
+			os.Remove(kc.kmdPIDPath)
 		}
 	} else {
 		err = nil
