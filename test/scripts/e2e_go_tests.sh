@@ -4,7 +4,7 @@ echo "  e2e_go_tests"
 echo "######################################################################"
 set -e
 set -o pipefail
-set +x
+set -x
 
 export GOPATH=$(go env GOPATH)
 export GO111MODULE=on
