@@ -28,6 +28,7 @@ import (
 )
 
 func TestServerStartsStopsSuccessfully(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	f.Setup(t)
@@ -37,11 +38,12 @@ func TestServerStartsStopsSuccessfully(t *testing.T) {
 	req := kmdapi.VersionsRequest{}
 	resp := kmdapi.VersionsResponse{}
 	err := f.Client.DoV1Request(req, &resp)
-	require.NoError(t, err)
+	a.NoError(err)
 }
 
 func TestBadAuthFails(t *testing.T) {
 	t.Parallel()
+	a := require.New(fixtures.SynchronizedTest(t))
 	var f fixtures.KMDFixture
 	f.Setup(t)
 	defer f.Shutdown()
@@ -49,16 +51,17 @@ func TestBadAuthFails(t *testing.T) {
 	// Make a client with a bad token
 	badAPIToken := strings.Repeat("x", 64)
 	client, err := client.MakeKMDClient(f.Sock, badAPIToken)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Test that `GET /v1/wallets` fails with the bad token
 	req := kmdapi.APIV1GETWalletsRequest{}
 	resp := kmdapi.APIV1GETWalletsResponse{}
 	err = client.DoV1Request(req, &resp)
-	require.Error(t, err)
+	a.Error(err)
 }
 
 func TestGoodAuthSucceeds(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	f.Setup(t)
@@ -69,5 +72,5 @@ func TestGoodAuthSucceeds(t *testing.T) {
 	req := kmdapi.APIV1GETWalletsRequest{}
 	resp := kmdapi.APIV1GETWalletsResponse{}
 	err := f.Client.DoV1Request(req, &resp)
-	require.NoError(t, err)
+	a.NoError(err)
 }

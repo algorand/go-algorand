@@ -32,6 +32,7 @@ import (
 )
 
 func TestGenerateAndListKeys(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -43,10 +44,10 @@ func TestGenerateAndListKeys(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Key should not be empty
-	require.NotEmpty(t, resp0.Address)
+	a.NotEmpty(resp0.Address)
 
 	// List public keys
 	req1 := kmdapi.APIV1POSTKeyListRequest{
@@ -54,13 +55,13 @@ func TestGenerateAndListKeys(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTKeyListResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// List should have exactly one entry
-	require.Equal(t, len(resp1.Addresses), 1)
+	a.Equal(len(resp1.Addresses), 1)
 
 	// Only entry should equal generated public key
-	require.Equal(t, resp1.Addresses[0], resp0.Address)
+	a.Equal(resp1.Addresses[0], resp0.Address)
 
 	// Generate another key
 	req2 := kmdapi.APIV1POSTKeyRequest{
@@ -68,7 +69,7 @@ func TestGenerateAndListKeys(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTKeyResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// List public keys
 	req3 := kmdapi.APIV1POSTKeyListRequest{
@@ -76,13 +77,14 @@ func TestGenerateAndListKeys(t *testing.T) {
 	}
 	resp3 := kmdapi.APIV1POSTKeyListResponse{}
 	err = f.Client.DoV1Request(req3, &resp3)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// List should have exactly two entries
-	require.Equal(t, len(resp3.Addresses), 2)
+	a.Equal(len(resp3.Addresses), 2)
 }
 
 func TestImportKey(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -100,10 +102,10 @@ func TestImportKey(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyImportResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Public key should be that of the key we imported
-	require.Equal(t, resp0.Address, basics.Address(secrets.SignatureVerifier).GetUserAddress())
+	a.Equal(resp0.Address, basics.Address(secrets.SignatureVerifier).GetUserAddress())
 
 	// Try to import the same key
 	req1 := kmdapi.APIV1POSTKeyImportRequest{
@@ -114,7 +116,7 @@ func TestImportKey(t *testing.T) {
 	err = f.Client.DoV1Request(req1, &resp1)
 
 	// Should fail (duplicate key)
-	require.Error(t, err)
+	a.Error(err)
 
 	// List public keys
 	req2 := kmdapi.APIV1POSTKeyListRequest{
@@ -122,16 +124,17 @@ func TestImportKey(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTKeyListResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// List should have exactly one entry
-	require.Equal(t, len(resp2.Addresses), 1)
+	a.Equal(len(resp2.Addresses), 1)
 
 	// Only entry should equal generated public key
-	require.Equal(t, resp2.Addresses[0], basics.Address(secrets.SignatureVerifier).GetUserAddress())
+	a.Equal(resp2.Addresses[0], basics.Address(secrets.SignatureVerifier).GetUserAddress())
 }
 
 func TestExportKey(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -149,10 +152,10 @@ func TestExportKey(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyImportResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Public key should be that of the key we imported
-	require.Equal(t, resp0.Address, basics.Address(secrets.SignatureVerifier).GetUserAddress())
+	a.Equal(resp0.Address, basics.Address(secrets.SignatureVerifier).GetUserAddress())
 
 	// List public keys
 	req1 := kmdapi.APIV1POSTKeyListRequest{
@@ -160,13 +163,13 @@ func TestExportKey(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTKeyListResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// List should have exactly one entry
-	require.Equal(t, len(resp1.Addresses), 1)
+	a.Equal(len(resp1.Addresses), 1)
 
 	// Only entry should equal generated public key
-	require.Equal(t, resp1.Addresses[0], basics.Address(secrets.SignatureVerifier).GetUserAddress())
+	a.Equal(resp1.Addresses[0], basics.Address(secrets.SignatureVerifier).GetUserAddress())
 
 	// Export the key
 	req2 := kmdapi.APIV1POSTKeyExportRequest{
@@ -176,10 +179,10 @@ func TestExportKey(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTKeyExportResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Response should be same secret key
-	require.Equal(t, resp2.PrivateKey, crypto.PrivateKey(secrets.SK))
+	a.Equal(resp2.PrivateKey, crypto.PrivateKey(secrets.SK))
 
 	// Export with wrong password should fail
 	req3 := kmdapi.APIV1POSTKeyExportRequest{
@@ -189,10 +192,11 @@ func TestExportKey(t *testing.T) {
 	}
 	resp3 := kmdapi.APIV1POSTKeyExportResponse{}
 	err = f.Client.DoV1Request(req3, &resp3)
-	require.Error(t, err)
+	a.Error(err)
 }
 
 func TestDeleteKey(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -204,10 +208,10 @@ func TestDeleteKey(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Token should not be empty
-	require.NotEqual(t, resp0.Address, crypto.Digest{})
+	a.NotEqual(resp0.Address, crypto.Digest{})
 
 	// List public keys
 	req1 := kmdapi.APIV1POSTKeyListRequest{
@@ -215,13 +219,13 @@ func TestDeleteKey(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTKeyListResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// List should have exactly one entry
-	require.Equal(t, len(resp1.Addresses), 1)
+	a.Equal(len(resp1.Addresses), 1)
 
 	// Only entry should equal generated public key
-	require.Equal(t, resp1.Addresses[0], resp0.Address)
+	a.Equal(resp1.Addresses[0], resp0.Address)
 
 	// Delete with wrong password should fail
 	req2 := kmdapi.APIV1DELETEKeyRequest{
@@ -231,7 +235,7 @@ func TestDeleteKey(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1DELETEKeyResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.Error(t, err)
+	a.Error(err)
 
 	// Try to delete the key
 	req3 := kmdapi.APIV1DELETEKeyRequest{
@@ -241,7 +245,7 @@ func TestDeleteKey(t *testing.T) {
 	}
 	resp3 := kmdapi.APIV1DELETEKeyResponse{}
 	err = f.Client.DoV1Request(req3, &resp3)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// List public keys
 	req4 := kmdapi.APIV1POSTKeyListRequest{
@@ -249,13 +253,14 @@ func TestDeleteKey(t *testing.T) {
 	}
 	resp4 := kmdapi.APIV1POSTKeyListResponse{}
 	err = f.Client.DoV1Request(req4, &resp4)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// List should have exactly zero entries
-	require.Equal(t, len(resp4.Addresses), 0)
+	a.Equal(len(resp4.Addresses), 0)
 }
 
 func TestSignTransaction(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -274,7 +279,7 @@ func TestSignTransaction(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyImportResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Make a transaction
 	tx := transactions.Transaction{
@@ -300,19 +305,20 @@ func TestSignTransaction(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTTransactionSignResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// SignedTxn signature should not be empty
 	var stx transactions.SignedTxn
 	err = protocol.Decode(resp1.SignedTransaction, &stx)
-	require.NoError(t, err)
-	require.NotEqual(t, stx.Sig, crypto.Signature{})
+	a.NoError(err)
+	a.NotEqual(stx.Sig, crypto.Signature{})
 
 	// TODO The SignedTxn should actually verify
-	// require.NoError(t, stx.Verify())
+	// a.NoError(stx.Verify())
 }
 
 func TestSignProgram(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -331,7 +337,7 @@ func TestSignProgram(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyImportResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	program := []byte("blah blah blah, not a real program, just some bytes to sign, kmd does not have a program interpreter to know if the program is legitimate, but it _does_ prefix the program with protocol.Program and we can verify that here below")
 
@@ -346,19 +352,20 @@ func TestSignProgram(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTProgramSignResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// SignedTxn signature should not be empty
-	require.NotEmpty(t, len(resp1.Signature), 0)
+	a.NotEmpty(len(resp1.Signature), 0)
 	var sig crypto.Signature
 	copy(sig[:], resp1.Signature)
-	require.NotEqual(t, sig, crypto.Signature{})
+	a.NotEqual(sig, crypto.Signature{})
 
 	ph := logic.Program(program)
-	require.True(t, secrets.SignatureVerifier.Verify(ph, sig))
+	a.True(secrets.SignatureVerifier.Verify(ph, sig))
 }
 
 func BenchmarkSignTransaction(b *testing.B) {
+	a := require.New(fixtures.SynchronizedTest(b))
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(b)
 	defer f.Shutdown()
@@ -376,7 +383,7 @@ func BenchmarkSignTransaction(b *testing.B) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyImportResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(b, err)
+	a.NoError(err)
 
 	// Make a transaction
 	tx := transactions.Transaction{
@@ -404,12 +411,13 @@ func BenchmarkSignTransaction(b *testing.B) {
 			}
 			resp1 := kmdapi.APIV1POSTTransactionSignResponse{}
 			err = f.Client.DoV1Request(req1, &resp1)
-			require.NoError(b, err)
+			a.NoError(err)
 		}
 	})
 }
 
 func TestMasterKeyImportExport(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -421,11 +429,11 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Key should not be empty
 	key0 := resp0.Address
-	require.NotEqual(t, key0, crypto.Digest{})
+	a.NotEqual(key0, crypto.Digest{})
 
 	// Generate another key
 	req1 := kmdapi.APIV1POSTKeyRequest{
@@ -433,11 +441,11 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTKeyResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Key should not be empty
 	key1 := resp1.Address
-	require.NotEqual(t, key1, crypto.Digest{})
+	a.NotEqual(key1, crypto.Digest{})
 
 	// Export master key with incorrect password should fail
 	req2 := kmdapi.APIV1POSTMasterKeyExportRequest{
@@ -446,7 +454,7 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTMasterKeyExportResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.Error(t, err)
+	a.Error(err)
 
 	// Export master key with correct password should succeed
 	req3 := kmdapi.APIV1POSTMasterKeyExportRequest{
@@ -455,11 +463,11 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp3 := kmdapi.APIV1POSTMasterKeyExportResponse{}
 	err = f.Client.DoV1Request(req3, &resp3)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// MDK should not be blank
 	mdk0 := resp3.MasterDerivationKey
-	require.NotEqual(t, mdk0, crypto.MasterDerivationKey{})
+	a.NotEqual(mdk0, crypto.MasterDerivationKey{})
 
 	// Create another wallet, don't import the MDK
 	pw := "unrelated-password"
@@ -470,11 +478,11 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp4 := kmdapi.APIV1POSTWalletResponse{}
 	err = f.Client.DoV1Request(req4, &resp4)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Get the new wallet ID
 	unrelatedWalletID := resp4.Wallet.ID
-	require.NotEmpty(t, unrelatedWalletID)
+	a.NotEmpty(unrelatedWalletID)
 
 	// Get a wallet token
 	req5 := kmdapi.APIV1POSTWalletInitRequest{
@@ -483,7 +491,7 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp5 := kmdapi.APIV1POSTWalletInitResponse{}
 	err = f.Client.DoV1Request(req5, &resp5)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Generate a key for the unrelated wallet
 	req6 := kmdapi.APIV1POSTKeyRequest{
@@ -491,15 +499,15 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp6 := kmdapi.APIV1POSTKeyResponse{}
 	err = f.Client.DoV1Request(req6, &resp6)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Key should not be empty
 	key2 := resp6.Address
-	require.NotEqual(t, key2, crypto.Digest{})
+	a.NotEqual(key2, crypto.Digest{})
 
 	// Key should not be equal to either of the keys from the first wallet
-	require.NotEqual(t, key2, key0)
-	require.NotEqual(t, key2, key1)
+	a.NotEqual(key2, key0)
+	a.NotEqual(key2, key1)
 
 	// Create another wallet, import the MDK
 	pw = "related-password"
@@ -511,11 +519,11 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp7 := kmdapi.APIV1POSTWalletResponse{}
 	err = f.Client.DoV1Request(req7, &resp7)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Get the new wallet ID
 	relatedWalletID := resp7.Wallet.ID
-	require.NotEmpty(t, relatedWalletID)
+	a.NotEmpty(relatedWalletID)
 
 	// Get a wallet token
 	req8 := kmdapi.APIV1POSTWalletInitRequest{
@@ -524,7 +532,7 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp8 := kmdapi.APIV1POSTWalletInitResponse{}
 	err = f.Client.DoV1Request(req8, &resp8)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	relatedWalletHandleToken := resp8.WalletHandleToken
 
@@ -534,11 +542,11 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp9 := kmdapi.APIV1POSTKeyResponse{}
 	err = f.Client.DoV1Request(req9, &resp9)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Key should not be empty
 	key3 := resp9.Address
-	require.NotEqual(t, key3, crypto.Digest{})
+	a.NotEqual(key3, crypto.Digest{})
 
 	// Generate another key
 	req10 := kmdapi.APIV1POSTKeyRequest{
@@ -546,17 +554,17 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp10 := kmdapi.APIV1POSTKeyResponse{}
 	err = f.Client.DoV1Request(req10, &resp10)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Key should not be empty
 	key4 := resp1.Address
-	require.NotEqual(t, key4, crypto.Digest{})
+	a.NotEqual(key4, crypto.Digest{})
 
 	// key3 should be the same as key0
-	require.Equal(t, key3, key0)
+	a.Equal(key3, key0)
 
 	// key4 should be the same as key1
-	require.Equal(t, key4, key1)
+	a.Equal(key4, key1)
 
 	// Export master key for related wallet
 	req11 := kmdapi.APIV1POSTMasterKeyExportRequest{
@@ -565,17 +573,18 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp11 := kmdapi.APIV1POSTMasterKeyExportResponse{}
 	err = f.Client.DoV1Request(req11, &resp11)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// MDK should not be blank
 	mdk1 := resp11.MasterDerivationKey
-	require.NotEqual(t, mdk1, crypto.MasterDerivationKey{})
+	a.NotEqual(mdk1, crypto.MasterDerivationKey{})
 
 	// MDK should be the same as the first mdk
-	require.Equal(t, mdk0, mdk1)
+	a.Equal(mdk0, mdk1)
 }
 
 func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -589,11 +598,11 @@ func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
 		}
 		resp := kmdapi.APIV1POSTKeyResponse{}
 		err := f.Client.DoV1Request(req, &resp)
-		require.NoError(t, err)
+		a.NoError(err)
 
 		// Key should not be empty
 		addr := resp.Address
-		require.NotEmpty(t, addr)
+		a.NotEmpty(addr)
 		addrs = append(addrs, addr)
 	}
 
@@ -604,11 +613,11 @@ func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTMasterKeyExportResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// MDK should not be blank
 	mdk := resp0.MasterDerivationKey
-	require.NotEqual(t, mdk, crypto.MasterDerivationKey{})
+	a.NotEqual(mdk, crypto.MasterDerivationKey{})
 
 	// Create another wallet, import the MDK
 	pw := "related-password"
@@ -620,11 +629,11 @@ func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTWalletResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Get the new wallet ID
 	relatedWalletID := resp1.Wallet.ID
-	require.NotEmpty(t, relatedWalletID)
+	a.NotEmpty(relatedWalletID)
 
 	// Get a wallet token
 	req2 := kmdapi.APIV1POSTWalletInitRequest{
@@ -633,7 +642,7 @@ func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTWalletInitResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	relatedWalletHandleToken := resp2.WalletHandleToken
 
@@ -643,14 +652,14 @@ func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
 	}
 	resp3 := kmdapi.APIV1POSTKeyResponse{}
 	err = f.Client.DoV1Request(req3, &resp3)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Key should not be empty
 	addr0 := resp3.Address
-	require.NotEmpty(t, addr0)
+	a.NotEmpty(addr0)
 
 	// key0 should be the same as keys[0]
-	require.Equal(t, addr0, addrs[0])
+	a.Equal(addr0, addrs[0])
 
 	// Export keys[1]'s secret key from the first wallet
 	req4 := kmdapi.APIV1POSTKeyExportRequest{
@@ -660,11 +669,11 @@ func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
 	}
 	resp4 := kmdapi.APIV1POSTKeyExportResponse{}
 	err = f.Client.DoV1Request(req4, &resp4)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Exported secret should not be blank
 	key1Secret := resp4.PrivateKey
-	require.NotEqual(t, key1Secret, crypto.PrivateKey{})
+	a.NotEqual(key1Secret, crypto.PrivateKey{})
 
 	// Import keys[1] into the second wallet
 	req5 := kmdapi.APIV1POSTKeyImportRequest{
@@ -673,10 +682,10 @@ func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
 	}
 	resp5 := kmdapi.APIV1POSTKeyImportResponse{}
 	err = f.Client.DoV1Request(req5, &resp5)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Address should be addrs[1]
-	require.Equal(t, resp5.Address, addrs[1])
+	a.Equal(resp5.Address, addrs[1])
 
 	// Generate another key in the second wallet
 	req6 := kmdapi.APIV1POSTKeyRequest{
@@ -684,12 +693,12 @@ func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
 	}
 	resp6 := kmdapi.APIV1POSTKeyResponse{}
 	err = f.Client.DoV1Request(req6, &resp6)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Address should not be empty
 	addr1 := resp6.Address
-	require.NotEmpty(t, addr1)
+	a.NotEmpty(addr1)
 
 	// Address should be equal to addrs[2]
-	require.Equal(t, addr1, addrs[2])
+	a.Equal(addr1, addrs[2])
 }

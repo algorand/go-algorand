@@ -1136,7 +1136,7 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpdates compactAccountDeltas, accountTotals []ledgercore.AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpdates compactAccountDeltas, accountTotals []ledgercore.AccountTotals, proto config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -1157,13 +1157,13 @@ func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpda
 			addr, data := updates[i].GetByIdx(j)
 
 			if oldAccountData, has := accounts[addr]; has {
-				totals.DelAccount(protos[i], oldAccountData, &ot)
+				totals.DelAccount(proto, oldAccountData, &ot)
 			} else {
 				err = fmt.Errorf("missing old account data")
 				return
 			}
 
-			totals.AddAccount(protos[i], data, &ot)
+			totals.AddAccount(proto, data, &ot)
 			accounts[addr] = data
 		}
 	}

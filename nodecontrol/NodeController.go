@@ -111,26 +111,26 @@ func (nc NodeController) stopProcesses() (kmdAlreadyStopped bool, err error) {
 	return
 }
 
-func killPID(pid int) error {
+func killPID(pid int) (killed bool, err error) {
 	process, err := util.FindProcess(pid)
 	if process == nil || err != nil {
-		return err
+		return false, err
 	}
 
 	err = util.KillProcess(pid, syscall.SIGTERM)
 	if err != nil {
-		return err
+		return false, err
 	}
 	waitLong := time.After(time.Second * 30)
 	for {
 		// Send null signal - if process still exists, it'll return nil
 		// So when we get an error, assume it's gone.
 		if err = process.Signal(syscall.Signal(0)); err != nil {
-			return nil
+			return false, nil
 		}
 		select {
 		case <-waitLong:
-			return util.KillProcess(pid, syscall.SIGKILL)
+			return true, util.KillProcess(pid, syscall.SIGKILL)
 		case <-time.After(time.Millisecond * 100):
 		}
 	}

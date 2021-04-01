@@ -31,7 +31,7 @@ func TestStartAndCancelAuctionNoBids(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "ThreeNodesEvenDist.json")
 	auctionParamFile := filepath.Join("auctions", "AuctionParams_1.json")
@@ -62,7 +62,7 @@ func TestStartAndCancelAuctionOneUserTenBids(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
 	auctionParamFile := filepath.Join("auctions", "AuctionParams_1.json")
@@ -122,7 +122,7 @@ func TestStartAndCancelAuctionOneUserTenBids(t *testing.T) {
 
 func TestStartAndCancelAuctionEarlyOneUserTenBids(t *testing.T) {
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
 	netTemplate := filepath.Join("nettemplates", "TwoNodes50Each.json")
 	auctionParamFile := filepath.Join("auctions", "AuctionParams_1.json")
