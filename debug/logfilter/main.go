@@ -35,6 +35,9 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 
 	tests := make(map[string]test)
 	currentTestName := ""
+	// packageOutputBuffer is used to buffer messages that are package-oriented. i.e. TestMain() generated messages,
+	// which are called before any test starts to run.
+	packageOutputBuffer := ""
 	for scanner.Scan() {
 		line := scanner.Text()
 		if len(line) == 0 {
@@ -103,14 +106,19 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 		}
 		if strings.HasPrefix(line, "ok  	") {
 			fmt.Fprintf(outFile, line+"\r\n")
+			packageOutputBuffer = ""
 			continue
 		}
 		if strings.HasPrefix(line, "FAIL	") {
+			if len(packageOutputBuffer) > 0 {
+				fmt.Fprintf(outFile, line+"...\r\n%s\r\n", packageOutputBuffer)
+			}
+			packageOutputBuffer = ""
 			fmt.Fprintf(outFile, line+"\r\n")
 			continue
 		}
-		// this shouldn't happen.. but if it does, just print out the text:
-		fmt.Fprintf(outFile, line+"\r\n")
+		// this is package-oriented output
+		packageOutputBuffer += line + "\r\n"
 	}
 	scannerErr := scanner.Err()
 	if scannerErr != nil {
