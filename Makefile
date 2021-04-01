@@ -220,7 +220,7 @@ fulltest: build-race
 shorttest: build-race $(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
 
 $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
-	@go test $(GOTAGS) -short -timeout 2500s -race $(subst short_test_target_,,$@)
+	@go test $(GOTAGS) -short -timeout 2500s -race $(subst short_test_target_,,$@) | logfilter
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
