@@ -125,7 +125,8 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 		if currentTestName != "" && tests[currentTestName].outputBuffer != "" {
 			fmt.Fprint(outFile, tests[currentTestName].outputBuffer)
 		}
-		return 1
+		fmt.Fprintf(outFile, "logfilter: the following error received on the input stream : %v\r\n", scannerErr)
+		return 0
 	}
 	return 0
 }
