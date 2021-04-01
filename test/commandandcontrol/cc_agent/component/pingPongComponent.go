@@ -120,13 +120,11 @@ func (componentInstance *PingPongComponentInstance) startPingPong(cfg *pingpong.
 
 	log.Infof("Preparing to initialize PingPong with config: %+v\n", cfg)
 
-	var accounts map[string]uint64
-	var cinfo pingpong.CreatablesInfo
-	var resultCfg pingpong.PpConfig
+	pps := pingpong.NewPingpong(*cfg)
 
 	// Initialize accounts if necessary, this may take several attempts while previous transactions to settle
 	for i := 0; i < 10; i++ {
-		accounts, cinfo, resultCfg, err = pingpong.PrepareAccounts(ac, *cfg)
+		err = pps.PrepareAccounts(ac)
 		if err == nil {
 			break
 		} else {
@@ -145,7 +143,7 @@ func (componentInstance *PingPongComponentInstance) startPingPong(cfg *pingpong.
 	componentInstance.ctx, componentInstance.cancelFunc = context.WithCancel(context.Background())
 
 	// Kick off the real processing
-	go pingpong.RunPingPong(componentInstance.ctx, ac, accounts, cinfo, resultCfg)
+	go pps.RunPingPong(componentInstance.ctx, ac)
 
 	return
 }

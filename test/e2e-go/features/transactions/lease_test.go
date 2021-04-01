@@ -28,7 +28,7 @@ import (
 
 func TestLeaseTransactionsSameSender(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -87,7 +87,7 @@ func TestLeaseTransactionsSameSender(t *testing.T) {
 
 func TestLeaseRegressionFaultyFirstValidCheckOld_2f3880f7(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV22.json"))
@@ -159,7 +159,7 @@ func TestLeaseRegressionFaultyFirstValidCheckOld_2f3880f7(t *testing.T) {
 
 func TestLeaseRegressionFaultyFirstValidCheckNew_2f3880f7(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -218,7 +218,7 @@ func TestLeaseRegressionFaultyFirstValidCheckNew_2f3880f7(t *testing.T) {
 
 func TestLeaseTransactionsSameSenderDifferentLease(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -279,7 +279,7 @@ func TestLeaseTransactionsSameSenderDifferentLease(t *testing.T) {
 
 func TestLeaseTransactionsDifferentSender(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -353,7 +353,7 @@ func TestLeaseTransactionsDifferentSender(t *testing.T) {
 
 func TestOverlappingLeases(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
