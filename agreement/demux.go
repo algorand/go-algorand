@@ -108,36 +108,31 @@ func (d *demux) UpdateEventsQueue(queueName string, queueLength int) {
 	d.processingMonitor.UpdateEventsQueue(queueName, queueLength)
 }
 
-func ReconstructProposal(net Network, b *bookkeeping.Block, h MessageHandle) error {
-	logging.Base().Infof("len %v", len(b.PaysetDigest))
-	stxnsData, allPresent := net.LoadMessage(h, b.PaysetDigest)
+func ReconstructProposal(s *Service, b *bookkeeping.Block, h MessageHandle) error {
 	if b.Payset == nil {
 		b.Payset = make(transactions.Payset, len(b.PaysetDigest))
 	}
+	if s.BlockFactory != nil {
+		if err := s.BlockFactory.ReconstructBlock(b); err != nil {
+			return err
+		}
+	} else {
+		logging.Base().Warnf("failed to reconstruct block: BlockFactory was nil")
+	}
+	logging.Base().Infof("len %v", len(b.PaysetDigest))
+	stxnsData, allPresent := s.Network.LoadMessage(h, b.PaysetDigest)
 	if !allPresent {
 		logging.Base().Warnf("could not recover txns")
 	} else {
 		logging.Base().Warnf("could recover txns")
 	}
 
-	totalLength := 0
-	for _, stxnData := range stxnsData {
-		if stxnData != nil {
-			totalLength += len(stxnData)
-		}
-	}
+	var dec protocol.Decoder
 
-	data := make([]byte, 0, totalLength)
-	for _, stxnData := range stxnsData {
-		if stxnData != nil {
-			data = append(data, stxnData...)
-		}
-	}
-
-	dec := protocol.NewDecoderBytes(data)
-
+	count := 0
 	for i, stxnData := range stxnsData {
-		if stxnData != nil {
+		if b.Payset[i].SignedTxn.MsgIsZero() && stxnData != nil {
+			dec = protocol.NewDecoderBytes(stxnData)
 			err := dec.Decode(&b.Payset[i].SignedTxn)
 			if err == io.EOF {
 				break
@@ -148,6 +143,18 @@ func ReconstructProposal(net Network, b *bookkeeping.Block, h MessageHandle) err
 				return err
 			}
 		}
+		if b.Payset[i].SignedTxn.MsgIsZero() {
+			count += 1
+		} else {
+			var err error
+			b.Payset[i], err = b.EncodeSignedTxn(b.Payset[i].SignedTxn, transactions.ApplyData{})
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if count > 0 {
+		return fmt.Errorf("%v txns missing from %v", count, len(b.PaysetDigest))
 	}
 
 	logging.Base().Infof("done %v", len(b.Payset))
@@ -186,10 +193,6 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, UnauthenticatedBundle: o.(unauthenticatedBundle)}
 				case protocol.ProposalPayloadTag:
 					msg = message{MessageHandle: raw.MessageHandle, Tag: tag, CompoundMessage: o.(compoundMessage)}
-					if err := ReconstructProposal(net, &msg.CompoundMessage.Proposal.Block, msg.MessageHandle); err != nil {
-						logging.Base().Warnf("Failed to reconstruct proposal: %v", err)
-						continue
-					}
 				default:
 					err := fmt.Errorf("bad message tag: %v", tag)
 					d.UpdateEventsQueue(fmt.Sprintf("Tokenizing-%s", tag), 0)
@@ -413,13 +416,9 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 // setupCompoundMessage processes compound messages: distinct messages which are delivered together
 func setupCompoundMessage(l LedgerReader, m message, s *Service) (res externalEvent) {
 	compound := m.CompoundMessage
-	if s.BlockFactory != nil {
-		if err := s.BlockFactory.ReconstructBlock(compound.Proposal.Block); err != nil {
-			logging.Base().Warnf("failed to reconstruct block: %v", err)
-			return emptyEvent{}
-		}
-	} else {
-		logging.Base().Warnf("failed to reconstruct block: service was nil")
+	if err := ReconstructProposal(s, &compound.Proposal.Block, m.MessageHandle); err != nil {
+		logging.Base().Warnf("Failed to reconstruct proposal: %v", err)
+		return emptyEvent{}
 	}
 	if compound.Vote == (unauthenticatedVote{}) {
 		m.Tag = protocol.ProposalPayloadTag

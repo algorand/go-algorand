@@ -1051,26 +1051,13 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 	return validatedBlock{vb: lvb}, nil
 }
 
-func (node *AlgorandFullNode) ReconstructBlock(block bookkeeping.Block) error {
-	count := 0
+func (node *AlgorandFullNode) ReconstructBlock(block *bookkeeping.Block) error {
 	txns, found := node.transactionPool.FindTxns(block.PaysetDigest)
 	logging.Base().Infof("found txns")
 	for i := range block.Payset {
 		if found[i] {
 			block.Payset[i].SignedTxn = txns[i]
 		}
-		if block.Payset[i].SignedTxn.MsgIsZero() {
-			count += 1
-		} else {
-			var err error
-			block.Payset[i], err = block.EncodeSignedTxn(block.Payset[i].SignedTxn, transactions.ApplyData{})
-			if err != nil {
-				return err
-			}
-		}
-	}
-	if count > 0 {
-		return fmt.Errorf("%v txns missing from %v", count, len(block.PaysetDigest))
 	}
 	return nil
 }
