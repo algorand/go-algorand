@@ -59,6 +59,7 @@ func queuePayments(b *testing.B, wg *sync.WaitGroup, c libgoal.Client, q <-chan 
 }
 
 func signer(b *testing.B, wg *sync.WaitGroup, c libgoal.Client, wh []byte, txnChan <-chan *transactions.Transaction, sigTxnChan chan<- *transactions.SignedTxn) {
+	a := require.New(fixtures.SynchronizedTest(b))
 	for {
 		txn := <-txnChan
 		if txn == nil {
@@ -69,7 +70,7 @@ func signer(b *testing.B, wg *sync.WaitGroup, c libgoal.Client, wh []byte, txnCh
 		if err != nil {
 			fmt.Printf("Error signing: %v\n", err)
 		}
-		require.NoError(b, err)
+		a.NoError(err)
 
 		sigTxnChan <- &stxn
 	}
@@ -84,6 +85,7 @@ func BenchmarkPaymentsThroughput(b *testing.B) {
 }
 
 func doBenchTemplate(b *testing.B, template string, moneynode string) {
+	a := require.New(fixtures.SynchronizedTest(b))
 	fmt.Printf("Starting to benchmark template %s\n", template)
 
 	// consensusTestBigBlocks is a version of ConsensusV0 used for testing
@@ -106,15 +108,15 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 	c := fixture.GetLibGoalClientForNamedNode(moneynode)
 
 	wallet, err := c.GetUnencryptedWalletHandle()
-	require.NoError(b, err)
+	a.NoError(err)
 
 	addrs, err := c.ListAddresses(wallet)
-	require.NoError(b, err)
-	require.True(b, len(addrs) > 0)
+	a.NoError(err)
+	a.True(len(addrs) > 0)
 	addr := addrs[0]
 
 	suggest, err := c.SuggestedParams()
-	require.NoError(b, err)
+	a.NoError(err)
 
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], suggest.GenesisHash)
@@ -133,7 +135,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 
 			fmt.Printf("Pre-signing %d transactions..\n", numTransactions)
 			wh, err := c.GetUnencryptedWalletHandle()
-			require.NoError(b, err)
+			a.NoError(err)
 
 			var sigWg sync.WaitGroup
 			txnChan := make(chan *transactions.Transaction, 100)
@@ -145,13 +147,13 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 
 			go func() {
 				sender, err := basics.UnmarshalChecksumAddress(addr)
-				require.NoError(b, err)
+				a.NoError(err)
 
 				round, err := c.CurrentRound()
-				require.NoError(b, err)
+				a.NoError(err)
 
 				params, err := c.SuggestedParams()
-				require.NoError(b, err)
+				a.NoError(err)
 				proto := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 
 				for txi := 0; txi < numTransactions; txi++ {
@@ -192,11 +194,11 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 			}
 
 			status, err = c.Status()
-			require.NoError(b, err)
+			a.NoError(err)
 
 			fmt.Printf("Waiting for round %d to start benchmark..\n", status.LastRound+1)
 			status, err = c.WaitForRound(status.LastRound + 1)
-			require.NoError(b, err)
+			a.NoError(err)
 
 			b.StartTimer()
 
@@ -232,7 +234,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 
 			_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addr, tx.ID().String())
 			fmt.Printf("Waiting for confirmation transaction to commit..\n")
-			require.NoError(b, err)
+			a.NoError(err)
 		}
 	})
 

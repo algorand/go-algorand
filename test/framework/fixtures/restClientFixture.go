@@ -39,14 +39,14 @@ type RestClientFixture struct {
 }
 
 // Setup is called to initialize the test fixture for the test(s)
-func (f *RestClientFixture) Setup(t TestingT, templateFile string) {
+func (f *RestClientFixture) Setup(t TestingTB, templateFile string) {
 	f.LibGoalFixture.Setup(t, templateFile)
 	f.AlgodClient = f.GetAlgodClientForController(f.NC)
 }
 
 // SetupNoStart is called to initialize the test fixture for the test(s)
 // but does not start the network before returning.  Call NC.Start() to start later.
-func (f *RestClientFixture) SetupNoStart(t TestingT, templateFile string) {
+func (f *RestClientFixture) SetupNoStart(t TestingTB, templateFile string) {
 	f.LibGoalFixture.SetupNoStart(t, templateFile)
 }
 

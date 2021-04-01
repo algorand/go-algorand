@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -34,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 func BenchmarkServiceFetchBlocks(b *testing.B) {
@@ -44,26 +44,39 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 
 	require.NotNil(b, remote)
 	require.NotNil(b, local)
-
-	net := &mocks.MockNetwork{}
-
+	
+	// Create a network and block service
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.TestingLog(b), config.GetDefaultLocal(), remote, net, "test genesisID")
+	nodeA := basicRPCNode{}
+	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+	net.addPeer(rootURL)
+	
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 
 	for i := 0; i < b.N; i++ {
 		inMem := true
-		local, err := data.LoadLedger(logging.Base(), b.Name()+"empty"+strconv.Itoa(i), inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
+		local, err := data.LoadLedger(logging.TestingLog(b), b.Name()+"empty"+strconv.Itoa(i), inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
 		require.NoError(b, err)
 
 		// Make Service
-		syncer := MakeService(logging.Base(), defaultConfig, net, local, new(mockedAuthenticator), nil)
-		syncer.fetcherFactory = makeMockFactory(&MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int), latency: 100 * time.Millisecond, predictable: true})
-
+		syncer := MakeService(logging.TestingLog(b), defaultConfig, net, local, new(mockedAuthenticator), nil)
 		b.StartTimer()
-		syncer.sync()
+		syncer.Start()
+		for w := 0; w < 1000; w++ {
+			if remote.LastRound() == local.LastRound() {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 		b.StopTimer()
-		local.Close()
+		syncer.Stop()
 		require.Equal(b, remote.LastRound(), local.LastRound())
+		local.Close()
 	}
 }
 
@@ -133,10 +146,10 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	emptyLedger, err = data.LoadLedger(logging.Base(), t.Name()+"empty", inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
+	emptyLedger, err = data.LoadLedger(logging.TestingLog(t), t.Name()+"empty", inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
 	require.NoError(t, err)
 
-	ledger, err = datatest.FabricateLedger(logging.Base(), t.Name(), parts, genesisBalances, emptyLedger.LastRound()+basics.Round(numBlocks))
+	ledger, err = datatest.FabricateLedger(logging.TestingLog(t), t.Name(), parts, genesisBalances, emptyLedger.LastRound()+basics.Round(numBlocks))
 	require.NoError(t, err)
 	require.Equal(t, ledger.LastRound(), emptyLedger.LastRound()+basics.Round(numBlocks))
 	return ledger, emptyLedger, release, genesisBalances

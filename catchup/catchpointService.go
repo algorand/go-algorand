@@ -101,12 +101,6 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 		net:            net,
 		ledger:         l,
 		config:         cfg,
-		blocksDownloadPeerSelector: makePeerSelector(
-			net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-			}),
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
@@ -116,7 +110,7 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 	if err != nil {
 		return nil, err
 	}
-
+	service.initDownloadPeerSelector()
 	return service, nil
 }
 
@@ -138,17 +132,12 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 		net:            net,
 		ledger:         l,
 		config:         cfg,
-		blocksDownloadPeerSelector: makePeerSelector(
-			net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-			}),
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
 		return nil, err
 	}
+	service.initDownloadPeerSelector()
 	return service, nil
 }
 
@@ -595,9 +584,8 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 		}
 		return nil, time.Duration(0), peer, true, cs.abort(fmt.Errorf("fetchBlock: recurring non-HTTP peer was provided by the peer selector"))
 	}
-	fetcher := makeHTTPFetcher(cs.log, httpPeer, cs.net, &cs.config)
-	blockDownloadStartTime := time.Now()
-	blk, _, err = fetcher.FetchBlock(cs.ctx, round)
+	fetcher := makeUniversalBlockFetcher(cs.log, cs.net, cs.config)
+	blk, _, downloadDuration, err = fetcher.fetchBlock(cs.ctx, round, httpPeer)
 	if err != nil {
 		if cs.ctx.Err() != nil {
 			return nil, time.Duration(0), peer, true, cs.stopOrAbort()
@@ -611,8 +599,6 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 		return nil, time.Duration(0), peer, true, cs.abort(fmt.Errorf("fetchBlock failed after multiple blocks download attempts"))
 	}
 	// success
-	fetcher.Close()
-	downloadDuration = time.Now().Sub(blockDownloadStartTime)
 	return blk, downloadDuration, peer, false, nil
 }
 
@@ -715,4 +701,21 @@ func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(aquiredBlocks
 	defer cs.statsMu.Unlock()
 	cs.stats.AcquiredBlocks = uint64(int64(cs.stats.AcquiredBlocks) + aquiredBlocksDelta)
 	cs.stats.VerifiedBlocks = uint64(int64(cs.stats.VerifiedBlocks) + verifiedBlocksDelta)
+}
+
+func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
+	if cs.config.EnableCatchupFromArchiveServers {
+		cs.blocksDownloadPeerSelector = makePeerSelector(
+			cs.net,
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			})
+	} else {
+		cs.blocksDownloadPeerSelector = makePeerSelector(
+			cs.net,
+			[]peerClass{
+				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
+			})
+	}
 }

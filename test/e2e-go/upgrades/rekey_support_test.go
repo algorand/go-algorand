@@ -29,7 +29,7 @@ import (
 
 // TestRekeyUpgrade tests that we rekey does not work before the upgrade and works well after
 func TestRekeyUpgrade(t *testing.T) {
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	smallLambdaMs := 500
 	consensus := makeApplicationUpgradeConsensus(t)
@@ -73,7 +73,7 @@ func TestRekeyUpgrade(t *testing.T) {
 	a.NoError(err)
 	_, err = client.BroadcastTransaction(rekey)
 	a.Error(err)
-	require.Contains(t, err.Error(), "transaction has RekeyTo set but rekeying not yet enable")
+	a.Contains(err.Error(), "transaction has RekeyTo set but rekeying not yet enable")
 
 	// use rekeyed key to authorize (AuthAddr check)
 	tx.RekeyTo = basics.Address{}
@@ -81,10 +81,10 @@ func TestRekeyUpgrade(t *testing.T) {
 	a.NoError(err)
 	_, err = client.BroadcastTransaction(rekeyed)
 	a.Error(err)
-	require.Contains(t, err.Error(), "nonempty AuthAddr but rekeying not supported")
+	a.Contains(err.Error(), "nonempty AuthAddr but rekeying not supported")
 	// go to upgrade
 	curStatus, err := client.Status()
-	require.NoError(t, err)
+	a.NoError(err)
 	initialStatus := curStatus
 
 	startLoopTime := time.Now()
@@ -92,21 +92,21 @@ func TestRekeyUpgrade(t *testing.T) {
 	// wait until the network upgrade : this can take a while.
 	for curStatus.LastVersion == initialStatus.LastVersion {
 		curStatus, err = client.Status()
-		require.NoError(t, err)
+		a.NoError(err)
 
-		require.Less(t, int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
+		a.Less(int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
 		time.Sleep(time.Duration(smallLambdaMs) * time.Millisecond)
 		round = curStatus.LastRound
 	}
 
 	// now, that we have upgraded to the new protocol which supports rekey, try again.
 	_, err = client.BroadcastTransaction(rekey)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	round, err = client.CurrentRound()
 	a.NoError(err)
 	client.WaitForRound(round + 1)
 
 	_, err = client.BroadcastTransaction(rekeyed)
-	require.NoError(t, err)
+	a.NoError(err)
 }
