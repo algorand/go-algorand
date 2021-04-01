@@ -1297,14 +1297,19 @@ func AssembleStringWithVersion(text string, version uint64) (*OpStream, error) {
 }
 
 type disassembleState struct {
-	program       []byte
-	pc            int
-	out           io.Writer
-	labelCount    int
-	pendingLabels map[int]string
+	program []byte
+	pc      int
+	out     io.Writer
+
+	numericTargets bool
+	labelCount     int
+	pendingLabels  map[int]string
 
 	nextpc int
 	err    error
+
+	intc  []uint64
+	bytec [][]byte
 }
 
 func (dis *disassembleState) putLabel(label string, target int) {
@@ -1321,29 +1326,22 @@ func (dis *disassembleState) outputLabelIfNeeded() (err error) {
 	return
 }
 
-type disassembleFunc func(dis *disassembleState, spec *OpSpec)
+type disassembleFunc func(dis *disassembleState, spec *OpSpec) (string, error)
 
 // Basic disasemble, and extra bytes of opcode are decoded as bytes integers.
-func disDefault(dis *disassembleState, spec *OpSpec) {
+func disDefault(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + spec.Details.Size - 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + spec.Details.Size
-	_, dis.err = fmt.Fprintf(dis.out, "%s", spec.Name)
-	if dis.err != nil {
-		return
-	}
+	out := spec.Name
 	for s := 1; s < spec.Details.Size; s++ {
 		b := uint(dis.program[dis.pc+s])
-		_, dis.err = fmt.Fprintf(dis.out, " %d", b)
-		if dis.err != nil {
-			return
-		}
+		out += fmt.Sprintf(" %d", b)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "\n")
+	return out, nil
 }
 
 var errShortIntcblock = errors.New("intcblock ran past end of program")
@@ -1490,76 +1488,149 @@ func checkByteConstBlock(cx *evalContext) int {
 	return 1
 }
 
-func disIntcblock(dis *disassembleState, spec *OpSpec) {
-	var intc []uint64
-	intc, dis.nextpc, dis.err = parseIntcblock(dis.program, dis.pc)
-	if dis.err != nil {
-		return
+func disIntcblock(dis *disassembleState, spec *OpSpec) (string, error) {
+	intc, nextpc, err := parseIntcblock(dis.program, dis.pc)
+	if err != nil {
+		return "", err
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "intcblock")
-	if dis.err != nil {
-		return
-	}
+	dis.nextpc = nextpc
+	out := spec.Name
 	for _, iv := range intc {
-		_, dis.err = fmt.Fprintf(dis.out, " %d", iv)
-		if dis.err != nil {
-			return
-		}
+		dis.intc = append(dis.intc, iv)
+		out += fmt.Sprintf(" %d", iv)
 	}
-	_, dis.err = dis.out.Write([]byte("\n"))
+	return out, nil
 }
 
-func disBytecblock(dis *disassembleState, spec *OpSpec) {
-	var bytec [][]byte
-	bytec, dis.nextpc, dis.err = parseBytecBlock(dis.program, dis.pc)
-	if dis.err != nil {
-		return
+func disIntc(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + spec.Details.Size - 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "bytecblock")
-	if dis.err != nil {
-		return
+	dis.nextpc = dis.pc + spec.Details.Size
+	var suffix string
+	var b int
+	switch spec.Opcode {
+	case 0x22:
+		suffix = "_0"
+		b = 0
+	case 0x23:
+		suffix = "_1"
+		b = 1
+	case 0x24:
+		suffix = "_2"
+		b = 2
+	case 0x25:
+		suffix = "_3"
+		b = 3
+	case 0x21:
+		b = int(dis.program[dis.pc+1])
+		suffix = fmt.Sprintf(" %d", b)
+	default:
+		return "", fmt.Errorf("disIntc on %v", spec)
 	}
+	if b < len(dis.intc) {
+		return fmt.Sprintf("intc%s // %d", suffix, dis.intc[b]), nil
+	}
+	return fmt.Sprintf("intc%s", suffix), nil
+}
+
+func disBytecblock(dis *disassembleState, spec *OpSpec) (string, error) {
+	bytec, nextpc, err := parseBytecBlock(dis.program, dis.pc)
+	if err != nil {
+		return "", err
+	}
+	dis.nextpc = nextpc
+	out := spec.Name
 	for _, bv := range bytec {
-		_, dis.err = fmt.Fprintf(dis.out, " 0x%s", hex.EncodeToString(bv))
-		if dis.err != nil {
-			return
-		}
+		dis.bytec = append(dis.bytec, bv)
+		out += fmt.Sprintf(" 0x%s", hex.EncodeToString(bv))
 	}
-	_, dis.err = dis.out.Write([]byte("\n"))
+	return out, nil
 }
 
-func disPushInt(dis *disassembleState, spec *OpSpec) {
+func allPrintableASCII(bytes []byte) bool {
+	for _, b := range bytes {
+		if b < 32 || b > 126 {
+			return false
+		}
+	}
+	return true
+}
+func guessByteFormat(bytes []byte) string {
+	var short basics.Address
+
+	if len(bytes) == len(short) {
+		copy(short[:], bytes[:])
+		return fmt.Sprintf("addr %s", short.String())
+	}
+	if allPrintableASCII(bytes) {
+		return fmt.Sprintf("\"%s\"", string(bytes))
+	}
+	return "0x" + hex.EncodeToString(bytes)
+}
+
+func disBytec(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + spec.Details.Size - 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+	}
+	dis.nextpc = dis.pc + spec.Details.Size
+	var suffix string
+	var b int
+	switch spec.Opcode {
+	case 0x28:
+		suffix = "_0"
+		b = 0
+	case 0x29:
+		suffix = "_1"
+		b = 1
+	case 0x2a:
+		suffix = "_2"
+		b = 2
+	case 0x2b:
+		suffix = "_3"
+		b = 3
+	case 0x27:
+		b = int(dis.program[dis.pc+1])
+		suffix = fmt.Sprintf(" %d", b)
+	}
+	if b < len(dis.bytec) {
+		return fmt.Sprintf("bytec%s // %s", suffix, guessByteFormat(dis.bytec[b])), nil
+	}
+	return fmt.Sprintf("bytec%s", suffix), nil
+}
+
+func disPushInt(dis *disassembleState, spec *OpSpec) (string, error) {
 	pos := dis.pc + 1
 	val, bytesUsed := binary.Uvarint(dis.program[pos:])
 	if bytesUsed <= 0 {
-		dis.err = fmt.Errorf("could not decode int at pc=%d", pos)
-		return
+		return "", fmt.Errorf("could not decode int at pc=%d", pos)
 	}
-	pos += bytesUsed
-	_, dis.err = fmt.Fprintf(dis.out, "%s %d\n", spec.Name, val)
-	dis.nextpc = pos
+	dis.nextpc = pos + bytesUsed
+	return fmt.Sprintf("%s %d", spec.Name, val), nil
 }
 func checkPushInt(cx *evalContext) int {
 	opPushInt(cx)
 	return 1
 }
 
-func disPushBytes(dis *disassembleState, spec *OpSpec) {
+func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
 	pos := dis.pc + 1
 	length, bytesUsed := binary.Uvarint(dis.program[pos:])
 	if bytesUsed <= 0 {
-		dis.err = fmt.Errorf("could not decode bytes length at pc=%d", pos)
-		return
+		return "", fmt.Errorf("could not decode bytes length at pc=%d", pos)
 	}
 	pos += bytesUsed
 	end := uint64(pos) + length
 	if end > uint64(len(dis.program)) || end < uint64(pos) {
-		dis.err = fmt.Errorf("pushbytes too long %d %d", end, pos)
-		return
+		return "", fmt.Errorf("pushbytes too long %d %d", end, pos)
 	}
 	bytes := dis.program[pos:end]
-	_, dis.err = fmt.Fprintf(dis.out, "%s 0x%s\n", spec.Name, hex.EncodeToString(bytes))
 	dis.nextpc = int(end)
+	return fmt.Sprintf("%s 0x%s", spec.Name, hex.EncodeToString(bytes)), nil
 }
 func checkPushBytes(cx *evalContext) int {
 	opPushBytes(cx)
@@ -1567,141 +1638,132 @@ func checkPushBytes(cx *evalContext) int {
 }
 
 // This is also used to disassemble gtxns
-func disTxn(dis *disassembleState, spec *OpSpec) {
+func disTxn(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 2
 	txarg := dis.program[dis.pc+1]
 	if int(txarg) >= len(TxnFieldNames) {
-		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "%s %s\n", spec.Name, TxnFieldNames[txarg])
+	return fmt.Sprintf("%s %s", spec.Name, TxnFieldNames[txarg]), nil
 }
 
 // This is also used to disassemble gtxnsa
-func disTxna(dis *disassembleState, spec *OpSpec) {
+func disTxna(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 2
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 3
 	txarg := dis.program[dis.pc+1]
 	if int(txarg) >= len(TxnFieldNames) {
-		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
 	}
 	arrayFieldIdx := dis.program[dis.pc+2]
-	_, dis.err = fmt.Fprintf(dis.out, "%s %s %d\n", spec.Name, TxnFieldNames[txarg], arrayFieldIdx)
+	return fmt.Sprintf("%s %s %d", spec.Name, TxnFieldNames[txarg], arrayFieldIdx), nil
 }
 
-func disGtxn(dis *disassembleState, spec *OpSpec) {
+func disGtxn(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 2
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 3
 	gi := dis.program[dis.pc+1]
 	txarg := dis.program[dis.pc+2]
 	if int(txarg) >= len(TxnFieldNames) {
-		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "gtxn %d %s\n", gi, TxnFieldNames[txarg])
+	return fmt.Sprintf("gtxn %d %s", gi, TxnFieldNames[txarg]), nil
 }
 
-func disGtxna(dis *disassembleState, spec *OpSpec) {
+func disGtxna(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 3
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 4
 	gi := dis.program[dis.pc+1]
 	txarg := dis.program[dis.pc+2]
 	if int(txarg) >= len(TxnFieldNames) {
-		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
 	}
 	arrayFieldIdx := dis.program[dis.pc+3]
-	_, dis.err = fmt.Fprintf(dis.out, "gtxna %d %s %d\n", gi, TxnFieldNames[txarg], arrayFieldIdx)
+	return fmt.Sprintf("gtxna %d %s %d", gi, TxnFieldNames[txarg], arrayFieldIdx), nil
 }
 
-func disGlobal(dis *disassembleState, spec *OpSpec) {
+func disGlobal(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 2
 	garg := dis.program[dis.pc+1]
 	if int(garg) >= len(GlobalFieldNames) {
-		dis.err = fmt.Errorf("invalid global arg index %d at pc=%d", garg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid global arg index %d at pc=%d", garg, dis.pc)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "global %s\n", GlobalFieldNames[garg])
+	return fmt.Sprintf("global %s", GlobalFieldNames[garg]), nil
 }
 
-func disBranch(dis *disassembleState, spec *OpSpec) {
+func disBranch(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 2
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 
 	dis.nextpc = dis.pc + 3
 	offset := (uint(dis.program[dis.pc+1]) << 8) | uint(dis.program[dis.pc+2])
 	target := int(offset) + dis.pc + 3
-	label, labelExists := dis.pendingLabels[target]
-	if !labelExists {
-		dis.labelCount++
-		label = fmt.Sprintf("label%d", dis.labelCount)
-		dis.putLabel(label, target)
+	var label string
+	if dis.numericTargets {
+		label = fmt.Sprintf("+%d", offset+3) // +3 so it's easy to calculate destination from current
+	} else {
+		if known, ok := dis.pendingLabels[target]; ok {
+			label = known
+		} else {
+			dis.labelCount++
+			label = fmt.Sprintf("label%d", dis.labelCount)
+			dis.putLabel(label, target)
+		}
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "%s %s\n", spec.Name, label)
+	return fmt.Sprintf("%s %s", spec.Name, label), nil
 }
 
-func disAssetHolding(dis *disassembleState, spec *OpSpec) {
+func disAssetHolding(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 2
 	arg := dis.program[dis.pc+1]
 	if int(arg) >= len(AssetHoldingFieldNames) {
-		dis.err = fmt.Errorf("invalid asset holding arg index %d at pc=%d", arg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid asset holding arg index %d at pc=%d", arg, dis.pc)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "asset_holding_get %s\n", AssetHoldingFieldNames[arg])
+	return fmt.Sprintf("asset_holding_get %s", AssetHoldingFieldNames[arg]), nil
 }
 
-func disAssetParams(dis *disassembleState, spec *OpSpec) {
+func disAssetParams(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 2
 	arg := dis.program[dis.pc+1]
 	if int(arg) >= len(AssetParamsFieldNames) {
-		dis.err = fmt.Errorf("invalid asset params arg index %d at pc=%d", arg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid asset params arg index %d at pc=%d", arg, dis.pc)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "asset_params_get %s\n", AssetParamsFieldNames[arg])
+	return fmt.Sprintf("asset_params_get %s", AssetParamsFieldNames[arg]), nil
 }
 
 type disInfo struct {
@@ -1725,7 +1787,7 @@ func disassembleInstrumented(program []byte) (text string, ds disInfo, err error
 		text = out.String()
 		return
 	}
-	fmt.Fprintf(dis.out, "// version %d\n", version)
+	fmt.Fprintf(dis.out, "#pragma version %d\n", version)
 	dis.pc = vlen
 	for dis.pc < len(program) {
 		err = dis.outputLabelIfNeeded()
@@ -1750,11 +1812,13 @@ func disassembleInstrumented(program []byte) (text string, ds disInfo, err error
 		ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
 
 		// Actually do the disassembly
-		op.dis(&dis, &op)
-		if dis.err != nil {
-			err = dis.err
+		var line string
+		line, err = op.dis(&dis, &op)
+		if err != nil {
 			return
 		}
+		out.WriteString(line)
+		out.WriteRune('\n')
 		dis.pc = dis.nextpc
 	}
 	err = dis.outputLabelIfNeeded()

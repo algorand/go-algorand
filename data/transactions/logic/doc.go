@@ -164,6 +164,8 @@ var opDocExtras = map[string]string{
 	"gtxns":             "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
 	"btoi":              "`btoi` panics if the input is longer than 8 bytes.",
 	"concat":            "`concat` panics if the result would be greater than 4096 bytes.",
+	"pushbytes":         "pushbytes args are not added to the bytecblock during assembly processes",
+	"pushint":           "pushint args are not added to the intcblock during assembly processes",
 	"getbit":            "see explanation of bit ordering in setbit",
 	"setbit":            "bit indexing begins with low-order bits in integers. Setting bit 4 to 1 on the integer 0 yields 16 (`int 0x0010`, or 2^4). Indexing begins in the first bytes of a byte-string (as seen in getbyte and substring). Setting bits 0 through 11 to 1 in a 4 byte-array of 0s yields `byte 0xfff00000`",
 	"app_opted_in":      "params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise.",

@@ -29,7 +29,7 @@ import (
 
 func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesPartialPartkeyOnlyWallets.json"))
@@ -105,7 +105,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	t.Skip() // temporary disable the test since it's failing.
 
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesOneOnline.json"))
