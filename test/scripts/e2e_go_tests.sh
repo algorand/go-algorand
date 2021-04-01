@@ -99,13 +99,13 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
             for TEST_NAME in ${TESTS[@]}; do
                 echo "go test ${RACE_OPTION} -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR} | logfilter"
                 go test ${RACE_OPTION} -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR} | logfilter
-                KMD_INSTANCES_COUNT=$(ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
+                KMD_INSTANCES_COUNT=$(set +o pipefail; ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
                 if [ "${KMD_INSTANCES_COUNT}" != "0" ]; then
                     echo "One or more than one KMD instances remains running:"
                     ps -Af | grep kmd | grep -v "grep"
                     exit 1
                 fi
-                ALGOD_INSTANCES_COUNT=$(ps -Af | grep algod | grep -v "grep" | wc -l | tr -d ' ')
+                ALGOD_INSTANCES_COUNT=$(set +o pipefail; ps -Af | grep algod | grep -v "grep" | wc -l | tr -d ' ')
                 if [ "${ALGOD_INSTANCES_COUNT}" != "0" ]; then
                     echo "One or more than one algod instances remains running:"
                     ps -Af | grep algod | grep -v "grep"
