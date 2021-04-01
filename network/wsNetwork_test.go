@@ -341,7 +341,7 @@ func TestWebsocketNetworkArray(t *testing.T) {
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 3)
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -349,7 +349,7 @@ func TestWebsocketNetworkArray(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	tags := []protocol.Tag{protocol.TxnTag, protocol.TxnTag, protocol.TxnTag}
+	tags := []protocol.Tag{protocol.AgreementVoteTag, protocol.AgreementVoteTag, protocol.AgreementVoteTag}
 	data := [][]byte{[]byte("foo"), []byte("bar"), []byte("algo")}
 	netA.BroadcastArray(context.Background(), tags, data, false, nil)
 
@@ -376,7 +376,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 	counter := newMessageCounter(t, 100)
 	counterDone := counter.done
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -387,7 +387,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	tags := make([]protocol.Tag, 100)
 	data := make([][]byte, 100)
 	for i := range data {
-		tags[i] = protocol.TxnTag
+		tags[i] = protocol.AgreementVoteTag
 		data[i] = []byte(string(i))
 	}
 
