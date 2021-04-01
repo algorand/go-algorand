@@ -104,9 +104,9 @@ func MakeExpectTest(t *testing.T) *ExpectFixture {
 		}
 		return nil
 	})
-	require.NoError(t, err)
+	require.NoError(SynchronizedTest(t), err)
 	err = ef.initialize(t)
-	require.NoError(t, err)
+	require.NoError(SynchronizedTest(t), err)
 	return ef
 }
 
@@ -115,9 +115,10 @@ func (ef *ExpectFixture) Run() {
 	for testName := range ef.expectFiles {
 		if match, _ := regexp.MatchString(ef.testFilter, testName); match {
 			ef.t.Run(testName, func(t *testing.T) {
+				syncTest := SynchronizedTest(t)
 				workingDir, algoDir, err := ef.getTestDir(testName)
-				require.NoError(t, err)
-				t.Logf("algoDir: %s\ntestDataDir:%s\n", algoDir, ef.testDataDir)
+				require.NoError(SynchronizedTest(t), err)
+				syncTest.Logf("algoDir: %s\ntestDataDir:%s\n", algoDir, ef.testDataDir)
 				cmd := exec.Command("expect", testName, algoDir, ef.testDataDir)
 				var outBuf bytes.Buffer
 				cmd.Stdout = &outBuf
@@ -131,8 +132,8 @@ func (ef *ExpectFixture) Run() {
 				// Using os.File as stderr does not trigger goroutine creation, instead exec.Cmd relies on os.File implementation.
 				errFile, err := os.OpenFile(path.Join(workingDir, "stderr.txt"), os.O_CREATE|os.O_RDWR, 0)
 				if err != nil {
-					t.Logf("failed opening stderr temp file: %s\n", err.Error())
-					t.Fail()
+					syncTest.Logf("failed opening stderr temp file: %s\n", err.Error())
+					syncTest.Fail()
 				}
 				defer errFile.Close() // Close might error but we Sync it before leaving the scope
 				cmd.Stderr = errFile
@@ -154,8 +155,8 @@ func (ef *ExpectFixture) Run() {
 					if ferr != nil {
 						stderr = ferr.Error()
 					}
-					t.Logf("err running '%s': %s\nstdout: %s\nstderr: %s\n", testName, err, string(outBuf.Bytes()), stderr)
-					t.Fail()
+					syncTest.Logf("err running '%s': %s\nstdout: %s\nstderr: %s\n", testName, err, string(outBuf.Bytes()), stderr)
+					syncTest.Fail()
 				} else {
 					// t.Logf("stdout: %s", string(outBuf.Bytes()))
 					ef.removeTestDir(workingDir)

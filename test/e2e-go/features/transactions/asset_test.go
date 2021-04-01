@@ -54,7 +54,7 @@ func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx
 
 func TestAssetValidRounds(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
@@ -188,7 +188,7 @@ func TestAssetConfig(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
@@ -420,7 +420,7 @@ func TestAssetConfig(t *testing.T) {
 
 func TestAssetInformation(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
@@ -512,7 +512,7 @@ func TestAssetInformation(t *testing.T) {
 
 func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
@@ -653,7 +653,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 
 func TestAssetSend(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
@@ -1049,7 +1049,7 @@ func setupTestAndNetwork(t *testing.T, networkTemplate string, consensus config.
 	Assertions *require.Assertions, Fixture *fixtures.RestClientFixture, Client *libgoal.Client, Account0 string) {
 
 	t.Parallel()
-	asser := require.New(t)
+	asser := require.New(fixtures.SynchronizedTest(t))
 	if 0 == len(networkTemplate) {
 		// If the  networkTemplate is not specified, used the default one
 		networkTemplate = "TwoNodes50Each.json"

@@ -36,7 +36,7 @@ import (
 
 func TestCompactCerts(t *testing.T) {
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-compactcert")
