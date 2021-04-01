@@ -31,7 +31,7 @@ func TestTealCompile(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))

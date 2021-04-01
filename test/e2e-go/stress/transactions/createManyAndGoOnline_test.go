@@ -49,7 +49,7 @@ func cascadeCreateAndFundAccounts(amountToSend, transactionFee uint64, fundingAc
 // sends them all money, and sends them online
 func TestManyAccountsCanGoOnline(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
