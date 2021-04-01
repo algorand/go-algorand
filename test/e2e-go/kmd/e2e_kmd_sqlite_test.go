@@ -26,6 +26,7 @@ import (
 )
 
 func TestNonAbsSQLiteWalletConfigFails(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	f.Initialize(t)
@@ -35,12 +36,13 @@ func TestNonAbsSQLiteWalletConfigFails(t *testing.T) {
 	cfg := `{"drivers":{"sqlite":{"wallets_dir":"not/absolute"}}}`
 	err := f.TestConfig([]byte(cfg))
 	// Should return an error
-	require.NotNil(t, err)
+	a.NotNil(err)
 	// Should return the correct error
-	require.Equal(t, err, config.ErrSQLiteWalletNotAbsolute)
+	a.Equal(err, config.ErrSQLiteWalletNotAbsolute)
 }
 
 func TestAbsSQLiteWalletConfigSucceeds(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	f.Initialize(t)
@@ -50,5 +52,5 @@ func TestAbsSQLiteWalletConfigSucceeds(t *testing.T) {
 	cfg := `{"drivers":{"sqlite":{"wallets_dir":"/very/absolute"}}}`
 	err := f.TestConfig([]byte(cfg))
 	// Error should be nil
-	require.Nil(t, err)
+	a.Nil(err)
 }

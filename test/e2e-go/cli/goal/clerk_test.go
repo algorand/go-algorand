@@ -22,11 +22,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
 func TestClerkSendNoteEncoding(t *testing.T) {
 	defer fixture.SetTestContext(t)()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	// wait for consensus on first round prior to sending transactions, time out after 2 minutes
 	err := fixture.WaitForRound(2, time.Duration(2*time.Minute))
