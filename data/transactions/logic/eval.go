@@ -570,11 +570,28 @@ func (cx *evalContext) step() {
 	cx.cost += deets.Cost
 	spec.op(cx)
 	if cx.Trace != nil {
-		immArgsString := " "
-		if spec.Name != "bnz" {
-			for i := 1; i < spec.Details.Size; i++ {
-				immArgsString += fmt.Sprintf("0x%02x ", cx.program[cx.pc+i])
+		// This code used to do a little disassembly on its
+		// own, but then it missed out on some nuances like
+		// getting the field names instead of constants in the
+		// txn opcodes.  To get them, we conjure up a
+		// disassembleState from the current execution state,
+		// and use the existing disassembly routines.  It
+		// feels a little funny to make a disassembleState
+		// right here, rather than build it as we go, or
+		// perhaps we could have an interface that allows
+		// disassembly to use the cx directly.  But for now,
+		// we don't want to worry about the dissassembly
+		// routines mucking about in the excution context
+		// (changing the pc, for example) and this gives a big
+		// improvement of dryrun readability
+		dstate := &disassembleState{program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec}
+		var sourceLine string
+		sourceLine, err := spec.dis(dstate, spec)
+		if err != nil {
+			if cx.err == nil { // don't override an error from evaluation
+				cx.err = err
 			}
+			return
 		}
 		var stackString string
 		if len(cx.stack) == 0 {
@@ -596,7 +613,7 @@ func (cx *evalContext) step() {
 				}
 			}
 		}
-		fmt.Fprintf(cx.Trace, "%3d %s%s=> %s\n", cx.pc, spec.Name, immArgsString, stackString)
+		fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, sourceLine, stackString)
 	}
 	if cx.err != nil {
 		return

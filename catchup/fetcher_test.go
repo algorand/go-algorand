@@ -18,14 +18,11 @@ package catchup
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/http"
-	"net/rpc"
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
@@ -41,133 +38,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-algorand/util/bloom"
 )
-
-type mockRunner struct {
-	ran           bool
-	done          chan *rpc.Call
-	failWithNil   bool
-	failWithError bool
-	txgroups      [][]transactions.SignedTxn
-}
-
-type mockRPCClient struct {
-	client  *mockRunner
-	closed  bool
-	rootURL string
-	log     logging.Logger
-}
-
-func (client *mockRPCClient) Close() error {
-	client.closed = true
-	return nil
-}
-
-func (client *mockRPCClient) Address() string {
-	return "mock.address."
-}
-func (client *mockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups [][]transactions.SignedTxn, err error) {
-	client.log.Info("MockRPCClient.Sync")
-	select {
-	case <-ctx.Done():
-		return nil, errors.New("cancelled")
-	default:
-	}
-	if client.client.failWithNil {
-		return nil, errors.New("old failWithNil")
-	}
-	if client.client.failWithError {
-		return nil, errors.New("failing call")
-	}
-	return client.client.txgroups, nil
-}
-func (client *mockRPCClient) getBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
-	return nil, nil
-}
-
-// network.HTTPPeer interface
-func (client *mockRPCClient) GetAddress() string {
-	return client.rootURL
-}
-func (client *mockRPCClient) GetHTTPClient() *http.Client {
-	return nil
-}
-
-type mockClientAggregator struct {
-	mocks.MockNetwork
-	peers []network.Peer
-}
-
-func (mca *mockClientAggregator) GetPeers(options ...network.PeerOption) []network.Peer {
-	return mca.peers
-}
-
-const numberOfPeers = 10
-
-func makeMockClientAggregator(t *testing.T, failWithNil bool, failWithError bool) *mockClientAggregator {
-	clients := make([]network.Peer, 0)
-	for i := 0; i < numberOfPeers; i++ {
-		runner := mockRunner{failWithNil: failWithNil, failWithError: failWithError, done: make(chan *rpc.Call)}
-		clients = append(clients, &mockRPCClient{client: &runner, log: logging.TestingLog(t)})
-	}
-	t.Logf("len(mca.clients) = %d", len(clients))
-	return &mockClientAggregator{peers: clients}
-}
-
-type dummyFetcher struct {
-	failWithNil   bool
-	failWithError bool
-	fetchTimeout  time.Duration
-}
-
-// FetcherClient interface
-func (df *dummyFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
-	if df.failWithNil {
-		return nil, nil
-	}
-	if df.failWithError {
-		return nil, errors.New("failing call")
-	}
-
-	timer := time.NewTimer(df.fetchTimeout)
-	defer timer.Stop()
-
-	// Fill in the dummy response with the correct round
-	dummyBlock := rpcs.EncodedBlockCert{
-		Block: bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: r,
-			},
-		},
-		Certificate: agreement.Certificate{
-			Round: r,
-		},
-	}
-
-	encodedData := protocol.Encode(&dummyBlock)
-
-	select {
-	case <-timer.C:
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-
-	return encodedData, nil
-}
-
-// FetcherClient interface
-func (df *dummyFetcher) Address() string {
-	//logging.Base().Debug("dummyFetcher Address")
-	return "dummyFetcher address"
-}
-
-// FetcherClient interface
-func (df *dummyFetcher) Close() error {
-	//logging.Base().Debug("dummyFetcher Close")
-	return nil
-}
 
 func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, next basics.Round, b bookkeeping.Block, err error) {
 	var user basics.Address

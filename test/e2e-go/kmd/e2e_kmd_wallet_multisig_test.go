@@ -32,12 +32,14 @@ import (
 )
 
 func addrToPK(t *testing.T, addr string) crypto.PublicKey {
+	req := require.New(fixtures.SynchronizedTest(t))
 	a, err := basics.UnmarshalChecksumAddress(addr)
-	require.NoError(t, err)
+	req.NoError(err)
 	return crypto.PublicKey(a)
 }
 
 func TestMultisigImportList(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -49,12 +51,12 @@ func TestMultisigImportList(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 	addr0 := resp0.Address
 	pk0 := addrToPK(t, addr0)
 
 	err = f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 	addr1 := resp0.Address
 	pk1 := addrToPK(t, addr1)
 
@@ -67,7 +69,7 @@ func TestMultisigImportList(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTMultisigImportResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 	addr := resp1.Address
 
 	// List multisig addresses and make sure it's there
@@ -76,14 +78,15 @@ func TestMultisigImportList(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTMultisigListResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Make sure the imported multisig address is there
-	require.Equal(t, len(resp2.Addresses), 1)
-	require.Equal(t, resp2.Addresses[0], addr)
+	a.Equal(len(resp2.Addresses), 1)
+	a.Equal(resp2.Addresses[0], addr)
 }
 
 func TestMultisigExportDelete(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -95,12 +98,12 @@ func TestMultisigExportDelete(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTKeyResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 	addr0 := resp0.Address
 	pk0 := addrToPK(t, addr0)
 
 	err = f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 	addr1 := resp0.Address
 	pk1 := addrToPK(t, addr1)
 
@@ -113,7 +116,7 @@ func TestMultisigExportDelete(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTMultisigImportResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 	addr := resp1.Address
 
 	// Export the multisig preimage
@@ -123,12 +126,12 @@ func TestMultisigExportDelete(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTMultisigExportResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Make sure the exported preimage is correct
-	require.Equal(t, req1.Version, resp2.Version)
-	require.Equal(t, req1.Threshold, resp2.Threshold)
-	require.Equal(t, req1.PKs, resp2.PKs)
+	a.Equal(req1.Version, resp2.Version)
+	a.Equal(req1.Threshold, resp2.Threshold)
+	a.Equal(req1.PKs, resp2.PKs)
 
 	// Delete the multisig preimage
 	req3 := kmdapi.APIV1DELETEMultisigRequest{
@@ -138,7 +141,7 @@ func TestMultisigExportDelete(t *testing.T) {
 	}
 	resp3 := kmdapi.APIV1DELETEMultisigResponse{}
 	err = f.Client.DoV1Request(req3, &resp3)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// List multisig addresses and make sure it's empty
 	req4 := kmdapi.APIV1POSTMultisigListRequest{
@@ -146,30 +149,31 @@ func TestMultisigExportDelete(t *testing.T) {
 	}
 	resp4 := kmdapi.APIV1POSTMultisigListResponse{}
 	err = f.Client.DoV1Request(req4, &resp4)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Make sure the imported multisig address is gone
-	require.Equal(t, len(resp4.Addresses), 0)
+	a.Equal(len(resp4.Addresses), 0)
 }
 
 func TestMultisigSign(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
 	defer f.Shutdown()
 
 	resp, err := f.Client.GenerateKey([]byte(walletHandleToken))
-	require.NoError(t, err)
+	a.NoError(err)
 	pk1 := addrToPK(t, resp.Address)
 	resp, err = f.Client.GenerateKey([]byte(walletHandleToken))
-	require.NoError(t, err)
+	a.NoError(err)
 	pk2 := addrToPK(t, resp.Address)
 	pk3 := crypto.PublicKey{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1} // some public key we haven't imported
 
 	// Create a 2-of-3 multisig account from the three public keys
 	resp1, err := f.Client.ImportMultisigAddr([]byte(walletHandleToken), 1, 2, []crypto.PublicKey{pk1, pk2, pk3})
 
-	require.NoError(t, err)
+	a.NoError(err)
 	msigAddr := addrToPK(t, resp1.Address)
 
 	// Make a transaction spending from the multisig address
@@ -197,11 +201,11 @@ func TestMultisigSign(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTMultisigTransactionSignResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	var msig crypto.MultisigSig
 	err = protocol.Decode(resp2.Multisig, &msig)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Try to add another signature
 	req3 := kmdapi.APIV1POSTMultisigTransactionSignRequest{
@@ -213,39 +217,40 @@ func TestMultisigSign(t *testing.T) {
 	}
 	resp3 := kmdapi.APIV1POSTMultisigTransactionSignResponse{}
 	err = f.Client.DoV1Request(req3, &resp3)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Assemble them into a signed transaction and see if it verifies
 	_, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, msig)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// TODO See if the signature verifies
 	// err = stxn.Verify()
-	// require.NoError(t, err)
+	// a.NoError(err)
 }
 
 func TestMultisigSignWithSigner(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
 	defer f.Shutdown()
 
 	resp, err := f.Client.GenerateKey([]byte(walletHandleToken))
-	require.NoError(t, err)
+	a.NoError(err)
 	pk1 := addrToPK(t, resp.Address)
 	resp, err = f.Client.GenerateKey([]byte(walletHandleToken))
-	require.NoError(t, err)
+	a.NoError(err)
 	pk2 := addrToPK(t, resp.Address)
 	pk3 := crypto.PublicKey{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1} // some public key we haven't imported
 
 	sender, err := f.Client.GenerateKey([]byte(walletHandleToken))
-	require.NoError(t, err)
+	a.NoError(err)
 	pkSender := addrToPK(t, sender.Address)
 
 	// Create a 2-of-3 multisig account from the three public keys
 	resp1, err := f.Client.ImportMultisigAddr([]byte(walletHandleToken), 1, 2, []crypto.PublicKey{pk1, pk2, pk3})
 
-	require.NoError(t, err)
+	a.NoError(err)
 	msigAddr := addrToPK(t, resp1.Address)
 
 	// Make a transaction spending from the multisig address
@@ -278,11 +283,11 @@ func TestMultisigSignWithSigner(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTMultisigTransactionSignResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	var msig crypto.MultisigSig
 	err = protocol.Decode(resp2.Multisig, &msig)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Try to add another signature
 	req3 := kmdapi.APIV1POSTMultisigTransactionSignRequest{
@@ -295,35 +300,36 @@ func TestMultisigSignWithSigner(t *testing.T) {
 	}
 	resp3 := kmdapi.APIV1POSTMultisigTransactionSignResponse{}
 	err = f.Client.DoV1Request(req3, &resp3)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Assemble them into a signed transaction and see if it verifies
 	_, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, msig)
-	require.NoError(t, err)
+	a.NoError(err)
 
 }
 
 func TestMultisigSignWithWrongSigner(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
 	defer f.Shutdown()
 
 	resp, err := f.Client.GenerateKey([]byte(walletHandleToken))
-	require.NoError(t, err)
+	a.NoError(err)
 	pk1 := addrToPK(t, resp.Address)
 	resp, err = f.Client.GenerateKey([]byte(walletHandleToken))
-	require.NoError(t, err)
+	a.NoError(err)
 	pk2 := addrToPK(t, resp.Address)
 	pk3 := crypto.PublicKey{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1} // some public key we haven't imported
 
 	sender, err := f.Client.GenerateKey([]byte(walletHandleToken))
-	require.NoError(t, err)
+	a.NoError(err)
 	pkSender := addrToPK(t, sender.Address)
 
 	// Create a 2-of-3 multisig account from the three public keys
 	_, err = f.Client.ImportMultisigAddr([]byte(walletHandleToken), 1, 2, []crypto.PublicKey{pk1, pk2, pk3})
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Make a transaction spending from the multisig address
 	tx := transactions.Transaction{
@@ -355,28 +361,29 @@ func TestMultisigSignWithWrongSigner(t *testing.T) {
 
 	resp2 := kmdapi.APIV1POSTMultisigTransactionSignResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.Error(t, err)
+	a.Error(err)
 
 }
 
 func TestMultisigSignProgram(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
 	defer f.Shutdown()
 
 	resp, err := f.Client.GenerateKey([]byte(walletHandleToken))
-	require.NoError(t, err)
+	a.NoError(err)
 	pk1 := addrToPK(t, resp.Address)
 	resp, err = f.Client.GenerateKey([]byte(walletHandleToken))
-	require.NoError(t, err)
+	a.NoError(err)
 	pk2 := addrToPK(t, resp.Address)
 	pk3 := crypto.PublicKey{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1} // some public key we haven't imported
 
 	// Create a 2-of-3 multisig account from the three public keys
 	resp1, err := f.Client.ImportMultisigAddr([]byte(walletHandleToken), 1, 2, []crypto.PublicKey{pk1, pk2, pk3})
 
-	require.NoError(t, err)
+	a.NoError(err)
 	msigAddr := addrToPK(t, resp1.Address)
 
 	program := []byte("blah blah blah, not a real program, just some bytes to sign, kmd does not have a program interpreter to know if the program is legitimate, but it _does_ prefix the program with protocol.Program and we can verify that here below")
@@ -392,11 +399,11 @@ func TestMultisigSignProgram(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTMultisigProgramSignResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	var msig crypto.MultisigSig
 	err = protocol.Decode(resp2.Multisig, &msig)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Try to add another signature
 	req3 := kmdapi.APIV1POSTMultisigProgramSignRequest{
@@ -409,12 +416,12 @@ func TestMultisigSignProgram(t *testing.T) {
 	}
 	resp3 := kmdapi.APIV1POSTMultisigProgramSignResponse{}
 	err = f.Client.DoV1Request(req3, &resp3)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	err = protocol.Decode(resp3.Multisig, &msig)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	ok, err := crypto.MultisigVerify(logic.Program(program), crypto.Digest(msigAddr), msig)
-	require.NoError(t, err)
-	require.True(t, ok)
+	a.NoError(err)
+	a.True(ok)
 }

@@ -18,6 +18,7 @@
 package node
 
 import (
+	"context"
 	"time"
 
 	"github.com/algorand/go-algorand/data"
@@ -131,7 +132,7 @@ func (tsnc *transcationSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 	if unicastPeer == nil {
 		return
 	}
-	if err := unicastPeer.Unicast(msg, protocol.Txn2Tag, func(enqueued bool, sequenceNumber uint64) {
+	if err := unicastPeer.Unicast(context.Background(), msg, protocol.Txn2Tag, func(enqueued bool, sequenceNumber uint64) {
 		callback(enqueued, sequenceNumber)
 	}); err != nil {
 		callback(false, 0)
