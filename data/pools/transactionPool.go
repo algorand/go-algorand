@@ -234,9 +234,6 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 		pool.pendingTxids = pool.rememberedTxids
 		pool.pendingLastestLocal = pool.rememberedLatestLocal
 		pool.ledger.VerifiedTransactionCache().UpdatePinned(pool.pendingTxids)
-		if len(pool.pendingTxGroups) > 0 && pool.pendingTxGroups[0].GroupCounter > pool.pendingLastestLocal {
-			pool.pendingLastestLocal = transactions.InvalidSignedTxGroupCounter
-		}
 	} else {
 		// update the GroupCounter on all the transaction groups we're going to add.
 		// this would ensure that each transaction group has a unique monotonic GroupCounter
