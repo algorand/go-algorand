@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"io/ioutil"
@@ -301,35 +302,127 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	if cfg.useBoostrappedFile {
 		dbFilesFolder := filepath.Join(rootDir, dbFilesFolderName)
 		fmt.Printf("generate database files to %s \n", dbFilesFolder)
-		cfg.GenerateDatabaseFiles()
+		cfg.GenerateDatabaseFiles(cfg.BootstrappedFile, genesisFolder)
 	}
 
 	return
 }
 
 //GenerateDatabaseFiles generates database files according to the configurations
-func (cfg DeployedNetwork) GenerateDatabaseFiles() {
+func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedFile, genesisFolder string) {
 	//hard coding address for testing. will read from genesis.json
-	src, _ := basics.UnmarshalChecksumAddress("PTRTVMOEZGPDEAXL7PCGNUSEW6XNBTZ4MNAQB3TFS5ZVACEIGEYLU3D4YM")
+	genesis, err := bookkeeping.LoadGenesisFromFile(genesisFolder)
+	if err != nil {
+		fmt.Printf("error loading genesis %s\n", err)
+		return
+	}
+
+	genesisID := genesis.ID()
+	genesisHash := crypto.Hash([]byte(genesisID))
+	addr := getSrcWalletAddress(fileCfgs.SourceWalletName, genesis.Allocation)
+	if addr == "" {
+		fmt.Printf("error finding source wallet address")
+		return
+	}
+	src, err := basics.UnmarshalChecksumAddress(addr)
+
+	var signedTnx []transactions.SignedTxn
+
+	//create accounts
+	for i := 0; i < fileCfgs.GeneratedAccountsCount; i++ {
+		tx, err := createSignedTx(src, protocol.PaymentTx, genesisID, genesisHash)
+		if err != nil {
+			fmt.Printf("error creating signed payment transaction %s\n", err)
+			return
+		}
+		signedTnx = append(signedTnx, tx)
+	}
+
+	//create asssets
+	for i := 0; i < fileCfgs.GeneratedAssetsCount; i++ {
+		tx, err := createSignedTx(src, protocol.AssetConfigTx, genesisID, genesisHash)
+		if err != nil {
+			fmt.Printf("error creating signed asset transaction %s\n", err)
+		}
+		signedTnx = append(signedTnx, tx)
+	}
+
+	//create applications
+	for i := 0; i < fileCfgs.GeneratedAccountsCount; i++ {
+		tx, err := createSignedTx(src, protocol.ApplicationCallTx, genesisID, genesisHash)
+		if err != nil {
+			fmt.Printf("error creating signed application transaction %s\n", err)
+		}
+		signedTnx = append(signedTnx, tx)
+	}
+	return
+}
+
+func createSignedTx(src basics.Address, tp protocol.TxType, genesisID string, genesisHash crypto.Digest) (transactions.SignedTxn, error) {
+	var tx transactions.Transaction
 	secretDst := keypair()
 	dst := basics.Address(secretDst.SignatureVerifier)
-
-	tx := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:     src,
-			Fee:        basics.MicroAlgos{Raw: 1},
-			FirstValid: basics.Round(0),
-			LastValid:  basics.Round(1000),
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: dst,
-			Amount:   basics.MicroAlgos{Raw: uint64(50)},
-		},
+	header := transactions.Header{
+		Sender:      src,
+		Fee:         basics.MicroAlgos{Raw: 1},
+		FirstValid:  basics.Round(0),
+		LastValid:   basics.Round(1000),
+		GenesisID:   genesisID,
+		GenesisHash: genesisHash,
 	}
-	transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+	switch tp {
+	case protocol.PaymentTx:
+		tx = transactions.Transaction{
+			Type:   tp,
+			Header: header,
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: dst,
+				Amount:   basics.MicroAlgos{Raw: uint64(50)},
+			},
+		}
+	case protocol.AssetConfigTx:
+		assetParam := basics.AssetParams{
+			Total:    100,
+			UnitName: "unit",
+			Manager:  src,
+		}
 
-	return
+		assetConfigFields := transactions.AssetConfigTxnFields{
+			AssetParams: assetParam,
+		}
+
+		tx = transactions.Transaction{
+			Type:                 tp,
+			Header:               header,
+			AssetConfigTxnFields: assetConfigFields,
+		}
+	case protocol.ApplicationCallTx:
+		appCallFields := transactions.ApplicationCallTxnFields{
+			OnCompletion: 0,
+		}
+		tx = transactions.Transaction{
+			Type:                     tp,
+			Header:                   header,
+			ApplicationCallTxnFields: appCallFields,
+		}
+	default:
+		fmt.Printf("%s not supported", tp)
+	}
+
+	t, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+	if err != nil {
+		return transactions.SignedTxn{}, err
+	}
+	return t, nil
+}
+
+func getSrcWalletAddress(name string, allocation []bookkeeping.GenesisAllocation) string {
+	for _, alloc := range allocation {
+		if alloc.Comment == name {
+			return alloc.Address
+		}
+	}
+	return ""
 }
 
 func keypair() *crypto.SignatureSecrets {

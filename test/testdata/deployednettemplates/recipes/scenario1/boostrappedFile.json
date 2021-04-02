@@ -1,0 +1,8 @@
+{
+	"NumRounds": 10,
+	"RoundTransactionsCount": 10,
+	"GeneratedAccountsCount": 10,
+	"GeneratedAssetsCount": 10,
+	"GeneratedApplicationCount": 10,
+	"SourceWalletName": "wallet1"
+}

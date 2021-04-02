@@ -4,5 +4,5 @@
     "ConfigFile": "../../configs/reference.json",
     "HostTemplatesFile": "../../hosttemplates/hosttemplates.json",
     "TopologyFile": "topology.json",
-    "LoadingFile": "loadingFile.json"
+    "BootstrappedFile": "boostrappedFile.json"
 }
