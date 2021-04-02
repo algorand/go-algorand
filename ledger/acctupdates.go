@@ -880,13 +880,13 @@ func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (v
 	return aul.au.voters.getVoters(rnd)
 }
 
-// BlockHdr returns the header of the given round. When the evaluator is running, it's usually referring to the previous header, which is what we
-// are optimizing for here. The compact cert support require lookups to other block headers as well, which falls back to the blockqueue implementation.
+// BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
+// are providing here. Any attempt to access a different header would get denied.
 func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	if r == aul.prevHeader.Round {
 		return aul.prevHeader, nil
 	}
-	return aul.au.ledger.BlockHdr(r)
+	return bookkeeping.BlockHeader{}, ledgercore.ErrNoEntry{}
 }
 
 // Totals returns the totals for a given round
