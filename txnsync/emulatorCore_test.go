@@ -191,6 +191,7 @@ func (e *emulator) initNodes() {
 			node.txpoolIds[group.FirstTransactionID] = true
 			node.txpoolEntries = append(node.txpoolEntries, group)
 		}
+		node.latestLocallyOriginatedGroupCounter = uint64(len(node.txpoolEntries) - 1)
 		e.totalInitialTransactions += uint64(initAlloc.transactionsCount)
 		node.txpoolGroupCounter += uint64(initAlloc.transactionsCount)
 		node.onNewTransactionPoolEntry()

@@ -112,6 +112,7 @@ func (g *guidedClock) Advance(adv time.Duration) {
 	// fire expired clocks
 	for _, entry := range expiredClocks {
 		entry.ch <- g.zero.Add(g.adv)
+		close(entry.ch)
 	}
 	g.Lock()
 	defer g.Unlock()

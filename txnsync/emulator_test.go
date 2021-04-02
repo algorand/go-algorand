@@ -541,7 +541,7 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 						{
 							uploadSpeed:   1000000,
 							downloadSpeed: 1000000,
-							target:        1,
+							target:        2,
 						},
 						{
 							uploadSpeed:   1000000,
