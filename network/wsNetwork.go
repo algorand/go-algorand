@@ -458,6 +458,7 @@ func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.
 	if len(tags) != len(data) {
 		return errBcastInvalidArray
 	}
+
 	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
 		request.except = except.(*wsPeer)

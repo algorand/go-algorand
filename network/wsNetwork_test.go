@@ -926,7 +926,6 @@ func TestDupFilter(t *testing.T) {
 	assert.Equal(t, 1, counter2.count)
 
 	debugMetrics(t)
-
 }
 
 func TestGetPeers(t *testing.T) {
@@ -1341,7 +1340,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 
 	currentTime := time.Now()
 	for i := 0; i < 10; i++ {
-		err := netA.broadcastWithTimestamp(protocol.TxnTag, []byte(string(i)), currentTime.Add(time.Hour*time.Duration(i-5)))
+		err := netA.broadcastWithTimestamp(protocol.TxnTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
 		require.NoErrorf(t, err, "No error was expected")
 	}
 
@@ -1459,9 +1458,9 @@ func TestForceMessageRelaying(t *testing.T) {
 
 	// send 5 messages from both netB and netC to netA
 	for i := 0; i < 5; i++ {
-		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{byte(i), 2, 3}, true, nil)
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
-		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{byte(i), 2, 3}, true, nil)
+		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
 
@@ -1483,7 +1482,7 @@ func TestForceMessageRelaying(t *testing.T) {
 	netB.relayMessages = true
 	// send additional 10 messages from netB
 	for i := 0; i < 10; i++ {
-		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{byte(i), 2, 3}, true, nil)
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
 

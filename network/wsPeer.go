@@ -327,8 +327,6 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	return nil
 }
 
-const maxBroadcastArraySize = 30000
-
 // setup values not trivially assigned
 func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.net.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.rootURL)
@@ -558,7 +556,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 	}
 	var digest crypto.Digest
 	copy(digest[:], msg.Data)
-	wp.net.log.Debugf("add filter %v", digest)
+	//wp.net.log.Debugf("add filter %v", digest)
 	wp.outgoingMsgFilter.CheckDigest(digest, true, true)
 }
 
