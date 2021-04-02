@@ -702,7 +702,7 @@ func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
 // GetPendingTxnsFromPool returns a snapshot of every pending transactions from the node's transaction pool in a slice.
 // Transactions are sorted in decreasing order. If no transactions, returns an empty slice.
 func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
-	poolGroups := node.transactionPool.PendingTxGroups()
+	poolGroups, _ := node.transactionPool.PendingTxGroups()
 	txnGroups := make([][]transactions.SignedTxn, len(poolGroups))
 	for i := range txnGroups {
 		txnGroups[i] = poolGroups[i].Transactions

@@ -55,20 +55,21 @@ type networkPeer struct {
 
 // emulatedNode implements the NodeConnector interface
 type emulatedNode struct {
-	externalEvents     chan Event
-	emulator           *emulator
-	peers              map[int]*networkPeer
-	nodeIndex          int
-	expiredTx          []transactions.SignedTxGroup
-	txpoolEntries      []transactions.SignedTxGroup
-	txpoolIds          map[transactions.Txid]bool
-	name               string
-	blocked            chan struct{}
-	mu                 sync.Mutex `algofix:"allow sync.Mutex"`
-	txpoolGroupCounter uint64
-	blockingEnabled    bool
-	nodeBlocked        chan struct{} // channel is closed when node is blocked.
-	nodeRunning        chan struct{} // channel is closed when node is running.
+	externalEvents                      chan Event
+	emulator                            *emulator
+	peers                               map[int]*networkPeer
+	nodeIndex                           int
+	expiredTx                           []transactions.SignedTxGroup
+	txpoolEntries                       []transactions.SignedTxGroup
+	txpoolIds                           map[transactions.Txid]bool
+	latestLocallyOriginatedGroupCounter uint64
+	name                                string
+	blocked                             chan struct{}
+	mu                                  sync.Mutex `algofix:"allow sync.Mutex"`
+	txpoolGroupCounter                  uint64
+	blockingEnabled                     bool
+	nodeBlocked                         chan struct{} // channel is closed when node is blocked.
+	nodeRunning                         chan struct{} // channel is closed when node is running.
 }
 
 func makeEmulatedNode(emulator *emulator, nodeIdx int) *emulatedNode {
@@ -270,8 +271,8 @@ func (n *emulatedNode) SendPeerMessage(netPeer interface{}, msg []byte, callback
 	peer.outSeq++
 }
 
-func (n *emulatedNode) GetPendingTransactionGroups() []transactions.SignedTxGroup {
-	return n.txpoolEntries
+func (n *emulatedNode) GetPendingTransactionGroups() ([]transactions.SignedTxGroup, uint64) {
+	return n.txpoolEntries, n.latestLocallyOriginatedGroupCounter
 }
 
 func (n *emulatedNode) IncomingTransactionGroups(peer interface{}, groups []transactions.SignedTxGroup) (transactionPoolSize int) {
