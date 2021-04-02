@@ -120,3 +120,44 @@ func BenchmarkTimeAfter(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkReencode(b *testing.B) {
+	b.StopTimer()
+	b.ResetTimer()
+
+	const numUsers = 100
+	secrets := make([]*crypto.SignatureSecrets, numUsers)
+	addresses := make([]basics.Address, numUsers)
+
+	for i := 0; i < numUsers; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
+	for i := 0; i < b.N/numUsers; i++ {
+		for u := 0; u < numUsers; u++ {
+			// generate transactions
+			tx := transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender:     addresses[u],
+					Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+					FirstValid: 0,
+					LastValid:  basics.Round(proto.MaxTxnLife),
+					Note:       make([]byte, 2),
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: addresses[(u+1)%numUsers],
+					Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
+				},
+			}
+			signedTx := tx.Sign(secrets[u])
+			signedTransactions = append(signedTransactions, signedTx)
+		}
+	}
+	b.StartTimer()
+	reencode(signedTransactions)
+}

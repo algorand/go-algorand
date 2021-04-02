@@ -553,6 +553,10 @@ func BenchmarkReconstructBlock(b *testing.B) {
 	var wn *network.WebsocketNetwork
 	net := gossip.WrapNetwork(wn, nil)
 
+	s := agreement.MakeService(agreement.Parameters{
+		Network: net,
+	})
+
 	_, signed, _, _ := generateTestObjects(100000, 100, 1)
 	var block bookkeeping.Block
 	block.Payset = make(transactions.Payset, len(signed), len(signed))
@@ -575,6 +579,6 @@ func BenchmarkReconstructBlock(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		agreement.ReconstructProposal(net, &block, h)
+		agreement.ReconstructProposal(s, &block, h)
 	}
 }

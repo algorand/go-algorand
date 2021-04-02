@@ -120,7 +120,11 @@ func ReconstructProposal(s *Service, b *bookkeeping.Block, h MessageHandle) erro
 		logging.Base().Warnf("failed to reconstruct block: BlockFactory was nil")
 	}
 	logging.Base().Infof("len %v", len(b.PaysetDigest))
-	stxnsData, allPresent := s.Network.LoadMessage(h, b.PaysetDigest)
+	var stxnsData [][]byte
+	var allPresent bool
+	if s.Network != nil {
+		stxnsData, allPresent = s.Network.LoadMessage(h, b.PaysetDigest)
+	}
 	if !allPresent {
 		logging.Base().Warnf("could not recover txns")
 	} else {
