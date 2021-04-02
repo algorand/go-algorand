@@ -316,25 +316,23 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	return false
 }
 
+// filterAlreadyCommitted scan the list of signed transaction groups, and filter out the ones that have already been included.
+// the resulting slice is using the *same* underlying array as the input slice, and the caller must ensure that this would not
+// cause issue on the caller side.
 func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []transactions.SignedTxGroup) (filteredGroups []transactions.SignedTxGroup) {
-	var duplicateTxnGroups []int
+	duplicateOffset := 0
 	for idx, utxng := range unverifiedTxGroups {
 		err := handler.txPool.Test(utxng.Transactions)
 		if err != nil {
 			// transaction group migth be a dup. We dynamically allocate this here since this is the "non-typical" use case.
-			duplicateTxnGroups = append(duplicateTxnGroups, idx)
+			duplicateOffset++
+			continue
+		}
+		if duplicateOffset > 0 {
+			unverifiedTxGroups[idx-duplicateOffset] = utxng
 		}
 	}
-	if len(duplicateTxnGroups) == 0 {
-		// no duplicate transactions
-		filteredGroups = unverifiedTxGroups
-		return
-	}
-	filteredGroups = make([]transactions.SignedTxGroup, len(duplicateTxnGroups))
-	for i, idx := range duplicateTxnGroups {
-		filteredGroups[i] = unverifiedTxGroups[idx]
-	}
-	return
+	return unverifiedTxGroups[:len(unverifiedTxGroups)-duplicateOffset]
 }
 
 func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.SignedTxGroup) (disconnect bool) {

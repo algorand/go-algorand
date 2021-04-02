@@ -12,7 +12,7 @@ if [ -z "$NETWORK" ]; then
     exit 1
 fi
 
-CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+CHANNEL=${CHANNEL:-$(./scripts/release/mule/common/get_channel.sh "$NETWORK")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 # A make target in Makefile.mule may pass the name as an argument.
 PACKAGE_NAME="$1"

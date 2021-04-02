@@ -63,6 +63,9 @@ func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber u
 	return nil
 }
 
+// pendingTransactionGroupsSnapshot is used to represent a snapshot of a pending transcation groups along with the latestLocallyOriginatedGroupCounter value.
+// The goal is to ensure we're "capturing"  this only once per `sendMessageLoop` call. In order to do so, we allocate that structure on the stack, and passing
+// a pointer to that structure downstream.
 type pendingTransactionGroupsSnapshot struct {
 	pendingTransactionsGroups           []transactions.SignedTxGroup
 	latestLocallyOriginatedGroupCounter uint64
@@ -73,7 +76,6 @@ func (s *syncState) sendMessageLoop(deadline timers.DeadlineMonitor, peers []*Pe
 		// no peers - no messages that need to be sent.
 		return
 	}
-
 	var pendingTransactions pendingTransactionGroupsSnapshot
 	pendingTransactions.pendingTransactionsGroups, pendingTransactions.latestLocallyOriginatedGroupCounter = s.node.GetPendingTransactionGroups()
 	seenPeers := make(map[*Peer]bool)

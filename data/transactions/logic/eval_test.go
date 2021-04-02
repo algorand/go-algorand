@@ -3671,8 +3671,8 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"app_global_put":    "byte 0x41; dup; app_global_put",
 		"app_local_del":     "int 0; byte 0x41; app_local_del",
 		"app_global_del":    "byte 0x41; app_global_del",
-		"asset_holding_get": "asset_holding_get AssetBalance",
-		"asset_params_get":  "asset_params_get AssetTotal",
+		"asset_holding_get": "int 1; int 1; asset_holding_get AssetBalance",
+		"asset_params_get":  "int 1; asset_params_get AssetTotal",
 	}
 
 	excluded := map[string]bool{
@@ -3900,6 +3900,14 @@ func TestBits(t *testing.T) {
 	testAccepts(t, "byte 0x0000; int 15; int 1; setbit; byte 0x0001; ==", 3)
 	testAccepts(t, "int 0x0000; int 3; int 1; setbit; int 0x0008; ==", 3)
 	testAccepts(t, "int 0x0000; int 12; int 1; setbit; int 0x1000; ==", 3)
+
+	// These test that setbyte is not modifying a shared value.
+	// Since neither bytec nor dup copies, the first test is
+	// insufficient, the setbit changes the original constant (if
+	// it fails to copy).
+	testAccepts(t, "byte 0xfffff0; dup; int 21; int 1; setbit; byte 0xfffff4; ==; pop; byte 0xfffff0; ==", 3)
+	testAccepts(t, "byte 0xffff; byte 0xf0; concat; dup; int 21; int 1; setbit; byte 0xfffff4; ==; pop; byte 0xfffff0; ==", 3)
+
 }
 
 func TestBytes(t *testing.T) {
@@ -3914,8 +3922,13 @@ func TestBytes(t *testing.T) {
 	testPanics(t, `byte "john"; int 4; getbyte; int 1; ==`, 3)    // past end
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
-	// dup makes copies, modifying one does not change the other
+
+	// These test that setbyte is not modifying a shared value.
+	// Since neither bytec nor dup copies, the first test is
+	// insufficient, the setbyte changes the original constant (if
+	// it fails to copy).
 	testAccepts(t, `byte "john"; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
+	testAccepts(t, `byte "jo"; byte "hn"; concat; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
 }
 
 func TestSwap(t *testing.T) {

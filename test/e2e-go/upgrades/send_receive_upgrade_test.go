@@ -98,7 +98,7 @@ func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtoc
 
 func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := generateFastUpgradeConsensus()
 

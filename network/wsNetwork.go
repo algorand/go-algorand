@@ -151,7 +151,9 @@ const (
 type GossipNode interface {
 	Address() (string, bool)
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
+	BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except Peer) error
 	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
+	RelayArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except Peer) error
 	Disconnect(badnode Peer)
 	DisconnectPeers()
 	Ready() chan struct{}
@@ -202,8 +204,11 @@ type GossipNode interface {
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
 
+	// GetPeerData returns a value stored by SetPeerData
 	GetPeerData(peer Peer, key string) interface{}
 
+	// SetPeerData attaches a piece of data to a peer.
+	// Other services inside go-algorand may attach data to a peer that gets garbage collected when the peer is closed.
 	SetPeerData(peer Peer, key string, value interface{})
 }
 
@@ -231,8 +236,13 @@ type IncomingMessage struct {
 // Tag is a short string (2 bytes) marking a type of message
 type Tag = protocol.Tag
 
-func highPriorityTag(tag protocol.Tag) bool {
-	return tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag
+func highPriorityTag(tags []protocol.Tag) bool {
+	for _, tag := range tags {
+		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
+			return true
+		}
+	}
+	return false
 }
 
 // OutgoingMessage represents a message we want to send.
@@ -398,11 +408,12 @@ type WebsocketNetwork struct {
 }
 
 type broadcastRequest struct {
-	tag         Tag
-	data        []byte
+	tags        []Tag
+	data        [][]byte
 	except      *wsPeer
 	done        chan struct{}
 	enqueueTime time.Time
+	ctx         context.Context
 }
 
 // Address returns a string and whether that is a 'final' address or guessed.
@@ -434,15 +445,30 @@ func (wn *WebsocketNetwork) PublicAddress() string {
 // Broadcast sends a message.
 // If except is not nil then we will not send it to that neighboring Peer.
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
-// TODO: add `priority` argument so that we don't have to guess it based on tag
 func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
-	request := broadcastRequest{tag: tag, data: data, enqueueTime: time.Now()}
+	dataArray := make([][]byte, 1, 1)
+	dataArray[0] = data
+	tagArray := make([]protocol.Tag, 1, 1)
+	tagArray[0] = tag
+	return wn.BroadcastArray(ctx, tagArray, dataArray, wait, except)
+}
+
+// BroadcastArray sends an array of messages.
+// If except is not nil then we will not send it to that neighboring Peer.
+// if wait is true then the call blocks until the packet has actually been sent to all neighbors.
+// TODO: add `priority` argument so that we don't have to guess it based on tag
+func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
+	if len(tags) != len(data) {
+		return errBcastInvalidArray
+	}
+
+	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
 		request.except = except.(*wsPeer)
 	}
 
 	broadcastQueue := wn.broadcastQueueBulk
-	if highPriorityTag(tag) {
+	if highPriorityTag(tags) {
 		broadcastQueue = wn.broadcastQueueHighPrio
 	}
 	if wait {
@@ -483,6 +509,14 @@ func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 func (wn *WebsocketNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
 	if wn.relayMessages {
 		return wn.Broadcast(ctx, tag, data, wait, except)
+	}
+	return nil
+}
+
+// RelayArray relays array of messages
+func (wn *WebsocketNetwork) RelayArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
+	if wn.relayMessages {
+		return wn.BroadcastArray(ctx, tags, data, wait, except)
 	}
 	return nil
 }
@@ -598,6 +632,17 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 	return outPeers
 }
 
+// find the max value across the given uint64 numbers.
+func max(numbers ...uint64) (maxNum uint64) {
+	maxNum = 0 // this is the lowest uint64 value.
+	for _, num := range numbers {
+		if num > maxNum {
+			maxNum = num
+		}
+	}
+	return
+}
+
 func (wn *WebsocketNetwork) setup() {
 	var preferredResolver dnssec.ResolverIf
 	if wn.config.DNSSecurityRelayAddrEnforced() {
@@ -626,14 +671,18 @@ func (wn *WebsocketNetwork) setup() {
 	wn.server.MaxHeaderBytes = httpServerMaxHeaderBytes
 	wn.ctx, wn.ctxCancel = context.WithCancel(context.Background())
 	wn.relayMessages = wn.config.NetAddress != "" || wn.config.ForceRelayMessages
-	// roughly estimate the number of messages that could be sent over the lifespan of a single round.
-	wn.outgoingMessagesBufferSize = int(config.Consensus[protocol.ConsensusCurrentVersion].NumProposers*2 +
-		config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].CertCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].NextCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].LateCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].RedoCommitteeSize +
-		config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize)
+	// roughly estimate the number of messages that could be seen at any given moment.
+	// For the late/redo/down committee, which happen in parallel, we need to allocate
+	// extra space there.
+	wn.outgoingMessagesBufferSize = int(
+		max(config.Consensus[protocol.ConsensusCurrentVersion].NumProposers,
+			config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize,
+			config.Consensus[protocol.ConsensusCurrentVersion].CertCommitteeSize,
+			config.Consensus[protocol.ConsensusCurrentVersion].NextCommitteeSize) +
+			max(config.Consensus[protocol.ConsensusCurrentVersion].LateCommitteeSize,
+				config.Consensus[protocol.ConsensusCurrentVersion].RedoCommitteeSize,
+				config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize),
+	)
 
 	wn.broadcastQueueHighPrio = make(chan broadcastRequest, wn.outgoingMessagesBufferSize)
 	wn.broadcastQueueBulk = make(chan broadcastRequest, 100)
@@ -1061,7 +1110,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		})
 
 	if wn.messagesOfInterestEnc != nil {
-		err = peer.Unicast(wn.messagesOfInterestEnc, protocol.MsgOfInterestTag, nil)
+		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag, nil)
 		if err != nil {
 			wn.log.Infof("ws send msgOfInterest: %v", err)
 		}
@@ -1321,14 +1370,18 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 	}
 
 	start := time.Now()
-	tbytes := []byte(request.tag)
-	mbytes := make([]byte, len(tbytes)+len(request.data))
-	copy(mbytes, tbytes)
-	copy(mbytes[len(tbytes):], request.data)
 
-	var digest crypto.Digest
-	if request.tag != protocol.MsgDigestSkipTag && len(request.data) >= messageFilterSize {
-		digest = crypto.Hash(mbytes)
+	digests := make([]crypto.Digest, len(request.data), len(request.data))
+	data := make([][]byte, len(request.data), len(request.data))
+	for i, d := range request.data {
+		tbytes := []byte(request.tags[i])
+		mbytes := make([]byte, len(tbytes)+len(d))
+		copy(mbytes, tbytes)
+		copy(mbytes[len(tbytes):], d)
+		data[i] = mbytes
+		if request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize {
+			digests[i] = crypto.Hash(mbytes)
+		}
 	}
 
 	// first send to all the easy outbound peers who don't block, get them started.
@@ -1340,7 +1393,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if peer == request.except {
 			continue
 		}
-		ok := peer.writeNonBlock(mbytes, prio, digest, request.enqueueTime, nil)
+		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime, nil)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1770,7 +1823,7 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []
 		}
 		relaysAddresses = nil
 	}
-	if wn.config.EnableCatchupFromArchiveServers {
+	if wn.config.EnableCatchupFromArchiveServers || wn.config.EnableBlockServiceFallbackToArchiver {
 		archiverAddresses, err = tools_network.ReadFromSRV("archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 		if err != nil {
 			// only log this warning on testnet or devnet
@@ -1831,6 +1884,8 @@ var errBadAddr = errors.New("bad address")
 var errNetworkClosing = errors.New("WebsocketNetwork shutting down")
 
 var errBcastCallerCancel = errors.New("caller cancelled broadcast")
+
+var errBcastInvalidArray = errors.New("invalid broadcast array")
 
 var errBcastQFull = errors.New("broadcast queue full")
 
@@ -2038,7 +2093,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			resp := wn.prioScheme.MakePrioResponse(challenge)
 			if resp != nil {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
-				sent := peer.writeNonBlock(mbytes, true, crypto.Digest{}, time.Now(), nil)
+				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now(), nil)
 				if !sent {
 					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
 				}

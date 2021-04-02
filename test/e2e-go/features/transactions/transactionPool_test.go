@@ -29,7 +29,7 @@ import (
 func TestTransactionPoolOrderingAndClearing(t *testing.T) {
 	t.Skip("test is flaky as of 2019-06-18")
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachOneOnline.json"))
@@ -46,7 +46,7 @@ func TestTransactionPoolOrderingAndClearing(t *testing.T) {
 	stoppedRound := curStatus.LastRound
 
 	minTxnFee, minAcctBalance, err := fixture.MinFeeAndBalance(curStatus.LastRound)
-	require.NoError(t, err)
+	r.NoError(err)
 
 	// put transactions in the pool - they cannot be removed from the pool while the node is stopped
 	numTransactions := 25
@@ -115,7 +115,7 @@ func TestTransactionPoolExponentialFees(t *testing.T) {
 	t.Skip("new FIFO pool does not have exponential fee txn replacement")
 
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))

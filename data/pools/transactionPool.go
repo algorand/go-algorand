@@ -75,19 +75,28 @@ type TransactionPool struct {
 	assemblyResults poolAsmResults
 
 	// pendingMu protects pendingTxGroups, pendingTxids, pendingCounter and pendingLastestLocal
-	pendingMu           deadlock.RWMutex
-	pendingTxGroups     []transactions.SignedTxGroup
-	pendingTxids        map[transactions.Txid]transactions.SignedTxn
-	pendingCounter      uint64
-	pendingLastestLocal uint64 // this is the latest transaction group counter which was locally originated.
+	pendingMu deadlock.RWMutex
+	// pendingTxGroups is a slice of the pending transaction groups.
+	pendingTxGroups []transactions.SignedTxGroup
+	// pendingTxids is a map of the pending *transaction ids* included in the pendingTxGroups array.
+	pendingTxids map[transactions.Txid]transactions.SignedTxn
+	// pendingCounter is a monotomic counter, indicating the next pending transaction group counter value.
+	pendingCounter uint64
+	// pendingLastestLocal is the value of the last transaction group counter which is associated with a transaction that was
+	// locally originated ( i.e. posted to this node via the REST API )
+	pendingLastestLocal uint64
 
 	// Calls to remember() add transactions to rememberedTxGroups and
 	// rememberedTxids.  Calling rememberCommit() adds them to the
 	// pendingTxGroups and pendingTxids.  This allows us to batch the
 	// changes in OnNewBlock() without preventing a concurrent call
-	// to PendingTxGroups() or Verified().
+	// to PendingTxGroups().
 	rememberedTxGroups []transactions.SignedTxGroup
 	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
+	// rememberedLatestLocal is the value of the last transaction group counter which is associated with a transaction that was
+	// locally originated ( i.e. posted to this node via the REST API ). This variable is used when OnNewBlock is called and
+	// we filter out the pending transaction through the evaluator.
+	rememberedLatestLocal uint64
 
 	log logging.Logger
 }
@@ -111,7 +120,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
-	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round), 0)
 	return &pool
 }
 
@@ -165,7 +174,7 @@ func (pool *TransactionPool) Reset() {
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
-	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round), 0)
 }
 
 // NumExpired returns the number of transactions that expired at the
@@ -223,6 +232,7 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 	if flush {
 		pool.pendingTxGroups = pool.rememberedTxGroups
 		pool.pendingTxids = pool.rememberedTxids
+		pool.pendingLastestLocal = pool.rememberedLatestLocal
 		pool.ledger.VerifiedTransactionCache().UpdatePinned(pool.pendingTxids)
 		if len(pool.pendingTxGroups) > 0 && pool.pendingTxGroups[0].GroupCounter > pool.pendingLastestLocal {
 			pool.pendingLastestLocal = transactions.InvalidSignedTxGroupCounter
@@ -233,7 +243,6 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 		for i, txGroup := range pool.rememberedTxGroups {
 			pool.pendingCounter++
 			txGroup.GroupCounter = pool.pendingCounter
-			txGroup.FirstTransactionID = txGroup.Transactions[0].ID()
 			pool.rememberedTxGroups[i] = txGroup
 			if txGroup.LocallyOriginated {
 				pool.pendingLastestLocal = txGroup.GroupCounter
@@ -246,8 +255,15 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 		}
 	}
 
+	pool.resetRememberedTransactionGroups()
+}
+
+// resetRememberedTransactionGroups clears the remembered transaction groups.
+// The caller is assumed to be holding pool.mu.
+func (pool *TransactionPool) resetRememberedTransactionGroups() {
 	pool.rememberedTxGroups = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
+	pool.rememberedLatestLocal = transactions.InvalidSignedTxGroupCounter
 }
 
 // PendingCount returns the number of transactions currently pending in the pool.
@@ -418,6 +434,10 @@ func (pool *TransactionPool) ingest(txgroup transactions.SignedTxGroup, params p
 		if err != nil {
 			return err
 		}
+
+		// since this is the first time the transaction was added to the transaction pool, it would
+		// be a good time now to figure the group's FirstTransactionID and group counter.
+		txgroup.FirstTransactionID = txgroup.Transactions[0].ID()
 	}
 
 	err := pool.addToPendingBlockEvaluator(txgroup, params.recomputing, params.stats)
@@ -426,9 +446,14 @@ func (pool *TransactionPool) ingest(txgroup transactions.SignedTxGroup, params p
 	}
 
 	pool.rememberedTxGroups = append(pool.rememberedTxGroups, txgroup)
-	for _, t := range txgroup.Transactions {
-		pool.rememberedTxids[t.ID()] = t
+	for i, t := range txgroup.Transactions {
+		if i == 0 {
+			pool.rememberedTxids[txgroup.FirstTransactionID] = t
+		} else {
+			pool.rememberedTxids[t.ID()] = t
+		}
 	}
+
 	return nil
 }
 
@@ -471,6 +496,8 @@ func (pool *TransactionPool) RememberArray(txgroups []transactions.SignedTxGroup
 	for _, txGroup := range txgroups {
 		err := pool.remember(txGroup)
 		if err != nil {
+			// we need to explicitly clear the remembered transaction groups here, since we might have added the first one successfully and then failing on the second one.
+			pool.resetRememberedTransactionGroups()
 			return fmt.Errorf("TransactionPool.RememberArray: %v", err)
 		}
 	}
@@ -507,10 +534,10 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 	var knownCommitted uint
 	var unknownCommitted uint
 
-	commitedTxids := delta.Txids
+	committedTxids := delta.Txids
 	if pool.logProcessBlockStats {
 		pool.pendingMu.RLock()
-		for txid := range commitedTxids {
+		for txid := range committedTxids {
 			if _, ok := pool.pendingTxids[txid]; ok {
 				knownCommitted++
 			} else {
@@ -551,7 +578,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator(commitedTxids)
+		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted)
 	}
 
 	stats.KnownCommittedCount = knownCommitted
@@ -664,7 +691,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup transactions.Sig
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]basics.Round) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]basics.Round, knownCommitted uint) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -704,7 +731,11 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, pendingCount)
+	hint := pendingCount - int(knownCommitted)
+	if hint < 0 || int(knownCommitted) < 0 {
+		hint = 0
+	}
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint)
 	if err != nil {
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
@@ -748,6 +779,8 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 				stats.RemovedInvalidCount++
 				pool.log.Warnf("Cannot re-add pending transaction to pool: %v", err)
 			}
+		} else if txgroup.LocallyOriginated {
+			pool.rememberedLatestLocal = txgroup.GroupCounter
 		}
 	}
 

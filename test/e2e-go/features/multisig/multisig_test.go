@@ -37,7 +37,7 @@ func TestBasicMultisig(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer fixture.Shutdown()
 
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	// create three addrs
 	client := fixture.LibGoalClient
@@ -112,7 +112,7 @@ func TestZeroThreshold(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer fixture.Shutdown()
 
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	client := fixture.LibGoalClient
 	walletHandle, err := client.GetUnencryptedWalletHandle()
 	r.NoError(err, "Getting default wallet handle should not return error")
@@ -139,7 +139,7 @@ func TestZeroSigners(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer fixture.Shutdown()
 
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 	client := fixture.LibGoalClient
 	walletHandle, err := client.GetUnencryptedWalletHandle()
 	r.NoError(err, "Getting default wallet handle should not return error")
@@ -162,7 +162,7 @@ func TestDuplicateKeys(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer fixture.Shutdown()
 
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	// create one addr
 	client := fixture.LibGoalClient

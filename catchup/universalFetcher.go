@@ -22,8 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path"
-	"strconv"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -80,7 +78,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 	} else {
 		return nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	}
-	downloadDuration = time.Now().Sub(blockDownloadStartTime)	
+	downloadDuration = time.Now().Sub(blockDownloadStartTime)
 	if err != nil {
 		return nil, nil, time.Duration(0), err
 	}
@@ -211,7 +209,7 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 		return nil, err
 	}
 
-	parsedURL.Path = hf.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(r), 36)))
+	parsedURL.Path = rpcs.FormatBlockQuery(uint64(r), parsedURL.Path, hf.net)
 	blockURL := parsedURL.String()
 	hf.log.Debugf("block GET %#v peer %#v %T", blockURL, hf.peer, hf.peer)
 	request, err := http.NewRequest("GET", blockURL, nil)
@@ -272,4 +270,3 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 func (hf *HTTPFetcher) address() string {
 	return hf.rootURL
 }
-

@@ -18,8 +18,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA256 hash of value X, yields [32]byte
 - **Cost**:
    - 7 (LogicSigVersion = 1)
-   - 35 (LogicSigVersion = 2)
-   - 35 (LogicSigVersion = 3)
+   - 35 (2 <= LogicSigVersion <= 3)
 
 ## keccak256
 
@@ -29,8 +28,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Keccak256 hash of value X, yields [32]byte
 - **Cost**:
    - 26 (LogicSigVersion = 1)
-   - 130 (LogicSigVersion = 2)
-   - 130 (LogicSigVersion = 3)
+   - 130 (2 <= LogicSigVersion <= 3)
 
 ## sha512_256
 
@@ -40,8 +38,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA512_256 hash of value X, yields [32]byte
 - **Cost**:
    - 9 (LogicSigVersion = 1)
-   - 45 (LogicSigVersion = 2)
-   - 45 (LogicSigVersion = 3)
+   - 45 (2 <= LogicSigVersion <= 3)
 
 ## ed25519verify
 
@@ -843,6 +840,8 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - push the following program bytes to the stack
 - LogicSigVersion >= 3
 
+pushbytes args are not added to the bytecblock during assembly processes
+
 ## pushint uint
 
 - Opcode: 0x81 {varuint int}
@@ -850,3 +849,5 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Pushes: uint64
 - push immediate UINT to the stack as an integer
 - LogicSigVersion >= 3
+
+pushint args are not added to the intcblock during assembly processes

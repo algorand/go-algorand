@@ -76,8 +76,7 @@ func (al *logicLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err 
 }
 
 func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusParams) (res basics.MicroAlgos, err error) {
-	// Fetch record with pending rewards applied
-	record, err := al.cow.Get(addr, true)
+	record, err := al.cow.Get(addr, false) // pending rewards unneeded
 	if err != nil {
 		return
 	}

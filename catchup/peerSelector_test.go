@@ -46,7 +46,7 @@ type mockUnicastPeer struct {
 func (d *mockUnicastPeer) GetAddress() string {
 	return d.address
 }
-func (d *mockUnicastPeer) Unicast(msg []byte, tag protocol.Tag, callback network.UnicastWebsocketMessageStateCallback) error {
+func (d *mockUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag, callback network.UnicastWebsocketMessageStateCallback) error {
 	return nil
 }
 func (d *mockUnicastPeer) Version() string {
