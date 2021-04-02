@@ -262,6 +262,9 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	require.Equal(t, *block, localBlock)
 }
 
+// TestAbruptWrites emulates the fact that the agreement can also generate new rounds
+// When caught up, and the agreement service is taking the lead, the sync() stops and
+// yields to the agreement. Agreement is emulated by the go func() loop in the test
 func TestAbruptWrites(t *testing.T) {
 	numberOfBlocks := 100
 
@@ -299,7 +302,6 @@ func TestAbruptWrites(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	defer wg.Wait()
 	go func() {
 		defer wg.Done()
 		for i := basics.Round(lastRound + 1); i <= basics.Round(numberOfBlocks); i++ {
@@ -317,6 +319,7 @@ func TestAbruptWrites(t *testing.T) {
 	s.testStart()
 
 	s.sync()
+	wg.Wait()
 	require.Equal(t, remote.LastRound(), local.LastRound())
 }
 

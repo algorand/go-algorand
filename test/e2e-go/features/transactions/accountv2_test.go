@@ -34,7 +34,7 @@ import (
 )
 
 func checkEvalDelta(t *testing.T, client *libgoal.Client, startRnd, endRnd uint64, gval uint64, lval uint64) {
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	foundGlobal := false
 	foundLocal := false
@@ -76,7 +76,7 @@ func checkEvalDelta(t *testing.T, client *libgoal.Client, startRnd, endRnd uint6
 
 func TestAccountInformationV2(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	proto, ok := config.Consensus[protocol.ConsensusFuture]

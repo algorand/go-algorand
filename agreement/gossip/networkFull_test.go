@@ -202,12 +202,12 @@ func testNetworkImplMixed(t *testing.T, nodesCount int) {
 	nets, counters := spinNetwork(t, nodesCount)
 	defer shutdownNetwork(nets, counters)
 
-	nets[0].broadcastTimeout(protocol.AgreementVoteTag, []byte{1}, testNetTimeout)
-	nets[0].broadcastTimeout(protocol.ProposalPayloadTag, []byte{1}, testNetTimeout)
-	nets[0].broadcastTimeout(protocol.ProposalPayloadTag, []byte{1}, testNetTimeout)
-	nets[0].broadcastTimeout(protocol.VoteBundleTag, []byte{1}, testNetTimeout)
-	nets[0].broadcastTimeout(protocol.VoteBundleTag, []byte{1}, testNetTimeout)
-	nets[0].broadcastTimeout(protocol.VoteBundleTag, []byte{1}, testNetTimeout)
+	nets[0].Broadcast(protocol.AgreementVoteTag, []byte{1})
+	nets[0].Broadcast(protocol.ProposalPayloadTag, []byte{1})
+	nets[0].Broadcast(protocol.ProposalPayloadTag, []byte{1})
+	nets[0].Broadcast(protocol.VoteBundleTag, []byte{1})
+	nets[0].Broadcast(protocol.VoteBundleTag, []byte{1})
+	nets[0].Broadcast(protocol.VoteBundleTag, []byte{1})
 	for i, counter := range counters {
 		if i != 0 {
 			if !counter.verify(t, 1, 2, 3) {
@@ -228,14 +228,14 @@ func testNetworkImplMixed2(t *testing.T, nodesCount int) {
 
 	const loadSize = 12
 	for i := byte(0); i < loadSize; i++ {
-		ok := nets[0].broadcastTimeout(protocol.AgreementVoteTag, []byte{i}, testNetTimeout)
+		ok := nets[0].Broadcast(protocol.AgreementVoteTag, []byte{i})
 		assert.NoError(t, ok)
 		if i%2 == 0 {
-			ok = nets[0].broadcastTimeout(protocol.ProposalPayloadTag, []byte{i}, testNetTimeout)
+			ok = nets[0].Broadcast(protocol.ProposalPayloadTag, []byte{i})
 			assert.NoError(t, ok)
 		}
 		if i%4 == 0 {
-			ok = nets[0].broadcastTimeout(protocol.VoteBundleTag, []byte{i}, testNetTimeout)
+			ok = nets[0].Broadcast(protocol.VoteBundleTag, []byte{i})
 			assert.NoError(t, ok)
 		}
 	}
@@ -266,14 +266,14 @@ func testNetworkImplReordered(t *testing.T, nodesCount int) {
 	wg.Add(loadSize)
 	for i := byte(0); i < loadSize; i++ {
 		go func(i byte) {
-			ok := nets[0].broadcastTimeout(protocol.AgreementVoteTag, []byte{i}, testNetTimeout)
+			ok := nets[0].Broadcast(protocol.AgreementVoteTag, []byte{i})
 			assert.NoError(t, ok)
 			if i%2 == 0 {
-				ok = nets[0].broadcastTimeout(protocol.ProposalPayloadTag, []byte{i}, testNetTimeout)
+				ok = nets[0].Broadcast(protocol.ProposalPayloadTag, []byte{i})
 				assert.NoError(t, ok)
 			}
 			if i%4 == 0 {
-				ok = nets[0].broadcastTimeout(protocol.VoteBundleTag, []byte{i}, testNetTimeout)
+				ok = nets[0].Broadcast(protocol.VoteBundleTag, []byte{i})
 				assert.NoError(t, ok)
 			}
 			wg.Done()
@@ -323,7 +323,7 @@ func testNetworkImplRebroadcast(t *testing.T, nodesCount int) {
 		rebroadcastNodes = 3
 	}
 	for i := byte(0); i < byte(rebroadcastNodes); i++ {
-		ok := nets[i].broadcastTimeout(protocol.AgreementVoteTag, []byte{i, i + 1}, testNetTimeout)
+		ok := nets[i].Broadcast(protocol.AgreementVoteTag, []byte{i, i + 1})
 		assert.NoError(t, ok)
 	}
 
