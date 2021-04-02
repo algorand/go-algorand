@@ -19,8 +19,6 @@ package agreement
 import (
 	"context"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto"
-
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -162,18 +160,8 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 		if err != nil {
 			logging.Base().Warnf("failed to decode payset: %v", err)
 		}
-		if len(payset) != len(msg.Proposal.PaysetDigest) {
-			logging.Base().Warnf("payset mismatch: %v vs %v", len(payset), len(msg.Proposal.PaysetDigest))
-		}
 		for i := range msg.Proposal.Payset {
-			stxn := payset[i].SignedTxn
-			if stxn.MsgIsZero() {
-				logging.Base().Warnf("logging zero transaction")
-			}
-			txnData[i] = protocol.Encode(&stxn)
-			if crypto.Hash(txnData[i]) != msg.Proposal.PaysetDigest[i] {
-				logging.Base().Warnf("digest mismatch")
-			}
+			txnData[i] = protocol.Encode(&payset[i].SignedTxn)
 			tags[i] = protocol.TxnTag
 		}
 		payload := transmittedPayload{
