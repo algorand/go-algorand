@@ -19,6 +19,10 @@ package remote
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -68,7 +72,7 @@ type DeployedNetwork struct {
 	GenesisData        gen.GenesisData
 	Topology           topology
 	Hosts              []HostConfig
-	BootstrappedFile   bootstrappedFile
+	BootstrappedFile   BootstrappedFile
 }
 
 // InitDeployedNetworkConfig loads the DeployedNetworkConfig from a file
@@ -277,7 +281,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	// Store genesis files in root/GenesisData
 	genesisFolder := filepath.Join(rootDir, genesisFolderName)
 	if cfg.useExistingGenesis {
-		fmt.Println(" *** using existing genesis files ***")
+		fmt.Println(" *** using ex isting genesis files ***")
 	} else {
 		if err = gen.GenerateGenesisFiles(cfg.GenesisData, config.Consensus, genesisFolder, true); err != nil {
 			return
@@ -297,9 +301,42 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	if cfg.useBoostrappedFile {
 		dbFilesFolder := filepath.Join(rootDir, dbFilesFolderName)
 		fmt.Printf("generate database files to %s \n", dbFilesFolder)
+		cfg.GenerateDatabaseFiles()
 	}
 
 	return
+}
+
+//GenerateDatabaseFiles generates database files according to the configurations
+func (cfg DeployedNetwork) GenerateDatabaseFiles() {
+	//hard coding address for testing. will read from genesis.json
+	src, _ := basics.UnmarshalChecksumAddress("PTRTVMOEZGPDEAXL7PCGNUSEW6XNBTZ4MNAQB3TFS5ZVACEIGEYLU3D4YM")
+	secretDst := keypair()
+	dst := basics.Address(secretDst.SignatureVerifier)
+
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:     src,
+			Fee:        basics.MicroAlgos{Raw: 1},
+			FirstValid: basics.Round(0),
+			LastValid:  basics.Round(1000),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: dst,
+			Amount:   basics.MicroAlgos{Raw: uint64(50)},
+		},
+	}
+	transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
+
+	return
+}
+
+func keypair() *crypto.SignatureSecrets {
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
+	s := crypto.GenerateSignatureSecrets(seed)
+	return s
 }
 
 type walletTargetData struct {
