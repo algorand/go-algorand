@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -419,7 +420,7 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	// Eval the program
 	pass, err = logic.EvalStateful(program, params)
 	if err != nil {
-		return false, basics.EvalDelta{}, err
+		return false, basics.EvalDelta{}, ledgercore.LogicEvalError{Err: err}
 	}
 
 	// If program passed, build our eval delta, and commit to state changes
