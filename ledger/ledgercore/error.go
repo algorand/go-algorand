@@ -76,3 +76,13 @@ type ErrNoEntry struct {
 func (err ErrNoEntry) Error() string {
 	return fmt.Sprintf("ledger does not have entry %d (latest %d, committed %d)", err.Round, err.Latest, err.Committed)
 }
+
+// LogicEvalError indicates TEAL evaluation failure
+type LogicEvalError struct {
+	Err error
+}
+
+// Error satisfies builtin interface `error`
+func (err LogicEvalError) Error() string {
+	return fmt.Sprintf("logic eval error: %v", err.Err)
+}
