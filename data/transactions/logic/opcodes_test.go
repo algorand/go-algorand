@@ -222,7 +222,7 @@ func TestOpcodesVersioningV2(t *testing.T) {
 	require.Len(t, OpsByName[3], cntv3)
 
 	// assert, min_balance, {get,set}{bit,byte}, swap, select, dig, stxn, stxna, push{int,bytes}
-	newOpcodes = 13
+	newOpcodes = 14
 	overwritten = 0 // ? none yet
 	require.Equal(t, newOpcodes+overwritten, cntAdded)
 

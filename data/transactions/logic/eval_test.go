@@ -497,6 +497,87 @@ int 1                   // ret 1
 `, 1)
 }
 
+func TestDivModwImpl(t *testing.T) {
+	t.Parallel()
+
+	resHigh, resLow, remHigh, remLow, err := opDivModwImpl(2, 5, 1, 1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), resHigh)
+	require.Equal(t, uint64(2), resLow)
+	require.Equal(t, uint64(0), remHigh)
+	require.Equal(t, uint64(3), remLow)
+
+	resHigh, resLow, remHigh, remLow, err = opDivModwImpl(1, 1, 0, 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), resHigh)
+	require.Equal(t, uint64(1<<63), resLow)
+	require.Equal(t, uint64(0), remHigh)
+	require.Equal(t, uint64(1), remLow)
+
+	resHigh, resLow, remHigh, remLow, err = opDivModwImpl((1<<64)-1, (1<<64)-1, (1<<64)-1, (1<<64)-1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), resHigh)
+	require.Equal(t, uint64(1), resLow)
+	require.Equal(t, uint64(0), remHigh)
+	require.Equal(t, uint64(0), remLow)
+
+	resHigh, resLow, remHigh, remLow, err = opDivModwImpl((1<<64)-1, (1<<64)-1, 0, (1 << 32))
+	require.NoError(t, err)
+	require.Equal(t, uint64((1<<32)-1), resHigh)
+	require.Equal(t, uint64((1<<64)-1), resLow)
+	require.Equal(t, uint64(0), remHigh)
+	require.Equal(t, uint64((1<<32)-1), remLow)
+
+	resHigh, resLow, remHigh, remLow, err = opDivModwImpl((1<<64)-1, (1<<64)-2, (1<<64)-1, (1<<64)-1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), resHigh)
+	require.Equal(t, uint64(0), resLow)
+	require.Equal(t, uint64((1<<64)-1), remHigh)
+	require.Equal(t, uint64((1<<64)-2), remLow)
+
+	resHigh, resLow, remHigh, remLow, err = opDivModwImpl(0x99999999, 0x77777777, 0x33333333, 0x11111111)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0x0), resHigh)
+	require.Equal(t, uint64(0x3), resLow)
+	require.Equal(t, uint64(0x0), remHigh)
+	require.Equal(t, uint64(0x44444444), remLow)
+
+	resHigh, resLow, remHigh, remLow, err = opDivModwImpl(2, 5, 0, 0)
+	require.Error(t, err)
+}
+
+func TestDivModw(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, `
+int 0x000000002
+int 0x000000005
+int 0x000000001
+int 0x000000001
+divmodw
+int 2                   // compare result low
+==
+bnz continue1
+err
+continue1:
+int 0                   // compare result high
+==
+bnz continue2
+err
+continue2:
+int 3                   // compare reminder low
+==
+bnz continue3
+err
+continue3:
+int 0                   // compare reminder high
+==
+bnz done
+err
+done:
+int 1                   // ret 1
+`, 3)
+}
+
 func TestAddwImpl(t *testing.T) {
 	t.Parallel()
 	carry, sum := opAddwImpl(1, 2)
@@ -3742,6 +3823,7 @@ func TestAllowedOpcodesV3(t *testing.T) {
 		"gtxnsa":      "int 0; gtxnsa Accounts 0",
 		"pushint":     "pushint 7; pushint 4",
 		"pushbytes":   `pushbytes "stringsfail?"`,
+		"divmodw":     "int 1; int 1; int 1; int 1; divmodw",
 	}
 
 	excluded := map[string]bool{}

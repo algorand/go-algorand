@@ -102,6 +102,7 @@ var byteIntInt = StackTypes{StackBytes, StackUint64, StackUint64}
 var oneInt = StackTypes{StackUint64}
 var twoInts = StackTypes{StackUint64, StackUint64}
 var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
+var fourInts = StackTypes{StackUint64, StackUint64, StackUint64, StackUint64}
 var oneAny = StackTypes{StackAny}
 var twoAny = StackTypes{StackAny, StackAny}
 var anyInt = StackTypes{StackAny, StackUint64}
@@ -151,6 +152,7 @@ var OpSpecs = []OpSpec{
 	{0x1c, "~", opBitNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opDefault},
 	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opDefault},
 	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opDefault},
+	{0x1f, "divmodw", opDivModw, asmDefault, disDefault, fourInts, fourInts, 3, modeAny, costly(6)},
 
 	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, varies(checkIntConstBlock, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, immediates("i")},

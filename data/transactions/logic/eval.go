@@ -853,6 +853,56 @@ func opMulw(cx *evalContext) {
 	cx.stack[last].Uint = low
 }
 
+func opDivModwImpl(dividentHigh, dividentLow, divisorHigh, divisorLow uint64) (resHigh, resLow, remHigh, remLow uint64, err error) {
+	if divisorHigh == 0 && divisorLow == 0 {
+		err = errors.New("/ 0")
+		return
+	}
+
+	var divident, divisor big.Int
+	divident.SetUint64(dividentHigh)
+	divident.Lsh(&divident, 64)
+	divident.Add(&divident, new(big.Int).SetUint64(dividentLow))
+
+	divisor.SetUint64(divisorHigh)
+	divisor.Lsh(&divisor, 64)
+	divisor.Add(&divisor, new(big.Int).SetUint64(divisorLow))
+
+	var res, rem big.Int
+	res.DivMod(&divident, &divisor, &rem)
+
+	resLow = res.Uint64()
+	res.Rsh(&res, 64)
+	resHigh = res.Uint64()
+
+	remLow = rem.Uint64()
+	rem.Rsh(&rem, 64)
+	remHigh = rem.Uint64()
+
+	return
+}
+
+func opDivModw(cx *evalContext) {
+	last := len(cx.stack) - 1
+
+	resHigh, resLow, remHigh, remLow, err := opDivModwImpl(
+		cx.stack[last-3].Uint,
+		cx.stack[last-2].Uint,
+		cx.stack[last-1].Uint,
+		cx.stack[last].Uint,
+	)
+
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[last-3].Uint = remHigh
+	cx.stack[last-2].Uint = remLow
+	cx.stack[last-1].Uint = resHigh
+	cx.stack[last].Uint = resLow
+}
+
 func opLt(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
