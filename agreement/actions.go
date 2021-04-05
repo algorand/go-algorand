@@ -19,7 +19,6 @@ package agreement
 import (
 	"context"
 	"fmt"
-
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -155,6 +154,10 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 			PriorVote:               msg.Vote,
 		}
 		data = protocol.Encode(&payload)
+		if a.CompoundMessage.Proposal.ctx == nil || *a.CompoundMessage.Proposal.ctx == nil { //TODO(yg) this check may be redundant
+			backgroundctx := context.Background()
+			a.CompoundMessage.Proposal.ctx = &backgroundctx
+		}
 	}
 
 	switch a.T {
