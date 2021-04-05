@@ -335,7 +335,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			r.runs[i].program = data
 			if IsTextFile(data) {
 				source := string(data)
-				ops, err := logic.AssembleStringWithVersion(source, r.proto.LogicSigVersion)
+				ops, err := logic.AssembleString(source)
 				if err != nil {
 					errorLines := ""
 					for _, lineError := range ops.Errors {
