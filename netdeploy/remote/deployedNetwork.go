@@ -19,21 +19,23 @@ package remote
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/gen"
+	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
+	"github.com/algorand/go-algorand/util/codecs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/gen"
-	"github.com/algorand/go-algorand/util"
-	"github.com/algorand/go-algorand/util/codecs"
 )
 
 const genesisFolderName = "genesisdata"
@@ -300,8 +302,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	}
 
 	if cfg.useBoostrappedFile {
-		dbFilesFolder := filepath.Join(rootDir, dbFilesFolderName)
-		fmt.Printf("generate database files to %s \n", dbFilesFolder)
+
 		cfg.GenerateDatabaseFiles(cfg.BootstrappedFile, genesisFolder)
 	}
 
@@ -309,64 +310,135 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 }
 
 //GenerateDatabaseFiles generates database files according to the configurations
-func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedFile, genesisFolder string) {
-	//hard coding address for testing. will read from genesis.json
-	genesis, err := bookkeeping.LoadGenesisFromFile(genesisFolder)
+func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedFile, genesisFolder string) error {
+
+	var signedTnx []transactions.SignedTxn
+	accounts := make(map[basics.Address]basics.AccountData)
+
+	genesis, err := bookkeeping.LoadGenesisFromFile(genesisFolder + "/genesis.json")
 	if err != nil {
-		fmt.Printf("error loading genesis %s\n", err)
-		return
+		return err
 	}
 
 	genesisID := genesis.ID()
 	genesisHash := crypto.Hash([]byte(genesisID))
-	addr := getSrcWalletAddress(fileCfgs.SourceWalletName, genesis.Allocation)
-	if addr == "" {
-		fmt.Printf("error finding source wallet address")
-		return
-	}
-	src, err := basics.UnmarshalChecksumAddress(addr)
+	srcWallet := getGenesisAlloc(fileCfgs.SourceWalletName, genesis.Allocation)
+	if srcWallet.Address == "" {
+		return fmt.Errorf("error finding source wallet address")
 
-	var signedTnx []transactions.SignedTxn
+	}
+
+	rewardsPool := getGenesisAlloc("RewardsPool", genesis.Allocation)
+	if rewardsPool.Address == "" {
+		return fmt.Errorf("error finding source rewards ppol address")
+
+	}
+
+	feeSink := getGenesisAlloc("FeeSink", genesis.Allocation)
+	if feeSink.Address == "" {
+		return fmt.Errorf("error finding fee sink address")
+
+	}
+	src, err := basics.UnmarshalChecksumAddress(srcWallet.Address)
+	accounts[src] = basics.MakeAccountData(basics.Online, srcWallet.State.MicroAlgos)
 
 	//create accounts
 	for i := 0; i < fileCfgs.GeneratedAccountsCount; i++ {
-		tx, err := createSignedTx(src, protocol.PaymentTx, genesisID, genesisHash)
+		secretDst := keypair()
+		dst := basics.Address(secretDst.SignatureVerifier)
+		accounts[dst] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
+		tx, err := createSignedTx(src, dst, protocol.PaymentTx, genesisID, genesisHash)
 		if err != nil {
-			fmt.Printf("error creating signed payment transaction %s\n", err)
-			return
+			return err
 		}
 		signedTnx = append(signedTnx, tx)
 	}
 
 	//create asssets
 	for i := 0; i < fileCfgs.GeneratedAssetsCount; i++ {
-		tx, err := createSignedTx(src, protocol.AssetConfigTx, genesisID, genesisHash)
+		secretDst := keypair()
+		acct := basics.Address(secretDst.SignatureVerifier)
+		accounts[acct] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
+
+		tx, err := createSignedTx(src, acct, protocol.AssetConfigTx, genesisID, genesisHash)
 		if err != nil {
-			fmt.Printf("error creating signed asset transaction %s\n", err)
+			return err
 		}
 		signedTnx = append(signedTnx, tx)
 	}
 
 	//create applications
 	for i := 0; i < fileCfgs.GeneratedAccountsCount; i++ {
-		tx, err := createSignedTx(src, protocol.ApplicationCallTx, genesisID, genesisHash)
+		secretDst := keypair()
+		acct := basics.Address(secretDst.SignatureVerifier)
+		accounts[acct] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
+
+		tx, err := createSignedTx(acct, acct, protocol.ApplicationCallTx, genesisID, genesisHash)
 		if err != nil {
-			fmt.Printf("error creating signed application transaction %s\n", err)
+			return err
 		}
 		signedTnx = append(signedTnx, tx)
 	}
-	return
+
+	poolAddr, err := basics.UnmarshalChecksumAddress(rewardsPool.Address)
+	if err != nil {
+		return err
+	}
+	sinkAddr, err := basics.UnmarshalChecksumAddress(feeSink.Address)
+	if err != nil {
+		return err
+	}
+
+	accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
+	accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
+
+	initState, err := generateInitState(poolAddr, sinkAddr, genesisID, genesisHash, 0, accounts, signedTnx[0:fileCfgs.RoundTransactionsCount])
+	if err != nil {
+		return err
+	}
+	localCfg := config.GetDefaultLocal()
+	localCfg.Archival = true
+	log := logging.NewLogger()
+	l, err := ledger.OpenLedger(log, genesisFolder+"/bootstrapped", false, initState, localCfg)
+	if err != nil {
+		return err
+	}
+
+	prev, _ := l.Block(l.Latest())
+	start := fileCfgs.RoundTransactionsCount
+	var end int
+	for i := 1; i < fileCfgs.NumRounds; i++ {
+		next := basics.Round(i)
+		end = start + fileCfgs.RoundTransactionsCount
+		var blk bookkeeping.Block
+		if end < len(signedTnx) {
+			blk, err = createBlock(poolAddr, sinkAddr, genesisID, genesisHash, uint64(next), prev, signedTnx[start:end])
+		} else {
+			blk, err = createBlock(poolAddr, sinkAddr, genesisID, genesisHash, uint64(next), prev, []transactions.SignedTxn{})
+		}
+
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err = l.AddBlock(blk, agreement.Certificate{Round: next})
+		if err != nil {
+			return err
+		}
+		l.WaitForCommit(basics.Round(i))
+		start = end
+
+	}
+
+	l.Close()
+	return nil
 }
 
-func createSignedTx(src basics.Address, tp protocol.TxType, genesisID string, genesisHash crypto.Digest) (transactions.SignedTxn, error) {
+func createSignedTx(src basics.Address, dst basics.Address, tp protocol.TxType, genesisID string, genesisHash crypto.Digest) (transactions.SignedTxn, error) {
 	var tx transactions.Transaction
-	secretDst := keypair()
-	dst := basics.Address(secretDst.SignatureVerifier)
+
 	header := transactions.Header{
 		Sender:      src,
 		Fee:         basics.MicroAlgos{Raw: 1},
 		FirstValid:  basics.Round(0),
-		LastValid:   basics.Round(1000),
+		LastValid:   basics.Round(0),
 		GenesisID:   genesisID,
 		GenesisHash: genesisHash,
 	}
@@ -384,7 +456,7 @@ func createSignedTx(src basics.Address, tp protocol.TxType, genesisID string, ge
 		assetParam := basics.AssetParams{
 			Total:    100,
 			UnitName: "unit",
-			Manager:  src,
+			Manager:  dst,
 		}
 
 		assetConfigFields := transactions.AssetConfigTxnFields{
@@ -409,20 +481,18 @@ func createSignedTx(src basics.Address, tp protocol.TxType, genesisID string, ge
 		fmt.Printf("%s not supported", tp)
 	}
 
-	t, err := transactions.AssembleSignedTxn(tx, crypto.Signature{}, crypto.MultisigSig{})
-	if err != nil {
-		return transactions.SignedTxn{}, err
-	}
+	t := transactions.SignedTxn{Txn: tx}
+
 	return t, nil
 }
 
-func getSrcWalletAddress(name string, allocation []bookkeeping.GenesisAllocation) string {
+func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bookkeeping.GenesisAllocation {
 	for _, alloc := range allocation {
-		if alloc.Comment == name {
-			return alloc.Address
+		if strings.ToLower(alloc.Comment) == strings.ToLower(name) {
+			return alloc
 		}
 	}
-	return ""
+	return bookkeeping.GenesisAllocation{}
 }
 
 func keypair() *crypto.SignatureSecrets {
@@ -430,6 +500,98 @@ func keypair() *crypto.SignatureSecrets {
 	crypto.RandBytes(seed[:])
 	s := crypto.GenerateSignatureSecrets(seed)
 	return s
+}
+
+func generateInitState(poolAddr basics.Address, sinkAddr basics.Address, genesisID string, genesisHash crypto.Digest, round uint64, accounts map[basics.Address]basics.AccountData, stxn []transactions.SignedTxn) (ledger.InitState, error) {
+
+	var initState ledger.InitState
+	payset := make([]transactions.SignedTxnInBlock, 0, len(stxn))
+	var txibs []transactions.SignedTxnInBlock
+	txibs = make([]transactions.SignedTxnInBlock, 0, len(stxn))
+
+	initBlock := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			GenesisID:   genesisID,
+			GenesisHash: genesisHash,
+			Round:       basics.Round(round),
+			RewardsState: bookkeeping.RewardsState{
+				RewardsRate: 1,
+				RewardsPool: poolAddr,
+				FeeSink:     sinkAddr,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusCurrentVersion,
+			},
+		},
+	}
+
+	initBlock.RewardsLevel = 0
+
+	for i := 0; i < len(stxn); i++ {
+		txib, err := initBlock.EncodeSignedTxn(stxn[i], transactions.ApplyData{})
+		if err != nil {
+			return ledger.InitState{}, err
+		}
+		txibs = append(txibs, txib)
+	}
+
+	payset = append(payset, txibs...)
+
+	initBlock.Payset = payset
+	var err error
+	initBlock.TxnRoot, err = initBlock.PaysetCommit()
+	if err != nil {
+		return ledger.InitState{}, err
+	}
+
+	initState.Block = initBlock
+	initState.Accounts = accounts
+	initState.GenesisHash = crypto.Hash([]byte(genesisID))
+	return initState, nil
+}
+
+func createBlock(poolAddr basics.Address, sinkAddr basics.Address, genesisID string, genesisHash crypto.Digest, round uint64, prev bookkeeping.Block, stxn []transactions.SignedTxn) (bookkeeping.Block, error) {
+	payset := make([]transactions.SignedTxnInBlock, 0, len(stxn))
+	var txibs []transactions.SignedTxnInBlock
+	txibs = make([]transactions.SignedTxnInBlock, 0, len(stxn))
+
+	block := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			GenesisID:   genesisID,
+			GenesisHash: genesisHash,
+			Round:       basics.Round(round),
+			RewardsState: bookkeeping.RewardsState{
+				RewardsRate: 1,
+				RewardsPool: poolAddr,
+				FeeSink:     sinkAddr,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusCurrentVersion,
+			},
+		},
+	}
+
+	block.RewardsLevel = prev.RewardsLevel
+	block.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+	for i := 0; i < len(stxn); i++ {
+		txib, err := block.EncodeSignedTxn(stxn[i], transactions.ApplyData{})
+		if err != nil {
+			return bookkeeping.Block{}, err
+		}
+		txibs = append(txibs, txib)
+	}
+
+	payset = append(payset, txibs...)
+
+	block.Payset = payset
+	var err error
+	block.TxnRoot, err = block.PaysetCommit()
+	if err != nil {
+		return bookkeeping.Block{}, err
+	}
+
+	return block, nil
 }
 
 type walletTargetData struct {
