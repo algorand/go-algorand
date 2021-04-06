@@ -19,6 +19,7 @@ package gen
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -55,6 +56,16 @@ type genesisAllocation struct {
 	Online basics.Status
 }
 
+func u64absDiff(a, b uint64) uint64 {
+	if a > b {
+		return a - b
+	}
+	if b > a {
+		return b - a
+	}
+	return 0
+}
+
 // GenerateGenesisFiles generates the genesis.json file and wallet files for a give genesis configuration.
 func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusProtocols, outDir string, verbose bool) error {
 	err := os.Mkdir(outDir, os.ModeDir|os.FileMode(0777))
@@ -79,7 +90,26 @@ func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusPro
 	}
 
 	if sum != TotalMoney {
-		panic(fmt.Sprintf("Amounts don't add up to TotalMoney - off by %v", int64(TotalMoney)-int64(sum)))
+		fsum := float64(sum)
+		ftot := float64(TotalMoney)
+		if (math.Abs((fsum-ftot)/ftot) < 0.01) && (u64absDiff(sum, TotalMoney) < 10000) {
+			// wallet stake is a float and roundoff might happen but we might be close enough to do fixup
+			i := 0
+			for sum != TotalMoney {
+				if sum < TotalMoney {
+					allocation[i].Stake += 1
+					sum += 1
+				} else {
+					if allocation[i].Stake > 1 {
+						allocation[i].Stake -= 1
+						sum -= 1
+					}
+				}
+				i = (i + 1) % len(allocation)
+			}
+		} else {
+			panic(fmt.Sprintf("Amounts don't add up to TotalMoney - off by %v", int64(TotalMoney)-int64(sum)))
+		}
 	}
 
 	// Backwards compatibility with older genesis files: if the consensus
