@@ -68,6 +68,27 @@ func u64absDiff(a, b uint64) uint64 {
 
 // GenerateGenesisFiles generates the genesis.json file and wallet files for a give genesis configuration.
 func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusProtocols, outDir string, verbose bool) error {
+	// Backwards compatibility with older genesis files: if the consensus
+	// protocol version is not specified, default to V0.
+	proto := genesisData.ConsensusProtocol
+	if proto == protocol.ConsensusVersion("") {
+		proto = protocol.ConsensusCurrentVersion
+	}
+
+	// Backwards compatibility with older genesis files: if the fee sink
+	// or the rewards pool is not specified, set their defaults.
+	if (genesisData.FeeSink == basics.Address{}) {
+		genesisData.FeeSink = defaultSinkAddr
+	}
+	if (genesisData.RewardsPool == basics.Address{}) {
+		genesisData.RewardsPool = defaultPoolAddr
+	}
+
+	consensusParams, ok := consensus[proto]
+	if !ok {
+		return fmt.Errorf("protocol %s not supported", proto)
+	}
+
 	err := os.Mkdir(outDir, os.ModeDir|os.FileMode(0777))
 	if err != nil && os.IsNotExist(err) {
 		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())
@@ -100,7 +121,7 @@ func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusPro
 					allocation[i].Stake += 1
 					sum += 1
 				} else {
-					if allocation[i].Stake > 1 {
+					if allocation[i].Stake > consensusParams.MinBalance {
 						allocation[i].Stake -= 1
 						sum -= 1
 					}
@@ -110,27 +131,6 @@ func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusPro
 		} else {
 			panic(fmt.Sprintf("Amounts don't add up to TotalMoney - off by %v", int64(TotalMoney)-int64(sum)))
 		}
-	}
-
-	// Backwards compatibility with older genesis files: if the consensus
-	// protocol version is not specified, default to V0.
-	proto := genesisData.ConsensusProtocol
-	if proto == protocol.ConsensusVersion("") {
-		proto = protocol.ConsensusCurrentVersion
-	}
-
-	// Backwards compatibility with older genesis files: if the fee sink
-	// or the rewards pool is not specified, set their defaults.
-	if (genesisData.FeeSink == basics.Address{}) {
-		genesisData.FeeSink = defaultSinkAddr
-	}
-	if (genesisData.RewardsPool == basics.Address{}) {
-		genesisData.RewardsPool = defaultPoolAddr
-	}
-
-	consensusParams, ok := consensus[proto]
-	if !ok {
-		return fmt.Errorf("protocol %s not supported", proto)
 	}
 
 	return generateGenesisFiles(outDir, proto, consensusParams, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)
