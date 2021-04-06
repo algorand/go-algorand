@@ -18,12 +18,14 @@ package catchup
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -217,4 +219,65 @@ func TestFindMissingPeer(t *testing.T) {
 	poolIdx, peerIdx := peerSelector.findPeer(&mockHTTPPeer{address: "abcd"})
 	require.Equal(t, -1, poolIdx)
 	require.Equal(t, -1, peerIdx)
+}
+
+
+func TestHistoricData(t *testing.T) {
+
+	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
+	peers2 := []network.Peer{&mockHTTPPeer{address: "abcd"}, &mockHTTPPeer{address: "efgh"}}
+
+	peerSelector := makePeerSelector(
+		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
+			for _, opt := range options {
+				if opt == network.PeersPhonebookArchivers {
+					peers = append(peers, peers1...)
+				} else {
+					peers = append(peers, peers2...)
+				}
+			}
+			return
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays}},
+	)
+
+	var counters [3]uint64
+	for i := 0; i < 10000; i++ {
+		peer, getPeerErr := peerSelector.GetNextPeer()
+
+		switch peer.(*mockHTTPPeer).address {
+		case "a1":
+			counters[0]++
+		case "a2":
+			counters[1]++
+		case "a3":
+			counters[2]++
+		}
+		
+		require.NoError(t, getPeerErr)
+		var duration time.Duration
+		randVal := float64(crypto.RandUint64() % uint64(200))/100
+		if randVal > 1.8 {
+			duration = time.Duration(8*time.Second)
+		} else {
+			switch peer.(*mockHTTPPeer).address {
+			case "a1":
+				duration = time.Duration(1500*float64(time.Millisecond)*randVal)
+			case "a2":
+				duration = time.Duration(500*float64(time.Millisecond)*randVal)
+			case "a3":
+				duration = time.Duration(100*float64(time.Millisecond)*randVal)
+			}
+		}
+		
+		peerRank := peerSelector.PeerDownloadDurationToRank(peer, duration)		
+		//		fmt.Printf("%s %v %v\n", peer.(*mockHTTPPeer).address, duration, peerRank)
+		peerSelector.RankPeer(peer, peerRank)
+	}
+
+	fmt.Printf("a1: %d\n", counters[0])
+	fmt.Printf("a2: %d\n", counters[1])
+	fmt.Printf("a3: %d\n", counters[2])
+	require.Greater(t, counters[2], counters[1])
+	require.Greater(t, counters[1], counters[0])
 }

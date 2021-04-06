@@ -79,8 +79,9 @@ type peersRetriever interface {
 // peerPoolEntry represents a single peer entry in the pool. It contains
 // the underlying network peer as well as the peer class.
 type peerPoolEntry struct {
-	peer  network.Peer
-	class peerClass
+	peer    network.Peer
+	class   peerClass
+	history historicStats
 }
 
 // peerPool is a single pool of peers that shares the same rank.
@@ -98,6 +99,51 @@ type peerSelector struct {
 	net         peersRetriever
 	peerClasses []peerClass
 	pools       []peerPool
+}
+
+// historicStats stores the past windowSize ranks for the peer
+// The purpose of this structure is to compute the rank based on the
+// performance of the peer in the past, and be forgiving of occasional
+// errors or performance variations which may not be representative of
+// the peer's overall performance.
+type historicStats struct {
+	windowSize  int
+	rankSamples []int
+	sum         uint64
+	requestGaps []time.Duration
+	lastRequest time.Time
+	penalty     float64
+}
+
+func makeHistoricStatus(windowSize int) (hs historicStats) {
+	hs = historicStats{
+		windowSize:   windowSize,
+		rankSamples:  make([]int, 0, windowSize),
+		requestGaps: make([]time.Duration, 0, windowSize),
+		sum:          0}
+	return
+}
+
+// push pushes a new rank to the historicStats, and returns the new rank
+// based on the average of ranks in the windowSize window
+func (hs *historicStats) push(value int) (averagedRank int) {
+	now := time.Now()
+	if len(hs.rankSamples) == hs.windowSize {
+		hs.sum -= uint64(hs.rankSamples[0])
+		hs.rankSamples = hs.rankSamples[1:]
+
+		hs.penalty -= 1.0 / float64(hs.requestGaps[0].Milliseconds())
+		hs.requestGaps = hs.requestGaps[1:]
+	}
+	hs.rankSamples = append(hs.rankSamples, value)
+	hs.sum += uint64(value)
+
+	sinceLastRequest := now.Sub(hs.lastRequest)
+	hs.lastRequest = now
+	hs.requestGaps = append(hs.requestGaps, sinceLastRequest)
+	hs.penalty += 1.0 / float64(sinceLastRequest)
+
+	return int((1.0 + hs.penalty) * (float64(hs.sum) / float64(len(hs.rankSamples))))
 }
 
 // makePeerSelector creates a peerSelector, given a peersRetriever and peerClass array.
@@ -147,6 +193,7 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 
 	// we need to remove the peer from the pool so we can place it in a different location.
 	pool := ps.pools[poolIdx]
+	rank = pool.peers[peerIdx].history.push(rank)
 	if pool.rank != rank {
 		class := pool.peers[peerIdx].class
 		if len(pool.peers) > 1 {
@@ -185,7 +232,6 @@ func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownl
 	default: // i.e. peerRankInitialFourthPriority
 		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank3LowBlockTime, peerRank3HighBlockTime)
 
-		
 	}
 }
 
@@ -197,11 +243,11 @@ func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass) 
 	for i, pool := range ps.pools {
 		if pool.rank == rank {
 			// we found an existing group, add this peer to the list.
-			ps.pools[i].peers = append(pool.peers, peerPoolEntry{peer: peer, class: class})
+			ps.pools[i].peers = append(pool.peers, peerPoolEntry{peer: peer, class: class, history: makeHistoricStatus(1000)})
 			return false
 		}
 	}
-	ps.pools = append(ps.pools, peerPool{rank: rank, peers: []peerPoolEntry{{peer: peer, class: class}}})
+	ps.pools = append(ps.pools, peerPool{rank: rank, peers: []peerPoolEntry{{peer: peer, class: class, history: makeHistoricStatus(100)}}})
 	return true
 }
 
