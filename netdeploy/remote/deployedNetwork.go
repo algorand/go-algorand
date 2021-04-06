@@ -302,7 +302,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	}
 
 	if cfg.useBoostrappedFile {
-
+		fmt.Println("Generating db files\n")
 		cfg.GenerateDatabaseFiles(cfg.BootstrappedFile, genesisFolder)
 	}
 
@@ -422,7 +422,10 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedFile, gene
 		if err != nil {
 			return err
 		}
-		l.WaitForCommit(basics.Round(i))
+
+		if i%20 == 0 {
+			l.WaitForCommit(basics.Round(i))
+		}
 		start = end
 
 	}
