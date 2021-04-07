@@ -262,7 +262,7 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 	}
 
 	// if we've just loaded a deferred page, no need to reload it during the commit.
-	if mtc.deferedPageLoad != page {
+	if mtc.deferedPageLoad == page {
 		mtc.deferedPageLoad = storedNodeIdentifierNull
 	}
 	return
