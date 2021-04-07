@@ -19,6 +19,7 @@ package merkletrie
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"sort"
 	"unsafe"
 
@@ -47,24 +48,26 @@ var childEntrySize int = int(unsafe.Sizeof(childEntry{}))
 
 // stats recursively update the provided Stats structure with the current node information
 func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error) {
-	stats.nodesCount++
+	stats.NodesCount++
 	if n.leaf() {
-		stats.leafCount++
-		if depth > stats.depth {
-			stats.depth = depth
+		stats.LeafCount++
+		if depth > stats.Depth {
+			stats.Depth = depth
 		}
-		stats.size += sliceSize + len(n.hash) + bitsetSize
+		stats.Size += sliceSize + len(n.hash) + bitsetSize
 		return nil
 	}
-	stats.size += sliceSize + len(n.hash) + sliceSize + len(n.children)*childEntrySize + bitsetSize
+	stats.Size += sliceSize + len(n.hash) + sliceSize + len(n.children)*childEntrySize + bitsetSize
 	for _, child := range n.children {
 		childNode, err := cache.getNode(child.id)
 		if err != nil {
-			return err
+			//return err
+			return fmt.Errorf("%s.[%d,%d,%d]", err, child.id, child.id/116, child.hashIndex)
 		}
 		err = childNode.stats(cache, stats, depth+1)
 		if err != nil {
-			return err
+			return fmt.Errorf("%s:[%d,%d,%d]", err, child.id, child.id/116, child.hashIndex)
+			//return err
 		}
 	}
 	return nil

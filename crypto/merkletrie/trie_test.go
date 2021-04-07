@@ -43,16 +43,16 @@ func TestAddingAndRemoving(t *testing.T) {
 		require.Equal(t, true, addResult)
 		rootsWhileAdding[i], _ = mt.RootHash()
 		stats, _ := mt.GetStats()
-		require.Equal(t, i+1, int(stats.leafCount))
+		require.Equal(t, i+1, int(stats.LeafCount))
 	}
 
 	stats, _ := mt.GetStats()
-	require.Equal(t, len(hashes), int(stats.leafCount))
-	require.Equal(t, 4, int(stats.depth))
-	require.Equal(t, 10915, int(stats.nodesCount))
-	require.Equal(t, 1135745, int(stats.size))
-	require.True(t, int(stats.nodesCount) > len(hashes))
-	require.True(t, int(stats.nodesCount) < 2*len(hashes))
+	require.Equal(t, len(hashes), int(stats.LeafCount))
+	require.Equal(t, 4, int(stats.Depth))
+	require.Equal(t, 10915, int(stats.NodesCount))
+	require.Equal(t, 1135745, int(stats.Size))
+	require.True(t, int(stats.NodesCount) > len(hashes))
+	require.True(t, int(stats.NodesCount) < 2*len(hashes))
 
 	allHashesAddedRoot, _ := mt.RootHash()
 
@@ -67,8 +67,8 @@ func TestAddingAndRemoving(t *testing.T) {
 	roothash, _ := mt.RootHash()
 	require.Equal(t, crypto.Digest{}, roothash)
 	stats, _ = mt.GetStats()
-	require.Equal(t, 0, int(stats.leafCount))
-	require.Equal(t, 0, int(stats.depth))
+	require.Equal(t, 0, int(stats.LeafCount))
+	require.Equal(t, 0, int(stats.Depth))
 
 	// add the items in a different order.
 	hashesOrder := rand.New(rand.NewSource(1234567)).Perm(len(hashes))

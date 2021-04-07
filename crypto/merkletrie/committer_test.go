@@ -26,10 +26,16 @@ import (
 )
 
 // Duplicate duplicates the current memory committer.
-func (mc *InMemoryCommitter) Duplicate() (out *InMemoryCommitter) {
+func (mc *InMemoryCommitter) Duplicate(flat bool) (out *InMemoryCommitter) {
 	out = &InMemoryCommitter{memStore: make(map[uint64][]byte)}
 	for k, v := range mc.memStore {
-		out.memStore[k] = v
+		if flat {
+			out.memStore[k] = v
+		} else {
+			bytes := make([]byte, len(v))
+			copy(bytes[:], v[:])
+			out.memStore[k] = bytes
+		}
 	}
 	return
 }
@@ -53,7 +59,7 @@ func TestInMemoryCommitter(t *testing.T) {
 	}
 	releasedNodes, err := mt1.Evict(true)
 	require.NoError(t, err)
-	savedMemoryCommitter := memoryCommitter.Duplicate()
+	savedMemoryCommitter := memoryCommitter.Duplicate(false)
 	require.Equal(t, 19282, releasedNodes)
 	for i := len(hashes) / 2; i < len(hashes); i++ {
 		mt1.Add(hashes[i][:])
@@ -78,8 +84,8 @@ func TestInMemoryCommitter(t *testing.T) {
 	}
 	require.Equal(t, 2425675, storageSize) // 2,425,575 / 50,000 ~= 48 bytes/leaf.
 	stats, _ := mt1.GetStats()
-	require.Equal(t, leafsCount, int(stats.leafCount))
-	require.Equal(t, 61926, int(stats.nodesCount))
+	require.Equal(t, leafsCount, int(stats.LeafCount))
+	require.Equal(t, 61926, int(stats.NodesCount))
 
 }
 
@@ -123,8 +129,8 @@ func TestNoRedundentPages(t *testing.T) {
 		}
 	}
 	stats, _ := mt1.GetStats()
-	require.Equal(t, testSize, int(stats.leafCount))
-	nodesCount := int(stats.nodesCount)
+	require.Equal(t, testSize, int(stats.LeafCount))
+	nodesCount := int(stats.NodesCount)
 	require.Equal(t, nodesCount, len(trieNodes))
 	require.Equal(t, nodesCount, mt1.cache.cachedNodeCount)
 }
@@ -186,4 +192,54 @@ func TestMultipleCommits(t *testing.T) {
 		storageSize2 += len(bytes) - headerSize
 	}
 	require.Equal(t, storageSize1, storageSize2)
+}
+
+func TestIterativeCommits(t *testing.T) {
+	testSize := 1000
+
+	memConfig := MemoryConfig{
+		NodesCountPerPage:         116,
+		CachedNodesCount:          9000,
+		PageFillFactor:            0.95,
+		MaxChildrenPagesThreshold: 64,
+	}
+
+	hashes := make([]crypto.Digest, testSize)
+	for i := 0; i < len(hashes); i++ {
+		hashes[i] = crypto.Hash([]byte{byte(i), byte(i >> 8), byte(i >> 16), byte(i >> 24), byte(0), byte(0)})
+	}
+
+	// initialize memory container.
+	mc := &InMemoryCommitter{}
+	mt, _ := MakeTrie(mc, memConfig)
+	for i := 0; i < len(hashes); i++ {
+		added, err := mt.Add(hashes[i][:])
+		require.True(t, added)
+		require.NoError(t, err)
+	}
+	_, err := mt.Commit()
+	require.NoError(t, err)
+
+	for r := 0; r < 100; r++ {
+		/*if r%2 == 1 {*/
+		newMC := mc.Duplicate(true)
+		mt, _ = MakeTrie(newMC, memConfig)
+		mc = newMC
+		//}
+
+		for k := r * 5; k < r*7+len(hashes); k++ {
+			i := k % len(hashes)
+			deleted, err := mt.Delete(hashes[i][:])
+			require.True(t, deleted)
+			require.NoError(t, err)
+			hashes[i] = crypto.Hash([]byte{byte(i), byte(i >> 8), byte(i >> 16), byte(i >> 24), byte(r + 1), byte((r + 1) >> 8)})
+			added, err := mt.Add(hashes[i][:])
+			require.True(t, added)
+			require.NoError(t, err)
+		}
+		_, err := mt.Commit()
+		require.NoError(t, err)
+		mt = nil
+
+	}
 }

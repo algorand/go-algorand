@@ -17,11 +17,16 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 var ledgerTrackerFilename string
@@ -29,6 +34,9 @@ var ledgerTrackerFilename string
 func init() {
 	databaseCmd.Flags().StringVarP(&ledgerTrackerFilename, "tracker", "t", "", "Specify the ledger tracker file name ( i.e. ./ledger.tracker.sqlite )")
 	databaseCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. ledger.dump.txt )")
+	databaseCmd.AddCommand(checkCmd)
+
+	checkCmd.Flags().StringVarP(&ledgerTrackerFilename, "tracker", "t", "", "Specify the ledger tracker file name ( i.e. ./ledger.tracker.sqlite )")
 }
 
 var databaseCmd = &cobra.Command{
@@ -55,4 +63,61 @@ var databaseCmd = &cobra.Command{
 			reportErrorf("Unable to print account database : %v", err)
 		}
 	},
+}
+
+var checkCmd = &cobra.Command{
+	Use:   "check",
+	Short: "Performs a consistency checking on the account merkle trie",
+	Long:  "Performs a consistency checking on the account merkle trie",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		if ledgerTrackerFilename == "" {
+			cmd.HelpFunc()(cmd, args)
+			return
+		}
+
+		outFile := os.Stdout
+		fmt.Fprintf(outFile, "Checking tracker database at %s.\n", ledgerTrackerFilename)
+		err := checkDatabase(ledgerTrackerFilename, outFile)
+		if err != nil {
+			reportErrorf("Error checking database : %v", err)
+		}
+	},
+}
+
+func checkDatabase(databaseName string, outFile *os.File) error {
+	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
+	if err != nil || dbAccessor.Handle == nil {
+		return err
+	}
+	defer func() {
+		dbAccessor.Close()
+	}()
+
+	var stats merkletrie.Stats
+	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		committer, err := ledger.MakeMerkleCommitter(tx, false)
+		if err != nil {
+			return err
+		}
+		trie, err := merkletrie.MakeTrie(committer, ledger.TrieMemoryConfig)
+		if err != nil {
+			return err
+		}
+		stats, err = trie.GetStats()
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(outFile, "Merkle trie statistics:\n")
+	fmt.Fprintf(outFile, " Nodes count: %d\n", stats.NodesCount)
+	fmt.Fprintf(outFile, " Leaf count:  %d\n", stats.LeafCount)
+	fmt.Fprintf(outFile, " Depth:       %d\n", stats.Depth)
+	fmt.Fprintf(outFile, " Size:        %d\n", stats.Size)
+	return nil
 }
