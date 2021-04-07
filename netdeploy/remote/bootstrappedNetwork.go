@@ -21,7 +21,7 @@ import (
 	"os"
 )
 
-type BootstrappedFile struct {
+type BootstrappedNetwork struct {
 	NumRounds                 int
 	RoundTransactionsCount    int
 	GeneratedAccountsCount    int
@@ -31,7 +31,7 @@ type BootstrappedFile struct {
 }
 
 // LoadBootstrappedData loads a bootstrappedFile structure from a json file
-func LoadBootstrappedData(file string) (data BootstrappedFile, err error) {
+func LoadBootstrappedData(file string) (data BootstrappedNetwork, err error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return

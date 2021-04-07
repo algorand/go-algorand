@@ -19,6 +19,12 @@ package remote
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -31,16 +37,10 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/codecs"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
 )
 
 const genesisFolderName = "genesisdata"
 const hostFolderName = "hosts"
-const dbFilesFolderName = "databasefiles"
 const networkConfigFileName = "network.config"
 const topologySpecFileName = "cloudspec.config"
 
@@ -52,6 +52,8 @@ var ErrDeployedNetworkInsufficientHosts = fmt.Errorf("target network requires mo
 
 // ErrDeployedNetworkNameCantIncludeWildcard is returned by Validate if network name contains '*'
 var ErrDeployedNetworkNameCantIncludeWildcard = fmt.Errorf("network name cannont include wild-cards")
+
+var BootstrappedNetState NetState
 
 // ErrDeployedNetworkTemplate A template file contained {{Field}} sections that were not handled by a corresponding Field value in configuration.
 type ErrDeployedNetworkTemplate struct {
@@ -70,12 +72,24 @@ type DeployedNetworkConfig struct {
 
 // DeployedNetwork represents the complete configuration specification for a deployed network
 type DeployedNetwork struct {
-	useExistingGenesis bool
-	useBoostrappedFile bool
-	GenesisData        gen.GenesisData
-	Topology           topology
-	Hosts              []HostConfig
-	BootstrappedFile   BootstrappedFile
+	useExistingGenesis       bool
+	createBoostrappedNetwork bool
+	GenesisData              gen.GenesisData
+	Topology                 topology
+	Hosts                    []HostConfig
+	BootstrappedNet          BootstrappedNetwork
+}
+
+type NetState struct {
+	nAccounts     int
+	nAssets       int
+	nApplications int
+	round         basics.Round
+	accounts      map[basics.Address]basics.AccountData
+	genesisID     string
+	genesisHash   crypto.Digest
+	poolAddr      basics.Address
+	sinkAddr      basics.Address
 }
 
 // InitDeployedNetworkConfig loads the DeployedNetworkConfig from a file
@@ -212,8 +226,8 @@ func (cfg *DeployedNetwork) SetUseExistingGenesisFiles(useExisting bool) bool {
 // files instead of generating new ones.  This is useful for permanent networks like devnet and testnet.
 // Returns the previous value.
 func (cfg *DeployedNetwork) SetUseBoostrappedFiles(boostrappedFile bool) bool {
-	old := cfg.useBoostrappedFile
-	cfg.useBoostrappedFile = boostrappedFile
+	old := cfg.createBoostrappedNetwork
+	cfg.createBoostrappedNetwork = boostrappedFile
 	return old
 }
 
@@ -301,27 +315,26 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 		return
 	}
 
-	if cfg.useBoostrappedFile {
-		fmt.Println("Generating db files\n")
-		cfg.GenerateDatabaseFiles(cfg.BootstrappedFile, genesisFolder)
+	if cfg.createBoostrappedNetwork {
+		fmt.Println("Generating db files")
+		cfg.GenerateDatabaseFiles(cfg.BootstrappedNet, genesisFolder)
 	}
 
 	return
 }
 
 //GenerateDatabaseFiles generates database files according to the configurations
-func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedFile, genesisFolder string) error {
+func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, genesisFolder string) error {
 
-	var signedTnx []transactions.SignedTxn
-	accounts := make(map[basics.Address]basics.AccountData)
+	BootstrappedNetState.accounts = make(map[basics.Address]basics.AccountData)
 
 	genesis, err := bookkeeping.LoadGenesisFromFile(genesisFolder + "/genesis.json")
 	if err != nil {
 		return err
 	}
 
-	genesisID := genesis.ID()
-	genesisHash := crypto.Hash([]byte(genesisID))
+	BootstrappedNetState.genesisID = genesis.ID()
+	BootstrappedNetState.genesisHash = crypto.Hash([]byte(genesis.ID()))
 	srcWallet := getGenesisAlloc(fileCfgs.SourceWalletName, genesis.Allocation)
 	if srcWallet.Address == "" {
 		return fmt.Errorf("error finding source wallet address")
@@ -340,45 +353,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedFile, gene
 
 	}
 	src, err := basics.UnmarshalChecksumAddress(srcWallet.Address)
-	accounts[src] = basics.MakeAccountData(basics.Online, srcWallet.State.MicroAlgos)
-
-	//create accounts
-	for i := 0; i < fileCfgs.GeneratedAccountsCount; i++ {
-		secretDst := keypair()
-		dst := basics.Address(secretDst.SignatureVerifier)
-		accounts[dst] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
-		tx, err := createSignedTx(src, dst, protocol.PaymentTx, genesisID, genesisHash)
-		if err != nil {
-			return err
-		}
-		signedTnx = append(signedTnx, tx)
-	}
-
-	//create asssets
-	for i := 0; i < fileCfgs.GeneratedAssetsCount; i++ {
-		secretDst := keypair()
-		acct := basics.Address(secretDst.SignatureVerifier)
-		accounts[acct] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
-
-		tx, err := createSignedTx(src, acct, protocol.AssetConfigTx, genesisID, genesisHash)
-		if err != nil {
-			return err
-		}
-		signedTnx = append(signedTnx, tx)
-	}
-
-	//create applications
-	for i := 0; i < fileCfgs.GeneratedAccountsCount; i++ {
-		secretDst := keypair()
-		acct := basics.Address(secretDst.SignatureVerifier)
-		accounts[acct] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
-
-		tx, err := createSignedTx(acct, acct, protocol.ApplicationCallTx, genesisID, genesisHash)
-		if err != nil {
-			return err
-		}
-		signedTnx = append(signedTnx, tx)
-	}
+	BootstrappedNetState.accounts[src] = basics.MakeAccountData(basics.Online, srcWallet.State.MicroAlgos)
 
 	poolAddr, err := basics.UnmarshalChecksumAddress(rewardsPool.Address)
 	if err != nil {
@@ -389,10 +364,19 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedFile, gene
 		return err
 	}
 
-	accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
-	accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
+	//initial state
+	BootstrappedNetState.nAccounts = fileCfgs.GeneratedAccountsCount
+	BootstrappedNetState.nAssets = fileCfgs.GeneratedAssetsCount
+	BootstrappedNetState.nApplications = fileCfgs.GeneratedApplicationCount
 
-	initState, err := generateInitState(poolAddr, sinkAddr, genesisID, genesisHash, 0, accounts, signedTnx[0:fileCfgs.RoundTransactionsCount])
+	BootstrappedNetState.accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
+	BootstrappedNetState.accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
+	BootstrappedNetState.poolAddr = poolAddr
+	BootstrappedNetState.sinkAddr = sinkAddr
+	BootstrappedNetState.round = basics.Round(0)
+
+	roundTrxCnt := fileCfgs.RoundTransactionsCount
+	initState, err := generateInitState(src, roundTrxCnt)
 	if err != nil {
 		return err
 	}
@@ -403,30 +387,20 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedFile, gene
 	if err != nil {
 		return err
 	}
-
 	prev, _ := l.Block(l.Latest())
-	start := fileCfgs.RoundTransactionsCount
-	var end int
 	for i := 1; i < fileCfgs.NumRounds; i++ {
-		next := basics.Round(i)
-		end = start + fileCfgs.RoundTransactionsCount
-		var blk bookkeeping.Block
-		if end < len(signedTnx) {
-			blk, err = createBlock(poolAddr, sinkAddr, genesisID, genesisHash, uint64(next), prev, signedTnx[start:end])
-		} else {
-			blk, err = createBlock(poolAddr, sinkAddr, genesisID, genesisHash, uint64(next), prev, []transactions.SignedTxn{})
-		}
-
+		BootstrappedNetState.round = basics.Round(i)
+		blk, _ := createBlock(src, prev, roundTrxCnt)
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		err = l.AddBlock(blk, agreement.Certificate{Round: next})
+		err = l.AddBlock(blk, agreement.Certificate{Round: BootstrappedNetState.round})
 		if err != nil {
+			fmt.Printf("Error %s\n", err)
 			return err
 		}
 
 		if i%20 == 0 {
 			l.WaitForCommit(basics.Round(i))
 		}
-		start = end
 
 	}
 
@@ -434,28 +408,19 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedFile, gene
 	return nil
 }
 
-func createSignedTx(src basics.Address, dst basics.Address, tp protocol.TxType, genesisID string, genesisHash crypto.Digest) (transactions.SignedTxn, error) {
+func createSignedTx(src basics.Address, dst basics.Address) transactions.SignedTxn {
 	var tx transactions.Transaction
 
 	header := transactions.Header{
 		Sender:      src,
 		Fee:         basics.MicroAlgos{Raw: 1},
-		FirstValid:  basics.Round(0),
-		LastValid:   basics.Round(0),
-		GenesisID:   genesisID,
-		GenesisHash: genesisHash,
+		FirstValid:  BootstrappedNetState.round,
+		LastValid:   BootstrappedNetState.round,
+		GenesisID:   BootstrappedNetState.genesisID,
+		GenesisHash: BootstrappedNetState.genesisHash,
 	}
-	switch tp {
-	case protocol.PaymentTx:
-		tx = transactions.Transaction{
-			Type:   tp,
-			Header: header,
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: dst,
-				Amount:   basics.MicroAlgos{Raw: uint64(50)},
-			},
-		}
-	case protocol.AssetConfigTx:
+
+	if BootstrappedNetState.nAssets > 0 {
 		assetParam := basics.AssetParams{
 			Total:    100,
 			UnitName: "unit",
@@ -467,26 +432,36 @@ func createSignedTx(src basics.Address, dst basics.Address, tp protocol.TxType, 
 		}
 
 		tx = transactions.Transaction{
-			Type:                 tp,
+			Type:                 protocol.AssetConfigTx,
 			Header:               header,
 			AssetConfigTxnFields: assetConfigFields,
 		}
-	case protocol.ApplicationCallTx:
+
+		BootstrappedNetState.nAssets--
+	} else if BootstrappedNetState.nApplications > 0 {
 		appCallFields := transactions.ApplicationCallTxnFields{
 			OnCompletion: 0,
 		}
 		tx = transactions.Transaction{
-			Type:                     tp,
+			Type:                     protocol.AssetConfigTx,
 			Header:                   header,
 			ApplicationCallTxnFields: appCallFields,
 		}
-	default:
-		fmt.Printf("%s not supported", tp)
+		BootstrappedNetState.nApplications--
+	} else {
+		tx = transactions.Transaction{
+			Type:   protocol.PaymentTx,
+			Header: header,
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: dst,
+				Amount:   basics.MicroAlgos{Raw: uint64(0)},
+			},
+		}
 	}
 
 	t := transactions.SignedTxn{Txn: tx}
 
-	return t, nil
+	return t
 }
 
 func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bookkeeping.GenesisAllocation {
@@ -505,22 +480,21 @@ func keypair() *crypto.SignatureSecrets {
 	return s
 }
 
-func generateInitState(poolAddr basics.Address, sinkAddr basics.Address, genesisID string, genesisHash crypto.Digest, round uint64, accounts map[basics.Address]basics.AccountData, stxn []transactions.SignedTxn) (ledger.InitState, error) {
+func generateInitState(src basics.Address, roundTrxCnt int) (ledger.InitState, error) {
 
 	var initState ledger.InitState
-	payset := make([]transactions.SignedTxnInBlock, 0, len(stxn))
-	var txibs []transactions.SignedTxnInBlock
-	txibs = make([]transactions.SignedTxnInBlock, 0, len(stxn))
+	payset := make([]transactions.SignedTxnInBlock, 0, roundTrxCnt)
+	txibs := make([]transactions.SignedTxnInBlock, 0, roundTrxCnt)
 
 	initBlock := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
-			GenesisID:   genesisID,
-			GenesisHash: genesisHash,
-			Round:       basics.Round(round),
+			GenesisID:   BootstrappedNetState.genesisID,
+			GenesisHash: BootstrappedNetState.genesisHash,
+			Round:       BootstrappedNetState.round,
 			RewardsState: bookkeeping.RewardsState{
 				RewardsRate: 1,
-				RewardsPool: poolAddr,
-				FeeSink:     sinkAddr,
+				RewardsPool: BootstrappedNetState.poolAddr,
+				FeeSink:     BootstrappedNetState.sinkAddr,
 			},
 			UpgradeState: bookkeeping.UpgradeState{
 				CurrentProtocol: protocol.ConsensusCurrentVersion,
@@ -530,8 +504,13 @@ func generateInitState(poolAddr basics.Address, sinkAddr basics.Address, genesis
 
 	initBlock.RewardsLevel = 0
 
-	for i := 0; i < len(stxn); i++ {
-		txib, err := initBlock.EncodeSignedTxn(stxn[i], transactions.ApplyData{})
+	for i := 0; i < roundTrxCnt; i++ {
+		secretDst := keypair()
+		dst := basics.Address(secretDst.SignatureVerifier)
+		BootstrappedNetState.accounts[dst] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
+
+		stxn := createSignedTx(src, dst)
+		txib, err := initBlock.EncodeSignedTxn(stxn, transactions.ApplyData{})
 		if err != nil {
 			return ledger.InitState{}, err
 		}
@@ -548,37 +527,40 @@ func generateInitState(poolAddr basics.Address, sinkAddr basics.Address, genesis
 	}
 
 	initState.Block = initBlock
-	initState.Accounts = accounts
-	initState.GenesisHash = crypto.Hash([]byte(genesisID))
+	initState.Accounts = BootstrappedNetState.accounts
+	initState.GenesisHash = crypto.Hash([]byte(BootstrappedNetState.genesisID))
 	return initState, nil
 }
 
-func createBlock(poolAddr basics.Address, sinkAddr basics.Address, genesisID string, genesisHash crypto.Digest, round uint64, prev bookkeeping.Block, stxn []transactions.SignedTxn) (bookkeeping.Block, error) {
-	payset := make([]transactions.SignedTxnInBlock, 0, len(stxn))
-	var txibs []transactions.SignedTxnInBlock
-	txibs = make([]transactions.SignedTxnInBlock, 0, len(stxn))
+func createBlock(src basics.Address, prev bookkeeping.Block, roundTrxCnt int) (bookkeeping.Block, error) {
+	payset := make([]transactions.SignedTxnInBlock, 0, roundTrxCnt)
+	txibs := make([]transactions.SignedTxnInBlock, 0, roundTrxCnt)
 
 	block := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
-			GenesisID:   genesisID,
-			GenesisHash: genesisHash,
-			Round:       basics.Round(round),
+			GenesisID:   BootstrappedNetState.genesisID,
+			GenesisHash: BootstrappedNetState.genesisHash,
+			Round:       BootstrappedNetState.round,
 			RewardsState: bookkeeping.RewardsState{
 				RewardsRate: 1,
-				RewardsPool: poolAddr,
-				FeeSink:     sinkAddr,
+				RewardsPool: BootstrappedNetState.poolAddr,
+				FeeSink:     BootstrappedNetState.sinkAddr,
 			},
 			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: protocol.ConsensusCurrentVersion,
+				CurrentProtocol: prev.CurrentProtocol,
 			},
 		},
 	}
 
 	block.RewardsLevel = prev.RewardsLevel
-	block.CurrentProtocol = protocol.ConsensusCurrentVersion
 
-	for i := 0; i < len(stxn); i++ {
-		txib, err := block.EncodeSignedTxn(stxn[i], transactions.ApplyData{})
+	for i := 0; i < roundTrxCnt; i++ {
+		secretDst := keypair()
+		dst := basics.Address(secretDst.SignatureVerifier)
+		BootstrappedNetState.accounts[dst] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
+
+		stxn := createSignedTx(src, dst)
+		txib, err := block.EncodeSignedTxn(stxn, transactions.ApplyData{})
 		if err != nil {
 			return bookkeeping.Block{}, err
 		}

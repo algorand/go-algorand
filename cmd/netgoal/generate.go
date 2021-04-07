@@ -512,7 +512,7 @@ func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
 
 func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTrxCount, accountsCount, assetsCount, applicationCount int) error {
 
-	var data = remote.BootstrappedFile{
+	var data = remote.BootstrappedNetwork{
 		NumRounds:                 rounds,
 		RoundTransactionsCount:    roundTrxCount,
 		GeneratedAccountsCount:    accountsCount,
@@ -523,7 +523,7 @@ func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, 
 	return saveLoadingFileDataToDisk(data, templateFilename)
 }
 
-func saveLoadingFileDataToDisk(data remote.BootstrappedFile, filename string) error {
+func saveLoadingFileDataToDisk(data remote.BootstrappedNetwork, filename string) error {
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		defer f.Close()
