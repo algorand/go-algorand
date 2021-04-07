@@ -156,7 +156,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 
 		numtxns := len(msg.Proposal.Payset)
 		txnData = make([][]byte, numtxns+1, numtxns+1)
-		tags = make([]protocol.Tag, numtxns+1)
+		tags = make([]protocol.Tag, numtxns+1, numtxns+1)
 		payset, err := msg.Proposal.Block.DecodePaysetFlat()
 		if err != nil {
 			logging.Base().Warnf("failed to decode payset: %v", err)
@@ -183,6 +183,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 			}
 			if duration > time.Millisecond {
 				millisecond ++
+				logging.Base().Infof("txtype: %v, len: %v", payset[i].SignedTxn.Txn.Type, payset[i].SignedTxn.Msgsize())
 			}
 			if duration > time.Millisecond * 10 {
 				millisecond10 ++
