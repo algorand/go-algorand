@@ -80,6 +80,9 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 		encodedMessage := msgCallback.messageData.message.MarshalMsg([]byte{})
 		msgCallback.messageData.encodedMessageSize = len(encodedMessage)
 		s.node.SendPeerMessage(peer.networkPeer, encodedMessage, msgCallback.asyncMessageSent)
+		// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
+		releaseEncodedTransactionGroups(msgCallback.messageData.message.TransactionGroups.Bytes)
+		msgCallback.messageData.message.TransactionGroups.Bytes = nil
 
 		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, msgCallback.messageData.partialMessage, currentTime)
 		if (ops & peerOpsSetInterruptible) == peerOpsSetInterruptible {
