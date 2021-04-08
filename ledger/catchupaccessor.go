@@ -466,19 +466,19 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		uncommitedHashesCount := 0
 		keepWriting := true
 		hashesWritten := uint64(0)
-		var mc *merkleCommitter
+		var mc *MerkleCommitter
 		if progressUpdates != nil {
 			progressUpdates(hashesWritten)
 		}
 
 		err := wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 			// create the merkle trie for the balances
-			mc, err = makeMerkleCommitter(tx, true)
+			mc, err = MakeMerkleCommitter(tx, true)
 			if err != nil {
 				return
 			}
 
-			trie, err = merkletrie.MakeTrie(mc, trieMemoryConfig)
+			trie, err = merkletrie.MakeTrie(mc, TrieMemoryConfig)
 			return err
 		})
 		if err != nil {
@@ -501,7 +501,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			}
 
 			err = rdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
-				mc, err = makeMerkleCommitter(tx, true)
+				mc, err = MakeMerkleCommitter(tx, true)
 				if err != nil {
 					return
 				}
@@ -528,7 +528,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				err = wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 					// set a long 30-second window for the evict before warning is generated.
 					db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(30*time.Second))
-					mc, err = makeMerkleCommitter(tx, true)
+					mc, err = MakeMerkleCommitter(tx, true)
 					if err != nil {
 						return
 					}
@@ -557,7 +557,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			err = wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 				// set a long 30-second window for the evict before warning is generated.
 				db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(30*time.Second))
-				mc, err = makeMerkleCommitter(tx, true)
+				mc, err = MakeMerkleCommitter(tx, true)
 				if err != nil {
 					return
 				}
@@ -618,12 +618,12 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	ledgerVerifycatchpointCount.Inc(nil)
 	err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// create the merkle trie for the balances
-		mc, err0 := makeMerkleCommitter(tx, true)
+		mc, err0 := MakeMerkleCommitter(tx, true)
 		if err0 != nil {
 			return fmt.Errorf("unable to make MerkleCommitter: %v", err0)
 		}
 		var trie *merkletrie.Trie
-		trie, err = merkletrie.MakeTrie(mc, trieMemoryConfig)
+		trie, err = merkletrie.MakeTrie(mc, TrieMemoryConfig)
 		if err != nil {
 			return fmt.Errorf("unable to make trie: %v", err)
 		}
