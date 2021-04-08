@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 )
@@ -76,4 +77,14 @@ func TestDefaultMessageTagsLength(t *testing.T) {
 	for tag := range defaultSendMessageTags {
 		require.Equal(t, 2, len(tag))
 	}
+}
+
+// TestAtomicVariablesAligment ensures that the 64-bit atomic variables
+// offsets are 64-bit aligned. This is required due to go atomic library
+// limitation.
+func TestAtomicVariablesAligment(t *testing.T) {
+	p := wsPeer{}
+	require.True(t, (unsafe.Offsetof(p.requestNonce)%8) == 0)
+	require.True(t, (unsafe.Offsetof(p.lastPacketTime)%8) == 0)
+	require.True(t, (unsafe.Offsetof(p.intermittentOutgoingMessageEnqueueTime)%8) == 0)
 }
