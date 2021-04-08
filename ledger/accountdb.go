@@ -1345,8 +1345,8 @@ func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *MerkleCommitter, err err
 	return mc, nil
 }
 
-// StorePage stores a single page in an in-memory persistence.
-func (mc *MerkleCommitter) StorePage(page uint64, content []byte) error {
+// StorePage is the merkletrie.Committer interface implementation, stores a single page in a sqllite database table.
+func (mc *merkleCommitter) StorePage(page uint64, content []byte) error {
 	if len(content) == 0 {
 		logging.Base().Warnf("committer: delete page %d", page)
 		_, err := mc.deleteStmt.Exec(page)
@@ -1357,8 +1357,8 @@ func (mc *MerkleCommitter) StorePage(page uint64, content []byte) error {
 	return err
 }
 
-// LoadPage load a single page from an in-memory persistence.
-func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
+// LoadPage is the merkletrie.Committer interface implementation, load a single page from a sqllite database table.
+func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	err = mc.selectStmt.QueryRow(page).Scan(&content)
 	if err == sql.ErrNoRows {
 		content = nil
