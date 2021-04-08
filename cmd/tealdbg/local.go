@@ -336,6 +336,9 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			if IsTextFile(data) {
 				source := string(data)
 				ops, err := logic.AssembleString(source)
+				if ops.Version > r.proto.LogicSigVersion {
+					return fmt.Errorf("Program version (%d) is beyond the maximum supported protocol version (%d)", ops.Version, r.proto.LogicSigVersion)
+				}
 				if err != nil {
 					errorLines := ""
 					for _, lineError := range ops.Errors {
