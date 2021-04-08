@@ -143,6 +143,9 @@ type wsPeer struct {
 	// peer, or zero if no message is being written.
 	intermittentOutgoingMessageEnqueueTime int64
 
+	// Nonce used to uniquely identify requests
+	requestNonce uint64
+
 	wsPeerCore
 
 	// conn will be *websocket.Conn (except in testing)
@@ -190,9 +193,6 @@ type wsPeer struct {
 
 	// peer version ( this is one of the version supported by the current node and listed in SupportedProtocolVersions )
 	version string
-
-	// Nonce used to uniquely identify requests
-	requestNonce uint64
 
 	// responseChannels used by the client to wait on the response of the request
 	responseChannels map[uint64]chan *Response
