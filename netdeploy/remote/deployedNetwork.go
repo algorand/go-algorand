@@ -353,7 +353,6 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 
 	}
 	src, err := basics.UnmarshalChecksumAddress(srcWallet.Address)
-	BootstrappedNetState.accounts[src] = basics.MakeAccountData(basics.Online, srcWallet.State.MicroAlgos)
 
 	poolAddr, err := basics.UnmarshalChecksumAddress(rewardsPool.Address)
 	if err != nil {
@@ -371,6 +370,8 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 
 	BootstrappedNetState.accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
 	BootstrappedNetState.accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
+	BootstrappedNetState.accounts[src] = basics.MakeAccountData(basics.Online, srcWallet.State.MicroAlgos)
+
 	BootstrappedNetState.poolAddr = poolAddr
 	BootstrappedNetState.sinkAddr = sinkAddr
 	BootstrappedNetState.round = basics.Round(0)
@@ -439,11 +440,12 @@ func createSignedTx(src basics.Address, dst basics.Address) transactions.SignedT
 
 		BootstrappedNetState.nAssets--
 	} else if BootstrappedNetState.nApplications > 0 {
+		header.Sender = dst
 		appCallFields := transactions.ApplicationCallTxnFields{
 			OnCompletion: 0,
 		}
 		tx = transactions.Transaction{
-			Type:                     protocol.AssetConfigTx,
+			Type:                     protocol.ApplicationCallTx,
 			Header:                   header,
 			ApplicationCallTxnFields: appCallFields,
 		}
