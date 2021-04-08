@@ -99,7 +99,8 @@ const initializingAccountCachesMessageTimeout = 3 * time.Second
 // where we end up batching up to 1000 rounds in a single update.
 const accountsUpdatePerRoundHighWatermark = 1 * time.Second
 
-var trieMemoryConfig = merkletrie.MemoryConfig{
+// TrieMemoryConfig is the memory configuration setup used for the merkle trie.
+var TrieMemoryConfig = merkletrie.MemoryConfig{
 	NodesCountPerPage:         merkleCommitterNodesPerPage,
 	CachedNodesCount:          trieCachedNodesCount,
 	PageFillFactor:            0.95,
@@ -1258,12 +1259,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	}
 
 	// create the merkle trie for the balances
-	committer, err := makeMerkleCommitter(tx, false)
+	committer, err := MakeMerkleCommitter(tx, false)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
 
-	trie, err := merkletrie.MakeTrie(committer, trieMemoryConfig)
+	trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
@@ -1533,7 +1534,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
 			deleted, err = au.balancesTrie.Delete(deleteHash)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
 			}
 			if !deleted {
 				au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
@@ -1546,7 +1547,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
 			added, err = au.balancesTrie.Add(addHash)
 			if err != nil {
-				return err
+				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
 			}
 			if !added {
 				au.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
@@ -1567,6 +1568,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 	if accumulatedChanges > 0 {
 		_, err = au.balancesTrie.Commit()
 	}
+
 	return
 }
 
@@ -2039,12 +2041,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
-			mc, err0 := makeMerkleCommitter(tx, false)
+			mc, err0 := MakeMerkleCommitter(tx, false)
 			if err0 != nil {
 				return err0
 			}
 			if au.balancesTrie == nil {
-				trie, err := merkletrie.MakeTrie(mc, trieMemoryConfig)
+				trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
 				if err != nil {
 					au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
 					return err
