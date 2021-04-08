@@ -116,7 +116,6 @@ func (mtc *merkleTrieCache) initialize(mt *Trie, committer Committer, memoryConf
 		if (int64(mtc.mt.nextNodeID) % mtc.nodesPerPage) > 0 {
 			mtc.deferedPageLoad = uint64(mtc.mt.nextNodeID) / uint64(mtc.nodesPerPage)
 		}
-
 	}
 	mtc.modified = false
 	return
