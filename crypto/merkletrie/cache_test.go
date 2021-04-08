@@ -454,3 +454,36 @@ func TestCachePagedOutTip(t *testing.T) {
 	page = uint64(mt1.root) / uint64(memConfig.NodesCountPerPage)
 	require.NotNil(t, mt1.cache.pageToNIDsPtr[page])
 }
+
+// TestCacheLoadingDeferedPage verifies that the loadPage
+// method correcly resets the mtc.deferedPageLoad on the correct page.
+func TestCacheLoadingDeferedPage(t *testing.T) {
+	var memoryCommitter1 InMemoryCommitter
+	mt1, _ := MakeTrie(&memoryCommitter1, defaultTestMemoryConfig)
+	// create 100000 hashes.
+	leafsCount := 100000
+	hashes := make([]crypto.Digest, leafsCount)
+	for i := 0; i < len(hashes); i++ {
+		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
+	}
+
+	for i := 0; i < len(hashes); i++ {
+		mt1.Add(hashes[i][:])
+	}
+	_, err := mt1.Commit()
+	require.NoError(t, err)
+
+	// verify that the cache doesn't reset the mtc.deferedPageLoad on loading a non-defered page.
+	dupMem := memoryCommitter1.Duplicate()
+	mt2, _ := MakeTrie(dupMem, defaultTestMemoryConfig)
+	lastPage := int64(mt2.nextNodeID) / defaultTestMemoryConfig.NodesCountPerPage
+	require.Equal(t, uint64(lastPage), mt2.cache.deferedPageLoad)
+	err = mt2.cache.loadPage(uint64(lastPage - 1))
+	require.NoError(t, err)
+	require.Equal(t, uint64(lastPage), mt2.cache.deferedPageLoad)
+
+	// verify that the cache does reset the mtc.deferedPageLoad on loading a defered page.
+	err = mt2.cache.loadPage(uint64(lastPage))
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), mt2.cache.deferedPageLoad)
+}
