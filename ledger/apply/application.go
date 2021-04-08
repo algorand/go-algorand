@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // Allocate the map of basics.AppParams if it is nil, and return a copy. We do *not*
@@ -368,14 +369,19 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		if exists {
 			pass, evalDelta, err := balances.StatefulEval(*evalParams, appIdx, params.ClearStateProgram)
 			if err != nil {
-				return err
+				// Fail on non-logic eval errors and ignore LogicEvalError errors
+				if _, ok := err.(ledgercore.LogicEvalError); !ok {
+					return err
+				}
 			}
 
-			// Fill in applyData, so that consumers don't have to implement a
-			// stateful TEAL interpreter to apply state changes
-			if pass {
-				// We will have applied any changes if and only if we passed
+			// We will have applied any changes if and only if we passed
+			if err == nil && pass {
+				// Fill in applyData, so that consumers don't have to implement a
+				// stateful TEAL interpreter to apply state changes
 				ad.EvalDelta = evalDelta
+			} else {
+				// Ignore logic eval errors and rejections from the ClearStateProgram
 			}
 		}
 
