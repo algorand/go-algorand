@@ -410,6 +410,10 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
+		// we want to shut down the compactCert last, since the oldKeyDeletionThread might depend on it when making the
+		// call to LatestSigsFromThisNode.
+		node.compactCert.Shutdown()
+		node.compactCert = nil
 	}()
 
 	node.net.ClearHandlers()
@@ -429,7 +433,6 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
-	node.compactCert.Shutdown()
 	if node.indexer != nil {
 		node.indexer.Shutdown()
 	}

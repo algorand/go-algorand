@@ -109,8 +109,9 @@ func (mtc *merkleTrieCache) initialize(mt *Trie, committer Committer, memoryConf
 	mtc.targetPageFillFactor = memoryConfig.PageFillFactor
 	mtc.maxChildrenPagesThreshold = memoryConfig.MaxChildrenPagesThreshold
 	if mt.nextNodeID != storedNodeIdentifierBase {
-		// if the next node is going to be on a new page, no need to reload the last page.
-		if (int64(mtc.mt.nextNodeID) / mtc.nodesPerPage) == (int64(mtc.mt.nextNodeID-1) / mtc.nodesPerPage) {
+		// If the next node would reside on a page that already has a few entries in it, make sure to mark it for late loading.
+		// Otherwise, the next node is going to be the first node on this page, we don't need to reload that page ( since it doesn't exist! ).
+		if (int64(mtc.mt.nextNodeID) % mtc.nodesPerPage) > 0 {
 			mtc.deferedPageLoad = uint64(mtc.mt.nextNodeID) / uint64(mtc.nodesPerPage)
 		}
 	}
@@ -262,7 +263,7 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 	}
 
 	// if we've just loaded a deferred page, no need to reload it during the commit.
-	if mtc.deferedPageLoad != page {
+	if mtc.deferedPageLoad == page {
 		mtc.deferedPageLoad = storedNodeIdentifierNull
 	}
 	return
