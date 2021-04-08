@@ -79,8 +79,9 @@ func TestDefaultMessageTagsLength(t *testing.T) {
 	}
 }
 
-// TestRequestNonceOffset ensures that the requestNonce is on a 64-bit
-// offset, which is needed so that we can use atomic on arm platform.
+// TestAtomicVariablesAligment ensures that the 64-bit atomic variables
+// offsets are 64-bit aligned. This is required due to go atomic library
+// limitation.
 func TestAtomicVariablesAligment(t *testing.T) {
 	p := wsPeer{}
 	require.True(t, (unsafe.Offsetof(p.requestNonce)%8) == 0)
