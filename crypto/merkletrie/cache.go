@@ -109,10 +109,8 @@ func (mtc *merkleTrieCache) initialize(mt *Trie, committer Committer, memoryConf
 	mtc.targetPageFillFactor = memoryConfig.PageFillFactor
 	mtc.maxChildrenPagesThreshold = memoryConfig.MaxChildrenPagesThreshold
 	if mt.nextNodeID != storedNodeIdentifierBase {
-		// if the next node is going to be the first node on this page, we don't
-		// need to reload that page ( since it doesn't exist! ). However, if the next node
-		// would reside on a page that already have few entries in it, make sure to mark it
-		// for late loading.
+		// If the next node would reside on a page that already has a few entries in it, make sure to mark it for late loading.
+		// Otherwise, the next node is going to be the first node on this page, we don't need to reload that page ( since it doesn't exist! ).
 		if (int64(mtc.mt.nextNodeID) % mtc.nodesPerPage) > 0 {
 			mtc.deferedPageLoad = uint64(mtc.mt.nextNodeID) / uint64(mtc.nodesPerPage)
 		}
