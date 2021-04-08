@@ -80,6 +80,8 @@ type DeployedNetwork struct {
 	BootstrappedNet          BootstrappedNetwork
 }
 
+type TxType int
+
 type NetState struct {
 	nAccounts     int
 	nAssets       int
@@ -90,6 +92,9 @@ type NetState struct {
 	genesisHash   crypto.Digest
 	poolAddr      basics.Address
 	sinkAddr      basics.Address
+	accountId     int
+	account       basics.Address
+	txState       protocol.TxType
 }
 
 // InitDeployedNetworkConfig loads the DeployedNetworkConfig from a file
@@ -364,9 +369,10 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	}
 
 	//initial state
-	BootstrappedNetState.nAccounts = fileCfgs.GeneratedAccountsCount
 	BootstrappedNetState.nAssets = fileCfgs.GeneratedAssetsCount
 	BootstrappedNetState.nApplications = fileCfgs.GeneratedApplicationCount
+	BootstrappedNetState.nAccounts = fileCfgs.GeneratedAccountsCount
+	BootstrappedNetState.txState = protocol.PaymentTx
 
 	BootstrappedNetState.accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
 	BootstrappedNetState.accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
@@ -388,6 +394,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	if err != nil {
 		return err
 	}
+
 	prev, _ := l.Block(l.Latest())
 	for i := 1; i < fileCfgs.NumRounds; i++ {
 		BootstrappedNetState.round = basics.Round(i)
@@ -409,8 +416,12 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	return nil
 }
 
-func createSignedTx(src basics.Address, dst basics.Address) transactions.SignedTxn {
+func createSignedTx(src basics.Address, dst basics.Address) (transactions.SignedTxn, bool) {
 	var tx transactions.Transaction
+
+	if BootstrappedNetState.nAccounts == 0 && BootstrappedNetState.nAssets == 0 && BootstrappedNetState.nApplications == 0 {
+		return transactions.SignedTxn{}, true
+	}
 
 	header := transactions.Header{
 		Sender:      src,
@@ -421,7 +432,21 @@ func createSignedTx(src basics.Address, dst basics.Address) transactions.SignedT
 		GenesisHash: BootstrappedNetState.genesisHash,
 	}
 
-	if BootstrappedNetState.nAssets > 0 {
+	if BootstrappedNetState.txState == protocol.PaymentTx {
+		tx = transactions.Transaction{
+			Type:   protocol.PaymentTx,
+			Header: header,
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: dst,
+				Amount:   basics.MicroAlgos{Raw: uint64(0)},
+			},
+		}
+		if BootstrappedNetState.nAssets > 0 {
+			BootstrappedNetState.txState = protocol.AssetConfigTx
+		} else if BootstrappedNetState.nApplications > 0 {
+			BootstrappedNetState.txState = protocol.ApplicationCallTx
+		}
+	} else if BootstrappedNetState.txState == protocol.AssetConfigTx {
 		assetParam := basics.AssetParams{
 			Total:    100,
 			UnitName: "unit",
@@ -433,37 +458,43 @@ func createSignedTx(src basics.Address, dst basics.Address) transactions.SignedT
 		}
 
 		tx = transactions.Transaction{
-			Type:                 protocol.AssetConfigTx,
+			Type: protocol.AssetConfigTx,
+
 			Header:               header,
 			AssetConfigTxnFields: assetConfigFields,
 		}
-
 		BootstrappedNetState.nAssets--
-	} else if BootstrappedNetState.nApplications > 0 {
-		header.Sender = dst
+		if BootstrappedNetState.nApplications > 0 {
+			BootstrappedNetState.txState = protocol.ApplicationCallTx
+		} else {
+			BootstrappedNetState.txState = protocol.PaymentTx
+		}
+	} else if BootstrappedNetState.txState == protocol.ApplicationCallTx {
+
+		header = transactions.Header{
+			Sender:      src,
+			Fee:         basics.MicroAlgos{Raw: 1},
+			FirstValid:  BootstrappedNetState.round,
+			LastValid:   BootstrappedNetState.round,
+			GenesisID:   BootstrappedNetState.genesisID,
+			GenesisHash: BootstrappedNetState.genesisHash,
+		}
 		appCallFields := transactions.ApplicationCallTxnFields{
 			OnCompletion: 0,
 		}
 		tx = transactions.Transaction{
-			Type:                     protocol.ApplicationCallTx,
-			Header:                   header,
+			Type:   protocol.ApplicationCallTx,
+			Header: header,
+
 			ApplicationCallTxnFields: appCallFields,
 		}
 		BootstrappedNetState.nApplications--
-	} else {
-		tx = transactions.Transaction{
-			Type:   protocol.PaymentTx,
-			Header: header,
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: dst,
-				Amount:   basics.MicroAlgos{Raw: uint64(0)},
-			},
-		}
+		BootstrappedNetState.txState = protocol.PaymentTx
 	}
 
 	t := transactions.SignedTxn{Txn: tx}
 
-	return t
+	return t, false
 }
 
 func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bookkeeping.GenesisAllocation {
@@ -508,15 +539,18 @@ func generateInitState(src basics.Address, roundTrxCnt int) (ledger.InitState, e
 
 	for i := 0; i < roundTrxCnt; i++ {
 		secretDst := keypair()
-		dst := basics.Address(secretDst.SignatureVerifier)
-		BootstrappedNetState.accounts[dst] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
-
-		stxn := createSignedTx(src, dst)
+		acct := basics.Address(secretDst.SignatureVerifier)
+		BootstrappedNetState.accounts[acct] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
+		stxn, done := createSignedTx(src, acct)
+		if done {
+			break
+		}
 		txib, err := initBlock.EncodeSignedTxn(stxn, transactions.ApplyData{})
 		if err != nil {
 			return ledger.InitState{}, err
 		}
 		txibs = append(txibs, txib)
+
 	}
 
 	payset = append(payset, txibs...)
@@ -558,15 +592,18 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTrxCnt int) (b
 
 	for i := 0; i < roundTrxCnt; i++ {
 		secretDst := keypair()
-		dst := basics.Address(secretDst.SignatureVerifier)
-		BootstrappedNetState.accounts[dst] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
-
-		stxn := createSignedTx(src, dst)
+		acct := basics.Address(secretDst.SignatureVerifier)
+		BootstrappedNetState.accounts[acct] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(1000000)})
+		stxn, done := createSignedTx(src, acct)
+		if done {
+			break
+		}
 		txib, err := block.EncodeSignedTxn(stxn, transactions.ApplyData{})
 		if err != nil {
 			return bookkeeping.Block{}, err
 		}
 		txibs = append(txibs, txib)
+
 	}
 
 	payset = append(payset, txibs...)
