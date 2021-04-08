@@ -1269,10 +1269,6 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
 
-	/*_, err = trie.GetStats()
-	if err != nil {
-		err = nil
-	}*/
 	// we might have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
 	// we can figure this out by examining the hash of the root:
 	rootHash, err := trie.RootHash()
@@ -1532,11 +1528,6 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 	var added, deleted bool
 	accumulatedChanges := 0
 
-	/*_, err = au.balancesTrie.GetStats()
-	if err != nil {
-		return fmt.Errorf("early get stats failed ! %w", err)
-	}*/
-
 	for i := 0; i < accountsDeltas.len(); i++ {
 		addr, delta := accountsDeltas.getByIdx(i)
 		if !delta.old.accountData.IsZero() {
@@ -1577,10 +1568,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 	if accumulatedChanges > 0 {
 		_, err = au.balancesTrie.Commit()
 	}
-	_, err = au.balancesTrie.GetStats()
-	if err != nil {
-		return fmt.Errorf("get stats failed ! %w", err)
-	}
+
 	return
 }
 
@@ -2046,7 +2034,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	var trieBalancesHash crypto.Digest
 
 	genesisProto := au.ledger.GenesisProto()
-	au.log.Warnf("writing rounds %d-%d", dbRound, dbRound+basics.Round(offset))
+
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	var updatedPersistedAccounts []persistedAccountData

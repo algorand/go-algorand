@@ -134,9 +134,6 @@ func (mtc *merkleTrieCache) allocateNewNode() (pnode *node, nid storedNodeIdenti
 	mtc.cachedNodeCount++
 	mtc.txCreatedNodeIDs[nextID] = true
 	mtc.modified = true
-	if 2384032 == nextID {
-		nextID = 2384032
-	}
 	return newNode, nextID
 }
 
@@ -144,9 +141,6 @@ func (mtc *merkleTrieCache) allocateNewNode() (pnode *node, nid storedNodeIdenti
 func (mtc *merkleTrieCache) refurbishNode(nid storedNodeIdentifier) (nextID storedNodeIdentifier) {
 	page := uint64(nid) / uint64(mtc.nodesPerPage)
 	pNode := mtc.pageToNIDsPtr[page][nid]
-	/*if nid == 2384032 {
-		nid = 2384032
-	}*/
 	if mtc.txCreatedNodeIDs[nid] {
 		delete(mtc.txCreatedNodeIDs, nid)
 		delete(mtc.pageToNIDsPtr[page], nid)
@@ -198,8 +192,7 @@ func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err 
 	var have bool
 	pageNodes = mtc.pageToNIDsPtr[nodePage]
 	if pnode, have = pageNodes[nid]; !have {
-		//err = ErrLoadedPageMissingNode
-		err = fmt.Errorf("loaded page %d is missing a node %d", nodePage, nid)
+		err = ErrLoadedPageMissingNode
 	} else {
 		// if we're current reallocating pages, the mtc.reallocatedPages would be non-nil, and
 		// the newly prioritized pages should be placed on the back. Otherwise, we're on the
@@ -211,9 +204,6 @@ func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err 
 			mtc.prioritizeNodeBack(nid)
 		}
 
-	}
-	if nid == 2384032 {
-		fmt.Printf("node 2384032 was loaded from page %d\n", nodePage)
 	}
 	return
 }
@@ -288,9 +278,6 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 // deleteNode marks the given node to be deleted, or ( if it was never flushed )
 // deletes it right away.
 func (mtc *merkleTrieCache) deleteNode(nid storedNodeIdentifier) {
-	/*if nid == 2384032 {
-		nid = 2384032
-	}*/
 	if mtc.txCreatedNodeIDs[nid] {
 		delete(mtc.txCreatedNodeIDs, nid)
 		page := uint64(nid) / uint64(mtc.nodesPerPage)
@@ -452,31 +439,6 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 	if int64(mtc.mt.lastCommittedNodeID)%mtc.nodesPerPage > 0 {
 		newPageThreshold++
 	}
-	{
-		fmt.Printf("lastCommittedNodeID=%d\n", mtc.mt.lastCommittedNodeID)
-		fmt.Printf("nextNodeID=%d\n", mtc.mt.nextNodeID)
-
-		page := newPageThreshold - 1
-		pageMap := mtc.pageToNIDsPtr[uint64(page)]
-		// test - all the children of the updated nodes do exist.
-		s := ""
-		for nid := range pageMap {
-			s = fmt.Sprintf("%s %d", s, nid)
-		}
-		s = fmt.Sprintf("initial: page %d has the following nodes %s", page, s)
-		fmt.Printf("%s\n", s)
-
-		page = 20549
-		pageMap = mtc.pageToNIDsPtr[uint64(page)]
-		// test - all the children of the updated nodes do exist.
-		s = ""
-		for nid := range pageMap {
-			s = fmt.Sprintf("%s %d", s, nid)
-		}
-		s = fmt.Sprintf("initial: page %d has the following nodes %s", page, s)
-		fmt.Printf("%s\n", s)
-
-	}
 
 	createdPages := make(map[uint64]map[storedNodeIdentifier]*node)
 	toUpdatePages := make(map[uint64]map[storedNodeIdentifier]*node)
@@ -578,16 +540,6 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 		delete(toRemovePages, pageRemovalCandidate)
 	}
 
-	// test - all the children of the updated nodes do exist.
-	for page, pageMap := range toUpdatePages {
-		s := ""
-		for nid := range pageMap {
-			s = fmt.Sprintf("%s %d", s, nid)
-		}
-		s = fmt.Sprintf("page %d has the following nodes %s", page, s)
-		fmt.Printf("%s\n", s)
-	}
-
 	return pagesToCreate, toRemovePages, toUpdatePages, nil
 }
 
@@ -670,9 +622,6 @@ func (mtc *merkleTrieCache) reallocatePage(page uint64, reallocationMap map[stor
 	for nid, node := range mtc.pageToNIDsPtr[page] {
 		reallocationMap[nid] = nextID
 		mtc.pageToNIDsPtr[uint64(nextID)/uint64(mtc.nodesPerPage)][nextID] = node
-		/*if nid == 2384032 {
-			nid = 2384032
-		}*/
 		delete(mtc.pageToNIDsPtr[page], nid)
 		nextID++
 	}

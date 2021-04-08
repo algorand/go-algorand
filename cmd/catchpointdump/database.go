@@ -67,8 +67,8 @@ var databaseCmd = &cobra.Command{
 
 var checkCmd = &cobra.Command{
 	Use:   "check",
-	Short: "Performs a consistency checking on the account merkle trie",
-	Long:  "Performs a consistency checking on the account merkle trie",
+	Short: "Performs a consistency checking on the accounts merkle trie",
+	Long:  "Performs a consistency checking on the accounts merkle trie",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		if ledgerTrackerFilename == "" {

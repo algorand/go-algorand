@@ -61,13 +61,11 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 	for _, child := range n.children {
 		childNode, err := cache.getNode(child.id)
 		if err != nil {
-			//return err
-			return fmt.Errorf("%s.[%d,%d,%d]", err, child.id, child.id/116, child.hashIndex)
+			return err
 		}
 		err = childNode.stats(cache, stats, depth+1)
 		if err != nil {
-			return fmt.Errorf("%s:[%d,%d,%d]", err, child.id, child.id/116, child.hashIndex)
-			//return err
+			return err
 		}
 	}
 	return nil

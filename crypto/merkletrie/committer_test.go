@@ -221,11 +221,9 @@ func TestIterativeCommits(t *testing.T) {
 	require.NoError(t, err)
 
 	for r := 0; r < 100; r++ {
-		/*if r%2 == 1 {*/
 		newMC := mc.Duplicate(true)
 		mt, _ = MakeTrie(newMC, memConfig)
 		mc = newMC
-		//}
 
 		for k := r * 5; k < r*7+len(hashes); k++ {
 			i := k % len(hashes)

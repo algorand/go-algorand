@@ -1323,7 +1323,8 @@ type MerkleCommitter struct {
 	selectStmt *sql.Stmt
 }
 
-// MakeMerkleCommitter - todo
+// MakeMerkleCommitter creates a MerkleCommitter object that implements the merkletrie.Committer interface allowing storing and loading
+// merkletrie pages from a sqlite database.
 func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *MerkleCommitter, err error) {
 	mc = &MerkleCommitter{tx: tx}
 	accountHashesTable := "accounthashes"
@@ -1345,7 +1346,7 @@ func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *MerkleCommitter, err err
 	return mc, nil
 }
 
-// StorePage is the merkletrie.Committer interface implementation, stores a single page in a sqllite database table.
+// StorePage is the merkletrie.Committer interface implementation, stores a single page in a sqlite database table.
 func (mc *merkleCommitter) StorePage(page uint64, content []byte) error {
 	if len(content) == 0 {
 		logging.Base().Warnf("committer: delete page %d", page)
@@ -1357,7 +1358,7 @@ func (mc *merkleCommitter) StorePage(page uint64, content []byte) error {
 	return err
 }
 
-// LoadPage is the merkletrie.Committer interface implementation, load a single page from a sqllite database table.
+// LoadPage is the merkletrie.Committer interface implementation, load a single page from a sqlite database table.
 func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	err = mc.selectStmt.QueryRow(page).Scan(&content)
 	if err == sql.ErrNoRows {
