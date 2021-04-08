@@ -180,10 +180,6 @@ func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err 
 		}
 	}
 
-	if nodePage == 20552 {
-		fmt.Printf("page 20552 loaded\n")
-	}
-
 	// if we don't have it in memory, try to load it from disk
 	err = mtc.loadPage(nodePage)
 	if err != nil {

@@ -19,7 +19,6 @@ package merkletrie
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"sort"
 	"unsafe"
 

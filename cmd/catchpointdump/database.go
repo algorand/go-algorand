@@ -90,6 +90,9 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 	if err != nil || dbAccessor.Handle == nil {
 		return err
 	}
+	if dbAccessor.Handle == nil {
+		return fmt.Errorf("database handle is nil when opening database %s", databaseName)
+	}
 	defer func() {
 		dbAccessor.Close()
 	}()

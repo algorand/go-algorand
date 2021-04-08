@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -1347,26 +1346,23 @@ func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *MerkleCommitter, err err
 }
 
 // StorePage is the merkletrie.Committer interface implementation, stores a single page in a sqlite database table.
-func (mc *merkleCommitter) StorePage(page uint64, content []byte) error {
+func (mc *MerkleCommitter) StorePage(page uint64, content []byte) error {
 	if len(content) == 0 {
-		logging.Base().Warnf("committer: delete page %d", page)
 		_, err := mc.deleteStmt.Exec(page)
 		return err
 	}
-	logging.Base().Warnf("committer: store page %d", page)
 	_, err := mc.insertStmt.Exec(page, content)
 	return err
 }
 
 // LoadPage is the merkletrie.Committer interface implementation, load a single page from a sqlite database table.
-func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
+func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	err = mc.selectStmt.QueryRow(page).Scan(&content)
 	if err == sql.ErrNoRows {
 		content = nil
 		err = nil
 		return
 	} else if err != nil {
-		logging.Base().Warnf("committer: failed load page %d", page)
 		return nil, err
 	}
 	return content, nil
