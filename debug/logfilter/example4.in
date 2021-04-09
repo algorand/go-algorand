@@ -1,0 +1,21 @@
+=== RUN   TestAlgodLogsToFile
+=== PAUSE TestAlgodLogsToFile
+=== CONT  TestAlgodLogsToFile
+Created new rootkey: /home/ubuntu/go/src/github.com/algorand/go-algorand/tmp/out/e2e/103921-1617052919657/TestAlgodLogsToFile/Wallet2.rootkey
+Created new rootkey: /home/ubuntu/go/src/github.com/algorand/go-algorand/tmp/out/e2e/103921-1617052919657/TestAlgodLogsToFile/Wallet1.rootkey
+Created new partkey: /home/ubuntu/go/src/github.com/algorand/go-algorand/tmp/out/e2e/103921-1617052919657/TestAlgodLogsToFile/Wallet1.0.3000000.partkey
+Created new partkey: /home/ubuntu/go/src/github.com/algorand/go-algorand/tmp/out/e2e/103921-1617052919657/TestAlgodLogsToFile/Wallet2.0.3000000.partkey
+https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff 100000
+algod(3523) : No REST API Token found. Generated token: 48ccf1649eeda3dcac44b414e134f5fad0cd12fbd01097386a44e6569cfe1404
+algod(3523) : No Admin REST API Token found. Generated token: 1427e9e6cb62beeabb825265ccf2d07d57ad4ca904275f83cb5fc28a539589cb
+algod(3523) : Logging to:  /home/ubuntu/go/src/github.com/algorand/go-algorand/tmp/out/e2e/103921-1617052919657/TestAlgodLogsToFile/Primary/node.log
+algod(3523) : Deadlock detection is set to: enabled (Default state is 'enable')
+algod(3523) : Initializing the Algorand node...
+algod(3523) : Success!
+algod(3523) : â‡¨ http server started on 127.0.0.1:8080
+algod(3523) : Node running and accepting RPC requests over HTTP on port 127.0.0.1:8080. Press Ctrl-C to exit
+algod(3523) : Exiting on terminated
+--- PASS: TestAlgodLogsToFile (6.64s)
+PASS
+ok  	github.com/algorand/go-algorand/test/e2e-go/cli/algod	6.744s
+
