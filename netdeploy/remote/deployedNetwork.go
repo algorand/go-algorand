@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
@@ -84,17 +85,21 @@ type netState struct {
 	nAccounts     uint64
 	nAssets       uint64
 	nApplications uint64
-	round         basics.Round
-	accounts      map[basics.Address]basics.AccountData
-	genesisID     string
-	genesisHash   crypto.Digest
-	poolAddr      basics.Address
-	sinkAddr      basics.Address
-	roundAccounts []basics.Address
-	txState       protocol.TxType
-	srcAcct       basics.Address
-	hasTrx        bool
 	roundTrxCnt   uint64
+
+	assetPerAcct int
+	appsPerAcct  int
+
+	genesisID   string
+	genesisHash crypto.Digest
+	poolAddr    basics.Address
+	sinkAddr    basics.Address
+
+	accountsCreated bool
+	txState         protocol.TxType
+
+	round    basics.Round
+	accounts map[basics.Address]basics.AccountData
 }
 
 const program = `#pragma version 2
@@ -388,9 +393,13 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	bootstrappedNet.roundTrxCnt = fileCfgs.RoundTransactionsCount
 	bootstrappedNet.round = basics.Round(0)
 
-	nAccounts := accountsNeeded(fileCfgs.GeneratedApplicationCount, fileCfgs.GeneratedAccountsCount, protocol.ConsensusCurrentVersion)
-	nAccounts += fileCfgs.GeneratedAccountsCount
-	bootstrappedNet.nAccounts = nAccounts
+	minAccounts := accountsNeeded(fileCfgs.GeneratedApplicationCount, fileCfgs.GeneratedAccountsCount, protocol.ConsensusCurrentVersion)
+	nAccounts := fileCfgs.GeneratedAccountsCount
+	if minAccounts > nAccounts {
+		bootstrappedNet.nAccounts = minAccounts
+	} else {
+		bootstrappedNet.nAccounts = nAccounts
+	}
 
 	accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
 	accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
@@ -415,6 +424,18 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	//create accounts, apps and assets
 	prev, _ := l.Block(l.Latest())
 	generateAccounts(src, fileCfgs.RoundTransactionsCount, prev, l)
+
+	//create more transactions
+	for i := uint64(0); i < fileCfgs.NumRounds; i++ {
+		bootstrappedNet.round++
+		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount)
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err = l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
+		if err != nil {
+			fmt.Printf("Error %s\n", err)
+			return err
+		}
+	}
 
 	l.Close()
 	return nil
@@ -510,7 +531,8 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTrxCnt uint64)
 
 func generateAccounts(src basics.Address, roundTrxCnt uint64, prev bookkeeping.Block, l *ledger.Ledger) error {
 
-	for bootstrappedNet.nAccounts > 0 {
+	for !bootstrappedNet.accountsCreated {
+		//create accounts
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, roundTrxCnt)
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
@@ -519,7 +541,7 @@ func generateAccounts(src basics.Address, roundTrxCnt uint64, prev bookkeeping.B
 			fmt.Printf("Error %s\n", err)
 			return err
 		}
-		l.WaitForCommit(bootstrappedNet.round)
+
 	}
 
 	return nil
@@ -545,6 +567,10 @@ func accountsNeeded(appsCount uint64, assetCount uint64, v protocol.ConsensusVer
 }
 
 func createSignedTx(src basics.Address, round basics.Round, protoVersion protocol.ConsensusVersion) []transactions.SignedTxn {
+
+	if bootstrappedNet.nApplications == 0 && bootstrappedNet.nAccounts == 0 && bootstrappedNet.nAssets == 0 {
+		bootstrappedNet.accountsCreated = true
+	}
 	var sgntx []transactions.SignedTxn
 
 	header := transactions.Header{
@@ -574,7 +600,7 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 				Header: header,
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: dst,
-					Amount:   basics.MicroAlgos{Raw: uint64(0)},
+					Amount:   basics.MicroAlgos{Raw: uint64(1000000)},
 				},
 			}
 			t := transactions.SignedTxn{Txn: tx}
@@ -583,39 +609,86 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 
 		bootstrappedNet.nAccounts -= uint64(len(sgntx))
 		bootstrappedNet.accounts = accounts
-		bootstrappedNet.txState = protocol.AssetConfigTx
+		if bootstrappedNet.nAssets > 0 {
+			bootstrappedNet.txState = protocol.AssetConfigTx
+		} else if bootstrappedNet.nApplications > 0 {
+			bootstrappedNet.txState = protocol.ApplicationCallTx
+		}
 	} else if bootstrappedNet.txState == protocol.AssetConfigTx {
-		consensusParams := config.Consensus[protoVersion]
+
 		for acct := range bootstrappedNet.accounts {
-			for j := uint64(0); j < bootstrappedNet.nAssets && j < uint64(consensusParams.MaxAssetsPerAccount); j++ {
-				bootstrappedNet.nAssets--
-				header.Sender = acct
+			header.Sender = acct
 
-				assetParam := basics.AssetParams{
-					Total:    100,
-					UnitName: "unit",
-					Manager:  acct,
-				}
-
-				assetConfigFields := transactions.AssetConfigTxnFields{
-					AssetParams: assetParam,
-				}
-
-				tx := transactions.Transaction{
-					Type: protocol.AssetConfigTx,
-
-					Header:               header,
-					AssetConfigTxnFields: assetConfigFields,
-				}
-				t := transactions.SignedTxn{Txn: tx}
-				sgntx = append(sgntx, t)
+			assetParam := basics.AssetParams{
+				Total:    100,
+				UnitName: "unit",
+				Manager:  acct,
 			}
+
+			assetConfigFields := transactions.AssetConfigTxnFields{
+				AssetParams: assetParam,
+			}
+
+			tx := transactions.Transaction{
+				Type:                 protocol.AssetConfigTx,
+				Header:               header,
+				AssetConfigTxnFields: assetConfigFields,
+			}
+			t := transactions.SignedTxn{Txn: tx}
+			sgntx = append(sgntx, t)
+		}
+		bootstrappedNet.assetPerAcct++
+		bootstrappedNet.nAssets -= uint64(len(sgntx))
+
+		consensusParams := config.Consensus[protoVersion]
+
+		if bootstrappedNet.nAssets <= 0 || bootstrappedNet.assetPerAcct == consensusParams.MaxAppsCreated {
+			if bootstrappedNet.nApplications > 0 {
+				bootstrappedNet.txState = protocol.ApplicationCallTx
+			} else {
+				bootstrappedNet.txState = protocol.PaymentTx
+				bootstrappedNet.assetPerAcct = 0
+			}
+
+		}
+	} else if bootstrappedNet.txState == protocol.ApplicationCallTx {
+		ops, err := logic.AssembleString(program)
+		approval := ops.Program
+		ops, err = logic.AssembleString("#pragma version 2 int 1")
+		if err != nil {
+			panic(err)
+		}
+		for acct := range bootstrappedNet.accounts {
+			header.Sender = acct
+			appCallFields := transactions.ApplicationCallTxnFields{
+				OnCompletion:      transactions.NoOpOC,
+				ApplicationID:     0,
+				ClearStateProgram: ops.Program,
+				ApprovalProgram:   approval,
+				ApplicationArgs: [][]byte{
+					[]byte("check"),
+					[]byte("bar"),
+				},
+			}
+			tx := transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: header,
+
+				ApplicationCallTxnFields: appCallFields,
+			}
+
+			t := transactions.SignedTxn{Txn: tx}
+			sgntx = append(sgntx, t)
 		}
 
-		bootstrappedNet.nAssets -= uint64(len(sgntx))
-		bootstrappedNet.txState = protocol.PaymentTx
+		bootstrappedNet.nApplications -= uint64(len(sgntx))
+		consensusParams := config.Consensus[protoVersion]
+		bootstrappedNet.appsPerAcct++
+		if bootstrappedNet.nApplications <= 0 || bootstrappedNet.appsPerAcct == consensusParams.MaxAppsCreated {
+			bootstrappedNet.txState = protocol.PaymentTx
+			bootstrappedNet.appsPerAcct = 0
+		}
 	}
-
 	return sgntx
 }
 
