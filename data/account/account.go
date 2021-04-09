@@ -134,7 +134,7 @@ func (root Root) Address() basics.Address {
 
 // RestoreParticipation restores a Participation from a database
 // handle.
-func RestoreParticipation(store db.Accessor) (acc Participation, err error) {
+func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err error) {
 	var rawParent, rawVRF, rawVoting []byte
 
 	err = Migrate(store)
@@ -163,19 +163,19 @@ func RestoreParticipation(store db.Accessor) (acc Participation, err error) {
 		return nil
 	})
 	if err != nil {
-		return Participation{}, err
+		return PersistedParticipation{}, err
 	}
 
 	acc.VRF = &crypto.VRFSecrets{}
 	err = protocol.Decode(rawVRF, acc.VRF)
 	if err != nil {
-		return Participation{}, err
+		return PersistedParticipation{}, err
 	}
 
 	acc.Voting = &crypto.OneTimeSignatureSecrets{}
 	err = protocol.Decode(rawVoting, acc.Voting)
 	if err != nil {
-		return Participation{}, err
+		return PersistedParticipation{}, err
 	}
 
 	acc.Store = store

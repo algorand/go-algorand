@@ -191,8 +191,11 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 
 			// Early reject partkeys if we already have a rootkey for the account
 			if !accountsWithRootKeys[participation.Address().String()] {
-				allPartKeys = append(allPartKeys, participation)
+				allPartKeys = append(allPartKeys, participation.Participation)
 			}
+
+			// close the database handle.
+			participation.Close()
 		}
 	}
 

@@ -41,8 +41,6 @@ import (
 // For correctness, all Roots should have no more than one Participation
 // globally active at any time. If this condition is violated, the Root may
 // equivocate. (Algorand tolerates a limited fraction of misbehaving accounts.)
-//
-// Participations handle persistence and deletion of secrets.
 type Participation struct {
 	Parent basics.Address
 
@@ -56,6 +54,13 @@ type Participation struct {
 	LastValid  basics.Round
 
 	KeyDilution uint64
+}
+
+// PersistedParticipation encapsulates the static state of the participation
+// for a single address at any given moment, while providing the ability
+// to handle persistence and deletion of secrets.
+type PersistedParticipation struct {
+	Participation
 
 	Store db.Accessor
 }
@@ -82,7 +87,7 @@ func (part Participation) OverlapsInterval(first, last basics.Round) bool {
 }
 
 // DeleteOldKeys securely deletes ephemeral keys for rounds strictly older than the given round.
-func (part Participation) DeleteOldKeys(current basics.Round, proto config.ConsensusParams) <-chan error {
+func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto config.ConsensusParams) <-chan error {
 	keyDilution := part.KeyDilution
 	if keyDilution == 0 {
 		keyDilution = proto.DefaultKeyDilution
@@ -108,7 +113,7 @@ func (part Participation) DeleteOldKeys(current basics.Round, proto config.Conse
 }
 
 // PersistNewParent writes a new parent address to the partkey database.
-func (part Participation) PersistNewParent() error {
+func (part PersistedParticipation) PersistNewParent() error {
 	return part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("UPDATE ParticipationAccount SET parent=?", part.Parent[:])
 		return err
@@ -157,7 +162,7 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 }
 
 // FillDBWithParticipationKeys initializes the passed database with participation keys
-func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firstValid, lastValid basics.Round, keyDilution uint64) (part Participation, err error) {
+func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firstValid, lastValid basics.Round, keyDilution uint64) (part PersistedParticipation, err error) {
 	if lastValid < firstValid {
 		err = fmt.Errorf("FillDBWithParticipationKeys: lastValid %d is after firstValid %d", lastValid, firstValid)
 		return
@@ -175,14 +180,16 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	vrf := crypto.GenerateVRFSecrets()
 
 	// Construct the Participation containing these keys to be persisted
-	part = Participation{
-		Parent:      address,
-		VRF:         vrf,
-		Voting:      v,
-		FirstValid:  firstValid,
-		LastValid:   lastValid,
-		KeyDilution: keyDilution,
-		Store:       store,
+	part = PersistedParticipation{
+		Participation: Participation{
+			Parent:      address,
+			VRF:         vrf,
+			Voting:      v,
+			FirstValid:  firstValid,
+			LastValid:   lastValid,
+			KeyDilution: keyDilution,
+		},
+		Store: store,
 	}
 
 	// Persist the Participation into the database
@@ -191,7 +198,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 }
 
 // Persist writes a Participation out to a database on the disk
-func (part Participation) Persist() error {
+func (part PersistedParticipation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
 	voting := part.Voting.Snapshot()
 	rawVoting := protocol.Encode(&voting)
@@ -220,6 +227,6 @@ func Migrate(partDB db.Accessor) error {
 }
 
 // Close closes the underlying database handle.
-func (part Participation) Close() {
+func (part PersistedParticipation) Close() {
 	part.Store.Close()
 }

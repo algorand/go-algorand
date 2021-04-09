@@ -45,9 +45,9 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 		return
 	}
 	// This lambda will be used for finding the desired file.
-	checkIfFileIsDesiredKey := func(file os.FileInfo, expiresAfter basics.Round) (part account.Participation, err error) {
+	checkIfFileIsDesiredKey := func(file os.FileInfo, expiresAfter basics.Round) (part account.PersistedParticipation, err error) {
 		var handle db.Accessor
-		var partCandidate account.Participation
+		var partCandidate account.PersistedParticipation
 
 		// If it can't be a participation key database, skip it
 		if !config.IsPartKeyFilename(file.Name()) {
@@ -88,7 +88,7 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 		// Use above lambda so the deferred handle closure happens each loop
 		partCandidate, err := checkIfFileIsDesiredKey(info, expiry)
 		if err == nil && (!partCandidate.Parent.IsZero()) {
-			part = partCandidate
+			part = partCandidate.Participation
 			expiry = part.LastValid
 		}
 	}
@@ -164,13 +164,15 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 
 	// Fill the database with new participation keys
 	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstRound, lastRound, keyDilution)
-	return newPart, partKeyPath, err
+	part = newPart.Participation
+	newPart.Close()
+	return part, partKeyPath, err
 }
 
 // InstallParticipationKeys creates a .partkey database for a given address,
 // based on an existing database from inputfile.  On successful install, it
 // deletes the input file.
-func (c *Client) InstallParticipationKeys(inputfile string) (part account.Participation, filePath string, err error) {
+func (c *Client) InstallParticipationKeys(inputfile string) (part account.PersistedParticipation, filePath string, err error) {
 	// Get the GenesisID for use in the participation key path
 	var genID string
 	genID, err = c.GenesisID()
@@ -275,7 +277,7 @@ func (c *Client) ListParticipationKeys() (partKeyFiles map[string]account.Partic
 			continue
 		}
 
-		partKeyFiles[filename] = part
+		partKeyFiles[filename] = part.Participation
 	}
 
 	return

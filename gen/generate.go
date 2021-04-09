@@ -142,7 +142,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 				return
 			}
 			var root account.Root
-			var part account.Participation
+			var part account.PersistedParticipation
 
 			wfilename := filepath.Join(outDir, config.RootKeyFilename(wallet.Name))
 			pfilename := filepath.Join(outDir, config.PartKeyFilename(wallet.Name, firstWalletValid, lastWalletValid))
@@ -350,7 +350,7 @@ func loadRootKey(filename string) (root account.Root, rootDB db.Accessor, err er
 }
 
 // If err != nil, partDB needs to be closed.
-func loadPartKeys(filename string) (part account.Participation, partDB db.Accessor, err error) {
+func loadPartKeys(filename string) (part account.PersistedParticipation, partDB db.Accessor, err error) {
 	if !util.FileExists(filename) {
 		err = os.ErrNotExist
 		return

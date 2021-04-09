@@ -81,7 +81,7 @@ var partGenerateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		printPartkey(partkey)
+		printPartkey(partkey.Participation)
 	},
 }
 
@@ -102,7 +102,7 @@ var partInfoCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		printPartkey(partkey)
+		printPartkey(partkey.Participation)
 	},
 }
 
@@ -136,7 +136,7 @@ var partReparentCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		printPartkey(partkey)
+		printPartkey(partkey.Participation)
 	},
 }
 
