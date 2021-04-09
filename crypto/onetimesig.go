@@ -334,7 +334,7 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 }
 
 // DeleteBeforeFineGrained deletes ephemeral keys before (but not including) the given id.
-func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatureIdentifier, numKeysPerBatch uint64) {
+func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatureIdentifier, numKeysPerBatch uint64) (modified bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -353,13 +353,15 @@ func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatu
 			s.Offsets = s.Offsets[jump:]
 		}
 
-		return
+		return true
 	}
 
 	// If we are trying to forget something earlier, there's nothing to do.
 	if current.Batch+1 < s.FirstBatch {
 		return
 	}
+
+	modified = true
 
 	// We are trying to move forward into a new batch.  The plan is fourfold:
 	// 1. Delete existing offsets.
@@ -408,6 +410,8 @@ func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatu
 	// 4. Delete the next batch subkey that we just expanded.
 	s.FirstBatch++
 	s.Batches = s.Batches[1:]
+
+	return
 }
 
 // Snapshot returns a copy of OneTimeSignatureSecrets consistent with
@@ -421,6 +425,33 @@ func (s *OneTimeSignatureSecrets) Snapshot() OneTimeSignatureSecrets {
 	return OneTimeSignatureSecrets{
 		OneTimeSignatureSecretsPersistent: s.OneTimeSignatureSecretsPersistent,
 	}
+}
+
+// Duplicate creates a copy of the OneTimeSignatureSecrets object
+func (s *OneTimeSignatureSecrets) Duplicate() (out *OneTimeSignatureSecrets) {
+	out = &OneTimeSignatureSecrets{}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	copy(out.OneTimeSignatureVerifier[:], s.OneTimeSignatureVerifier[:])
+	copy(out.OffsetsPK2[:], s.OffsetsPK2[:])
+	copy(out.OffsetsPK2Sig[:], s.OffsetsPK2Sig[:])
+	out.FirstBatch = s.FirstBatch
+	out.FirstOffset = s.FirstOffset
+	out.Batches = make([]ephemeralSubkey, len(s.Batches), cap(s.Batches))
+	out.Offsets = make([]ephemeralSubkey, len(s.Offsets), cap(s.Offsets))
+	for i := range s.Batches {
+		copy(out.Batches[i].PK[:], s.Batches[i].PK[:])
+		copy(out.Batches[i].SK[:], s.Batches[i].SK[:])
+		copy(out.Batches[i].PKSigOld[:], s.Batches[i].PKSigOld[:])
+		copy(out.Batches[i].PKSigNew[:], s.Batches[i].PKSigNew[:])
+	}
+	for i := range s.Offsets {
+		copy(out.Offsets[i].PK[:], s.Offsets[i].PK[:])
+		copy(out.Offsets[i].SK[:], s.Offsets[i].SK[:])
+		copy(out.Offsets[i].PKSigOld[:], s.Offsets[i].PKSigOld[:])
+		copy(out.Offsets[i].PKSigNew[:], s.Offsets[i].PKSigNew[:])
+	}
+	return
 }
 
 // OneTimeSigner is a wrapper for OneTimeSignatureSecrets that also

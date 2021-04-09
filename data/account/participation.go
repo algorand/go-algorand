@@ -94,26 +94,71 @@ func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto con
 		keyDilution = proto.DefaultKeyDilution
 	}
 
-	part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
+	modified := part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
 
 	errorCh := make(chan error, 1)
+
+	if !modified {
+		errorCh <- nil
+		return errorCh
+	}
+
 	deleteOldKeys := func(encodedVotingSecrets []byte) {
-		t := time.Now()
 		errorCh <- part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			t := time.Now()
 			_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
 			if err != nil {
 				return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
 			}
+			d := time.Now().Sub(t)
+			logging.Base().Warnf("tsachi DeleteOldKeys time is %v", d)
 			return nil
 		})
-		d := time.Now().Sub(t)
-		logging.Base().Warnf("tsachi DeleteOldKeys time is %v", d)
+
 		close(errorCh)
 	}
 	voting := part.Voting.Snapshot()
 	encodedVotingSecrets := protocol.Encode(&voting)
 	go deleteOldKeys(encodedVotingSecrets)
 	return errorCh
+}
+
+// ReDeleteOldKeys securely deletes ephemeral keys for rounds strictly older than the given round.
+func (part PersistedParticipation) ReDeleteOldKeys(current basics.Round, proto config.ConsensusParams) (PersistedParticipation, error) {
+	keyDilution := part.KeyDilution
+	if keyDilution == 0 {
+		keyDilution = proto.DefaultKeyDilution
+	}
+
+	voting := part.Voting.Duplicate()
+
+	modified := voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
+
+	if !modified {
+		return part, nil
+	}
+
+	snapshot := voting.Snapshot()
+	encodedVotingSecrets := protocol.Encode(&snapshot)
+	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		t := time.Now()
+		_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
+		if err != nil {
+			return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
+		}
+		d := time.Now().Sub(t)
+		logging.Base().Warnf("tsachi DeleteOldKeys time is %v", d)
+		return nil
+	})
+	if err != nil {
+		return PersistedParticipation{}, err
+	}
+	outPart := PersistedParticipation{
+		Participation: part.Participation,
+		Store:         part.Store,
+	}
+	outPart.Participation.Voting = voting
+	return outPart, nil
 }
 
 // PersistNewParent writes a new parent address to the partkey database.
@@ -141,6 +186,18 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 		OneTimeSignatureSecrets: part.Voting,
 		OptionalKeyDilution:     part.KeyDilution,
 	}
+}
+
+// Duplicate creates a copy of the current participation object, ensuring that the
+// internal pointer objects aren't shared with the copied object.
+func (part Participation) Duplicate() (out Participation) {
+	copy(out.Parent[:], part.Parent[:])
+	out.FirstValid = part.FirstValid
+	out.LastValid = part.LastValid
+	out.KeyDilution = part.KeyDilution
+	out.VRF = part.VRF.Duplicate()
+	out.Voting = part.Voting.Duplicate()
+	return out
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
