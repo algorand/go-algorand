@@ -22,11 +22,11 @@ import (
 )
 
 type BootstrappedNetwork struct {
-	NumRounds                 int
-	RoundTransactionsCount    int
-	GeneratedAccountsCount    int
-	GeneratedAssetsCount      int
-	GeneratedApplicationCount int
+	NumRounds                 uint64
+	RoundTransactionsCount    uint64
+	GeneratedAccountsCount    uint64
+	GeneratedAssetsCount      uint64
+	GeneratedApplicationCount uint64
 	SourceWalletName          string
 }
 

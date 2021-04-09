@@ -45,11 +45,11 @@ var nodeTemplatePath string
 var nonParticipatingNodeTemplatePath string
 var relayTemplatePath string
 var sourceWallet string
-var rounds int
-var roundTrxCount int
-var accountsCount int
-var assetsCount int
-var applicationCount int
+var rounds uint64
+var roundTrxCount uint64
+var accountsCount uint64
+var assetsCount uint64
+var applicationCount uint64
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
@@ -68,11 +68,11 @@ func init() {
 	generateCmd.Flags().StringVarP(&nonParticipatingNodeTemplatePath, "non-participating-node-template", "", "", "json for non participating node")
 	generateCmd.Flags().StringVarP(&relayTemplatePath, "relay-template", "", "", "json for a relay node")
 	generateCmd.Flags().StringVarP(&sourceWallet, "wallet-name", "", "", "Source wallet name")
-	generateCmd.Flags().IntVarP(&rounds, "rounds", "", 5000, "Number of rounds")
-	generateCmd.Flags().IntVarP(&roundTrxCount, "ntrx", "", 1000, "Transaction count")
-	generateCmd.Flags().IntVarP(&accountsCount, "naccounts", "", 100000, "Account count")
-	generateCmd.Flags().IntVarP(&assetsCount, "nassets", "", 100000, "Asset count")
-	generateCmd.Flags().IntVarP(&applicationCount, "napps", "", 100000, "Application Count")
+	generateCmd.Flags().Uint64VarP(&rounds, "rounds", "", 5000, "Number of rounds")
+	generateCmd.Flags().Uint64VarP(&roundTrxCount, "ntrx", "", 1000, "Transaction count")
+	generateCmd.Flags().Uint64VarP(&accountsCount, "naccounts", "", 100000, "Account count")
+	generateCmd.Flags().Uint64VarP(&assetsCount, "nassets", "", 100000, "Asset count")
+	generateCmd.Flags().Uint64VarP(&applicationCount, "napps", "", 100000, "Application Count")
 
 	longParts := make([]string, len(generateTemplateLines)+1)
 	longParts[0] = generateCmd.Long
@@ -510,7 +510,7 @@ func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
 	return err
 }
 
-func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTrxCount, accountsCount, assetsCount, applicationCount int) error {
+func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTrxCount, accountsCount, assetsCount, applicationCount uint64) error {
 
 	var data = remote.BootstrappedNetwork{
 		NumRounds:                 rounds,
