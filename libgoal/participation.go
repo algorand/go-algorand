@@ -271,13 +271,14 @@ func (c *Client) ListParticipationKeys() (partKeyFiles map[string]account.Partic
 
 		// Fetch an account.Participation from the database
 		part, err := account.RestoreParticipation(handle)
-		handle.Close()
 		if err != nil {
 			// Couldn't read it, skip it
+			handle.Close()
 			continue
 		}
 
 		partKeyFiles[filename] = part.Participation
+		part.Close()
 	}
 
 	return

@@ -20,12 +20,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/algorand/go-algorand/logging"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -97,6 +98,7 @@ func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto con
 
 	errorCh := make(chan error, 1)
 	deleteOldKeys := func(encodedVotingSecrets []byte) {
+		t := time.Now()
 		errorCh <- part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
 			if err != nil {
@@ -104,6 +106,8 @@ func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto con
 			}
 			return nil
 		})
+		d := time.Now().Sub(t)
+		logging.Base().Warnf("tsachi DeleteOldKeys time is %v", d)
 		close(errorCh)
 	}
 	voting := part.Voting.Snapshot()

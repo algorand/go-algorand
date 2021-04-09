@@ -186,6 +186,7 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			if err != nil {
 				// Couldn't read it, skip it
 				err = nil
+				handle.Close()
 				continue
 			}
 
