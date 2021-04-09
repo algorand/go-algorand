@@ -231,7 +231,6 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 	err = <-errCh
 	if err != nil {
 		newpartkey.Close()
-		newpartkey = account.Participation{}
 		return
 	}
 	os.Remove(inputfile)
