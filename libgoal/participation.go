@@ -171,6 +171,12 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 // based on an existing database from inputfile.  On successful install, it
 // deletes the input file.
 func (c *Client) InstallParticipationKeys(inputfile string) (part account.Participation, filePath string, err error) {
+	proto, ok := c.consensus[protocol.ConsensusCurrentVersion]
+	if !ok {
+		err = fmt.Errorf("Unknown consensus protocol %s", protocol.ConsensusCurrentVersion)
+		return
+	}
+
 	// Get the GenesisID for use in the participation key path
 	var genID string
 	genID, err = c.GenesisID()
@@ -210,12 +216,7 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 	newpartkey.Store = newdb
 	err = newpartkey.Persist()
 	if err != nil {
-		return
-	}
-
-	proto, ok := c.consensus[protocol.ConsensusCurrentVersion]
-	if !ok {
-		err = fmt.Errorf("Unknown consensus protocol %s", protocol.ConsensusCurrentVersion)
+		newpartkey.Close()
 		return
 	}
 
@@ -229,6 +230,8 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 	errCh := partkey.DeleteOldKeys(basics.Round(math.MaxUint64), proto)
 	err = <-errCh
 	if err != nil {
+		newpartkey.Close()
+		newpartkey = account.Participation{}
 		return
 	}
 	os.Remove(inputfile)
