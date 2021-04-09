@@ -101,3 +101,23 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL clearing state twice should fail %Y%m%d_%H%M%S'
     false
 fi
+
+# Create an application with clear program always errs
+# Ensure clear still works
+APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(printf '#pragma version 2\nint 1') --clear-prog <(printf '#pragma version 2\nerr') --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
+
+# Should succeed to opt in
+${gcmd} app optin --app-id $APPID --from $ACCOUNT
+
+# Succeed in clearing state for the app
+${gcmd} app clear --app-id $APPID --from $ACCOUNT
+
+# Create an application with clear program always fails
+# Ensure clear still works
+APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(printf '#pragma version 2\nint 1') --clear-prog <(printf '#pragma version 2\nint 0') --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
+
+# Should succeed to opt in
+${gcmd} app optin --app-id $APPID --from $ACCOUNT
+
+# Succeed in clearing state for the app
+${gcmd} app clear --app-id $APPID --from $ACCOUNT
