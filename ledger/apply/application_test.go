@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -110,6 +111,7 @@ type testBalances struct {
 	// logic evaluator control
 	pass  bool
 	delta basics.EvalDelta
+	err   error
 }
 
 type testBalancesPass struct {
@@ -182,7 +184,7 @@ func (b *testBalances) Deallocate(addr basics.Address, aidx basics.AppIndex, glo
 }
 
 func (b *testBalances) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error) {
-	return b.pass, b.delta, nil
+	return b.pass, b.delta, b.err
 }
 
 func (b *testBalancesPass) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -665,7 +667,7 @@ func TestAppCallClearState(t *testing.T) {
 
 	ac := transactions.ApplicationCallTxnFields{
 		ApplicationID: appIdx,
-		OnCompletion:  transactions.CloseOutOC,
+		OnCompletion:  transactions.ClearStateOC,
 	}
 	params := basics.AppParams{
 		ApprovalProgram: []byte{1},
@@ -689,7 +691,7 @@ func TestAppCallClearState(t *testing.T) {
 	b.balances[sender] = basics.AccountData{}
 	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), "is not opted in to app")
+	a.Contains(err.Error(), "is not currently opted in to app")
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
@@ -741,8 +743,8 @@ func TestAppCallClearState(t *testing.T) {
 	b.appCreators[appIdx] = creator
 
 	// one put: to opt out
-	gd := basics.StateDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	b.delta = basics.EvalDelta{GlobalDelta: gd}
+	b.pass = false
+	b.delta = basics.EvalDelta{GlobalDelta: nil}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
@@ -750,13 +752,46 @@ func TestAppCallClearState(t *testing.T) {
 	br = b.putBalances[sender]
 	a.Equal(0, len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
-	a.Equal(gd, ad.EvalDelta.GlobalDelta)
+	a.Equal(basics.StateDelta(nil), ad.EvalDelta.GlobalDelta)
 
 	b.ResetWrites()
 
-	// check existing application with successful ClearStateProgram. two
-	// one to opt out, one deallocate
+	// check existing application with logic err ClearStateProgram.
+	// one to opt out, one deallocate, no error from ApplicationCall
 	b.pass = true
+	b.delta = basics.EvalDelta{GlobalDelta: nil}
+	b.err = ledgercore.LogicEvalError{Err: fmt.Errorf("test error")}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(1, b.put)
+	a.Equal(0, b.putWith)
+	br = b.putBalances[sender]
+	a.Equal(0, len(br.AppLocalStates))
+	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
+	a.Equal(basics.StateDelta(nil), ad.EvalDelta.GlobalDelta)
+
+	b.ResetWrites()
+
+	// check existing application with non-logic err ClearStateProgram.
+	// ApplicationCall must fail
+	b.pass = true
+	b.delta = basics.EvalDelta{GlobalDelta: nil}
+	b.err = fmt.Errorf("test error")
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.Error(err)
+	br = b.putBalances[sender]
+	a.Equal(0, len(br.AppLocalStates))
+	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
+	a.Equal(basics.StateDelta(nil), ad.EvalDelta.GlobalDelta)
+
+	b.ResetWrites()
+
+	// check existing application with successful ClearStateProgram.
+	// one to opt out, one deallocate, no error from ApplicationCall
+	b.pass = true
+	b.err = nil
+	gd := basics.StateDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
+	b.delta = basics.EvalDelta{GlobalDelta: gd}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
