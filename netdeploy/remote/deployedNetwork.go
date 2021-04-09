@@ -586,12 +586,10 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 		bootstrappedNet.txState = protocol.AssetConfigTx
 	} else if bootstrappedNet.txState == protocol.AssetConfigTx {
 		consensusParams := config.Consensus[protoVersion]
-		for acct, data := range bootstrappedNet.accounts {
-			fmt.Println(acct, ",", data.MicroAlgos)
+		for acct := range bootstrappedNet.accounts {
 			for j := uint64(0); j < bootstrappedNet.nAssets && j < uint64(consensusParams.MaxAssetsPerAccount); j++ {
 				bootstrappedNet.nAssets--
 				header.Sender = acct
-				fmt.Println("asset", header.Sender)
 
 				assetParam := basics.AssetParams{
 					Total:    100,
@@ -617,40 +615,7 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 		bootstrappedNet.nAssets -= uint64(len(sgntx))
 		bootstrappedNet.txState = protocol.PaymentTx
 	}
-	//	else {
-	//		bootstrappedNet.txState = protocol.PaymentTx
-	//	}
-	//} else if bootstrappedNet.txState == protocol.ApplicationCallTx {
-	//	ops, err := logic.AssembleString(program)
-	//	approval := ops.Program
-	//	ops, err = logic.AssembleString("#pragma version 2 int 1")
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//	localStateCheckProg = ops.Program
-	//
-	//	header.Sender = bootstrappedNet.account
-	//	fmt.Println(header.Sender)
-	//
-	//	appCallFields := transactions.ApplicationCallTxnFields{
-	//		OnCompletion:      transactions.NoOpOC,
-	//		ApplicationID:     0,
-	//		ClearStateProgram: ops.Program,
-	//		ApprovalProgram:   approval,
-	//		ApplicationArgs: [][]byte{
-	//			[]byte("check"),
-	//			[]byte("bar"),
-	//		},
-	//	}
-	//	tx = transactions.Transaction{
-	//		Type:   protocol.ApplicationCallTx,
-	//		Header: header,
-	//
-	//		ApplicationCallTxnFields: appCallFields,
-	//	}
-	//	bootstrappedNet.nApplications--
-	//	bootstrappedNet.txState = protocol.PaymentTx
-	//}
+
 	return sgntx
 }
 
