@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 const maxEncodedTransactionGroup = 10000
@@ -40,7 +41,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 		stub.TxnGroups[i] = inTxnGroups[i].Transactions
 	}
 
-	return stub.MarshalMsg([]byte{})
+	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
 }
 
 func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGroup, err error) {
@@ -57,4 +58,12 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 		txnGroups[i].Transactions = stub.TxnGroups[i]
 	}
 	return txnGroups, nil
+}
+
+func releaseEncodedTransactionGroups(buffer []byte) {
+	if buffer == nil {
+		return
+	}
+
+	protocol.PutEncodingBuf(buffer[:0])
 }
