@@ -197,8 +197,9 @@ func (hs *historicStats) updateRequestPenalty(counter uint64) float64 {
 	return hs.computerPenalty()
 }
 
-func (hs *historicStats) resetRequestPenalty(steps int, initialRank int) (int) {
+func (hs *historicStats) resetRequestPenalty(steps int, initialRank int) int {
 	if len(hs.requestGaps) == 0 || len(hs.rankSamples) == 0 {
+		fmt.Println("_")
 		return initialRank
 	}
 	if steps == 0 {
@@ -210,6 +211,7 @@ func (hs *historicStats) resetRequestPenalty(steps int, initialRank int) (int) {
 	hs.requestGaps = hs.requestGaps[1:]
 	hs.gapSum -= 1 / float64(removed)
 
+	fmt.Printf("resetPenalty steps: %d %d -> %d\n", steps, initialRank, int(hs.computerPenalty() * (float64(hs.rankSum) / float64(len(hs.rankSamples)))))
 	return int(hs.computerPenalty() * (float64(hs.rankSum) / float64(len(hs.rankSamples))))
 }
 
@@ -235,6 +237,7 @@ func (hs *historicStats) push(value int, counter uint64) (averagedRank int) {
 	penalty := hs.updateRequestPenalty(counter)
 	//	fmt.Println(penalty)
 
+	fmt.Printf("penalty: %f histo(%d): %f\n", penalty, len(hs.rankSamples), float64(hs.rankSum)/float64(len(hs.rankSamples)))
 	return int(penalty * (float64(hs.rankSum) / float64(len(hs.rankSamples))))
 }
 
@@ -301,13 +304,13 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 
 	sortNeeded := false
 
-	
-	
 	// we need to remove the peer from the pool so we can place it in a different location.
 	pool := ps.pools[poolIdx]
 	ps.counter++
+	xrank := rank
 	rank = pool.peers[peerIdx].history.push(rank, ps.counter)
 	rank = boundRankByClass(rank, pool.peers[peerIdx].class)
+	fmt.Printf("RankPeer %s %d -> %d\n", peerAddress(peer), xrank, rank)
 	if pool.rank != rank {
 		class := pool.peers[peerIdx].class
 		peerHistory := pool.peers[peerIdx].history
@@ -328,7 +331,6 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 		newRank int
 	}
 
-
 	for _, pool := range ps.pools {
 		fmt.Printf("rank: %d\n", pool.rank)
 		for _, p := range pool.peers {
@@ -337,11 +339,11 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 		fmt.Printf("\n\n")
 	}
 	fmt.Printf("-BBBBBBBBbb----------------------\n\n")
-	
+
 	// Update the ranks of the peers by reducing the penalty for not beeing selected
-	for pl := len(ps.pools)-1; pl >= 0; pl-- {
+	for pl := len(ps.pools) - 1; pl >= 0; pl-- {
 		pool := ps.pools[pl]
-		for pr := len(pool.peers)-1; pr >=0; pr-- {
+		for pr := len(pool.peers) - 1; pr >= 0; pr-- {
 			localPeer := pool.peers[pr]
 			if pool.peers[pr].peer == peer {
 				continue
@@ -358,14 +360,14 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 					// the last peer was removed from the pool; delete this pool.
 					ps.pools = append(ps.pools[:pl], ps.pools[pl+1:]...)
 				}
-				sortNeeded =  ps.addToPool(upeer, newRank, class, peerHistory) || sortNeeded
+				sortNeeded = ps.addToPool(upeer, newRank, class, peerHistory) || sortNeeded
 
 				/*
-				trimmedUpdates = append(trimmedUpdates, struct {
-					poolIdx int
-					peerIdx int
-					newRank int
-				}{pl, pr, newRank})*/
+					trimmedUpdates = append(trimmedUpdates, struct {
+						poolIdx int
+						peerIdx int
+						newRank int
+					}{pl, pr, newRank})*/
 			}
 		}
 	}
@@ -429,7 +431,7 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 		fmt.Printf("\n\n")
 	}
 	fmt.Printf("CCC-----------------------\n\n")
-	
+
 	return true
 }
 
@@ -529,7 +531,7 @@ func (ps *peerSelector) refreshAvailablePeers() {
 			// the last peer was removed from the pool; delete this pool.
 			ps.pools = append(ps.pools[:tup.poolIdx], ps.pools[tup.poolIdx+1:]...)
 		}
-		sortNeeded =  ps.addToPool(peer, tup.newRank, class, peerHistory) || sortNeeded
+		sortNeeded = ps.addToPool(peer, tup.newRank, class, peerHistory) || sortNeeded
 	}
 
 	for _, initClass := range ps.peerClasses {

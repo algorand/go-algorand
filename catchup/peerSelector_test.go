@@ -264,7 +264,7 @@ func TestHistoricData(t *testing.T) {
 		randVal := float64(crypto.RandUint64() % uint64(100))/100
 		//		randVal = 1
 		randVal = randVal + 1
-		if randVal > 1.8 {
+		if randVal > 1.98 {
 			duration = time.Duration(4*time.Second)
 
 
