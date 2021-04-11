@@ -225,7 +225,7 @@ func TestFindMissingPeer(t *testing.T) {
 func TestHistoricData(t *testing.T) {
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
-	peers2 := []network.Peer{&mockHTTPPeer{address: "abcd"}, &mockHTTPPeer{address: "efgh"}}
+	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
 
 	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
@@ -241,10 +241,11 @@ func TestHistoricData(t *testing.T) {
 			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays}},
 	)
 
-	var counters [3]uint64
-	for i := 0; i < 10000; i++ {
+	var counters [5]int
+	var timeouts [5]int
+	for i := 0; i < 100; i++ {
 		peer, getPeerErr := peerSelector.GetNextPeer()
-
+		fmt.Println("selected: " + peer.(*mockHTTPPeer).address)
 		switch peer.(*mockHTTPPeer).address {
 		case "a1":
 			counters[0]++
@@ -252,13 +253,34 @@ func TestHistoricData(t *testing.T) {
 			counters[1]++
 		case "a3":
 			counters[2]++
+		case "b1":
+			counters[3]++
+		case "b2":
+			counters[4]++
 		}
 		
 		require.NoError(t, getPeerErr)
 		var duration time.Duration
-		randVal := float64(crypto.RandUint64() % uint64(200))/100
+		randVal := float64(crypto.RandUint64() % uint64(100))/100
+		//		randVal = 1
+		randVal = randVal + 1
 		if randVal > 1.8 {
-			duration = time.Duration(8*time.Second)
+			duration = time.Duration(4*time.Second)
+
+
+			switch peer.(*mockHTTPPeer).address {
+			case "a1":
+				timeouts[0]++
+				fmt.Println("timeout: a1")
+			case "a2":
+				timeouts[1]++
+				fmt.Println("timeout: a2")
+			case "a3":
+				timeouts[2]++
+				fmt.Println("timeout: a3")
+			}
+
+			
 		} else {
 			switch peer.(*mockHTTPPeer).address {
 			case "a1":
@@ -274,10 +296,17 @@ func TestHistoricData(t *testing.T) {
 		//		fmt.Printf("%s %v %v\n", peer.(*mockHTTPPeer).address, duration, peerRank)
 		peerSelector.RankPeer(peer, peerRank)
 	}
+	fmt.Printf("a1 t/o: %d\n", timeouts[0])
+	fmt.Printf("a2 t/o: %d\n", timeouts[1])
+	fmt.Printf("a3 t/o: %d\n", timeouts[2])
 
 	fmt.Printf("a1: %d\n", counters[0])
 	fmt.Printf("a2: %d\n", counters[1])
 	fmt.Printf("a3: %d\n", counters[2])
-	require.Greater(t, counters[2], counters[1])
-	require.Greater(t, counters[1], counters[0])
+	fmt.Printf("b1: %d\n", counters[3])
+	fmt.Printf("b2: %d\n", counters[4])
+	require.GreaterOrEqual(t, counters[2], counters[1])
+	require.GreaterOrEqual(t, counters[2], counters[0])
+	require.Equal(t, counters[3], 0)
+	require.Equal(t, counters[4], 0)
 }

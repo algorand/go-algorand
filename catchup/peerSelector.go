@@ -18,6 +18,8 @@ package catchup
 
 import (
 	"errors"
+	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -57,6 +59,9 @@ const (
 	// then mapped into the a ranking range.
 	lowBlockDownloadThreshold  = 50 * time.Millisecond
 	highBlockDownloadThreshold = 8 * time.Second
+
+	// Is the lookback window size of peer usage statistics
+	peerHistoryWindowSize = 100
 )
 
 var errPeerSelectorNoPeerPoolsAvailable = errors.New("no peer pools available")
@@ -81,7 +86,7 @@ type peersRetriever interface {
 type peerPoolEntry struct {
 	peer    network.Peer
 	class   peerClass
-	history historicStats
+	history *historicStats
 }
 
 // peerPool is a single pool of peers that shares the same rank.
@@ -95,10 +100,13 @@ type peerPool struct {
 // client to provide feedback regarding the peer's performance, and to have the subsequent
 // query(s) take advantage of that intel.
 type peerSelector struct {
-	mu          deadlock.Mutex
-	net         peersRetriever
-	peerClasses []peerClass
-	pools       []peerPool
+	mu                 deadlock.Mutex
+	net                peersRetriever
+	peerClasses        []peerClass
+	pools              []peerPool
+	counter            uint64
+	lastSelected       network.Peer
+	resetAndRerankPeer network.Peer
 }
 
 // historicStats stores the past windowSize ranks for the peer
@@ -109,41 +117,125 @@ type peerSelector struct {
 type historicStats struct {
 	windowSize  int
 	rankSamples []int
-	sum         uint64
-	requestGaps []time.Duration
-	lastRequest time.Time
-	penalty     float64
+	rankSum     uint64
+	requestGaps []uint64
+	gapSum      float64
+	//	lastRequest time.Time
+	counter uint64
 }
 
-func makeHistoricStatus(windowSize int) (hs historicStats) {
-	hs = historicStats{
-		windowSize:   windowSize,
-		rankSamples:  make([]int, 0, windowSize),
-		requestGaps: make([]time.Duration, 0, windowSize),
-		sum:          0}
-	return
+func makeHistoricStatus(windowSize int) *historicStats {
+	hs := historicStats{
+		windowSize:  windowSize,
+		rankSamples: make([]int, 0, windowSize),
+		requestGaps: make([]uint64, 0, windowSize),
+		rankSum:     0,
+		gapSum:      0.0}
+	return &hs
+}
+
+/*
+// Add a penalty to the ranking when the peer is repeatedly used.
+// This is a compunding penalty, to facilitate the rotation of peers.
+func computeRequestPenalty(peerCounter, totalCounter uint64) float64 {
+
+
+
+	/*
+	// add 1 mocrosecond to avoid infinity when divided by a very small duration
+	earlyUseFactor := float64(int64(1*time.Microsecond) + duration.Milliseconds())
+
+	// The window size dictates how long the compunding of the penalty can be
+
+	// When the window size is small, the penalty will eventually
+	// hit an upper bound which is not be effective. Hence, the
+	// increase should be steeper to force the selector to pick a
+	// different peer.
+	windowSizeFactor := 1 / math.Log(peerHistoryWindowSize)
+
+	// The sooner the next use of the peer, the smaller earlyUseFactor,
+	// and the bigger the penalty
+	//
+	// Let the maximum tolarlnce be 10 minutes 4
+	penalty := 1.0 / earlyUseFactor * windowSizeFactor
+	//	fmt.Printf("d = %d p = %f\n", duration, penalty)
+	return penalty
+}
+*/
+
+/*
+func (hs *historicStats) trim(rank int, counter uint64, class peerClass) int {
+	if len(hs.requestGaps) == 0 {
+		return rank
+	}
+	if (counter - hs.counter) > uint64(len(hs.requestGaps)) {
+		hs.penalty = 0
+		hs.requestGaps = hs.requestGaps[:0]
+		hs.counter = counter
+		return int((1.0 + hs.penalty) * (float64(hs.rankSum) / float64(len(hs.rankSamples))))
+	}
+	g := 0
+	for i := hs.counter; i < counter; i++ {
+		hs.penalty -= computeRequestPenalty(hs.requestGaps[g])
+		g++
+	}
+	hs.requestGaps = hs.requestGaps[g:]
+	hs.counter = counter
+	return int((1.0 + hs.penalty) * (float64(hs.rankSum) / float64(len(hs.rankSamples))))
+}
+*/
+
+func (hs *historicStats) computerPenalty() float64 {
+	return 1 + (math.Exp(hs.gapSum/10) / 1000)
+}
+
+func (hs *historicStats) updateRequestPenalty(counter uint64) float64 {
+	newGap := counter - hs.counter
+	hs.counter = counter
+	hs.requestGaps = append(hs.requestGaps, newGap)
+	hs.gapSum += 1 / float64(newGap)
+	return hs.computerPenalty()
+}
+
+func (hs *historicStats) resetRequestPenalty(steps int, initialRank int) (int) {
+	if len(hs.requestGaps) == 0 || len(hs.rankSamples) == 0 {
+		return initialRank
+	}
+	if steps == 0 {
+		hs.requestGaps = make([]uint64, 0, hs.windowSize)
+		hs.gapSum = 0
+		return int(float64(hs.rankSum) / float64(len(hs.rankSamples)))
+	}
+	removed := hs.requestGaps[0]
+	hs.requestGaps = hs.requestGaps[1:]
+	hs.gapSum -= 1 / float64(removed)
+
+	return int(hs.computerPenalty() * (float64(hs.rankSum) / float64(len(hs.rankSamples))))
 }
 
 // push pushes a new rank to the historicStats, and returns the new rank
 // based on the average of ranks in the windowSize window
-func (hs *historicStats) push(value int) (averagedRank int) {
-	now := time.Now()
+func (hs *historicStats) push(value int, counter uint64) (averagedRank int) {
+
 	if len(hs.rankSamples) == hs.windowSize {
-		hs.sum -= uint64(hs.rankSamples[0])
+		hs.rankSum -= uint64(hs.rankSamples[0])
 		hs.rankSamples = hs.rankSamples[1:]
 
-		hs.penalty -= 1.0 / float64(hs.requestGaps[0].Milliseconds())
-		hs.requestGaps = hs.requestGaps[1:]
+		if len(hs.requestGaps) > 0 {
+			hs.gapSum -= 1.0 / float64(hs.requestGaps[0])
+			hs.requestGaps = hs.requestGaps[1:]
+		}
 	}
 	hs.rankSamples = append(hs.rankSamples, value)
-	hs.sum += uint64(value)
+	hs.rankSum += uint64(value)
 
-	sinceLastRequest := now.Sub(hs.lastRequest)
-	hs.lastRequest = now
-	hs.requestGaps = append(hs.requestGaps, sinceLastRequest)
-	hs.penalty += 1.0 / float64(sinceLastRequest)
+	//	sinceLastRequest := now.Sub(hs.lastRequest)
+	//	hs.lastRequest = now
 
-	return int((1.0 + hs.penalty) * (float64(hs.sum) / float64(len(hs.rankSamples))))
+	penalty := hs.updateRequestPenalty(counter)
+	//	fmt.Println(penalty)
+
+	return int(penalty * (float64(hs.rankSum) / float64(len(hs.rankSamples))))
 }
 
 // makePeerSelector creates a peerSelector, given a peersRetriever and peerClass array.
@@ -162,6 +254,15 @@ func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.refreshAvailablePeers()
+
+	for _, pool := range ps.pools {
+		fmt.Printf("rank: %d\n", pool.rank)
+		for _, p := range pool.peers {
+			fmt.Printf("%s ", peerAddress(p.peer))
+		}
+		fmt.Printf("\n\n")
+	}
+	fmt.Printf("-----------------------\n\n")
 	for _, pool := range ps.pools {
 		if len(pool.peers) > 0 {
 			// the previous call to refreshAvailablePeers ensure that this would always be the case;
@@ -170,6 +271,13 @@ func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
 			// pick one of the peers from this pool at random
 			peerIdx := crypto.RandUint64() % uint64(len(pool.peers))
 			peer = pool.peers[peerIdx].peer
+
+			if pool.peers[peerIdx].peer != ps.lastSelected {
+				ps.resetAndRerankPeer = ps.lastSelected
+				ps.lastSelected = pool.peers[peerIdx].peer
+			} else {
+				ps.resetAndRerankPeer = ""
+			}
 			return
 		}
 	}
@@ -191,11 +299,18 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 		return false
 	}
 
+	sortNeeded := false
+
+	
+	
 	// we need to remove the peer from the pool so we can place it in a different location.
 	pool := ps.pools[poolIdx]
-	rank = pool.peers[peerIdx].history.push(rank)
+	ps.counter++
+	rank = pool.peers[peerIdx].history.push(rank, ps.counter)
+	rank = boundRankByClass(rank, pool.peers[peerIdx].class)
 	if pool.rank != rank {
 		class := pool.peers[peerIdx].class
+		peerHistory := pool.peers[peerIdx].history
 		if len(pool.peers) > 1 {
 			pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
 			ps.pools[poolIdx] = pool
@@ -204,12 +319,117 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 			ps.pools = append(ps.pools[:poolIdx], ps.pools[poolIdx+1:]...)
 		}
 
-		sortNeeded := ps.addToPool(peer, rank, class)
-		if sortNeeded {
-			ps.sort()
-		}
+		sortNeeded = ps.addToPool(peer, rank, class, peerHistory)
 	}
 
+	var trimmedUpdates []struct {
+		poolIdx int
+		peerIdx int
+		newRank int
+	}
+
+
+	for _, pool := range ps.pools {
+		fmt.Printf("rank: %d\n", pool.rank)
+		for _, p := range pool.peers {
+			fmt.Printf("%s ", peerAddress(p.peer))
+		}
+		fmt.Printf("\n\n")
+	}
+	fmt.Printf("-BBBBBBBBbb----------------------\n\n")
+	
+	// Update the ranks of the peers by reducing the penalty for not beeing selected
+	for pl := len(ps.pools)-1; pl >= 0; pl-- {
+		pool := ps.pools[pl]
+		for pr := len(pool.peers)-1; pr >=0; pr-- {
+			localPeer := pool.peers[pr]
+			if pool.peers[pr].peer == peer {
+				continue
+			}
+			newRank := localPeer.history.resetRequestPenalty(1, pool.rank)
+			if newRank != pool.rank {
+				upeer := pool.peers[pr].peer
+				class := pool.peers[pr].class
+				peerHistory := pool.peers[pr].history
+				if len(pool.peers) > 1 {
+					pool.peers = append(pool.peers[:pr], pool.peers[pr+1:]...)
+					ps.pools[pl] = pool
+				} else {
+					// the last peer was removed from the pool; delete this pool.
+					ps.pools = append(ps.pools[:pl], ps.pools[pl+1:]...)
+				}
+				sortNeeded =  ps.addToPool(upeer, newRank, class, peerHistory) || sortNeeded
+
+				/*
+				trimmedUpdates = append(trimmedUpdates, struct {
+					poolIdx int
+					peerIdx int
+					newRank int
+				}{pl, pr, newRank})*/
+			}
+		}
+	}
+	// Reposition the peers whose rank has changed
+	for t := len(trimmedUpdates) - 1; t >= 0; t-- {
+		fmt.Print(".")
+		tup := trimmedUpdates[t]
+		pool := ps.pools[tup.poolIdx]
+		peer := pool.peers[tup.peerIdx].peer
+		class := pool.peers[tup.peerIdx].class
+		peerHistory := pool.peers[tup.peerIdx].history
+		if len(pool.peers) > 1 {
+			pool.peers = append(pool.peers[:tup.peerIdx], pool.peers[tup.peerIdx+1:]...)
+			ps.pools[tup.poolIdx] = pool
+		} else {
+			// the last peer was removed from the pool; delete this pool.
+			ps.pools = append(ps.pools[:tup.poolIdx], ps.pools[tup.poolIdx+1:]...)
+		}
+		sortNeeded = sortNeeded || ps.addToPool(peer, tup.newRank, class, peerHistory)
+	}
+	fmt.Println(".")
+	/*
+		if ps.resetAndRerankPeer != "" {
+			poolIdx, peerIdx := ps.findPeer(ps.resetAndRerankPeer)
+			ps.resetAndRerankPeer = ""
+			if poolIdx < 0 || peerIdx < 0 {
+				return true
+			}
+
+			// we need to remove the peer from the pool so we can place it in a different location.
+			pool := ps.pools[poolIdx]
+			newRank := pool.peers[peerIdx].history.resetRequestPenalty(0)
+			if pool.rank != newRank {
+				class := pool.peers[peerIdx].class
+				peerHistory := pool.peers[peerIdx].history
+				if len(pool.peers) > 1 {
+					pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
+					ps.pools[poolIdx] = pool
+				} else {
+					// the last peer was removed from the pool; delete this pool.
+					ps.pools = append(ps.pools[:poolIdx], ps.pools[poolIdx+1:]...)
+				}
+
+				sortNeeded := ps.addToPool(peer, newRank, class, peerHistory)
+				if sortNeeded {
+					ps.sort()
+				}
+			}
+		}
+	*/
+
+	if sortNeeded {
+		ps.sort()
+	}
+
+	for _, pool := range ps.pools {
+		fmt.Printf("rank: %d\n", pool.rank)
+		for _, p := range pool.peers {
+			fmt.Printf("%s ", peerAddress(p.peer))
+		}
+		fmt.Printf("\n\n")
+	}
+	fmt.Printf("CCC-----------------------\n\n")
+	
 	return true
 }
 
@@ -238,16 +458,16 @@ func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownl
 // addToPool adds a given peer to the correct group. If no group exists for that peer's rank,
 // a new group is created.
 // The method return true if a new group was created ( suggesting that the pools list would need to be re-ordered ), or false otherwise.
-func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass) bool {
+func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass, peerHistory *historicStats) bool {
 	// see if we already have a list with that rank:
 	for i, pool := range ps.pools {
 		if pool.rank == rank {
 			// we found an existing group, add this peer to the list.
-			ps.pools[i].peers = append(pool.peers, peerPoolEntry{peer: peer, class: class, history: makeHistoricStatus(1000)})
+			ps.pools[i].peers = append(pool.peers, peerPoolEntry{peer: peer, class: class, history: peerHistory})
 			return false
 		}
 	}
-	ps.pools = append(ps.pools, peerPool{rank: rank, peers: []peerPoolEntry{{peer: peer, class: class, history: makeHistoricStatus(100)}}})
+	ps.pools = append(ps.pools, peerPool{rank: rank, peers: []peerPoolEntry{{peer: peer, class: class, history: peerHistory}}})
 	return true
 }
 
@@ -274,14 +494,44 @@ func peerAddress(peer network.Peer) string {
 // corresponding initial rank, and deletes peers that have been dropped by the network package.
 func (ps *peerSelector) refreshAvailablePeers() {
 	existingPeers := make(map[string]network.Peer)
+	var trimmedUpdates []struct {
+		poolIdx int
+		peerIdx int
+		newRank int
+	}
 	for _, pool := range ps.pools {
 		for _, localPeer := range pool.peers {
 			if peerAddress := peerAddress(localPeer.peer); peerAddress != "" {
 				existingPeers[peerAddress] = localPeer.peer
+				/*				newRank := localPeer.history.trim(pool.rank, ps.counter, localPeer.class)
+								if newRank != pool.rank {
+									trimmedUpdates = append(trimmedUpdates, struct {
+										poolIdx int
+										peerIdx int
+										newRank int
+									}{pl, pr, newRank})
+								}*/
 			}
 		}
 	}
 	sortNeeded := false
+	for t := len(trimmedUpdates) - 1; t >= 0; t-- {
+		tup := trimmedUpdates[t]
+		// TODO refactor this
+		pool := ps.pools[tup.poolIdx]
+		peer := pool.peers[tup.peerIdx].peer
+		class := pool.peers[tup.peerIdx].class
+		peerHistory := pool.peers[tup.peerIdx].history
+		if len(pool.peers) > 1 {
+			pool.peers = append(pool.peers[:tup.peerIdx], pool.peers[tup.peerIdx+1:]...)
+			ps.pools[tup.poolIdx] = pool
+		} else {
+			// the last peer was removed from the pool; delete this pool.
+			ps.pools = append(ps.pools[:tup.poolIdx], ps.pools[tup.poolIdx+1:]...)
+		}
+		sortNeeded =  ps.addToPool(peer, tup.newRank, class, peerHistory) || sortNeeded
+	}
+
 	for _, initClass := range ps.peerClasses {
 		peers := ps.net.GetPeers(initClass.peerClass)
 		for _, peer := range peers {
@@ -293,8 +543,8 @@ func (ps *peerSelector) refreshAvailablePeers() {
 				delete(existingPeers, peerAddress)
 				continue
 			}
-			// it's an entry which we did not had before.
-			sortNeeded = ps.addToPool(peer, initClass.initialRank, initClass) || sortNeeded
+			// it's an entry which we did not have before.
+			sortNeeded = ps.addToPool(peer, initClass.initialRank, initClass, makeHistoricStatus(peerHistoryWindowSize)) || sortNeeded
 		}
 	}
 
@@ -350,4 +600,40 @@ func downloadDurationToRank(downloadDuration, minDownloadDuration, maxDownloadDu
 	// the formula below maps an element in the range of [minDownloadDuration .. maxDownloadDuration] onto the range of [minRank .. maxRank]
 	rank = minRank + int((downloadDuration-minDownloadDuration).Nanoseconds()*int64(maxRank-minRank)/(maxDownloadDuration-minDownloadDuration).Nanoseconds())
 	return
+}
+
+func boundRankByClass(rank int, class peerClass) int {
+	switch class.initialRank {
+	case peerRankInitialFirstPriority:
+		if rank < peerRank0LowBlockTime {
+			return peerRank0LowBlockTime
+		}
+		if rank > peerRank0HighBlockTime {
+			return peerRank0HighBlockTime
+		}
+	case peerRankInitialSecondPriority:
+		if rank < peerRank1LowBlockTime {
+			return peerRank1LowBlockTime
+		}
+		if rank > peerRank1HighBlockTime {
+			return peerRank1HighBlockTime
+		}
+
+	case peerRankInitialThirdPriority:
+		if rank < peerRank2LowBlockTime {
+			return peerRank2LowBlockTime
+		}
+		if rank > peerRank2HighBlockTime {
+			return peerRank2HighBlockTime
+		}
+
+	default: // i.e. peerRankInitialFourthPriority
+		if rank < peerRank3LowBlockTime {
+			return peerRank3LowBlockTime
+		}
+		if rank > peerRank3HighBlockTime {
+			return peerRank3HighBlockTime
+		}
+	}
+	return rank
 }
