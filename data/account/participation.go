@@ -20,7 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
+	//"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -105,13 +105,10 @@ func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto con
 
 	deleteOldKeys := func(encodedVotingSecrets []byte) {
 		errorCh <- part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			t := time.Now()
 			_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
 			if err != nil {
 				return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
 			}
-			d := time.Now().Sub(t)
-			logging.Base().Warnf("tsachi DeleteOldKeys time is %v", d)
 			return nil
 		})
 
@@ -138,21 +135,27 @@ func (part PersistedParticipation) ReDeleteOldKeys(current basics.Round, proto c
 		return part, nil
 	}
 
+	rawVRF := protocol.Encode(part.VRF)
 	snapshot := voting.Snapshot()
 	encodedVotingSecrets := protocol.Encode(&snapshot)
+	//t := time.Now()
 	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		t := time.Now()
-		_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
+		_, err := tx.Exec("DELETE FROM ParticipationAccount")
 		if err != nil {
 			return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
 		}
-		d := time.Now().Sub(t)
-		logging.Base().Warnf("tsachi DeleteOldKeys time is %v", d)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?)",
+			part.Parent[:], rawVRF, encodedVotingSecrets, part.FirstValid, part.LastValid, part.KeyDilution)
+		if err != nil {
+			return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
+		}
 		return nil
 	})
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
+	/*d := time.Now().Sub(t)
+	logging.Base().Warnf("tsachi DeleteOldKeys time is %v", d)*/
 	outPart := PersistedParticipation{
 		Participation: part.Participation,
 		Store:         part.Store,
