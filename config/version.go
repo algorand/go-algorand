@@ -29,11 +29,11 @@ import (
 
 // VersionMajor is the Major semantic version number (#.y.z) - changed when first public release (0.y.z -> 1.y.z)
 // and when backwards compatibility is broken.
-const VersionMajor = 2
+const VersionMajor = 0
 
 // VersionMinor is the Minor semantic version number (x.#.z) - changed when backwards-compatible features are introduced.
 // Not enforced until after initial public release (x > 0).
-const VersionMinor = 5
+const VersionMinor = 0
 
 // Version is the type holding our full version information.
 type Version struct {
