@@ -48,14 +48,14 @@ type testWorkerStubs struct {
 	latest        basics.Round
 	waiters       map[basics.Round]chan struct{}
 	blocks        map[basics.Round]bookkeeping.BlockHeader
-	keys          []account.PersistedParticipation
-	keysForVoters []account.PersistedParticipation
+	keys          []account.Participation
+	keysForVoters []account.Participation
 	sigmsg        chan []byte
 	txmsg         chan transactions.SignedTxn
 	totalWeight   int
 }
 
-func newWorkerStubs(t testing.TB, keys []account.PersistedParticipation, totalWeight int) *testWorkerStubs {
+func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int) *testWorkerStubs {
 	s := &testWorkerStubs{
 		waiters:       make(map[basics.Round]chan struct{}),
 		blocks:        make(map[basics.Round]bookkeeping.BlockHeader),
@@ -97,10 +97,7 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 }
 
 func (s *testWorkerStubs) Keys() (out []account.Participation) {
-	for _, key := range s.keys {
-		out = append(out, key.Participation.Duplicate())
-	}
-	return out
+	return s.keys
 }
 
 func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -199,18 +196,19 @@ func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
 	return newTestWorkerDB(t, s, dbs.Wdb)
 }
 
-func newPartKey(t testing.TB, parent basics.Address) account.PersistedParticipation {
+func newPartKey(t testing.TB, parent basics.Address) account.Participation {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 	partDB, err := db.MakeAccessor(fn, false, true)
 	require.NoError(t, err)
 
 	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024*1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
-	return part
+	part.Close()
+	return part.Participation
 }
 
 func TestWorkerAllSigs(t *testing.T) {
-	var keys []account.PersistedParticipation
+	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
@@ -270,7 +268,7 @@ func TestWorkerAllSigs(t *testing.T) {
 }
 
 func TestWorkerPartialSigs(t *testing.T) {
-	var keys []account.PersistedParticipation
+	var keys []account.Participation
 	for i := 0; i < 7; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
@@ -326,7 +324,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 }
 
 func TestWorkerInsufficientSigs(t *testing.T) {
-	var keys []account.PersistedParticipation
+	var keys []account.Participation
 	for i := 0; i < 2; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
@@ -355,7 +353,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 }
 
 func TestLatestSigsFromThisNode(t *testing.T) {
-	var keys []account.PersistedParticipation
+	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
@@ -392,7 +390,7 @@ func TestLatestSigsFromThisNode(t *testing.T) {
 }
 
 func TestWorkerRestart(t *testing.T) {
-	var keys []account.PersistedParticipation
+	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
@@ -431,7 +429,7 @@ func TestWorkerRestart(t *testing.T) {
 }
 
 func TestWorkerHandleSig(t *testing.T) {
-	var keys []account.PersistedParticipation
+	var keys []account.Participation
 	for i := 0; i < 2; i++ {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
