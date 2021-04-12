@@ -24,7 +24,7 @@ import (
 )
 
 func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
-	res := make(map[basics.AssetIndex]basics.AssetHolding)
+	res := make(map[basics.AssetIndex]basics.AssetHolding, len(m))
 	for id, val := range m {
 		res[id] = val
 	}
@@ -32,7 +32,7 @@ func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.
 }
 
 func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
-	res := make(map[basics.AssetIndex]basics.AssetParams)
+	res := make(map[basics.AssetIndex]basics.AssetParams, len(m))
 	for id, val := range m {
 		res[id] = val
 	}
@@ -102,7 +102,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			Index:   basics.CreatableIndex(newidx),
 		}
 
-		return balances.PutWithCreatable(record, created, nil)
+		return balances.PutWithCreatable(header.Sender, record, created, nil)
 	}
 
 	// Re-configuration and destroying must be done by the manager key.
@@ -158,7 +158,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		record.AssetParams[cc.ConfigAsset] = params
 	}
 
-	return balances.PutWithCreatable(record, nil, deleted)
+	return balances.PutWithCreatable(creator, record, nil, deleted)
 }
 
 func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
@@ -188,7 +188,7 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 	sndHolding.Amount = newAmount
 
 	snd.Assets[asset] = sndHolding
-	return balances.Put(snd)
+	return balances.Put(addr, snd)
 }
 
 func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
@@ -218,7 +218,7 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 	}
 
 	rcv.Assets[asset] = rcvHolding
-	return balances.Put(rcv)
+	return balances.Put(addr, rcv)
 }
 
 // AssetTransfer applies an AssetTransfer transaction using the Balances interface.
@@ -268,7 +268,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 				return fmt.Errorf("too many assets in account: %d > %d", len(snd.Assets), balances.ConsensusParams().MaxAssetsPerAccount)
 			}
 
-			err = balances.Put(snd)
+			err = balances.Put(source, snd)
 			if err != nil {
 				return err
 			}
@@ -330,6 +330,13 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		// and putIn will short circuit (so bypassFreeze doesn't matter)
 		_, bypassFreeze := dst.AssetParams[ct.XferAsset]
 
+		// AssetCloseAmount was a late addition, checking that the current protocol version supports it.
+		if balances.ConsensusParams().EnableAssetCloseAmount {
+			// Add the close amount to ApplyData.
+			closeAmount := sndHolding.Amount
+			ad.AssetClosingAmount = closeAmount
+		}
+
 		// Move the balance out.
 		err = takeOut(balances, source, ct.XferAsset, sndHolding.Amount, bypassFreeze)
 		if err != nil {
@@ -355,7 +362,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		}
 
 		delete(snd.Assets, ct.XferAsset)
-		err = balances.Put(snd)
+		err = balances.Put(source, snd)
 		if err != nil {
 			return err
 		}
@@ -390,5 +397,5 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 
 	holding.Frozen = cf.AssetFrozen
 	record.Assets[cf.FreezeAsset] = holding
-	return balances.Put(record)
+	return balances.Put(cf.FreezeAccount, record)
 }

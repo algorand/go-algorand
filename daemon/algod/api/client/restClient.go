@@ -35,7 +35,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -252,6 +252,21 @@ func (client RestClient) Status() (response generatedV2.NodeStatusResponse, err 
 	return
 }
 
+// WaitForBlock returns the node status after waiting for the given round.
+func (client RestClient) WaitForBlock(round basics.Round) (response generatedV2.NodeStatusResponse, err error) {
+	switch client.versionAffinity {
+	case APIVersionV2:
+		err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d/", round), nil)
+	default:
+		var nodeStatus v1.NodeStatus
+		err = client.get(&nodeStatus, fmt.Sprintf("/v1/status/wait-for-block-after/%d/", round), nil)
+		if err == nil {
+			response = fillNodeStatusResponse(nodeStatus)
+		}
+	}
+	return
+}
+
 // HealthCheck does a health check on the the potentially running node,
 // returning an error if the API is down
 func (client RestClient) HealthCheck() error {
@@ -333,7 +348,7 @@ type rawblockParams struct {
 	Raw uint64 `url:"raw"`
 }
 
-type rawAccountParams struct {
+type rawFormat struct {
 	Format string `url:"format"`
 }
 
@@ -392,7 +407,7 @@ func (blob *Blob) SetBytes(b []byte) {
 // RawAccountInformationV2 gets the raw AccountData associated with the passed address
 func (client RestClient) RawAccountInformationV2(address string) (response []byte, err error) {
 	var blob Blob
-	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawAccountParams{Format: "msgpack"})
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawFormat{Format: "msgpack"})
 	response = blob
 	return
 }
@@ -457,8 +472,17 @@ func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 }
 
 // RawBlock gets the encoded, raw msgpack block for the given round
-func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error) {
-	err = client.getRaw(&response, fmt.Sprintf("/v1/block/%d", round), rawblockParams{1})
+func (client RestClient) RawBlock(round uint64) (response []byte, err error) {
+	switch client.versionAffinity {
+	case APIVersionV2:
+		var blob Blob
+		err = client.getRaw(&blob, fmt.Sprintf("/v2/blocks/%d", round), rawFormat{Format: "msgpack"})
+		response = blob
+	default:
+		var raw v1.RawBlock
+		err = client.getRaw(&raw, fmt.Sprintf("/v1/block/%d", round), rawblockParams{1})
+		response = raw
+	}
 	return
 }
 
@@ -553,5 +577,12 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	var blob Blob
 	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */)
 	response = blob
+	return
+}
+
+// Proof gets a Merkle proof for a transaction in a block.
+func (client RestClient) Proof(txid string, round uint64) (response generatedV2.ProofResponse, err error) {
+	txid = stripTransaction(txid)
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), nil)
 	return
 }

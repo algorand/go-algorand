@@ -7,27 +7,14 @@ assignees: ''
 
 ---
 
-<!--
-NOTE: If this issue relates to security, please use the vulnerability disclosure form here:
-https://www.algorand.com/resources/blog/security
+## Is your feature request related to a problem? Please describe.
 
-General, developer or support questions concerning Algorand should be directed to the Algorand Forums https://forum.algorand.org/.
--->
+<!-- A clear and concise description of what the problem is. Ex. I'm always frustrated when [...] -->
 
-<!--
-This project is focused on low level platform concerns. A good feature request would be related
-to protocol and network usage, debugging and monitoring tools, and goal commands.
+## Describe the solution you'd like.
 
-Higher level suggestions relating to layer 2 applications (like wallet apps) are not appropriate here.
--->
-**Is your feature request related to a problem? Please describe.**
+<!-- A clear and concise description of what you want to happen. -->
 
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+## Additional context.
 
-**Describe the solution you'd like**
-
-A clear and concise description of what you want to happen.
-
-**Additional context**
-
-Add any other context or screenshots about the feature request here.
+<!-- Add any other context or screenshots about the feature request here. -->

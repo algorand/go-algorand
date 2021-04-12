@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -108,7 +109,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
-	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round), 0)
 	return &pool
 }
 
@@ -161,7 +162,7 @@ func (pool *TransactionPool) Reset() {
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
-	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round), 0)
 }
 
 // NumExpired returns the number of transactions that expired at the
@@ -462,15 +463,15 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
-func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
+func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
 
-	commitedTxids := delta.Txids
+	committedTxids := delta.Txids
 	if pool.logProcessBlockStats {
 		pool.pendingMu.RLock()
-		for txid := range commitedTxids {
+		for txid := range committedTxids {
 			if _, ok := pool.pendingTxids[txid]; ok {
 				knownCommitted++
 			} else {
@@ -511,7 +512,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.St
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator(commitedTxids)
+		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted)
 	}
 
 	stats.KnownCommittedCount = knownCommitted
@@ -624,7 +625,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]basics.Round) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]basics.Round, knownCommitted uint) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -664,7 +665,11 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, pendingCount)
+	hint := pendingCount - int(knownCommitted)
+	if hint < 0 || int(knownCommitted) < 0 {
+		hint = 0
+	}
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint)
 	if err != nil {
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
@@ -693,7 +698,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			}
 
 			switch err.(type) {
-			case ledger.TransactionInLedgerError:
+			case ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
 				stats.RemovedInvalidCount++
 			case transactions.TxnDeadError:
@@ -762,7 +767,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 				for i, txib := range payset {
 					fee := txib.Txn.Fee.Raw
-					encodedLen := len(protocol.Encode(&txib))
+					encodedLen := txib.GetEncodedLength()
 
 					stats.IncludedCount++
 					totalFees += fee

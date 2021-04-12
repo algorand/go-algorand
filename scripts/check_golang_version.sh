@@ -38,7 +38,7 @@ elif [ "$1" == "build" ]; then
     fi
 else
     # Check to make sure that it matches what is specified in `go.mod`.
-    GOMOD_VERSION=$(go mod edit -json | jq -r ".Go")
+    GOMOD_VERSION=$(go mod edit -print | awk '/^go[ \t]+[0-9]+\.[0-9]+(\.[0-9]+)?[ \t]*$/{print $2}')
 
     if [[ ! "${BUILD_VERSION}" =~ ^"${GOMOD_VERSION}" ]]; then
         echo "[$0] ERROR: go version mismatch, go mod version ${GOMOD_VERSION} does not match required version ${BUILD_VERSION}"

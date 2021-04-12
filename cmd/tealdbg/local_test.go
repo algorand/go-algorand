@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -459,7 +460,7 @@ int 100
 		ProgramBlobs:    [][]byte{[]byte(source)},
 		BalanceBlob:     balanceBlob,
 		TxnBlob:         txnBlob,
-		Proto:           "future",
+		Proto:           string(protocol.ConsensusCurrentVersion),
 		Round:           222,
 		LatestTimestamp: 333,
 		GroupIndex:      0,
@@ -569,8 +570,9 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.NoError(err)
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
-	a.NotNil(l.runs[0].eval)
-	a.Nil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ba)
+	a.Equal(modeLogicsig, l.runs[0].mode)
+	a.Empty(l.runs[0].aidx)
 
 	dp = DebugParams{
 		ProgramNames: []string{"test", "test"},
@@ -585,11 +587,13 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Equal(2, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.Equal(0, l.runs[1].groupIndex)
-	a.NotNil(l.runs[0].eval)
-	a.Nil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ba)
+	a.Equal(modeLogicsig, l.runs[0].mode)
+	a.Empty(l.runs[0].aidx)
 
-	a.NotNil(l.runs[1].eval)
-	a.Nil(l.runs[1].ledger)
+	a.Nil(l.runs[1].ba)
+	a.Equal(modeLogicsig, l.runs[1].mode)
+	a.Empty(l.runs[1].aidx)
 }
 
 func TestRunMode(t *testing.T) {
@@ -613,7 +617,9 @@ func TestRunMode(t *testing.T) {
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.NotNil(l.runs[0].ledger)
+	a.NotNil(l.runs[0].ba)
+	a.Equal(modeStateful, l.runs[0].mode)
+	a.Equal(basics.AppIndex(100), l.runs[0].aidx)
 	a.NotEqual(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -634,11 +640,9 @@ func TestRunMode(t *testing.T) {
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.Nil(l.runs[0].ledger)
-	a.Equal(
-		reflect.ValueOf(logic.Eval).Pointer(),
-		reflect.ValueOf(l.runs[0].eval).Pointer(),
-	)
+	a.Nil(l.runs[0].ba)
+	a.Equal(modeLogicsig, l.runs[0].mode)
+	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
 
 	// check run mode application
 	dp = DebugParams{
@@ -655,11 +659,9 @@ func TestRunMode(t *testing.T) {
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.NotNil(l.runs[0].ledger)
-	a.NotEqual(
-		reflect.ValueOf(logic.Eval).Pointer(),
-		reflect.ValueOf(l.runs[0].eval).Pointer(),
-	)
+	a.NotNil(l.runs[0].ba)
+	a.Equal(modeStateful, l.runs[0].mode)
+	a.Equal(basics.AppIndex(100), l.runs[0].aidx)
 
 	// check run mode signature
 	dp = DebugParams{
@@ -675,11 +677,9 @@ func TestRunMode(t *testing.T) {
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.Nil(l.runs[0].ledger)
-	a.Equal(
-		reflect.ValueOf(logic.Eval).Pointer(),
-		reflect.ValueOf(l.runs[0].eval).Pointer(),
-	)
+	a.Nil(l.runs[0].ba)
+	a.Equal(modeLogicsig, l.runs[0].mode)
+	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
 }
 
 func TestDebugFromTxn(t *testing.T) {
@@ -739,11 +739,9 @@ func TestDebugFromTxn(t *testing.T) {
 	a.Equal(1, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{3}, l.runs[0].program)
-	a.Nil(l.runs[0].ledger)
-	a.Equal(
-		reflect.ValueOf(logic.Eval).Pointer(),
-		reflect.ValueOf(l.runs[0].eval).Pointer(),
-	)
+	a.Nil(l.runs[0].ba)
+	a.Equal(modeLogicsig, l.runs[0].mode)
+	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
 
 	// ensure clear approval program is supposed to be debugged
 	brs = makeSampleBalanceRecord(sender, 0, appIdx)
@@ -767,11 +765,9 @@ func TestDebugFromTxn(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{1}, l.runs[0].program)
-	a.NotNil(l.runs[0].ledger)
-	a.NotEqual(
-		reflect.ValueOf(logic.Eval).Pointer(),
-		reflect.ValueOf(l.runs[0].eval).Pointer(),
-	)
+	a.NotNil(l.runs[0].ba)
+	a.Equal(modeStateful, l.runs[0].mode)
+	a.NotEmpty(l.runs[0].aidx)
 
 	// ensure clear state program is supposed to be debugged
 	appTxn.Txn.Type = protocol.ApplicationCallTx
@@ -792,11 +788,9 @@ func TestDebugFromTxn(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{1, 1}, l.runs[0].program)
-	a.NotNil(l.runs[0].ledger)
-	a.NotEqual(
-		reflect.ValueOf(logic.Eval).Pointer(),
-		reflect.ValueOf(l.runs[0].eval).Pointer(),
-	)
+	a.NotNil(l.runs[0].ba)
+	a.Equal(modeStateful, l.runs[0].mode)
+	a.NotEmpty(l.runs[0].aidx)
 
 	// check app create txn uses approval program from the txn
 	appTxn.Txn.Type = protocol.ApplicationCallTx
@@ -819,11 +813,9 @@ func TestDebugFromTxn(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{4}, l.runs[0].program)
-	a.NotNil(l.runs[0].ledger)
-	a.NotEqual(
-		reflect.ValueOf(logic.Eval).Pointer(),
-		reflect.ValueOf(l.runs[0].eval).Pointer(),
-	)
+	a.NotNil(l.runs[0].ba)
+	a.Equal(modeStateful, l.runs[0].mode)
+	a.NotEmpty(l.runs[0].aidx)
 
 	// check error on no programs
 	txnBlob = protocol.EncodeMsgp(&payTxn)
@@ -840,7 +832,76 @@ func TestDebugFromTxn(t *testing.T) {
 	a.Equal(2, len(l.txnGroup))
 }
 
-func TestLocalLedger(t *testing.T) {
+func checkBalanceAdapter(
+	a *require.Assertions, ba apply.Balances, sender basics.Address, receiver basics.Address,
+	assetIdx basics.AssetIndex, appIdx basics.AppIndex,
+) {
+	ad, err := ba.Get(sender, false)
+	a.NoError(err)
+	a.Equal(basics.MicroAlgos{Raw: 500000000}, ad.MicroAlgos)
+
+	holdings, ok := ad.Assets[assetIdx+1]
+	a.False(ok)
+	holdings, ok = ad.Assets[assetIdx]
+	a.True(ok)
+	a.Equal(basics.AssetHolding{Amount: 10, Frozen: false}, holdings)
+
+	aparams, ok := ad.AssetParams[assetIdx]
+	a.True(ok)
+	a.Equal(uint64(100), aparams.Total)
+	a.Equal("tok", aparams.UnitName)
+
+	params, ok := ad.AppParams[appIdx+1]
+	a.False(ok)
+	params, ok = ad.AppParams[appIdx]
+	a.True(ok)
+
+	addr, ok, err := ba.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
+	a.NoError(err)
+	a.True(ok)
+	a.Equal(sender, addr)
+
+	addr, ok, err = ba.GetCreator(basics.CreatableIndex(assetIdx+1), basics.AssetCreatable)
+	a.NoError(err)
+	a.False(ok)
+
+	addr, ok, err = ba.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
+	a.NoError(err)
+	a.True(ok)
+	a.Equal(sender, addr)
+
+	addr, ok, err = ba.GetCreator(basics.CreatableIndex(appIdx+1), basics.AppCreatable)
+	a.NoError(err)
+	a.False(ok)
+
+	v, ok := params.GlobalState["gkeyint"]
+	a.True(ok)
+	a.Equal(uint64(2), v.Uint)
+
+	v, ok = params.GlobalState["gkeybyte"]
+	a.True(ok)
+	a.Equal("global", v.Bytes)
+
+	loc, ok := ad.AppLocalStates[appIdx+1]
+	a.False(ok)
+	loc, ok = ad.AppLocalStates[appIdx]
+	a.True(ok)
+
+	v, ok = loc.KeyValue["lkeyint"]
+	a.True(ok)
+	a.Equal(uint64(1), v.Uint)
+
+	v, ok = loc.KeyValue["lkeybyte"]
+	a.True(ok)
+	a.Equal("local", v.Bytes)
+
+	ad, err = ba.Get(receiver, false)
+	a.NoError(err)
+	loc, ok = ad.AppLocalStates[appIdx]
+	a.False(ok)
+}
+
+func TestLocalBalanceAdapter(t *testing.T) {
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -889,52 +950,18 @@ func TestLocalLedger(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{1}, l.runs[0].program)
-	a.NotNil(l.runs[0].ledger)
+	a.NotNil(l.runs[0].ba)
+	a.Equal(modeStateful, l.runs[0].mode)
+	a.NotEmpty(l.runs[0].aidx)
 	a.NotEqual(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
 	)
-	ledger := l.runs[0].ledger
-	a.Equal(basics.Round(100), ledger.Round())
-	a.Equal(int64(333), ledger.LatestTimestamp())
-
-	balance, err := ledger.Balance(sender)
-	a.NoError(err)
-	a.Equal(basics.MicroAlgos{Raw: 500000000}, balance)
-
-	holdings, err := ledger.AssetHolding(sender, assetIdx)
-	a.NoError(err)
-	a.Equal(basics.AssetHolding{Amount: 10, Frozen: false}, holdings)
-	holdings, err = ledger.AssetHolding(sender, assetIdx+1)
-	a.Error(err)
-
-	params, err := ledger.AssetParams(assetIdx)
-	a.NoError(err)
-	a.Equal(uint64(100), params.Total)
-	a.Equal("tok", params.UnitName)
-
-	tkv, err := ledger.AppGlobalState(0)
-	a.NoError(err)
-	a.Equal(uint64(2), tkv["gkeyint"].Uint)
-	tkv, err = ledger.AppGlobalState(appIdx)
-	a.NoError(err)
-	a.Equal("global", tkv["gkeybyte"].Bytes)
-	tkv, err = ledger.AppGlobalState(appIdx + 1)
-	a.Error(err)
-
-	tkv, err = ledger.AppLocalState(sender, 0)
-	a.NoError(err)
-	a.Equal(uint64(1), tkv["lkeyint"].Uint)
-	tkv, err = ledger.AppLocalState(sender, appIdx)
-	a.NoError(err)
-	a.Equal("local", tkv["lkeybyte"].Bytes)
-	tkv, err = ledger.AppLocalState(sender, appIdx+1)
-	a.Error(err)
-	tkv, err = ledger.AppLocalState(payTxn.Txn.Receiver, appIdx)
-	a.Error(err)
+	ba := l.runs[0].ba
+	checkBalanceAdapter(a, ba, sender, payTxn.Txn.Receiver, assetIdx, appIdx)
 }
 
-func TestLocalLedgerIndexer(t *testing.T) {
+func TestLocalBalanceAdapterIndexer(t *testing.T) {
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -1013,47 +1040,14 @@ func TestLocalLedgerIndexer(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{1}, l.runs[0].program)
-	a.NotNil(l.runs[0].ledger)
+	a.NotNil(l.runs[0].ba)
+	a.Equal(modeStateful, l.runs[0].mode)
+	a.NotEmpty(l.runs[0].aidx)
 	a.NotEqual(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
 	)
-	ledger := l.runs[0].ledger
-	a.Equal(basics.Round(100), ledger.Round())
-	a.Equal(int64(333), ledger.LatestTimestamp())
 
-	balance, err := ledger.Balance(sender)
-	a.NoError(err)
-	a.Equal(basics.MicroAlgos{Raw: 500000000}, balance)
-
-	holdings, err := ledger.AssetHolding(sender, assetIdx)
-	a.NoError(err)
-	a.Equal(basics.AssetHolding{Amount: 10, Frozen: false}, holdings)
-	holdings, err = ledger.AssetHolding(sender, assetIdx+1)
-	a.Error(err)
-
-	params, err := ledger.AssetParams(assetIdx)
-	a.NoError(err)
-	a.Equal(uint64(100), params.Total)
-	a.Equal("tok", params.UnitName)
-
-	tkv, err := ledger.AppGlobalState(0)
-	a.NoError(err)
-	a.Equal(uint64(2), tkv["gkeyint"].Uint)
-	tkv, err = ledger.AppGlobalState(appIdx)
-	a.NoError(err)
-	a.Equal("global", tkv["gkeybyte"].Bytes)
-	tkv, err = ledger.AppGlobalState(appIdx + 1)
-	a.Error(err)
-
-	tkv, err = ledger.AppLocalState(sender, 0)
-	a.NoError(err)
-	a.Equal(uint64(1), tkv["lkeyint"].Uint)
-	tkv, err = ledger.AppLocalState(sender, appIdx)
-	a.NoError(err)
-	a.Equal("local", tkv["lkeybyte"].Bytes)
-	tkv, err = ledger.AppLocalState(sender, appIdx+1)
-	a.Error(err)
-	tkv, err = ledger.AppLocalState(payTxn.Txn.Receiver, appIdx)
-	a.Error(err)
+	ba := l.runs[0].ba
+	checkBalanceAdapter(a, ba, sender, payTxn.Txn.Receiver, assetIdx, appIdx)
 }

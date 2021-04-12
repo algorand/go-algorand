@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -56,7 +57,6 @@ var minBalance = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
 func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) *ledger.Ledger {
 	var hash crypto.Digest
 	crypto.RandBytes(hash[:])
-	params := config.Consensus[proto]
 
 	var pool basics.Address
 	crypto.RandBytes(pool[:])
@@ -66,7 +66,6 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 
 	initBlock := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
-			TxnRoot:     transactions.Payset{}.Commit(params.PaysetCommitFlat),
 			GenesisID:   "pooltest",
 			GenesisHash: hash,
 			UpgradeState: bookkeeping.UpgradeState{
@@ -78,6 +77,11 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 			},
 		},
 	}
+
+	var err error
+	initBlock.TxnRoot, err = initBlock.PaysetCommit()
+	require.NoError(t, err)
+
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	const inMem = true
 	genesisInitState := ledger.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
@@ -546,7 +550,7 @@ func TestRememberForget(t *testing.T) {
 
 	err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 	require.NoError(t, err)
-	transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
+	transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 
 	pending = transactionPool.PendingTxGroups()
 	require.Len(t, pending, 0)
@@ -608,7 +612,7 @@ func TestCleanUp(t *testing.T) {
 		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(t, err)
 
-		transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
+		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 	}
 
 	pending := transactionPool.PendingTxGroups()
@@ -624,7 +628,7 @@ func TestCleanUp(t *testing.T) {
 		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(t, err)
 
-		transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
+		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 		require.Zero(t, transactionPool.NumExpired(blk.Block().Round()))
 	}
 	require.Len(t, transactionPool.expiredTxCount, int(expiredHistory*proto.MaxTxnLife))
@@ -717,7 +721,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	err = mockLedger.AddValidatedBlock(*block, agreement.Certificate{})
 	require.NoError(t, err)
 
-	transactionPool.OnNewBlock(block.Block(), ledger.StateDelta{})
+	transactionPool.OnNewBlock(block.Block(), ledgercore.StateDelta{})
 
 	pending = transactionPool.PendingTxGroups()
 	// only one transaction is missing
@@ -1147,7 +1151,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		err = l.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(b, err)
 
-		transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
+		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 
 		fmt.Printf("BenchmarkTransactionPoolSteadyState: committed block %d\n", blk.Block().Round())
 	}

@@ -36,18 +36,24 @@ func (d TestData) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, d[:]
 }
 
+type TestBuf []byte
+
+func (b TestBuf) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.Message, b
+}
+
 type TestArray []TestData
 
 func (a TestArray) Length() uint64 {
 	return uint64(len(a))
 }
 
-func (a TestArray) Get(pos uint64) (crypto.Hashable, error) {
+func (a TestArray) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= uint64(len(a)) {
-		return nil, fmt.Errorf("pos %d larger than length %d", pos, len(a))
+		return crypto.Digest{}, fmt.Errorf("pos %d larger than length %d", pos, len(a))
 	}
 
-	return a[pos], nil
+	return crypto.HashObj(a[pos]), nil
 }
 
 type TestRepeatingArray struct {
@@ -59,12 +65,12 @@ func (a TestRepeatingArray) Length() uint64 {
 	return a.count
 }
 
-func (a TestRepeatingArray) Get(pos uint64) (crypto.Hashable, error) {
+func (a TestRepeatingArray) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= a.count {
-		return nil, fmt.Errorf("pos %d larger than length %d", pos, a.count)
+		return crypto.Digest{}, fmt.Errorf("pos %d larger than length %d", pos, a.count)
 	}
 
-	return a.item, nil
+	return crypto.HashObj(a.item), nil
 }
 
 func TestMerkle(t *testing.T) {
@@ -85,7 +91,7 @@ func TestMerkle(t *testing.T) {
 		root := tree.Root()
 
 		var allpos []uint64
-		allmap := make(map[uint64]crypto.Hashable)
+		allmap := make(map[uint64]crypto.Digest)
 
 		for i := uint64(0); i < sz; i++ {
 			proof, err := tree.Prove([]uint64{i})
@@ -93,18 +99,18 @@ func TestMerkle(t *testing.T) {
 				t.Error(err)
 			}
 
-			err = Verify(root, map[uint64]crypto.Hashable{i: a[i]}, proof)
+			err = Verify(root, map[uint64]crypto.Digest{i: crypto.HashObj(a[i])}, proof)
 			if err != nil {
 				t.Error(err)
 			}
 
-			err = Verify(root, map[uint64]crypto.Hashable{i: junk}, proof)
+			err = Verify(root, map[uint64]crypto.Digest{i: crypto.HashObj(junk)}, proof)
 			if err == nil {
 				t.Errorf("no error when verifying junk")
 			}
 
 			allpos = append(allpos, i)
-			allmap[i] = a[i]
+			allmap[i] = crypto.HashObj(a[i])
 		}
 
 		proof, err := tree.Prove(allpos)
@@ -117,12 +123,12 @@ func TestMerkle(t *testing.T) {
 			t.Error(err)
 		}
 
-		err = Verify(root, map[uint64]crypto.Hashable{0: junk}, proof)
+		err = Verify(root, map[uint64]crypto.Digest{0: crypto.HashObj(junk)}, proof)
 		if err == nil {
 			t.Errorf("no error when verifying junk batch")
 		}
 
-		err = Verify(root, map[uint64]crypto.Hashable{0: junk}, nil)
+		err = Verify(root, map[uint64]crypto.Digest{0: crypto.HashObj(junk)}, nil)
 		if err == nil {
 			t.Errorf("no error when verifying junk batch")
 		}
@@ -132,18 +138,18 @@ func TestMerkle(t *testing.T) {
 			t.Errorf("no error when proving past the end")
 		}
 
-		err = Verify(root, map[uint64]crypto.Hashable{sz: junk}, nil)
+		err = Verify(root, map[uint64]crypto.Digest{sz: crypto.HashObj(junk)}, nil)
 		if err == nil {
 			t.Errorf("no error when verifying past the end")
 		}
 
 		if sz > 0 {
 			var somepos []uint64
-			somemap := make(map[uint64]crypto.Hashable)
+			somemap := make(map[uint64]crypto.Digest)
 			for i := 0; i < 10; i++ {
 				pos := crypto.RandUint64() % sz
 				somepos = append(somepos, pos)
-				somemap[pos] = a[pos]
+				somemap[pos] = crypto.HashObj(a[pos])
 			}
 
 			proof, err = tree.Prove(somepos)
@@ -160,17 +166,26 @@ func TestMerkle(t *testing.T) {
 }
 
 func BenchmarkMerkleCommit(b *testing.B) {
-	msg := TestMessage("Hello world")
+	for sz := 10; sz <= 100000; sz *= 100 {
+		msg := make(TestBuf, sz)
+		crypto.RandBytes(msg[:])
 
-	var a TestRepeatingArray
-	a.item = msg
-	a.count = uint64(b.N)
+		for cnt := 10; cnt <= 10000000; cnt *= 10 {
+			var a TestRepeatingArray
+			a.item = msg
+			a.count = uint64(cnt)
 
-	tree, err := Build(a)
-	if err != nil {
-		b.Error(err)
+			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					tree, err := Build(a)
+					if err != nil {
+						b.Error(err)
+					}
+					tree.Root()
+				}
+			})
+		}
 	}
-	tree.Root()
 }
 
 func BenchmarkMerkleProve1M(b *testing.B) {
@@ -219,7 +234,7 @@ func BenchmarkMerkleVerify1M(b *testing.B) {
 	b.ResetTimer()
 
 	for i := uint64(0); i < uint64(b.N); i++ {
-		err := Verify(root, map[uint64]crypto.Hashable{i % a.count: msg}, proofs[i])
+		err := Verify(root, map[uint64]crypto.Digest{i % a.count: crypto.HashObj(msg)}, proofs[i])
 		if err != nil {
 			b.Error(err)
 		}

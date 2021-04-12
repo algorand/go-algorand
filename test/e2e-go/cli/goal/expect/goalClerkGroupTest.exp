@@ -21,7 +21,7 @@ if { [catch {
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # Start network
-    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
 
     set PRIMARY_WALLET_NAME unencrypted-default-wallet
 
@@ -57,7 +57,7 @@ if { [catch {
     }
 
     # Shutdown the network
-    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
 
     puts "goal clerk group test Successful"
 

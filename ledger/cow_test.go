@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 type mockLedger struct {
@@ -34,7 +35,7 @@ func (ml *mockLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 	return ml.balanceMap[addr], nil
 }
 
-func (ml *mockLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl txlease) error {
+func (ml *mockLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
 	return nil
 }
 
@@ -50,11 +51,27 @@ func (ml *mockLedger) getCreator(cidx basics.CreatableIndex, ctype basics.Creata
 	return basics.Address{}, false, nil
 }
 
+func (ml *mockLedger) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	return basics.StateSchema{}, nil
+}
+
+func (ml *mockLedger) getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	return basics.StateSchema{}, nil
+}
+
+func (ml *mockLedger) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
+	return true, nil
+}
+
+func (ml *mockLedger) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+	return basics.TealValue{}, false, nil
+}
+
 func (ml *mockLedger) txnCounter() uint64 {
 	return 0
 }
 
-func (ml *mockLedger) compactCertLast() basics.Round {
+func (ml *mockLedger) compactCertNext() basics.Round {
 	return 0
 }
 
@@ -74,9 +91,10 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	require.Equal(t, d, basics.AccountData{})
 }
 
-func applyUpdates(cow *roundCowState, updates map[basics.Address]accountDelta) {
-	for addr, delta := range updates {
-		cow.put(addr, delta.old, delta.new, nil, nil)
+func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
+	for i := 0; i < updates.Len(); i++ {
+		addr, delta := updates.GetByIdx(i)
+		cow.put(addr, delta, nil, nil)
 	}
 }
 
@@ -84,10 +102,10 @@ func TestCowBalance(t *testing.T) {
 	accts0 := randomAccounts(20, true)
 	ml := mockLedger{balanceMap: accts0}
 
-	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{})
+	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
 	checkCow(t, c0, accts0)
 
-	c1 := c0.child()
+	c1 := c0.child(0)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts0)
 
@@ -96,7 +114,7 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)
 
-	c2 := c1.child()
+	c2 := c1.child(0)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)
 	checkCow(t, c2, accts1)
