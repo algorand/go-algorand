@@ -74,8 +74,8 @@ func (l *basicMsgLogger) logMessage(mstat msgStats, mode, tofrom string) {
 	)
 }
 func (l *basicMsgLogger) outgoingMessage(mstat msgStats) {
-	l.logMessage(mstat, "Incoming", "from")
+	l.logMessage(mstat, "Outgoing", "to")
 }
 func (l *basicMsgLogger) incomingMessage(mstat msgStats) {
-	l.logMessage(mstat, "Outgoing", "to")
+	l.logMessage(mstat, "Incoming", "from")
 }
