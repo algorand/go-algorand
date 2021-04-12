@@ -31,7 +31,7 @@ fi
 
 # Fail if creating app with on-completion clear
 RES=$(${gcmd} app create --creator ${ACCOUNT}  --on-completion "ClearState" --approval-prog "${PROGRAM_FILE}" --clear-prog "${PROGRAM_FILE}" --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 2>&1 || true  ) 
-EXPERROR1='cannot clear state for app'
+EXPERROR1='cannot clear state'
 EXPERROR2='is not currently opted in'
 if [[ $RES != *"${EXPERROR1}"*"${EXPERROR2}"* ]]; then
     date '+app-create-clear FAIL should fail to create app with on-completion ClearState %Y%m%d_%H%M%S'

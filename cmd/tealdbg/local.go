@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -135,8 +136,6 @@ type evalResult struct {
 	err  error
 }
 
-type evalFn func(program []byte, ep logic.EvalParams) (bool, error)
-
 // AppState encapsulates information about execution of stateful teal program
 type AppState struct {
 	appIdx  basics.AppIndex
@@ -165,6 +164,25 @@ func (a *AppState) empty() bool {
 	return a.appIdx == 0 && len(a.global) == 0 && len(a.locals) == 0
 }
 
+type modeType int
+
+func (m modeType) String() string {
+	switch m {
+	case modeLogicsig:
+		return "logicsig"
+	case modeStateful:
+		return "stateful"
+	default:
+		return "unknown"
+	}
+}
+
+const (
+	modeUnknown modeType = iota
+	modeLogicsig
+	modeStateful
+)
+
 // evaluation is a description of a single debugger run
 type evaluation struct {
 	program      []byte
@@ -172,10 +190,19 @@ type evaluation struct {
 	offsetToLine map[int]int
 	name         string
 	groupIndex   int
-	eval         evalFn
-	ledger       logic.LedgerForLogic
+	mode         modeType
+	aidx         basics.AppIndex
+	ba           apply.Balances
 	result       evalResult
 	states       AppState
+}
+
+func (e *evaluation) eval(ep logic.EvalParams) (pass bool, err error) {
+	if e.mode == modeStateful {
+		pass, _, err = e.ba.StatefulEval(ep, e.aidx, e.program)
+		return
+	}
+	return logic.Eval(e.program, ep)
 }
 
 // LocalRunner runs local eval
@@ -200,17 +227,12 @@ func MakeLocalRunner(debugger *Debugger) *LocalRunner {
 	return r
 }
 
-func determineEvalMode(program []byte, modeIn string) (eval evalFn, mode string, err error) {
-	statefulEval := func(program []byte, ep logic.EvalParams) (bool, error) {
-		pass, _, err := logic.EvalStateful(program, ep)
-		return pass, err
-	}
-	mode = modeIn
+func determineEvalMode(program []byte, modeIn string) (mode modeType, err error) {
 	switch modeIn {
 	case "signature":
-		eval = logic.Eval
+		mode = modeLogicsig
 	case "application":
-		eval = statefulEval
+		mode = modeStateful
 	case "auto":
 		var hasStateful bool
 		hasStateful, err = logic.HasStatefulOps(program)
@@ -218,15 +240,12 @@ func determineEvalMode(program []byte, modeIn string) (eval evalFn, mode string,
 			return
 		}
 		if hasStateful {
-			eval = statefulEval
-			mode = "application"
+			mode = modeStateful
 		} else {
-			eval = logic.Eval
-			mode = "signature"
+			mode = modeLogicsig
 		}
 	default:
 		err = fmt.Errorf("unknown run mode")
-		return
 	}
 	return
 }
@@ -318,6 +337,13 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				source := string(data)
 				ops, err := logic.AssembleStringWithVersion(source, r.proto.LogicSigVersion)
 				if err != nil {
+					errorLines := ""
+					for _, lineError := range ops.Errors {
+						errorLines = fmt.Sprintf("%s\n%s", errorLines, lineError.Error())
+					}
+					if errorLines != "" {
+						return fmt.Errorf("%w:%s", err, errorLines)
+					}
 					return err
 				}
 				r.runs[i].program = ops.Program
@@ -329,17 +355,15 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			r.runs[i].groupIndex = dp.GroupIndex
 			r.runs[i].name = dp.ProgramNames[i]
 
-			var eval evalFn
-			var mode string
-			eval, mode, err = determineEvalMode(r.runs[i].program, dp.RunMode)
+			var mode modeType
+			mode, err = determineEvalMode(r.runs[i].program, dp.RunMode)
 			if err != nil {
 				return
 			}
-			r.runs[i].eval = eval
-
-			log.Printf("Run mode: %s", mode)
-			if mode == "application" {
-				var ledger logic.LedgerForLogic
+			log.Printf("Run mode: %s", mode.String())
+			r.runs[i].mode = mode
+			if mode == modeStateful {
+				var b apply.Balances
 				var states AppState
 				txn := r.txnGroup[dp.GroupIndex]
 				appIdx := txn.Txn.ApplicationID
@@ -347,16 +371,17 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					appIdx = basics.AppIndex(dp.AppID)
 				}
 
-				ledger, states, err = makeAppLedger(
+				b, states, err = makeBalancesAdapter(
 					balances, r.txnGroup, dp.GroupIndex,
-					r.proto, dp.Round, dp.LatestTimestamp, appIdx,
+					r.protoName, dp.Round, dp.LatestTimestamp, appIdx,
 					dp.Painless, dp.IndexerURL, dp.IndexerToken,
 				)
 				if err != nil {
 					return
 				}
 
-				r.runs[i].ledger = ledger
+				r.runs[i].aidx = appIdx
+				r.runs[i].ba = b
 				r.runs[i].states = states
 			}
 		}
@@ -371,23 +396,19 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			run := evaluation{
 				program:    stxn.Lsig.Logic,
 				groupIndex: gi,
-				eval:       logic.Eval,
+				mode:       modeLogicsig,
 			}
 			r.runs = append(r.runs, run)
 		} else if stxn.Txn.Type == protocol.ApplicationCallTx {
-			var ledger logic.LedgerForLogic
+			var b apply.Balances
 			var states AppState
-			eval := func(program []byte, ep logic.EvalParams) (bool, error) {
-				pass, _, err := logic.EvalStateful(program, ep)
-				return pass, err
-			}
 			appIdx := stxn.Txn.ApplicationID
 			if appIdx == 0 { // app create, use ApprovalProgram from the transaction
 				if len(stxn.Txn.ApprovalProgram) > 0 {
 					appIdx = basics.AppIndex(dp.AppID)
-					ledger, states, err = makeAppLedger(
+					b, states, err = makeBalancesAdapter(
 						balances, r.txnGroup, gi,
-						r.proto, dp.Round, dp.LatestTimestamp,
+						r.protoName, dp.Round, dp.LatestTimestamp,
 						appIdx, dp.Painless, dp.IndexerURL, dp.IndexerToken,
 					)
 					if err != nil {
@@ -396,8 +417,9 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					run := evaluation{
 						program:    stxn.Txn.ApprovalProgram,
 						groupIndex: gi,
-						eval:       eval,
-						ledger:     ledger,
+						mode:       modeStateful,
+						aidx:       appIdx,
+						ba:         b,
 						states:     states,
 					}
 					r.runs = append(r.runs, run)
@@ -419,9 +441,9 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 								err = fmt.Errorf("empty program found for app idx %d", appIdx)
 								return
 							}
-							ledger, states, err = makeAppLedger(
+							b, states, err = makeBalancesAdapter(
 								balances, r.txnGroup, gi,
-								r.proto, dp.Round, dp.LatestTimestamp,
+								r.protoName, dp.Round, dp.LatestTimestamp,
 								appIdx, dp.Painless, dp.IndexerURL, dp.IndexerToken,
 							)
 							if err != nil {
@@ -430,8 +452,9 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 							run := evaluation{
 								program:    program,
 								groupIndex: gi,
-								eval:       eval,
-								ledger:     ledger,
+								mode:       modeStateful,
+								aidx:       appIdx,
+								ba:         b,
 								states:     states,
 							}
 							r.runs = append(r.runs, run)
@@ -472,10 +495,9 @@ func (r *LocalRunner) RunAll() error {
 			Txn:        &r.txnGroup[groupIndex],
 			TxnGroup:   r.txnGroup,
 			GroupIndex: run.groupIndex,
-			Ledger:     run.ledger,
 		}
 
-		run.result.pass, run.result.err = run.eval(run.program, ep)
+		run.result.pass, run.result.err = run.eval(ep)
 		if run.result.err != nil {
 			failed++
 		}
@@ -500,7 +522,6 @@ func (r *LocalRunner) Run() (bool, error) {
 		Txn:        &r.txnGroup[groupIndex],
 		TxnGroup:   r.txnGroup,
 		GroupIndex: run.groupIndex,
-		Ledger:     run.ledger,
 	}
 
 	// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
@@ -512,5 +533,5 @@ func (r *LocalRunner) Run() (bool, error) {
 		ep.Debugger = r.debugger
 	}
 
-	return run.eval(run.program, ep)
+	return run.eval(ep)
 }

@@ -35,21 +35,11 @@ func preparePayset(txnCount, acctCount int) Payset {
 	return Payset(stxnb)
 }
 func TestPaysetCommitsToTxnOrder(t *testing.T) {
-	for _, flat := range []bool{true, false} {
-		payset := preparePayset(50, 50)
-		commit1 := payset.Commit(flat)
-		payset[0], payset[1] = payset[1], payset[0]
-		commit2 := payset.Commit(flat)
-		require.NotEqual(t, commit1, commit2)
-	}
-}
-
-func TestPaysetDoesNotCommitToSignatures(t *testing.T) {
 	payset := preparePayset(50, 50)
-	commit1 := payset.Commit(false)
-	payset[0].SignedTxn.MessUpSigForTesting()
-	commit2 := payset.Commit(false)
-	require.Equal(t, commit1, commit2)
+	commit1 := payset.CommitFlat()
+	payset[0], payset[1] = payset[1], payset[0]
+	commit2 := payset.CommitFlat()
+	require.NotEqual(t, commit1, commit2)
 }
 
 func TestEmptyPaysetCommitment(t *testing.T) {
@@ -59,19 +49,12 @@ func TestEmptyPaysetCommitment(t *testing.T) {
 
 	// Non-genesis blocks should encode empty paysets identically to nil paysets
 	var nilPayset Payset
-	require.Equal(t, nilFlatPaysetHash, Payset{}.Commit(true).String())
-	require.Equal(t, nilFlatPaysetHash, nilPayset.Commit(true).String())
+	require.Equal(t, nilFlatPaysetHash, Payset{}.CommitFlat().String())
+	require.Equal(t, nilFlatPaysetHash, nilPayset.CommitFlat().String())
 
 	// Genesis block should encode the empty payset differently
-	require.Equal(t, emptyFlatPaysetHash, Payset{}.CommitGenesis(true).String())
-	require.Equal(t, nilFlatPaysetHash, nilPayset.CommitGenesis(true).String())
-
-	// Non-flat paysets (which we have dropped support for) should encode
-	// the same regardless of nilness or if this is a genesis block
-	require.Equal(t, merklePaysetHash, Payset{}.CommitGenesis(false).String())
-	require.Equal(t, merklePaysetHash, nilPayset.CommitGenesis(false).String())
-	require.Equal(t, merklePaysetHash, Payset{}.Commit(false).String())
-	require.Equal(t, merklePaysetHash, nilPayset.Commit(false).String())
+	require.Equal(t, emptyFlatPaysetHash, Payset{}.CommitGenesis().String())
+	require.Equal(t, nilFlatPaysetHash, nilPayset.CommitGenesis().String())
 }
 
 func BenchmarkCommit(b *testing.B) {
@@ -79,7 +62,7 @@ func BenchmarkCommit(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		payset.Commit(true)
+		payset.CommitFlat()
 	}
 	b.ReportMetric(float64(len(payset)), "transactions/block")
 }

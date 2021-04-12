@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 )
 
 type dummyLedgerFetcherReporter struct {
@@ -40,10 +41,9 @@ func (lf *dummyLedgerFetcherReporter) updateLedgerFetcherProgress(*ledger.Catchp
 
 func TestNoPeersAvailable(t *testing.T) {
 	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
-	err := lf.downloadLedger(context.Background(), basics.Round(0))
-	require.Equal(t, errNoPeersAvailable, err)
-	lf.peers = append(lf.peers, &lf) // The peer is an opaque interface.. we can add anything as a Peer.
-	err = lf.downloadLedger(context.Background(), basics.Round(0))
+	var peer network.Peer
+	peer = &lf // The peer is an opaque interface.. we can add anything as a Peer.
+	err := lf.downloadLedger(context.Background(), peer, basics.Round(0))
 	require.Equal(t, errNonHTTPPeer, err)
 }
 

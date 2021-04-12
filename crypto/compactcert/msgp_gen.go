@@ -60,7 +60,7 @@ import (
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Cert) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *Cert) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0005Len := uint32(5)
@@ -97,11 +97,7 @@ func (z *Cert) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).PartProofs)))
 			}
 			for zb0002 := range (*z).PartProofs {
-				o, err = (*z).PartProofs[zb0002].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "PartProofs", zb0002)
-					return
-				}
+				o = (*z).PartProofs[zb0002].MarshalMsg(o)
 			}
 		}
 		if (zb0005Mask & 0x2) == 0 { // if not empty
@@ -113,21 +109,13 @@ func (z *Cert) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).SigProofs)))
 			}
 			for zb0001 := range (*z).SigProofs {
-				o, err = (*z).SigProofs[zb0001].MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "SigProofs", zb0001)
-					return
-				}
+				o = (*z).SigProofs[zb0001].MarshalMsg(o)
 			}
 		}
 		if (zb0005Mask & 0x8) == 0 { // if not empty
 			// string "c"
 			o = append(o, 0xa1, 0x63)
-			o, err = (*z).SigCommit.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "SigCommit")
-				return
-			}
+			o = (*z).SigCommit.MarshalMsg(o)
 		}
 		if (zb0005Mask & 0x10) == 0 { // if not empty
 			// string "r"
@@ -146,11 +134,7 @@ func (z *Cert) MarshalMsg(b []byte) (o []byte, err error) {
 				zb0004 := (*z).Reveals[zb0003]
 				_ = zb0004
 				o = msgp.AppendUint64(o, zb0003)
-				o, err = zb0004.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Reveals", zb0003)
-					return
-				}
+				o = zb0004.MarshalMsg(o)
 			}
 		}
 		if (zb0005Mask & 0x20) == 0 { // if not empty
@@ -458,7 +442,7 @@ func (z *Cert) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *CompactOneTimeSignature) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *CompactOneTimeSignature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(6)
@@ -493,56 +477,32 @@ func (z *CompactOneTimeSignature) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "p"
 			o = append(o, 0xa1, 0x70)
-			o, err = (*z).OneTimeSignature.PK.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "PK")
-				return
-			}
+			o = (*z).OneTimeSignature.PK.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "p1s"
 			o = append(o, 0xa3, 0x70, 0x31, 0x73)
-			o, err = (*z).OneTimeSignature.PK1Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "PK1Sig")
-				return
-			}
+			o = (*z).OneTimeSignature.PK1Sig.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "p2"
 			o = append(o, 0xa2, 0x70, 0x32)
-			o, err = (*z).OneTimeSignature.PK2.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "PK2")
-				return
-			}
+			o = (*z).OneTimeSignature.PK2.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "p2s"
 			o = append(o, 0xa3, 0x70, 0x32, 0x73)
-			o, err = (*z).OneTimeSignature.PK2Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "PK2Sig")
-				return
-			}
+			o = (*z).OneTimeSignature.PK2Sig.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "ps"
 			o = append(o, 0xa2, 0x70, 0x73)
-			o, err = (*z).OneTimeSignature.PKSigOld.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "PKSigOld")
-				return
-			}
+			o = (*z).OneTimeSignature.PKSigOld.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x80) == 0 { // if not empty
 			// string "s"
 			o = append(o, 0xa1, 0x73)
-			o, err = (*z).OneTimeSignature.Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sig")
-				return
-			}
+			o = (*z).OneTimeSignature.Sig.MarshalMsg(o)
 		}
 	}
 	return
@@ -703,7 +663,7 @@ func (z *CompactOneTimeSignature) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Participant) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *Participant) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
@@ -731,11 +691,7 @@ func (z *Participant) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "p"
 			o = append(o, 0xa1, 0x70)
-			o, err = (*z).PK.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "PK")
-				return
-			}
+			o = (*z).PK.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "w"
@@ -859,7 +815,7 @@ func (z *Participant) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Reveal) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *Reveal) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
@@ -878,11 +834,7 @@ func (z *Reveal) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "p"
 			o = append(o, 0xa1, 0x70)
-			o, err = (*z).Part.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Part")
-				return
-			}
+			o = (*z).Part.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "s"
@@ -908,11 +860,7 @@ func (z *Reveal) MarshalMsg(b []byte) (o []byte, err error) {
 			if (zb0002Mask & 0x4) == 0 { // if not empty
 				// string "s"
 				o = append(o, 0xa1, 0x73)
-				o, err = (*z).SigSlot.Sig.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "SigSlot", "Sig")
-					return
-				}
+				o = (*z).SigSlot.Sig.MarshalMsg(o)
 			}
 		}
 	}
@@ -1146,7 +1094,7 @@ func (z *Reveal) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *coinChoice) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *coinChoice) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(6)
@@ -1186,20 +1134,12 @@ func (z *coinChoice) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "msghash"
 			o = append(o, 0xa7, 0x6d, 0x73, 0x67, 0x68, 0x61, 0x73, 0x68)
-			o, err = (*z).MsgHash.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "MsgHash")
-				return
-			}
+			o = (*z).MsgHash.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "partcom"
 			o = append(o, 0xa7, 0x70, 0x61, 0x72, 0x74, 0x63, 0x6f, 0x6d)
-			o, err = (*z).Partcom.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Partcom")
-				return
-			}
+			o = (*z).Partcom.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "provenweight"
@@ -1209,11 +1149,7 @@ func (z *coinChoice) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "sigcom"
 			o = append(o, 0xa6, 0x73, 0x69, 0x67, 0x63, 0x6f, 0x6d)
-			o, err = (*z).Sigcom.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sigcom")
-				return
-			}
+			o = (*z).Sigcom.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "sigweight"
@@ -1379,7 +1315,7 @@ func (z *coinChoice) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *sigslotCommit) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *sigslotCommit) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
@@ -1403,11 +1339,7 @@ func (z *sigslotCommit) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "s"
 			o = append(o, 0xa1, 0x73)
-			o, err = (*z).Sig.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Sig")
-				return
-			}
+			o = (*z).Sig.MarshalMsg(o)
 		}
 	}
 	return

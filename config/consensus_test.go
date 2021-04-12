@@ -25,14 +25,14 @@ import (
 func TestConsensusParams(t *testing.T) {
 	for proto, params := range Consensus {
 		// Our implementation of Payset.Commit() assumes that
-		// SupportSignedTxnInBlock implies PaysetCommitFlat.
-		if params.SupportSignedTxnInBlock && !params.PaysetCommitFlat {
-			t.Errorf("Protocol %s: SupportSignedTxnInBlock without PaysetCommitFlat", proto)
+		// SupportSignedTxnInBlock implies not PaysetCommitUnsupported.
+		if params.SupportSignedTxnInBlock && params.PaysetCommit == PaysetCommitUnsupported {
+			t.Errorf("Protocol %s: SupportSignedTxnInBlock with PaysetCommitUnsupported", proto)
 		}
 
-		// ApplyData requires PaysetCommitFlat.
-		if params.ApplyData && !params.PaysetCommitFlat {
-			t.Errorf("Protocol %s: ApplyData without PaysetCommitFlat", proto)
+		// ApplyData requires not PaysetCommitUnsupported.
+		if params.ApplyData && params.PaysetCommit == PaysetCommitUnsupported {
+			t.Errorf("Protocol %s: ApplyData with PaysetCommitUnsupported", proto)
 		}
 	}
 }

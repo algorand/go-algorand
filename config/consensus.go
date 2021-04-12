@@ -145,9 +145,8 @@ type ConsensusParams struct {
 	FastRecoveryLambda    time.Duration // time between fast recovery attempts
 	FastPartitionRecovery bool          // set when fast partition recovery is enabled
 
-	// commit to payset using a hash of entire payset,
-	// instead of txid merkle tree
-	PaysetCommitFlat bool
+	// how to commit to the payset: flat or merkle tree
+	PaysetCommit PaysetCommitType
 
 	MaxTimestampIncrement int64 // maximum time between timestamps on successive blocks
 
@@ -298,7 +297,7 @@ type ConsensusParams struct {
 	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
 
-	// CompactCertRounds defines the frequency with with compact
+	// CompactCertRounds defines the frequency with which compact
 	// certificates are generated.  Every round that is a multiple
 	// of CompactCertRounds, the block header will include a Merkle
 	// commitment to the set of online accounts (that can vote after
@@ -326,21 +325,47 @@ type ConsensusParams struct {
 	// accounts and balances) in the critical path.
 	CompactCertVotersLookback uint64
 
-	// CompactCertWeightThreshold is the percentage of top voters weight
+	// CompactCertWeightThreshold specifies the fraction of top voters weight
 	// that must sign the message (block header) for security.  The compact
 	// certificate ensures this threshold holds; however, forming a valid
 	// compact certificate requires a somewhat higher number of signatures,
 	// and the more signatures are collected, the smaller the compact cert
 	// can be.
 	//
-	// This threshold can be thought of as the maximum percentage of
+	// This threshold can be thought of as the maximum fraction of
 	// malicious weight that compact certificates defend against.
-	CompactCertWeightThreshold uint64
+	//
+	// The threshold is computed as CompactCertWeightThreshold/(1<<32).
+	CompactCertWeightThreshold uint32
 
 	// CompactCertSecKQ is the security parameter (k+q) for the compact
 	// certificate scheme.
 	CompactCertSecKQ uint64
+
+	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
+	// asset that were sent to the close-to address.
+	EnableAssetCloseAmount bool
+
+	// update the initial rewards rate calculation to take the reward pool minimum balance into account
+	InitialRewardsRateCalculation bool
 }
+
+// PaysetCommitType enumerates possible ways for the block header to commit to
+// the set of transactions in the block.
+type PaysetCommitType int
+
+const (
+	// PaysetCommitUnsupported is the zero value, reflecting the fact
+	// that some early protocols used a Merkle tree to commit to the
+	// transactions in a way that we no longer support.
+	PaysetCommitUnsupported PaysetCommitType = iota
+
+	// PaysetCommitFlat hashes the entire payset array.
+	PaysetCommitFlat
+
+	// PaysetCommitMerkle uses merklearray to commit to the payset.
+	PaysetCommitMerkle
+)
 
 // ConsensusProtocols defines a set of supported protocol versions and their
 // corresponding parameters.
@@ -378,6 +403,10 @@ var MaxTxGroupSize int
 // of the consensus protocols. used for decoding purposes.
 var MaxAppProgramLen int
 
+// MaxBytesKeyValueLen is a maximum length of key or value across all protocols.
+// used for decoding purposes.
+var MaxBytesKeyValueLen int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -404,12 +433,25 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(int(p.LogicSigMaxSize), &MaxLogicSigMaxSize)
 	checkSetMax(p.MaxTxnNoteBytes, &MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &MaxTxGroupSize)
+	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
+	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
+	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
+// if the params contains zero protocols, the existing consensus.json file will be removed if exists.
 func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
 
+	if len(params) == 0 {
+		// we have no consensus params to write. In this case, just delete the existing file
+		// ( if any )
+		err := os.Remove(consensusProtocolPath)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
 	encodedConsensusParams, err := json.Marshal(params)
 	if err != nil {
 		return err
@@ -609,7 +651,7 @@ func initConsensusProtocols() {
 	// v11 introduces SignedTxnInBlock.
 	v11 := v10
 	v11.SupportSignedTxnInBlock = true
-	v11.PaysetCommitFlat = true
+	v11.PaysetCommit = PaysetCommitFlat
 	v11.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusV11] = v11
 
@@ -803,13 +845,52 @@ func initConsensusProtocols() {
 	// v23 can be upgraded to v24, with an update delay of 7 days ( see calculation above )
 	v23.ApprovedUpgrades[protocol.ConsensusV24] = 140000
 
+	// v25 enables AssetCloseAmount in the ApplyData
+	v25 := v24
+	v25.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable AssetCloseAmount field
+	v25.EnableAssetCloseAmount = true
+	Consensus[protocol.ConsensusV25] = v25
+
+	// v26 adds support for teal3
+	v26 := v25
+	v26.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable the InitialRewardsRateCalculation fix
+	v26.InitialRewardsRateCalculation = true
+
+	// Enable transaction Merkle tree.
+	v26.PaysetCommit = PaysetCommitMerkle
+
+	// Enable teal3
+	v26.LogicSigVersion = 3
+
+	Consensus[protocol.ConsensusV26] = v26
+
+	// v25 or v24 can be upgraded to v26, with an update delay of 7 days ( see calculation above )
+	v25.ApprovedUpgrades[protocol.ConsensusV26] = 140000
+	v24.ApprovedUpgrades[protocol.ConsensusV26] = 140000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v24
+	vFuture := v26
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
+
+	// Enable compact certificates.
+	vFuture.CompactCertRounds = 128
+	vFuture.CompactCertTopVoters = 1024 * 1024
+	vFuture.CompactCertVotersLookback = 16
+	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
+	vFuture.CompactCertSecKQ = 128
+
+	// enable the InitialRewardsRateCalculation fix
+	vFuture.InitialRewardsRateCalculation = true
+	// Enable transaction Merkle tree.
+	vFuture.PaysetCommit = PaysetCommitMerkle
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

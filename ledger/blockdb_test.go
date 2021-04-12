@@ -25,18 +25,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
-func dbOpenTest(t testing.TB, inMemory bool) (dbPair, string) {
+func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
-	dbs, err := dbOpen(fn, inMemory)
+	dbs, err := db.OpenPair(fn, inMemory)
 	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
 	return dbs, fn
 }
@@ -112,18 +112,18 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 	require.Error(t, err)
 }
 
-func setDbLogging(t testing.TB, dbs dbPair) {
+func setDbLogging(t testing.TB, dbs db.Pair) {
 	dblogger := logging.TestingLog(t)
-	dbs.rdb.SetLogger(dblogger)
-	dbs.wdb.SetLogger(dblogger)
+	dbs.Rdb.SetLogger(dblogger)
+	dbs.Wdb.SetLogger(dblogger)
 }
 
 func TestBlockDBEmpty(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -135,9 +135,9 @@ func TestBlockDBEmpty(t *testing.T) {
 func TestBlockDBInit(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -155,9 +155,9 @@ func TestBlockDBInit(t *testing.T) {
 func TestBlockDBAppend(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -180,23 +180,20 @@ func TestBlockDBAppend(t *testing.T) {
 func TestFixGenesisPaysetHash(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	// Fetch some consensus params
-	params := config.Consensus[protocol.ConsensusCurrentVersion]
-
 	// Make a genesis block with a good payset hash
 	goodGenesis := randomBlock(basics.Round(0))
-	goodGenesis.block.BlockHeader.TxnRoot = transactions.Payset{}.CommitGenesis(params.PaysetCommitFlat)
+	goodGenesis.block.BlockHeader.TxnRoot = transactions.Payset{}.CommitGenesis()
 	require.NoError(t, err)
 
 	// Copy the genesis block and replace its payset hash with the buggy value
 	badGenesis := goodGenesis
-	badGenesis.block.BlockHeader.TxnRoot = transactions.Payset{}.Commit(params.PaysetCommitFlat)
+	badGenesis.block.BlockHeader.TxnRoot = transactions.Payset{}.CommitFlat()
 
 	// Assert that the buggy value is different from the good value
 	require.NotEqual(t, goodGenesis.block.BlockHeader.TxnRoot, badGenesis.block.BlockHeader.TxnRoot)

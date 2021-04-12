@@ -138,7 +138,7 @@ func (am *Tracker) ProcessMessage(txn v1.Transaction) error {
 		case NoteDeposit:
 			auctionID := msg.SignedDeposit.Deposit.AuctionID
 			if _, ok := am.Auctions[auctionID]; !ok {
-				log.Warn("Invalid auction ID %v, dropping deposit message", auctionID)
+				log.Warnf("Invalid auction ID %v, dropping deposit message", auctionID)
 				continue
 			}
 

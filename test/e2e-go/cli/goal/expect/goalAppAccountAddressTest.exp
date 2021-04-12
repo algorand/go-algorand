@@ -7,7 +7,7 @@ log_user 1
 # * The test creates four additional accounts, opt-in one to the app, then passes the four accounts
 #   as --app-account flag to goal app call.
 # * The teal program writes the four passed account addresses into the local state of the caller and one
-# * additional account. 
+# * additional account.
 # * The test verifies the correct addresses are written to the local states of both.
 # * It also tests for the error when one flag is missing
 ###
@@ -38,7 +38,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # Start network
-    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
 
     set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
     puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
@@ -164,7 +164,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     }
 
     # Shutdown the network
-    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
 
     puts "Goal Stateful Teal test Successful"
 }

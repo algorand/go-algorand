@@ -24,7 +24,7 @@ FEE=100000
 echo "generating new delegate and participation keys for newly-funded account ${ACCOUNTA}"
 ${gcmd} clerk send --from ${ACCOUNT} --to ${ACCOUNTA} -a 1000000
 DELKEY=$(algokey generate -f ${TEMPDIR}/delegate.keyregkey | grep "Public key" | awk '{ print $3 }')
-algotmpl -d ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/ delegate-key-registration --fee ${FEE} --dur ${DUR} --period ${PERIOD} --expire ${EXPIRE} --auth ${DELKEY} --lease ${LEASE} > ${TEMPDIR}/delegate.teal
+algotmpl -d tools/teal/templates/ delegate-key-registration --fee ${FEE} --dur ${DUR} --period ${PERIOD} --expire ${EXPIRE} --auth ${DELKEY} --lease ${LEASE} > ${TEMPDIR}/delegate.teal
 ${gcmd} clerk compile -a ${ACCOUNTA} -s -o ${TEMPDIR}/kr.lsig ${TEMPDIR}/delegate.teal
 
 RES=$(${gcmd} account addpartkey -a ${ACCOUNTA} --roundFirstValid 0 --roundLastValid 100)
@@ -115,7 +115,7 @@ FEE=100000
 
 ${gcmd} clerk send --from ${ACCOUNT} --to ${ACCOUNTB} -a 1000000
 DELKEY=$(algokey generate -f ${TEMPDIR}/delegate.keyregkey | grep "Public key" | awk '{ print $3 }')
-algotmpl -d ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/ delegate-key-registration --fee ${FEE} --dur ${DUR} --period ${PERIOD} --expire ${EXPIRE} --auth ${DELKEY} --lease ${LEASE} > ${TEMPDIR}/delegate.teal
+algotmpl -d tools/teal/templates/ delegate-key-registration --fee ${FEE} --dur ${DUR} --period ${PERIOD} --expire ${EXPIRE} --auth ${DELKEY} --lease ${LEASE} > ${TEMPDIR}/delegate.teal
 ${gcmd} clerk compile -a ${ACCOUNTB} -s -o ${TEMPDIR}/kr.lsig ${TEMPDIR}/delegate.teal
 
 RES=$(${gcmd} account addpartkey -a ${ACCOUNTB} --roundFirstValid 0 --roundLastValid 100)

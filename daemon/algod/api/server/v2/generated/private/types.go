@@ -529,6 +529,9 @@ type PendingTransactionResponse struct {
 	// The application index if the transaction was found and it created an application.
 	ApplicationIndex *uint64 `json:"application-index,omitempty"`
 
+	// The number of the asset's unit that were transferred to the close-to address.
+	AssetClosingAmount *uint64 `json:"asset-closing-amount,omitempty"`
+
 	// The asset index if the transaction was found and it created an asset.
 	AssetIndex *uint64 `json:"asset-index,omitempty"`
 
@@ -575,6 +578,19 @@ type PostTransactionsResponse struct {
 
 	// encoding of the transaction hash.
 	TxId string `json:"txId"`
+}
+
+// ProofResponse defines model for ProofResponse.
+type ProofResponse struct {
+
+	// Index of the transaction in the block's payset.
+	Idx uint64 `json:"idx"`
+
+	// Merkle proof of transaction membership.
+	Proof []byte `json:"proof"`
+
+	// Hash of SignedTxnInBlock for verifying proof.
+	Stibhash []byte `json:"stibhash"`
 }
 
 // SupplyResponse defines model for SupplyResponse.

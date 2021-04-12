@@ -9,10 +9,10 @@ assignees: ''
 ---
 
 ## Summary
-*Describe the problem identified or the general goal of this issue*
+<!-- *Describe the problem identified or the general goal of this issue* -->
 
 ## Scope/Requirements
-*What's involved in this issue? What's required to achieve the goal?*
+<!-- *What's involved in this issue? What's required to achieve the goal?* -->
 
 ## Urgency/Relative Priority
-*How urgent is this issue? What are the timing considerations to take into account?*
+<!-- *How urgent is this issue? What are the timing considerations to take into account?* -->

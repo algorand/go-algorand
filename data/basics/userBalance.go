@@ -30,11 +30,14 @@ import (
 type Status byte
 
 const (
-	// Offline indicates that the associated account is delegated.
+	// Offline indicates that the associated account receives rewards but does not participate in the consensus.
 	Offline Status = iota
-	// Online indicates that the associated account used as part of the delegation pool.
+	// Online indicates that the associated account participates in the consensus and receive rewards.
 	Online
-	// NotParticipating indicates that the associated account is neither a delegator nor a delegate. Currently it is reserved for the incentive pool.
+	// NotParticipating indicates that the associated account neither participates in the consensus, nor recieves rewards.
+	// Accounts that are marked as NotParticipating cannot change their status, but can receive and send Algos to other accounts.
+	// Two special accounts that are defined as NotParticipating are the incentive pool (also know as rewards pool) and the fee sink.
+	// These two accounts also have additional Algo transfer restrictions.
 	NotParticipating
 
 	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
@@ -48,21 +51,21 @@ const (
 	// protocol-specific constains would be tested once the decoding is complete.
 	encodedMaxAssetsPerAccount = 1024
 
-	// encodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
+	// EncodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
 	// It is verified in TestEncodedAccountAllocationBounds to align with
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxppsOptedIn
-	encodedMaxAppLocalStates = 64
+	EncodedMaxAppLocalStates = 64
 
-	// encodedMaxAppParams is the decoder limit for number of created apps in a single account.
+	// EncodedMaxAppParams is the decoder limit for number of created apps in a single account.
 	// It is verified in TestEncodedAccountAllocationBounds to align with
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsCreated
-	encodedMaxAppParams = 64
+	EncodedMaxAppParams = 64
 
-	// encodedMaxKeyValueEntries is the decoder limit for the length of a key/value store.
+	// EncodedMaxKeyValueEntries is the decoder limit for the length of a key/value store.
 	// It is verified in TestEncodedAccountAllocationBounds to align with
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxLocalSchemaEntries and
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxGlobalSchemaEntries
-	encodedMaxKeyValueEntries = 1024
+	EncodedMaxKeyValueEntries = 1024
 )
 
 func (s Status) String() string {
@@ -94,7 +97,8 @@ func UnmarshalStatus(value string) (s Status, err error) {
 
 // AccountData contains the data associated with a given address.
 //
-// This includes the account balance, delegation keys, delegation status, and a custom note.
+// This includes the account balance, cryptographic public keys,
+// consensus delegation status, asset data, and application data.
 type AccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -188,11 +192,11 @@ type AccountData struct {
 
 	// AppLocalStates stores the local states associated with any applications
 	// that this account has opted in to.
-	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=encodedMaxAppLocalStates"`
+	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=EncodedMaxAppLocalStates"`
 
 	// AppParams stores the global parameters and state associated with any
 	// applications that this account has created.
-	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=encodedMaxAppParams"`
+	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=EncodedMaxAppParams"`
 
 	// TotalAppSchema stores the sum of all of the LocalStateSchemas
 	// and GlobalStateSchemas in this account (global for applications
