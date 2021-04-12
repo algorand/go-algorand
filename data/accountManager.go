@@ -155,8 +155,8 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 			errString := fmt.Sprintf("AccountManager.DeleteOldKeys(): key for %s (%d-%d), nextRound %d",
 				part.Address().String(), first, last, nextRound)
 			errCh := part.DeleteOldKeys(nextRound, agreementProto)
-			pendingItems[errString] = errCh
 
+			pendingItems[errString] = errCh
 		}
 	}()
 
