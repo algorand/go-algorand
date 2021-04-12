@@ -30,23 +30,20 @@ const PartTableSchemaVersion = 2
 // ErrUnsupportedSchema is the error returned when the PartTable schema version is wrong.
 var ErrUnsupportedSchema = fmt.Errorf("unsupported participation file schema version (expected %d)", PartTableSchemaVersion)
 
-// partInstallSchema is the sql script used to create the ParticipationAccount table.
-var partInstallSchema = `CREATE TABLE ParticipationAccount (
-	parent BLOB,
-
-	vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
-	voting BLOB, --*  msgpack encoding of ParticipationAccount.voting
-
-	firstValid INTEGER,
-	lastValid INTEGER,
-
-	keyDilution INTEGER NOT NULL DEFAULT 0
-);`
-
 func partInstallDatabase(tx *sql.Tx) error {
 	var err error
 
-	_, err = tx.Exec(partInstallSchema)
+	_, err = tx.Exec(`CREATE TABLE ParticipationAccount (
+		parent BLOB,
+
+		vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
+		voting BLOB, --*  msgpack encoding of ParticipationAccount.voting
+
+		firstValid INTEGER,
+		lastValid INTEGER,
+
+		keyDilution INTEGER NOT NULL DEFAULT 0
+	);`)
 	if err != nil {
 		return err
 	}

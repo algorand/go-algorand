@@ -60,14 +60,6 @@ func GenerateVRFSecrets() *VRFSecrets {
 	return s
 }
 
-// Duplicate creates a copy of the given VRFSecrets object
-func (v *VRFSecrets) Duplicate() *VRFSecrets {
-	out := &VRFSecrets{}
-	copy(out.PK[:], v.PK[:])
-	copy(out.SK[:], v.SK[:])
-	return out
-}
-
 // TODO: Go arrays are copied by value, so any call to e.g. VrfPrivkey.Prove() makes a copy of the secret key that lingers in memory.
 // To avoid this, should we instead allocate memory for secret keys here (maybe even in the C heap) and pass around pointers?
 // e.g., allocate a privkey with sodium_malloc and have VrfPrivkey be of type unsafe.Pointer?
