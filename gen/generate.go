@@ -18,6 +18,7 @@ package gen
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
 	"os"
@@ -50,6 +51,9 @@ var defaultIncentivePoolBalanceAtInception uint64 = 125e6 * 1e6
 // TotalMoney represents the total amount of MicroAlgos in the system
 const TotalMoney uint64 = 10 * 1e9 * 1e6
 
+// made redirectable for test
+var verboseOutWriter io.Writer = os.Stdout
+
 type genesisAllocation struct {
 	Name   string
 	Stake  uint64
@@ -66,11 +70,12 @@ func u64absDiff(a, b uint64) uint64 {
 	return 0
 }
 
-// GenerateGenesisFiles generates the genesis.json file and wallet files for a give genesis configuration.
-func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusProtocols, outDir string, verbose bool) error {
+// testable inner function that doesn't touch filesystem
+func setupGenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusProtocols, verbose bool) (proto protocol.ConsensusVersion, consensusParams config.ConsensusParams, allocation []genesisAllocation, err error) {
+	err = nil
 	// Backwards compatibility with older genesis files: if the consensus
 	// protocol version is not specified, default to V0.
-	proto := genesisData.ConsensusProtocol
+	proto = genesisData.ConsensusProtocol
 	if proto == protocol.ConsensusVersion("") {
 		proto = protocol.ConsensusCurrentVersion
 	}
@@ -84,18 +89,15 @@ func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusPro
 		genesisData.RewardsPool = defaultPoolAddr
 	}
 
-	consensusParams, ok := consensus[proto]
+	var ok bool
+	consensusParams, ok = consensus[proto]
 	if !ok {
-		return fmt.Errorf("protocol %s not supported", proto)
-	}
-
-	err := os.Mkdir(outDir, os.ModeDir|os.FileMode(0777))
-	if err != nil && os.IsNotExist(err) {
-		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())
+		err = fmt.Errorf("protocol %s not supported", proto)
+		return
 	}
 
 	var sum uint64
-	allocation := make([]genesisAllocation, len(genesisData.Wallets))
+	allocation = make([]genesisAllocation, len(genesisData.Wallets))
 
 	for i, wallet := range genesisData.Wallets {
 		acct := genesisAllocation{
@@ -114,6 +116,9 @@ func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusPro
 		fsum := float64(sum)
 		ftot := float64(TotalMoney)
 		if (math.Abs((fsum-ftot)/ftot) < 0.01) && (u64absDiff(sum, TotalMoney) < 10000) {
+			if verbose {
+				fmt.Fprintf(verboseOutWriter, "doing roundoff fixup expected total money %d actual sum %d\n", TotalMoney, sum)
+			}
 			// wallet stake is a float and roundoff might happen but we might be close enough to do fixup
 			i := 0
 			for sum != TotalMoney {
@@ -131,6 +136,20 @@ func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusPro
 		} else {
 			panic(fmt.Sprintf("Amounts don't add up to TotalMoney - off by %v", int64(TotalMoney)-int64(sum)))
 		}
+	}
+	return
+}
+
+// GenerateGenesisFiles generates the genesis.json file and wallet files for a give genesis configuration.
+func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusProtocols, outDir string, verbose bool) error {
+	proto, consensusParams, allocation, err := setupGenerateGenesisFiles(genesisData, consensus, verbose)
+	if err != nil {
+		return err
+	}
+
+	err = os.Mkdir(outDir, os.ModeDir|os.FileMode(0777))
+	if err != nil && os.IsNotExist(err) {
+		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())
 	}
 
 	return generateGenesisFiles(outDir, proto, consensusParams, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)
@@ -273,7 +292,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 		// create a listener for the verbosedOutput
 		go func() {
 			for textOut := range verbosedOutput {
-				fmt.Printf("%s\n", textOut)
+				fmt.Fprintf(verboseOutWriter, "%s\n", textOut)
 			}
 		}()
 	}
@@ -299,7 +318,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 	genesisAddrs["RewardsPool"] = rewardsPool
 
 	if verbose {
-		fmt.Println(protoVersion, protoParams.MinBalance)
+		fmt.Fprintln(verboseOutWriter, protoVersion, protoParams.MinBalance)
 	}
 
 	records["FeeSink"] = basics.AccountData{

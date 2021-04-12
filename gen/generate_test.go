@@ -21,10 +21,13 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 
 	"github.com/stretchr/testify/require"
@@ -99,4 +102,23 @@ func TestLoadSingleRootKeyConcurrent(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func TestGenesisRoundoff(t *testing.T) {
+	defer func() {
+		verboseOutWriter = os.Stdout
+	}()
+	fakeStdout := strings.Builder{}
+	verboseOutWriter = &fakeStdout
+	genesisData := DefaultGenesis
+	genesisData.NetworkName = "wat"
+	genesisData.ConsensusProtocol = protocol.ConsensusCurrentVersion // TODO: also check ConsensusFuture ?
+	genesisData.Wallets = make([]WalletData, 15)
+	for i := range genesisData.Wallets {
+		genesisData.Wallets[i].Name = fmt.Sprintf("w%d", i)
+		genesisData.Wallets[i].Stake = 100.0 / float64(len(genesisData.Wallets))
+	}
+	_, _, _, err := setupGenerateGenesisFiles(genesisData, config.Consensus, true)
+	require.NoError(t, err)
+	require.True(t, strings.Contains(fakeStdout.String(), "roundoff"))
 }
