@@ -105,11 +105,7 @@ func TestLoadSingleRootKeyConcurrent(t *testing.T) {
 }
 
 func TestGenesisRoundoff(t *testing.T) {
-	defer func() {
-		verboseOutWriter = os.Stdout
-	}()
-	fakeStdout := strings.Builder{}
-	verboseOutWriter = &fakeStdout
+	verbosity := strings.Builder{}
 	genesisData := DefaultGenesis
 	genesisData.NetworkName = "wat"
 	genesisData.ConsensusProtocol = protocol.ConsensusCurrentVersion // TODO: also check ConsensusFuture ?
@@ -118,7 +114,7 @@ func TestGenesisRoundoff(t *testing.T) {
 		genesisData.Wallets[i].Name = fmt.Sprintf("w%d", i)
 		genesisData.Wallets[i].Stake = 100.0 / float64(len(genesisData.Wallets))
 	}
-	_, _, _, err := setupGenerateGenesisFiles(genesisData, config.Consensus, true)
+	_, _, _, err := setupGenerateGenesisFiles(genesisData, config.Consensus, &verbosity)
 	require.NoError(t, err)
-	require.True(t, strings.Contains(fakeStdout.String(), "roundoff"))
+	require.True(t, strings.Contains(verbosity.String(), "roundoff"))
 }
