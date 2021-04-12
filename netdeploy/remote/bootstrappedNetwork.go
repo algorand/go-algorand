@@ -21,6 +21,7 @@ import (
 	"os"
 )
 
+//BootstrappedNetwork contains the specs for generating db files
 type BootstrappedNetwork struct {
 	NumRounds                 uint64
 	RoundTransactionsCount    uint64
