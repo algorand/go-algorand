@@ -68,11 +68,11 @@ func init() {
 	generateCmd.Flags().StringVarP(&nonParticipatingNodeTemplatePath, "non-participating-node-template", "", "", "json for non participating node")
 	generateCmd.Flags().StringVarP(&relayTemplatePath, "relay-template", "", "", "json for a relay node")
 	generateCmd.Flags().StringVarP(&sourceWallet, "wallet-name", "", "", "Source wallet name")
-	generateCmd.Flags().Uint64VarP(&rounds, "rounds", "", 5000, "Number of rounds")
-	generateCmd.Flags().Uint64VarP(&roundTrxCount, "ntrx", "", 1000, "Transaction count")
-	generateCmd.Flags().Uint64VarP(&accountsCount, "naccounts", "", 100000, "Account count")
-	generateCmd.Flags().Uint64VarP(&assetsCount, "nassets", "", 100000, "Asset count")
-	generateCmd.Flags().Uint64VarP(&applicationCount, "napps", "", 100000, "Application Count")
+	generateCmd.Flags().Uint64VarP(&rounds, "rounds", "", 13, "Number of rounds")
+	generateCmd.Flags().Uint64VarP(&roundTrxCount, "ntxns", "", 17, "Transaction count")
+	generateCmd.Flags().Uint64VarP(&accountsCount, "naccounts", "", 31, "Account count")
+	generateCmd.Flags().Uint64VarP(&assetsCount, "nassets", "", 5, "Asset count")
+	generateCmd.Flags().Uint64VarP(&applicationCount, "napps", "", 7, "Application Count")
 
 	longParts := make([]string, len(generateTemplateLines)+1)
 	longParts[0] = generateCmd.Long
@@ -87,7 +87,7 @@ var generateTemplateLines = []string{
 	"otwt => OneThousandWallets network template",
 	"otwg => OneThousandWallets genesis data",
 	"ohwg => OneHundredWallets genesis data",
-	"loadingFile => create accounts database file according to -wallet-name -rounds -ntrxs -naccts -nassets -napps options",
+	"loadingFile => create accounts database file according to -wallet-name -rounds -ntxnss -naccts -nassets -napps options",
 }
 
 var generateCmd = &cobra.Command{
@@ -173,24 +173,6 @@ template modes for -t:`,
 		case "loadingfile":
 			if sourceWallet == "" {
 				reportErrorf("must specify source wallet name with -wname.")
-			}
-			if rounds < 0 {
-				reportErrorf("must specify number of rounds with -rounds")
-			}
-			if roundTrxCount < 0 {
-				reportErrorf("must specify round transaction count with -wname.")
-			}
-
-			if accountsCount < 0 {
-				reportErrorf("must specify number of accounts with -naccts.")
-			}
-
-			if assetsCount < 0 {
-				reportErrorf("must specify number of assets with -nassets.")
-			}
-
-			if applicationCount < 0 {
-				reportErrorf("must specify number of applications with -napps.")
 			}
 
 			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTrxCount, accountsCount, assetsCount, applicationCount)

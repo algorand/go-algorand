@@ -96,9 +96,10 @@ type netState struct {
 	accountsCreated bool
 	txState         protocol.TxType
 
-	round    basics.Round
-	accounts map[basics.Address]basics.AccountData
-	trxCnt   uint64
+	round          basics.Round
+	accounts       []basics.Address
+	trxCnt         uint64
+	fundPerAccount basics.MicroAlgos
 }
 
 const program = `#pragma version 2
@@ -111,8 +112,6 @@ app_local_put
 ok:
 int 1
 `
-
-var localStateCheckProg []byte
 
 // InitDeployedNetworkConfig loads the DeployedNetworkConfig from a file
 func InitDeployedNetworkConfig(file string, buildConfig BuildConfig) (cfg DeployedNetworkConfig, err error) {
@@ -408,7 +407,9 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
 	accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
 	//fund src account with enough funding
-	accounts[src] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{srcWallet.State.MicroAlgos.Raw + 5000000*bootstrappedNet.nAccounts + bootstrappedNet.nAccounts})
+	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bootstrappedNet.nAssets) * params.MinBalance * 2}
+	totalFunds := srcWallet.State.MicroAlgos.Raw + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts
+	accounts[src] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: totalFunds})
 
 	bootstrappedNet.poolAddr = poolAddr
 	bootstrappedNet.sinkAddr = sinkAddr
@@ -429,13 +430,16 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 
 	//create accounts, apps and assets
 	prev, _ := l.Block(l.Latest())
-	generateAccounts(src, fileCfgs.RoundTransactionsCount, prev, l, &bootstrappedNet)
+	err = generateAccounts(src, fileCfgs.RoundTransactionsCount, prev, l, &bootstrappedNet, params)
+	if err != nil {
+		return err
+	}
 
 	//create more transactions
 	prev, _ = l.Block(l.Latest())
 	for i := uint64(bootstrappedNet.round); i < fileCfgs.NumRounds; i++ {
 		bootstrappedNet.round++
-		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount, &bootstrappedNet)
+		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount, &bootstrappedNet, params)
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err = l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
@@ -493,7 +497,7 @@ func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrap
 	return initState, nil
 }
 
-func createBlock(src basics.Address, prev bookkeeping.Block, roundTrxCnt uint64, bootstrappedNet *netState) (bookkeeping.Block, error) {
+func createBlock(src basics.Address, prev bookkeeping.Block, roundTrxCnt uint64, bootstrappedNet *netState, csParams config.ConsensusParams) (bookkeeping.Block, error) {
 	payset := make([]transactions.SignedTxnInBlock, 0, roundTrxCnt)
 	txibs := make([]transactions.SignedTxnInBlock, 0, roundTrxCnt)
 
@@ -516,7 +520,10 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTrxCnt uint64,
 
 	block.RewardsLevel = prev.RewardsLevel
 
-	stxns := createSignedTx(src, bootstrappedNet.round, prev.CurrentProtocol, bootstrappedNet)
+	stxns, err := createSignedTx(src, bootstrappedNet.round, csParams, bootstrappedNet)
+	if err != nil {
+		return bookkeeping.Block{}, err
+	}
 
 	for _, stxn := range stxns {
 		txib, err := block.EncodeSignedTxn(stxn, transactions.ApplyData{})
@@ -529,7 +536,6 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTrxCnt uint64,
 	payset = append(payset, txibs...)
 	bootstrappedNet.trxCnt += uint64(len(payset))
 	block.Payset = payset
-	var err error
 	block.TxnRoot, err = block.PaysetCommit()
 	if err != nil {
 		return bookkeeping.Block{}, err
@@ -538,12 +544,12 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTrxCnt uint64,
 	return block, nil
 }
 
-func generateAccounts(src basics.Address, roundTrxCnt uint64, prev bookkeeping.Block, l *ledger.Ledger, bootstrappedNet *netState) error {
+func generateAccounts(src basics.Address, roundTrxCnt uint64, prev bookkeeping.Block, l *ledger.Ledger, bootstrappedNet *netState, csParams config.ConsensusParams) error {
 
 	for !bootstrappedNet.accountsCreated {
 		//create accounts
 		bootstrappedNet.round++
-		blk, _ := createBlock(src, prev, roundTrxCnt, bootstrappedNet)
+		blk, _ := createBlock(src, prev, roundTrxCnt, bootstrappedNet, csParams)
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err := l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
@@ -580,13 +586,12 @@ func accountsNeeded(appsCount uint64, assetCount uint64, params config.Consensus
 
 }
 
-func createSignedTx(src basics.Address, round basics.Round, protoVersion protocol.ConsensusVersion, bootstrappedNet *netState) []transactions.SignedTxn {
+func createSignedTx(src basics.Address, round basics.Round, params config.ConsensusParams, bootstrappedNet *netState) ([]transactions.SignedTxn, error) {
 
 	if bootstrappedNet.nApplications == 0 && bootstrappedNet.nAccounts == 0 && bootstrappedNet.nAssets == 0 {
 		bootstrappedNet.accountsCreated = true
 	}
 	var sgntx []transactions.SignedTxn
-	consensusParams := config.Consensus[protoVersion]
 
 	header := transactions.Header{
 		Fee:         basics.MicroAlgos{Raw: 1},
@@ -597,7 +602,7 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 	}
 
 	if bootstrappedNet.txState == protocol.PaymentTx {
-		accounts := make(map[basics.Address]basics.AccountData)
+		var accounts []basics.Address
 
 		n := bootstrappedNet.nAccounts
 		if n == 0 || n >= bootstrappedNet.roundTrxCnt {
@@ -606,7 +611,7 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 		for i := uint64(0); i < n; i++ {
 			secretDst := keypair()
 			dst := basics.Address(secretDst.SignatureVerifier)
-			accounts[dst] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64(0)})
+			accounts = append(accounts, dst)
 
 			header.Sender = src
 
@@ -615,7 +620,7 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 				Header: header,
 				PaymentTxnFields: transactions.PaymentTxnFields{
 					Receiver: dst,
-					Amount:   basics.MicroAlgos{Raw: uint64(5000000)},
+					Amount:   bootstrappedNet.fundPerAccount,
 				},
 			}
 			t := transactions.SignedTxn{Txn: tx}
@@ -631,7 +636,7 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 		}
 	} else if bootstrappedNet.txState == protocol.AssetConfigTx {
 		i := uint64(0)
-		for acct := range bootstrappedNet.accounts {
+		for _, acct := range bootstrappedNet.accounts {
 			if i == bootstrappedNet.nAssets {
 				break
 			}
@@ -658,9 +663,7 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 		bootstrappedNet.assetPerAcct++
 		bootstrappedNet.nAssets -= uint64(len(sgntx))
 
-		//consensusParams := config.Consensus[protoVersion]
-		if bootstrappedNet.nAssets == 0 || bootstrappedNet.assetPerAcct == consensusParams.MaxAppsCreated {
-			bootstrappedNet.assetPerAcct = 0
+		if bootstrappedNet.nAssets == 0 || bootstrappedNet.assetPerAcct == params.MaxAssetsPerAccount {
 			if bootstrappedNet.nApplications > 0 {
 				bootstrappedNet.txState = protocol.ApplicationCallTx
 			} else {
@@ -670,13 +673,16 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 		}
 	} else if bootstrappedNet.txState == protocol.ApplicationCallTx {
 		ops, err := logic.AssembleString(program)
+		if err != nil {
+			return []transactions.SignedTxn{}, err
+		}
 		approval := ops.Program
 		ops, err = logic.AssembleString("#pragma version 2 int 1")
 		if err != nil {
 			panic(err)
 		}
 		i := uint64(0)
-		for acct := range bootstrappedNet.accounts {
+		for _, acct := range bootstrappedNet.accounts {
 			if i == bootstrappedNet.nApplications {
 				break
 			}
@@ -705,12 +711,11 @@ func createSignedTx(src basics.Address, round basics.Round, protoVersion protoco
 
 		bootstrappedNet.nApplications -= uint64(len(sgntx))
 		bootstrappedNet.appsPerAcct++
-		if bootstrappedNet.nApplications == 0 || bootstrappedNet.appsPerAcct == consensusParams.MaxAppsCreated {
+		if bootstrappedNet.nApplications == 0 || bootstrappedNet.appsPerAcct == params.MaxAppsCreated {
 			bootstrappedNet.txState = protocol.PaymentTx
-			bootstrappedNet.appsPerAcct = 0
 		}
 	}
-	return sgntx
+	return sgntx, nil
 }
 
 type walletTargetData struct {

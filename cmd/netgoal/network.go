@@ -51,7 +51,7 @@ func init() {
 	networkBuildCmd.MarkFlagRequired("recipe")
 
 	networkBuildCmd.Flags().BoolVarP(&networkUseGenesisFiles, "use-existing-files", "e", false, "Use existing genesis files.")
-	networkBuildCmd.Flags().BoolVarP(&bootstrapLoadingFile, "gen-db-files", "d", false, "Generate database files.")
+	networkBuildCmd.Flags().BoolVarP(&bootstrapLoadingFile, "gen-db-files", "b", false, "Generate database files.")
 	networkBuildCmd.Flags().BoolVarP(&networkIgnoreExistingDir, "force", "f", false, "Force generation into existing directory.")
 	networkBuildCmd.Flags().StringSliceVarP(&miscStringStringTokens, "val", "v", nil, "name=value, may be reapeated")
 
