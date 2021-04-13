@@ -114,7 +114,7 @@ func TestGenesisRoundoff(t *testing.T) {
 		genesisData.Wallets[i].Name = fmt.Sprintf("w%d", i)
 		genesisData.Wallets[i].Stake = 100.0 / float64(len(genesisData.Wallets))
 	}
-	_, _, _, err := setupGenerateGenesisFiles(genesisData, config.Consensus, &verbosity)
+	_, _, _, err := setupGenerateGenesisFiles(&genesisData, config.Consensus, &verbosity)
 	require.NoError(t, err)
 	require.True(t, strings.Contains(verbosity.String(), "roundoff"))
 }
