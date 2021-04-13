@@ -104,6 +104,9 @@ type ApplyData struct {
 	// Closing amount for transaction.
 	ClosingAmount basics.MicroAlgos `codec:"ca"`
 
+	// Closing amount for asset transaction.
+	AssetClosingAmount uint64 `codec:"aca"`
+
 	// Rewards applied to the Sender, Receiver, and CloseRemainderTo accounts.
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
@@ -115,6 +118,9 @@ type ApplyData struct {
 // EvalDelta's internal deltas (see EvalDelta.Equal for more information)
 func (ad ApplyData) Equal(o ApplyData) bool {
 	if ad.ClosingAmount != o.ClosingAmount {
+		return false
+	}
+	if ad.AssetClosingAmount != o.AssetClosingAmount {
 		return false
 	}
 	if ad.SenderRewards != o.SenderRewards {
@@ -156,7 +162,9 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 
 // ID returns the Txid (i.e., hash) of the transaction.
 func (tx Transaction) ID() Txid {
-	return Txid(crypto.HashObj(tx))
+	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
+	defer protocol.PutEncodingBuf(enc)
+	return Txid(crypto.Hash(enc))
 }
 
 // Sign signs a transaction using a given Account's secrets.

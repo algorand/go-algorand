@@ -33,10 +33,6 @@ func TestAccountsCanChangeOnlineState(t *testing.T) {
 	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOffline.json"))
 }
 
-func TestAccountsCanChangeOnlineStateV7(t *testing.T) {
-	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineV7.json"))
-}
-
 func TestAccountsCanChangeOnlineStateInTheFuture(t *testing.T) {
 	testAccountsCanChangeOnlineState(t, filepath.Join("nettemplates", "TwoNodesPartlyOfflineVFuture.json"))
 }
@@ -44,7 +40,7 @@ func TestAccountsCanChangeOnlineStateInTheFuture(t *testing.T) {
 func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, templatePath)

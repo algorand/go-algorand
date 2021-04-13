@@ -80,7 +80,7 @@ func (MicroAlgos) CanMarshalMsg(z interface{}) bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (a MicroAlgos) MarshalMsg(b []byte) (o []byte, err error) {
+func (a MicroAlgos) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, msgp.Uint64Size)
 	o = msgp.AppendUint64(o, a.Raw)
 	return
@@ -121,7 +121,7 @@ func OneTimeIDForRound(round Round, keyDilution uint64) crypto.OneTimeSignatureI
 	}
 }
 
-// SubSaturate subtracts two rounds with saturation arithmetic that does not
+// SubSaturate subtracts x rounds with saturation arithmetic that does not
 // wrap around past zero, and instead returns 0 on underflow.
 func (round Round) SubSaturate(x Round) Round {
 	if round < x {

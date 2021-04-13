@@ -60,7 +60,7 @@ import (
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AccountTotals) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *AccountTotals) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
@@ -103,11 +103,7 @@ func (z *AccountTotals) MarshalMsg(b []byte) (o []byte, err error) {
 			if (zb0002Mask & 0x2) == 0 { // if not empty
 				// string "mon"
 				o = append(o, 0xa3, 0x6d, 0x6f, 0x6e)
-				o, err = (*z).NotParticipating.Money.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "NotParticipating", "Money")
-					return
-				}
+				o = (*z).NotParticipating.Money.MarshalMsg(o)
 			}
 			if (zb0002Mask & 0x4) == 0 { // if not empty
 				// string "rwd"
@@ -134,11 +130,7 @@ func (z *AccountTotals) MarshalMsg(b []byte) (o []byte, err error) {
 			if (zb0003Mask & 0x2) == 0 { // if not empty
 				// string "mon"
 				o = append(o, 0xa3, 0x6d, 0x6f, 0x6e)
-				o, err = (*z).Offline.Money.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Offline", "Money")
-					return
-				}
+				o = (*z).Offline.Money.MarshalMsg(o)
 			}
 			if (zb0003Mask & 0x4) == 0 { // if not empty
 				// string "rwd"
@@ -165,11 +157,7 @@ func (z *AccountTotals) MarshalMsg(b []byte) (o []byte, err error) {
 			if (zb0004Mask & 0x2) == 0 { // if not empty
 				// string "mon"
 				o = append(o, 0xa3, 0x6d, 0x6f, 0x6e)
-				o, err = (*z).Online.Money.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "Online", "Money")
-					return
-				}
+				o = (*z).Online.Money.MarshalMsg(o)
 			}
 			if (zb0004Mask & 0x4) == 0 { // if not empty
 				// string "rwd"
@@ -697,7 +685,7 @@ func (z *AccountTotals) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AlgoCount) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *AlgoCount) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
@@ -716,11 +704,7 @@ func (z *AlgoCount) MarshalMsg(b []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "mon"
 			o = append(o, 0xa3, 0x6d, 0x6f, 0x6e)
-			o, err = (*z).Money.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Money")
-				return
-			}
+			o = (*z).Money.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "rwd"

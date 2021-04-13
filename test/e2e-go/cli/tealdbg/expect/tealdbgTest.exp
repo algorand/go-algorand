@@ -2,24 +2,26 @@
 set err 0
 log_user 1
 
-if { [catch {
+# workaround for scoping issue in TestTealdbg and setting URL inside expect_background's re scope
+set URL ""
 
-    set TEST_ALGO_DIR [lindex $argv 0]
-    set timeout 30
-
-    set TEST_DIR $TEST_ALGO_DIR
-    exec mkdir -p $TEST_DIR
-
-    set TEAL_PROG_FILE "$TEST_DIR/trivial.teal"
-    exec printf "#pragma version 2\nint 1\ndup\n+\n" > $TEAL_PROG_FILE
-
+proc TestTealdbg { TEAL_PROG_FILE PROTOCOL_VERSION ARGS } {
+    variable URL
     set URL ""
     set PASSED 0
-    spawn tealdbg debug -v $TEAL_PROG_FILE
+    spawn tealdbg debug -v $TEAL_PROG_FILE -p $PROTOCOL_VERSION {*}[lrange $ARGS 0 end]
     expect_background {
         timeout { puts "tealdbg debug timed out"; exit 1 }
         -re {CDT debugger listening on: (ws://[.a-z0-9:/]+)} { set URL $expect_out(1,string); }
+        eof {
+            catch wait result
+            if { [lindex $result 3] != 0 } {
+                puts "returned error code is [lindex $result 3]"
+                exit 1
+            }
+        }
     }
+    set tealdbg_spawn_id $spawn_id
 
     # wait until URL is set or timeout
     set it 0
@@ -43,6 +45,35 @@ if { [catch {
         puts "ERROR: have not found 'Debugger.paused' in cdtmock output"
         exit 1
     }
+
+    puts "Shutting down tealdbg"
+    close -i $tealdbg_spawn_id
+}
+
+if { [catch {
+
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set timeout 30
+
+    set TEST_DIR $TEST_ALGO_DIR
+    exec mkdir -p $TEST_DIR
+
+    set TEAL_PROG_FILE "$TEST_DIR/trivial.teal"
+    # this is ConsensusV25
+    set PROTOCOL_VERSION_2 "https://github.com/algorandfoundation/specs/tree/bea19289bf41217d2c0af30522fa222ef1366466"
+
+    # this is ConsensusV26
+    set PROTOCOL_VERSION_3 "https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff"
+
+    # run the test using version 2:
+    exec printf "#pragma version 2\nint 1\ndup\n+\n" > $TEAL_PROG_FILE
+    TestTealdbg $TEAL_PROG_FILE $PROTOCOL_VERSION_2 ""
+
+    # run the test using version 3:
+    exec printf "#pragma version 3\nint 1\ndup\n+\n" > $TEAL_PROG_FILE
+    TestTealdbg $TEAL_PROG_FILE $PROTOCOL_VERSION_3 "--remote-debugging-port 9392 --listen 127.0.0.1"
+
+    exec rm $TEAL_PROG_FILE
 
 } EXCEPTION ] } {
     puts "ERROR in teadbgTest: $EXCEPTION"

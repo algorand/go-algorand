@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -45,6 +46,11 @@ var ErrNoSpace = errors.New("block does not have space for transaction")
 // many transactions in a block.
 const maxPaysetHint = 20000
 
+// asyncAccountLoadingThreadCount controls how many go routines would be used
+// to load the account data before the eval() start processing individual
+// transaction group.
+const asyncAccountLoadingThreadCount = 4
+
 type roundCowBase struct {
 	l ledgerForCowBase
 
@@ -62,15 +68,33 @@ type roundCowBase struct {
 
 	// The current protocol consensus params.
 	proto config.ConsensusParams
+
+	// The accounts that we're already accessed during this round evaluation. This is a caching
+	// buffer used to avoid looking up the same account data more than once during a single evaluator
+	// execution. The AccountData is always an historical one, then therefore won't be changing.
+	// The underlying (accountupdates) infrastucture may provide additional cross-round caching which
+	// are beyond the scope of this cache.
+	// The account data store here is always the account data without the rewards.
+	accounts map[basics.Address]basics.AccountData
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return x.l.getCreatorForRound(x.rnd, cidx, ctype)
 }
 
-func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData, err error) {
-	acctData, _, err = x.l.LookupWithoutRewards(x.rnd, addr)
-	return acctData, err
+// lookup returns the non-rewarded account data for the provided account address. It uses the internal per-round cache
+// first, and if it cannot find it there, it would defer to the underlaying implementation.
+// note that errors in accounts data retrivals are not cached as these typically cause the transaction evaluation to fail.
+func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
+	if accountData, found := x.accounts[addr]; found {
+		return accountData, nil
+	}
+
+	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err == nil {
+		x.accounts[addr] = accountData
+	}
+	return accountData, err
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -280,7 +304,11 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) compactCert(certRnd basics.Round, cert compactcert.Cert, atRound basics.Round) error {
+func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert compactcert.Cert, atRound basics.Round, validate bool) error {
+	if certType != protocol.CompactCertBasic {
+		return fmt.Errorf("compact cert type %d not supported", certType)
+	}
+
 	nextCertRnd := cs.compactCertNext()
 
 	certHdr, err := cs.blockHdr(certRnd)
@@ -289,15 +317,18 @@ func (cs *roundCowState) compactCert(certRnd basics.Round, cert compactcert.Cert
 	}
 
 	proto := config.Consensus[certHdr.CurrentProtocol]
-	votersRnd := certRnd.SubSaturate(basics.Round(proto.CompactCertRounds))
-	votersHdr, err := cs.blockHdr(votersRnd)
-	if err != nil {
-		return err
-	}
 
-	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
-	if err != nil {
-		return err
+	if validate {
+		votersRnd := certRnd.SubSaturate(basics.Round(proto.CompactCertRounds))
+		votersHdr, err := cs.blockHdr(votersRnd)
+		if err != nil {
+			return err
+		}
+
+		err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
+		if err != nil {
+			return err
+		}
 	}
 
 	cs.setCompactCertNext(certRnd + basics.Round(proto.CompactCertRounds))
@@ -360,8 +391,9 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		// the block at this round below, so underflow will be caught.
 		// If we are not validating, we must have previously checked
 		// an agreement.Certificate attesting that hdr is valid.
-		rnd:   hdr.Round - 1,
-		proto: proto,
+		rnd:      hdr.Round - 1,
+		proto:    proto,
+		accounts: make(map[basics.Address]basics.AccountData),
 	}
 
 	eval := &BlockEvaluator{
@@ -392,7 +424,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		}
 
 		base.txnCount = eval.prevHeader.TxnCounter
-		base.compactCertNextRnd = eval.prevHeader.CompactCertNextRound
+		base.compactCertNextRnd = eval.prevHeader.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
 		prevProto, ok = config.Consensus[eval.prevHeader.CurrentProtocol]
 		if !ok {
 			return nil, protocol.Error(eval.prevHeader.CurrentProtocol)
@@ -549,7 +581,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		return fmt.Errorf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize)
 	}
 
-	cow := eval.state.child()
+	cow := eval.state.child(len(txgroup))
 
 	var group transactions.TxGroup
 	for gi, txn := range txgroup {
@@ -683,7 +715,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	var group transactions.TxGroup
 	var groupTxBytes int
 
-	cow := eval.state.child()
+	cow := eval.state.child(len(txgroup))
 
 	// Prepare eval params for any ApplicationCall transactions in the group
 	evalParams := eval.prepareEvalParams(txgroup)
@@ -701,7 +733,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		txibs = append(txibs, txib)
 
 		if eval.validate {
-			groupTxBytes += len(protocol.Encode(&txib))
+			groupTxBytes += txib.GetEncodedLength()
 			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
 				return ErrNoSpace
 			}
@@ -780,7 +812,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := applyTransaction(txn.Txn, cow, evalParams, spec, cow.txnCounter())
+	applyData, err := eval.applyTransaction(txn.Txn, cow, evalParams, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -851,7 +883,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 }
 
 // applyTransaction changes the balances according to this transaction.
-func applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
+func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -901,7 +933,14 @@ func applyTransaction(tx transactions.Transaction, balances *roundCowState, eval
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, evalParams, ctr)
 
 	case protocol.CompactCertTx:
-		err = balances.compactCert(tx.CertRound, tx.Cert, tx.Header.FirstValid)
+		// in case of a CompactCertTx transaction, we want to "apply" it only in validate or generate mode. This will deviate the cow's CompactCertNext depending of
+		// whether we're in validate/generate mode or not, however - given that this variable in only being used in these modes, it would be safe.
+		// The reason for making this into an exception is that during initialization time, the accounts update is "converting" the recent 320 blocks into deltas to
+		// be stored in memory. These deltas don't care about the compact certificate, and so we can improve the node load time. Additionally, it save us from
+		// performing the validation during catchup, which is another performance boost.
+		if eval.validate || eval.generate {
+			err = balances.compactCert(tx.CertRound, tx.CertType, tx.Cert, tx.Header.FirstValid, eval.validate)
+		}
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
@@ -946,20 +985,30 @@ func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.Digest, tot
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
 func (eval *BlockEvaluator) endOfBlock() error {
 	if eval.generate {
-		eval.block.TxnRoot = eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
+		var err error
+		eval.block.TxnRoot, err = eval.block.PaysetCommit()
+		if err != nil {
+			return err
+		}
+
 		if eval.proto.TxnCounter {
 			eval.block.TxnCounter = eval.state.txnCounter()
 		} else {
 			eval.block.TxnCounter = 0
 		}
 
-		var err error
-		eval.block.CompactCertVoters, eval.block.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
-		if err != nil {
-			return err
-		}
+		if eval.proto.CompactCertRounds > 0 {
+			var basicCompactCert bookkeeping.CompactCertState
+			basicCompactCert.CompactCertVoters, basicCompactCert.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
+			if err != nil {
+				return err
+			}
 
-		eval.block.CompactCertNextRound = eval.state.compactCertNext()
+			basicCompactCert.CompactCertNextRound = eval.state.compactCertNext()
+
+			eval.block.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
+			eval.block.CompactCert[protocol.CompactCertBasic] = basicCompactCert
+		}
 	}
 
 	return nil
@@ -967,9 +1016,13 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 // FinalValidation does the validation that must happen after the block is built and all state updates are computed
 func (eval *BlockEvaluator) finalValidation() error {
+	eval.state.mods.OptimizeAllocatedMemory(eval.proto)
 	if eval.validate {
 		// check commitments
-		txnRoot := eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
+		txnRoot, err := eval.block.PaysetCommit()
+		if err != nil {
+			return err
+		}
 		if txnRoot != eval.block.TxnRoot {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnRoot)
 		}
@@ -986,14 +1039,19 @@ func (eval *BlockEvaluator) finalValidation() error {
 		if err != nil {
 			return err
 		}
-		if eval.block.CompactCertVoters != expectedVoters {
-			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCertVoters, expectedVoters)
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters != expectedVoters {
+			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters, expectedVoters)
 		}
-		if eval.block.CompactCertVotersTotal != expectedVotersWeight {
-			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCertVotersTotal, expectedVotersWeight)
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal != expectedVotersWeight {
+			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal, expectedVotersWeight)
 		}
-		if eval.block.CompactCertNextRound != eval.state.compactCertNext() {
-			return fmt.Errorf("CompactCertNextRound wrong: %v != %v", eval.block.CompactCertNextRound, eval.state.compactCertNext())
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound != eval.state.compactCertNext() {
+			return fmt.Errorf("CompactCertNextRound wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, eval.state.compactCertNext())
+		}
+		for ccType := range eval.block.CompactCert {
+			if ccType != protocol.CompactCertBasic {
+				return fmt.Errorf("CompactCertType %d unexpected", ccType)
+			}
 		}
 	}
 
@@ -1077,23 +1135,31 @@ func (validator *evalTxValidator) run() {
 
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
-// Validate: eval(ctx, l, blk, true, txcache, executionPool)
-// AddBlock: eval(context.Background(), l, blk, false, txcache, nil)
-// tracker:  eval(context.Background(), l, blk, false, txcache, nil)
+// Validate: eval(ctx, l, blk, true, txcache, executionPool, true)
+// AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
+// tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
 func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}
 
+	validationCtx, validationCancel := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	defer func() {
+		validationCancel()
+		wg.Wait()
+	}()
+
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}
+
+	paysetgroupsCh := loadAccounts(ctx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+
 	var txvalidator evalTxValidator
-	validationCtx, validationCancel := context.WithCancel(ctx)
-	defer validationCancel()
 	if validate {
 		_, ok := config.Consensus[blk.CurrentProtocol]
 		if !ok {
@@ -1110,8 +1176,25 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 
 	}
 
-	for _, txgroup := range paysetgroups {
+	base := eval.state.lookupParent.(*roundCowBase)
+
+transactionGroupLoop:
+	for {
 		select {
+		case txgroup, ok := <-paysetgroupsCh:
+			if !ok {
+				break transactionGroupLoop
+			} else if txgroup.err != nil {
+				return ledgercore.StateDelta{}, err
+			}
+
+			for _, br := range txgroup.balances {
+				base.accounts[br.Addr] = br.AccountData
+			}
+			err = eval.TransactionGroup(txgroup.group)
+			if err != nil {
+				return ledgercore.StateDelta{}, err
+			}
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
 		case err, open := <-txvalidator.done:
@@ -1119,12 +1202,6 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 			if open && err != nil {
 				return ledgercore.StateDelta{}, err
 			}
-		default:
-		}
-
-		err = eval.TransactionGroup(txgroup)
-		if err != nil {
-			return ledgercore.StateDelta{}, err
 		}
 	}
 
@@ -1155,6 +1232,185 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	return eval.state.deltas(), nil
+}
+
+// loadedTransactionGroup is a helper struct to allow asyncronious loading of the account data needed by the transaction groups
+type loadedTransactionGroup struct {
+	// group is the transaction group
+	group []transactions.SignedTxnWithAD
+	// balances is a list of all the balances that the transaction group refer to and are needed.
+	balances []basics.BalanceRecord
+	// err indicates whether any of the balances in this structure have failed to load. In case of an error, at least
+	// one of the entries in the balances would be uninitialized.
+	err error
+}
+
+// loadAccounts loads the account data for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
+// The order of the transaction groups returned by the channel is identical to the one in the input array.
+func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, groups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) chan loadedTransactionGroup {
+	outChan := make(chan loadedTransactionGroup, len(groups))
+	go func() {
+		// groupTask helps to organize the account loading for each transaction group.
+		type groupTask struct {
+			// balances contains the loaded balances each transaction group have
+			balances []basics.BalanceRecord
+			// balancesCount is the number of balances that nees to be loaded per transaction group
+			balancesCount int
+			// done is a waiting channel for all the account data for the transaction group to be loaded
+			done chan error
+		}
+		// addrTask manage the loading of a single account address.
+		type addrTask struct {
+			// account address to fetch
+			address basics.Address
+			// a list of transaction group tasks that depends on this address
+			groups []*groupTask
+			// a list of indices into the groupTask.balances where the address would be stored
+			groupIndices []int
+		}
+		defer close(outChan)
+
+		accountTasks := make(map[basics.Address]*addrTask)
+		maxAddressesPerTransaction := 7 + consensusParams.MaxAppTxnAccounts
+		addressesCh := make(chan *addrTask, len(groups)*consensusParams.MaxTxGroupSize*maxAddressesPerTransaction)
+		// totalBalances counts the total number of balances over all the transaction groups
+		totalBalances := 0
+
+		initAccount := func(addr basics.Address, wg *groupTask) {
+			if addr.IsZero() {
+				return
+			}
+			if task, have := accountTasks[addr]; !have {
+				task := &addrTask{
+					address:      addr,
+					groups:       make([]*groupTask, 1, 4),
+					groupIndices: make([]int, 1, 4),
+				}
+				task.groups[0] = wg
+				task.groupIndices[0] = wg.balancesCount
+
+				accountTasks[addr] = task
+				addressesCh <- task
+			} else {
+				task.groups = append(task.groups, wg)
+				task.groupIndices = append(task.groupIndices, wg.balancesCount)
+			}
+			wg.balancesCount++
+			totalBalances++
+		}
+		// add the fee sink address to the accountTasks/addressesCh so that it will be loaded first.
+		if len(groups) > 0 {
+			task := &addrTask{
+				address: feeSinkAddr,
+			}
+			addressesCh <- task
+			accountTasks[feeSinkAddr] = task
+		}
+
+		// iterate over the transaction groups and add all their account addresses to the list
+		groupsReady := make([]*groupTask, len(groups))
+		for i, group := range groups {
+			task := &groupTask{}
+			groupsReady[i] = task
+			for _, stxn := range group {
+				initAccount(stxn.Txn.Sender, task)
+				initAccount(stxn.Txn.Receiver, task)
+				initAccount(stxn.Txn.CloseRemainderTo, task)
+				initAccount(stxn.Txn.AssetSender, task)
+				initAccount(stxn.Txn.AssetReceiver, task)
+				initAccount(stxn.Txn.AssetCloseTo, task)
+				initAccount(stxn.Txn.FreezeAccount, task)
+				for _, xa := range stxn.Txn.Accounts {
+					initAccount(xa, task)
+				}
+			}
+		}
+
+		// Add fee sink to the first group
+		if len(groupsReady) > 0 {
+			initAccount(feeSinkAddr, groupsReady[0])
+		}
+		close(addressesCh)
+
+		// updata all the groups task :
+		// allocate the correct number of balances, as well as
+		// enough space on the "done" channel.
+		allBalances := make([]basics.BalanceRecord, totalBalances)
+		usedBalances := 0
+		for _, gr := range groupsReady {
+			gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
+			gr.done = make(chan error, gr.balancesCount)
+			usedBalances += gr.balancesCount
+		}
+
+		// create few go-routines to load asyncroniously the account data.
+		for i := 0; i < asyncAccountLoadingThreadCount; i++ {
+			go func() {
+				for {
+					select {
+					case task, ok := <-addressesCh:
+						// load the address
+						if !ok {
+							// the channel got closed, which mean we're done.
+							return
+						}
+						// lookup the account data directly from the ledger.
+						acctData, _, err := l.LookupWithoutRewards(rnd, task.address)
+						br := basics.BalanceRecord{
+							Addr:        task.address,
+							AccountData: acctData,
+						}
+						// if there is no error..
+						if err == nil {
+							// update all the group tasks with the new acquired balance.
+							for i, wg := range task.groups {
+								wg.balances[task.groupIndices[i]] = br
+								// write a nil to indicate that we're loaded one entry.
+								wg.done <- nil
+							}
+						} else {
+							// there was an error loading that entry.
+							for _, wg := range task.groups {
+								// notify the channel of the error.
+								wg.done <- err
+							}
+						}
+					case <-ctx.Done():
+						// if the context was canceled, abort right away.
+						return
+					}
+
+				}
+			}()
+		}
+
+		// iterate on the transaction groups tasks. This array retains the original order.
+		for i, wg := range groupsReady {
+			// Wait to receive wg.balancesCount nil error messages, one for each address referenced in this txn group.
+			for j := 0; j < wg.balancesCount; j++ {
+				select {
+				case err := <-wg.done:
+					if err != nil {
+						// if there is an error, report the error to the output channel.
+						outChan <- loadedTransactionGroup{
+							group: groups[i],
+							err:   err,
+						}
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+			// if we had no error, write the result to the output channel.
+			// this write will not block since we preallocated enough space on the channel.
+			outChan <- loadedTransactionGroup{
+				group:    groups[i],
+				balances: wg.balances,
+			}
+		}
+	}()
+	return outChan
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.

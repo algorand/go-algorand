@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"time"
 
@@ -180,6 +181,64 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	}
 
 	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
+// GetProof generates a Merkle proof for a transaction in a block.
+// (GET /v2/blocks/{round}/transactions/{txid}/proof)
+func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params generated.GetProofParams) error {
+	var txID transactions.Txid
+	err := txID.UnmarshalText([]byte(txid))
+	if err != nil {
+		return badRequest(ctx, err, errNoTxnSpecified, v2.Log)
+	}
+
+	ledger := v2.Node.Ledger()
+	block, _, err := ledger.BlockCert(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	proto := config.Consensus[block.CurrentProtocol]
+	if proto.PaysetCommit != config.PaysetCommitMerkle {
+		return notFound(ctx, err, "protocol does not support Merkle proofs", v2.Log)
+	}
+
+	txns, err := block.DecodePaysetFlat()
+	if err != nil {
+		return internalError(ctx, err, "decoding transactions", v2.Log)
+	}
+
+	for idx := range txns {
+		if txns[idx].Txn.ID() == txID {
+			tree, err := block.TxnMerkleTree()
+			if err != nil {
+				return internalError(ctx, err, "building Merkle tree", v2.Log)
+			}
+
+			proof, err := tree.Prove([]uint64{uint64(idx)})
+			if err != nil {
+				return internalError(ctx, err, "generating proof", v2.Log)
+			}
+
+			var proofconcat []byte
+			for _, proofelem := range proof {
+				proofconcat = append(proofconcat, proofelem[:]...)
+			}
+
+			stibhash := block.Payset[idx].Hash()
+
+			response := generated.ProofResponse{
+				Proof:    proofconcat,
+				Stibhash: stibhash[:],
+				Idx:      uint64(idx),
+			}
+
+			return ctx.JSON(http.StatusOK, response)
+		}
+	}
+
+	err = errors.New(errTransactionNotFound)
+	return notFound(ctx, err, err.Error(), v2.Log)
 }
 
 // GetSupply gets the current supply reported by the ledger.
@@ -442,17 +501,18 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
-		AssetIndex       *uint64                        `codec:"asset-index,omitempty"`
-		ApplicationIndex *uint64                        `codec:"application-index,omitempty"`
-		CloseRewards     *uint64                        `codec:"close-rewards,omitempty"`
-		ClosingAmount    *uint64                        `codec:"closing-amount,omitempty"`
-		ConfirmedRound   *uint64                        `codec:"confirmed-round,omitempty"`
-		GlobalStateDelta *generated.StateDelta          `codec:"global-state-delta,omitempty"`
-		LocalStateDelta  *[]generated.AccountStateDelta `codec:"local-state-delta,omitempty"`
-		PoolError        string                         `codec:"pool-error"`
-		ReceiverRewards  *uint64                        `codec:"receiver-rewards,omitempty"`
-		SenderRewards    *uint64                        `codec:"sender-rewards,omitempty"`
-		Txn              transactions.SignedTxn         `codec:"txn"`
+		AssetIndex         *uint64                        `codec:"asset-index,omitempty"`
+		AssetClosingAmount *uint64                        `codec:"asset-closing-amount,omitempty"`
+		ApplicationIndex   *uint64                        `codec:"application-index,omitempty"`
+		CloseRewards       *uint64                        `codec:"close-rewards,omitempty"`
+		ClosingAmount      *uint64                        `codec:"closing-amount,omitempty"`
+		ConfirmedRound     *uint64                        `codec:"confirmed-round,omitempty"`
+		GlobalStateDelta   *generated.StateDelta          `codec:"global-state-delta,omitempty"`
+		LocalStateDelta    *[]generated.AccountStateDelta `codec:"local-state-delta,omitempty"`
+		PoolError          string                         `codec:"pool-error"`
+		ReceiverRewards    *uint64                        `codec:"receiver-rewards,omitempty"`
+		SenderRewards      *uint64                        `codec:"sender-rewards,omitempty"`
+		Txn                transactions.SignedTxn         `codec:"txn"`
 	}{
 		Txn: txn.Txn,
 	}
@@ -467,6 +527,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.ConfirmedRound = &r
 
 		response.ClosingAmount = &txn.ApplyData.ClosingAmount.Raw
+		response.AssetClosingAmount = &txn.ApplyData.AssetClosingAmount
 		response.SenderRewards = &txn.ApplyData.SenderRewards.Raw
 		response.ReceiverRewards = &txn.ApplyData.ReceiverRewards.Raw
 		response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
@@ -512,7 +573,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
-	txns, err := v2.Node.GetPendingTxnsFromPool()
+	txnPool, err := v2.Node.GetPendingTxnsFromPool()
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpTransactionPool, v2.Log)
 	}
@@ -523,11 +584,16 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		RewardsPool: basics.Address{},
 	}
 
+	txnLimit := uint64(math.MaxUint64)
+	if max != nil && *max != 0 {
+		txnLimit = *max
+	}
+
 	// Convert transactions to msgp / json strings
-	txnArray := make([]transactions.SignedTxn, 0)
-	for _, txn := range txns {
+	topTxns := make([]transactions.SignedTxn, 0)
+	for _, txn := range txnPool {
 		// break out if we've reached the max number of transactions
-		if max != nil && uint64(len(txnArray)) >= *max {
+		if uint64(len(topTxns)) >= txnLimit {
 			break
 		}
 
@@ -536,7 +602,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 			continue
 		}
 
-		txnArray = append(txnArray, txn)
+		topTxns = append(topTxns, txn)
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
@@ -544,8 +610,8 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		TopTransactions   []transactions.SignedTxn `json:"top-transactions"`
 		TotalTransactions uint64                   `json:"total-transactions"`
 	}{
-		TopTransactions:   txnArray,
-		TotalTransactions: uint64(len(txnArray)),
+		TopTransactions:   topTxns,
+		TotalTransactions: uint64(len(txnPool)),
 	}
 
 	data, err := encode(handle, response)

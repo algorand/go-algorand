@@ -92,3 +92,60 @@ func TestAccountDeltas(t *testing.T) {
 	a.Equal(addr1, address)
 	a.Equal(sample1, data)
 }
+
+func BenchmarkMakeStateDelta(b *testing.B) {
+	hint := 23000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		MakeStateDelta(nil, 0, hint, 0)
+	}
+}
+
+func BenchmarkBalanceRecord(b *testing.B) {
+	hint := 23000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		x := make([]basics.BalanceRecord, 0, hint*2)
+		if len(x) > 0 {
+			return
+		}
+	}
+}
+
+func BenchmarkAcctCache(b *testing.B) {
+	hint := 23000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		x := make(map[basics.Address]int, hint*2)
+		if len(x) > 0 {
+			return
+		}
+	}
+}
+
+func BenchmarkCreatables(b *testing.B) {
+	hint := 23000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		x := make(map[basics.CreatableIndex]ModifiedCreatable, hint)
+		if len(x) > 0 {
+			return
+		}
+	}
+}
+
+func BenchmarkTxLeases(b *testing.B) {
+	hint := 23000
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		x := make(map[Txlease]basics.Round, hint)
+		if len(x) > 0 {
+			return
+		}
+	}
+}

@@ -27,10 +27,10 @@ import (
 
 func TestAccountsCanClose(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV10.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV15.json"))
 	defer fixture.Shutdown()
 	client := fixture.LibGoalClient
 

@@ -859,10 +859,11 @@ No --delete-input flag specified, exiting without installing key.`)
 		dataDir := ensureSingleDataDir()
 
 		client := ensureAlgodClient(dataDir)
-		_, _, err := client.InstallParticipationKeys(partKeyFile)
+		partKey, _, err := client.InstallParticipationKeys(partKeyFile)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
+		partKey.Close()
 		fmt.Println("Participation key installed successfully")
 	},
 }

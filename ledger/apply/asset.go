@@ -24,7 +24,7 @@ import (
 )
 
 func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
-	res := make(map[basics.AssetIndex]basics.AssetHolding)
+	res := make(map[basics.AssetIndex]basics.AssetHolding, len(m))
 	for id, val := range m {
 		res[id] = val
 	}
@@ -32,7 +32,7 @@ func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.
 }
 
 func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
-	res := make(map[basics.AssetIndex]basics.AssetParams)
+	res := make(map[basics.AssetIndex]basics.AssetParams, len(m))
 	for id, val := range m {
 		res[id] = val
 	}
@@ -329,6 +329,13 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		// If we are closing out 0 units of the asset, then takeOut
 		// and putIn will short circuit (so bypassFreeze doesn't matter)
 		_, bypassFreeze := dst.AssetParams[ct.XferAsset]
+
+		// AssetCloseAmount was a late addition, checking that the current protocol version supports it.
+		if balances.ConsensusParams().EnableAssetCloseAmount {
+			// Add the close amount to ApplyData.
+			closeAmount := sndHolding.Amount
+			ad.AssetClosingAmount = closeAmount
+		}
 
 		// Move the balance out.
 		err = takeOut(balances, source, ct.XferAsset, sndHolding.Amount, bypassFreeze)

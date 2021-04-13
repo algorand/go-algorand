@@ -31,7 +31,7 @@ import (
 
 func TestGroupTransactions(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
@@ -101,7 +101,7 @@ func TestGroupTransactions(t *testing.T) {
 
 func TestGroupTransactionsDifferentSizes(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
@@ -207,7 +207,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 
 func TestGroupTransactionsSubmission(t *testing.T) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
