@@ -146,23 +146,30 @@ func (hs *historicStats) updateRequestPenalty(counter uint64) float64 {
 	return hs.computerPenalty()
 }
 
+// removes steps least recent penalties and recomputes the rank with the new penalty value
 func (hs *historicStats) resetRequestPenalty(steps int, initialRank int, class peerClass) int {
-	if len(hs.requestGaps) == 0 || len(hs.rankSamples) == 0 {
+	if len(hs.requestGaps) == 0 {
 		return initialRank
 	}
-	// resetRequestPenalty cannot move the peer to a better class
+	// resetRequestPenalty cannot move the peer to a better class if the peer was moved
+	// to a lower class (e.g. failed downloads or invalid downloads)
 	if upperBound(class) < initialRank {
 		return initialRank
 	}
+	// if setps is 0, it is a full reset
 	if steps == 0 {
 		hs.requestGaps = make([]uint64, 0, hs.windowSize)
 		hs.gapSum = 0.0
 		return int(float64(hs.rankSum) / float64(len(hs.rankSamples)))
 	}
-	removed := hs.requestGaps[0]
-	hs.requestGaps = hs.requestGaps[1:]
-	hs.gapSum -= 1.0 / float64(removed)
 
+	if steps > len(hs.requestGaps) {
+		steps = len(hs.requestGaps)
+	}
+	for s := 0; s < steps; s++ {
+		hs.gapSum -= 1.0 / float64(hs.requestGaps[s])
+	}
+	hs.requestGaps = hs.requestGaps[steps:]
 	return int(hs.computerPenalty() * (float64(hs.rankSum) / float64(len(hs.rankSamples))))
 }
 
@@ -196,6 +203,8 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 		// the peer from the class if it is repeatedly
 		// failing. This is to make sure to switch to the next
 		// class when all peers in this class are failing.
+		// Here, +10 is added. This is of little consequence, and the
+		// purpose is to avoid rounding errors.
 		value = upperBound(class) + 10
 	}
 
@@ -297,7 +306,11 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 			if pool.peers[pr].peer == peer {
 				continue
 			}
-			newRank := localPeer.history.resetRequestPenalty(1, pool.rank, pool.peers[pr].class)
+			// make the removal of penalty at a faster rate than adding it, so that the
+			// performance of the peer dominates in the evaluation over the freequency.
+			// Otherwise, the peer selection will oscillate between the good performing and
+			// a bad performing peers when sufficient penalty is accumulated to the good peer.
+			newRank := localPeer.history.resetRequestPenalty(5, pool.rank, pool.peers[pr].class)
 			if newRank != pool.rank {
 				upeer := pool.peers[pr].peer
 				class := pool.peers[pr].class
