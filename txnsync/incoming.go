@@ -151,7 +151,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		}
 		txnGroups, err := decodeTransactionGroups(txMsg.TransactionGroups.Bytes)
 		if err != nil {
-			s.log.Warnf("received transactions groups failed %v\n", err)
+			s.log.Warnf("failed to decode received transactions groups: %v\n", err)
 			continue
 		}
 
