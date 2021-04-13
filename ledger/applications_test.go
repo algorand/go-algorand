@@ -517,8 +517,8 @@ return`
 	err = l.accts.accountsq.lookupStmt.QueryRow(userOptin[:]).Scan(&rowid, &dbRound, &buf)
 	a.NoError(err)
 	a.Equal(expectedUserOptIn, buf)
-	pad, err := l.accts.accountsq.lookup(userOptin)
-	a.Nil(pad.accountData.AppLocalStates[appIdx].KeyValue)
+	dbad, err := l.accts.accountsq.lookup(userOptin)
+	a.Nil(dbad.pad.AccountData.AppLocalStates[appIdx].KeyValue)
 	ad, err := l.Lookup(dbRound, userOptin)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)
 

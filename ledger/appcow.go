@@ -385,24 +385,6 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	return nil // note: deletion cannot cause us to violate maxCount
 }
 
-// MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
-	base := &roundCowBase{
-		l:        l,
-		rnd:      round - 1,
-		proto:    config.Consensus[proto],
-		accounts: make(map[basics.Address]basics.AccountData),
-	}
-
-	hdr := bookkeeping.BlockHeader{
-		Round:        round,
-		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: proto},
-	}
-	hint := 2
-	cb := makeRoundCowState(base, hdr, prevTimestamp, hint)
-	return cb
-}
-
 // StatefulEval runs application.
 // Execution happens in a child cow and all modifications are merged into parent if the program passes
 func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta basics.EvalDelta, err error) {
