@@ -117,7 +117,7 @@ type historicStats struct {
 	rankSum     uint64
 	requestGaps []uint64
 	gapSum      float64
-	counter uint64
+	counter     uint64
 }
 
 func makeHistoricStatus(windowSize int) *historicStats {
@@ -182,7 +182,9 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 			hs.requestGaps = hs.requestGaps[1:]
 		}
 	}
-	
+
+	initalRank := value
+
 	// Download may fail for various reasons. Give it additional tries
 	// and see if it recovers/improves.
 	if value == peerRankDownloadFailed {
@@ -196,18 +198,19 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	hs.rankSamples = append(hs.rankSamples, value)
 	hs.rankSum += uint64(value)
 
-	// A penalty is added relative to how freequently the peer is used
-	penalty := hs.updateRequestPenalty(counter)
 	// The average performance of the peer
 	average := float64(hs.rankSum) / float64(len(hs.rankSamples))
 
-	if int(average) > upperBound(class) && value == peerRankDownloadFailed {
+	if int(average) > upperBound(class) && initalRank == peerRankDownloadFailed {
 		// peerRankDownloadFailed will be delayed, to give the peer
 		// additional time to improve. If odes not improve over time,
 		// the average will exceed the class limit. At this point,
 		// it will be pushed down to download failed class.
 		return peerRankDownloadFailed
 	}
+
+	// A penalty is added relative to how freequently the peer is used
+	penalty := hs.updateRequestPenalty(counter)
 
 	// The rank based on the performance and the freequency
 	avgWithPenalty := int(penalty * average)
