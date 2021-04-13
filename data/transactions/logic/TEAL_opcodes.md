@@ -840,6 +840,8 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - push the following program bytes to the stack
 - LogicSigVersion >= 3
 
+pushbytes args are not added to the bytecblock during assembly processes
+
 ## pushint uint
 
 - Opcode: 0x81 {varuint int}
@@ -847,3 +849,5 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Pushes: uint64
 - push immediate UINT to the stack as an integer
 - LogicSigVersion >= 3
+
+pushint args are not added to the intcblock during assembly processes

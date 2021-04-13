@@ -34,7 +34,7 @@ func TestBasicPartitionRecovery(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	// Overview of this test:
 	// Start a two-node network (with 50% each)
@@ -114,7 +114,7 @@ func TestPartitionRecoveryStaggerRestart(t *testing.T) {
 }
 
 func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFixture) {
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	// Get Node1 so we can wait until it has reached the target round
 	nc1, err := fixture.GetNodeController("Node1")
@@ -159,7 +159,7 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	// Overview of this test:
 	// Start a three-node network capable of making progress.
@@ -210,7 +210,7 @@ func TestPartitionHalfOffline(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	// Overview of this test:
 	// Start a TenNodeDistributed network

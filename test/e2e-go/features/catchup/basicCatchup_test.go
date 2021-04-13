@@ -35,7 +35,7 @@ func TestBasicCatchup(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	// Overview of this test:
 	// Start a two-node network (primary has 0%, secondary has 100%)
@@ -78,13 +78,14 @@ func TestBasicCatchup(t *testing.T) {
 func TestCatchupOverGossip(t *testing.T) {
 	t.Parallel()
 
+	syncTest := fixtures.SynchronizedTest(t)
 	supportedVersions := network.SupportedProtocolVersions
-	require.LessOrEqual(t, len(supportedVersions), 3)
+	require.LessOrEqual(syncTest, len(supportedVersions), 3)
 
 	// ledger node upgraded version, fetcher node upgraded version
 	// Run with the default values. Instead of "", pass the default value
 	// to exercise loading it from the config file.
-	runCatchupOverGossip(t, supportedVersions[0], supportedVersions[0])
+	runCatchupOverGossip(syncTest, supportedVersions[0], supportedVersions[0])
 	for i := 1; i < len(supportedVersions); i++ {
 		runCatchupOverGossip(t, supportedVersions[i], "")
 		runCatchupOverGossip(t, "", supportedVersions[i])
@@ -92,7 +93,7 @@ func TestCatchupOverGossip(t *testing.T) {
 	}
 }
 
-func runCatchupOverGossip(t *testing.T,
+func runCatchupOverGossip(t fixtures.TestingTB,
 	ledgerNodeDowngradeTo,
 	fetcherNodeDowngradeTo string) {
 
@@ -117,7 +118,7 @@ func runCatchupOverGossip(t *testing.T,
 		a.NoError(err)
 		cfg, err := config.LoadConfigFromDisk(dir)
 		a.NoError(err)
-		require.Empty(t, cfg.NetworkProtocolVersion)
+		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = ledgerNodeDowngradeTo
 		cfg.SaveToDisk(dir)
 	}
@@ -127,7 +128,7 @@ func runCatchupOverGossip(t *testing.T,
 		dir := fixture.PrimaryDataDir()
 		cfg, err := config.LoadConfigFromDisk(dir)
 		a.NoError(err)
-		require.Empty(t, cfg.NetworkProtocolVersion)
+		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = fetcherNodeDowngradeTo
 		cfg.SaveToDisk(dir)
 	}
@@ -177,7 +178,7 @@ func runCatchupOverGossip(t *testing.T,
 
 		if time.Now().Sub(waitStart) > time.Minute {
 			// it's taking too long.
-			require.FailNow(t, "Waiting too long for catchup to complete")
+			a.FailNow("Waiting too long for catchup to complete")
 		}
 
 		time.Sleep(50 * time.Millisecond)
@@ -198,7 +199,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 		t.Skip()
 	}
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := make(config.ConsensusProtocols)
 	// The following two protocols: testUnupgradedProtocol and testUnupgradedToProtocol
