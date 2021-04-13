@@ -87,7 +87,7 @@ var generateTemplateLines = []string{
 	"otwt => OneThousandWallets network template",
 	"otwg => OneThousandWallets genesis data",
 	"ohwg => OneHundredWallets genesis data",
-	"loadingFile => create accounts database file according to -wallet-name -rounds -ntxnss -naccts -nassets -napps options",
+	"loadingFile => create accounts database file according to -wallet-name -rounds -ntxns -naccts -nassets -napps options",
 }
 
 var generateCmd = &cobra.Command{
