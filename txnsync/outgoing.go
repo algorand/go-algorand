@@ -132,12 +132,22 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 	}
 
 	if (msgOps&messageConstBloomFilter == messageConstBloomFilter) && len(pendingTransactions.pendingTransactionsGroups) > 0 {
+		var lastBloomFilter *bloomFilter
+		// for relays, where we send a full bloom filter to everyone, we want to coordinate that with a single
+		// copy of the bloom filter, to prevent re-creation.
+		if s.isRelay {
+			lastBloomFilter = &s.lastBloomFilter
+		} else {
+			// for peers, we want to make sure we don't regenerate the same bloom filter as before.
+			lastBloomFilter = &peer.lastSentBloomFilter
+		}
 		// generate a bloom filter that matches the requests params.
-		metaMessage.filter = makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, uint32(s.node.Random(0xffffffff)))
+		metaMessage.filter = makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, uint32(s.node.Random(0xffffffff)), lastBloomFilter)
 		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
 			metaMessage.message.TxnBloomFilter = metaMessage.filter.encode()
 			bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()
 		}
+		s.lastBloomFilter = metaMessage.filter
 	}
 
 	if msgOps&messageConstTransactions == messageConstTransactions {
