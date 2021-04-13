@@ -117,7 +117,6 @@ type historicStats struct {
 	rankSum     uint64
 	requestGaps []uint64
 	gapSum      float64
-	//	lastRequest time.Time
 	counter uint64
 }
 
@@ -167,6 +166,12 @@ func (hs *historicStats) resetRequestPenalty(steps int, initialRank int, class p
 // based on the average of ranks in the windowSize window
 func (hs *historicStats) push(value int, counter uint64, class peerClass) (averagedRank int) {
 
+	// This is the lowest ranking class, and is not subject to giving another chance.
+	// Do not modify this value with historical data.
+	if value == peerRankInvalidDownload {
+		return value
+	}
+
 	// This is a moving window. Remore the least recent value once the window is full
 	if len(hs.rankSamples) == hs.windowSize {
 		hs.rankSum -= uint64(hs.rankSamples[0])
@@ -177,14 +182,15 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 			hs.requestGaps = hs.requestGaps[1:]
 		}
 	}
-	dontBound := false
+	
+	// Download may fail for various reasons. Give it additional tries
+	// and see if it recovers/improves.
 	if value == peerRankDownloadFailed {
 		// Set the rank to 1 + the class upper bound, to evict
 		// the peer from the class if it is repeatedly
 		// failing. This is to make sure to switch to the next
 		// class when all peers in this class are failing.
 		value = upperBound(class) + 10
-		dontBound = true
 	}
 
 	hs.rankSamples = append(hs.rankSamples, value)
@@ -194,14 +200,18 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	penalty := hs.updateRequestPenalty(counter)
 	// The average performance of the peer
 	average := float64(hs.rankSum) / float64(len(hs.rankSamples))
+
+	if int(average) > upperBound(class) && value == peerRankDownloadFailed {
+		// peerRankDownloadFailed will be delayed, to give the peer
+		// additional time to improve. If odes not improve over time,
+		// the average will exceed the class limit. At this point,
+		// it will be pushed down to download failed class.
+		return peerRankDownloadFailed
+	}
+
 	// The rank based on the performance and the freequency
 	avgWithPenalty := int(penalty * average)
-	if dontBound {
-		if int(average) > upperBound(class) {
-			return peerRankDownloadFailed
-		}
-		return avgWithPenalty
-	}
+
 	// Keep the peer in the same class. The rank will be within bounds, but
 	// the penalty may push it over. Prevent it here.
 	bounded := boundRankByClass(avgWithPenalty, class)
