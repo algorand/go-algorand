@@ -68,7 +68,7 @@ func u64absDiff(a, b uint64) uint64 {
 }
 
 // testable inner function that doesn't touch filesystem
-func setupGenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusProtocols, verboseOut io.Writer) (proto protocol.ConsensusVersion, consensusParams config.ConsensusParams, allocation []genesisAllocation, err error) {
+func setupGenerateGenesisFiles(genesisData *GenesisData, consensus config.ConsensusProtocols, verboseOut io.Writer) (proto protocol.ConsensusVersion, consensusParams config.ConsensusParams, allocation []genesisAllocation, err error) {
 	err = nil
 	// Backwards compatibility with older genesis files: if the consensus
 	// protocol version is not specified, default to V0.
@@ -139,7 +139,7 @@ func setupGenerateGenesisFiles(genesisData GenesisData, consensus config.Consens
 
 // GenerateGenesisFiles generates the genesis.json file and wallet files for a give genesis configuration.
 func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusProtocols, outDir string, verboseOut io.Writer) error {
-	proto, consensusParams, allocation, err := setupGenerateGenesisFiles(genesisData, consensus, verboseOut)
+	proto, consensusParams, allocation, err := setupGenerateGenesisFiles(&genesisData, consensus, verboseOut)
 	if err != nil {
 		return err
 	}
