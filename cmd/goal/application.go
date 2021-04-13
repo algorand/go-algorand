@@ -416,7 +416,7 @@ var createAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -499,7 +499,7 @@ var updateAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -577,7 +577,7 @@ var optInAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -655,7 +655,7 @@ var closeOutAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -733,7 +733,7 @@ var clearAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -811,7 +811,7 @@ var callAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -889,7 +889,7 @@ var deleteAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
 				}

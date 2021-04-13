@@ -151,7 +151,7 @@ var clerkCmd = &cobra.Command{
 	},
 }
 
-func waitForCommit(client libgoal.Client, txid string) error {
+func waitForCommit(client libgoal.Client, txid string, lastWaitRound uint64) error {
 	// Get current round information
 	stat, err := client.Status()
 	if err != nil {
@@ -159,6 +159,9 @@ func waitForCommit(client libgoal.Client, txid string) error {
 	}
 
 	for {
+		if stat.LastRound > lastWaitRound {
+			return fmt.Errorf(errorTransactionExpired, txid)
+		}
 		// Check if we know about the transaction yet
 		txn, err := client.PendingTransactionInformation(txid)
 		if err != nil {
@@ -175,7 +178,7 @@ func waitForCommit(client libgoal.Client, txid string) error {
 		}
 
 		reportInfof(infoTxPending, txid, stat.LastRound)
-		stat, err = client.WaitForRound(stat.LastRound + 1)
+		stat, err = client.WaitForRound(stat.LastRound)
 		if err != nil {
 			return fmt.Errorf(errorRequestFail, err)
 		}
@@ -460,7 +463,7 @@ var sendCmd = &cobra.Command{
 			reportInfof(infoTxIssued, amount, fromAddressResolved, toAddressResolved, txid, fee)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lastValid)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
