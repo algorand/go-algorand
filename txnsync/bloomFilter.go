@@ -90,7 +90,6 @@ func (bf *bloomFilter) test(txID transactions.Txid) bool {
 
 func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, shuffler uint32, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams
-
 	switch {
 	case encodingParams.Modulator == 0:
 		// we want none.
