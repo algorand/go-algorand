@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -348,6 +349,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 //GenerateDatabaseFiles generates database files according to the configurations
 func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, genesisFolder string) error {
 
+	fmt.Printf("starts %v\n", time.Now())
 	accounts := make(map[basics.Address]basics.AccountData)
 
 	genesis, err := bookkeeping.LoadGenesisFromFile(genesisFolder + "/genesis.json")
@@ -407,8 +409,8 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
 	accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
 	//fund src account with enough funding
-	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bootstrappedNet.nAssets) * params.MinBalance * 2}
-	totalFunds := srcWallet.State.MicroAlgos.Raw + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts
+	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bootstrappedNet.nAssets) * params.MinBalance * 10}
+	totalFunds := srcWallet.State.MicroAlgos.Raw + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.roundTrxCnt*fileCfgs.NumRounds
 	accounts[src] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: totalFunds})
 
 	bootstrappedNet.poolAddr = poolAddr
@@ -421,6 +423,8 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	}
 	localCfg := config.GetDefaultLocal()
 	localCfg.Archival = true
+	localCfg.CatchpointTracking = -1
+	localCfg.LedgerSynchronousMode = 0
 	log := logging.NewLogger()
 	l, err := ledger.OpenLedger(log, genesisFolder+"/bootstrapped", false, initState, localCfg)
 	if err != nil {
@@ -450,6 +454,13 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	}
 
 	l.WaitForCommit(bootstrappedNet.round)
+	l.Close()
+
+	localCfg.CatchpointTracking = 0
+	l, err = ledger.OpenLedger(log, genesisFolder+"/bootstrapped", false, initState, localCfg)
+	if err != nil {
+		return err
+	}
 	l.Close()
 	return nil
 }
@@ -498,6 +509,9 @@ func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrap
 }
 
 func createBlock(src basics.Address, prev bookkeeping.Block, roundTrxCnt uint64, bootstrappedNet *netState, csParams config.ConsensusParams) (bookkeeping.Block, error) {
+	if bootstrappedNet.round%1000 == 0 {
+		fmt.Printf("round %v, time %v\n", bootstrappedNet.round, time.Now())
+	}
 	payset := make([]transactions.SignedTxnInBlock, 0, roundTrxCnt)
 	txibs := make([]transactions.SignedTxnInBlock, 0, roundTrxCnt)
 
