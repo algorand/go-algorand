@@ -409,7 +409,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
 	accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
 	//fund src account with enough funding
-	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bootstrappedNet.nAssets) * params.MinBalance * 10}
+	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bootstrappedNet.nAssets) * params.MinBalance * 2}
 	totalFunds := srcWallet.State.MicroAlgos.Raw + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.roundTrxCnt*fileCfgs.NumRounds
 	accounts[src] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: totalFunds})
 
@@ -462,6 +462,8 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		return err
 	}
 	l.Close()
+
+	fmt.Printf("ends %v\n", time.Now())
 	return nil
 }
 
@@ -617,7 +619,8 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 
 	if bootstrappedNet.txState == protocol.PaymentTx {
 		var accounts []basics.Address
-
+		bootstrappedNet.appsPerAcct = 0
+		bootstrappedNet.assetPerAcct = 0
 		n := bootstrappedNet.nAccounts
 		if n == 0 || n >= bootstrappedNet.roundTrxCnt {
 			n = bootstrappedNet.roundTrxCnt
