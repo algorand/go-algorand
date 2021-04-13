@@ -121,9 +121,13 @@ type historicStats struct {
 }
 
 func makeHistoricStatus(windowSize int) *historicStats {
+	// Initialize the window (rankSamples) with zeros.
+	// This way, every peer will slowly build up its profile.
+	// Otherwise, if the best peer gets a bad download the first time,
+	// may never be selected again.
 	hs := historicStats{
 		windowSize:  windowSize,
-		rankSamples: make([]int, 0, windowSize),
+		rankSamples: make([]int, windowSize, windowSize),
 		requestGaps: make([]uint64, 0, windowSize),
 		rankSum:     0,
 		gapSum:      0.0}
@@ -131,14 +135,14 @@ func makeHistoricStatus(windowSize int) *historicStats {
 }
 
 func (hs *historicStats) computerPenalty() float64 {
-	return 1 + (math.Exp(hs.gapSum/10) / 1000)
+	return 1 + (math.Exp(hs.gapSum/10.0) / 1000)
 }
 
 func (hs *historicStats) updateRequestPenalty(counter uint64) float64 {
 	newGap := counter - hs.counter
 	hs.counter = counter
 	hs.requestGaps = append(hs.requestGaps, newGap)
-	hs.gapSum += 1 / float64(newGap)
+	hs.gapSum += 1.0 / float64(newGap)
 	return hs.computerPenalty()
 }
 
@@ -152,12 +156,12 @@ func (hs *historicStats) resetRequestPenalty(steps int, initialRank int, class p
 	}
 	if steps == 0 {
 		hs.requestGaps = make([]uint64, 0, hs.windowSize)
-		hs.gapSum = 0
+		hs.gapSum = 0.0
 		return int(float64(hs.rankSum) / float64(len(hs.rankSamples)))
 	}
 	removed := hs.requestGaps[0]
 	hs.requestGaps = hs.requestGaps[1:]
-	hs.gapSum -= 1 / float64(removed)
+	hs.gapSum -= 1.0 / float64(removed)
 
 	return int(hs.computerPenalty() * (float64(hs.rankSum) / float64(len(hs.rankSamples))))
 }
@@ -176,14 +180,14 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	if len(hs.rankSamples) == hs.windowSize {
 		hs.rankSum -= uint64(hs.rankSamples[0])
 		hs.rankSamples = hs.rankSamples[1:]
-
-		if len(hs.requestGaps) > 0 {
-			hs.gapSum -= 1.0 / float64(hs.requestGaps[0])
-			hs.requestGaps = hs.requestGaps[1:]
-		}
 	}
 
-	initalRank := value
+	if len(hs.requestGaps) == hs.windowSize {
+		hs.gapSum -= 1.0 / float64(hs.requestGaps[0])
+		hs.requestGaps = hs.requestGaps[1:]
+	}
+
+	initialRank := value
 
 	// Download may fail for various reasons. Give it additional tries
 	// and see if it recovers/improves.
@@ -201,7 +205,7 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	// The average performance of the peer
 	average := float64(hs.rankSum) / float64(len(hs.rankSamples))
 
-	if int(average) > upperBound(class) && initalRank == peerRankDownloadFailed {
+	if int(average) > upperBound(class) && initialRank == peerRankDownloadFailed {
 		// peerRankDownloadFailed will be delayed, to give the peer
 		// additional time to improve. If odes not improve over time,
 		// the average will exceed the class limit. At this point,
