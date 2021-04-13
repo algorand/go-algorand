@@ -50,6 +50,10 @@ if { [catch {
                 # this is a legit possible case, so just keep iterating if we hit this one.
                 close;
             }
+            -re {Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: txn dead: round ([0-9]+) outside of ([0-9]+)--([0-9]+)} {
+                # this is a legit possible case, so just keep iterating if we hit this one.
+                close;
+            }
             eof { ::AlgorandGoal::CheckEOF "Failed to send a dummy transaction" }
         }
         set TEST_TRANSACTION_EXPIRATION [expr {$TEST_TRANSACTION_EXPIRATION - 1}]
