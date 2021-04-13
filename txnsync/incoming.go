@@ -22,6 +22,7 @@ import (
 )
 
 var errUnsupportedTransactionSyncMessageVersion = errors.New("unsupported transaction sync message version")
+var errTransactionSyncIncomingMessageQueueFull = errors.New("transaction sync incoming message queue is full")
 
 type incomingMessage struct {
 	networkPeer    interface{}
@@ -38,10 +39,12 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	_, err := txMsg.UnmarshalMsg(message)
 	if err != nil {
 		// if we recieved a message that we cannot parse, disconnect.
+		s.log.Infof("received unparsable transaction sync message from peer. disconnecting from peer.")
 		return err
 	}
 	if txMsg.Version != txnBlockMessageVersion {
 		// we receive a message from a version that we don't support, disconnect.
+		s.log.Infof("received unsupported transaction sync message version from peer. disconnecting from peer.")
 		return errUnsupportedTransactionSyncMessageVersion
 	}
 	if peer == nil {
@@ -50,19 +53,27 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		select {
 		case s.incomingMessagesCh <- incomingMessage{networkPeer: networkPeer, message: txMsg, sequenceNumber: sequenceNumber, encodedSize: len(message)}:
 		default:
-			// todo - handle the case where we can't write to the channel.
+			// if we can't enqueue that, return an error, which would disconnect the peer.
+			// ( we have to disconnect, since otherwise, we would have no way to syncronize the sequence number)
+			s.log.Infof("unable to enqueue incoming message from a peer without txsync allocated data; incomingMessagesCh is full. disconnecting from peer.")
+			return errTransactionSyncIncomingMessageQueueFull
 		}
 		return nil
 	}
 	err = peer.incomingMessages.enqueue(txMsg, sequenceNumber, len(message))
 	if err != nil {
+		// if the incoming message queue for this peer is full, disconnect from this peer.
+		s.log.Infof("unable to enqueue incoming message into peer incoming message backlog. disconnecting from peer.")
 		return err
 	}
 
 	select {
 	case s.incomingMessagesCh <- incomingMessage{peer: peer}:
 	default:
-		// todo - handle the case where we can't write to the channel.
+		// if we can't enqueue that, return an error, which would disconnect the peer.
+		//
+		s.log.Infof("unable to enqueue incoming message from a peer with txsync allocated data; incomingMessagesCh is full. disconnecting from peer.")
+		return errTransactionSyncIncomingMessageQueueFull
 	}
 	return nil
 }
@@ -135,12 +146,12 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		// if the peer's round is more than a single round behind the local node, then we don't want to
 		// try and load the transactions. The other peer should first catch up before getting transactions.
 		if (peer.lastRound + 1) < s.round {
-			s.log.Info("Incoming Txsync #%d late round %d", seq, peer.lastRound)
+			s.log.Infof("Incoming Txsync #%d late round %d", seq, peer.lastRound)
 			continue
 		}
 		txnGroups, err := decodeTransactionGroups(txMsg.TransactionGroups.Bytes)
 		if err != nil {
-			s.log.Warn("received transactions groups failed %v\n", err)
+			s.log.Warnf("failed to decode received transactions groups: %v\n", err)
 			continue
 		}
 
