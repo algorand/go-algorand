@@ -88,27 +88,35 @@ func (bf *bloomFilter) test(txID transactions.Txid) bool {
 	return false
 }
 
-func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, shuffler uint32) (result bloomFilter) {
+func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, shuffler uint32, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams
-	var filtedTransactionsIDs []transactions.Txid
 	switch {
 	case encodingParams.Modulator == 0:
 		// we want none.
 		return
 	case encodingParams.Modulator == 1:
 		// we want all.
-		filtedTransactionsIDs = make([]transactions.Txid, 0, len(txnGroups))
-		for _, group := range txnGroups {
-			filtedTransactionsIDs = append(filtedTransactionsIDs, group.FirstTransactionID)
-		}
 		if len(txnGroups) > 0 {
 			result.containedTxnsRange.firstCounter = txnGroups[0].GroupCounter
 			result.containedTxnsRange.lastCounter = txnGroups[len(txnGroups)-1].GroupCounter
+			result.containedTxnsRange.transactionsCount = uint64(len(txnGroups))
+		}
+
+		if hintPrevBloomFilter != nil {
+			if result.sameParams(*hintPrevBloomFilter) {
+				return *hintPrevBloomFilter
+			}
+		}
+
+		sizeBits, numHashes := bloom.Optimal(len(txnGroups), bloomFilterFalsePositiveRate)
+		result.filter = bloom.New(sizeBits, numHashes, shuffler)
+		for _, group := range txnGroups {
+			result.filter.Set(group.FirstTransactionID[:])
 		}
 	default:
 		// we want subset.
 		result.containedTxnsRange.firstCounter = math.MaxUint64
-		filtedTransactionsIDs = make([]transactions.Txid, 0, len(txnGroups))
+		filtedTransactionsIDs := make([]transactions.Txid, 0, len(txnGroups))
 		for _, group := range txnGroups {
 			txID := group.FirstTransactionID
 			if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {
@@ -120,14 +128,21 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 			}
 			result.containedTxnsRange.lastCounter = group.GroupCounter
 		}
-	}
 
-	sizeBits, numHashes := bloom.Optimal(len(filtedTransactionsIDs), bloomFilterFalsePositiveRate)
-	result.filter = bloom.New(sizeBits, numHashes, shuffler)
-	for _, txid := range filtedTransactionsIDs {
-		result.filter.Set(txid[:])
+		result.containedTxnsRange.transactionsCount = uint64(len(filtedTransactionsIDs))
+
+		if hintPrevBloomFilter != nil {
+			if result.sameParams(*hintPrevBloomFilter) {
+				return *hintPrevBloomFilter
+			}
+		}
+
+		sizeBits, numHashes := bloom.Optimal(len(filtedTransactionsIDs), bloomFilterFalsePositiveRate)
+		result.filter = bloom.New(sizeBits, numHashes, shuffler)
+		for _, txid := range filtedTransactionsIDs {
+			result.filter.Set(txid[:])
+		}
 	}
-	result.containedTxnsRange.transactionsCount = uint64(len(filtedTransactionsIDs))
 
 	return
 }

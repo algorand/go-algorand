@@ -479,7 +479,19 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 	} else {
 		ops |= messageConstTransactions
 		if fetchTransactions {
-			ops |= messageConstBloomFilter | messageConstUpdateRequestParams
+			if p.localTransactionsModulator == 1 {
+				// special optimization if we have just one relay that we're connected to:
+				// generate the bloom filter only once per 2*beta message.
+				// this would reduce the number of unneeded bloom filters generation dramatically.
+				// that single relay would know which messages it previously sent us, and would refrain from
+				// sending these again.
+				if p.nextStateTimestamp == 0 {
+					ops |= messageConstBloomFilter
+				}
+			} else {
+				ops |= messageConstBloomFilter
+			}
+			ops |= messageConstUpdateRequestParams
 		}
 	}
 	return
@@ -498,7 +510,7 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 			} else {
 				// a partial message was sent to an incoming peer
 				if p.nextStateTimestamp > time.Duration(0) {
-					if currentTime+messageTimeWindow < p.nextStateTimestamp {
+					if currentTime+messageTimeWindow*2 < p.nextStateTimestamp {
 						// we have enough time to send another message
 						return messageTimeWindow, peerOpsReschedule
 					}
@@ -512,7 +524,7 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 			}
 		} else {
 			if p.nextStateTimestamp > time.Duration(0) {
-				if currentTime+messageTimeWindow < p.nextStateTimestamp {
+				if currentTime+messageTimeWindow*2 < p.nextStateTimestamp {
 					// we have enough time to send another message
 					return messageTimeWindow, peerOpsReschedule
 				}
