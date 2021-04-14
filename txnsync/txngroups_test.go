@@ -17,10 +17,13 @@
 package txnsync
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -33,12 +36,43 @@ func TestTxnGroupEncoding(t *testing.T) {
 				{
 					Txn: transactions.Transaction{
 						Type: protocol.PaymentTx,
+						Header: transactions.Header{
+							Sender: basics.Address(crypto.Hash([]byte("2"))),
+							Fee: basics.MicroAlgos{Raw: 100},
+						},
+						PaymentTxnFields: transactions.PaymentTxnFields{
+							Receiver: basics.Address(crypto.Hash([]byte("4"))),
+							Amount: basics.MicroAlgos{Raw: 1000},
+						},
 					},
+					Sig: crypto.Signature{1},
+				},
+			},
+		},
+		transactions.SignedTxGroup{
+			Transactions: []transactions.SignedTxn{
+				{
+					Txn: transactions.Transaction{
+						Type: protocol.PaymentTx,
+						Header: transactions.Header{
+							Sender: basics.Address(crypto.Hash([]byte("1"))),
+							Fee: basics.MicroAlgos{Raw: 100},
+						},
+						PaymentTxnFields: transactions.PaymentTxnFields{
+							Receiver: basics.Address(crypto.Hash([]byte("2"))),
+							Amount: basics.MicroAlgos{Raw: 1000},
+						},
+					},
+					Sig: crypto.Signature{2},
 				},
 				{
 					Txn: transactions.Transaction{
 						Type: protocol.KeyRegistrationTx,
+						Header: transactions.Header{
+							Sender: basics.Address(crypto.Hash([]byte("1"))),
+						},
 					},
+					Sig: crypto.Signature{3},
 				},
 			},
 		},
@@ -47,23 +81,44 @@ func TestTxnGroupEncoding(t *testing.T) {
 				{
 					Txn: transactions.Transaction{
 						Type: protocol.AssetConfigTx,
+						Header: transactions.Header{
+							Sender: basics.Address(crypto.Hash([]byte("1"))),
+							Fee: basics.MicroAlgos{Raw: 100},
+						},
 					},
+					Sig: crypto.Signature{4},
 				},
 				{
 					Txn: transactions.Transaction{
 						Type: protocol.AssetFreezeTx,
+						Header: transactions.Header{
+							Sender: basics.Address(crypto.Hash([]byte("1"))),
+						},
 					},
+					Sig: crypto.Signature{5},
 				},
 				{
 					Txn: transactions.Transaction{
 						Type: protocol.CompactCertTx,
+						Header: transactions.Header{
+							Sender: basics.Address(crypto.Hash([]byte("1"))),
+						},
 					},
+					Msig: crypto.MultisigSig{Version: 1},
 				},
 			},
 		},
 	}
+	for _, txns := range inTxnGroups {
+		var txGroup transactions.TxGroup
+		txGroup.TxGroupHashes = make([]crypto.Digest, len(txns.Transactions))
+		for i, tx := range txns.Transactions {
+			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
+		}
+	}
 	encodedGroupsBytes := encodeTransactionGroups(inTxnGroups)
+	fmt.Println(len(encodedGroupsBytes))
 	out, err := decodeTransactionGroups(encodedGroupsBytes)
 	require.NoError(t, err)
-	require.Equal(t, inTxnGroups, out)
+	require.ElementsMatch(t, inTxnGroups, out)
 }
