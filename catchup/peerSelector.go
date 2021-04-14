@@ -266,23 +266,25 @@ func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
 }
 
 // RankPeer ranks a given peer.
-// return true if the value was updated or false otherwise.
-func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
+// return the old value and the new updated value.
+// updated value could be different from the input rank.
+func (ps *peerSelector) RankPeer(peer network.Peer, rank int) (int, int) {
 	if peer == nil {
-		return false
+		return -1, -1
 	}
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
 	poolIdx, peerIdx := ps.findPeer(peer)
 	if poolIdx < 0 || peerIdx < 0 {
-		return false
+		return -1, -1
 	}
 	sortNeeded := false
 
 	// we need to remove the peer from the pool so we can place it in a different location.
 	pool := ps.pools[poolIdx]
 	ps.counter++
+	initialRank := pool.rank
 	rank = pool.peers[peerIdx].history.push(rank, ps.counter, pool.peers[peerIdx].class)
 	if pool.rank != rank {
 		class := pool.peers[peerIdx].class
@@ -329,7 +331,7 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) bool {
 	if sortNeeded {
 		ps.sort()
 	}
-	return true
+	return initialRank, rank
 }
 
 // PeerDownloadDurationToRank calculates the rank for a peer given a peer and the block download time.

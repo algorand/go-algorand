@@ -131,13 +131,15 @@ func TestPeerSelector(t *testing.T) {
 
 	// add another peer
 	peers = []network.Peer{&mockHTTPPeer{address: "54321"}, &mockHTTPPeer{address: "abcde"}}
-	require.True(t, peerSelector.RankPeer(peer, 5))
+	r1, r2 := peerSelector.RankPeer(peer, 5)
+	require.True(t, r1 != r2)
 
 	peer, err = peerSelector.GetNextPeer()
 	require.NoError(t, err)
 	require.Equal(t, "abcde", peerAddress(peer))
 
-	require.True(t, peerSelector.RankPeer(peer, 10))
+	r1, r2 = peerSelector.RankPeer(peer, 10)
+	require.True(t, r1 != r2)
 
 	peer, err = peerSelector.GetNextPeer()
 	require.NoError(t, err)
@@ -154,8 +156,10 @@ func TestPeerSelector(t *testing.T) {
 	require.Equal(t, errPeerSelectorNoPeerPoolsAvailable, err)
 	require.Nil(t, peer)
 
-	require.False(t, peerSelector.RankPeer(nil, 10))
-	require.False(t, peerSelector.RankPeer(&mockHTTPPeer{address: "abc123"}, 10))
+	r1, r2 = peerSelector.RankPeer(nil, 10)
+	require.False(t, r1 != r2 )
+	r2, r2 = peerSelector.RankPeer(&mockHTTPPeer{address: "abc123"}, 10)
+	require.False(t, r1 != r2)
 
 	return
 }
