@@ -141,8 +141,15 @@ func (hs *historicStats) computerPenalty() float64 {
 func (hs *historicStats) updateRequestPenalty(counter uint64) float64 {
 	newGap := counter - hs.counter
 	hs.counter = counter
+
+	if len(hs.requestGaps) == hs.windowSize {
+		hs.gapSum -= 1.0 / float64(hs.requestGaps[0])
+		hs.requestGaps = hs.requestGaps[1:]
+	}
+	
 	hs.requestGaps = append(hs.requestGaps, newGap)
 	hs.gapSum += 1.0 / float64(newGap)
+	
 	return hs.computerPenalty()
 }
 
@@ -187,11 +194,6 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	if len(hs.rankSamples) == hs.windowSize {
 		hs.rankSum -= uint64(hs.rankSamples[0])
 		hs.rankSamples = hs.rankSamples[1:]
-	}
-
-	if len(hs.requestGaps) == hs.windowSize {
-		hs.gapSum -= 1.0 / float64(hs.requestGaps[0])
-		hs.requestGaps = hs.requestGaps[1:]
 	}
 
 	initialRank := value
