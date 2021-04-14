@@ -32,8 +32,8 @@ import (
 	"github.com/algorand/go-algorand/data/datatest"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 func BenchmarkServiceFetchBlocks(b *testing.B) {
@@ -44,7 +44,7 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 
 	require.NotNil(b, remote)
 	require.NotNil(b, local)
-
+	
 	// Create a network and block service
 	net := &httpTestPeerSource{}
 	ls := rpcs.MakeBlockService(logging.TestingLog(b), config.GetDefaultLocal(), remote, net, "test genesisID")
@@ -54,7 +54,7 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
 	net.addPeer(rootURL)
-
+	
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 
