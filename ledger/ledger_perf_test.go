@@ -256,7 +256,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 				var stxn transactions.SignedTxn
 				stxn.Txn = tx
 				stxn.Sig = crypto.Signature{1}
-				err = eval.Transaction(stxn, transactions.ApplyData{})
+				err = eval.Transaction(stxn)
 
 			}
 
@@ -287,7 +287,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 					var stxn transactions.SignedTxn
 					stxn.Txn = tx
 					stxn.Sig = crypto.Signature{1}
-					err = eval.Transaction(stxn, transactions.ApplyData{})
+					err = eval.Transaction(stxn)
 				}
 				break
 			}

@@ -84,7 +84,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 	// Correct signature should work
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.Transaction(st)
 	require.NoError(t, err)
 
 	// Broken signature should fail
@@ -154,7 +154,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.NoError(t, err)
 
-	err = eval.Transaction(stxn, transactions.ApplyData{})
+	err = eval.Transaction(stxn)
 	require.NoError(t, err)
 
 	t3 := txn
@@ -277,7 +277,7 @@ func TestRekeying(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
-			err = eval.Transaction(stxn, transactions.ApplyData{})
+			err = eval.Transaction(stxn)
 			if err != nil {
 				return err
 			}
@@ -636,7 +636,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 			},
 		}
 		st := txn.Sign(keys[sender])
-		err = bev.Transaction(st, transactions.ApplyData{})
+		err = bev.Transaction(st)
 		require.NoError(b, err)
 	}
 

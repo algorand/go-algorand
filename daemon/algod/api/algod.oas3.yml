@@ -3179,6 +3179,16 @@
     "/v2/transactions/params": {
       "get": {
         "operationId": "TransactionParams",
+        "parameters": [
+          {
+            "description": "The speculative context in which to perform the query or operation.",
+            "in": "query",
+            "name": "speculation",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

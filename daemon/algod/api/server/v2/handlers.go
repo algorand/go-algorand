@@ -67,7 +67,9 @@ type ledgerForApiHandlers interface {
 // NodeInterface represents node fns used by the handlers.
 type NodeInterface interface {
 	Ledger() *data.Ledger
-	SpeculationLedger(token string) *data.SpeculationLedger
+	NewSpeculationLedger(rnd basics.Round) (string, error)
+	SpeculationLedger(token string) (*data.SpeculationLedger, error)
+	DestroySpeculationLedger(token string)
 	Status() (s node.StatusReport, err error)
 	GenesisID() string
 	GenesisHash() crypto.Digest
@@ -111,7 +113,10 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	if params.Speculation == nil {
 		ledger = v2.Node.Ledger()
 	} else {
-		ledger = v2.Node.SpeculationLedger(*params.Speculation)
+		ledger, err = v2.Node.SpeculationLedger(*params.Speculation)
+		if err != nil {
+			return badRequest(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
 	}
 	lastRound := ledger.Latest()
 	record, err := ledger.Lookup(lastRound, addr)
@@ -200,13 +205,19 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 }
 
 // Create a speculation context starting at the given block.
-// (POST /v2/blocks/{round}/speculate)
+// (POST /v2/blocks/{round}/speculation)
 func (v2 *Handlers) CreateSpeculation(ctx echo.Context, round uint64) error {
-	//	ledger := v2.Node.Ledger()
-	//	basics.Round(round),
+	if round == 0 {
+		round = uint64(v2.Node.Ledger().Latest())
+	}
+	token, err := v2.Node.NewSpeculationLedger(basics.Round(round))
+	if err != nil {
+		return badRequest(ctx, err, fmt.Sprintf("%v", err), v2.Log)
+	}
+
 	return ctx.JSON(http.StatusOK, generated.SpeculationResponse{
 		Base:  round,
-		Token: "6f45b",
+		Token: token,
 	})
 }
 
@@ -396,6 +407,19 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context, params generated.RawTransac
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
+	if params.Speculation != nil {
+		// Rather than broadcast the txgroup, apply it to the speculation ledger
+		ledger, err := v2.Node.SpeculationLedger(*params.Speculation)
+		if err != nil {
+			return badRequest(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+		err = ledger.Apply(txgroup)
+		if err != nil {
+			return badRequest(ctx, err, fmt.Sprintf("%v", err), v2.Log)
+		}
+		return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: "notImPleMENted"})
+	}
+
 	err = v2.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -473,7 +497,7 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 
 // TransactionParams returns the suggested parameters for constructing a new transaction.
 // (GET /v2/transactions/params)
-func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
+func (v2 *Handlers) TransactionParams(ctx echo.Context, params generated.TransactionParamsParams) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -483,15 +507,27 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 		return serviceUnavailable(ctx, fmt.Errorf("TransactionParams failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
 	}
 
+	version := stat.LastVersion
+	last := stat.LastRound
+
+	if params.Speculation != nil {
+		ledger, err := v2.Node.SpeculationLedger(*params.Speculation)
+		if err != nil {
+			return badRequest(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+		version = ledger.Version
+		last = ledger.Latest()
+	}
+
 	gh := v2.Node.GenesisHash()
-	proto := config.Consensus[stat.LastVersion]
+	proto := config.Consensus[version]
 
 	response := generated.TransactionParametersResponse{
-		ConsensusVersion: string(stat.LastVersion),
+		ConsensusVersion: string(version),
 		Fee:              v2.Node.SuggestedFee().Raw,
 		GenesisHash:      gh[:],
 		GenesisId:        v2.Node.GenesisID(),
-		LastRound:        uint64(stat.LastRound),
+		LastRound:        uint64(last),
 		MinFee:           proto.MinTxnFee,
 	}
 
@@ -730,7 +766,16 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationId uint64, p
 // (GET /v2/assets/{asset-id})
 func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetId uint64, params generated.GetAssetByIDParams) error {
 	assetIdx := basics.AssetIndex(assetId)
-	ledger := v2.Node.Ledger()
+	var ledger ledgerForApiHandlers
+	var err error
+	if params.Speculation == nil {
+		ledger = v2.Node.Ledger()
+	} else {
+		ledger, err = v2.Node.SpeculationLedger(*params.Speculation)
+		if err != nil {
+			return badRequest(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
 	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)

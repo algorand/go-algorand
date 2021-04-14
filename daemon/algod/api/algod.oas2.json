@@ -749,6 +749,11 @@
         ],
         "summary": "Get parameters for constructing a new transaction",
         "operationId": "TransactionParams",
+        "parameters": [
+          {
+            "$ref": "#/parameters/speculation"
+          }
+        ],
         "responses": {
           "200": {
             "$ref": "#/responses/TransactionParametersResponse"

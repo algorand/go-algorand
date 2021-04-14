@@ -558,6 +558,11 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	return
 }
 
+// State returns the current account state.
+func (eval *BlockEvaluator) State() *roundCowState {
+	return eval.state
+}
+
 // TxnCounter returns the number of transactions that have been added to the block evaluator so far.
 func (eval *BlockEvaluator) TxnCounter() int {
 	return len(eval.block.Payset)
@@ -657,11 +662,11 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *rou
 // Transaction tentatively adds a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
+func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn) error {
 	return eval.transactionGroup([]transactions.SignedTxnWithAD{
 		{
 			SignedTxn: txn,
-			ApplyData: ad,
+			ApplyData: transactions.ApplyData{},
 		},
 	})
 }
@@ -669,8 +674,12 @@ func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transacti
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithAD) error {
-	return eval.transactionGroup(txads)
+func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxn) error {
+	txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
+	for i, tx := range txgroup {
+		txgroupad[i].SignedTxn = tx
+	}
+	return eval.transactionGroup(txgroupad)
 }
 
 // prepareEvalParams creates a logic.EvalParams for each ApplicationCall
@@ -1226,7 +1235,7 @@ transactionGroupLoop:
 			for _, br := range txgroup.balances {
 				base.accounts[br.Addr] = br.AccountData
 			}
-			err = eval.TransactionGroup(txgroup.group)
+			err = eval.transactionGroup(txgroup.group)
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}

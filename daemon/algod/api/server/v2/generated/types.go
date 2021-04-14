@@ -707,6 +707,13 @@ type RawTransactionParams struct {
 	Speculation *string `json:"speculation,omitempty"`
 }
 
+// TransactionParamsParams defines parameters for TransactionParams.
+type TransactionParamsParams struct {
+
+	// The speculative context in which to perform the query or operation.
+	Speculation *string `json:"speculation,omitempty"`
+}
+
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
 type GetPendingTransactionsParams struct {
 

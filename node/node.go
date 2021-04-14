@@ -133,6 +133,9 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	compactCert *compactcert.Worker
+
+	specMu      deadlock.Mutex
+	speculation map[string]*data.SpeculationLedger
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -462,10 +465,45 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 	return node.ledger
 }
 
+// NewSpeculationLedger
+func (node *AlgorandFullNode) NewSpeculationLedger(rnd basics.Round) (string, error) {
+	sl, err := data.NewSpeculationLedger(node.ledger, rnd)
+	if err != nil {
+		return "", err
+	}
+
+	node.specMu.Lock()
+	defer node.specMu.Unlock()
+	if node.speculation == nil {
+		node.speculation = make(map[string]*data.SpeculationLedger)
+	}
+	ver := 0
+	var key string
+	for ok := true; ok; ver++ {
+		key = fmt.Sprintf("spec-%d-%d", rnd, ver)
+		_, ok = node.speculation[key]
+	}
+
+	node.speculation[key] = sl
+
+	return key, nil
+}
+
 // SpeculationLedger gives out a virtual ledger for speculation that
 // had previously be created by NewSpeculationLedger()
-func (node *AlgorandFullNode) SpeculationLedger(token string) *data.SpeculationLedger {
-	return &data.SpeculationLedger{ConcreteLedger: node.ledger}
+func (node *AlgorandFullNode) SpeculationLedger(token string) (*data.SpeculationLedger, error) {
+	sl, ok := node.speculation[token]
+	if !ok {
+		node.log.Errorf("could not find speculation: %s", token)
+		return nil, fmt.Errorf("could not find speculation: %s", token)
+	}
+	return sl, nil
+}
+
+// DestorySpeculationLedger cleans up resources associated with the
+// "named" SpeculationLedger.
+func (node *AlgorandFullNode) DestroySpeculationLedger(token string) {
+	delete(node.speculation, token)
 }
 
 // BroadcastSignedTxGroup broadcasts a transaction group that has already been signed.
