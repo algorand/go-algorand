@@ -46,7 +46,7 @@ var nonParticipatingNodeTemplatePath string
 var relayTemplatePath string
 var sourceWallet string
 var rounds uint64
-var roundTrxCount uint64
+var roundTxnCount uint64
 var accountsCount uint64
 var assetsCount uint64
 var applicationCount uint64
@@ -69,7 +69,7 @@ func init() {
 	generateCmd.Flags().StringVarP(&relayTemplatePath, "relay-template", "", "", "json for a relay node")
 	generateCmd.Flags().StringVarP(&sourceWallet, "wallet-name", "", "", "Source wallet name")
 	generateCmd.Flags().Uint64VarP(&rounds, "rounds", "", 13, "Number of rounds")
-	generateCmd.Flags().Uint64VarP(&roundTrxCount, "ntxns", "", 17, "Transaction count")
+	generateCmd.Flags().Uint64VarP(&roundTxnCount, "ntxns", "", 17, "Transaction count")
 	generateCmd.Flags().Uint64VarP(&accountsCount, "naccounts", "", 31, "Account count")
 	generateCmd.Flags().Uint64VarP(&assetsCount, "nassets", "", 5, "Asset count")
 	generateCmd.Flags().Uint64VarP(&applicationCount, "napps", "", 7, "Application Count")
@@ -175,7 +175,7 @@ template modes for -t:`,
 				reportErrorf("must specify source wallet name with -wname.")
 			}
 
-			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTrxCount, accountsCount, assetsCount, applicationCount)
+			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount)
 		default:
 			reportInfoln("Please specify a valid template name.\nSupported templates are:")
 			for _, line := range generateTemplateLines {
@@ -492,11 +492,11 @@ func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
 	return err
 }
 
-func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTrxCount, accountsCount, assetsCount, applicationCount uint64) error {
+func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount uint64) error {
 
 	var data = remote.BootstrappedNetwork{
 		NumRounds:                 rounds,
-		RoundTransactionsCount:    roundTrxCount,
+		RoundTransactionsCount:    roundTxnCount,
 		GeneratedAccountsCount:    accountsCount,
 		GeneratedAssetsCount:      assetsCount,
 		GeneratedApplicationCount: applicationCount,
@@ -507,11 +507,11 @@ func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, 
 
 func saveLoadingFileDataToDisk(data remote.BootstrappedNetwork, filename string) error {
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err == nil {
-		defer f.Close()
-
-		enc := codecs.NewFormattedJSONEncoder(f)
-		err = enc.Encode(data)
+	if err != nil {
+		return err
 	}
-	return err
+	defer f.Close()
+
+	enc := codecs.NewFormattedJSONEncoder(f)
+	return enc.Encode(data)
 }

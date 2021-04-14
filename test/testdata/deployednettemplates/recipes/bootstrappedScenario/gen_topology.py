@@ -5,7 +5,7 @@ regions = [
 ]
 
 f = open("topology.json", "w")
-f.write("{ \"Hosts\":\n  [")
+f.write("{ 'Hosts':\n  [")
 
 region_count = len(regions)
 first = True
@@ -20,7 +20,7 @@ for  x in node_types:
             first = False
         else:
             f.write(",")
-        f.write ("\n    {\n      \"Name\": \"" + node_name + "\",\n      \"Template\": \"" + region + region_size + "\"\n    }"  )
+        f.write ("\n    {\n      'Name': '" + node_name + "',\n      'Template': '" + region + region_size + "'\n    }"  )
 
 f.write("\n  ]\n}\n")
 f.close()

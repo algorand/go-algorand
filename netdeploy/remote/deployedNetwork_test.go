@@ -26,64 +26,64 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func Test_createSignedTx(t *testing.T) {
+func TestCreateSignedTx(t *testing.T) {
 	var networkState netState
 	networkState.nApplications = 2
 	networkState.nAssets = 2
 	networkState.nAccounts = 10
-	networkState.roundTrxCnt = 4
-	networkState.txState = protocol.PaymentTx
+	networkState.roundTxnCnt = 4
+	networkState.txnState = protocol.PaymentTx
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	secretDst := keypair()
 	src := basics.Address(secretDst.SignatureVerifier)
 
-	//create accounts
-	sntxs, _ := createSignedTx(src, basics.Round(1), params, &networkState)
-	require.Equal(t, 4, len(sntxs))
-	require.Equal(t, protocol.AssetConfigTx, networkState.txState)
-	for _, sntx := range sntxs {
+	//	create accounts
+	sgtxns, _ := createSignedTx(src, basics.Round(1), params, &networkState)
+	require.Equal(t, 4, len(sgtxns))
+	require.Equal(t, protocol.AssetConfigTx, networkState.txnState)
+	for _, sntx := range sgtxns {
 		require.Equal(t, protocol.PaymentTx, sntx.Txn.Type)
 	}
 
 	initialAccounts := networkState.accounts
 
-	//should be creating assets next
-	sntxs, _ = createSignedTx(src, basics.Round(1), params, &networkState)
+	//	should be creating assets next
+	sgtxns, _ = createSignedTx(src, basics.Round(1), params, &networkState)
 	accounts := networkState.accounts
-	require.Equal(t, 2, len(sntxs))
-	require.Equal(t, protocol.ApplicationCallTx, networkState.txState)
+	require.Equal(t, 2, len(sgtxns))
+	require.Equal(t, protocol.ApplicationCallTx, networkState.txnState)
 	require.Equal(t, uint64(0), networkState.nAssets)
-	//same accounts should be used
+	//	same accounts should be used
 	require.Equal(t, initialAccounts[0], accounts[0])
-	for _, sntx := range sntxs {
+	for _, sntx := range sgtxns {
 		require.Equal(t, protocol.AssetConfigTx, sntx.Txn.Type)
 	}
 
-	//should be creating applications next
-	sntxs, _ = createSignedTx(src, basics.Round(1), params, &networkState)
-	require.Equal(t, 2, len(sntxs))
-	require.Equal(t, protocol.PaymentTx, networkState.txState)
+	//	should be creating applications next
+	sgtxns, _ = createSignedTx(src, basics.Round(1), params, &networkState)
+	require.Equal(t, 2, len(sgtxns))
+	require.Equal(t, protocol.PaymentTx, networkState.txnState)
 	require.Equal(t, uint64(0), networkState.nApplications)
 	require.Equal(t, initialAccounts[0], accounts[0])
-	for _, sntx := range sntxs {
+	for _, sntx := range sgtxns {
 		require.Equal(t, protocol.ApplicationCallTx, sntx.Txn.Type)
 	}
 
 	//	create payment transactions for the remainder rounds
-	sntxs, _ = createSignedTx(src, basics.Round(1), params, &networkState)
-	require.Equal(t, 4, len(sntxs))
-	require.Equal(t, protocol.PaymentTx, networkState.txState)
+	sgtxns, _ = createSignedTx(src, basics.Round(1), params, &networkState)
+	require.Equal(t, 4, len(sgtxns))
+	require.Equal(t, protocol.PaymentTx, networkState.txnState)
 	//new accounts should be created
 	accounts = networkState.accounts
 	require.NotEqual(t, initialAccounts[0], accounts[0])
-	for _, sntx := range sntxs {
+	for _, sntx := range sgtxns {
 		require.Equal(t, protocol.PaymentTx, sntx.Txn.Type)
 	}
 
 	//	assets per account should not exceed limit
-	networkState.txState = protocol.PaymentTx
+	networkState.txnState = protocol.PaymentTx
 	networkState.nAssets = 10
 	networkState.nApplications = 10
 	networkState.nAccounts = 1
@@ -91,23 +91,27 @@ func Test_createSignedTx(t *testing.T) {
 	networkState.appsPerAcct = 0
 
 	params.MaxAssetsPerAccount = 5
-	//create 1 account and try to create 6 assets for the account
+	//	create 1 account and try to create 6 assets for the account
 	createSignedTx(src, basics.Round(1), params, &networkState)
-	for i := 0; i < 6; i++ {
+	for i := 0; i < params.MaxAssetsPerAccount; i++ {
 		createSignedTx(src, basics.Round(1), params, &networkState)
 	}
-	require.Equal(t, 5, networkState.assetPerAcct)
+	require.Equal(t, params.MaxAssetsPerAccount, networkState.assetPerAcct)
+	//	txn state has changed to the next one
+	require.Equal(t, protocol.ApplicationCallTx, networkState.txnState)
 
 	params.MaxAppsCreated = 5
-	// try to create 6 apps for the account
-	createSignedTx(src, basics.Round(1), params, &networkState)
-	for i := 0; i < 6; i++ {
+	networkState.appsPerAcct = 0
+	//	try to create 6 apps for the account
+	for i := 0; i < params.MaxAppsCreated; i++ {
 		createSignedTx(src, basics.Round(1), params, &networkState)
 	}
-	require.Equal(t, 5, networkState.appsPerAcct)
+	require.Equal(t, params.MaxAppsCreated, networkState.appsPerAcct)
+	//	txn state has changed to the next one
+	require.Equal(t, protocol.PaymentTx, networkState.txnState)
 }
 
-func Test_accountsNeeded(t *testing.T) {
+func TestAccountsNeeded(t *testing.T) {
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 	params.MaxAppsCreated = 10
 	params.MaxAssetsPerAccount = 20
