@@ -30,6 +30,14 @@ type test struct {
 	outputBuffer string
 }
 
+/*
+func dumpAllTests(outFile io.Writer, tests map[string]test, msg string, args ...interface{}) {
+	fmt.Fprintf(outFile, msg, args...)
+	for _, testData := range tests {
+		fmt.Fprintf(outFile, "running test output "
+	}
+}*/
+
 func logFilter(inFile io.Reader, outFile io.Writer) int {
 	scanner := bufio.NewScanner(inFile)
 
@@ -74,10 +82,12 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			var testName string
 			fmt.Sscanf(line[idx:], "--- PASS: %s", &testName)
 			if _, have := tests[testName]; !have {
-				panic(fmt.Errorf("test '%s' is missing, when parsing '%s'", testName, line))
+				fmt.Fprintf(outFile, "%s\r\n%s\r\n", line, packageOutputBuffer)
+				packageOutputBuffer = ""
+			} else {
+				fmt.Fprintf(outFile, line+"\r\n")
+				delete(tests, testName)
 			}
-			fmt.Fprintf(outFile, line+"\r\n")
-			delete(tests, testName)
 			continue
 		}
 		if idx := strings.Index(line, "--- FAIL:"); idx >= 0 {
@@ -85,7 +95,8 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			fmt.Sscanf(line[idx:], "--- FAIL: %s", &testName)
 			test, have := tests[testName]
 			if !have {
-				panic(fmt.Errorf("test %s is missing", testName))
+				fmt.Fprintf(outFile, "%s\r\n%s\r\n", line, packageOutputBuffer)
+				packageOutputBuffer = ""
 			}
 			fmt.Fprintf(outFile, test.outputBuffer+"\r\n")
 			fmt.Fprintf(outFile, line+"\r\n")
