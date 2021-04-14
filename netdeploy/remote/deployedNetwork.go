@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -625,32 +626,52 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 		if n == 0 || n >= bootstrappedNet.roundTrxCnt {
 			n = bootstrappedNet.roundTrxCnt
 		}
-		for i := uint64(0); i < n; i++ {
-			secretDst := keypair()
-			dst := basics.Address(secretDst.SignatureVerifier)
-			accounts = append(accounts, dst)
 
-			header.Sender = src
+		if !bootstrappedNet.accountsCreated {
+			for i := uint64(0); i < n; i++ {
+				secretDst := keypair()
+				dst := basics.Address(secretDst.SignatureVerifier)
+				accounts = append(accounts, dst)
 
-			tx := transactions.Transaction{
-				Type:   protocol.PaymentTx,
-				Header: header,
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: dst,
-					Amount:   bootstrappedNet.fundPerAccount,
-				},
+				header.Sender = src
+
+				tx := transactions.Transaction{
+					Type:   protocol.PaymentTx,
+					Header: header,
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: dst,
+						Amount:   bootstrappedNet.fundPerAccount,
+					},
+				}
+				t := transactions.SignedTxn{Txn: tx}
+				sgntx = append(sgntx, t)
 			}
-			t := transactions.SignedTxn{Txn: tx}
-			sgntx = append(sgntx, t)
+			bootstrappedNet.nAccounts -= uint64(len(sgntx))
+			bootstrappedNet.accounts = accounts
+			if bootstrappedNet.nAssets > 0 {
+				bootstrappedNet.txState = protocol.AssetConfigTx
+			} else if bootstrappedNet.nApplications > 0 {
+				bootstrappedNet.txState = protocol.ApplicationCallTx
+			}
+		} else {
+			//send payments to created accounts randomly
+			accti := rand.Intn(len(bootstrappedNet.accounts))
+			for i := uint64(0); i < n; i++ {
+				header.Sender = src
+				tx := transactions.Transaction{
+					Type:   protocol.PaymentTx,
+					Header: header,
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: bootstrappedNet.accounts[accti],
+						Amount:   bootstrappedNet.fundPerAccount,
+					},
+				}
+				t := transactions.SignedTxn{Txn: tx}
+				sgntx = append(sgntx, t)
+			}
+
 		}
 
-		bootstrappedNet.nAccounts -= uint64(len(sgntx))
-		bootstrappedNet.accounts = accounts
-		if bootstrappedNet.nAssets > 0 {
-			bootstrappedNet.txState = protocol.AssetConfigTx
-		} else if bootstrappedNet.nApplications > 0 {
-			bootstrappedNet.txState = protocol.ApplicationCallTx
-		}
 	} else if bootstrappedNet.txState == protocol.AssetConfigTx {
 		i := uint64(0)
 		for _, acct := range bootstrappedNet.accounts {
