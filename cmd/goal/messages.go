@@ -124,6 +124,7 @@ const (
 	rekeySenderTargetSameError = "The sender and the resulted multisig address are the same"
 	noOutputFileError          = "--msig-params must be specified with an output file name (-o)"
 	infoAutoFeeSet             = "Automatically set fee to %d MicroAlgos"
+	errorTransactionExpired    = "Transaction %s expired before it could be included in a block"
 
 	loggingNotConfigured = "Remote logging is not currently configured and won't be enabled"
 	loggingNotEnabled    = "Remote logging is current disabled"
