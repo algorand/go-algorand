@@ -1,5 +1,5 @@
 {
-	"NumRounds":65000,
+	"NumRounds":650000,
 	"RoundTransactionsCount": 1000,
 	"GeneratedAccountsCount": 7000000,
 	"GeneratedAssetsCount": 200000,

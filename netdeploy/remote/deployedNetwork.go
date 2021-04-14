@@ -100,7 +100,7 @@ type netState struct {
 
 	round          basics.Round
 	accounts       []basics.Address
-	trxCnt         uint64
+	txnCount       uint64
 	fundPerAccount basics.MicroAlgos
 }
 
@@ -350,55 +350,58 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 //GenerateDatabaseFiles generates database files according to the configurations
 func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, genesisFolder string) error {
 
-	fmt.Printf("starts %v\n", time.Now())
 	accounts := make(map[basics.Address]basics.AccountData)
 
-	genesis, err := bookkeeping.LoadGenesisFromFile(genesisFolder + "/genesis.json")
+	genesis, err := bookkeeping.LoadGenesisFromFile(filepath.Join(genesisFolder, "genesis.json"))
 	if err != nil {
 		return err
 	}
 
-	var bootstrappedNet netState
-
-	bootstrappedNet.genesisID = genesis.ID()
-	bootstrappedNet.genesisHash = crypto.Hash([]byte(genesis.ID()))
 	srcWallet := getGenesisAlloc(fileCfgs.SourceWalletName, genesis.Allocation)
 	if srcWallet.Address == "" {
 		return fmt.Errorf("error finding source wallet address")
-
 	}
 
 	rewardsPool := getGenesisAlloc("RewardsPool", genesis.Allocation)
 	if rewardsPool.Address == "" {
 		return fmt.Errorf("error finding source rewards ppol address")
-
 	}
 
 	feeSink := getGenesisAlloc("FeeSink", genesis.Allocation)
 	if feeSink.Address == "" {
 		return fmt.Errorf("error finding fee sink address")
-
 	}
 	src, err := basics.UnmarshalChecksumAddress(srcWallet.Address)
-
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal rewards src address : %w", err)
+	}
 	poolAddr, err := basics.UnmarshalChecksumAddress(rewardsPool.Address)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal rewards pool address %w", err)
 	}
 	sinkAddr, err := basics.UnmarshalChecksumAddress(feeSink.Address)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal fee sink address %w", err)
 	}
 
 	//initial state
-	bootstrappedNet.nAssets = fileCfgs.GeneratedAssetsCount
-	bootstrappedNet.nApplications = fileCfgs.GeneratedApplicationCount
-	//bootstrappedNet.nApplications = 0
-	bootstrappedNet.txnState = protocol.PaymentTx
-	bootstrappedNet.roundTxnCnt = fileCfgs.RoundTransactionsCount
-	bootstrappedNet.round = basics.Round(0)
+	bootstrappedNet := netState{
+		nAssets:       fileCfgs.GeneratedAssetsCount,
+		nApplications: fileCfgs.GeneratedApplicationCount,
+		txnState:      protocol.PaymentTx,
+		roundTxnCnt:   fileCfgs.RoundTransactionsCount,
+		round:         basics.Round(0),
+		genesisID:     genesis.ID(),
+		genesisHash:   crypto.HashObj(genesis),
+	}
 
-	params := config.Consensus[protocol.ConsensusCurrentVersion]
+	var params config.ConsensusParams
+	if len(genesis.Proto) == 0 {
+		params = config.Consensus[protocol.ConsensusCurrentVersion]
+	} else {
+		params = config.Consensus[genesis.Proto]
+	}
+
 	minAccounts := accountsNeeded(fileCfgs.GeneratedApplicationCount, fileCfgs.GeneratedAssetsCount, params)
 	nAccounts := fileCfgs.GeneratedAccountsCount
 	if minAccounts > nAccounts {
@@ -406,7 +409,6 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	} else {
 		bootstrappedNet.nAccounts = nAccounts
 	}
-
 	accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
 	accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
 	//fund src account with enough funding
@@ -417,7 +419,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	bootstrappedNet.poolAddr = poolAddr
 	bootstrappedNet.sinkAddr = sinkAddr
 
-	//gensis block
+	//init block
 	initState, err := generateInitState(accounts, &bootstrappedNet)
 	if err != nil {
 		return err
@@ -427,11 +429,10 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	localCfg.CatchpointTracking = -1
 	localCfg.LedgerSynchronousMode = 0
 	log := logging.NewLogger()
-	l, err := ledger.OpenLedger(log, genesisFolder+"/bootstrapped", false, initState, localCfg)
+	l, err := ledger.OpenLedger(log, filepath.Join(genesisFolder, "bootstrapped"), false, initState, localCfg)
 	if err != nil {
 		return err
 	}
-	l.WaitForCommit(0)
 
 	//create accounts, apps and assets
 	prev, _ := l.Block(l.Latest())
@@ -445,10 +446,9 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	for i := uint64(bootstrappedNet.round); i < fileCfgs.NumRounds; i++ {
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount, &bootstrappedNet, params)
-		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err = l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
-			fmt.Printf("Error %s\n", err)
+			fmt.Printf("Error  %v\n", err)
 			return err
 		}
 		prev, _ = l.Block(l.Latest())
@@ -464,13 +464,13 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	}
 	l.Close()
 
-	fmt.Printf("ends %v\n", time.Now())
 	return nil
 }
 
 func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bookkeeping.GenesisAllocation {
+	name = strings.ToLower(name)
 	for _, alloc := range allocation {
-		if strings.ToLower(alloc.Comment) == strings.ToLower(name) {
+		if strings.ToLower(alloc.Comment) == name {
 			return alloc
 		}
 	}
@@ -490,6 +490,7 @@ func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrap
 
 	block := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
+			TimeStamp:   time.Now().Unix(),
 			GenesisID:   bootstrappedNet.genesisID,
 			GenesisHash: bootstrappedNet.genesisHash,
 			Round:       bootstrappedNet.round,
@@ -507,35 +508,32 @@ func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrap
 
 	initState.Block = block
 	initState.Accounts = accounts
-	initState.GenesisHash = crypto.Hash([]byte(bootstrappedNet.genesisID))
+	initState.GenesisHash = bootstrappedNet.genesisHash
 	return initState, nil
 }
 
 func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64, bootstrappedNet *netState, csParams config.ConsensusParams) (bookkeeping.Block, error) {
-	if bootstrappedNet.round%1000 == 0 {
-		fmt.Printf("round %v, time %v\n", bootstrappedNet.round, time.Now())
-	}
 	payset := make([]transactions.SignedTxnInBlock, 0, roundTxnCnt)
 	txibs := make([]transactions.SignedTxnInBlock, 0, roundTxnCnt)
 
 	block := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
+			TimeStamp:   prev.TimeStamp + int64(crypto.RandUint64()%100*1000),
 			GenesisID:   bootstrappedNet.genesisID,
 			GenesisHash: bootstrappedNet.genesisHash,
 			Round:       bootstrappedNet.round,
 			RewardsState: bookkeeping.RewardsState{
-				RewardsRate: 1,
-				RewardsPool: prev.RewardsPool,
-				FeeSink:     prev.FeeSink,
+				RewardsRate:  1,
+				RewardsPool:  prev.RewardsPool,
+				RewardsLevel: prev.RewardsLevel,
+				FeeSink:      prev.FeeSink,
 			},
 			UpgradeState: bookkeeping.UpgradeState{
 				CurrentProtocol: prev.CurrentProtocol,
 			},
-			TxnCounter: bootstrappedNet.trxCnt,
+			TxnCounter: bootstrappedNet.txnCount,
 		},
 	}
-
-	block.RewardsLevel = prev.RewardsLevel
 
 	stxns, err := createSignedTx(src, bootstrappedNet.round, csParams, bootstrappedNet)
 	if err != nil {
@@ -551,7 +549,7 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64,
 	}
 
 	payset = append(payset, txibs...)
-	bootstrappedNet.trxCnt += uint64(len(payset))
+	bootstrappedNet.txnCount += uint64(len(payset))
 	block.Payset = payset
 	block.TxnRoot, err = block.PaysetCommit()
 	if err != nil {
@@ -570,7 +568,7 @@ func generateAccounts(src basics.Address, roundTxnCnt uint64, prev bookkeeping.B
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err := l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
-			fmt.Printf("Error %s\n", err)
+			fmt.Printf("Error %v\n", err)
 			return err
 		}
 
@@ -583,24 +581,32 @@ func generateAccounts(src basics.Address, roundTxnCnt uint64, prev bookkeeping.B
 
 func accountsNeeded(appsCount uint64, assetCount uint64, params config.ConsensusParams) uint64 {
 	var maxApps uint64
+	var nAppAcct uint64
+
 	maxApps = uint64(params.MaxAppsCreated)
-	nAppAcct := appsCount / maxApps
-	if appsCount%maxApps != 0 {
-		nAppAcct++
+
+	if maxApps > 0 {
+		nAppAcct = appsCount / maxApps
+		if appsCount%maxApps != 0 {
+			nAppAcct++
+		}
 	}
 
 	var maxAssets uint64
+	var nAssetAcct uint64
 	maxAssets = uint64(params.MaxAssetsPerAccount)
-	nAssetAcct := assetCount / maxAssets
-	if assetCount%maxAssets != 0 {
-		nAssetAcct++
+
+	if maxAssets > 0 {
+		nAssetAcct = assetCount / maxAssets
+		if assetCount%maxAssets != 0 {
+			nAssetAcct++
+		}
 	}
 
 	if nAppAcct > nAssetAcct {
 		return nAppAcct
 	}
 	return nAssetAcct
-
 }
 
 func createSignedTx(src basics.Address, round basics.Round, params config.ConsensusParams, bootstrappedNet *netState) ([]transactions.SignedTxn, error) {
