@@ -62,9 +62,10 @@ func MakeDebugBalances(l ApplicationDbgLedger, round basics.Round, proto protoco
 	w := ledgerForCowBaseWrapper{l}
 
 	base := &roundCowBase{
-		l:     &w,
-		rnd:   round - 1,
-		proto: config.Consensus[proto],
+		l:        &w,
+		rnd:      round - 1,
+		proto:    config.Consensus[proto],
+		accounts: make(map[basics.Address]basics.AccountData),
 	}
 
 	hdr := bookkeeping.BlockHeader{
