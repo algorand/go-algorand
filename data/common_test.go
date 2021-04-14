@@ -49,7 +49,7 @@ func keypair() *crypto.SignatureSecrets {
 	return s
 }
 
-func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
+func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*Ledger, []account.Root, []account.PersistedParticipation, []transactions.SignedTxn, func()) {
 	P := numAccounts               // n accounts
 	TXs := numTxs                  // n txns
 	maxMoneyAtStart := 1000000     // max money start
@@ -71,7 +71,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 	genesis := make(map[basics.Address]basics.AccountData)
 	gen := rand.New(rand.NewSource(2))
 	roots := make([]account.Root, P)
-	parts := make([]account.Participation, P)
+	parts := make([]account.PersistedParticipation, P)
 	for i := 0; i < P; i++ {
 		access, err := db.MakeAccessor(t.Name()+"_root_testingenv"+strconv.Itoa(i), false, true)
 		if err != nil {

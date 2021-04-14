@@ -19,11 +19,13 @@ package account
 import (
 	"context"
 	"database/sql"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -50,6 +52,9 @@ func TestParticipation_NewDB(t *testing.T) {
 	versions, err := getSchemaVersions(partDB)
 	a.NoError(err)
 	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
+
+	partDB.Close()
+	rootDB.Close()
 }
 
 func getSchemaVersions(db db.Accessor) (versions map[string]int, err error) {
@@ -112,4 +117,30 @@ func TestOverlapsInterval(t *testing.T) {
 
 	a.True(interval.OverlapsInterval(end, end))
 	a.True(interval.OverlapsInterval(end, after))
+}
+
+func BenchmarkOldKeysDeletion(b *testing.B) {
+	a := require.New(b)
+
+	var rootAddr basics.Address
+	crypto.RandBytes(rootAddr[:])
+
+	partDB, err := db.MakeErasableAccessor(b.Name() + "_part")
+	a.NoError(err)
+	a.NotNil(partDB)
+	defer func() {
+		os.Remove(b.Name() + "_part")
+	}()
+
+	part, err := FillDBWithParticipationKeys(partDB, rootAddr, 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	a.NoError(err)
+	a.NotNil(part)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		errCh := part.DeleteOldKeys(basics.Round(i), config.Consensus[protocol.ConsensusCurrentVersion])
+		err := <-errCh
+		a.NoError(err)
+	}
+	part.Close()
 }
