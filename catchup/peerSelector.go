@@ -106,11 +106,13 @@ type peerSelector struct {
 	counter     uint64
 }
 
-// historicStats stores the past windowSize ranks for the peer
-// The purpose of this structure is to compute the rank based on the
-// performance of the peer in the past, and be forgiving of occasional
-// errors or performance variations which may not be representative of
-// the peer's overall performance.
+// historicStats stores the past windowSize ranks for the peer passed
+// into RankPeer (i.e. no averaging or penalty). The purpose of this
+// structure is to compute the rank based on the performance of the
+// peer in the past, and to be forgiving of occasional performance
+// variations which may not be representative of the peer's overall
+// performance. It also stores the penalty history in the form or peer
+// selection gaps.
 type historicStats struct {
 	windowSize  int
 	rankSamples []int
@@ -124,7 +126,7 @@ func makeHistoricStatus(windowSize int) *historicStats {
 	// Initialize the window (rankSamples) with zeros.
 	// This way, every peer will slowly build up its profile.
 	// Otherwise, if the best peer gets a bad download the first time,
-	// may never be selected again.
+	// that will determine the rank of the peer.
 	hs := historicStats{
 		windowSize:  windowSize,
 		rankSamples: make([]int, windowSize, windowSize),
@@ -134,10 +136,17 @@ func makeHistoricStatus(windowSize int) *historicStats {
 	return &hs
 }
 
+// computerPenalty is the formula (exponential) used to calculate the
+// penalty from the sum of gaps.
 func (hs *historicStats) computerPenalty() float64 {
 	return 1 + (math.Exp(hs.gapSum/10.0) / 1000)
 }
 
+// updateRequestPenalty is given a counter, which is the most recent
+// counter for ranking a peer. It calculates newGap, which is the
+// number of counter ticks since it last was updated (i.e. last ranked
+// after being selected). The number of gaps stored is bounded by the
+// windowSize. Calculages and returns the new penalty.
 func (hs *historicStats) updateRequestPenalty(counter uint64) float64 {
 	newGap := counter - hs.counter
 	hs.counter = counter
@@ -153,8 +162,10 @@ func (hs *historicStats) updateRequestPenalty(counter uint64) float64 {
 	return hs.computerPenalty()
 }
 
-// removes steps least recent penalties and recomputes the rank with the new penalty value
-func (hs *historicStats) resetRequestPenalty(steps int, initialRank int, class peerClass) int {
+// resetRequestPenalty removes steps least recent gaps and recomputes the new penalty.
+// Returns the new rank calculated with the new penalty.
+// If steps it 0, it is a full reset i.e. drops or gap values. 
+func (hs *historicStats) resetRequestPenalty(steps int, initialRank int, class peerClass) (rank int) {
 	if len(hs.requestGaps) == 0 {
 		return initialRank
 	}
@@ -180,8 +191,9 @@ func (hs *historicStats) resetRequestPenalty(steps int, initialRank int, class p
 	return int(hs.computerPenalty() * (float64(hs.rankSum) / float64(len(hs.rankSamples))))
 }
 
-// push pushes a new rank to the historicStats, and returns the new rank
-// based on the average of ranks in the windowSize window
+// push pushes a new rank to the historicStats, and returns the new
+// rank based on the average of ranks in the windowSize window and the
+// penlaty.
 func (hs *historicStats) push(value int, counter uint64, class peerClass) (averagedRank int) {
 
 	// This is the lowest ranking class, and is not subject to giving another chance.
@@ -201,7 +213,7 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	// Download may fail for various reasons. Give it additional tries
 	// and see if it recovers/improves.
 	if value == peerRankDownloadFailed {
-		// Set the rank to 1 + the class upper bound, to evict
+		// Set the rank to 10 + the class upper bound, to evict
 		// the peer from the class if it is repeatedly
 		// failing. This is to make sure to switch to the next
 		// class when all peers in this class are failing.
@@ -218,7 +230,7 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 
 	if int(average) > upperBound(class) && initialRank == peerRankDownloadFailed {
 		// peerRankDownloadFailed will be delayed, to give the peer
-		// additional time to improve. If odes not improve over time,
+		// additional time to improve. If does not improve over time,
 		// the average will exceed the class limit. At this point,
 		// it will be pushed down to download failed class.
 		return peerRankDownloadFailed
@@ -230,8 +242,10 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	// The rank based on the performance and the freequency
 	avgWithPenalty := int(penalty * average)
 
-	// Keep the peer in the same class. The rank will be within bounds, but
-	// the penalty may push it over. Prevent it here.
+	// Keep the peer in the same class. The value passed will be
+	// within bounds (unless it is downloadFailed or
+	// invalidDownload), but the penalty may push it over. Prevent
+	// the penalty pushing it off the class bounds.
 	bounded := boundRankByClass(avgWithPenalty, class)
 	return bounded
 }
