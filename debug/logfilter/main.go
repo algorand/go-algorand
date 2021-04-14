@@ -30,14 +30,6 @@ type test struct {
 	outputBuffer string
 }
 
-/*
-func dumpAllTests(outFile io.Writer, tests map[string]test, msg string, args ...interface{}) {
-	fmt.Fprintf(outFile, msg, args...)
-	for _, testData := range tests {
-		fmt.Fprintf(outFile, "running test output "
-	}
-}*/
-
 func logFilter(inFile io.Reader, outFile io.Writer) int {
 	scanner := bufio.NewScanner(inFile)
 
@@ -97,11 +89,12 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			if !have {
 				fmt.Fprintf(outFile, "%s\r\n%s\r\n", line, packageOutputBuffer)
 				packageOutputBuffer = ""
+			} else {
+				fmt.Fprintf(outFile, test.outputBuffer+"\r\n")
+				fmt.Fprintf(outFile, line+"\r\n")
+				test.outputBuffer = ""
+				tests[testName] = test
 			}
-			fmt.Fprintf(outFile, test.outputBuffer+"\r\n")
-			fmt.Fprintf(outFile, line+"\r\n")
-			test.outputBuffer = ""
-			tests[testName] = test
 			continue
 		}
 		// otherwise, add the line to the current test ( if there is such )
