@@ -197,7 +197,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		block, cert, blockDownloadDuration, err := s.innerFetch(r, peer)
 
 		if err != nil {
-			s.log.Infof("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
+			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
 			peerSelector.RankPeer(peer, peerRankDownloadFailed)
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exists and we're making many requests down the chain
@@ -257,7 +257,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 		peerRank := peerSelector.PeerDownloadDurationToRank(peer, blockDownloadDuration)
 		r1, r2 := peerSelector.RankPeer(peer, peerRank)
-		s.log.Infof("fetchAndWrite(%d): ranked peer with %d from %d to %d", r, peerRank, r1, r2)
+		s.log.Debugf("fetchAndWrite(%d): ranked peer with %d from %d to %d", r, peerRank, r1, r2)
 
 		// Write to ledger, noting that ledger writes must be in order
 		select {
