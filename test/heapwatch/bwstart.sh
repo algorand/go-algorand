@@ -30,7 +30,7 @@ goal network start -r "${TESTDIR}"
 sleep 2
 
 mkdir -p "${TESTDIR}/heaps"
-python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --no-heap --metrics --blockinfo --period 90 "${TESTDIR}"/{node,relay}* &
+python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --no-heap --metrics --blockinfo --period 90 "${TESTDIR}"/{node,relay}* > "${TESTDIR}/heaps/watch.log" 2>&1 &
 
 echo "$!" > .heapWatch.pid
 
