@@ -151,7 +151,7 @@ var clerkCmd = &cobra.Command{
 	},
 }
 
-func waitForCommit(client libgoal.Client, txid string) error {
+func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound uint64) error {
 	// Get current round information
 	stat, err := client.Status()
 	if err != nil {
@@ -174,8 +174,16 @@ func waitForCommit(client libgoal.Client, txid string) error {
 			return fmt.Errorf(txPoolError, txid, txn.PoolError)
 		}
 
+		// check if we've already committed to the block number equals to the transaction's last valid round.
+		// if this is the case, the transaction would not be included in the blockchain, and we can exit right
+		// here.
+		if stat.LastRound >= transactionLastValidRound {
+			return fmt.Errorf(errorTransactionExpired, txid)
+		}
+
 		reportInfof(infoTxPending, txid, stat.LastRound)
-		stat, err = client.WaitForRound(stat.LastRound + 1)
+		// WaitForRound waits until round "stat.LastRound+1" is committed
+		stat, err = client.WaitForRound(stat.LastRound)
 		if err != nil {
 			return fmt.Errorf(errorRequestFail, err)
 		}
@@ -460,7 +468,7 @@ var sendCmd = &cobra.Command{
 			reportInfof(infoTxIssued, amount, fromAddressResolved, toAddressResolved, txid, fee)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lastValid)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
