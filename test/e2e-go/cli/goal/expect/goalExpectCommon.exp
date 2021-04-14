@@ -830,6 +830,28 @@ proc ::AlgorandGoal::GetNodeLastCatchpoint { NODE_DATA_DIR } {
     return $CATCHPOINT
 }
 
+
+# Get node's last reached round
+proc ::AlgorandGoal::GetNodeLastCommittedBlock { NODE_DATA_DIR } {
+    set COMMITTEDROUND ""
+    if { [catch {
+        # Check node status
+        puts "spawn node status"
+        spawn goal node status -d $NODE_DATA_DIR
+        expect {
+            timeout { ::AlgorandGoal::Abort "goal node status timed out" }
+            -re {Last committed block: ([0-9]+)} {regexp -- {[0-9]+} $expect_out(0,string) COMMITTEDROUND; exp_continue }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to perform goal node status : error code [lindex $result 3]"} }
+        }
+        if { $COMMITTEDROUND == "" } {
+            ::AlgorandGoal::Abort "Last committed block entry was missing from goal node status"
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in GetNodeLastCommittedBlock: $EXCEPTION"
+    }
+    return $COMMITTEDROUND
+}
+
 # Start catching up to a specific catchpoint
 proc ::AlgorandGoal::StartCatchup { NODE_DATA_DIR CATCHPOINT } {
     if { [catch {
