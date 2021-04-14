@@ -185,6 +185,7 @@ func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownl
 	default: // i.e. peerRankInitialFourthPriority
 		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank3LowBlockTime, peerRank3HighBlockTime)
 
+
 	}
 }
 
