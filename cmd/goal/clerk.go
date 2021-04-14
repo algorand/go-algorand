@@ -158,13 +158,6 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 		return fmt.Errorf(errorRequestFail, err)
 	}
 
-	// check if we've already committed to the block number equals to the transaction's last valid round.
-	// if this is the case, the transaction would not be included in the blockchain, and we can exit right
-	// here.
-	if stat.LastRound >= transactionLastValidRound {
-		return fmt.Errorf(errorTransactionExpired, txid)
-	}
-
 	for {
 		// Check if we know about the transaction yet
 		txn, err := client.PendingTransactionInformation(txid)
