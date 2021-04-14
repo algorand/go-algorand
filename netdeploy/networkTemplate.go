@@ -50,7 +50,7 @@ func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName, bi
 	genesisData := t.Genesis
 	genesisData.NetworkName = networkName
 	mergedConsensus := config.Consensus.Merge(t.Consensus)
-	return gen.GenerateGenesisFiles(genesisData, mergedConsensus, targetFolder, true)
+	return gen.GenerateGenesisFiles(genesisData, mergedConsensus, targetFolder, os.Stdout)
 }
 
 // Create data folders for all NodeConfigs, configuring relays appropriately and
