@@ -373,7 +373,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	}
 	src, err := basics.UnmarshalChecksumAddress(srcWallet.Address)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal rewards src address : %w", err)
+		return fmt.Errorf("failed to unmarshal src address : %w", err)
 	}
 	poolAddr, err := basics.UnmarshalChecksumAddress(rewardsPool.Address)
 	if err != nil {
@@ -565,7 +565,6 @@ func generateAccounts(src basics.Address, roundTxnCnt uint64, prev bookkeeping.B
 		//create accounts
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, roundTxnCnt, bootstrappedNet, csParams)
-		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err := l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
 			fmt.Printf("Error %v\n", err)
