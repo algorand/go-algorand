@@ -304,14 +304,14 @@ var restartCmd = &cobra.Command{
 			}
 
 			algodAlreadyRunning, err := nc.StartAlgod(nodeArgs)
-			if algodAlreadyRunning {
-				reportInfoln(infoNodeAlreadyStarted)
-			}
-
 			if err != nil {
 				reportErrorf(errorNodeFailedToStart, err)
 			} else {
-				reportInfoln(infoNodeStart)
+				if algodAlreadyRunning {
+					reportInfoln(infoNodeAlreadyStarted)
+				} else {
+					reportInfoln(infoNodeStart)
+				}
 			}
 		})
 	},
