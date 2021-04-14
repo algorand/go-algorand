@@ -1,0 +1,66 @@
+--- FAIL: TestBalanceAdapterStateChanges (0.00s)
+2021/04/13 21:46:13 Desc object: [{"name":"globals","value":{"type":"object","className":"Object","description":"Object","objectId":"globalsObjID","preview":{"type":"object","description":"Object","overflow":true,"properties":[{"name":"error","type":"undefined","value":"globals: invalid length 0 != 10"}]}},"writable":false,"configurable":false,"enumerable":true,"isOwn":true}]
+2021/04/13 21:46:13 ------------------------------------------------
+2021/04/13 21:46:13 CDT debugger listening on: ws://127.0.0.1:12345/test
+2021/04/13 21:46:13 Or open in Chrome:
+2021/04/13 21:46:13 devtools://devtools/bundled/js_app.html?experiments=true&v8only=false&ws=127.0.0.1:12345/test
+2021/04/13 21:46:13 ------------------------------------------------
+2021/04/13 21:46:13 ------------------------------------------------
+2021/04/13 21:46:13 CDT debugger listening on: ws://127.0.0.1:12345/test
+2021/04/13 21:46:13 Or open in Chrome:
+2021/04/13 21:46:13 devtools://devtools/bundled/js_app.html?experiments=true&v8only=false&ws=127.0.0.1:12345/test
+2021/04/13 21:46:13 ------------------------------------------------
+2021/04/13 21:46:13 ------------------------------------------------
+2021/04/13 21:46:13 CDT debugger listening on: ws://127.0.0.1:12345/test2
+2021/04/13 21:46:13 Or open in Chrome:
+2021/04/13 21:46:13 devtools://devtools/bundled/js_app.html?experiments=true&v8only=false&ws=127.0.0.1:12345/test2
+2021/04/13 21:46:13 ------------------------------------------------
+2021/04/13 21:46:13 ------------------------------------------------
+2021/04/13 21:46:13 CDT debugger listening on: ws://127.0.0.1:12345/test
+2021/04/13 21:46:13 Or open in Chrome:
+2021/04/13 21:46:13 devtools://devtools/bundled/js_app.html?experiments=true&v8only=false&ws=127.0.0.1:12345/test
+2021/04/13 21:46:13 ------------------------------------------------
+2021/04/13 21:46:13 CDT session test closed
+
+
+--- FAIL: TestBalanceAdapterStateChanges (0.00s)
+FAIL	github.com/algorand/go-algorand/cmd/tealdbg	0.903s...
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: stateful
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: stateful
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: stateful
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: logicsig
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: logicsig
+2021/04/13 21:46:13 Run mode: logicsig
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: stateful
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: logicsig
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: stateful
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: logicsig
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: stateful
+2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:13 Run mode: stateful
+2021/04/13 21:46:13 starting server on 127.0.0.1:63081
+2021/04/13 21:46:14 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
+2021/04/13 21:46:14 Run mode: logicsig
+2021/04/13 21:46:14 Open http://127.0.0.1:12345 in a web browser
+2021/04/13 21:46:14 subscribeHandler error: websocket: response does not implement http.Hijacker
+
+FAIL	github.com/algorand/go-algorand/cmd/tealdbg	0.903s
