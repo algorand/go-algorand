@@ -20,10 +20,11 @@ goal network start -r "${TESTDIR}"
 sleep 2
 
 mkdir -p "${TESTDIR}/heaps"
-python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --period 10m "${TESTDIR}/"* &
+python3 "${REPO_ROOT}/test/heapwatch/heapWatch.py" -o "${TESTDIR}/heaps" --period 10m --metrics --blockinfo "${TESTDIR}/"* &
 
 echo "$!" > .heapWatch.pid
 
+# TODO: other pingpong modes
 pingpong run -d "${TESTDIR}/Node1" --tps 10 --rest 0 --run 0 --nftasapersecond 200 &
 
 echo "$!" > .pingpong1.pid
