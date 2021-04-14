@@ -22,8 +22,6 @@
 2021/04/13 21:46:13 ------------------------------------------------
 2021/04/13 21:46:13 CDT session test closed
 
-
---- FAIL: TestBalanceAdapterStateChanges (0.00s)
 FAIL	github.com/algorand/go-algorand/cmd/tealdbg	0.903s...
 2021/04/13 21:46:13 Using proto: https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff
 2021/04/13 21:46:13 Run mode: stateful
