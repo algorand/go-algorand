@@ -268,7 +268,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	if cfg.useExistingGenesis {
 		fmt.Println(" *** using existing genesis files ***")
 	} else {
-		if err = gen.GenerateGenesisFiles(cfg.GenesisData, config.Consensus, genesisFolder, true); err != nil {
+		if err = gen.GenerateGenesisFiles(cfg.GenesisData, config.Consensus, genesisFolder, os.Stdout); err != nil {
 			return
 		}
 	}
