@@ -356,7 +356,8 @@ func generateNAccounts(t *testing.T, N int, firstRound, lastRound basics.Round, 
 		if err != nil {
 			panic(err)
 		}
-		accounts = append(accounts, part)
+		accounts = append(accounts, part.Participation)
+		part.Close()
 	}
 	return
 }
