@@ -11,5 +11,5 @@ if [ "${DISTRIB}" = "arch" ]; then
     pacman -S --refresh --needed --noconfirm $ARCH_DEPS
 else
     apt-get update
-    apt-get -y install sudo
+    apt-get -y install $UBUNTU_DEPS
 fi
