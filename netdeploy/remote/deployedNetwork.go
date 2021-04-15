@@ -20,13 +20,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/gen"
+	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -62,12 +73,47 @@ type DeployedNetworkConfig struct {
 
 // DeployedNetwork represents the complete configuration specification for a deployed network
 type DeployedNetwork struct {
-	useExistingGenesis bool
-
-	GenesisData gen.GenesisData
-	Topology    topology
-	Hosts       []HostConfig
+	useExistingGenesis       bool
+	createBoostrappedNetwork bool
+	GenesisData              gen.GenesisData
+	Topology                 topology
+	Hosts                    []HostConfig
+	BootstrappedNet          BootstrappedNetwork
 }
+
+type netState struct {
+	nAccounts     uint64
+	nAssets       uint64
+	nApplications uint64
+	roundTxnCnt   uint64
+
+	assetPerAcct int
+	appsPerAcct  int
+
+	genesisID   string
+	genesisHash crypto.Digest
+	poolAddr    basics.Address
+	sinkAddr    basics.Address
+
+	accountsCreated bool
+	txnState        protocol.TxType
+
+	round          basics.Round
+	accounts       []basics.Address
+	txnCount       uint64
+	fundPerAccount basics.MicroAlgos
+}
+
+const program = `#pragma version 2
+txn ApplicationID
+bz ok
+int 0
+byte "key"
+byte "value"
+app_local_put
+ok:
+int 1
+`
 
 // InitDeployedNetworkConfig loads the DeployedNetworkConfig from a file
 func InitDeployedNetworkConfig(file string, buildConfig BuildConfig) (cfg DeployedNetworkConfig, err error) {
@@ -199,6 +245,15 @@ func (cfg *DeployedNetwork) SetUseExistingGenesisFiles(useExisting bool) bool {
 	return old
 }
 
+// SetUseBoostrappedFiles sets the override flag indicating we should use existing genesis
+// files instead of generating new ones.  This is useful for permanent networks like devnet and testnet.
+// Returns the previous value.
+func (cfg *DeployedNetwork) SetUseBoostrappedFiles(boostrappedFile bool) bool {
+	old := cfg.createBoostrappedNetwork
+	cfg.createBoostrappedNetwork = boostrappedFile
+	return old
+}
+
 // Validate uses the specified template to deploy a new private network
 // under the specified root directory.
 func (cfg DeployedNetwork) Validate(buildCfg BuildConfig, rootDir string) (err error) {
@@ -268,7 +323,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	if cfg.useExistingGenesis {
 		fmt.Println(" *** using existing genesis files ***")
 	} else {
-		if err = gen.GenerateGenesisFiles(cfg.GenesisData, config.Consensus, genesisFolder, true); err != nil {
+		if err = gen.GenerateGenesisFiles(cfg.GenesisData, config.Consensus, genesisFolder, os.Stdout); err != nil {
 			return
 		}
 	}
@@ -283,7 +338,427 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 		return
 	}
 
+	if cfg.createBoostrappedNetwork {
+		fmt.Println("Generating db files ")
+
+		cfg.GenerateDatabaseFiles(cfg.BootstrappedNet, genesisFolder)
+	}
+
 	return
+}
+
+//GenerateDatabaseFiles generates database files according to the configurations
+func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, genesisFolder string) error {
+
+	accounts := make(map[basics.Address]basics.AccountData)
+
+	genesis, err := bookkeeping.LoadGenesisFromFile(filepath.Join(genesisFolder, "genesis.json"))
+	if err != nil {
+		return err
+	}
+
+	srcWallet := getGenesisAlloc(fileCfgs.SourceWalletName, genesis.Allocation)
+	if srcWallet.Address == "" {
+		return fmt.Errorf("error finding source wallet address")
+	}
+
+	rewardsPool := getGenesisAlloc("RewardsPool", genesis.Allocation)
+	if rewardsPool.Address == "" {
+		return fmt.Errorf("error finding source rewards ppol address")
+	}
+
+	feeSink := getGenesisAlloc("FeeSink", genesis.Allocation)
+	if feeSink.Address == "" {
+		return fmt.Errorf("error finding fee sink address")
+	}
+	src, err := basics.UnmarshalChecksumAddress(srcWallet.Address)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal src address : %w", err)
+	}
+	poolAddr, err := basics.UnmarshalChecksumAddress(rewardsPool.Address)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal rewards pool address %w", err)
+	}
+	sinkAddr, err := basics.UnmarshalChecksumAddress(feeSink.Address)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal fee sink address %w", err)
+	}
+
+	//initial state
+	bootstrappedNet := netState{
+		nAssets:       fileCfgs.GeneratedAssetsCount,
+		nApplications: fileCfgs.GeneratedApplicationCount,
+		txnState:      protocol.PaymentTx,
+		roundTxnCnt:   fileCfgs.RoundTransactionsCount,
+		round:         basics.Round(0),
+		genesisID:     genesis.ID(),
+		genesisHash:   crypto.HashObj(genesis),
+	}
+
+	var params config.ConsensusParams
+	if len(genesis.Proto) == 0 {
+		params = config.Consensus[protocol.ConsensusCurrentVersion]
+	} else {
+		params = config.Consensus[genesis.Proto]
+	}
+
+	minAccounts := accountsNeeded(fileCfgs.GeneratedApplicationCount, fileCfgs.GeneratedAssetsCount, params)
+	nAccounts := fileCfgs.GeneratedAccountsCount
+	if minAccounts > nAccounts {
+		bootstrappedNet.nAccounts = minAccounts
+	} else {
+		bootstrappedNet.nAccounts = nAccounts
+	}
+	accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
+	accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
+	//fund src account with enough funding
+	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bootstrappedNet.nAssets) * params.MinBalance * 2}
+	totalFunds := srcWallet.State.MicroAlgos.Raw + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts + bootstrappedNet.roundTxnCnt*fileCfgs.NumRounds
+	accounts[src] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: totalFunds})
+
+	bootstrappedNet.poolAddr = poolAddr
+	bootstrappedNet.sinkAddr = sinkAddr
+
+	//init block
+	initState, err := generateInitState(accounts, &bootstrappedNet)
+	if err != nil {
+		return err
+	}
+	localCfg := config.GetDefaultLocal()
+	localCfg.Archival = true
+	localCfg.CatchpointTracking = -1
+	localCfg.LedgerSynchronousMode = 0
+	log := logging.NewLogger()
+	l, err := ledger.OpenLedger(log, filepath.Join(genesisFolder, "bootstrapped"), false, initState, localCfg)
+	if err != nil {
+		return err
+	}
+
+	//create accounts, apps and assets
+	prev, _ := l.Block(l.Latest())
+	err = generateAccounts(src, fileCfgs.RoundTransactionsCount, prev, l, &bootstrappedNet, params)
+	if err != nil {
+		return err
+	}
+
+	//create more transactions
+	prev, _ = l.Block(l.Latest())
+	for i := uint64(bootstrappedNet.round); i < fileCfgs.NumRounds; i++ {
+		bootstrappedNet.round++
+		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount, &bootstrappedNet, params)
+		err = l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
+		if err != nil {
+			fmt.Printf("Error  %v\n", err)
+			return err
+		}
+		prev, _ = l.Block(l.Latest())
+	}
+
+	l.WaitForCommit(bootstrappedNet.round)
+	l.Close()
+
+	localCfg.CatchpointTracking = 0
+	l, err = ledger.OpenLedger(log, genesisFolder+"/bootstrapped", false, initState, localCfg)
+	if err != nil {
+		return err
+	}
+	l.Close()
+
+	return nil
+}
+
+func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bookkeeping.GenesisAllocation {
+	name = strings.ToLower(name)
+	for _, alloc := range allocation {
+		if strings.ToLower(alloc.Comment) == name {
+			return alloc
+		}
+	}
+	return bookkeeping.GenesisAllocation{}
+}
+
+func keypair() *crypto.SignatureSecrets {
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
+	s := crypto.GenerateSignatureSecrets(seed)
+	return s
+}
+
+func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrappedNet *netState) (ledger.InitState, error) {
+
+	var initState ledger.InitState
+
+	block := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			TimeStamp:   time.Now().Unix(),
+			GenesisID:   bootstrappedNet.genesisID,
+			GenesisHash: bootstrappedNet.genesisHash,
+			Round:       bootstrappedNet.round,
+			RewardsState: bookkeeping.RewardsState{
+				RewardsRate: 1,
+				RewardsPool: bootstrappedNet.poolAddr,
+				FeeSink:     bootstrappedNet.sinkAddr,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusCurrentVersion,
+			},
+			TxnCounter: 0,
+		},
+	}
+
+	initState.Block = block
+	initState.Accounts = accounts
+	initState.GenesisHash = bootstrappedNet.genesisHash
+	return initState, nil
+}
+
+func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64, bootstrappedNet *netState, csParams config.ConsensusParams) (bookkeeping.Block, error) {
+	payset := make([]transactions.SignedTxnInBlock, 0, roundTxnCnt)
+	txibs := make([]transactions.SignedTxnInBlock, 0, roundTxnCnt)
+
+	block := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			TimeStamp:   prev.TimeStamp + int64(crypto.RandUint64()%100*1000),
+			GenesisID:   bootstrappedNet.genesisID,
+			GenesisHash: bootstrappedNet.genesisHash,
+			Round:       bootstrappedNet.round,
+			RewardsState: bookkeeping.RewardsState{
+				RewardsRate:  1,
+				RewardsPool:  prev.RewardsPool,
+				RewardsLevel: prev.RewardsLevel,
+				FeeSink:      prev.FeeSink,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: prev.CurrentProtocol,
+			},
+			TxnCounter: bootstrappedNet.txnCount,
+		},
+	}
+
+	stxns, err := createSignedTx(src, bootstrappedNet.round, csParams, bootstrappedNet)
+	if err != nil {
+		return bookkeeping.Block{}, err
+	}
+
+	for _, stxn := range stxns {
+		txib, err := block.EncodeSignedTxn(stxn, transactions.ApplyData{})
+		if err != nil {
+			return bookkeeping.Block{}, err
+		}
+		txibs = append(txibs, txib)
+	}
+
+	payset = append(payset, txibs...)
+	bootstrappedNet.txnCount += uint64(len(payset))
+	block.Payset = payset
+	block.TxnRoot, err = block.PaysetCommit()
+	if err != nil {
+		return bookkeeping.Block{}, err
+	}
+
+	return block, nil
+}
+
+func generateAccounts(src basics.Address, roundTxnCnt uint64, prev bookkeeping.Block, l *ledger.Ledger, bootstrappedNet *netState, csParams config.ConsensusParams) error {
+
+	for !bootstrappedNet.accountsCreated {
+		//create accounts
+		bootstrappedNet.round++
+		blk, _ := createBlock(src, prev, roundTxnCnt, bootstrappedNet, csParams)
+		err := l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
+		if err != nil {
+			fmt.Printf("Error %v\n", err)
+			return err
+		}
+
+		prev, _ = l.Block(l.Latest())
+
+	}
+
+	return nil
+}
+
+func accountsNeeded(appsCount uint64, assetCount uint64, params config.ConsensusParams) uint64 {
+	var maxApps uint64
+	var nAppAcct uint64
+
+	maxApps = uint64(params.MaxAppsCreated)
+
+	if maxApps > 0 {
+		nAppAcct = appsCount / maxApps
+		if appsCount%maxApps != 0 {
+			nAppAcct++
+		}
+	}
+
+	var maxAssets uint64
+	var nAssetAcct uint64
+	maxAssets = uint64(params.MaxAssetsPerAccount)
+
+	if maxAssets > 0 {
+		nAssetAcct = assetCount / maxAssets
+		if assetCount%maxAssets != 0 {
+			nAssetAcct++
+		}
+	}
+
+	if nAppAcct > nAssetAcct {
+		return nAppAcct
+	}
+	return nAssetAcct
+}
+
+func createSignedTx(src basics.Address, round basics.Round, params config.ConsensusParams, bootstrappedNet *netState) ([]transactions.SignedTxn, error) {
+
+	if bootstrappedNet.nApplications == 0 && bootstrappedNet.nAccounts == 0 && bootstrappedNet.nAssets == 0 {
+		bootstrappedNet.accountsCreated = true
+	}
+	var sgtxns []transactions.SignedTxn
+
+	header := transactions.Header{
+		Fee:         basics.MicroAlgos{Raw: 1},
+		FirstValid:  round,
+		LastValid:   round,
+		GenesisID:   bootstrappedNet.genesisID,
+		GenesisHash: bootstrappedNet.genesisHash,
+	}
+
+	if bootstrappedNet.txnState == protocol.PaymentTx {
+		var accounts []basics.Address
+		bootstrappedNet.appsPerAcct = 0
+		bootstrappedNet.assetPerAcct = 0
+		n := bootstrappedNet.nAccounts
+		if n == 0 || n >= bootstrappedNet.roundTxnCnt {
+			n = bootstrappedNet.roundTxnCnt
+		}
+
+		if !bootstrappedNet.accountsCreated {
+			for i := uint64(0); i < n; i++ {
+				secretDst := keypair()
+				dst := basics.Address(secretDst.SignatureVerifier)
+				accounts = append(accounts, dst)
+
+				header.Sender = src
+
+				tx := transactions.Transaction{
+					Type:   protocol.PaymentTx,
+					Header: header,
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: dst,
+						Amount:   bootstrappedNet.fundPerAccount,
+					},
+				}
+				t := transactions.SignedTxn{Txn: tx}
+				sgtxns = append(sgtxns, t)
+			}
+			bootstrappedNet.nAccounts -= uint64(len(sgtxns))
+			bootstrappedNet.accounts = accounts
+			if bootstrappedNet.nAssets > 0 {
+				bootstrappedNet.txnState = protocol.AssetConfigTx
+			} else if bootstrappedNet.nApplications > 0 {
+				bootstrappedNet.txnState = protocol.ApplicationCallTx
+			}
+		} else {
+			//send payments to created accounts randomly
+			accti := rand.Intn(len(bootstrappedNet.accounts))
+			for i := uint64(0); i < n; i++ {
+				header.Sender = src
+				tx := transactions.Transaction{
+					Type:   protocol.PaymentTx,
+					Header: header,
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: bootstrappedNet.accounts[accti],
+						Amount:   basics.MicroAlgos{Raw: 0},
+					},
+				}
+				t := transactions.SignedTxn{Txn: tx}
+				sgtxns = append(sgtxns, t)
+			}
+
+		}
+
+	} else if bootstrappedNet.txnState == protocol.AssetConfigTx {
+		i := uint64(0)
+		for _, acct := range bootstrappedNet.accounts {
+			if i == bootstrappedNet.nAssets {
+				break
+			}
+			header.Sender = acct
+			assetParam := basics.AssetParams{
+				Total:    100,
+				UnitName: "unit",
+				Manager:  acct,
+			}
+
+			assetConfigFields := transactions.AssetConfigTxnFields{
+				AssetParams: assetParam,
+			}
+
+			tx := transactions.Transaction{
+				Type:                 protocol.AssetConfigTx,
+				Header:               header,
+				AssetConfigTxnFields: assetConfigFields,
+			}
+			t := transactions.SignedTxn{Txn: tx}
+			sgtxns = append(sgtxns, t)
+			i++
+		}
+		bootstrappedNet.assetPerAcct++
+		bootstrappedNet.nAssets -= uint64(len(sgtxns))
+
+		if bootstrappedNet.nAssets == 0 || bootstrappedNet.assetPerAcct == params.MaxAssetsPerAccount {
+			if bootstrappedNet.nApplications > 0 {
+				bootstrappedNet.txnState = protocol.ApplicationCallTx
+			} else {
+				bootstrappedNet.txnState = protocol.PaymentTx
+			}
+
+		}
+	} else if bootstrappedNet.txnState == protocol.ApplicationCallTx {
+		ops, err := logic.AssembleString(program)
+		if err != nil {
+			return []transactions.SignedTxn{}, err
+		}
+		approval := ops.Program
+		ops, err = logic.AssembleString("#pragma version 2 int 1")
+		if err != nil {
+			panic(err)
+		}
+		i := uint64(0)
+		for _, acct := range bootstrappedNet.accounts {
+			if i == bootstrappedNet.nApplications {
+				break
+			}
+			header.Sender = acct
+			appCallFields := transactions.ApplicationCallTxnFields{
+				OnCompletion:      transactions.NoOpOC,
+				ApplicationID:     0,
+				ClearStateProgram: ops.Program,
+				ApprovalProgram:   approval,
+				ApplicationArgs: [][]byte{
+					[]byte("check"),
+					[]byte("bar"),
+				},
+			}
+			tx := transactions.Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: header,
+
+				ApplicationCallTxnFields: appCallFields,
+			}
+
+			t := transactions.SignedTxn{Txn: tx}
+			sgtxns = append(sgtxns, t)
+			i++
+		}
+
+		bootstrappedNet.nApplications -= uint64(len(sgtxns))
+		bootstrappedNet.appsPerAcct++
+		if bootstrappedNet.nApplications == 0 || bootstrappedNet.appsPerAcct == params.MaxAppsCreated {
+			bootstrappedNet.txnState = protocol.PaymentTx
+		}
+	}
+	return sgtxns, nil
 }
 
 type walletTargetData struct {

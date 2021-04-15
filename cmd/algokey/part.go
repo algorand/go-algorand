@@ -101,6 +101,7 @@ var partInfoCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Cannot load partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
 		}
+		partkey.Close()
 
 		printPartkey(partkey.Participation)
 	},
@@ -128,6 +129,7 @@ var partReparentCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Cannot load partkey database %s: %v\n", partKeyfile, err)
 			os.Exit(1)
 		}
+		defer partkey.Close()
 
 		partkey.Parent = parent
 		err = partkey.PersistNewParent()
