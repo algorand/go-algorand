@@ -58,6 +58,7 @@ const (
 	// Node
 	infoNodeStart                     = "Algorand node successfully started!"
 	infoNodeAlreadyStarted            = "Algorand node was already started!"
+	infoNodeDidNotRestart             = "Algorand node did not restart. The node is still running!"
 	infoTryingToStopNode              = "Trying to stop the node..."
 	infoNodeShuttingDown              = "Algorand node is shutting down..."
 	infoNodeSuccessfullyStopped       = "The node was successfully stopped."
