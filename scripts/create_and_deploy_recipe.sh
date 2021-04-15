@@ -40,6 +40,7 @@ FORCE_OPTION=""
 SCHEMA_MODIFIER=""
 BUCKET=""
 SKIP_BUILD=""
+BOOTSTRAP=""
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -72,6 +73,9 @@ while [ "$1" != "" ]; do
         -b)
             shift
             BUCKET="$1"
+            ;;
+        --gendbfiles)
+            BOOTSTRAP="true"
             ;;
         --skip-build)
             SKIP_BUILD="true"
@@ -108,7 +112,8 @@ if [[ "${SKIP_BUILD}" != "true" || ! -f ${GOPATH}/bin/netgoal ]]; then
 fi
 
 # Generate the nodecfg package directory
-${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}"
+echo "bootstrap? " ${BOOTSTRAP}
+${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}" -b=${BOOTSTRAP:-false}
 
 # Package and upload the config package
 export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"
@@ -120,7 +125,7 @@ if [ -f "${NETWORK_PERF_RULES_PATH}" ]; then
     cp "${NETWORK_PERF_RULES_PATH}" "${ROOTDIR}/network_performance_rules"
 fi
 
-# Deploy binaries
+## Deploy binaries
 if [ "${NO_DEPLOY}" = "" ]; then
     # Now generate a private build using our custom genesis.json and deploy it to S3 also
     ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_RELEASE_BUCKET}"
