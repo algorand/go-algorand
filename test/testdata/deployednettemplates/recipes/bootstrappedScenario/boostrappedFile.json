@@ -1,8 +1,8 @@
 {
-	"NumRounds":650000,
-	"RoundTransactionsCount": 1000,
-	"GeneratedAccountsCount": 7000000,
-	"GeneratedAssetsCount": 200000,
-	"GeneratedApplicationCount": 1000000,
-	"SourceWalletName": "wallet1"
+	"numRounds":65000,
+	"roundTransactionsCount": 1000,
+	"generatedAccountsCount": 7000000,
+	"generatedAssetsCount": 200000,
+	"generatedApplicationCount": 1000000,
+	"sourceWalletName": "wallet1"
 }
