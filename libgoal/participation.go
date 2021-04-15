@@ -47,7 +47,7 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 	// This lambda will be used for finding the desired file.
 	checkIfFileIsDesiredKey := func(file os.FileInfo, expiresAfter basics.Round) (part account.Participation, err error) {
 		var handle db.Accessor
-		var partCandidate account.Participation
+		var partCandidate account.PersistedParticipation
 
 		// If it can't be a participation key database, skip it
 		if !config.IsPartKeyFilename(file.Name()) {
@@ -62,14 +62,15 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 			// Couldn't open it, skip it
 			return
 		}
-		defer handle.Close()
 
 		// Fetch an account.Participation from the database
 		partCandidate, err = account.RestoreParticipation(handle)
 		if err != nil {
 			// Couldn't read it, skip it
+			handle.Close()
 			return
 		}
+		defer partCandidate.Close()
 
 		// Return the Participation valid for this round that relates to the passed address
 		// that expires farthest in the future.
@@ -77,7 +78,7 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 		// in the short-term.
 		// In the future we should allow the user to specify exactly which partkeys to register.
 		if partCandidate.FirstValid <= round && round <= partCandidate.LastValid && partCandidate.Parent == address && partCandidate.LastValid > expiresAfter {
-			part = partCandidate
+			part = partCandidate.Participation
 		}
 		return
 	}
@@ -164,7 +165,9 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 
 	// Fill the database with new participation keys
 	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstRound, lastRound, keyDilution)
-	return newPart, partKeyPath, err
+	part = newPart.Participation
+	newPart.Close()
+	return part, partKeyPath, err
 }
 
 // InstallParticipationKeys creates a .partkey database for a given address,
@@ -234,8 +237,9 @@ func (c *Client) InstallParticipationKeys(inputfile string) (part account.Partic
 		return
 	}
 	os.Remove(inputfile)
-
-	return newpartkey, newdbpath, nil
+	part = newpartkey.Participation
+	newpartkey.Close()
+	return part, newdbpath, nil
 }
 
 // ListParticipationKeys returns the available participation keys,
@@ -271,13 +275,14 @@ func (c *Client) ListParticipationKeys() (partKeyFiles map[string]account.Partic
 
 		// Fetch an account.Participation from the database
 		part, err := account.RestoreParticipation(handle)
-		handle.Close()
 		if err != nil {
 			// Couldn't read it, skip it
+			handle.Close()
 			continue
 		}
 
-		partKeyFiles[filename] = part
+		partKeyFiles[filename] = part.Participation
+		part.Close()
 	}
 
 	return

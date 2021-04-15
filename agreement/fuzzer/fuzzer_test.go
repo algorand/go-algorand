@@ -205,27 +205,12 @@ func (n *Fuzzer) initAccountsAndBalances(rootSeed []byte, onlineNodes []bool) er
 		}
 		rootAddress := root.Address()
 
-		partAccess, err := db.MakeAccessor(n.networkName+"part"+strconv.Itoa(i+off), false, true)
-
-		if err != nil {
-			return err
-		}
-
-		n.accountAccessors[i*2+1] = partAccess
-
 		n.accounts[i] = account.Participation{
 			Parent:     rootAddress,
 			VRF:        generatePseudoRandomVRF(i),
 			Voting:     readOnlyParticipationVotes[i],
 			FirstValid: firstValid,
 			LastValid:  lastValid,
-			Store:      partAccess,
-		}
-
-		err = n.accounts[i].Persist()
-
-		if err != nil {
-			panic(err)
 		}
 
 		acctData := basics.AccountData{

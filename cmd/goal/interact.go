@@ -622,7 +622,7 @@ var appExecuteCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
 				}

@@ -231,7 +231,7 @@ var createAssetCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -311,7 +311,7 @@ var destroyAssetCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lastValid)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -400,7 +400,7 @@ var configAssetCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lastValid)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -481,7 +481,7 @@ var sendAssetCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lastValid)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -546,7 +546,7 @@ var freezeAssetCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				err = waitForCommit(client, txid, lastValid)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
