@@ -92,6 +92,9 @@ tasks:
     name: build.arm
     agent: cicd.alpine.arm
     target: ci-build
+  - task: shell.Make
+    name: build.darwin-amd64
+    target: ci-build
 
   - task: docker.Make
     name: archive.amd64
@@ -187,6 +190,10 @@ tasks:
     target: mule-sign
 
 jobs:
+  build-darwin-amd64:
+    tasks:
+      - shell.Make.build.darwin-amd64
+      - stash.Stash.darwin-amd64
   build-linux-amd64:
     tasks:
       - docker.Make.build.amd64
@@ -204,6 +211,7 @@ jobs:
       - stash.Unstash.linux-amd64
       - stash.Unstash.linux-arm64
       - stash.Unstash.linux-arm
+      - stash.Unstash.darwin-amd64
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
       - stash.Stash.packages
