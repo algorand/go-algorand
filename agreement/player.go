@@ -391,9 +391,15 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 
 	if e.t() == payloadPipelined {
 		e := e.(payloadProcessedEvent)
-		msg := message{MessageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload} // TODO do we want to keep around the original handle?
-		a := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, p.Round, e.Period, e.Pinned)
-		actions = append(actions, a)
+
+		up := e.UnauthenticatedPayload
+		uv := e.Vote.u()
+		msg := message{MessageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: up} // TODO do we want to keep around the original handle?
+
+		ra := relayAction(messageEvent{T: payloadPresent, Input: msg}, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
+		vpa := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, p.Round, e.Period, e.Pinned)
+
+		actions = append(actions, vpa, ra)
 	}
 
 	// we might need to handle a pipelined threshold event

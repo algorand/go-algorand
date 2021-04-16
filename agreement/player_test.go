@@ -1802,6 +1802,50 @@ func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 	require.Truef(t, pM.getTrace().Contains(resynchEvent), "Player should try to repropagate freshest bundle")
 }
 
+func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
+	// if a player receives a proposal payload for a future round, it should still
+	// propagate it at some point.
+	const r = round(209)
+	_, pM, helper := setupP(t, r, 0, soft)
+	payload, pV := helper.MakeRandomProposalPayload(t, r+1)
+
+	// store an arbitrary proposal/payload
+	vVote := helper.MakeVerifiedVote(t, 0, r+1, 0, propose, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	m := message{
+		MessageHandle: "msghandle",
+		UnauthenticatedProposal: payload.u(),
+	}
+	inMsg = messageEvent{
+		T:     payloadPresent,
+		Input: m,
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// advance to the next round
+	msg := roundInterruptionEvent {
+		Round: r+1,
+	}
+	err, panicErr = pM.transition(msg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	relayPayloadEvent := ev(networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
+	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay payload on new round")
+}
+
 func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	// if player broadcasts a non-bottom freshest bundle during recovery/resynch, broadcast the
 	// associated proposal payload. note this is distinct from relaying the payload
