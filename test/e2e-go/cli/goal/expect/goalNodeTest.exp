@@ -30,6 +30,23 @@ if { [catch {
     # Start node
     ::AlgorandGoal::StartNode $TEST_PRIMARY_NODE_DIR
 
+    # Try starting the node again, should just report the node is already running
+    set ALREADY_STARTED_MESSAGE_RECEIVED 0
+    spawn goal node start -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "goal node start unexpectedly failed" }
+        "^Algorand node was already started!" {
+	    set ALREADY_STARTED_MESSAGE_RECEIVED 1
+	    exp_continue
+	}
+	-re "\\S+" { close; ::AlgorandGoal::Abort "Unexpected message for goal node start on a running node" }
+        eof {
+	    if {$ALREADY_STARTED_MESSAGE_RECEIVED == 0} {
+		{ close; ::AlgorandGoal::Abort "eof recieved before the expected message "}
+	    }
+	}
+    }
+
     # Restart node
     ::AlgorandGoal::RestartNode $TEST_PRIMARY_NODE_DIR
 
