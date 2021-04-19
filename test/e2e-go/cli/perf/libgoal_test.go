@@ -34,19 +34,20 @@ func BenchmarkLibGoalPerf(b *testing.B) {
 	binDir := fixture.GetBinDir()
 
 	c, err := libgoal.MakeClientWithBinDir(binDir, fixture.PrimaryDataDir(), fixture.PrimaryDataDir(), libgoal.FullClient)
-	require.NoError(b, err)
+	a := require.New(fixtures.SynchronizedTest(b))
+	a.NoError(err)
 
 	b.Run("algod", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, err := c.AlgodVersions()
-			require.NoError(b, err)
+			a.NoError(err)
 		}
 	})
 
 	b.Run("kmd", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, err := c.GetUnencryptedWalletHandle()
-			require.NoError(b, err)
+			a.NoError(err)
 		}
 	})
 }

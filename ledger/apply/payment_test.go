@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -77,52 +76,8 @@ func TestAlgosEncoding(t *testing.T) {
 	}
 }
 
-type mockBalances struct {
-	protocol.ConsensusVersion
-}
-
-func (balances mockBalances) Round() basics.Round {
-	return basics.Round(8675309)
-}
-
-func (balances mockBalances) Allocate(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
-	return nil
-}
-
-func (balances mockBalances) Deallocate(basics.Address, basics.AppIndex, bool) error {
-	return nil
-}
-
-func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, basics.EvalDelta, error) {
-	return false, basics.EvalDelta{}, nil
-}
-
-func (balances mockBalances) PutWithCreatable(basics.Address, basics.AccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
-	return nil
-}
-
-func (balances mockBalances) Get(basics.Address, bool) (basics.AccountData, error) {
-	return basics.AccountData{}, nil
-}
-
-func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	return basics.Address{}, true, nil
-}
-
-func (balances mockBalances) Put(basics.Address, basics.AccountData) error {
-	return nil
-}
-
-func (balances mockBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
-	return nil
-}
-
-func (balances mockBalances) ConsensusParams() config.ConsensusParams {
-	return config.Consensus[balances.ConsensusVersion]
-}
-
 func TestPaymentApply(t *testing.T) {
-	mockBalV0 := mockBalances{protocol.ConsensusCurrentVersion}
+	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
 
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
@@ -149,8 +104,8 @@ func TestPaymentApply(t *testing.T) {
 }
 
 func TestCheckSpender(t *testing.T) {
-	mockBalV0 := mockBalances{protocol.ConsensusCurrentVersion}
-	mockBalV7 := mockBalances{protocol.ConsensusV7}
+	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
+	mockBalV7 := makeMockBalances(protocol.ConsensusV7)
 
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)

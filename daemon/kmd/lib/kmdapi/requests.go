@@ -27,7 +27,7 @@ type APIV1Request interface{} // we need to tell swagger to ignore due to bug (g
 
 // APIV1RequestEnvelope is a common envelope that all API V1 requests must embed
 //
-// swagger:ignore
+// swagger:model VersionsRequest
 type APIV1RequestEnvelope struct { // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 }
@@ -161,6 +161,11 @@ type APIV1POSTKeyListRequest struct {
 type APIV1POSTTransactionSignRequest struct {
 	APIV1RequestEnvelope
 	WalletHandleToken string `json:"wallet_handle_token"`
+	// Base64 encoding of msgpack encoding of a `Transaction` object
+	// Note: SDK and goal usually generate `SignedTxn` objects
+	//   in that case, the field `txn` / `Transaction` of the
+	//   generated `SignedTxn` object needs to be used
+	//
 	// swagger:strfmt byte
 	Transaction    []byte           `json:"transaction"`
 	PublicKey      crypto.PublicKey `json:"public_key"`

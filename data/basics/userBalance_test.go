@@ -194,8 +194,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		ad.AppLocalStates[AppIndex(0x1234123412341234-appHolderApps)] = ls
 	}
 
-	encoded, err := ad.MarshalMsg(nil)
-	require.NoError(t, err)
+	encoded := ad.MarshalMsg(nil)
 	require.GreaterOrEqual(t, MaxEncodedAccountDataSize, len(encoded))
 }
 

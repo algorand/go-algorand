@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 type storageAction uint64
@@ -388,7 +389,7 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 // Execution happens in a child cow and all modifications are merged into parent if the program passes
 func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta basics.EvalDelta, err error) {
 	// Make a child cow to eval our program in
-	calf := cb.child()
+	calf := cb.child(1)
 	params.Ledger, err = newLogicLedger(calf, aidx)
 	if err != nil {
 		return false, basics.EvalDelta{}, err
@@ -397,7 +398,7 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	// Eval the program
 	pass, err = logic.EvalStateful(program, params)
 	if err != nil {
-		return false, basics.EvalDelta{}, err
+		return false, basics.EvalDelta{}, ledgercore.LogicEvalError{Err: err}
 	}
 
 	// If program passed, build our eval delta, and commit to state changes
@@ -544,16 +545,18 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 		case deallocAction:
 			delete(owned, aapp.aidx)
 		case allocAction, remainAllocAction:
-			// TODO verify this assertion
 			// note: these should always exist because they were
-			// at least preceded by a call to PutWithCreatable?
+			// at least preceded by a call to PutWithCreatable
 			params, ok := owned[aapp.aidx]
 			if !ok {
 				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)
 			}
 			params = params.Clone()
-			if store.action == allocAction {
-				// TODO does this ever accidentally clobber?
+			if (store.action == allocAction && len(store.kvCow) > 0) ||
+				(store.action == remainAllocAction && params.GlobalState == nil) {
+				// allocate KeyValue for
+				// 1) app creation and global write in the same app call
+				// 2) global state writing into empty global state
 				params.GlobalState = make(basics.TealKeyValue)
 			}
 			// note: if this is an allocAction, there will be no
@@ -580,7 +583,6 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 		case deallocAction:
 			delete(owned, aapp.aidx)
 		case allocAction, remainAllocAction:
-			// TODO verify this assertion
 			// note: these should always exist because they were
 			// at least preceded by a call to Put?
 			states, ok := owned[aapp.aidx]
@@ -588,8 +590,11 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 				return basics.AccountData{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
 			}
 			states = states.Clone()
-			if store.action == allocAction {
-				// TODO does this ever accidentally clobber?
+			if (store.action == allocAction && len(store.kvCow) > 0) ||
+				(store.action == remainAllocAction && states.KeyValue == nil) {
+				// allocate KeyValue for
+				// 1) opting in and local state write in the same app call
+				// 2) local state writing into empty local state (opted in)
 				states.KeyValue = make(basics.TealKeyValue)
 			}
 			// note: if this is an allocAction, there will be no

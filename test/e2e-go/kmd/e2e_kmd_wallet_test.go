@@ -27,6 +27,7 @@ import (
 )
 
 func TestWalletCreation(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	f.Setup(t)
@@ -36,10 +37,10 @@ func TestWalletCreation(t *testing.T) {
 	req0 := kmdapi.APIV1GETWalletsRequest{}
 	resp0 := kmdapi.APIV1GETWalletsResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Shouldn't be any wallets yet
-	require.Equal(t, len(resp0.Wallets), 0)
+	a.Equal(len(resp0.Wallets), 0)
 
 	// Create a wallet
 	walletName := "default"
@@ -51,16 +52,16 @@ func TestWalletCreation(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTWalletResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Test that `GET /v1/wallets` returns the new wallet
 	req2 := kmdapi.APIV1GETWalletsRequest{}
 	resp2 := kmdapi.APIV1GETWalletsResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Should be one wallet
-	require.Equal(t, len(resp2.Wallets), 1)
+	a.Equal(len(resp2.Wallets), 1)
 
 	// Try to create a wallet with the same name
 	req3 := kmdapi.APIV1POSTWalletRequest{
@@ -72,10 +73,11 @@ func TestWalletCreation(t *testing.T) {
 	err = f.Client.DoV1Request(req3, &resp3)
 
 	// Should be an error
-	require.Error(t, err)
+	a.Error(err)
 }
 
 func TestBlankWalletCreation(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	f.Setup(t)
@@ -89,25 +91,26 @@ func TestBlankWalletCreation(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTWalletResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Test that `GET /v1/wallets` returns the new wallet
 	req1 := kmdapi.APIV1GETWalletsRequest{}
 	resp1 := kmdapi.APIV1GETWalletsResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Should be one wallet
-	require.Equal(t, len(resp1.Wallets), 1)
+	a.Equal(len(resp1.Wallets), 1)
 
 	// Name should not be blank
-	require.NotEmpty(t, resp1.Wallets[0].Name)
+	a.NotEmpty(resp1.Wallets[0].Name)
 
 	// Name should be equal to ID
-	require.Equal(t, resp1.Wallets[0].Name, resp1.Wallets[0].ID)
+	a.Equal(resp1.Wallets[0].Name, resp1.Wallets[0].ID)
 }
 
 func TestWalletRename(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	f.Setup(t)
@@ -123,19 +126,19 @@ func TestWalletRename(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTWalletResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Test that `GET /v1/wallets` returns the new wallet
 	req1 := kmdapi.APIV1GETWalletsRequest{}
 	resp1 := kmdapi.APIV1GETWalletsResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Should be one wallet
-	require.Equal(t, len(resp1.Wallets), 1)
+	a.Equal(len(resp1.Wallets), 1)
 
 	// Name should be correct
-	require.Equal(t, resp1.Wallets[0].Name, walletName)
+	a.Equal(resp1.Wallets[0].Name, walletName)
 
 	// Try to rename the wallet with the wrong password
 	newWalletName := "newWallet4u"
@@ -148,7 +151,7 @@ func TestWalletRename(t *testing.T) {
 	err = f.Client.DoV1Request(req2, &resp2)
 
 	// Should be an error
-	require.Error(t, err)
+	a.Error(err)
 
 	// Try to rename the wallet with the correct password
 	req3 := kmdapi.APIV1POSTWalletRenameRequest{
@@ -160,31 +163,32 @@ func TestWalletRename(t *testing.T) {
 	err = f.Client.DoV1Request(req3, &resp3)
 
 	// Should succeed
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Returned wallet should have the new name
-	require.Equal(t, newWalletName, resp3.Wallet.Name)
+	a.Equal(newWalletName, resp3.Wallet.Name)
 
 	// Returned wallet should have the correct ID
-	require.Equal(t, resp1.Wallets[0].ID, resp3.Wallet.ID)
+	a.Equal(resp1.Wallets[0].ID, resp3.Wallet.ID)
 
 	// Test that `GET /v1/wallets` returns the new wallet
 	req4 := kmdapi.APIV1GETWalletsRequest{}
 	resp4 := kmdapi.APIV1GETWalletsResponse{}
 	err = f.Client.DoV1Request(req4, &resp4)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Should be one wallet
-	require.Equal(t, len(resp4.Wallets), 1)
+	a.Equal(len(resp4.Wallets), 1)
 
 	// Returned wallet should have the new name
-	require.Equal(t, newWalletName, resp4.Wallets[0].Name)
+	a.Equal(newWalletName, resp4.Wallets[0].Name)
 
 	// Returned wallet should have the correct ID
-	require.Equal(t, resp1.Wallets[0].ID, resp4.Wallets[0].ID)
+	a.Equal(resp1.Wallets[0].ID, resp4.Wallets[0].ID)
 }
 
 func TestWalletSessionRelease(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -196,10 +200,10 @@ func TestWalletSessionRelease(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTWalletInfoResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Should return the wallet we created
-	require.Equal(t, resp0.WalletHandle.Wallet.Name, f.WalletName)
+	a.Equal(resp0.WalletHandle.Wallet.Name, f.WalletName)
 
 	// Test that `POST /v1/wallet/release` succeeds
 	req1 := kmdapi.APIV1POSTWalletReleaseRequest{
@@ -207,7 +211,7 @@ func TestWalletSessionRelease(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTWalletReleaseResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Test that `POST /v1/wallet/info` no longer works with this token
 	req2 := kmdapi.APIV1POSTWalletInfoRequest{
@@ -217,13 +221,14 @@ func TestWalletSessionRelease(t *testing.T) {
 	err = f.Client.DoV1Request(req2, &resp2)
 
 	// Error response
-	require.Error(t, err)
+	a.Error(err)
 
 	// Should not return the wallet we created
-	require.NotEqual(t, resp2.WalletHandle.Wallet.Name, f.WalletName)
+	a.NotEqual(resp2.WalletHandle.Wallet.Name, f.WalletName)
 }
 
 func TestWalletSessionRenew(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	walletHandleToken := f.SetupWithWallet(t)
@@ -235,7 +240,7 @@ func TestWalletSessionRenew(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTWalletInfoResponse{}
 	err := f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Note # seconds until expiration
 	expiresSecsInitial := resp0.WalletHandle.ExpiresSeconds
@@ -249,11 +254,11 @@ func TestWalletSessionRenew(t *testing.T) {
 	}
 	resp1 := kmdapi.APIV1POSTWalletInfoResponse{}
 	err = f.Client.DoV1Request(req1, &resp1)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Should have decreased
 	expiresSecsLater := resp1.WalletHandle.ExpiresSeconds
-	require.True(t, expiresSecsLater < expiresSecsInitial)
+	a.True(expiresSecsLater < expiresSecsInitial)
 
 	// Renew the handle
 	req2 := kmdapi.APIV1POSTWalletRenewRequest{
@@ -261,14 +266,15 @@ func TestWalletSessionRenew(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTWalletRenewResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Should have increased
 	expiresSecsRenewed := resp2.WalletHandle.ExpiresSeconds
-	require.True(t, expiresSecsRenewed > expiresSecsLater)
+	a.True(expiresSecsRenewed > expiresSecsLater)
 }
 
 func TestWalletSessionExpiry(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
 	// Write a config for 1 second session expirations
@@ -276,7 +282,7 @@ func TestWalletSessionExpiry(t *testing.T) {
 	f.SetupWithConfig(t, cfg)
 	walletHandleToken, err := f.MakeWalletAndHandleToken()
 	defer f.Shutdown()
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Get deets about this wallet token to confirm the token works
 	req0 := kmdapi.APIV1POSTWalletInfoRequest{
@@ -284,7 +290,7 @@ func TestWalletSessionExpiry(t *testing.T) {
 	}
 	resp0 := kmdapi.APIV1POSTWalletInfoResponse{}
 	err = f.Client.DoV1Request(req0, &resp0)
-	require.NoError(t, err)
+	a.NoError(err)
 
 	// Wait for token to expire
 	time.Sleep(2 * time.Second)
@@ -297,5 +303,5 @@ func TestWalletSessionExpiry(t *testing.T) {
 	err = f.Client.DoV1Request(req1, &resp1)
 
 	// Token should have expired
-	require.Error(t, err)
+	a.Error(err)
 }

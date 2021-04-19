@@ -63,7 +63,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -366,6 +366,28 @@ type Local struct {
 
 	// VerifiedTranscationsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
 	VerifiedTranscationsCacheSize int `version[14]:"30000"`
+
+	// EnableCatchupFromArchiveServers controls which peers the catchup service would use in order to catchup.
+	// When enabled, the catchup service would use the archive servers before falling back to the relays.
+	// On networks that doesn't have archive servers, this becomes a no-op, as the catchup service would have no
+	// archive server to pick from, and therefore automatically selects one of the relay nodes.
+	EnableCatchupFromArchiveServers bool `version[15]:"false"`
+
+	// DisableLocalhostConnectionRateLimit controls whether the incoming connection rate limit would apply for
+	// connections that are originating from the local machine. Setting this to "true", allow to create large
+	// local-machine networks that won't trip the incoming connection limit observed by relays.
+	DisableLocalhostConnectionRateLimit bool `version[16]:"true"`
+
+	// BlockServiceCustomFallbackEndpoints is a comma delimited list of endpoints which the block service uses to
+	// redirect the http requests to in case it does not have the round. If it is not specified, will check
+	// EnableBlockServiceFallbackToArchiver.
+	BlockServiceCustomFallbackEndpoints string `version[16]:""`
+
+	// EnableBlockServiceFallbackToArchiver controls whether the block service redirects the http requests to
+	// an archiver or return StatusNotFound (404) when in does not have the requested round, and
+	// BlockServiceCustomFallbackEndpoints is empty.
+	// The archiver is randomly selected, if none is available, will return StatusNotFound (404).
+	EnableBlockServiceFallbackToArchiver bool `version[16]:"true"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

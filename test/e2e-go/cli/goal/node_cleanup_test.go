@@ -22,11 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/nodecontrol"
+	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
 func TestGoalNodeCleanup(t *testing.T) {
 	defer fixture.SetTestContext(t)()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	primaryDir := fixture.PrimaryDataDir()
 	nc := nodecontrol.MakeNodeController(fixture.GetBinDir(), primaryDir)

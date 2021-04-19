@@ -1,2 +1,0 @@
-Files in this package were copied from Google's (Apache-licensed) Trillian package (github.com/google/trillian)
-and modified by us to avoid needing to import the entire trillian package

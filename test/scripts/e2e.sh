@@ -45,9 +45,22 @@ TEST_RUN_ID=$(${SCRIPT_PATH}/testrunid.py)
 export TEMPDIR=${SRCROOT}/tmp/out/e2e/${TEST_RUN_ID}
 echo "Test output can be found in ${TEMPDIR}"
 
+
+# ARM64 has an unoptimized scrypt() which can cause tests to timeout.
+# Run kmd with scrypt() configured to run less secure and fast to go through the motions for test.
+# thus, on those platforms we launch kmd with unsafe_scrypt = true to speed up the tests.
+RUN_KMD_WITH_UNSAFE_SCRYPT=""
+PLATFORM_ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
+
+echo "ARCHTYPE:    ${PLATFORM_ARCHTYPE}"
+if [[ "${PLATFORM_ARCHTYPE}" = arm* ]]; then
+    RUN_KMD_WITH_UNSAFE_SCRYPT="--unsafe_scrypt"
+fi
+
+echo "RUN_KMD_WITH_UNSAFE_SCRYPT = ${RUN_KMD_WITH_UNSAFE_SCRYPT}"
+
 export BINDIR=${TEMPDIR}/bin
 export DATADIR=${TEMPDIR}/data
-RUNNING_COUNT=0
 
 function reset_dirs() {
     rm -rf ${BINDIR}
@@ -61,7 +74,7 @@ function reset_dirs() {
 reset_dirs
 echo Killing all instances and installing current build
 
-pkill -u $(whoami) -x algod || true
+pkill -u "$(whoami)" -x algod || true
 
 if ! ${NO_BUILD} ; then
     ./scripts/local_install.sh -c ${CHANNEL} -p ${BINDIR} -d ${DATADIR}
@@ -82,11 +95,14 @@ cd "${SCRIPT_PATH}"
 
 ./timeout 200 ./e2e_basic_start_stop.sh
 
-python3 -m venv ${TEMPDIR}/ve
-. ${TEMPDIR}/ve/bin/activate
-${TEMPDIR}/ve/bin/pip3 install --upgrade pip
-${TEMPDIR}/ve/bin/pip3 install --upgrade py-algorand-sdk cryptography
-${TEMPDIR}/ve/bin/python3 e2e_client_runner.py e2e_subs/*.sh
+python3 -m venv "${TEMPDIR}/ve"
+. "${TEMPDIR}/ve/bin/activate"
+"${TEMPDIR}/ve/bin/pip3" install --upgrade pip
+"${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
+"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
+for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+done
 deactivate
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
@@ -97,7 +113,7 @@ export SRCROOT=${SRCROOT}
 
 ./e2e_go_tests.sh ${GO_TEST_ARGS}
 
-rm -rf ${TEMPDIR}
+rm -rf "${TEMPDIR}"
 
 if ! ${NO_BUILD} ; then
     rm -rf ${PKG_ROOT}

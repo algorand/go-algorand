@@ -17,6 +17,8 @@
 package logic
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -79,7 +81,7 @@ const (
 	ApplicationID
 	// OnCompletion OnCompletion
 	OnCompletion
-	// ApplicationArgs []basics.TealValue
+	// ApplicationArgs  [][]byte
 	ApplicationArgs
 	// NumAppArgs len(ApplicationArgs)
 	NumAppArgs
@@ -123,6 +125,23 @@ const (
 	FreezeAssetAccount
 	// FreezeAssetFrozen bool
 	FreezeAssetFrozen
+	// Assets []basics.AssetIndex
+	Assets
+	// NumAssets len(ForeignAssets)
+	NumAssets
+	// Applications []basics.AppIndex
+	Applications
+	// NumApplications len(ForeignApps)
+	NumApplications
+
+	// GlobalNumUint uint64
+	GlobalNumUint
+	// GlobalNumByteSlice uint64
+	GlobalNumByteSlice
+	// LocalNumUint uint64
+	LocalNumUint
+	// LocalNumByteSlice uint64
+	LocalNumByteSlice
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -141,7 +160,7 @@ type tfNameSpecMap map[string]txnFieldSpec
 
 func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
 	if s[name].version > 1 {
-		extra = "LogicSigVersion >= 2."
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
 	return
 }
@@ -201,6 +220,14 @@ var txnFieldSpecs = []txnFieldSpec{
 	{FreezeAsset, StackUint64, 2},
 	{FreezeAssetAccount, StackBytes, 2},
 	{FreezeAssetFrozen, StackUint64, 2},
+	{Assets, StackUint64, 3},
+	{NumAssets, StackUint64, 3},
+	{Applications, StackUint64, 3},
+	{NumApplications, StackUint64, 3},
+	{GlobalNumUint, StackUint64, 3},
+	{GlobalNumByteSlice, StackUint64, 3},
+	{LocalNumUint, StackUint64, 3},
+	{LocalNumByteSlice, StackUint64, 3},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
@@ -211,11 +238,15 @@ var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String()}
 var TxnaFieldTypes = []StackType{
 	txnaFieldSpecByField[ApplicationArgs].ftype,
 	txnaFieldSpecByField[Accounts].ftype,
+	txnaFieldSpecByField[Assets].ftype,
+	txnaFieldSpecByField[Applications].ftype,
 }
 
 var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
 	ApplicationArgs: {ApplicationArgs, StackBytes, 2},
 	Accounts:        {Accounts, StackBytes, 2},
+	Assets:          {Assets, StackUint64, 3},
+	Applications:    {Applications, StackUint64, 3},
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order
@@ -275,6 +306,9 @@ const (
 	ZeroAddress
 	// GroupSize len(txn group)
 	GroupSize
+
+	// v2
+
 	// LogicSigVersion ConsensusParams.LogicSigVersion
 	LogicSigVersion
 	// Round basics.Round
@@ -283,6 +317,11 @@ const (
 	LatestTimestamp
 	// CurrentApplicationID uint64
 	CurrentApplicationID
+
+	// v3
+
+	// CreatorAddress [32]byte
+	CreatorAddress
 
 	invalidGlobalField
 )
@@ -310,6 +349,7 @@ var globalFieldSpecs = []globalFieldSpec{
 	{Round, StackUint64, runModeApplication, 2},
 	{LatestTimestamp, StackUint64, runModeApplication, 2},
 	{CurrentApplicationID, StackUint64, runModeApplication, 2},
+	{CreatorAddress, StackBytes, runModeApplication, 3},
 }
 
 // GlobalFieldSpecByField maps GlobalField to spec
@@ -321,7 +361,7 @@ type gfNameSpecMap map[string]globalFieldSpec
 
 func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
 	if s[name].version > 1 {
-		extra = "LogicSigVersion >= 2."
+		extra = fmt.Sprintf("LogicSigVersion >= %d.", s[name].version)
 	}
 	return
 }
@@ -478,7 +518,7 @@ func init() {
 
 	txnTypeConstToUint64 = make(map[string]uint64, len(TxnTypeNames))
 	for tt, v := range txnTypeIndexes {
-		symbol := TypeNameDescription(tt)
+		symbol := TypeNameDescriptions[tt]
 		txnTypeConstToUint64[symbol] = v
 	}
 

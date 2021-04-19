@@ -24,7 +24,8 @@ ESCROWV2=$(${gcmd} clerk compile "${TEMPDIR}/simple.teal" -o "${TEMPDIR}/simple.
 
 # Fund v1 escrow, v2 escrow, and ACCOUNTD
 ACCOUNTD=$(${gcmd} account new|awk '{ print $6 }')
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ESCROWV1}"
+# The Note attached to this transaction is a specific non-utf8 string to help test that tools are binary safe and not assuming a readable "string".
+${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ESCROWV1}" --noteb64 /v8AAAAAAP/////+/g==
 ${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ESCROWV2}"
 ${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTD}"
 
@@ -122,3 +123,13 @@ if [ "$BALANCEB" -ne 400000 ]; then
     false
 fi
 
+# Close ACCOUNTD. This txn provides test data for Indexer to ensure that "signer" isn't left behind for a closed account.
+${gcmd} clerk send -a 1 -f "${ACCOUNTD}" -t "${ACCOUNT}" --close-to "${ACCOUNT}" -o "${TEMPDIR}/ctx.tx"
+${gcmd} clerk sign -S "${ACCOUNT}" -i "${TEMPDIR}/ctx.tx" -o "${TEMPDIR}/ctx.stxn"
+${gcmd} clerk rawsend -f "${TEMPDIR}/ctx.stxn"
+
+BALANCED=$(${gcmd} account balance -a "${ACCOUNTD}" | awk '{ print $1 }')
+if [ "$BALANCED" -ne 0 ]; then
+    date "+e2e_subs/rekey.sh FAIL wanted balance=0 but got ${BALANCED} %Y%m%d_%H%M%S"
+    false
+fi

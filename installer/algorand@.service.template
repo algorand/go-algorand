@@ -6,12 +6,11 @@
 ##
 ## To enable and start algod for a particular directory, run:
 ##
-##   systemctl enable algorand@$(systemd-escape /home/algo/algorand/testnet/data/relay)
-##   systemctl start  algorand@$(systemd-escape /home/algo/algorand/testnet/data/relay)
+##   systemctl enable algorand@$(systemd-escape /home/algorand/node/data)
+##   systemctl start  algorand@$(systemd-escape /home/algorand/node/data)
 ##
 ## This assumes a directory layout where the algod binary lives at
-## /home/algo/algorand/testnet/algod, and the data lives under
-## /home/algo/algorand/testnet/data/relay.
+## /home/algorand/node/algod and the data lives under /home/algorand/node/data.
 ##
 ## To allow the update script (which runs as the algo user) to manipulate
 ## the algorand systemd service, the following lines need to be added to
@@ -24,7 +23,6 @@
 ##
 ## On an Ubuntu machine, replace /usr/bin/systemctl with /bin/systemctl.
 ##
-## We do not use systemd user services because they are disabled in CentOS.
 
 [Unit]
 Description=Algorand daemon under %I
@@ -32,7 +30,7 @@ After=network.target
 AssertPathExists=%I
 
 [Service]
-ExecStart=/bin/bash -c "exec /%I/../../algod -d %I"
+ExecStart=@@BINDIR@@/algod -d %I
 User=@@USER@@
 Group=@@GROUP@@
 Restart=always

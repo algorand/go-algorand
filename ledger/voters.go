@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // The votersTracker maintains the Merkle tree for the most recent
@@ -132,17 +133,17 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) er
 	}
 	proto := config.Consensus[hdr.CurrentProtocol]
 
-	if proto.CompactCertRounds == 0 || hdr.CompactCertNextRound == 0 {
+	if proto.CompactCertRounds == 0 || hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
 		// Disabled, nothing to load.
 		return nil
 	}
 
-	startR := votersRoundForCertRound(hdr.CompactCertNextRound, proto)
+	startR := votersRoundForCertRound(hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto)
 
 	// Sanity check: we should never underflow or even reach 0.
 	if startR == 0 {
 		return fmt.Errorf("votersTracker: underflow: %d - %d - %d = %d",
-			hdr.CompactCertNextRound, proto.CompactCertRounds, proto.CompactCertVotersLookback, startR)
+			hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, proto.CompactCertRounds, proto.CompactCertVotersLookback, startR)
 	}
 
 	for r := startR; r <= latest; r += basics.Round(proto.CompactCertRounds) {
@@ -275,7 +276,7 @@ func (vt *votersTracker) newBlock(hdr bookkeeping.BlockHeader) {
 	for r, tr := range vt.round {
 		commitRound := r + basics.Round(tr.Proto.CompactCertVotersLookback)
 		certRound := commitRound + basics.Round(tr.Proto.CompactCertRounds)
-		if certRound < hdr.CompactCertNextRound {
+		if certRound < hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound {
 			delete(vt.round, r)
 		}
 	}
@@ -340,10 +341,10 @@ func (a participantsArray) Length() uint64 {
 	return uint64(len(a))
 }
 
-func (a participantsArray) Get(pos uint64) (crypto.Hashable, error) {
+func (a participantsArray) GetHash(pos uint64) (crypto.Digest, error) {
 	if pos >= uint64(len(a)) {
-		return nil, fmt.Errorf("participantsArray.Get(%d) out of bounds %d", pos, len(a))
+		return crypto.Digest{}, fmt.Errorf("participantsArray.Get(%d) out of bounds %d", pos, len(a))
 	}
 
-	return a[pos], nil
+	return crypto.HashObj(a[pos]), nil
 }

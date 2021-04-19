@@ -46,13 +46,18 @@ package require Tcl 8.0
 proc ::AlgorandGoal::Abort { ERROR } {
     puts "Aborting with Error: $ERROR"
 
-    if { "$::GLOBAL_TEST_ALGO_DIR" != "" && "$::GLOBAL_TEST_ROOT_DIR" != "" } {
+    if { [info exists ::GLOBAL_TEST_ROOT_DIR] } {
         # terminate child algod processes, if there are active child processes the test will hang on a test failure
-        puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
         puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
         puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
-        ::AlgorandGoal::StopNetwork $::GLOBAL_NETWORK_NAME $::GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ROOT_DIR
+        ::AlgorandGoal::StopNetwork $::GLOBAL_NETWORK_NAME $::GLOBAL_TEST_ROOT_DIR
     }
+
+    if { [info exists ::GLOBAL_TEST_ALGO_DIR] } {
+        puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
+        ::AlgorandGoal::StopNode $::GLOBAL_TEST_ALGO_DIR
+    }
+
     exit 1
 }
 
@@ -199,9 +204,8 @@ proc ::AlgorandGoal::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR
 }
 
 # Start the network
-proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR TEST_ROOT_DIR } {
+proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ROOT_DIR } {
     set timeout 120
-    set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
     set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
     set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
 
@@ -235,16 +239,15 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
 }
 
 # Stop the network
-proc ::AlgorandGoal::StopNetwork { NETWORK_NAME TEST_ALGO_DIR TEST_ROOT_DIR } {
+proc ::AlgorandGoal::StopNetwork { NETWORK_NAME TEST_ROOT_DIR } {
     set timeout 60
     set NETWORK_STOP_MESSAGE ""
     puts "Stopping network: $NETWORK_NAME"
-    spawn goal network stop -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
+    spawn goal network stop -r $TEST_ROOT_DIR
     expect {
         timeout {
 	      close
 	      puts "Timed out shutting down network"
-	      puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
 	      puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
 	      puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
 	      exit 1

@@ -20,11 +20,12 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                 14,
+	Version:                                 16,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
 	Archival:                                false,
 	BaseLoggerDebugLevel:                    4,
+	BlockServiceCustomFallbackEndpoints:     "",
 	BroadcastConnectionsLimit:               -1,
 	CadaverSizeTarget:                       1073741824,
 	CatchpointFileHistoryLength:             365,
@@ -41,11 +42,14 @@ var defaultLocal = Local{
 	DNSBootstrapID:                          "<network>.algorand.network",
 	DNSSecurityFlags:                        1,
 	DeadlockDetection:                       0,
+	DisableLocalhostConnectionRateLimit:     true,
 	DisableOutgoingConnectionThrottling:     false,
 	EnableAgreementReporting:                false,
 	EnableAgreementTimeMetrics:              false,
 	EnableAssembleStats:                     false,
 	EnableBlockService:                      false,
+	EnableBlockServiceFallbackToArchiver:    true,
+	EnableCatchupFromArchiveServers:         false,
 	EnableDeveloperAPI:                      false,
 	EnableGossipBlockService:                true,
 	EnableIncomingMessageFilter:             false,

@@ -20,7 +20,9 @@ import (
 	"context"
 	"encoding/binary"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 
@@ -28,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -48,6 +51,15 @@ const blockServerCatchupRequestBufferSize = 10
 // e.g. .Handle(BlockServiceBlockPath, &ls)
 const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
 
+// Constant strings used as keys for topics
+const (
+	RoundKey           = "roundKey"        // Block round-number topic-key in the request
+	RequestDataTypeKey = "requestDataType" // Data-type topic-key in the request (e.g. block, cert, block+cert)
+	BlockDataKey       = "blockData"       // Block-data topic-key in the response
+	CertDataKey        = "certData"        // Cert-data topic-key in the response
+	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
+)
+
 // BlockService represents the Block RPC API
 type BlockService struct {
 	ledger                  *data.Ledger
@@ -57,6 +69,9 @@ type BlockService struct {
 	net                     network.GossipNode
 	enableService           bool
 	enableServiceOverGossip bool
+	fallbackEndpoints       fallbackEndpoints
+	enableArchiverFallback  bool
+	log                     logging.Logger
 }
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
@@ -75,8 +90,13 @@ type PreEncodedBlockCert struct {
 	Certificate codec.Raw `codec:"cert"`
 }
 
+type fallbackEndpoints struct {
+	endpoints []string
+	lastUsed  int
+}
+
 // MakeBlockService creates a BlockService around the provider Ledger and registers it for HTTP callback on the block serving path
-func MakeBlockService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *BlockService {
+func MakeBlockService(log logging.Logger, config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *BlockService {
 	service := &BlockService{
 		ledger:                  ledger,
 		genesisID:               genesisID,
@@ -84,6 +104,9 @@ func MakeBlockService(config config.Local, ledger *data.Ledger, net network.Goss
 		net:                     net,
 		enableService:           config.EnableBlockService,
 		enableServiceOverGossip: config.EnableGossipBlockService,
+		fallbackEndpoints:       makeFallbackEndpoints(log, config.BlockServiceCustomFallbackEndpoints),
+		enableArchiverFallback:  config.EnableBlockServiceFallbackToArchiver,
+		log:                     log,
 	}
 	if service.enableService {
 		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
@@ -102,7 +125,7 @@ func (bs *BlockService) Start() {
 		bs.net.RegisterHandlers(handlers)
 	}
 	bs.stop = make(chan struct{})
-	go bs.ListenForCatchupReq(bs.catchupReqs, bs.stop)
+	go bs.listenForCatchupReq(bs.catchupReqs, bs.stop)
 }
 
 // Stop servicing catchup requests over ws
@@ -120,19 +143,19 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	genesisID, hasGenesisID := pathVars["genesisID"]
 	if hasVersionStr {
 		if versionStr != "1" {
-			logging.Base().Debug("http block bad version", versionStr)
+			bs.log.Debug("http block bad version", versionStr)
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	}
 	if hasGenesisID {
 		if bs.genesisID != genesisID {
-			logging.Base().Debugf("http block bad genesisID mine=%#v theirs=%#v", bs.genesisID, genesisID)
+			bs.log.Debugf("http block bad genesisID mine=%#v theirs=%#v", bs.genesisID, genesisID)
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	} else {
-		logging.Base().Debug("http block no genesisID")
+		bs.log.Debug("http block no genesisID")
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -141,13 +164,13 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 		request.Body = http.MaxBytesReader(response, request.Body, blockServerMaxBodyLength)
 		err := request.ParseForm()
 		if err != nil {
-			logging.Base().Debug("http block parse form err", err)
+			bs.log.Debug("http block parse form err", err)
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		roundStrs, ok := request.Form["b"]
 		if !ok || len(roundStrs) != 1 {
-			logging.Base().Debug("http block bad block id form arg")
+			bs.log.Debug("http block bad block id form arg")
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -156,12 +179,12 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 		if ok {
 			if len(versionStrs) == 1 {
 				if versionStrs[0] != "1" {
-					logging.Base().Debug("http block bad version", versionStr)
+					bs.log.Debug("http block bad version", versionStr)
 					response.WriteHeader(http.StatusBadRequest)
 					return
 				}
 			} else {
-				logging.Base().Debug("http block wrong number of v args", len(versionStrs))
+				bs.log.Debug("http block wrong number of v args", len(versionStrs))
 				response.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -171,7 +194,7 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	}
 	round, err := strconv.ParseUint(roundStr, 36, 64)
 	if err != nil {
-		logging.Base().Debug("http block round parse fail", roundStr, err)
+		bs.log.Debug("http block round parse fail", roundStr, err)
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -180,12 +203,15 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
 			// entry cound not be found.
-			response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
-			response.WriteHeader(http.StatusNotFound)
+			ok := bs.redirectRequest(round, response, request)
+			if !ok {
+				response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
+				response.WriteHeader(http.StatusNotFound)
+			}
 			return
 		default:
 			// unexpected error.
-			logging.Base().Warnf("ServeHTTP : failed to retrieve block %d %v", round, err)
+			bs.log.Warnf("ServeHTTP : failed to retrieve block %d %v", round, err)
 			response.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -197,20 +223,8 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	response.WriteHeader(http.StatusOK)
 	_, err = response.Write(encodedBlockCert)
 	if err != nil {
-		logging.Base().Warn("http block write failed ", err)
+		bs.log.Warn("http block write failed ", err)
 	}
-}
-
-// WsGetBlockRequest is a msgpack message requesting a block
-type WsGetBlockRequest struct {
-	Round uint64 `json:"round"`
-}
-
-// WsGetBlockOut is a msgpack message delivered on responding to a block (not rpc-based though)
-type WsGetBlockOut struct {
-	Round      uint64
-	Error      string
-	BlockBytes []byte `json:"blockbytes"`
 }
 
 func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n network.OutgoingMessage) {
@@ -223,8 +237,8 @@ func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n n
 	return
 }
 
-// ListenForCatchupReq handles catchup getblock request
-func (bs *BlockService) ListenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
+// listenForCatchupReq handles catchup getblock request
+func (bs *BlockService) listenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
@@ -245,54 +259,31 @@ const datatypeUnsupportedErrMsg = "requested data type is unsupported"
 
 // a blocking function for handling a catchup request
 func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
-	var res WsGetBlockOut
 	target := reqMsg.Sender.(network.UnicastPeer)
 	var respTopics network.Topics
 
-	if target.Version() == "1" {
-
-		defer func() {
-			bs.sendCatchupRes(ctx, target, reqMsg.Tag, res)
-		}()
-		var req WsGetBlockRequest
-		err := protocol.DecodeReflect(reqMsg.Data, &req)
-		if err != nil {
-			res.Error = err.Error()
-			return
-		}
-		res.Round = req.Round
-		encodedBlob, err := RawBlockBytes(bs.ledger, basics.Round(req.Round))
-
-		if err != nil {
-			res.Error = err.Error()
-			return
-		}
-		res.BlockBytes = encodedBlob
-		return
-	}
-	// Else, if version == 2.1
 	defer func() {
 		target.Respond(ctx, reqMsg, respTopics)
 	}()
 
 	topics, err := network.UnmarshallTopics(reqMsg.Data)
 	if err != nil {
-		logging.Base().Infof("BlockService handleCatchupReq: %s", err.Error())
+		bs.log.Infof("BlockService handleCatchupReq: %s", err.Error())
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey, []byte(err.Error()))}
 		return
 	}
-	roundBytes, found := topics.GetValue(roundKey)
+	roundBytes, found := topics.GetValue(RoundKey)
 	if !found {
-		logging.Base().Infof("BlockService handleCatchupReq: %s", noRoundNumberErrMsg)
+		bs.log.Infof("BlockService handleCatchupReq: %s", noRoundNumberErrMsg)
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
 				[]byte(noRoundNumberErrMsg))}
 		return
 	}
-	requestType, found := topics.GetValue(requestDataTypeKey)
+	requestType, found := topics.GetValue(RequestDataTypeKey)
 	if !found {
-		logging.Base().Infof("BlockService handleCatchupReq: %s", noDataTypeErrMsg)
+		bs.log.Infof("BlockService handleCatchupReq: %s", noDataTypeErrMsg)
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
 				[]byte(noDataTypeErrMsg))}
@@ -301,43 +292,85 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 
 	round, read := binary.Uvarint(roundBytes)
 	if read <= 0 {
-		logging.Base().Infof("BlockService handleCatchupReq: %s", roundNumberParseErrMsg)
+		bs.log.Infof("BlockService handleCatchupReq: %s", roundNumberParseErrMsg)
 		respTopics = network.Topics{
 			network.MakeTopic(network.ErrorKey,
 				[]byte(roundNumberParseErrMsg))}
 		return
 	}
-	respTopics = topicBlockBytes(bs.ledger, basics.Round(round), string(requestType))
+	respTopics = topicBlockBytes(bs.log, bs.ledger, basics.Round(round), string(requestType))
 	return
 }
 
-func (bs *BlockService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
-	t := reqTag.Complement()
-	logging.Base().Infof("catching down peer: %v, round %v. outcome: %v. ledger: %v", target.GetAddress(), outMsg.Round, outMsg.Error, bs.ledger.LastRound())
-	err := target.Unicast(ctx, protocol.EncodeReflect(outMsg), t)
-	if err != nil {
-		logging.Base().Info("failed to respond to catchup req", err)
+// redirectRequest redirects the request to the next round robin fallback endpoing if available, otherwise,
+// if EnableBlockServiceFallbackToArchiver is enabled, redirects to a random archiver.
+func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWriter, request *http.Request) (ok bool) {
+	peerAddress := bs.getNextCustomFallbackEndpoint()
+	if peerAddress == "" && bs.enableArchiverFallback {
+		peerAddress = bs.getRandomArchiver()
 	}
+	if peerAddress == "" {
+		return false
+	}
+
+	parsedURL, err := network.ParseHostOrURL(peerAddress)
+	if err != nil {
+		bs.log.Debugf("redirectRequest: %s", err.Error())
+		return false
+	}
+	parsedURL.Path = FormatBlockQuery(round, parsedURL.Path, bs.net)
+	http.Redirect(response, request, parsedURL.String(), http.StatusTemporaryRedirect)
+	bs.log.Debugf("redirectRequest: redirected block request to %s", parsedURL.String())
+	return true
 }
 
-func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType string) network.Topics {
+// getNextCustomFallbackEndpoint returns the next custorm fallback endpoint in RR ordering
+func (bs *BlockService) getNextCustomFallbackEndpoint() (endpointAddress string) {
+	if len(bs.fallbackEndpoints.endpoints) == 0 {
+		return
+	}
+	endpointAddress = bs.fallbackEndpoints.endpoints[bs.fallbackEndpoints.lastUsed]
+	bs.fallbackEndpoints.lastUsed = (bs.fallbackEndpoints.lastUsed + 1) % len(bs.fallbackEndpoints.endpoints)
+	return
+}
+
+// getRandomArchiver returns a random archiver address
+func (bs *BlockService) getRandomArchiver() (endpointAddress string) {
+	peers := bs.net.GetPeers(network.PeersPhonebookArchivers)
+	httpPeers := make([]network.HTTPPeer, 0, len(peers))
+
+	for _, peer := range peers {
+		httpPeer, validHTTPPeer := peer.(network.HTTPPeer)
+		if validHTTPPeer {
+			httpPeers = append(httpPeers, httpPeer)
+		}
+	}
+	if len(httpPeers) == 0 {
+		return
+	}
+	randIndex := crypto.RandUint64() % uint64(len(httpPeers))
+	endpointAddress = httpPeers[randIndex].GetAddress()
+	return
+}
+
+func topicBlockBytes(log logging.Logger, dataLedger *data.Ledger, round basics.Round, requestType string) network.Topics {
 	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
 		default:
-			logging.Base().Infof("BlockService topicBlockBytes: %s", err)
+			log.Infof("BlockService topicBlockBytes: %s", err)
 		}
 		return network.Topics{
 			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailabeErrMsg))}
 	}
 	switch requestType {
-	case blockAndCertValue:
+	case BlockAndCertValue:
 		return network.Topics{
 			network.MakeTopic(
-				blockDataKey, blk),
+				BlockDataKey, blk),
 			network.MakeTopic(
-				certDataKey, cert),
+				CertDataKey, cert),
 		}
 	default:
 		return network.Topics{
@@ -360,4 +393,25 @@ func RawBlockBytes(l *data.Ledger, round basics.Round) ([]byte, error) {
 		Block:       blk,
 		Certificate: cert,
 	}), nil
+}
+
+// FormatBlockQuery formats a block request query for the given network and round number
+func FormatBlockQuery(round uint64, parsedURL string, net network.GossipNode) string {
+	return net.SubstituteGenesisID(path.Join(parsedURL, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(round), 36)))
+}
+
+func makeFallbackEndpoints(log logging.Logger, customFallbackEndpoints string) (fe fallbackEndpoints) {
+	if customFallbackEndpoints == "" {
+		return
+	}
+	endpoints := strings.Split(customFallbackEndpoints, ",")
+	for _, ep := range endpoints {
+		parsed, err := network.ParseHostOrURL(ep)
+		if err != nil {
+			log.Warnf("makeFallbackEndpoints: error parsing %s %s", ep, err.Error())
+			continue
+		}
+		fe.endpoints = append(fe.endpoints, parsed.String())
+	}
+	return
 }

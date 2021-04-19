@@ -509,8 +509,10 @@ func (l *Ledger) Latest() basics.Round {
 
 // LatestCommitted returns the last block round number written to
 // persistent storage.  This block, and all previous blocks, are
-// guaranteed to be available after a crash.
-func (l *Ledger) LatestCommitted() basics.Round {
+// guaranteed to be available after a crash. In addition, it returns
+// the latest block round number added to the ledger ( which will be
+// flushed to persistent storage later on )
+func (l *Ledger) LatestCommitted() (basics.Round, basics.Round) {
 	return l.blockQ.latestCommitted()
 }
 
