@@ -750,6 +750,13 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		// Fetch a handle to this database
 		handle, err := node.getExistingPartHandle(filename)
 		if err != nil {
+			if err.Error() == "database is locked" {
+				// this is a special case:
+				// we might get "database is locked" when we attempt to access a database that is conurrently updates it's participation keys.
+				// that database is clearly already on the account manager, and doesn't need to be processed through this logic, and therefore
+				// we can safely ignore that fail case.
+				continue
+			}
 			return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load db %v: %v", filename, err)
 		}
 

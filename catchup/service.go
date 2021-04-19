@@ -172,6 +172,7 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	i := 0
 	hasLookback := false
+	fetchStarted := time.Now()
 	for true {
 		i++
 		select {
@@ -183,7 +184,18 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 		// Stop retrying after a while.
 		if i > catchupRetryLimit {
-			s.log.Errorf("fetchAndWrite: block retrieval exceeded retry limit")
+			if _, initialSync := s.IsSynchronizing(); initialSync {
+				// on the initial sync, it's completly expected that we won't be able to get all the "next" blocks. therefore info should suffice.
+				s.log.Infof("fetchAndWrite(%d): block retrieval exceeded retry limit, total time %v", r, time.Now().Sub(fetchStarted))
+			} else {
+				// on any subsequent sync, we migth be looking for multiple rounds into the future, so it's completly reasonable that we would fail retrieving the future
+				// block. Generate a warning here only if we're failing to retrieve X+1 or below. all other retrievals should not generate a warning.
+				if r <= s.ledger.NextRound() {
+					s.log.Infof("fetchAndWrite(%d): block retrieval exceeded retry limit, total time %v", r, time.Now().Sub(fetchStarted))
+				} else {
+					s.log.Warnf("fetchAndWrite(%d): block retrieval exceeded retry limit, total time %v", r, time.Now().Sub(fetchStarted))
+				}
+			}
 			return false
 		}
 
