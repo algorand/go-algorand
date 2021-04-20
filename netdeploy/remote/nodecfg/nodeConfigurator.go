@@ -33,12 +33,13 @@ import (
 )
 
 type nodeConfigurator struct {
-	config           remote.HostConfig
-	dnsName          string
-	genesisFile      string
-	genesisData      bookkeeping.Genesis
-	relayEndpoints   []srvEntry
-	metricsEndpoints []srvEntry
+	config                remote.HostConfig
+	dnsName               string
+	genesisFile           string
+	genesisData           bookkeeping.Genesis
+	bootstrappedDataFiles []string
+	relayEndpoints        []srvEntry
+	metricsEndpoints      []srvEntry
 }
 
 type srvEntry struct {
@@ -63,6 +64,18 @@ func ApplyConfigurationToHost(cfg remote.HostConfig, rootConfigDir, rootNodeDir 
 // Copy node directories from configuration folder to the rootNodeDir
 // Then configure
 func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error) {
+
+	blockFile := filepath.Join(rootConfigDir, "genesisdata", "bootstrapped.block.sqlite")
+	blockFileExists := util.FileExists(blockFile)
+
+	trackerFile := filepath.Join(rootConfigDir, "genesisdata", "bootstrapped.tracker.sqlite")
+	trackerFileExists := util.FileExists(trackerFile)
+
+	if blockFileExists && trackerFileExists {
+		nc.bootstrappedDataFiles = append(nc.bootstrappedDataFiles, blockFile)
+		nc.bootstrappedDataFiles = append(nc.bootstrappedDataFiles, trackerFile)
+	}
+
 	nc.genesisFile = filepath.Join(rootConfigDir, "genesisdata", config.GenesisJSONFile)
 	nc.genesisData, err = bookkeeping.LoadGenesisFromFile(nc.genesisFile)
 	nodeDirs, err := nc.prepareNodeDirs(nc.config.Nodes, rootConfigDir, rootNodeDir)
@@ -118,6 +131,15 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 		_, err = util.CopyFile(nc.genesisFile, filepath.Join(nodeDest, config.GenesisJSONFile))
 		if err != nil {
 			return
+		}
+
+		// Copy the bootstrapped files
+		fmt.Fprintf(os.Stdout, "... copying databasefiles to ledger folder ...\n")
+		for _, srcPath := range nc.bootstrappedDataFiles {
+			_, err = util.CopyFile(srcPath, filepath.Join(nodeDest, genesisDir, config.LedgerFilenamePrefix, ".block.sqlite"))
+			if err != nil {
+				return
+			}
 		}
 
 		// Copy wallet files into current ledger folder and import the wallets
