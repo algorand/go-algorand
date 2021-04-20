@@ -157,7 +157,7 @@ func TestPeerSelector(t *testing.T) {
 	require.Nil(t, peer)
 
 	r1, r2 = peerSelector.RankPeer(nil, 10)
-	require.False(t, r1 != r2 )
+	require.False(t, r1 != r2)
 	r2, r2 = peerSelector.RankPeer(&mockHTTPPeer{address: "abc123"}, 10)
 	require.False(t, r1 != r2)
 

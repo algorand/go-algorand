@@ -565,10 +565,10 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			if ep.Round == p.Round {
 				vpa := verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned)
 				return append(actions, vpa, ra)
-			} else {
-				logging.Base().Infof("originally would not have relayed here")
-				actions = append(actions, ra)
 			}
+
+			logging.Base().Infof("originally would not have relayed here")
+			actions = append(actions, ra)
 		}
 
 		// relay as the proposer
