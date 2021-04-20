@@ -413,7 +413,7 @@ func TestCowBuildDelta(t *testing.T) {
 	a.Equal(
 		basics.EvalDelta{
 			GlobalDelta: basics.StateDelta{},
-			LocalDeltas: map[uint64]basics.StateDelta{0: {}},
+			LocalDeltas: map[uint64]basics.StateDelta{},
 		},
 		ed,
 	)
@@ -439,6 +439,80 @@ func TestCowBuildDelta(t *testing.T) {
 			LocalDeltas: map[uint64]basics.StateDelta{
 				0: {
 					"key1": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
+				},
+			},
+		},
+		ed,
+	)
+
+	// check empty sender delta (same key update) and non-empty others
+	delete(cow.sdeltas[sender], storagePtr{aidx, false})
+	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
+		action: remainAllocAction,
+		kvCow: stateDelta{
+			"key1": valueDelta{
+				old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				new:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				oldExists: true,
+				newExists: true,
+			},
+		},
+	}
+	txn.Accounts = append(txn.Accounts, creator)
+	cow.sdeltas[creator][storagePtr{aidx, false}] = &storageDelta{
+		action: remainAllocAction,
+		kvCow: stateDelta{
+			"key2": valueDelta{
+				old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				new:       basics.TealValue{Type: basics.TealUintType, Uint: 2},
+				oldExists: true,
+				newExists: true,
+			},
+		},
+	}
+
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	a.NoError(err)
+	a.Equal(
+		basics.EvalDelta{
+			GlobalDelta: basics.StateDelta(nil),
+			LocalDeltas: map[uint64]basics.StateDelta{
+				1: {
+					"key2": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
+				},
+			},
+		},
+		ed,
+	)
+
+	// check two keys: empty change and value update
+	delete(cow.sdeltas[sender], storagePtr{aidx, false})
+	delete(cow.sdeltas[creator], storagePtr{aidx, false})
+	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
+		action: remainAllocAction,
+		kvCow: stateDelta{
+			"key1": valueDelta{
+				old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				new:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				oldExists: true,
+				newExists: true,
+			},
+			"key2": valueDelta{
+				old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				new:       basics.TealValue{Type: basics.TealUintType, Uint: 2},
+				oldExists: true,
+				newExists: true,
+			},
+		},
+	}
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	a.NoError(err)
+	a.Equal(
+		basics.EvalDelta{
+			GlobalDelta: basics.StateDelta(nil),
+			LocalDeltas: map[uint64]basics.StateDelta{
+				0: {
+					"key2": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
 				},
 			},
 		},
