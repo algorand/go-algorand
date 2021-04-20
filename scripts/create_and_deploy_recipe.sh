@@ -112,7 +112,6 @@ if [[ "${SKIP_BUILD}" != "true" || ! -f ${GOPATH}/bin/netgoal ]]; then
 fi
 
 # Generate the nodecfg package directory
-echo "bootstrap? " ${BOOTSTRAP}
 ${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}" -b=${BOOTSTRAP:-false}
 
 # Package and upload the config package
