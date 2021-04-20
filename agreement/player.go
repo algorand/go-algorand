@@ -567,7 +567,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				return append(actions, vpa, ra)
 			}
 
-			logging.Base().Infof("originally would not have relayed here")
+			logging.Base().Infof("originally would not have relayed here: %v, %v", ep.Round, p.Round)
 			actions = append(actions, ra)
 		}
 
