@@ -151,7 +151,7 @@ func getChildProcesses(pid int) []int {
 }
 
 func killProcess(pid int) error {
-	h, err := syscall.OpenProcess(syscall.SYNCHRONIZE|syscall.PROCESS_TERMINATE, false, uint32(pid))
+	h, err := syscall.OpenProcess(syscall.SYNCHRONIZE | syscall.PROCESS_TERMINATE, false, uint32(pid))
 	if err == nil {
 		err = syscall.TerminateProcess(h, STATUS_CANCELLED)
 		if err == nil {
