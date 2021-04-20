@@ -17,6 +17,8 @@
 package main
 
 import (
+	"log"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 
@@ -31,11 +33,15 @@ func ddrFromParams(dp *DebugParams) (ddr v2.DryrunRequest, err error) {
 	}
 
 	var gdr generatedV2.DryrunRequest
-	err = protocol.DecodeJSON(dp.DdrBlob, &gdr)
-	if err == nil {
+	err1 := protocol.DecodeJSON(dp.DdrBlob, &gdr)
+	if err1 == nil {
 		ddr, err = v2.DryrunRequestFromGenerated(&gdr)
 	} else {
 		err = protocol.DecodeReflect(dp.DdrBlob, &ddr)
+		// if failed report intermediate decoding error
+		if err != nil {
+			log.Printf("Decoding as JSON DryrunRequest object failed: %s", err1.Error())
+		}
 	}
 
 	return

@@ -60,14 +60,14 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, err
 
 	// 1. Attempt json - a single transaction
 	var txn transactions.SignedTxn
-	err = protocol.DecodeJSON(data, &txn)
+	err1 := protocol.DecodeJSON(data, &txn)
 	if err == nil {
 		txnGroup = append(txnGroup, txn)
 		return
 	}
 
 	// 2. Attempt json - array of transactions
-	err = protocol.DecodeJSON(data, &txnGroup)
+	err2 := protocol.DecodeJSON(data, &txnGroup)
 	if err == nil {
 		return
 	}
@@ -87,6 +87,16 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, err
 		txnGroup = append(txnGroup, txn)
 	}
 
+	// if conversion failed report all intermediate decoding errors
+	if err != nil {
+		if err1 != nil {
+			log.Printf("Decoding as JSON txn failed: %s", err1.Error())
+		}
+		if err2 != nil {
+			log.Printf("Decoding as JSON txn group failed: %s", err2.Error())
+		}
+	}
+
 	return
 }
 
@@ -101,19 +111,19 @@ func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, 
 
 	// 1. Attempt json - a single record
 	var record basics.BalanceRecord
-	err = protocol.DecodeJSON(data, &record)
-	if err == nil {
+	err1 := protocol.DecodeJSON(data, &record)
+	if err1 == nil {
 		records = append(records, record)
 		return
 	}
 
 	// 2. Attempt json - a array of records
-	err = protocol.DecodeJSON(data, &records)
-	if err == nil {
+	err2 := protocol.DecodeJSON(data, &records)
+	if err2 == nil {
 		return
 	}
 
-	// 2. Attempt msgp - a array of records
+	// 3. Attempt msgp - a array of records
 	dec := protocol.NewDecoderBytes(data)
 	for {
 		var record basics.BalanceRecord
@@ -126,6 +136,16 @@ func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, 
 			break
 		}
 		records = append(records, record)
+	}
+
+	// if conversion failed report all intermediate decoding errors
+	if err != nil {
+		if err1 != nil {
+			log.Printf("Decoding as JSON record failed: %s", err1.Error())
+		}
+		if err2 != nil {
+			log.Printf("Decoding as JSON array of records failed: %s", err2.Error())
+		}
 	}
 
 	return
@@ -335,7 +355,10 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			r.runs[i].program = data
 			if IsTextFile(data) {
 				source := string(data)
-				ops, err := logic.AssembleStringWithVersion(source, r.proto.LogicSigVersion)
+				ops, err := logic.AssembleString(source)
+				if ops.Version > r.proto.LogicSigVersion {
+					return fmt.Errorf("Program version (%d) is beyond the maximum supported protocol version (%d)", ops.Version, r.proto.LogicSigVersion)
+				}
 				if err != nil {
 					errorLines := ""
 					for _, lineError := range ops.Errors {

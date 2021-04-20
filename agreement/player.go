@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/logging"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -559,11 +560,14 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			uv := ef.(payloadProcessedEvent).Vote.u()
 
 			// relay proposal if it has been pipelined
-			a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
-			actions = append(actions, a)
+			ra := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
 
 			if ep.Round == p.Round {
-				return append(actions, verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned))
+				vpa := verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned)
+				return append(actions, vpa, ra)
+			} else {
+				logging.Base().Infof("originally would not have relayed here")
+				actions = append(actions, ra)
 			}
 		}
 

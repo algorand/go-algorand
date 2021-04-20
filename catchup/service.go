@@ -256,7 +256,8 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		}
 
 		peerRank := peerSelector.PeerDownloadDurationToRank(peer, blockDownloadDuration)
-		peerSelector.RankPeer(peer, peerRank)
+		r1, r2 := peerSelector.RankPeer(peer, peerRank)
+		s.log.Debugf("fetchAndWrite(%d): ranked peer with %d from %d to %d", r, peerRank, r1, r2)
 
 		// Write to ledger, noting that ledger writes must be in order
 		select {
