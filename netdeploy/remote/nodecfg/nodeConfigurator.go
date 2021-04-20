@@ -33,13 +33,14 @@ import (
 )
 
 type nodeConfigurator struct {
-	config                remote.HostConfig
-	dnsName               string
-	genesisFile           string
-	genesisData           bookkeeping.Genesis
-	bootstrappedDataFiles []string
-	relayEndpoints        []srvEntry
-	metricsEndpoints      []srvEntry
+	config                  remote.HostConfig
+	dnsName                 string
+	genesisFile             string
+	genesisData             bookkeeping.Genesis
+	bootstrappedBlockFile   string
+	bootstrappedTrackerFile string
+	relayEndpoints          []srvEntry
+	metricsEndpoints        []srvEntry
 }
 
 type srvEntry struct {
@@ -67,13 +68,14 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 
 	blockFile := filepath.Join(rootConfigDir, "genesisdata", "bootstrapped.block.sqlite")
 	blockFileExists := util.FileExists(blockFile)
+	if blockFileExists {
+		nc.bootstrappedBlockFile = blockFile
+	}
 
 	trackerFile := filepath.Join(rootConfigDir, "genesisdata", "bootstrapped.tracker.sqlite")
 	trackerFileExists := util.FileExists(trackerFile)
-
-	if blockFileExists && trackerFileExists {
-		nc.bootstrappedDataFiles = append(nc.bootstrappedDataFiles, blockFile)
-		nc.bootstrappedDataFiles = append(nc.bootstrappedDataFiles, trackerFile)
+	if trackerFileExists {
+		nc.bootstrappedTrackerFile = trackerFile
 	}
 
 	nc.genesisFile = filepath.Join(rootConfigDir, "genesisdata", config.GenesisJSONFile)
@@ -133,15 +135,6 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 			return
 		}
 
-		// Copy the bootstrapped files
-		fmt.Fprintf(os.Stdout, "... copying databasefiles to ledger folder ...\n")
-		for _, srcPath := range nc.bootstrappedDataFiles {
-			_, err = util.CopyFile(srcPath, filepath.Join(nodeDest, genesisDir, config.LedgerFilenamePrefix, ".block.sqlite"))
-			if err != nil {
-				return
-			}
-		}
-
 		// Copy wallet files into current ledger folder and import the wallets
 		//
 		fmt.Fprintf(os.Stdout, "... copying wallets to ledger folder ...\n")
@@ -154,6 +147,24 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 		err = importWalletFiles(importKeysCmd, nodeDest)
 		if err != nil {
 			return
+		}
+
+		// Copy the bootstrapped files into current ledger folder
+		if nc.bootstrappedBlockFile != "" {
+			fmt.Fprintf(os.Stdout, "... copying block database file to ledger folder ...\n")
+			fmt.Fprintf(os.Stdout, nc.bootstrappedBlockFile)
+			_, err = util.CopyFile(nc.bootstrappedBlockFile, filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.block.sqlite", config.LedgerFilenamePrefix)))
+			if err != nil {
+				return
+			}
+		}
+
+		if nc.bootstrappedTrackerFile != "" {
+			fmt.Fprintf(os.Stdout, "... copying tracker database file to ledger folder ...\n")
+			_, err = util.CopyFile(nc.bootstrappedTrackerFile, filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.tracker.sqlite", config.LedgerFilenamePrefix)))
+			if err != nil {
+				return
+			}
 		}
 
 		nodeDirs = append(nodeDirs, nodeDir{
