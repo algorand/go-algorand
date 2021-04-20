@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -60,6 +61,8 @@ const (
 	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
 	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
 	trieAccumulatedChangesFlush = 256
+	// CatchpointDirName represents the directory name in which all the catchpoints files are stored
+	CatchpointDirName = "catchpoints"
 )
 
 // trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
@@ -834,7 +837,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 	}
 
 	// if the database doesn't know about that round, see if we have that file anyway:
-	fileName := filepath.Join("catchpoints", catchpointRoundToPath(round))
+	fileName := filepath.Join(CatchpointDirName, catchpointRoundToPath(round))
 	catchpointPath := filepath.Join(au.dbDirectory, fileName)
 	file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
 	if err == nil && file != nil {
@@ -1232,6 +1235,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
+			case 4:
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1487,6 +1496,89 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 	return 4, nil
 }
 
+
+// upgradeDatabaseSchema4 upgrades the database schema from version 4 to version 5,
+// cleaning old empty catchpoint directories.
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	//validate no empty dirs
+	err = au.removeEmptyDirsOnSchemaUpgrade()
+	if err != nil {
+		return 0, err
+	}
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 5)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 4 to 5: %v", err)
+	}
+	return 5, nil
+}
+
+
+// IsDirEmpty returns if a given directory is empty or not.
+func IsDirEmpty(path string) (bool, error){
+	dir, err := os.Open(path)
+	if err != nil{
+		return false, err
+	}
+	defer dir.Close()
+	_,err = dir.Readdirnames(1)
+	if err != io.EOF{
+		return false,err
+	}
+	return true,nil
+}
+
+func  (au *accountUpdates) removeEmptyDirsOnSchemaUpgrade() (err error) {
+	catchpointRootDir := filepath.Join(au.dbDirectory,CatchpointDirName)
+	if _,err := os.Stat(catchpointRootDir); os.IsNotExist(err) {
+		return nil
+	}
+	for {
+		emptyDirs, err := GetEmptyDirs(catchpointRootDir)
+		if err != nil {
+			return err
+		}
+		// There are no empty dirs
+		if len(emptyDirs) == 0 {
+			break
+		}
+		// only left with the root dir
+		if len(emptyDirs) == 1 && emptyDirs[0] == catchpointRootDir {
+			break
+		}
+		for _, emptyDirPath := range emptyDirs {
+			os.Remove(emptyDirPath)
+		}
+	}
+	return nil
+}
+
+// GetEmptyDirs returns a slice of paths for empty directories which are located in PathToScan arg
+func GetEmptyDirs(PathToScan string) ([]string, error) {
+	var emptyDir []string
+	err := filepath.Walk(PathToScan,func(path string, f os.FileInfo, errIn error) error {
+		if errIn != nil  {
+			return errIn
+		}
+		if !f.IsDir() {
+			return nil
+		}
+		isEmpty, err := IsDirEmpty(path)
+		if err != nil {
+			if os.IsNotExist(err){
+				return filepath.SkipDir
+			}
+			return err
+		}
+		if isEmpty {
+			emptyDir = append(emptyDir, path)
+		}
+		return nil
+	})
+	return emptyDir, err
+}
+
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
 // once all the files have been deleted, it would go ahead and remove the entries from the table.
 func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries) (err error) {
@@ -1501,14 +1593,9 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 		}
 
 		for round, fileName := range fileNames {
-			absCatchpointFileName := filepath.Join(au.dbDirectory, fileName)
-			err = os.Remove(absCatchpointFileName)
-			if err == nil || os.IsNotExist(err) {
-				// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
-				err = nil
-			} else {
-				// we can't delete the file, abort -
-				return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+			err = au.removeSingleCatchpointFileFromDisk(fileName)
+			if err != nil {
+				return err
 			}
 			// clear the entry from the database
 			err = dbQueries.storeCatchpoint(ctx, round, "", "", 0)
@@ -2245,7 +2332,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		return
 	}
 
-	relCatchpointFileName := filepath.Join("catchpoints", catchpointRoundToPath(committedRound))
+	relCatchpointFileName := filepath.Join(CatchpointDirName, catchpointRoundToPath(committedRound))
 	absCatchpointFileName := filepath.Join(au.dbDirectory, relCatchpointFileName)
 
 	more := true
@@ -2348,6 +2435,54 @@ func catchpointRoundToPath(rnd basics.Round) string {
 	return outStr
 }
 
+// This function remove a single catchpoint file from the disk. this function does not leave empty directories
+func (au *accountUpdates) removeSingleCatchpointFileFromDisk(fileToDelete string) (err error) {
+	absCatchpointFileName := filepath.Join(au.dbDirectory, fileToDelete)
+	err = os.Remove(absCatchpointFileName)
+	if err == nil || os.IsNotExist(err) {
+		// it's ok if the file doesn't exist.
+		err = nil
+	} else {
+		// we can't delete the file, abort -
+		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+	}
+	splitedDirName := strings.Split(fileToDelete,string(os.PathSeparator))
+
+	var subDirectoriesToScan  []string
+	//build a list of all the subdirs
+	currentSubDir := ""
+	for _,element :=  range splitedDirName{
+		currentSubDir = filepath.Join(currentSubDir, element)
+		subDirectoriesToScan = append(subDirectoriesToScan, currentSubDir)
+	}
+
+	// iterating over the list of directories. starting from the sub dirs and moving up.
+	// skipping the file itself.
+	for i := len(subDirectoriesToScan)-2; i >= 0; i-- {
+		absSubdir := filepath.Join(au.dbDirectory, subDirectoriesToScan[i])
+		if _, err := os.Stat(absSubdir); os.IsNotExist(err){
+			continue
+		}
+
+		isEmpty, err:= IsDirEmpty(absSubdir)
+		if err != nil {
+			return fmt.Errorf("unable to read old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
+		}
+		if isEmpty{
+			err = os.Remove(absSubdir)
+			if err != nil {
+				if os.IsNotExist(err){
+					continue
+				}
+				return fmt.Errorf("unable to delete old catchpoint directory '%s' : %v", subDirectoriesToScan[i], err)
+			}
+		}
+	}
+
+
+	return nil
+}
+
 // saveCatchpointFile stores the provided fileName as the stored catchpoint for the given round.
 // after a successful insert operation to the database, it would delete up to 2 old entries, as needed.
 // deleting 2 entries while inserting single entry allow us to adjust the size of the backing storage and have the
@@ -2374,20 +2509,17 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 	if err != nil {
 		return fmt.Errorf("unable to delete catchpoint file, getOldestCatchpointFiles failed : %v", err)
 	}
+
 	for round, fileToDelete := range filesToDelete {
-		absCatchpointFileName := filepath.Join(au.dbDirectory, fileToDelete)
-		err = os.Remove(absCatchpointFileName)
-		if err == nil || os.IsNotExist(err) {
-			// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
-			err = nil
-		} else {
-			// we can't delete the file, abort -
-			return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+		err = au.removeSingleCatchpointFileFromDisk(fileToDelete)
+		if err != nil {
+			return err
 		}
 		err = au.accountsq.storeCatchpoint(context.Background(), round, "", "", 0)
 		if err != nil {
 			return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
 		}
+
 	}
 	return
 }
