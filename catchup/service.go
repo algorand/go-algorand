@@ -28,11 +28,13 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 const catchupPeersForSync = 10
@@ -56,21 +58,24 @@ type Ledger interface {
 	LastRound() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
 	IsWritingCatchpointFile() bool
+	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledger.ValidatedBlock, error)
+	AddValidatedBlock(vb ledger.ValidatedBlock, cert agreement.Certificate) error
 }
 
 // Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
 type Service struct {
-	syncStartNS     int64 // at top of struct to keep 64 bit aligned for atomic.* ops
-	cfg             config.Local
-	ledger          Ledger
-	ctx             context.Context
-	cancel          func()
-	done            chan struct{}
-	log             logging.Logger
-	net             network.GossipNode
-	auth            BlockAuthenticator
-	parallelBlocks  uint64
-	deadlineTimeout time.Duration
+	syncStartNS         int64 // at top of struct to keep 64 bit aligned for atomic.* ops
+	cfg                 config.Local
+	ledger              Ledger
+	ctx                 context.Context
+	cancel              func()
+	done                chan struct{}
+	log                 logging.Logger
+	net                 network.GossipNode
+	auth                BlockAuthenticator
+	parallelBlocks      uint64
+	deadlineTimeout     time.Duration
+	blockValidationPool execpool.BacklogPool
 
 	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -99,7 +104,7 @@ type BlockAuthenticator interface {
 }
 
 // MakeService creates a catchup service instance from its constituent components
-func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger Ledger, auth BlockAuthenticator, unmatchedPendingCertificates <-chan PendingUnmatchedCertificate) (s *Service) {
+func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger Ledger, auth BlockAuthenticator, unmatchedPendingCertificates <-chan PendingUnmatchedCertificate, blockValidationPool execpool.BacklogPool) (s *Service) {
 	s = &Service{}
 
 	s.cfg = config
@@ -110,6 +115,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.log = log.With("Context", "sync")
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
+	s.blockValidationPool = blockValidationPool
 
 	return s
 }
@@ -222,16 +228,18 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		s.log.Debugf("fetchAndWrite(%v): Got block and cert contents: %v %v", r, block, cert)
 
 		// Check that the block's contents match the block header (necessary with an untrusted block because b.Hash() only hashes the header)
-		if !block.ContentsMatchHeader() {
-			peerSelector.RankPeer(peer, peerRankInvalidDownload)
-			// Check if this mismatch is due to an unsupported protocol version
-			if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
-				s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
-				return false
-			}
+		if s.cfg.CatchupVerifyPaysetHash() {
+			if !block.ContentsMatchHeader() {
+				peerSelector.RankPeer(peer, peerRankInvalidDownload)
+				// Check if this mismatch is due to an unsupported protocol version
+				if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
+					s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
+					return false
+				}
 
-			s.log.Warnf("fetchAndWrite(%v): block contents do not match header (attempt %d)", r, i)
-			continue // retry the fetch
+				s.log.Warnf("fetchAndWrite(%v): block contents do not match header (attempt %d)", r, i)
+				continue // retry the fetch
+			}
 		}
 
 		// make sure that we have the lookBack block that's required for authenticating this block
@@ -247,12 +255,13 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 				}
 			}
 		}
-
-		err = s.auth.Authenticate(block, cert)
-		if err != nil {
-			s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
-			peerSelector.RankPeer(peer, peerRankInvalidDownload)
-			continue // retry the fetch
+		if s.cfg.CatchupVerifyCertificate() {
+			err = s.auth.Authenticate(block, cert)
+			if err != nil {
+				s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
+				peerSelector.RankPeer(peer, peerRankInvalidDownload)
+				continue // retry the fetch
+			}
 		}
 
 		peerRank := peerSelector.PeerDownloadDurationToRank(peer, blockDownloadDuration)
@@ -281,7 +290,21 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 					return false
 				}
 
-				err = s.ledger.AddBlock(*block, *cert)
+				if s.cfg.CatchupVerifyTransactionSignatures() || s.cfg.CatchupVerifyApplyData() {
+					vb, err := s.ledger.Validate(s.ctx, *block, s.blockValidationPool)
+					if err != nil {
+						if s.ctx.Err() != nil {
+							// if the context expired, just exit.
+							return false
+						}
+						s.log.Warnf("fetchAndWrite(%d): failed to validate block : %v", r, err)
+						return false
+					}
+					err = s.ledger.AddValidatedBlock(*vb, *cert)
+				} else {
+					err = s.ledger.AddBlock(*block, *cert)
+				}
+
 				if err != nil {
 					switch err.(type) {
 					case ledgercore.BlockInLedgerError:

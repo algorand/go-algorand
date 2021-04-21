@@ -34,10 +34,12 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var defaultConfig = config.GetDefaultLocal()
@@ -150,7 +152,7 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil)
+	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
 
 	syncer.testStart()
 	syncer.sync()
@@ -187,7 +189,7 @@ func TestPeriodicSync(t *testing.T) {
 	require.True(t, 0 == initialLocalRound)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
 	s.deadlineTimeout = 2 * time.Second
 
 	s.Start()
@@ -236,7 +238,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
 
 	// Get last round
 
@@ -298,7 +300,7 @@ func TestAbruptWrites(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -354,7 +356,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil)
+	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
 	fetcher := makeUniversalBlockFetcher(logging.Base(), net, defaultConfig)
 
 	// Start the service ( dummy )
@@ -407,7 +409,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil, nil)
 
 	// Start the service ( dummy )
 	s.testStart()
@@ -554,7 +556,7 @@ func helperTestOnSwitchToUnSupportedProtocol(
 	net.addPeer(rootURL)
 
 	// Make Service
-	s := MakeService(logging.Base(), config, net, local, &mockedAuthenticator{errorRound: -1}, nil)
+	s := MakeService(logging.Base(), config, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
 	s.deadlineTimeout = 2 * time.Second
 	s.Start()
 	defer s.Stop()
@@ -605,6 +607,14 @@ func (m *mockedLedger) AddBlock(blk bookkeeping.Block, cert agreement.Certificat
 			delete(m.chans, r)
 		}
 	}
+	return nil
+}
+
+func (m *mockedLedger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledger.ValidatedBlock, error) {
+	return nil, nil
+}
+
+func (m *mockedLedger) AddValidatedBlock(vb ledger.ValidatedBlock, cert agreement.Certificate) error {
 	return nil
 }
 
@@ -742,7 +752,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil, nil)
 	s.testStart()
 	for roundNumber := 2; roundNumber < 10; roundNumber += 3 {
 		pc := &PendingUnmatchedCertificate{
