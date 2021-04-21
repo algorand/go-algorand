@@ -152,7 +152,6 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 		// Copy the bootstrapped files into current ledger folder
 		if nc.bootstrappedBlockFile != "" {
 			fmt.Fprintf(os.Stdout, "... copying block database file to ledger folder ...\n")
-			fmt.Fprintf(os.Stdout, nc.bootstrappedBlockFile)
 			_, err = util.CopyFile(nc.bootstrappedBlockFile, filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.block.sqlite", config.LedgerFilenamePrefix)))
 			if err != nil {
 				return
