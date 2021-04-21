@@ -19,6 +19,38 @@ import (
 //    |-----> Msgsize
 //    |-----> MsgIsZero
 //
+// encodedApplicationCallTxnFields
+//                |-----> (*) MarshalMsg
+//                |-----> (*) CanMarshalMsg
+//                |-----> (*) UnmarshalMsg
+//                |-----> (*) CanUnmarshalMsg
+//                |-----> (*) Msgsize
+//                |-----> (*) MsgIsZero
+//
+// encodedAssetConfigTxnFields
+//              |-----> (*) MarshalMsg
+//              |-----> (*) CanMarshalMsg
+//              |-----> (*) UnmarshalMsg
+//              |-----> (*) CanUnmarshalMsg
+//              |-----> (*) Msgsize
+//              |-----> (*) MsgIsZero
+//
+// encodedAssetFreezeTxnFields
+//              |-----> (*) MarshalMsg
+//              |-----> (*) CanMarshalMsg
+//              |-----> (*) UnmarshalMsg
+//              |-----> (*) CanUnmarshalMsg
+//              |-----> (*) Msgsize
+//              |-----> (*) MsgIsZero
+//
+// encodedAssetTransferTxnFields
+//               |-----> (*) MarshalMsg
+//               |-----> (*) CanMarshalMsg
+//               |-----> (*) UnmarshalMsg
+//               |-----> (*) CanUnmarshalMsg
+//               |-----> (*) Msgsize
+//               |-----> (*) MsgIsZero
+//
 // encodedBloomFilter
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
@@ -27,7 +59,39 @@ import (
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
 //
+// encodedCompactCertTxnFields
+//              |-----> (*) MarshalMsg
+//              |-----> (*) CanMarshalMsg
+//              |-----> (*) UnmarshalMsg
+//              |-----> (*) CanUnmarshalMsg
+//              |-----> (*) Msgsize
+//              |-----> (*) MsgIsZero
+//
+// encodedKeyregTxnFields
+//            |-----> (*) MarshalMsg
+//            |-----> (*) CanMarshalMsg
+//            |-----> (*) UnmarshalMsg
+//            |-----> (*) CanUnmarshalMsg
+//            |-----> (*) Msgsize
+//            |-----> (*) MsgIsZero
+//
+// encodedPaymentTxnFields
+//            |-----> (*) MarshalMsg
+//            |-----> (*) CanMarshalMsg
+//            |-----> (*) UnmarshalMsg
+//            |-----> (*) CanUnmarshalMsg
+//            |-----> (*) Msgsize
+//            |-----> (*) MsgIsZero
+//
 // encodedSignedTxns
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//
+// encodedTxnHeaders
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
@@ -136,6 +200,334 @@ func (z bitmask) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z bitmask) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *encodedApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(0)
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+	}
+	return
+}
+
+func (_ *encodedApplicationCallTxnFields) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedApplicationCallTxnFields)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = encodedApplicationCallTxnFields{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *encodedApplicationCallTxnFields) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedApplicationCallTxnFields)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *encodedApplicationCallTxnFields) Msgsize() (s int) {
+	s = 1
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *encodedApplicationCallTxnFields) MsgIsZero() bool {
+	return true
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *encodedAssetConfigTxnFields) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(0)
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+	}
+	return
+}
+
+func (_ *encodedAssetConfigTxnFields) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedAssetConfigTxnFields)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *encodedAssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = encodedAssetConfigTxnFields{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *encodedAssetConfigTxnFields) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedAssetConfigTxnFields)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *encodedAssetConfigTxnFields) Msgsize() (s int) {
+	s = 1
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *encodedAssetConfigTxnFields) MsgIsZero() bool {
+	return true
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *encodedAssetFreezeTxnFields) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(0)
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+	}
+	return
+}
+
+func (_ *encodedAssetFreezeTxnFields) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedAssetFreezeTxnFields)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *encodedAssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = encodedAssetFreezeTxnFields{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *encodedAssetFreezeTxnFields) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedAssetFreezeTxnFields)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *encodedAssetFreezeTxnFields) Msgsize() (s int) {
+	s = 1
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *encodedAssetFreezeTxnFields) MsgIsZero() bool {
+	return true
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *encodedAssetTransferTxnFields) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(0)
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+	}
+	return
+}
+
+func (_ *encodedAssetTransferTxnFields) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedAssetTransferTxnFields)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *encodedAssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = encodedAssetTransferTxnFields{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *encodedAssetTransferTxnFields) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedAssetTransferTxnFields)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *encodedAssetTransferTxnFields) Msgsize() (s int) {
+	s = 1
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *encodedAssetTransferTxnFields) MsgIsZero() bool {
+	return true
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -484,51 +876,437 @@ func (z *encodedBloomFilter) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z *encodedCompactCertTxnFields) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(0)
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+	}
+	return
+}
+
+func (_ *encodedCompactCertTxnFields) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedCompactCertTxnFields)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *encodedCompactCertTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = encodedCompactCertTxnFields{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *encodedCompactCertTxnFields) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedCompactCertTxnFields)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *encodedCompactCertTxnFields) Msgsize() (s int) {
+	s = 1
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *encodedCompactCertTxnFields) MsgIsZero() bool {
+	return true
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *encodedKeyregTxnFields) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(0)
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+	}
+	return
+}
+
+func (_ *encodedKeyregTxnFields) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedKeyregTxnFields)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *encodedKeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = encodedKeyregTxnFields{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *encodedKeyregTxnFields) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedKeyregTxnFields)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *encodedKeyregTxnFields) Msgsize() (s int) {
+	s = 1
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *encodedKeyregTxnFields) MsgIsZero() bool {
+	return true
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *encodedPaymentTxnFields) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(0)
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+	}
+	return
+}
+
+func (_ *encodedPaymentTxnFields) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedPaymentTxnFields)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *encodedPaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = encodedPaymentTxnFields{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *encodedPaymentTxnFields) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedPaymentTxnFields)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *encodedPaymentTxnFields) Msgsize() (s int) {
+	s = 1
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *encodedPaymentTxnFields) MsgIsZero() bool {
+	return true
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0006Len := uint32(9)
-	var zb0006Mask uint16 /* 11 bits */
+	zb0016Len := uint32(27)
+	var zb0016Mask uint32 /* 30 bits */
+	if len((*z).encodedTxns.encodedTxnHeaders.Fee) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x8
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskFee) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x10
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.FirstValid) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x20
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x40
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.GenesisID) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x80
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x100
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.GenesisHash) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x200
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x400
+	}
 	if len((*z).Lsig) == 0 {
-		zb0006Len--
-		zb0006Mask |= 0x4
+		zb0016Len--
+		zb0016Mask |= 0x800
 	}
 	if len((*z).BitmaskLsig) == 0 {
-		zb0006Len--
-		zb0006Mask |= 0x8
+		zb0016Len--
+		zb0016Mask |= 0x1000
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.LastValid) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x2000
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x4000
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.Lease) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x8000
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskLease) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x10000
 	}
 	if len((*z).Msig) == 0 {
-		zb0006Len--
-		zb0006Mask |= 0x10
+		zb0016Len--
+		zb0016Mask |= 0x20000
 	}
 	if len((*z).BitmaskMsig) == 0 {
-		zb0006Len--
-		zb0006Mask |= 0x20
+		zb0016Len--
+		zb0016Mask |= 0x40000
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.Note) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x80000
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskNote) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x100000
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.RekeyTo) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x200000
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x400000
 	}
 	if len((*z).AuthAddr) == 0 {
-		zb0006Len--
-		zb0006Mask |= 0x40
+		zb0016Len--
+		zb0016Mask |= 0x800000
 	}
 	if len((*z).BitmaskAuthAddr) == 0 {
-		zb0006Len--
-		zb0006Mask |= 0x80
+		zb0016Len--
+		zb0016Mask |= 0x1000000
 	}
 	if len((*z).Sig) == 0 {
-		zb0006Len--
-		zb0006Mask |= 0x100
+		zb0016Len--
+		zb0016Mask |= 0x2000000
 	}
 	if len((*z).BitmaskSig) == 0 {
-		zb0006Len--
-		zb0006Mask |= 0x200
+		zb0016Len--
+		zb0016Mask |= 0x4000000
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.Sender) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x8000000
+	}
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskSender) == 0 {
+		zb0016Len--
+		zb0016Mask |= 0x10000000
 	}
 	if len((*z).encodedTxns.TxType) == 0 {
-		zb0006Len--
-		zb0006Mask |= 0x400
+		zb0016Len--
+		zb0016Mask |= 0x20000000
 	}
-	// variable map header, size zb0006Len
-	o = append(o, 0x80|uint8(zb0006Len))
-	if zb0006Len != 0 {
-		if (zb0006Mask & 0x4) == 0 { // if not empty
+	// variable map header, size zb0016Len
+	o = msgp.AppendMapHeader(o, zb0016Len)
+	if zb0016Len != 0 {
+		if (zb0016Mask & 0x8) == 0 { // if not empty
+			// string "fee"
+			o = append(o, 0xa3, 0x66, 0x65, 0x65)
+			if (*z).encodedTxns.encodedTxnHeaders.Fee == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxns.encodedTxnHeaders.Fee)))
+			}
+			for zb0007 := range (*z).encodedTxns.encodedTxnHeaders.Fee {
+				o = (*z).encodedTxns.encodedTxnHeaders.Fee[zb0007].MarshalMsg(o)
+			}
+		}
+		if (zb0016Mask & 0x10) == 0 { // if not empty
+			// string "feebm"
+			o = append(o, 0xa5, 0x66, 0x65, 0x65, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskFee))
+		}
+		if (zb0016Mask & 0x20) == 0 { // if not empty
+			// string "fv"
+			o = append(o, 0xa2, 0x66, 0x76)
+			if (*z).encodedTxns.encodedTxnHeaders.FirstValid == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxns.encodedTxnHeaders.FirstValid)))
+			}
+			for zb0008 := range (*z).encodedTxns.encodedTxnHeaders.FirstValid {
+				o = (*z).encodedTxns.encodedTxnHeaders.FirstValid[zb0008].MarshalMsg(o)
+			}
+		}
+		if (zb0016Mask & 0x40) == 0 { // if not empty
+			// string "fvbm"
+			o = append(o, 0xa4, 0x66, 0x76, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid))
+		}
+		if (zb0016Mask & 0x80) == 0 { // if not empty
+			// string "gen"
+			o = append(o, 0xa3, 0x67, 0x65, 0x6e)
+			if (*z).encodedTxns.encodedTxnHeaders.GenesisID == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxns.encodedTxnHeaders.GenesisID)))
+			}
+			for zb0011 := range (*z).encodedTxns.encodedTxnHeaders.GenesisID {
+				o = msgp.AppendString(o, (*z).encodedTxns.encodedTxnHeaders.GenesisID[zb0011])
+			}
+		}
+		if (zb0016Mask & 0x100) == 0 { // if not empty
+			// string "genbm"
+			o = append(o, 0xa5, 0x67, 0x65, 0x6e, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID))
+		}
+		if (zb0016Mask & 0x200) == 0 { // if not empty
+			// string "gh"
+			o = append(o, 0xa2, 0x67, 0x68)
+			if (*z).encodedTxns.encodedTxnHeaders.GenesisHash == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxns.encodedTxnHeaders.GenesisHash)))
+			}
+			for zb0012 := range (*z).encodedTxns.encodedTxnHeaders.GenesisHash {
+				o = (*z).encodedTxns.encodedTxnHeaders.GenesisHash[zb0012].MarshalMsg(o)
+			}
+		}
+		if (zb0016Mask & 0x400) == 0 { // if not empty
+			// string "ghbm"
+			o = append(o, 0xa4, 0x67, 0x68, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash))
+		}
+		if (zb0016Mask & 0x800) == 0 { // if not empty
 			// string "lsig"
 			o = append(o, 0xa4, 0x6c, 0x73, 0x69, 0x67)
 			if (*z).Lsig == nil {
@@ -540,12 +1318,46 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).Lsig[zb0003].MarshalMsg(o)
 			}
 		}
-		if (zb0006Mask & 0x8) == 0 { // if not empty
+		if (zb0016Mask & 0x1000) == 0 { // if not empty
 			// string "lsigb"
 			o = append(o, 0xa5, 0x6c, 0x73, 0x69, 0x67, 0x62)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskLsig))
 		}
-		if (zb0006Mask & 0x10) == 0 { // if not empty
+		if (zb0016Mask & 0x2000) == 0 { // if not empty
+			// string "lv"
+			o = append(o, 0xa2, 0x6c, 0x76)
+			if (*z).encodedTxns.encodedTxnHeaders.LastValid == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxns.encodedTxnHeaders.LastValid)))
+			}
+			for zb0009 := range (*z).encodedTxns.encodedTxnHeaders.LastValid {
+				o = (*z).encodedTxns.encodedTxnHeaders.LastValid[zb0009].MarshalMsg(o)
+			}
+		}
+		if (zb0016Mask & 0x4000) == 0 { // if not empty
+			// string "lvbm"
+			o = append(o, 0xa4, 0x6c, 0x76, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid))
+		}
+		if (zb0016Mask & 0x8000) == 0 { // if not empty
+			// string "lx"
+			o = append(o, 0xa2, 0x6c, 0x78)
+			if (*z).encodedTxns.encodedTxnHeaders.Lease == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxns.encodedTxnHeaders.Lease)))
+			}
+			for zb0013 := range (*z).encodedTxns.encodedTxnHeaders.Lease {
+				o = msgp.AppendBytes(o, ((*z).encodedTxns.encodedTxnHeaders.Lease[zb0013])[:])
+			}
+		}
+		if (zb0016Mask & 0x10000) == 0 { // if not empty
+			// string "lxbm"
+			o = append(o, 0xa4, 0x6c, 0x78, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLease))
+		}
+		if (zb0016Mask & 0x20000) == 0 { // if not empty
 			// string "msig"
 			o = append(o, 0xa4, 0x6d, 0x73, 0x69, 0x67)
 			if (*z).Msig == nil {
@@ -557,12 +1369,46 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).Msig[zb0002].MarshalMsg(o)
 			}
 		}
-		if (zb0006Mask & 0x20) == 0 { // if not empty
+		if (zb0016Mask & 0x40000) == 0 { // if not empty
 			// string "msigbm"
 			o = append(o, 0xa6, 0x6d, 0x73, 0x69, 0x67, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskMsig))
 		}
-		if (zb0006Mask & 0x40) == 0 { // if not empty
+		if (zb0016Mask & 0x80000) == 0 { // if not empty
+			// string "note"
+			o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
+			if (*z).encodedTxns.encodedTxnHeaders.Note == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxns.encodedTxnHeaders.Note)))
+			}
+			for zb0010 := range (*z).encodedTxns.encodedTxnHeaders.Note {
+				o = msgp.AppendBytes(o, (*z).encodedTxns.encodedTxnHeaders.Note[zb0010])
+			}
+		}
+		if (zb0016Mask & 0x100000) == 0 { // if not empty
+			// string "notebm"
+			o = append(o, 0xa6, 0x6e, 0x6f, 0x74, 0x65, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskNote))
+		}
+		if (zb0016Mask & 0x200000) == 0 { // if not empty
+			// string "rekey"
+			o = append(o, 0xa5, 0x72, 0x65, 0x6b, 0x65, 0x79)
+			if (*z).encodedTxns.encodedTxnHeaders.RekeyTo == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxns.encodedTxnHeaders.RekeyTo)))
+			}
+			for zb0015 := range (*z).encodedTxns.encodedTxnHeaders.RekeyTo {
+				o = (*z).encodedTxns.encodedTxnHeaders.RekeyTo[zb0015].MarshalMsg(o)
+			}
+		}
+		if (zb0016Mask & 0x400000) == 0 { // if not empty
+			// string "rekeybm"
+			o = append(o, 0xa7, 0x72, 0x65, 0x6b, 0x65, 0x79, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo))
+		}
+		if (zb0016Mask & 0x800000) == 0 { // if not empty
 			// string "sgnr"
 			o = append(o, 0xa4, 0x73, 0x67, 0x6e, 0x72)
 			if (*z).AuthAddr == nil {
@@ -574,12 +1420,12 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).AuthAddr[zb0004].MarshalMsg(o)
 			}
 		}
-		if (zb0006Mask & 0x80) == 0 { // if not empty
+		if (zb0016Mask & 0x1000000) == 0 { // if not empty
 			// string "sgnrbm"
 			o = append(o, 0xa6, 0x73, 0x67, 0x6e, 0x72, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskAuthAddr))
 		}
-		if (zb0006Mask & 0x100) == 0 { // if not empty
+		if (zb0016Mask & 0x2000000) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
 			if (*z).Sig == nil {
@@ -591,12 +1437,29 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).Sig[zb0001].MarshalMsg(o)
 			}
 		}
-		if (zb0006Mask & 0x200) == 0 { // if not empty
+		if (zb0016Mask & 0x4000000) == 0 { // if not empty
 			// string "sigbm"
 			o = append(o, 0xa5, 0x73, 0x69, 0x67, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskSig))
 		}
-		if (zb0006Mask & 0x400) == 0 { // if not empty
+		if (zb0016Mask & 0x8000000) == 0 { // if not empty
+			// string "snd"
+			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
+			if (*z).encodedTxns.encodedTxnHeaders.Sender == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxns.encodedTxnHeaders.Sender)))
+			}
+			for zb0006 := range (*z).encodedTxns.encodedTxnHeaders.Sender {
+				o = (*z).encodedTxns.encodedTxnHeaders.Sender[zb0006].MarshalMsg(o)
+			}
+		}
+		if (zb0016Mask & 0x10000000) == 0 { // if not empty
+			// string "sndbm"
+			o = append(o, 0xa5, 0x73, 0x6e, 0x64, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskSender))
+		}
+		if (zb0016Mask & 0x20000000) == 0 { // if not empty
 			// string "type"
 			o = append(o, 0xa4, 0x74, 0x79, 0x70, 0x65)
 			if (*z).encodedTxns.TxType == nil {
@@ -621,35 +1484,35 @@ func (_ *encodedSignedTxns) CanMarshalMsg(z interface{}) bool {
 func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0006 int
-	var zb0007 bool
-	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0016 int
+	var zb0017 bool
+	zb0016, zb0017, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0016, zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0006 > 0 {
-			zb0006--
-			var zb0008 int
-			var zb0009 bool
-			zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0016 > 0 {
+			zb0016--
+			var zb0018 int
+			var zb0019 bool
+			zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sig")
 				return
 			}
-			if zb0008 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(maxEncodedTransactionGroup))
+			if zb0018 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0018), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "Sig")
 				return
 			}
-			if zb0009 {
+			if zb0019 {
 				(*z).Sig = nil
-			} else if (*z).Sig != nil && cap((*z).Sig) >= zb0008 {
-				(*z).Sig = ((*z).Sig)[:zb0008]
+			} else if (*z).Sig != nil && cap((*z).Sig) >= zb0018 {
+				(*z).Sig = ((*z).Sig)[:zb0018]
 			} else {
-				(*z).Sig = make([]crypto.Signature, zb0008)
+				(*z).Sig = make([]crypto.Signature, zb0018)
 			}
 			for zb0001 := range (*z).Sig {
 				bts, err = (*z).Sig[zb0001].UnmarshalMsg(bts)
@@ -659,38 +1522,38 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0006 > 0 {
-			zb0006--
+		if zb0016 > 0 {
+			zb0016--
 			{
-				var zb0010 []byte
-				zb0010, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskSig))
+				var zb0020 []byte
+				zb0020, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskSig))
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "BitmaskSig")
 					return
 				}
-				(*z).BitmaskSig = bitmask(zb0010)
+				(*z).BitmaskSig = bitmask(zb0020)
 			}
 		}
-		if zb0006 > 0 {
-			zb0006--
-			var zb0011 int
-			var zb0012 bool
-			zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0016 > 0 {
+			zb0016--
+			var zb0021 int
+			var zb0022 bool
+			zb0021, zb0022, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Msig")
 				return
 			}
-			if zb0011 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0011), uint64(maxEncodedTransactionGroup))
+			if zb0021 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0021), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "Msig")
 				return
 			}
-			if zb0012 {
+			if zb0022 {
 				(*z).Msig = nil
-			} else if (*z).Msig != nil && cap((*z).Msig) >= zb0011 {
-				(*z).Msig = ((*z).Msig)[:zb0011]
+			} else if (*z).Msig != nil && cap((*z).Msig) >= zb0021 {
+				(*z).Msig = ((*z).Msig)[:zb0021]
 			} else {
-				(*z).Msig = make([]crypto.MultisigSig, zb0011)
+				(*z).Msig = make([]crypto.MultisigSig, zb0021)
 			}
 			for zb0002 := range (*z).Msig {
 				bts, err = (*z).Msig[zb0002].UnmarshalMsg(bts)
@@ -700,38 +1563,38 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0006 > 0 {
-			zb0006--
+		if zb0016 > 0 {
+			zb0016--
 			{
-				var zb0013 []byte
-				zb0013, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskMsig))
+				var zb0023 []byte
+				zb0023, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskMsig))
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "BitmaskMsig")
 					return
 				}
-				(*z).BitmaskMsig = bitmask(zb0013)
+				(*z).BitmaskMsig = bitmask(zb0023)
 			}
 		}
-		if zb0006 > 0 {
-			zb0006--
-			var zb0014 int
-			var zb0015 bool
-			zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0016 > 0 {
+			zb0016--
+			var zb0024 int
+			var zb0025 bool
+			zb0024, zb0025, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Lsig")
 				return
 			}
-			if zb0014 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0014), uint64(maxEncodedTransactionGroup))
+			if zb0024 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0024), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "Lsig")
 				return
 			}
-			if zb0015 {
+			if zb0025 {
 				(*z).Lsig = nil
-			} else if (*z).Lsig != nil && cap((*z).Lsig) >= zb0014 {
-				(*z).Lsig = ((*z).Lsig)[:zb0014]
+			} else if (*z).Lsig != nil && cap((*z).Lsig) >= zb0024 {
+				(*z).Lsig = ((*z).Lsig)[:zb0024]
 			} else {
-				(*z).Lsig = make([]transactions.LogicSig, zb0014)
+				(*z).Lsig = make([]transactions.LogicSig, zb0024)
 			}
 			for zb0003 := range (*z).Lsig {
 				bts, err = (*z).Lsig[zb0003].UnmarshalMsg(bts)
@@ -741,38 +1604,38 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0006 > 0 {
-			zb0006--
+		if zb0016 > 0 {
+			zb0016--
 			{
-				var zb0016 []byte
-				zb0016, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskLsig))
+				var zb0026 []byte
+				zb0026, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskLsig))
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "BitmaskLsig")
 					return
 				}
-				(*z).BitmaskLsig = bitmask(zb0016)
+				(*z).BitmaskLsig = bitmask(zb0026)
 			}
 		}
-		if zb0006 > 0 {
-			zb0006--
-			var zb0017 int
-			var zb0018 bool
-			zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0016 > 0 {
+			zb0016--
+			var zb0027 int
+			var zb0028 bool
+			zb0027, zb0028, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AuthAddr")
 				return
 			}
-			if zb0017 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0017), uint64(maxEncodedTransactionGroup))
+			if zb0027 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0027), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "AuthAddr")
 				return
 			}
-			if zb0018 {
+			if zb0028 {
 				(*z).AuthAddr = nil
-			} else if (*z).AuthAddr != nil && cap((*z).AuthAddr) >= zb0017 {
-				(*z).AuthAddr = ((*z).AuthAddr)[:zb0017]
+			} else if (*z).AuthAddr != nil && cap((*z).AuthAddr) >= zb0027 {
+				(*z).AuthAddr = ((*z).AuthAddr)[:zb0027]
 			} else {
-				(*z).AuthAddr = make([]basics.Address, zb0017)
+				(*z).AuthAddr = make([]basics.Address, zb0027)
 			}
 			for zb0004 := range (*z).AuthAddr {
 				bts, err = (*z).AuthAddr[zb0004].UnmarshalMsg(bts)
@@ -782,38 +1645,38 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0006 > 0 {
-			zb0006--
+		if zb0016 > 0 {
+			zb0016--
 			{
-				var zb0019 []byte
-				zb0019, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskAuthAddr))
+				var zb0029 []byte
+				zb0029, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskAuthAddr))
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "BitmaskAuthAddr")
 					return
 				}
-				(*z).BitmaskAuthAddr = bitmask(zb0019)
+				(*z).BitmaskAuthAddr = bitmask(zb0029)
 			}
 		}
-		if zb0006 > 0 {
-			zb0006--
-			var zb0020 int
-			var zb0021 bool
-			zb0020, zb0021, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0016 > 0 {
+			zb0016--
+			var zb0030 int
+			var zb0031 bool
+			zb0030, zb0031, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TxType")
 				return
 			}
-			if zb0020 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0020), uint64(maxEncodedTransactionGroup))
+			if zb0030 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0030), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "TxType")
 				return
 			}
-			if zb0021 {
+			if zb0031 {
 				(*z).encodedTxns.TxType = nil
-			} else if (*z).encodedTxns.TxType != nil && cap((*z).encodedTxns.TxType) >= zb0020 {
-				(*z).encodedTxns.TxType = ((*z).encodedTxns.TxType)[:zb0020]
+			} else if (*z).encodedTxns.TxType != nil && cap((*z).encodedTxns.TxType) >= zb0030 {
+				(*z).encodedTxns.TxType = ((*z).encodedTxns.TxType)[:zb0030]
 			} else {
-				(*z).encodedTxns.TxType = make([]protocol.TxType, zb0020)
+				(*z).encodedTxns.TxType = make([]protocol.TxType, zb0030)
 			}
 			for zb0005 := range (*z).encodedTxns.TxType {
 				bts, err = (*z).encodedTxns.TxType[zb0005].UnmarshalMsg(bts)
@@ -823,8 +1686,377 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0006 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0006)
+		if zb0016 > 0 {
+			zb0016--
+			var zb0032 int
+			var zb0033 bool
+			zb0032, zb0033, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				return
+			}
+			if zb0032 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0032), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				return
+			}
+			if zb0033 {
+				(*z).encodedTxns.encodedTxnHeaders.Sender = nil
+			} else if (*z).encodedTxns.encodedTxnHeaders.Sender != nil && cap((*z).encodedTxns.encodedTxnHeaders.Sender) >= zb0032 {
+				(*z).encodedTxns.encodedTxnHeaders.Sender = ((*z).encodedTxns.encodedTxnHeaders.Sender)[:zb0032]
+			} else {
+				(*z).encodedTxns.encodedTxnHeaders.Sender = make([]basics.Address, zb0032)
+			}
+			for zb0006 := range (*z).encodedTxns.encodedTxnHeaders.Sender {
+				bts, err = (*z).encodedTxns.encodedTxnHeaders.Sender[zb0006].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Sender", zb0006)
+					return
+				}
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			{
+				var zb0034 []byte
+				zb0034, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskSender))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskSender")
+					return
+				}
+				(*z).encodedTxns.encodedTxnHeaders.BitmaskSender = bitmask(zb0034)
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			var zb0035 int
+			var zb0036 bool
+			zb0035, zb0036, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Fee")
+				return
+			}
+			if zb0035 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0035), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Fee")
+				return
+			}
+			if zb0036 {
+				(*z).encodedTxns.encodedTxnHeaders.Fee = nil
+			} else if (*z).encodedTxns.encodedTxnHeaders.Fee != nil && cap((*z).encodedTxns.encodedTxnHeaders.Fee) >= zb0035 {
+				(*z).encodedTxns.encodedTxnHeaders.Fee = ((*z).encodedTxns.encodedTxnHeaders.Fee)[:zb0035]
+			} else {
+				(*z).encodedTxns.encodedTxnHeaders.Fee = make([]basics.MicroAlgos, zb0035)
+			}
+			for zb0007 := range (*z).encodedTxns.encodedTxnHeaders.Fee {
+				bts, err = (*z).encodedTxns.encodedTxnHeaders.Fee[zb0007].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Fee", zb0007)
+					return
+				}
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			{
+				var zb0037 []byte
+				zb0037, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskFee))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskFee")
+					return
+				}
+				(*z).encodedTxns.encodedTxnHeaders.BitmaskFee = bitmask(zb0037)
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			var zb0038 int
+			var zb0039 bool
+			zb0038, zb0039, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
+				return
+			}
+			if zb0038 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0038), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
+				return
+			}
+			if zb0039 {
+				(*z).encodedTxns.encodedTxnHeaders.FirstValid = nil
+			} else if (*z).encodedTxns.encodedTxnHeaders.FirstValid != nil && cap((*z).encodedTxns.encodedTxnHeaders.FirstValid) >= zb0038 {
+				(*z).encodedTxns.encodedTxnHeaders.FirstValid = ((*z).encodedTxns.encodedTxnHeaders.FirstValid)[:zb0038]
+			} else {
+				(*z).encodedTxns.encodedTxnHeaders.FirstValid = make([]basics.Round, zb0038)
+			}
+			for zb0008 := range (*z).encodedTxns.encodedTxnHeaders.FirstValid {
+				bts, err = (*z).encodedTxns.encodedTxnHeaders.FirstValid[zb0008].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "FirstValid", zb0008)
+					return
+				}
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			{
+				var zb0040 []byte
+				zb0040, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskFirstValid")
+					return
+				}
+				(*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid = bitmask(zb0040)
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			var zb0041 int
+			var zb0042 bool
+			zb0041, zb0042, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LastValid")
+				return
+			}
+			if zb0041 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0041), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "LastValid")
+				return
+			}
+			if zb0042 {
+				(*z).encodedTxns.encodedTxnHeaders.LastValid = nil
+			} else if (*z).encodedTxns.encodedTxnHeaders.LastValid != nil && cap((*z).encodedTxns.encodedTxnHeaders.LastValid) >= zb0041 {
+				(*z).encodedTxns.encodedTxnHeaders.LastValid = ((*z).encodedTxns.encodedTxnHeaders.LastValid)[:zb0041]
+			} else {
+				(*z).encodedTxns.encodedTxnHeaders.LastValid = make([]basics.Round, zb0041)
+			}
+			for zb0009 := range (*z).encodedTxns.encodedTxnHeaders.LastValid {
+				bts, err = (*z).encodedTxns.encodedTxnHeaders.LastValid[zb0009].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "LastValid", zb0009)
+					return
+				}
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			{
+				var zb0043 []byte
+				zb0043, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskLastValid")
+					return
+				}
+				(*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid = bitmask(zb0043)
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			var zb0044 int
+			var zb0045 bool
+			zb0044, zb0045, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Note")
+				return
+			}
+			if zb0044 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0044), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Note")
+				return
+			}
+			if zb0045 {
+				(*z).encodedTxns.encodedTxnHeaders.Note = nil
+			} else if (*z).encodedTxns.encodedTxnHeaders.Note != nil && cap((*z).encodedTxns.encodedTxnHeaders.Note) >= zb0044 {
+				(*z).encodedTxns.encodedTxnHeaders.Note = ((*z).encodedTxns.encodedTxnHeaders.Note)[:zb0044]
+			} else {
+				(*z).encodedTxns.encodedTxnHeaders.Note = make([][]byte, zb0044)
+			}
+			for zb0010 := range (*z).encodedTxns.encodedTxnHeaders.Note {
+				(*z).encodedTxns.encodedTxnHeaders.Note[zb0010], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedTxns.encodedTxnHeaders.Note[zb0010])
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Note", zb0010)
+					return
+				}
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			{
+				var zb0046 []byte
+				zb0046, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskNote))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskNote")
+					return
+				}
+				(*z).encodedTxns.encodedTxnHeaders.BitmaskNote = bitmask(zb0046)
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			var zb0047 int
+			var zb0048 bool
+			zb0047, zb0048, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0047 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0047), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0048 {
+				(*z).encodedTxns.encodedTxnHeaders.GenesisID = nil
+			} else if (*z).encodedTxns.encodedTxnHeaders.GenesisID != nil && cap((*z).encodedTxns.encodedTxnHeaders.GenesisID) >= zb0047 {
+				(*z).encodedTxns.encodedTxnHeaders.GenesisID = ((*z).encodedTxns.encodedTxnHeaders.GenesisID)[:zb0047]
+			} else {
+				(*z).encodedTxns.encodedTxnHeaders.GenesisID = make([]string, zb0047)
+			}
+			for zb0011 := range (*z).encodedTxns.encodedTxnHeaders.GenesisID {
+				(*z).encodedTxns.encodedTxnHeaders.GenesisID[zb0011], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "GenesisID", zb0011)
+					return
+				}
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			{
+				var zb0049 []byte
+				zb0049, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskGenesisID")
+					return
+				}
+				(*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0049)
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			var zb0050 int
+			var zb0051 bool
+			zb0050, zb0051, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				return
+			}
+			if zb0050 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0050), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				return
+			}
+			if zb0051 {
+				(*z).encodedTxns.encodedTxnHeaders.GenesisHash = nil
+			} else if (*z).encodedTxns.encodedTxnHeaders.GenesisHash != nil && cap((*z).encodedTxns.encodedTxnHeaders.GenesisHash) >= zb0050 {
+				(*z).encodedTxns.encodedTxnHeaders.GenesisHash = ((*z).encodedTxns.encodedTxnHeaders.GenesisHash)[:zb0050]
+			} else {
+				(*z).encodedTxns.encodedTxnHeaders.GenesisHash = make([]crypto.Digest, zb0050)
+			}
+			for zb0012 := range (*z).encodedTxns.encodedTxnHeaders.GenesisHash {
+				bts, err = (*z).encodedTxns.encodedTxnHeaders.GenesisHash[zb0012].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "GenesisHash", zb0012)
+					return
+				}
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			{
+				var zb0052 []byte
+				zb0052, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskGenesisHash")
+					return
+				}
+				(*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash = bitmask(zb0052)
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			var zb0053 int
+			var zb0054 bool
+			zb0053, zb0054, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Lease")
+				return
+			}
+			if zb0053 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0053), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Lease")
+				return
+			}
+			if zb0054 {
+				(*z).encodedTxns.encodedTxnHeaders.Lease = nil
+			} else if (*z).encodedTxns.encodedTxnHeaders.Lease != nil && cap((*z).encodedTxns.encodedTxnHeaders.Lease) >= zb0053 {
+				(*z).encodedTxns.encodedTxnHeaders.Lease = ((*z).encodedTxns.encodedTxnHeaders.Lease)[:zb0053]
+			} else {
+				(*z).encodedTxns.encodedTxnHeaders.Lease = make([][32]byte, zb0053)
+			}
+			for zb0013 := range (*z).encodedTxns.encodedTxnHeaders.Lease {
+				bts, err = msgp.ReadExactBytes(bts, ((*z).encodedTxns.encodedTxnHeaders.Lease[zb0013])[:])
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Lease", zb0013)
+					return
+				}
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			{
+				var zb0055 []byte
+				zb0055, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLease))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskLease")
+					return
+				}
+				(*z).encodedTxns.encodedTxnHeaders.BitmaskLease = bitmask(zb0055)
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			var zb0056 int
+			var zb0057 bool
+			zb0056, zb0057, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RekeyTo")
+				return
+			}
+			if zb0056 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0056), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "RekeyTo")
+				return
+			}
+			if zb0057 {
+				(*z).encodedTxns.encodedTxnHeaders.RekeyTo = nil
+			} else if (*z).encodedTxns.encodedTxnHeaders.RekeyTo != nil && cap((*z).encodedTxns.encodedTxnHeaders.RekeyTo) >= zb0056 {
+				(*z).encodedTxns.encodedTxnHeaders.RekeyTo = ((*z).encodedTxns.encodedTxnHeaders.RekeyTo)[:zb0056]
+			} else {
+				(*z).encodedTxns.encodedTxnHeaders.RekeyTo = make([]basics.Address, zb0056)
+			}
+			for zb0015 := range (*z).encodedTxns.encodedTxnHeaders.RekeyTo {
+				bts, err = (*z).encodedTxns.encodedTxnHeaders.RekeyTo[zb0015].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "RekeyTo", zb0015)
+					return
+				}
+			}
+		}
+		if zb0016 > 0 {
+			zb0016--
+			{
+				var zb0058 []byte
+				zb0058, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskRekeyTo")
+					return
+				}
+				(*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo = bitmask(zb0058)
+			}
+		}
+		if zb0016 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0016)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -835,11 +2067,11 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0007 {
+		if zb0017 {
 			(*z) = encodedSignedTxns{}
 		}
-		for zb0006 > 0 {
-			zb0006--
+		for zb0016 > 0 {
+			zb0016--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -847,24 +2079,24 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "sig":
-				var zb0022 int
-				var zb0023 bool
-				zb0022, zb0023, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0059 int
+				var zb0060 bool
+				zb0059, zb0060, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
-				if zb0022 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0022), uint64(maxEncodedTransactionGroup))
+				if zb0059 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0059), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
-				if zb0023 {
+				if zb0060 {
 					(*z).Sig = nil
-				} else if (*z).Sig != nil && cap((*z).Sig) >= zb0022 {
-					(*z).Sig = ((*z).Sig)[:zb0022]
+				} else if (*z).Sig != nil && cap((*z).Sig) >= zb0059 {
+					(*z).Sig = ((*z).Sig)[:zb0059]
 				} else {
-					(*z).Sig = make([]crypto.Signature, zb0022)
+					(*z).Sig = make([]crypto.Signature, zb0059)
 				}
 				for zb0001 := range (*z).Sig {
 					bts, err = (*z).Sig[zb0001].UnmarshalMsg(bts)
@@ -875,33 +2107,33 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "sigbm":
 				{
-					var zb0024 []byte
-					zb0024, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskSig))
+					var zb0061 []byte
+					zb0061, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskSig))
 					if err != nil {
 						err = msgp.WrapError(err, "BitmaskSig")
 						return
 					}
-					(*z).BitmaskSig = bitmask(zb0024)
+					(*z).BitmaskSig = bitmask(zb0061)
 				}
 			case "msig":
-				var zb0025 int
-				var zb0026 bool
-				zb0025, zb0026, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0062 int
+				var zb0063 bool
+				zb0062, zb0063, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Msig")
 					return
 				}
-				if zb0025 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0025), uint64(maxEncodedTransactionGroup))
+				if zb0062 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0062), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "Msig")
 					return
 				}
-				if zb0026 {
+				if zb0063 {
 					(*z).Msig = nil
-				} else if (*z).Msig != nil && cap((*z).Msig) >= zb0025 {
-					(*z).Msig = ((*z).Msig)[:zb0025]
+				} else if (*z).Msig != nil && cap((*z).Msig) >= zb0062 {
+					(*z).Msig = ((*z).Msig)[:zb0062]
 				} else {
-					(*z).Msig = make([]crypto.MultisigSig, zb0025)
+					(*z).Msig = make([]crypto.MultisigSig, zb0062)
 				}
 				for zb0002 := range (*z).Msig {
 					bts, err = (*z).Msig[zb0002].UnmarshalMsg(bts)
@@ -912,33 +2144,33 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "msigbm":
 				{
-					var zb0027 []byte
-					zb0027, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskMsig))
+					var zb0064 []byte
+					zb0064, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskMsig))
 					if err != nil {
 						err = msgp.WrapError(err, "BitmaskMsig")
 						return
 					}
-					(*z).BitmaskMsig = bitmask(zb0027)
+					(*z).BitmaskMsig = bitmask(zb0064)
 				}
 			case "lsig":
-				var zb0028 int
-				var zb0029 bool
-				zb0028, zb0029, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0065 int
+				var zb0066 bool
+				zb0065, zb0066, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Lsig")
 					return
 				}
-				if zb0028 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0028), uint64(maxEncodedTransactionGroup))
+				if zb0065 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0065), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "Lsig")
 					return
 				}
-				if zb0029 {
+				if zb0066 {
 					(*z).Lsig = nil
-				} else if (*z).Lsig != nil && cap((*z).Lsig) >= zb0028 {
-					(*z).Lsig = ((*z).Lsig)[:zb0028]
+				} else if (*z).Lsig != nil && cap((*z).Lsig) >= zb0065 {
+					(*z).Lsig = ((*z).Lsig)[:zb0065]
 				} else {
-					(*z).Lsig = make([]transactions.LogicSig, zb0028)
+					(*z).Lsig = make([]transactions.LogicSig, zb0065)
 				}
 				for zb0003 := range (*z).Lsig {
 					bts, err = (*z).Lsig[zb0003].UnmarshalMsg(bts)
@@ -949,33 +2181,33 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "lsigb":
 				{
-					var zb0030 []byte
-					zb0030, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskLsig))
+					var zb0067 []byte
+					zb0067, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskLsig))
 					if err != nil {
 						err = msgp.WrapError(err, "BitmaskLsig")
 						return
 					}
-					(*z).BitmaskLsig = bitmask(zb0030)
+					(*z).BitmaskLsig = bitmask(zb0067)
 				}
 			case "sgnr":
-				var zb0031 int
-				var zb0032 bool
-				zb0031, zb0032, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0068 int
+				var zb0069 bool
+				zb0068, zb0069, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AuthAddr")
 					return
 				}
-				if zb0031 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0031), uint64(maxEncodedTransactionGroup))
+				if zb0068 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0068), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "AuthAddr")
 					return
 				}
-				if zb0032 {
+				if zb0069 {
 					(*z).AuthAddr = nil
-				} else if (*z).AuthAddr != nil && cap((*z).AuthAddr) >= zb0031 {
-					(*z).AuthAddr = ((*z).AuthAddr)[:zb0031]
+				} else if (*z).AuthAddr != nil && cap((*z).AuthAddr) >= zb0068 {
+					(*z).AuthAddr = ((*z).AuthAddr)[:zb0068]
 				} else {
-					(*z).AuthAddr = make([]basics.Address, zb0031)
+					(*z).AuthAddr = make([]basics.Address, zb0068)
 				}
 				for zb0004 := range (*z).AuthAddr {
 					bts, err = (*z).AuthAddr[zb0004].UnmarshalMsg(bts)
@@ -986,33 +2218,33 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "sgnrbm":
 				{
-					var zb0033 []byte
-					zb0033, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskAuthAddr))
+					var zb0070 []byte
+					zb0070, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskAuthAddr))
 					if err != nil {
 						err = msgp.WrapError(err, "BitmaskAuthAddr")
 						return
 					}
-					(*z).BitmaskAuthAddr = bitmask(zb0033)
+					(*z).BitmaskAuthAddr = bitmask(zb0070)
 				}
 			case "type":
-				var zb0034 int
-				var zb0035 bool
-				zb0034, zb0035, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0071 int
+				var zb0072 bool
+				zb0071, zb0072, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TxType")
 					return
 				}
-				if zb0034 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0034), uint64(maxEncodedTransactionGroup))
+				if zb0071 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0071), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "TxType")
 					return
 				}
-				if zb0035 {
+				if zb0072 {
 					(*z).encodedTxns.TxType = nil
-				} else if (*z).encodedTxns.TxType != nil && cap((*z).encodedTxns.TxType) >= zb0034 {
-					(*z).encodedTxns.TxType = ((*z).encodedTxns.TxType)[:zb0034]
+				} else if (*z).encodedTxns.TxType != nil && cap((*z).encodedTxns.TxType) >= zb0071 {
+					(*z).encodedTxns.TxType = ((*z).encodedTxns.TxType)[:zb0071]
 				} else {
-					(*z).encodedTxns.TxType = make([]protocol.TxType, zb0034)
+					(*z).encodedTxns.TxType = make([]protocol.TxType, zb0071)
 				}
 				for zb0005 := range (*z).encodedTxns.TxType {
 					bts, err = (*z).encodedTxns.TxType[zb0005].UnmarshalMsg(bts)
@@ -1020,6 +2252,339 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "TxType", zb0005)
 						return
 					}
+				}
+			case "snd":
+				var zb0073 int
+				var zb0074 bool
+				zb0073, zb0074, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Sender")
+					return
+				}
+				if zb0073 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0073), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Sender")
+					return
+				}
+				if zb0074 {
+					(*z).encodedTxns.encodedTxnHeaders.Sender = nil
+				} else if (*z).encodedTxns.encodedTxnHeaders.Sender != nil && cap((*z).encodedTxns.encodedTxnHeaders.Sender) >= zb0073 {
+					(*z).encodedTxns.encodedTxnHeaders.Sender = ((*z).encodedTxns.encodedTxnHeaders.Sender)[:zb0073]
+				} else {
+					(*z).encodedTxns.encodedTxnHeaders.Sender = make([]basics.Address, zb0073)
+				}
+				for zb0006 := range (*z).encodedTxns.encodedTxnHeaders.Sender {
+					bts, err = (*z).encodedTxns.encodedTxnHeaders.Sender[zb0006].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Sender", zb0006)
+						return
+					}
+				}
+			case "sndbm":
+				{
+					var zb0075 []byte
+					zb0075, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskSender))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskSender")
+						return
+					}
+					(*z).encodedTxns.encodedTxnHeaders.BitmaskSender = bitmask(zb0075)
+				}
+			case "fee":
+				var zb0076 int
+				var zb0077 bool
+				zb0076, zb0077, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Fee")
+					return
+				}
+				if zb0076 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0076), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Fee")
+					return
+				}
+				if zb0077 {
+					(*z).encodedTxns.encodedTxnHeaders.Fee = nil
+				} else if (*z).encodedTxns.encodedTxnHeaders.Fee != nil && cap((*z).encodedTxns.encodedTxnHeaders.Fee) >= zb0076 {
+					(*z).encodedTxns.encodedTxnHeaders.Fee = ((*z).encodedTxns.encodedTxnHeaders.Fee)[:zb0076]
+				} else {
+					(*z).encodedTxns.encodedTxnHeaders.Fee = make([]basics.MicroAlgos, zb0076)
+				}
+				for zb0007 := range (*z).encodedTxns.encodedTxnHeaders.Fee {
+					bts, err = (*z).encodedTxns.encodedTxnHeaders.Fee[zb0007].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Fee", zb0007)
+						return
+					}
+				}
+			case "feebm":
+				{
+					var zb0078 []byte
+					zb0078, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskFee))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskFee")
+						return
+					}
+					(*z).encodedTxns.encodedTxnHeaders.BitmaskFee = bitmask(zb0078)
+				}
+			case "fv":
+				var zb0079 int
+				var zb0080 bool
+				zb0079, zb0080, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstValid")
+					return
+				}
+				if zb0079 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0079), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "FirstValid")
+					return
+				}
+				if zb0080 {
+					(*z).encodedTxns.encodedTxnHeaders.FirstValid = nil
+				} else if (*z).encodedTxns.encodedTxnHeaders.FirstValid != nil && cap((*z).encodedTxns.encodedTxnHeaders.FirstValid) >= zb0079 {
+					(*z).encodedTxns.encodedTxnHeaders.FirstValid = ((*z).encodedTxns.encodedTxnHeaders.FirstValid)[:zb0079]
+				} else {
+					(*z).encodedTxns.encodedTxnHeaders.FirstValid = make([]basics.Round, zb0079)
+				}
+				for zb0008 := range (*z).encodedTxns.encodedTxnHeaders.FirstValid {
+					bts, err = (*z).encodedTxns.encodedTxnHeaders.FirstValid[zb0008].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "FirstValid", zb0008)
+						return
+					}
+				}
+			case "fvbm":
+				{
+					var zb0081 []byte
+					zb0081, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskFirstValid")
+						return
+					}
+					(*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid = bitmask(zb0081)
+				}
+			case "lv":
+				var zb0082 int
+				var zb0083 bool
+				zb0082, zb0083, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "LastValid")
+					return
+				}
+				if zb0082 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0082), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "LastValid")
+					return
+				}
+				if zb0083 {
+					(*z).encodedTxns.encodedTxnHeaders.LastValid = nil
+				} else if (*z).encodedTxns.encodedTxnHeaders.LastValid != nil && cap((*z).encodedTxns.encodedTxnHeaders.LastValid) >= zb0082 {
+					(*z).encodedTxns.encodedTxnHeaders.LastValid = ((*z).encodedTxns.encodedTxnHeaders.LastValid)[:zb0082]
+				} else {
+					(*z).encodedTxns.encodedTxnHeaders.LastValid = make([]basics.Round, zb0082)
+				}
+				for zb0009 := range (*z).encodedTxns.encodedTxnHeaders.LastValid {
+					bts, err = (*z).encodedTxns.encodedTxnHeaders.LastValid[zb0009].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "LastValid", zb0009)
+						return
+					}
+				}
+			case "lvbm":
+				{
+					var zb0084 []byte
+					zb0084, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskLastValid")
+						return
+					}
+					(*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid = bitmask(zb0084)
+				}
+			case "note":
+				var zb0085 int
+				var zb0086 bool
+				zb0085, zb0086, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Note")
+					return
+				}
+				if zb0085 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0085), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Note")
+					return
+				}
+				if zb0086 {
+					(*z).encodedTxns.encodedTxnHeaders.Note = nil
+				} else if (*z).encodedTxns.encodedTxnHeaders.Note != nil && cap((*z).encodedTxns.encodedTxnHeaders.Note) >= zb0085 {
+					(*z).encodedTxns.encodedTxnHeaders.Note = ((*z).encodedTxns.encodedTxnHeaders.Note)[:zb0085]
+				} else {
+					(*z).encodedTxns.encodedTxnHeaders.Note = make([][]byte, zb0085)
+				}
+				for zb0010 := range (*z).encodedTxns.encodedTxnHeaders.Note {
+					(*z).encodedTxns.encodedTxnHeaders.Note[zb0010], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedTxns.encodedTxnHeaders.Note[zb0010])
+					if err != nil {
+						err = msgp.WrapError(err, "Note", zb0010)
+						return
+					}
+				}
+			case "notebm":
+				{
+					var zb0087 []byte
+					zb0087, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskNote))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskNote")
+						return
+					}
+					(*z).encodedTxns.encodedTxnHeaders.BitmaskNote = bitmask(zb0087)
+				}
+			case "gen":
+				var zb0088 int
+				var zb0089 bool
+				zb0088, zb0089, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0088 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0088), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0089 {
+					(*z).encodedTxns.encodedTxnHeaders.GenesisID = nil
+				} else if (*z).encodedTxns.encodedTxnHeaders.GenesisID != nil && cap((*z).encodedTxns.encodedTxnHeaders.GenesisID) >= zb0088 {
+					(*z).encodedTxns.encodedTxnHeaders.GenesisID = ((*z).encodedTxns.encodedTxnHeaders.GenesisID)[:zb0088]
+				} else {
+					(*z).encodedTxns.encodedTxnHeaders.GenesisID = make([]string, zb0088)
+				}
+				for zb0011 := range (*z).encodedTxns.encodedTxnHeaders.GenesisID {
+					(*z).encodedTxns.encodedTxnHeaders.GenesisID[zb0011], bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "GenesisID", zb0011)
+						return
+					}
+				}
+			case "genbm":
+				{
+					var zb0090 []byte
+					zb0090, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskGenesisID")
+						return
+					}
+					(*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0090)
+				}
+			case "gh":
+				var zb0091 int
+				var zb0092 bool
+				zb0091, zb0092, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+				if zb0091 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0091), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+				if zb0092 {
+					(*z).encodedTxns.encodedTxnHeaders.GenesisHash = nil
+				} else if (*z).encodedTxns.encodedTxnHeaders.GenesisHash != nil && cap((*z).encodedTxns.encodedTxnHeaders.GenesisHash) >= zb0091 {
+					(*z).encodedTxns.encodedTxnHeaders.GenesisHash = ((*z).encodedTxns.encodedTxnHeaders.GenesisHash)[:zb0091]
+				} else {
+					(*z).encodedTxns.encodedTxnHeaders.GenesisHash = make([]crypto.Digest, zb0091)
+				}
+				for zb0012 := range (*z).encodedTxns.encodedTxnHeaders.GenesisHash {
+					bts, err = (*z).encodedTxns.encodedTxnHeaders.GenesisHash[zb0012].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "GenesisHash", zb0012)
+						return
+					}
+				}
+			case "ghbm":
+				{
+					var zb0093 []byte
+					zb0093, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskGenesisHash")
+						return
+					}
+					(*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash = bitmask(zb0093)
+				}
+			case "lx":
+				var zb0094 int
+				var zb0095 bool
+				zb0094, zb0095, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Lease")
+					return
+				}
+				if zb0094 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0094), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Lease")
+					return
+				}
+				if zb0095 {
+					(*z).encodedTxns.encodedTxnHeaders.Lease = nil
+				} else if (*z).encodedTxns.encodedTxnHeaders.Lease != nil && cap((*z).encodedTxns.encodedTxnHeaders.Lease) >= zb0094 {
+					(*z).encodedTxns.encodedTxnHeaders.Lease = ((*z).encodedTxns.encodedTxnHeaders.Lease)[:zb0094]
+				} else {
+					(*z).encodedTxns.encodedTxnHeaders.Lease = make([][32]byte, zb0094)
+				}
+				for zb0013 := range (*z).encodedTxns.encodedTxnHeaders.Lease {
+					bts, err = msgp.ReadExactBytes(bts, ((*z).encodedTxns.encodedTxnHeaders.Lease[zb0013])[:])
+					if err != nil {
+						err = msgp.WrapError(err, "Lease", zb0013)
+						return
+					}
+				}
+			case "lxbm":
+				{
+					var zb0096 []byte
+					zb0096, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLease))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskLease")
+						return
+					}
+					(*z).encodedTxns.encodedTxnHeaders.BitmaskLease = bitmask(zb0096)
+				}
+			case "rekey":
+				var zb0097 int
+				var zb0098 bool
+				zb0097, zb0098, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RekeyTo")
+					return
+				}
+				if zb0097 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0097), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "RekeyTo")
+					return
+				}
+				if zb0098 {
+					(*z).encodedTxns.encodedTxnHeaders.RekeyTo = nil
+				} else if (*z).encodedTxns.encodedTxnHeaders.RekeyTo != nil && cap((*z).encodedTxns.encodedTxnHeaders.RekeyTo) >= zb0097 {
+					(*z).encodedTxns.encodedTxnHeaders.RekeyTo = ((*z).encodedTxns.encodedTxnHeaders.RekeyTo)[:zb0097]
+				} else {
+					(*z).encodedTxns.encodedTxnHeaders.RekeyTo = make([]basics.Address, zb0097)
+				}
+				for zb0015 := range (*z).encodedTxns.encodedTxnHeaders.RekeyTo {
+					bts, err = (*z).encodedTxns.encodedTxnHeaders.RekeyTo[zb0015].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "RekeyTo", zb0015)
+						return
+					}
+				}
+			case "rekeybm":
+				{
+					var zb0099 []byte
+					zb0099, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskRekeyTo")
+						return
+					}
+					(*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo = bitmask(zb0099)
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -1041,7 +2606,7 @@ func (_ *encodedSignedTxns) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *encodedSignedTxns) Msgsize() (s int) {
-	s = 1 + 4 + msgp.ArrayHeaderSize
+	s = 3 + 4 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).Sig {
 		s += (*z).Sig[zb0001].Msgsize()
 	}
@@ -1061,28 +2626,1328 @@ func (z *encodedSignedTxns) Msgsize() (s int) {
 	for zb0005 := range (*z).encodedTxns.TxType {
 		s += (*z).encodedTxns.TxType[zb0005].Msgsize()
 	}
+	s += 4 + msgp.ArrayHeaderSize
+	for zb0006 := range (*z).encodedTxns.encodedTxnHeaders.Sender {
+		s += (*z).encodedTxns.encodedTxnHeaders.Sender[zb0006].Msgsize()
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskSender)) + 4 + msgp.ArrayHeaderSize
+	for zb0007 := range (*z).encodedTxns.encodedTxnHeaders.Fee {
+		s += (*z).encodedTxns.encodedTxnHeaders.Fee[zb0007].Msgsize()
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskFee)) + 3 + msgp.ArrayHeaderSize
+	for zb0008 := range (*z).encodedTxns.encodedTxnHeaders.FirstValid {
+		s += (*z).encodedTxns.encodedTxnHeaders.FirstValid[zb0008].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid)) + 3 + msgp.ArrayHeaderSize
+	for zb0009 := range (*z).encodedTxns.encodedTxnHeaders.LastValid {
+		s += (*z).encodedTxns.encodedTxnHeaders.LastValid[zb0009].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid)) + 5 + msgp.ArrayHeaderSize
+	for zb0010 := range (*z).encodedTxns.encodedTxnHeaders.Note {
+		s += msgp.BytesPrefixSize + len((*z).encodedTxns.encodedTxnHeaders.Note[zb0010])
+	}
+	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskNote)) + 4 + msgp.ArrayHeaderSize
+	for zb0011 := range (*z).encodedTxns.encodedTxnHeaders.GenesisID {
+		s += msgp.StringPrefixSize + len((*z).encodedTxns.encodedTxnHeaders.GenesisID[zb0011])
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID)) + 3 + msgp.ArrayHeaderSize
+	for zb0012 := range (*z).encodedTxns.encodedTxnHeaders.GenesisHash {
+		s += (*z).encodedTxns.encodedTxnHeaders.GenesisHash[zb0012].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash)) + 3 + msgp.ArrayHeaderSize + (len((*z).encodedTxns.encodedTxnHeaders.Lease) * (32 * (msgp.ByteSize))) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLease)) + 6 + msgp.ArrayHeaderSize
+	for zb0015 := range (*z).encodedTxns.encodedTxnHeaders.RekeyTo {
+		s += (*z).encodedTxns.encodedTxnHeaders.RekeyTo[zb0015].Msgsize()
+	}
+	s += 8 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *encodedSignedTxns) MsgIsZero() bool {
-	return (len((*z).Sig) == 0) && (len((*z).BitmaskSig) == 0) && (len((*z).Msig) == 0) && (len((*z).BitmaskMsig) == 0) && (len((*z).Lsig) == 0) && (len((*z).BitmaskLsig) == 0) && (len((*z).AuthAddr) == 0) && (len((*z).BitmaskAuthAddr) == 0) && (len((*z).encodedTxns.TxType) == 0)
+	return (len((*z).Sig) == 0) && (len((*z).BitmaskSig) == 0) && (len((*z).Msig) == 0) && (len((*z).BitmaskMsig) == 0) && (len((*z).Lsig) == 0) && (len((*z).BitmaskLsig) == 0) && (len((*z).AuthAddr) == 0) && (len((*z).BitmaskAuthAddr) == 0) && (len((*z).encodedTxns.TxType) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Sender) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskSender) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Fee) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskFee) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.FirstValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.LastValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Note) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskNote) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.GenesisID) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.GenesisHash) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Lease) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskLease) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.RekeyTo) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *encodedTxnHeaders) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0011Len := uint32(18)
+	var zb0011Mask uint32 /* 19 bits */
+	if len((*z).Fee) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x2
+	}
+	if len((*z).BitmaskFee) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x4
+	}
+	if len((*z).FirstValid) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x8
+	}
+	if len((*z).BitmaskFirstValid) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x10
+	}
+	if len((*z).GenesisID) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x20
+	}
+	if len((*z).BitmaskGenesisID) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x40
+	}
+	if len((*z).GenesisHash) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x80
+	}
+	if len((*z).BitmaskGenesisHash) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x100
+	}
+	if len((*z).LastValid) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x200
+	}
+	if len((*z).BitmaskLastValid) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x400
+	}
+	if len((*z).Lease) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x800
+	}
+	if len((*z).BitmaskLease) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x1000
+	}
+	if len((*z).Note) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x2000
+	}
+	if len((*z).BitmaskNote) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x4000
+	}
+	if len((*z).RekeyTo) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x8000
+	}
+	if len((*z).BitmaskRekeyTo) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x10000
+	}
+	if len((*z).Sender) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x20000
+	}
+	if len((*z).BitmaskSender) == 0 {
+		zb0011Len--
+		zb0011Mask |= 0x40000
+	}
+	// variable map header, size zb0011Len
+	o = msgp.AppendMapHeader(o, zb0011Len)
+	if zb0011Len != 0 {
+		if (zb0011Mask & 0x2) == 0 { // if not empty
+			// string "fee"
+			o = append(o, 0xa3, 0x66, 0x65, 0x65)
+			if (*z).Fee == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Fee)))
+			}
+			for zb0002 := range (*z).Fee {
+				o = (*z).Fee[zb0002].MarshalMsg(o)
+			}
+		}
+		if (zb0011Mask & 0x4) == 0 { // if not empty
+			// string "feebm"
+			o = append(o, 0xa5, 0x66, 0x65, 0x65, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).BitmaskFee))
+		}
+		if (zb0011Mask & 0x8) == 0 { // if not empty
+			// string "fv"
+			o = append(o, 0xa2, 0x66, 0x76)
+			if (*z).FirstValid == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).FirstValid)))
+			}
+			for zb0003 := range (*z).FirstValid {
+				o = (*z).FirstValid[zb0003].MarshalMsg(o)
+			}
+		}
+		if (zb0011Mask & 0x10) == 0 { // if not empty
+			// string "fvbm"
+			o = append(o, 0xa4, 0x66, 0x76, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).BitmaskFirstValid))
+		}
+		if (zb0011Mask & 0x20) == 0 { // if not empty
+			// string "gen"
+			o = append(o, 0xa3, 0x67, 0x65, 0x6e)
+			if (*z).GenesisID == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).GenesisID)))
+			}
+			for zb0006 := range (*z).GenesisID {
+				o = msgp.AppendString(o, (*z).GenesisID[zb0006])
+			}
+		}
+		if (zb0011Mask & 0x40) == 0 { // if not empty
+			// string "genbm"
+			o = append(o, 0xa5, 0x67, 0x65, 0x6e, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).BitmaskGenesisID))
+		}
+		if (zb0011Mask & 0x80) == 0 { // if not empty
+			// string "gh"
+			o = append(o, 0xa2, 0x67, 0x68)
+			if (*z).GenesisHash == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).GenesisHash)))
+			}
+			for zb0007 := range (*z).GenesisHash {
+				o = (*z).GenesisHash[zb0007].MarshalMsg(o)
+			}
+		}
+		if (zb0011Mask & 0x100) == 0 { // if not empty
+			// string "ghbm"
+			o = append(o, 0xa4, 0x67, 0x68, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).BitmaskGenesisHash))
+		}
+		if (zb0011Mask & 0x200) == 0 { // if not empty
+			// string "lv"
+			o = append(o, 0xa2, 0x6c, 0x76)
+			if (*z).LastValid == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).LastValid)))
+			}
+			for zb0004 := range (*z).LastValid {
+				o = (*z).LastValid[zb0004].MarshalMsg(o)
+			}
+		}
+		if (zb0011Mask & 0x400) == 0 { // if not empty
+			// string "lvbm"
+			o = append(o, 0xa4, 0x6c, 0x76, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).BitmaskLastValid))
+		}
+		if (zb0011Mask & 0x800) == 0 { // if not empty
+			// string "lx"
+			o = append(o, 0xa2, 0x6c, 0x78)
+			if (*z).Lease == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Lease)))
+			}
+			for zb0008 := range (*z).Lease {
+				o = msgp.AppendBytes(o, ((*z).Lease[zb0008])[:])
+			}
+		}
+		if (zb0011Mask & 0x1000) == 0 { // if not empty
+			// string "lxbm"
+			o = append(o, 0xa4, 0x6c, 0x78, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).BitmaskLease))
+		}
+		if (zb0011Mask & 0x2000) == 0 { // if not empty
+			// string "note"
+			o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
+			if (*z).Note == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Note)))
+			}
+			for zb0005 := range (*z).Note {
+				o = msgp.AppendBytes(o, (*z).Note[zb0005])
+			}
+		}
+		if (zb0011Mask & 0x4000) == 0 { // if not empty
+			// string "notebm"
+			o = append(o, 0xa6, 0x6e, 0x6f, 0x74, 0x65, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).BitmaskNote))
+		}
+		if (zb0011Mask & 0x8000) == 0 { // if not empty
+			// string "rekey"
+			o = append(o, 0xa5, 0x72, 0x65, 0x6b, 0x65, 0x79)
+			if (*z).RekeyTo == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).RekeyTo)))
+			}
+			for zb0010 := range (*z).RekeyTo {
+				o = (*z).RekeyTo[zb0010].MarshalMsg(o)
+			}
+		}
+		if (zb0011Mask & 0x10000) == 0 { // if not empty
+			// string "rekeybm"
+			o = append(o, 0xa7, 0x72, 0x65, 0x6b, 0x65, 0x79, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).BitmaskRekeyTo))
+		}
+		if (zb0011Mask & 0x20000) == 0 { // if not empty
+			// string "snd"
+			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
+			if (*z).Sender == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Sender)))
+			}
+			for zb0001 := range (*z).Sender {
+				o = (*z).Sender[zb0001].MarshalMsg(o)
+			}
+		}
+		if (zb0011Mask & 0x40000) == 0 { // if not empty
+			// string "sndbm"
+			o = append(o, 0xa5, 0x73, 0x6e, 0x64, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).BitmaskSender))
+		}
+	}
+	return
+}
+
+func (_ *encodedTxnHeaders) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedTxnHeaders)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0011 int
+	var zb0012 bool
+	zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0011 > 0 {
+			zb0011--
+			var zb0013 int
+			var zb0014 bool
+			zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				return
+			}
+			if zb0013 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0013), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				return
+			}
+			if zb0014 {
+				(*z).Sender = nil
+			} else if (*z).Sender != nil && cap((*z).Sender) >= zb0013 {
+				(*z).Sender = ((*z).Sender)[:zb0013]
+			} else {
+				(*z).Sender = make([]basics.Address, zb0013)
+			}
+			for zb0001 := range (*z).Sender {
+				bts, err = (*z).Sender[zb0001].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Sender", zb0001)
+					return
+				}
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			{
+				var zb0015 []byte
+				zb0015, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskSender))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskSender")
+					return
+				}
+				(*z).BitmaskSender = bitmask(zb0015)
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			var zb0016 int
+			var zb0017 bool
+			zb0016, zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Fee")
+				return
+			}
+			if zb0016 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0016), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Fee")
+				return
+			}
+			if zb0017 {
+				(*z).Fee = nil
+			} else if (*z).Fee != nil && cap((*z).Fee) >= zb0016 {
+				(*z).Fee = ((*z).Fee)[:zb0016]
+			} else {
+				(*z).Fee = make([]basics.MicroAlgos, zb0016)
+			}
+			for zb0002 := range (*z).Fee {
+				bts, err = (*z).Fee[zb0002].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Fee", zb0002)
+					return
+				}
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			{
+				var zb0018 []byte
+				zb0018, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskFee))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskFee")
+					return
+				}
+				(*z).BitmaskFee = bitmask(zb0018)
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			var zb0019 int
+			var zb0020 bool
+			zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
+				return
+			}
+			if zb0019 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0019), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
+				return
+			}
+			if zb0020 {
+				(*z).FirstValid = nil
+			} else if (*z).FirstValid != nil && cap((*z).FirstValid) >= zb0019 {
+				(*z).FirstValid = ((*z).FirstValid)[:zb0019]
+			} else {
+				(*z).FirstValid = make([]basics.Round, zb0019)
+			}
+			for zb0003 := range (*z).FirstValid {
+				bts, err = (*z).FirstValid[zb0003].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "FirstValid", zb0003)
+					return
+				}
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			{
+				var zb0021 []byte
+				zb0021, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskFirstValid))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskFirstValid")
+					return
+				}
+				(*z).BitmaskFirstValid = bitmask(zb0021)
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			var zb0022 int
+			var zb0023 bool
+			zb0022, zb0023, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LastValid")
+				return
+			}
+			if zb0022 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0022), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "LastValid")
+				return
+			}
+			if zb0023 {
+				(*z).LastValid = nil
+			} else if (*z).LastValid != nil && cap((*z).LastValid) >= zb0022 {
+				(*z).LastValid = ((*z).LastValid)[:zb0022]
+			} else {
+				(*z).LastValid = make([]basics.Round, zb0022)
+			}
+			for zb0004 := range (*z).LastValid {
+				bts, err = (*z).LastValid[zb0004].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "LastValid", zb0004)
+					return
+				}
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			{
+				var zb0024 []byte
+				zb0024, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskLastValid))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskLastValid")
+					return
+				}
+				(*z).BitmaskLastValid = bitmask(zb0024)
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			var zb0025 int
+			var zb0026 bool
+			zb0025, zb0026, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Note")
+				return
+			}
+			if zb0025 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0025), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Note")
+				return
+			}
+			if zb0026 {
+				(*z).Note = nil
+			} else if (*z).Note != nil && cap((*z).Note) >= zb0025 {
+				(*z).Note = ((*z).Note)[:zb0025]
+			} else {
+				(*z).Note = make([][]byte, zb0025)
+			}
+			for zb0005 := range (*z).Note {
+				(*z).Note[zb0005], bts, err = msgp.ReadBytesBytes(bts, (*z).Note[zb0005])
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Note", zb0005)
+					return
+				}
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			{
+				var zb0027 []byte
+				zb0027, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskNote))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskNote")
+					return
+				}
+				(*z).BitmaskNote = bitmask(zb0027)
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			var zb0028 int
+			var zb0029 bool
+			zb0028, zb0029, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0028 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0028), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0029 {
+				(*z).GenesisID = nil
+			} else if (*z).GenesisID != nil && cap((*z).GenesisID) >= zb0028 {
+				(*z).GenesisID = ((*z).GenesisID)[:zb0028]
+			} else {
+				(*z).GenesisID = make([]string, zb0028)
+			}
+			for zb0006 := range (*z).GenesisID {
+				(*z).GenesisID[zb0006], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "GenesisID", zb0006)
+					return
+				}
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			{
+				var zb0030 []byte
+				zb0030, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskGenesisID))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskGenesisID")
+					return
+				}
+				(*z).BitmaskGenesisID = bitmask(zb0030)
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			var zb0031 int
+			var zb0032 bool
+			zb0031, zb0032, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				return
+			}
+			if zb0031 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0031), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				return
+			}
+			if zb0032 {
+				(*z).GenesisHash = nil
+			} else if (*z).GenesisHash != nil && cap((*z).GenesisHash) >= zb0031 {
+				(*z).GenesisHash = ((*z).GenesisHash)[:zb0031]
+			} else {
+				(*z).GenesisHash = make([]crypto.Digest, zb0031)
+			}
+			for zb0007 := range (*z).GenesisHash {
+				bts, err = (*z).GenesisHash[zb0007].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "GenesisHash", zb0007)
+					return
+				}
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			{
+				var zb0033 []byte
+				zb0033, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskGenesisHash))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskGenesisHash")
+					return
+				}
+				(*z).BitmaskGenesisHash = bitmask(zb0033)
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			var zb0034 int
+			var zb0035 bool
+			zb0034, zb0035, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Lease")
+				return
+			}
+			if zb0034 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0034), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Lease")
+				return
+			}
+			if zb0035 {
+				(*z).Lease = nil
+			} else if (*z).Lease != nil && cap((*z).Lease) >= zb0034 {
+				(*z).Lease = ((*z).Lease)[:zb0034]
+			} else {
+				(*z).Lease = make([][32]byte, zb0034)
+			}
+			for zb0008 := range (*z).Lease {
+				bts, err = msgp.ReadExactBytes(bts, ((*z).Lease[zb0008])[:])
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Lease", zb0008)
+					return
+				}
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			{
+				var zb0036 []byte
+				zb0036, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskLease))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskLease")
+					return
+				}
+				(*z).BitmaskLease = bitmask(zb0036)
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			var zb0037 int
+			var zb0038 bool
+			zb0037, zb0038, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RekeyTo")
+				return
+			}
+			if zb0037 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0037), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "RekeyTo")
+				return
+			}
+			if zb0038 {
+				(*z).RekeyTo = nil
+			} else if (*z).RekeyTo != nil && cap((*z).RekeyTo) >= zb0037 {
+				(*z).RekeyTo = ((*z).RekeyTo)[:zb0037]
+			} else {
+				(*z).RekeyTo = make([]basics.Address, zb0037)
+			}
+			for zb0010 := range (*z).RekeyTo {
+				bts, err = (*z).RekeyTo[zb0010].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "RekeyTo", zb0010)
+					return
+				}
+			}
+		}
+		if zb0011 > 0 {
+			zb0011--
+			{
+				var zb0039 []byte
+				zb0039, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskRekeyTo))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskRekeyTo")
+					return
+				}
+				(*z).BitmaskRekeyTo = bitmask(zb0039)
+			}
+		}
+		if zb0011 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0011)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0012 {
+			(*z) = encodedTxnHeaders{}
+		}
+		for zb0011 > 0 {
+			zb0011--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "snd":
+				var zb0040 int
+				var zb0041 bool
+				zb0040, zb0041, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Sender")
+					return
+				}
+				if zb0040 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0040), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Sender")
+					return
+				}
+				if zb0041 {
+					(*z).Sender = nil
+				} else if (*z).Sender != nil && cap((*z).Sender) >= zb0040 {
+					(*z).Sender = ((*z).Sender)[:zb0040]
+				} else {
+					(*z).Sender = make([]basics.Address, zb0040)
+				}
+				for zb0001 := range (*z).Sender {
+					bts, err = (*z).Sender[zb0001].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Sender", zb0001)
+						return
+					}
+				}
+			case "sndbm":
+				{
+					var zb0042 []byte
+					zb0042, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskSender))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskSender")
+						return
+					}
+					(*z).BitmaskSender = bitmask(zb0042)
+				}
+			case "fee":
+				var zb0043 int
+				var zb0044 bool
+				zb0043, zb0044, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Fee")
+					return
+				}
+				if zb0043 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0043), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Fee")
+					return
+				}
+				if zb0044 {
+					(*z).Fee = nil
+				} else if (*z).Fee != nil && cap((*z).Fee) >= zb0043 {
+					(*z).Fee = ((*z).Fee)[:zb0043]
+				} else {
+					(*z).Fee = make([]basics.MicroAlgos, zb0043)
+				}
+				for zb0002 := range (*z).Fee {
+					bts, err = (*z).Fee[zb0002].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Fee", zb0002)
+						return
+					}
+				}
+			case "feebm":
+				{
+					var zb0045 []byte
+					zb0045, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskFee))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskFee")
+						return
+					}
+					(*z).BitmaskFee = bitmask(zb0045)
+				}
+			case "fv":
+				var zb0046 int
+				var zb0047 bool
+				zb0046, zb0047, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstValid")
+					return
+				}
+				if zb0046 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0046), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "FirstValid")
+					return
+				}
+				if zb0047 {
+					(*z).FirstValid = nil
+				} else if (*z).FirstValid != nil && cap((*z).FirstValid) >= zb0046 {
+					(*z).FirstValid = ((*z).FirstValid)[:zb0046]
+				} else {
+					(*z).FirstValid = make([]basics.Round, zb0046)
+				}
+				for zb0003 := range (*z).FirstValid {
+					bts, err = (*z).FirstValid[zb0003].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "FirstValid", zb0003)
+						return
+					}
+				}
+			case "fvbm":
+				{
+					var zb0048 []byte
+					zb0048, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskFirstValid))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskFirstValid")
+						return
+					}
+					(*z).BitmaskFirstValid = bitmask(zb0048)
+				}
+			case "lv":
+				var zb0049 int
+				var zb0050 bool
+				zb0049, zb0050, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "LastValid")
+					return
+				}
+				if zb0049 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0049), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "LastValid")
+					return
+				}
+				if zb0050 {
+					(*z).LastValid = nil
+				} else if (*z).LastValid != nil && cap((*z).LastValid) >= zb0049 {
+					(*z).LastValid = ((*z).LastValid)[:zb0049]
+				} else {
+					(*z).LastValid = make([]basics.Round, zb0049)
+				}
+				for zb0004 := range (*z).LastValid {
+					bts, err = (*z).LastValid[zb0004].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "LastValid", zb0004)
+						return
+					}
+				}
+			case "lvbm":
+				{
+					var zb0051 []byte
+					zb0051, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskLastValid))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskLastValid")
+						return
+					}
+					(*z).BitmaskLastValid = bitmask(zb0051)
+				}
+			case "note":
+				var zb0052 int
+				var zb0053 bool
+				zb0052, zb0053, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Note")
+					return
+				}
+				if zb0052 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0052), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Note")
+					return
+				}
+				if zb0053 {
+					(*z).Note = nil
+				} else if (*z).Note != nil && cap((*z).Note) >= zb0052 {
+					(*z).Note = ((*z).Note)[:zb0052]
+				} else {
+					(*z).Note = make([][]byte, zb0052)
+				}
+				for zb0005 := range (*z).Note {
+					(*z).Note[zb0005], bts, err = msgp.ReadBytesBytes(bts, (*z).Note[zb0005])
+					if err != nil {
+						err = msgp.WrapError(err, "Note", zb0005)
+						return
+					}
+				}
+			case "notebm":
+				{
+					var zb0054 []byte
+					zb0054, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskNote))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskNote")
+						return
+					}
+					(*z).BitmaskNote = bitmask(zb0054)
+				}
+			case "gen":
+				var zb0055 int
+				var zb0056 bool
+				zb0055, zb0056, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0055 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0055), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0056 {
+					(*z).GenesisID = nil
+				} else if (*z).GenesisID != nil && cap((*z).GenesisID) >= zb0055 {
+					(*z).GenesisID = ((*z).GenesisID)[:zb0055]
+				} else {
+					(*z).GenesisID = make([]string, zb0055)
+				}
+				for zb0006 := range (*z).GenesisID {
+					(*z).GenesisID[zb0006], bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "GenesisID", zb0006)
+						return
+					}
+				}
+			case "genbm":
+				{
+					var zb0057 []byte
+					zb0057, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskGenesisID))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskGenesisID")
+						return
+					}
+					(*z).BitmaskGenesisID = bitmask(zb0057)
+				}
+			case "gh":
+				var zb0058 int
+				var zb0059 bool
+				zb0058, zb0059, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+				if zb0058 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0058), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+				if zb0059 {
+					(*z).GenesisHash = nil
+				} else if (*z).GenesisHash != nil && cap((*z).GenesisHash) >= zb0058 {
+					(*z).GenesisHash = ((*z).GenesisHash)[:zb0058]
+				} else {
+					(*z).GenesisHash = make([]crypto.Digest, zb0058)
+				}
+				for zb0007 := range (*z).GenesisHash {
+					bts, err = (*z).GenesisHash[zb0007].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "GenesisHash", zb0007)
+						return
+					}
+				}
+			case "ghbm":
+				{
+					var zb0060 []byte
+					zb0060, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskGenesisHash))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskGenesisHash")
+						return
+					}
+					(*z).BitmaskGenesisHash = bitmask(zb0060)
+				}
+			case "lx":
+				var zb0061 int
+				var zb0062 bool
+				zb0061, zb0062, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Lease")
+					return
+				}
+				if zb0061 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0061), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Lease")
+					return
+				}
+				if zb0062 {
+					(*z).Lease = nil
+				} else if (*z).Lease != nil && cap((*z).Lease) >= zb0061 {
+					(*z).Lease = ((*z).Lease)[:zb0061]
+				} else {
+					(*z).Lease = make([][32]byte, zb0061)
+				}
+				for zb0008 := range (*z).Lease {
+					bts, err = msgp.ReadExactBytes(bts, ((*z).Lease[zb0008])[:])
+					if err != nil {
+						err = msgp.WrapError(err, "Lease", zb0008)
+						return
+					}
+				}
+			case "lxbm":
+				{
+					var zb0063 []byte
+					zb0063, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskLease))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskLease")
+						return
+					}
+					(*z).BitmaskLease = bitmask(zb0063)
+				}
+			case "rekey":
+				var zb0064 int
+				var zb0065 bool
+				zb0064, zb0065, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RekeyTo")
+					return
+				}
+				if zb0064 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0064), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "RekeyTo")
+					return
+				}
+				if zb0065 {
+					(*z).RekeyTo = nil
+				} else if (*z).RekeyTo != nil && cap((*z).RekeyTo) >= zb0064 {
+					(*z).RekeyTo = ((*z).RekeyTo)[:zb0064]
+				} else {
+					(*z).RekeyTo = make([]basics.Address, zb0064)
+				}
+				for zb0010 := range (*z).RekeyTo {
+					bts, err = (*z).RekeyTo[zb0010].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "RekeyTo", zb0010)
+						return
+					}
+				}
+			case "rekeybm":
+				{
+					var zb0066 []byte
+					zb0066, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).BitmaskRekeyTo))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskRekeyTo")
+						return
+					}
+					(*z).BitmaskRekeyTo = bitmask(zb0066)
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *encodedTxnHeaders) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*encodedTxnHeaders)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *encodedTxnHeaders) Msgsize() (s int) {
+	s = 3 + 4 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Sender {
+		s += (*z).Sender[zb0001].Msgsize()
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskSender)) + 4 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).Fee {
+		s += (*z).Fee[zb0002].Msgsize()
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskFee)) + 3 + msgp.ArrayHeaderSize
+	for zb0003 := range (*z).FirstValid {
+		s += (*z).FirstValid[zb0003].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskFirstValid)) + 3 + msgp.ArrayHeaderSize
+	for zb0004 := range (*z).LastValid {
+		s += (*z).LastValid[zb0004].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskLastValid)) + 5 + msgp.ArrayHeaderSize
+	for zb0005 := range (*z).Note {
+		s += msgp.BytesPrefixSize + len((*z).Note[zb0005])
+	}
+	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskNote)) + 4 + msgp.ArrayHeaderSize
+	for zb0006 := range (*z).GenesisID {
+		s += msgp.StringPrefixSize + len((*z).GenesisID[zb0006])
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskGenesisID)) + 3 + msgp.ArrayHeaderSize
+	for zb0007 := range (*z).GenesisHash {
+		s += (*z).GenesisHash[zb0007].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskGenesisHash)) + 3 + msgp.ArrayHeaderSize + (len((*z).Lease) * (32 * (msgp.ByteSize))) + 5 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskLease)) + 6 + msgp.ArrayHeaderSize
+	for zb0010 := range (*z).RekeyTo {
+		s += (*z).RekeyTo[zb0010].Msgsize()
+	}
+	s += 8 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskRekeyTo))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *encodedTxnHeaders) MsgIsZero() bool {
+	return (len((*z).Sender) == 0) && (len((*z).BitmaskSender) == 0) && (len((*z).Fee) == 0) && (len((*z).BitmaskFee) == 0) && (len((*z).FirstValid) == 0) && (len((*z).BitmaskFirstValid) == 0) && (len((*z).LastValid) == 0) && (len((*z).BitmaskLastValid) == 0) && (len((*z).Note) == 0) && (len((*z).BitmaskNote) == 0) && (len((*z).GenesisID) == 0) && (len((*z).BitmaskGenesisID) == 0) && (len((*z).GenesisHash) == 0) && (len((*z).BitmaskGenesisHash) == 0) && (len((*z).Lease) == 0) && (len((*z).BitmaskLease) == 0) && (len((*z).RekeyTo) == 0) && (len((*z).BitmaskRekeyTo) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(1)
-	var zb0002Mask uint8 /* 2 bits */
-	if len((*z).TxType) == 0 {
-		zb0002Len--
-		zb0002Mask |= 0x2
+	zb0012Len := uint32(19)
+	var zb0012Mask uint32 /* 21 bits */
+	if len((*z).encodedTxnHeaders.Fee) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x4
 	}
-	// variable map header, size zb0002Len
-	o = append(o, 0x80|uint8(zb0002Len))
-	if zb0002Len != 0 {
-		if (zb0002Mask & 0x2) == 0 { // if not empty
+	if len((*z).encodedTxnHeaders.BitmaskFee) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x8
+	}
+	if len((*z).encodedTxnHeaders.FirstValid) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x10
+	}
+	if len((*z).encodedTxnHeaders.BitmaskFirstValid) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x20
+	}
+	if len((*z).encodedTxnHeaders.GenesisID) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x40
+	}
+	if len((*z).encodedTxnHeaders.BitmaskGenesisID) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x80
+	}
+	if len((*z).encodedTxnHeaders.GenesisHash) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x100
+	}
+	if len((*z).encodedTxnHeaders.BitmaskGenesisHash) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x200
+	}
+	if len((*z).encodedTxnHeaders.LastValid) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x400
+	}
+	if len((*z).encodedTxnHeaders.BitmaskLastValid) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x800
+	}
+	if len((*z).encodedTxnHeaders.Lease) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x1000
+	}
+	if len((*z).encodedTxnHeaders.BitmaskLease) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x2000
+	}
+	if len((*z).encodedTxnHeaders.Note) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x4000
+	}
+	if len((*z).encodedTxnHeaders.BitmaskNote) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x8000
+	}
+	if len((*z).encodedTxnHeaders.RekeyTo) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x10000
+	}
+	if len((*z).encodedTxnHeaders.BitmaskRekeyTo) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x20000
+	}
+	if len((*z).encodedTxnHeaders.Sender) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x40000
+	}
+	if len((*z).encodedTxnHeaders.BitmaskSender) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x80000
+	}
+	if len((*z).TxType) == 0 {
+		zb0012Len--
+		zb0012Mask |= 0x100000
+	}
+	// variable map header, size zb0012Len
+	o = msgp.AppendMapHeader(o, zb0012Len)
+	if zb0012Len != 0 {
+		if (zb0012Mask & 0x4) == 0 { // if not empty
+			// string "fee"
+			o = append(o, 0xa3, 0x66, 0x65, 0x65)
+			if (*z).encodedTxnHeaders.Fee == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxnHeaders.Fee)))
+			}
+			for zb0003 := range (*z).encodedTxnHeaders.Fee {
+				o = (*z).encodedTxnHeaders.Fee[zb0003].MarshalMsg(o)
+			}
+		}
+		if (zb0012Mask & 0x8) == 0 { // if not empty
+			// string "feebm"
+			o = append(o, 0xa5, 0x66, 0x65, 0x65, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskFee))
+		}
+		if (zb0012Mask & 0x10) == 0 { // if not empty
+			// string "fv"
+			o = append(o, 0xa2, 0x66, 0x76)
+			if (*z).encodedTxnHeaders.FirstValid == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxnHeaders.FirstValid)))
+			}
+			for zb0004 := range (*z).encodedTxnHeaders.FirstValid {
+				o = (*z).encodedTxnHeaders.FirstValid[zb0004].MarshalMsg(o)
+			}
+		}
+		if (zb0012Mask & 0x20) == 0 { // if not empty
+			// string "fvbm"
+			o = append(o, 0xa4, 0x66, 0x76, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskFirstValid))
+		}
+		if (zb0012Mask & 0x40) == 0 { // if not empty
+			// string "gen"
+			o = append(o, 0xa3, 0x67, 0x65, 0x6e)
+			if (*z).encodedTxnHeaders.GenesisID == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxnHeaders.GenesisID)))
+			}
+			for zb0007 := range (*z).encodedTxnHeaders.GenesisID {
+				o = msgp.AppendString(o, (*z).encodedTxnHeaders.GenesisID[zb0007])
+			}
+		}
+		if (zb0012Mask & 0x80) == 0 { // if not empty
+			// string "genbm"
+			o = append(o, 0xa5, 0x67, 0x65, 0x6e, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskGenesisID))
+		}
+		if (zb0012Mask & 0x100) == 0 { // if not empty
+			// string "gh"
+			o = append(o, 0xa2, 0x67, 0x68)
+			if (*z).encodedTxnHeaders.GenesisHash == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxnHeaders.GenesisHash)))
+			}
+			for zb0008 := range (*z).encodedTxnHeaders.GenesisHash {
+				o = (*z).encodedTxnHeaders.GenesisHash[zb0008].MarshalMsg(o)
+			}
+		}
+		if (zb0012Mask & 0x200) == 0 { // if not empty
+			// string "ghbm"
+			o = append(o, 0xa4, 0x67, 0x68, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskGenesisHash))
+		}
+		if (zb0012Mask & 0x400) == 0 { // if not empty
+			// string "lv"
+			o = append(o, 0xa2, 0x6c, 0x76)
+			if (*z).encodedTxnHeaders.LastValid == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxnHeaders.LastValid)))
+			}
+			for zb0005 := range (*z).encodedTxnHeaders.LastValid {
+				o = (*z).encodedTxnHeaders.LastValid[zb0005].MarshalMsg(o)
+			}
+		}
+		if (zb0012Mask & 0x800) == 0 { // if not empty
+			// string "lvbm"
+			o = append(o, 0xa4, 0x6c, 0x76, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskLastValid))
+		}
+		if (zb0012Mask & 0x1000) == 0 { // if not empty
+			// string "lx"
+			o = append(o, 0xa2, 0x6c, 0x78)
+			if (*z).encodedTxnHeaders.Lease == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxnHeaders.Lease)))
+			}
+			for zb0009 := range (*z).encodedTxnHeaders.Lease {
+				o = msgp.AppendBytes(o, ((*z).encodedTxnHeaders.Lease[zb0009])[:])
+			}
+		}
+		if (zb0012Mask & 0x2000) == 0 { // if not empty
+			// string "lxbm"
+			o = append(o, 0xa4, 0x6c, 0x78, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskLease))
+		}
+		if (zb0012Mask & 0x4000) == 0 { // if not empty
+			// string "note"
+			o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
+			if (*z).encodedTxnHeaders.Note == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxnHeaders.Note)))
+			}
+			for zb0006 := range (*z).encodedTxnHeaders.Note {
+				o = msgp.AppendBytes(o, (*z).encodedTxnHeaders.Note[zb0006])
+			}
+		}
+		if (zb0012Mask & 0x8000) == 0 { // if not empty
+			// string "notebm"
+			o = append(o, 0xa6, 0x6e, 0x6f, 0x74, 0x65, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskNote))
+		}
+		if (zb0012Mask & 0x10000) == 0 { // if not empty
+			// string "rekey"
+			o = append(o, 0xa5, 0x72, 0x65, 0x6b, 0x65, 0x79)
+			if (*z).encodedTxnHeaders.RekeyTo == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxnHeaders.RekeyTo)))
+			}
+			for zb0011 := range (*z).encodedTxnHeaders.RekeyTo {
+				o = (*z).encodedTxnHeaders.RekeyTo[zb0011].MarshalMsg(o)
+			}
+		}
+		if (zb0012Mask & 0x20000) == 0 { // if not empty
+			// string "rekeybm"
+			o = append(o, 0xa7, 0x72, 0x65, 0x6b, 0x65, 0x79, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskRekeyTo))
+		}
+		if (zb0012Mask & 0x40000) == 0 { // if not empty
+			// string "snd"
+			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
+			if (*z).encodedTxnHeaders.Sender == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedTxnHeaders.Sender)))
+			}
+			for zb0002 := range (*z).encodedTxnHeaders.Sender {
+				o = (*z).encodedTxnHeaders.Sender[zb0002].MarshalMsg(o)
+			}
+		}
+		if (zb0012Mask & 0x80000) == 0 { // if not empty
+			// string "sndbm"
+			o = append(o, 0xa5, 0x73, 0x6e, 0x64, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskSender))
+		}
+		if (zb0012Mask & 0x100000) == 0 { // if not empty
 			// string "type"
 			o = append(o, 0xa4, 0x74, 0x79, 0x70, 0x65)
 			if (*z).TxType == nil {
@@ -1107,35 +3972,35 @@ func (_ *encodedTxns) CanMarshalMsg(z interface{}) bool {
 func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 int
-	var zb0003 bool
-	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0012 int
+	var zb0013 bool
+	zb0012, zb0013, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
-			var zb0004 int
-			var zb0005 bool
-			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0012 > 0 {
+			zb0012--
+			var zb0014 int
+			var zb0015 bool
+			zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TxType")
 				return
 			}
-			if zb0004 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxEncodedTransactionGroup))
+			if zb0014 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0014), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "TxType")
 				return
 			}
-			if zb0005 {
+			if zb0015 {
 				(*z).TxType = nil
-			} else if (*z).TxType != nil && cap((*z).TxType) >= zb0004 {
-				(*z).TxType = ((*z).TxType)[:zb0004]
+			} else if (*z).TxType != nil && cap((*z).TxType) >= zb0014 {
+				(*z).TxType = ((*z).TxType)[:zb0014]
 			} else {
-				(*z).TxType = make([]protocol.TxType, zb0004)
+				(*z).TxType = make([]protocol.TxType, zb0014)
 			}
 			for zb0001 := range (*z).TxType {
 				bts, err = (*z).TxType[zb0001].UnmarshalMsg(bts)
@@ -1145,8 +4010,377 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
+		if zb0012 > 0 {
+			zb0012--
+			var zb0016 int
+			var zb0017 bool
+			zb0016, zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				return
+			}
+			if zb0016 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0016), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				return
+			}
+			if zb0017 {
+				(*z).encodedTxnHeaders.Sender = nil
+			} else if (*z).encodedTxnHeaders.Sender != nil && cap((*z).encodedTxnHeaders.Sender) >= zb0016 {
+				(*z).encodedTxnHeaders.Sender = ((*z).encodedTxnHeaders.Sender)[:zb0016]
+			} else {
+				(*z).encodedTxnHeaders.Sender = make([]basics.Address, zb0016)
+			}
+			for zb0002 := range (*z).encodedTxnHeaders.Sender {
+				bts, err = (*z).encodedTxnHeaders.Sender[zb0002].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Sender", zb0002)
+					return
+				}
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			{
+				var zb0018 []byte
+				zb0018, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskSender))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskSender")
+					return
+				}
+				(*z).encodedTxnHeaders.BitmaskSender = bitmask(zb0018)
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			var zb0019 int
+			var zb0020 bool
+			zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Fee")
+				return
+			}
+			if zb0019 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0019), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Fee")
+				return
+			}
+			if zb0020 {
+				(*z).encodedTxnHeaders.Fee = nil
+			} else if (*z).encodedTxnHeaders.Fee != nil && cap((*z).encodedTxnHeaders.Fee) >= zb0019 {
+				(*z).encodedTxnHeaders.Fee = ((*z).encodedTxnHeaders.Fee)[:zb0019]
+			} else {
+				(*z).encodedTxnHeaders.Fee = make([]basics.MicroAlgos, zb0019)
+			}
+			for zb0003 := range (*z).encodedTxnHeaders.Fee {
+				bts, err = (*z).encodedTxnHeaders.Fee[zb0003].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Fee", zb0003)
+					return
+				}
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			{
+				var zb0021 []byte
+				zb0021, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskFee))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskFee")
+					return
+				}
+				(*z).encodedTxnHeaders.BitmaskFee = bitmask(zb0021)
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			var zb0022 int
+			var zb0023 bool
+			zb0022, zb0023, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
+				return
+			}
+			if zb0022 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0022), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
+				return
+			}
+			if zb0023 {
+				(*z).encodedTxnHeaders.FirstValid = nil
+			} else if (*z).encodedTxnHeaders.FirstValid != nil && cap((*z).encodedTxnHeaders.FirstValid) >= zb0022 {
+				(*z).encodedTxnHeaders.FirstValid = ((*z).encodedTxnHeaders.FirstValid)[:zb0022]
+			} else {
+				(*z).encodedTxnHeaders.FirstValid = make([]basics.Round, zb0022)
+			}
+			for zb0004 := range (*z).encodedTxnHeaders.FirstValid {
+				bts, err = (*z).encodedTxnHeaders.FirstValid[zb0004].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "FirstValid", zb0004)
+					return
+				}
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			{
+				var zb0024 []byte
+				zb0024, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskFirstValid))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskFirstValid")
+					return
+				}
+				(*z).encodedTxnHeaders.BitmaskFirstValid = bitmask(zb0024)
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			var zb0025 int
+			var zb0026 bool
+			zb0025, zb0026, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LastValid")
+				return
+			}
+			if zb0025 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0025), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "LastValid")
+				return
+			}
+			if zb0026 {
+				(*z).encodedTxnHeaders.LastValid = nil
+			} else if (*z).encodedTxnHeaders.LastValid != nil && cap((*z).encodedTxnHeaders.LastValid) >= zb0025 {
+				(*z).encodedTxnHeaders.LastValid = ((*z).encodedTxnHeaders.LastValid)[:zb0025]
+			} else {
+				(*z).encodedTxnHeaders.LastValid = make([]basics.Round, zb0025)
+			}
+			for zb0005 := range (*z).encodedTxnHeaders.LastValid {
+				bts, err = (*z).encodedTxnHeaders.LastValid[zb0005].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "LastValid", zb0005)
+					return
+				}
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			{
+				var zb0027 []byte
+				zb0027, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskLastValid))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskLastValid")
+					return
+				}
+				(*z).encodedTxnHeaders.BitmaskLastValid = bitmask(zb0027)
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			var zb0028 int
+			var zb0029 bool
+			zb0028, zb0029, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Note")
+				return
+			}
+			if zb0028 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0028), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Note")
+				return
+			}
+			if zb0029 {
+				(*z).encodedTxnHeaders.Note = nil
+			} else if (*z).encodedTxnHeaders.Note != nil && cap((*z).encodedTxnHeaders.Note) >= zb0028 {
+				(*z).encodedTxnHeaders.Note = ((*z).encodedTxnHeaders.Note)[:zb0028]
+			} else {
+				(*z).encodedTxnHeaders.Note = make([][]byte, zb0028)
+			}
+			for zb0006 := range (*z).encodedTxnHeaders.Note {
+				(*z).encodedTxnHeaders.Note[zb0006], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedTxnHeaders.Note[zb0006])
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Note", zb0006)
+					return
+				}
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			{
+				var zb0030 []byte
+				zb0030, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskNote))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskNote")
+					return
+				}
+				(*z).encodedTxnHeaders.BitmaskNote = bitmask(zb0030)
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			var zb0031 int
+			var zb0032 bool
+			zb0031, zb0032, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0031 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0031), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0032 {
+				(*z).encodedTxnHeaders.GenesisID = nil
+			} else if (*z).encodedTxnHeaders.GenesisID != nil && cap((*z).encodedTxnHeaders.GenesisID) >= zb0031 {
+				(*z).encodedTxnHeaders.GenesisID = ((*z).encodedTxnHeaders.GenesisID)[:zb0031]
+			} else {
+				(*z).encodedTxnHeaders.GenesisID = make([]string, zb0031)
+			}
+			for zb0007 := range (*z).encodedTxnHeaders.GenesisID {
+				(*z).encodedTxnHeaders.GenesisID[zb0007], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "GenesisID", zb0007)
+					return
+				}
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			{
+				var zb0033 []byte
+				zb0033, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskGenesisID))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskGenesisID")
+					return
+				}
+				(*z).encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0033)
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			var zb0034 int
+			var zb0035 bool
+			zb0034, zb0035, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				return
+			}
+			if zb0034 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0034), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				return
+			}
+			if zb0035 {
+				(*z).encodedTxnHeaders.GenesisHash = nil
+			} else if (*z).encodedTxnHeaders.GenesisHash != nil && cap((*z).encodedTxnHeaders.GenesisHash) >= zb0034 {
+				(*z).encodedTxnHeaders.GenesisHash = ((*z).encodedTxnHeaders.GenesisHash)[:zb0034]
+			} else {
+				(*z).encodedTxnHeaders.GenesisHash = make([]crypto.Digest, zb0034)
+			}
+			for zb0008 := range (*z).encodedTxnHeaders.GenesisHash {
+				bts, err = (*z).encodedTxnHeaders.GenesisHash[zb0008].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "GenesisHash", zb0008)
+					return
+				}
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			{
+				var zb0036 []byte
+				zb0036, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskGenesisHash))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskGenesisHash")
+					return
+				}
+				(*z).encodedTxnHeaders.BitmaskGenesisHash = bitmask(zb0036)
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			var zb0037 int
+			var zb0038 bool
+			zb0037, zb0038, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Lease")
+				return
+			}
+			if zb0037 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0037), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Lease")
+				return
+			}
+			if zb0038 {
+				(*z).encodedTxnHeaders.Lease = nil
+			} else if (*z).encodedTxnHeaders.Lease != nil && cap((*z).encodedTxnHeaders.Lease) >= zb0037 {
+				(*z).encodedTxnHeaders.Lease = ((*z).encodedTxnHeaders.Lease)[:zb0037]
+			} else {
+				(*z).encodedTxnHeaders.Lease = make([][32]byte, zb0037)
+			}
+			for zb0009 := range (*z).encodedTxnHeaders.Lease {
+				bts, err = msgp.ReadExactBytes(bts, ((*z).encodedTxnHeaders.Lease[zb0009])[:])
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Lease", zb0009)
+					return
+				}
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			{
+				var zb0039 []byte
+				zb0039, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskLease))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskLease")
+					return
+				}
+				(*z).encodedTxnHeaders.BitmaskLease = bitmask(zb0039)
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			var zb0040 int
+			var zb0041 bool
+			zb0040, zb0041, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RekeyTo")
+				return
+			}
+			if zb0040 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0040), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "RekeyTo")
+				return
+			}
+			if zb0041 {
+				(*z).encodedTxnHeaders.RekeyTo = nil
+			} else if (*z).encodedTxnHeaders.RekeyTo != nil && cap((*z).encodedTxnHeaders.RekeyTo) >= zb0040 {
+				(*z).encodedTxnHeaders.RekeyTo = ((*z).encodedTxnHeaders.RekeyTo)[:zb0040]
+			} else {
+				(*z).encodedTxnHeaders.RekeyTo = make([]basics.Address, zb0040)
+			}
+			for zb0011 := range (*z).encodedTxnHeaders.RekeyTo {
+				bts, err = (*z).encodedTxnHeaders.RekeyTo[zb0011].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "RekeyTo", zb0011)
+					return
+				}
+			}
+		}
+		if zb0012 > 0 {
+			zb0012--
+			{
+				var zb0042 []byte
+				zb0042, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskRekeyTo))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskRekeyTo")
+					return
+				}
+				(*z).encodedTxnHeaders.BitmaskRekeyTo = bitmask(zb0042)
+			}
+		}
+		if zb0012 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0012)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -1157,11 +4391,11 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 {
+		if zb0013 {
 			(*z) = encodedTxns{}
 		}
-		for zb0002 > 0 {
-			zb0002--
+		for zb0012 > 0 {
+			zb0012--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -1169,24 +4403,24 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "type":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0043 int
+				var zb0044 bool
+				zb0043, zb0044, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TxType")
 					return
 				}
-				if zb0006 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(maxEncodedTransactionGroup))
+				if zb0043 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0043), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "TxType")
 					return
 				}
-				if zb0007 {
+				if zb0044 {
 					(*z).TxType = nil
-				} else if (*z).TxType != nil && cap((*z).TxType) >= zb0006 {
-					(*z).TxType = ((*z).TxType)[:zb0006]
+				} else if (*z).TxType != nil && cap((*z).TxType) >= zb0043 {
+					(*z).TxType = ((*z).TxType)[:zb0043]
 				} else {
-					(*z).TxType = make([]protocol.TxType, zb0006)
+					(*z).TxType = make([]protocol.TxType, zb0043)
 				}
 				for zb0001 := range (*z).TxType {
 					bts, err = (*z).TxType[zb0001].UnmarshalMsg(bts)
@@ -1194,6 +4428,339 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "TxType", zb0001)
 						return
 					}
+				}
+			case "snd":
+				var zb0045 int
+				var zb0046 bool
+				zb0045, zb0046, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Sender")
+					return
+				}
+				if zb0045 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0045), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Sender")
+					return
+				}
+				if zb0046 {
+					(*z).encodedTxnHeaders.Sender = nil
+				} else if (*z).encodedTxnHeaders.Sender != nil && cap((*z).encodedTxnHeaders.Sender) >= zb0045 {
+					(*z).encodedTxnHeaders.Sender = ((*z).encodedTxnHeaders.Sender)[:zb0045]
+				} else {
+					(*z).encodedTxnHeaders.Sender = make([]basics.Address, zb0045)
+				}
+				for zb0002 := range (*z).encodedTxnHeaders.Sender {
+					bts, err = (*z).encodedTxnHeaders.Sender[zb0002].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Sender", zb0002)
+						return
+					}
+				}
+			case "sndbm":
+				{
+					var zb0047 []byte
+					zb0047, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskSender))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskSender")
+						return
+					}
+					(*z).encodedTxnHeaders.BitmaskSender = bitmask(zb0047)
+				}
+			case "fee":
+				var zb0048 int
+				var zb0049 bool
+				zb0048, zb0049, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Fee")
+					return
+				}
+				if zb0048 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0048), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Fee")
+					return
+				}
+				if zb0049 {
+					(*z).encodedTxnHeaders.Fee = nil
+				} else if (*z).encodedTxnHeaders.Fee != nil && cap((*z).encodedTxnHeaders.Fee) >= zb0048 {
+					(*z).encodedTxnHeaders.Fee = ((*z).encodedTxnHeaders.Fee)[:zb0048]
+				} else {
+					(*z).encodedTxnHeaders.Fee = make([]basics.MicroAlgos, zb0048)
+				}
+				for zb0003 := range (*z).encodedTxnHeaders.Fee {
+					bts, err = (*z).encodedTxnHeaders.Fee[zb0003].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Fee", zb0003)
+						return
+					}
+				}
+			case "feebm":
+				{
+					var zb0050 []byte
+					zb0050, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskFee))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskFee")
+						return
+					}
+					(*z).encodedTxnHeaders.BitmaskFee = bitmask(zb0050)
+				}
+			case "fv":
+				var zb0051 int
+				var zb0052 bool
+				zb0051, zb0052, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstValid")
+					return
+				}
+				if zb0051 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0051), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "FirstValid")
+					return
+				}
+				if zb0052 {
+					(*z).encodedTxnHeaders.FirstValid = nil
+				} else if (*z).encodedTxnHeaders.FirstValid != nil && cap((*z).encodedTxnHeaders.FirstValid) >= zb0051 {
+					(*z).encodedTxnHeaders.FirstValid = ((*z).encodedTxnHeaders.FirstValid)[:zb0051]
+				} else {
+					(*z).encodedTxnHeaders.FirstValid = make([]basics.Round, zb0051)
+				}
+				for zb0004 := range (*z).encodedTxnHeaders.FirstValid {
+					bts, err = (*z).encodedTxnHeaders.FirstValid[zb0004].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "FirstValid", zb0004)
+						return
+					}
+				}
+			case "fvbm":
+				{
+					var zb0053 []byte
+					zb0053, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskFirstValid))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskFirstValid")
+						return
+					}
+					(*z).encodedTxnHeaders.BitmaskFirstValid = bitmask(zb0053)
+				}
+			case "lv":
+				var zb0054 int
+				var zb0055 bool
+				zb0054, zb0055, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "LastValid")
+					return
+				}
+				if zb0054 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0054), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "LastValid")
+					return
+				}
+				if zb0055 {
+					(*z).encodedTxnHeaders.LastValid = nil
+				} else if (*z).encodedTxnHeaders.LastValid != nil && cap((*z).encodedTxnHeaders.LastValid) >= zb0054 {
+					(*z).encodedTxnHeaders.LastValid = ((*z).encodedTxnHeaders.LastValid)[:zb0054]
+				} else {
+					(*z).encodedTxnHeaders.LastValid = make([]basics.Round, zb0054)
+				}
+				for zb0005 := range (*z).encodedTxnHeaders.LastValid {
+					bts, err = (*z).encodedTxnHeaders.LastValid[zb0005].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "LastValid", zb0005)
+						return
+					}
+				}
+			case "lvbm":
+				{
+					var zb0056 []byte
+					zb0056, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskLastValid))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskLastValid")
+						return
+					}
+					(*z).encodedTxnHeaders.BitmaskLastValid = bitmask(zb0056)
+				}
+			case "note":
+				var zb0057 int
+				var zb0058 bool
+				zb0057, zb0058, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Note")
+					return
+				}
+				if zb0057 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0057), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Note")
+					return
+				}
+				if zb0058 {
+					(*z).encodedTxnHeaders.Note = nil
+				} else if (*z).encodedTxnHeaders.Note != nil && cap((*z).encodedTxnHeaders.Note) >= zb0057 {
+					(*z).encodedTxnHeaders.Note = ((*z).encodedTxnHeaders.Note)[:zb0057]
+				} else {
+					(*z).encodedTxnHeaders.Note = make([][]byte, zb0057)
+				}
+				for zb0006 := range (*z).encodedTxnHeaders.Note {
+					(*z).encodedTxnHeaders.Note[zb0006], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedTxnHeaders.Note[zb0006])
+					if err != nil {
+						err = msgp.WrapError(err, "Note", zb0006)
+						return
+					}
+				}
+			case "notebm":
+				{
+					var zb0059 []byte
+					zb0059, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskNote))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskNote")
+						return
+					}
+					(*z).encodedTxnHeaders.BitmaskNote = bitmask(zb0059)
+				}
+			case "gen":
+				var zb0060 int
+				var zb0061 bool
+				zb0060, zb0061, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0060 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0060), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0061 {
+					(*z).encodedTxnHeaders.GenesisID = nil
+				} else if (*z).encodedTxnHeaders.GenesisID != nil && cap((*z).encodedTxnHeaders.GenesisID) >= zb0060 {
+					(*z).encodedTxnHeaders.GenesisID = ((*z).encodedTxnHeaders.GenesisID)[:zb0060]
+				} else {
+					(*z).encodedTxnHeaders.GenesisID = make([]string, zb0060)
+				}
+				for zb0007 := range (*z).encodedTxnHeaders.GenesisID {
+					(*z).encodedTxnHeaders.GenesisID[zb0007], bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "GenesisID", zb0007)
+						return
+					}
+				}
+			case "genbm":
+				{
+					var zb0062 []byte
+					zb0062, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskGenesisID))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskGenesisID")
+						return
+					}
+					(*z).encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0062)
+				}
+			case "gh":
+				var zb0063 int
+				var zb0064 bool
+				zb0063, zb0064, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+				if zb0063 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0063), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+				if zb0064 {
+					(*z).encodedTxnHeaders.GenesisHash = nil
+				} else if (*z).encodedTxnHeaders.GenesisHash != nil && cap((*z).encodedTxnHeaders.GenesisHash) >= zb0063 {
+					(*z).encodedTxnHeaders.GenesisHash = ((*z).encodedTxnHeaders.GenesisHash)[:zb0063]
+				} else {
+					(*z).encodedTxnHeaders.GenesisHash = make([]crypto.Digest, zb0063)
+				}
+				for zb0008 := range (*z).encodedTxnHeaders.GenesisHash {
+					bts, err = (*z).encodedTxnHeaders.GenesisHash[zb0008].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "GenesisHash", zb0008)
+						return
+					}
+				}
+			case "ghbm":
+				{
+					var zb0065 []byte
+					zb0065, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskGenesisHash))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskGenesisHash")
+						return
+					}
+					(*z).encodedTxnHeaders.BitmaskGenesisHash = bitmask(zb0065)
+				}
+			case "lx":
+				var zb0066 int
+				var zb0067 bool
+				zb0066, zb0067, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Lease")
+					return
+				}
+				if zb0066 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0066), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Lease")
+					return
+				}
+				if zb0067 {
+					(*z).encodedTxnHeaders.Lease = nil
+				} else if (*z).encodedTxnHeaders.Lease != nil && cap((*z).encodedTxnHeaders.Lease) >= zb0066 {
+					(*z).encodedTxnHeaders.Lease = ((*z).encodedTxnHeaders.Lease)[:zb0066]
+				} else {
+					(*z).encodedTxnHeaders.Lease = make([][32]byte, zb0066)
+				}
+				for zb0009 := range (*z).encodedTxnHeaders.Lease {
+					bts, err = msgp.ReadExactBytes(bts, ((*z).encodedTxnHeaders.Lease[zb0009])[:])
+					if err != nil {
+						err = msgp.WrapError(err, "Lease", zb0009)
+						return
+					}
+				}
+			case "lxbm":
+				{
+					var zb0068 []byte
+					zb0068, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskLease))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskLease")
+						return
+					}
+					(*z).encodedTxnHeaders.BitmaskLease = bitmask(zb0068)
+				}
+			case "rekey":
+				var zb0069 int
+				var zb0070 bool
+				zb0069, zb0070, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RekeyTo")
+					return
+				}
+				if zb0069 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0069), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "RekeyTo")
+					return
+				}
+				if zb0070 {
+					(*z).encodedTxnHeaders.RekeyTo = nil
+				} else if (*z).encodedTxnHeaders.RekeyTo != nil && cap((*z).encodedTxnHeaders.RekeyTo) >= zb0069 {
+					(*z).encodedTxnHeaders.RekeyTo = ((*z).encodedTxnHeaders.RekeyTo)[:zb0069]
+				} else {
+					(*z).encodedTxnHeaders.RekeyTo = make([]basics.Address, zb0069)
+				}
+				for zb0011 := range (*z).encodedTxnHeaders.RekeyTo {
+					bts, err = (*z).encodedTxnHeaders.RekeyTo[zb0011].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "RekeyTo", zb0011)
+						return
+					}
+				}
+			case "rekeybm":
+				{
+					var zb0071 []byte
+					zb0071, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedTxnHeaders.BitmaskRekeyTo))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskRekeyTo")
+						return
+					}
+					(*z).encodedTxnHeaders.BitmaskRekeyTo = bitmask(zb0071)
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -1215,16 +4782,49 @@ func (_ *encodedTxns) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *encodedTxns) Msgsize() (s int) {
-	s = 1 + 5 + msgp.ArrayHeaderSize
+	s = 3 + 5 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).TxType {
 		s += (*z).TxType[zb0001].Msgsize()
 	}
+	s += 4 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).encodedTxnHeaders.Sender {
+		s += (*z).encodedTxnHeaders.Sender[zb0002].Msgsize()
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskSender)) + 4 + msgp.ArrayHeaderSize
+	for zb0003 := range (*z).encodedTxnHeaders.Fee {
+		s += (*z).encodedTxnHeaders.Fee[zb0003].Msgsize()
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskFee)) + 3 + msgp.ArrayHeaderSize
+	for zb0004 := range (*z).encodedTxnHeaders.FirstValid {
+		s += (*z).encodedTxnHeaders.FirstValid[zb0004].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskFirstValid)) + 3 + msgp.ArrayHeaderSize
+	for zb0005 := range (*z).encodedTxnHeaders.LastValid {
+		s += (*z).encodedTxnHeaders.LastValid[zb0005].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskLastValid)) + 5 + msgp.ArrayHeaderSize
+	for zb0006 := range (*z).encodedTxnHeaders.Note {
+		s += msgp.BytesPrefixSize + len((*z).encodedTxnHeaders.Note[zb0006])
+	}
+	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskNote)) + 4 + msgp.ArrayHeaderSize
+	for zb0007 := range (*z).encodedTxnHeaders.GenesisID {
+		s += msgp.StringPrefixSize + len((*z).encodedTxnHeaders.GenesisID[zb0007])
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskGenesisID)) + 3 + msgp.ArrayHeaderSize
+	for zb0008 := range (*z).encodedTxnHeaders.GenesisHash {
+		s += (*z).encodedTxnHeaders.GenesisHash[zb0008].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskGenesisHash)) + 3 + msgp.ArrayHeaderSize + (len((*z).encodedTxnHeaders.Lease) * (32 * (msgp.ByteSize))) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskLease)) + 6 + msgp.ArrayHeaderSize
+	for zb0011 := range (*z).encodedTxnHeaders.RekeyTo {
+		s += (*z).encodedTxnHeaders.RekeyTo[zb0011].Msgsize()
+	}
+	s += 8 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskRekeyTo))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *encodedTxns) MsgIsZero() bool {
-	return (len((*z).TxType) == 0)
+	return (len((*z).TxType) == 0) && (len((*z).encodedTxnHeaders.Sender) == 0) && (len((*z).encodedTxnHeaders.BitmaskSender) == 0) && (len((*z).encodedTxnHeaders.Fee) == 0) && (len((*z).encodedTxnHeaders.BitmaskFee) == 0) && (len((*z).encodedTxnHeaders.FirstValid) == 0) && (len((*z).encodedTxnHeaders.BitmaskFirstValid) == 0) && (len((*z).encodedTxnHeaders.LastValid) == 0) && (len((*z).encodedTxnHeaders.BitmaskLastValid) == 0) && (len((*z).encodedTxnHeaders.Note) == 0) && (len((*z).encodedTxnHeaders.BitmaskNote) == 0) && (len((*z).encodedTxnHeaders.GenesisID) == 0) && (len((*z).encodedTxnHeaders.BitmaskGenesisID) == 0) && (len((*z).encodedTxnHeaders.GenesisHash) == 0) && (len((*z).encodedTxnHeaders.BitmaskGenesisHash) == 0) && (len((*z).encodedTxnHeaders.Lease) == 0) && (len((*z).encodedTxnHeaders.BitmaskLease) == 0) && (len((*z).encodedTxnHeaders.RekeyTo) == 0) && (len((*z).encodedTxnHeaders.BitmaskRekeyTo) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2234,74 +5834,214 @@ func (z *transactionBlockMessage) MsgIsZero() bool {
 func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0007Len := uint32(13)
-	var zb0007Mask uint16 /* 16 bits */
+	zb0017Len := uint32(31)
+	var zb0017Mask uint64 /* 35 bits */
 	if (*z).TotalTransactionsCount == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x1
+		zb0017Len--
+		zb0017Mask |= 0x1
 	}
 	if (*z).TransactionGroupCount == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x2
+		zb0017Len--
+		zb0017Mask |= 0x2
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x40
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFee) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x80
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x100
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x200
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x400
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x800
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x1000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x2000
 	}
 	if len((*z).encodedSignedTxns.Lsig) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x20
+		zb0017Len--
+		zb0017Mask |= 0x4000
 	}
 	if len((*z).encodedSignedTxns.BitmaskLsig) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x40
+		zb0017Len--
+		zb0017Mask |= 0x8000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x10000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x20000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x40000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x80000
 	}
 	if len((*z).encodedSignedTxns.Msig) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x80
+		zb0017Len--
+		zb0017Mask |= 0x100000
 	}
 	if len((*z).encodedSignedTxns.BitmaskMsig) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x100
+		zb0017Len--
+		zb0017Mask |= 0x200000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x400000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x800000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x1000000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x2000000
 	}
 	if len((*z).encodedSignedTxns.AuthAddr) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x200
+		zb0017Len--
+		zb0017Mask |= 0x4000000
 	}
 	if len((*z).encodedSignedTxns.BitmaskAuthAddr) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x400
+		zb0017Len--
+		zb0017Mask |= 0x8000000
 	}
 	if len((*z).encodedSignedTxns.Sig) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x800
+		zb0017Len--
+		zb0017Mask |= 0x10000000
 	}
 	if len((*z).encodedSignedTxns.BitmaskSig) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x1000
+		zb0017Len--
+		zb0017Mask |= 0x20000000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x40000000
+	}
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender) == 0 {
+		zb0017Len--
+		zb0017Mask |= 0x80000000
 	}
 	if len((*z).SignedTxns) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x2000
+		zb0017Len--
+		zb0017Mask |= 0x100000000
 	}
 	if len((*z).TransactionGroupSizes) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x4000
+		zb0017Len--
+		zb0017Mask |= 0x200000000
 	}
 	if len((*z).encodedSignedTxns.encodedTxns.TxType) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x8000
+		zb0017Len--
+		zb0017Mask |= 0x400000000
 	}
-	// variable map header, size zb0007Len
-	o = append(o, 0x80|uint8(zb0007Len))
-	if zb0007Len != 0 {
-		if (zb0007Mask & 0x1) == 0 { // if not empty
+	// variable map header, size zb0017Len
+	o = msgp.AppendMapHeader(o, zb0017Len)
+	if zb0017Len != 0 {
+		if (zb0017Mask & 0x1) == 0 { // if not empty
 			// string "TotalTransactionsCount"
 			o = append(o, 0xb6, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
 			o = msgp.AppendUint64(o, (*z).TotalTransactionsCount)
 		}
-		if (zb0007Mask & 0x2) == 0 { // if not empty
+		if (zb0017Mask & 0x2) == 0 { // if not empty
 			// string "TransactionGroupCount"
 			o = append(o, 0xb5, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x43, 0x6f, 0x75, 0x6e, 0x74)
 			o = msgp.AppendUint64(o, (*z).TransactionGroupCount)
 		}
-		if (zb0007Mask & 0x20) == 0 { // if not empty
+		if (zb0017Mask & 0x40) == 0 { // if not empty
+			// string "fee"
+			o = append(o, 0xa3, 0x66, 0x65, 0x65)
+			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee)))
+			}
+			for zb0008 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee {
+				o = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee[zb0008].MarshalMsg(o)
+			}
+		}
+		if (zb0017Mask & 0x80) == 0 { // if not empty
+			// string "feebm"
+			o = append(o, 0xa5, 0x66, 0x65, 0x65, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFee))
+		}
+		if (zb0017Mask & 0x100) == 0 { // if not empty
+			// string "fv"
+			o = append(o, 0xa2, 0x66, 0x76)
+			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid)))
+			}
+			for zb0009 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid {
+				o = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid[zb0009].MarshalMsg(o)
+			}
+		}
+		if (zb0017Mask & 0x200) == 0 { // if not empty
+			// string "fvbm"
+			o = append(o, 0xa4, 0x66, 0x76, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid))
+		}
+		if (zb0017Mask & 0x400) == 0 { // if not empty
+			// string "gen"
+			o = append(o, 0xa3, 0x67, 0x65, 0x6e)
+			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID)))
+			}
+			for zb0012 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID {
+				o = msgp.AppendString(o, (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID[zb0012])
+			}
+		}
+		if (zb0017Mask & 0x800) == 0 { // if not empty
+			// string "genbm"
+			o = append(o, 0xa5, 0x67, 0x65, 0x6e, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID))
+		}
+		if (zb0017Mask & 0x1000) == 0 { // if not empty
+			// string "gh"
+			o = append(o, 0xa2, 0x67, 0x68)
+			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash)))
+			}
+			for zb0013 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash {
+				o = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash[zb0013].MarshalMsg(o)
+			}
+		}
+		if (zb0017Mask & 0x2000) == 0 { // if not empty
+			// string "ghbm"
+			o = append(o, 0xa4, 0x67, 0x68, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash))
+		}
+		if (zb0017Mask & 0x4000) == 0 { // if not empty
 			// string "lsig"
 			o = append(o, 0xa4, 0x6c, 0x73, 0x69, 0x67)
 			if (*z).encodedSignedTxns.Lsig == nil {
@@ -2313,12 +6053,46 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedSignedTxns.Lsig[zb0004].MarshalMsg(o)
 			}
 		}
-		if (zb0007Mask & 0x40) == 0 { // if not empty
+		if (zb0017Mask & 0x8000) == 0 { // if not empty
 			// string "lsigb"
 			o = append(o, 0xa5, 0x6c, 0x73, 0x69, 0x67, 0x62)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.BitmaskLsig))
 		}
-		if (zb0007Mask & 0x80) == 0 { // if not empty
+		if (zb0017Mask & 0x10000) == 0 { // if not empty
+			// string "lv"
+			o = append(o, 0xa2, 0x6c, 0x76)
+			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid)))
+			}
+			for zb0010 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid {
+				o = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid[zb0010].MarshalMsg(o)
+			}
+		}
+		if (zb0017Mask & 0x20000) == 0 { // if not empty
+			// string "lvbm"
+			o = append(o, 0xa4, 0x6c, 0x76, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid))
+		}
+		if (zb0017Mask & 0x40000) == 0 { // if not empty
+			// string "lx"
+			o = append(o, 0xa2, 0x6c, 0x78)
+			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease)))
+			}
+			for zb0014 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease {
+				o = msgp.AppendBytes(o, ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease[zb0014])[:])
+			}
+		}
+		if (zb0017Mask & 0x80000) == 0 { // if not empty
+			// string "lxbm"
+			o = append(o, 0xa4, 0x6c, 0x78, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease))
+		}
+		if (zb0017Mask & 0x100000) == 0 { // if not empty
 			// string "msig"
 			o = append(o, 0xa4, 0x6d, 0x73, 0x69, 0x67)
 			if (*z).encodedSignedTxns.Msig == nil {
@@ -2330,12 +6104,46 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedSignedTxns.Msig[zb0003].MarshalMsg(o)
 			}
 		}
-		if (zb0007Mask & 0x100) == 0 { // if not empty
+		if (zb0017Mask & 0x200000) == 0 { // if not empty
 			// string "msigbm"
 			o = append(o, 0xa6, 0x6d, 0x73, 0x69, 0x67, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.BitmaskMsig))
 		}
-		if (zb0007Mask & 0x200) == 0 { // if not empty
+		if (zb0017Mask & 0x400000) == 0 { // if not empty
+			// string "note"
+			o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
+			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note)))
+			}
+			for zb0011 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note {
+				o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note[zb0011])
+			}
+		}
+		if (zb0017Mask & 0x800000) == 0 { // if not empty
+			// string "notebm"
+			o = append(o, 0xa6, 0x6e, 0x6f, 0x74, 0x65, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote))
+		}
+		if (zb0017Mask & 0x1000000) == 0 { // if not empty
+			// string "rekey"
+			o = append(o, 0xa5, 0x72, 0x65, 0x6b, 0x65, 0x79)
+			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo)))
+			}
+			for zb0016 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo {
+				o = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo[zb0016].MarshalMsg(o)
+			}
+		}
+		if (zb0017Mask & 0x2000000) == 0 { // if not empty
+			// string "rekeybm"
+			o = append(o, 0xa7, 0x72, 0x65, 0x6b, 0x65, 0x79, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo))
+		}
+		if (zb0017Mask & 0x4000000) == 0 { // if not empty
 			// string "sgnr"
 			o = append(o, 0xa4, 0x73, 0x67, 0x6e, 0x72)
 			if (*z).encodedSignedTxns.AuthAddr == nil {
@@ -2347,12 +6155,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedSignedTxns.AuthAddr[zb0005].MarshalMsg(o)
 			}
 		}
-		if (zb0007Mask & 0x400) == 0 { // if not empty
+		if (zb0017Mask & 0x8000000) == 0 { // if not empty
 			// string "sgnrbm"
 			o = append(o, 0xa6, 0x73, 0x67, 0x6e, 0x72, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.BitmaskAuthAddr))
 		}
-		if (zb0007Mask & 0x800) == 0 { // if not empty
+		if (zb0017Mask & 0x10000000) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
 			if (*z).encodedSignedTxns.Sig == nil {
@@ -2364,12 +6172,29 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedSignedTxns.Sig[zb0002].MarshalMsg(o)
 			}
 		}
-		if (zb0007Mask & 0x1000) == 0 { // if not empty
+		if (zb0017Mask & 0x20000000) == 0 { // if not empty
 			// string "sigbm"
 			o = append(o, 0xa5, 0x73, 0x69, 0x67, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.BitmaskSig))
 		}
-		if (zb0007Mask & 0x2000) == 0 { // if not empty
+		if (zb0017Mask & 0x40000000) == 0 { // if not empty
+			// string "snd"
+			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
+			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender)))
+			}
+			for zb0007 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender {
+				o = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender[zb0007].MarshalMsg(o)
+			}
+		}
+		if (zb0017Mask & 0x80000000) == 0 { // if not empty
+			// string "sndbm"
+			o = append(o, 0xa5, 0x73, 0x6e, 0x64, 0x62, 0x6d)
+			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender))
+		}
+		if (zb0017Mask & 0x100000000) == 0 { // if not empty
 			// string "st"
 			o = append(o, 0xa2, 0x73, 0x74)
 			if (*z).SignedTxns == nil {
@@ -2381,12 +6206,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).SignedTxns[zb0001].MarshalMsg(o)
 			}
 		}
-		if (zb0007Mask & 0x4000) == 0 { // if not empty
+		if (zb0017Mask & 0x200000000) == 0 { // if not empty
 			// string "tgs"
 			o = append(o, 0xa3, 0x74, 0x67, 0x73)
 			o = msgp.AppendBytes(o, (*z).TransactionGroupSizes)
 		}
-		if (zb0007Mask & 0x8000) == 0 { // if not empty
+		if (zb0017Mask & 0x400000000) == 0 { // if not empty
 			// string "type"
 			o = append(o, 0xa4, 0x74, 0x79, 0x70, 0x65)
 			if (*z).encodedSignedTxns.encodedTxns.TxType == nil {
@@ -2411,41 +6236,41 @@ func (_ *txGroupsEncodingStub) CanMarshalMsg(z interface{}) bool {
 func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0007 int
-	var zb0008 bool
-	zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0017 int
+	var zb0018 bool
+	zb0017, zb0018, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0007 > 0 {
-			zb0007--
+		if zb0017 > 0 {
+			zb0017--
 			(*z).TotalTransactionsCount, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TotalTransactionsCount")
 				return
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
+		if zb0017 > 0 {
+			zb0017--
 			(*z).TransactionGroupCount, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TransactionGroupCount")
 				return
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
-			var zb0009 int
-			zb0009, err = msgp.ReadBytesBytesHeader(bts)
+		if zb0017 > 0 {
+			zb0017--
+			var zb0019 int
+			zb0019, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TransactionGroupSizes")
 				return
 			}
-			if zb0009 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(maxEncodedTransactionGroup))
+			if zb0019 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0019), uint64(maxEncodedTransactionGroup))
 				return
 			}
 			(*z).TransactionGroupSizes, bts, err = msgp.ReadBytesBytes(bts, (*z).TransactionGroupSizes)
@@ -2454,26 +6279,26 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
-			var zb0010 int
-			var zb0011 bool
-			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0017 > 0 {
+			zb0017--
+			var zb0020 int
+			var zb0021 bool
+			zb0020, zb0021, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SignedTxns")
 				return
 			}
-			if zb0010 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0010), uint64(maxEncodedTransactionGroup))
+			if zb0020 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0020), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "SignedTxns")
 				return
 			}
-			if zb0011 {
+			if zb0021 {
 				(*z).SignedTxns = nil
-			} else if (*z).SignedTxns != nil && cap((*z).SignedTxns) >= zb0010 {
-				(*z).SignedTxns = ((*z).SignedTxns)[:zb0010]
+			} else if (*z).SignedTxns != nil && cap((*z).SignedTxns) >= zb0020 {
+				(*z).SignedTxns = ((*z).SignedTxns)[:zb0020]
 			} else {
-				(*z).SignedTxns = make([]transactions.SignedTxn, zb0010)
+				(*z).SignedTxns = make([]transactions.SignedTxn, zb0020)
 			}
 			for zb0001 := range (*z).SignedTxns {
 				bts, err = (*z).SignedTxns[zb0001].UnmarshalMsg(bts)
@@ -2483,26 +6308,26 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
-			var zb0012 int
-			var zb0013 bool
-			zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0017 > 0 {
+			zb0017--
+			var zb0022 int
+			var zb0023 bool
+			zb0022, zb0023, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sig")
 				return
 			}
-			if zb0012 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0012), uint64(maxEncodedTransactionGroup))
+			if zb0022 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0022), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "Sig")
 				return
 			}
-			if zb0013 {
+			if zb0023 {
 				(*z).encodedSignedTxns.Sig = nil
-			} else if (*z).encodedSignedTxns.Sig != nil && cap((*z).encodedSignedTxns.Sig) >= zb0012 {
-				(*z).encodedSignedTxns.Sig = ((*z).encodedSignedTxns.Sig)[:zb0012]
+			} else if (*z).encodedSignedTxns.Sig != nil && cap((*z).encodedSignedTxns.Sig) >= zb0022 {
+				(*z).encodedSignedTxns.Sig = ((*z).encodedSignedTxns.Sig)[:zb0022]
 			} else {
-				(*z).encodedSignedTxns.Sig = make([]crypto.Signature, zb0012)
+				(*z).encodedSignedTxns.Sig = make([]crypto.Signature, zb0022)
 			}
 			for zb0002 := range (*z).encodedSignedTxns.Sig {
 				bts, err = (*z).encodedSignedTxns.Sig[zb0002].UnmarshalMsg(bts)
@@ -2512,38 +6337,38 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
+		if zb0017 > 0 {
+			zb0017--
 			{
-				var zb0014 []byte
-				zb0014, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskSig))
+				var zb0024 []byte
+				zb0024, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskSig))
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "BitmaskSig")
 					return
 				}
-				(*z).encodedSignedTxns.BitmaskSig = bitmask(zb0014)
+				(*z).encodedSignedTxns.BitmaskSig = bitmask(zb0024)
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
-			var zb0015 int
-			var zb0016 bool
-			zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0017 > 0 {
+			zb0017--
+			var zb0025 int
+			var zb0026 bool
+			zb0025, zb0026, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Msig")
 				return
 			}
-			if zb0015 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0015), uint64(maxEncodedTransactionGroup))
+			if zb0025 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0025), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "Msig")
 				return
 			}
-			if zb0016 {
+			if zb0026 {
 				(*z).encodedSignedTxns.Msig = nil
-			} else if (*z).encodedSignedTxns.Msig != nil && cap((*z).encodedSignedTxns.Msig) >= zb0015 {
-				(*z).encodedSignedTxns.Msig = ((*z).encodedSignedTxns.Msig)[:zb0015]
+			} else if (*z).encodedSignedTxns.Msig != nil && cap((*z).encodedSignedTxns.Msig) >= zb0025 {
+				(*z).encodedSignedTxns.Msig = ((*z).encodedSignedTxns.Msig)[:zb0025]
 			} else {
-				(*z).encodedSignedTxns.Msig = make([]crypto.MultisigSig, zb0015)
+				(*z).encodedSignedTxns.Msig = make([]crypto.MultisigSig, zb0025)
 			}
 			for zb0003 := range (*z).encodedSignedTxns.Msig {
 				bts, err = (*z).encodedSignedTxns.Msig[zb0003].UnmarshalMsg(bts)
@@ -2553,38 +6378,38 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
+		if zb0017 > 0 {
+			zb0017--
 			{
-				var zb0017 []byte
-				zb0017, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskMsig))
+				var zb0027 []byte
+				zb0027, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskMsig))
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "BitmaskMsig")
 					return
 				}
-				(*z).encodedSignedTxns.BitmaskMsig = bitmask(zb0017)
+				(*z).encodedSignedTxns.BitmaskMsig = bitmask(zb0027)
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
-			var zb0018 int
-			var zb0019 bool
-			zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0017 > 0 {
+			zb0017--
+			var zb0028 int
+			var zb0029 bool
+			zb0028, zb0029, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Lsig")
 				return
 			}
-			if zb0018 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0018), uint64(maxEncodedTransactionGroup))
+			if zb0028 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0028), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "Lsig")
 				return
 			}
-			if zb0019 {
+			if zb0029 {
 				(*z).encodedSignedTxns.Lsig = nil
-			} else if (*z).encodedSignedTxns.Lsig != nil && cap((*z).encodedSignedTxns.Lsig) >= zb0018 {
-				(*z).encodedSignedTxns.Lsig = ((*z).encodedSignedTxns.Lsig)[:zb0018]
+			} else if (*z).encodedSignedTxns.Lsig != nil && cap((*z).encodedSignedTxns.Lsig) >= zb0028 {
+				(*z).encodedSignedTxns.Lsig = ((*z).encodedSignedTxns.Lsig)[:zb0028]
 			} else {
-				(*z).encodedSignedTxns.Lsig = make([]transactions.LogicSig, zb0018)
+				(*z).encodedSignedTxns.Lsig = make([]transactions.LogicSig, zb0028)
 			}
 			for zb0004 := range (*z).encodedSignedTxns.Lsig {
 				bts, err = (*z).encodedSignedTxns.Lsig[zb0004].UnmarshalMsg(bts)
@@ -2594,38 +6419,38 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
+		if zb0017 > 0 {
+			zb0017--
 			{
-				var zb0020 []byte
-				zb0020, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskLsig))
+				var zb0030 []byte
+				zb0030, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskLsig))
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "BitmaskLsig")
 					return
 				}
-				(*z).encodedSignedTxns.BitmaskLsig = bitmask(zb0020)
+				(*z).encodedSignedTxns.BitmaskLsig = bitmask(zb0030)
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
-			var zb0021 int
-			var zb0022 bool
-			zb0021, zb0022, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0017 > 0 {
+			zb0017--
+			var zb0031 int
+			var zb0032 bool
+			zb0031, zb0032, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AuthAddr")
 				return
 			}
-			if zb0021 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0021), uint64(maxEncodedTransactionGroup))
+			if zb0031 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0031), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "AuthAddr")
 				return
 			}
-			if zb0022 {
+			if zb0032 {
 				(*z).encodedSignedTxns.AuthAddr = nil
-			} else if (*z).encodedSignedTxns.AuthAddr != nil && cap((*z).encodedSignedTxns.AuthAddr) >= zb0021 {
-				(*z).encodedSignedTxns.AuthAddr = ((*z).encodedSignedTxns.AuthAddr)[:zb0021]
+			} else if (*z).encodedSignedTxns.AuthAddr != nil && cap((*z).encodedSignedTxns.AuthAddr) >= zb0031 {
+				(*z).encodedSignedTxns.AuthAddr = ((*z).encodedSignedTxns.AuthAddr)[:zb0031]
 			} else {
-				(*z).encodedSignedTxns.AuthAddr = make([]basics.Address, zb0021)
+				(*z).encodedSignedTxns.AuthAddr = make([]basics.Address, zb0031)
 			}
 			for zb0005 := range (*z).encodedSignedTxns.AuthAddr {
 				bts, err = (*z).encodedSignedTxns.AuthAddr[zb0005].UnmarshalMsg(bts)
@@ -2635,38 +6460,38 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
+		if zb0017 > 0 {
+			zb0017--
 			{
-				var zb0023 []byte
-				zb0023, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskAuthAddr))
+				var zb0033 []byte
+				zb0033, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskAuthAddr))
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "BitmaskAuthAddr")
 					return
 				}
-				(*z).encodedSignedTxns.BitmaskAuthAddr = bitmask(zb0023)
+				(*z).encodedSignedTxns.BitmaskAuthAddr = bitmask(zb0033)
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
-			var zb0024 int
-			var zb0025 bool
-			zb0024, zb0025, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0017 > 0 {
+			zb0017--
+			var zb0034 int
+			var zb0035 bool
+			zb0034, zb0035, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TxType")
 				return
 			}
-			if zb0024 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0024), uint64(maxEncodedTransactionGroup))
+			if zb0034 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0034), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "TxType")
 				return
 			}
-			if zb0025 {
+			if zb0035 {
 				(*z).encodedSignedTxns.encodedTxns.TxType = nil
-			} else if (*z).encodedSignedTxns.encodedTxns.TxType != nil && cap((*z).encodedSignedTxns.encodedTxns.TxType) >= zb0024 {
-				(*z).encodedSignedTxns.encodedTxns.TxType = ((*z).encodedSignedTxns.encodedTxns.TxType)[:zb0024]
+			} else if (*z).encodedSignedTxns.encodedTxns.TxType != nil && cap((*z).encodedSignedTxns.encodedTxns.TxType) >= zb0034 {
+				(*z).encodedSignedTxns.encodedTxns.TxType = ((*z).encodedSignedTxns.encodedTxns.TxType)[:zb0034]
 			} else {
-				(*z).encodedSignedTxns.encodedTxns.TxType = make([]protocol.TxType, zb0024)
+				(*z).encodedSignedTxns.encodedTxns.TxType = make([]protocol.TxType, zb0034)
 			}
 			for zb0006 := range (*z).encodedSignedTxns.encodedTxns.TxType {
 				bts, err = (*z).encodedSignedTxns.encodedTxns.TxType[zb0006].UnmarshalMsg(bts)
@@ -2676,8 +6501,377 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if zb0007 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0007)
+		if zb0017 > 0 {
+			zb0017--
+			var zb0036 int
+			var zb0037 bool
+			zb0036, zb0037, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				return
+			}
+			if zb0036 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0036), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Sender")
+				return
+			}
+			if zb0037 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender = nil
+			} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender) >= zb0036 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender)[:zb0036]
+			} else {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender = make([]basics.Address, zb0036)
+			}
+			for zb0007 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender {
+				bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender[zb0007].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Sender", zb0007)
+					return
+				}
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			{
+				var zb0038 []byte
+				zb0038, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskSender")
+					return
+				}
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender = bitmask(zb0038)
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			var zb0039 int
+			var zb0040 bool
+			zb0039, zb0040, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Fee")
+				return
+			}
+			if zb0039 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0039), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Fee")
+				return
+			}
+			if zb0040 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee = nil
+			} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee) >= zb0039 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee)[:zb0039]
+			} else {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee = make([]basics.MicroAlgos, zb0039)
+			}
+			for zb0008 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee {
+				bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee[zb0008].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Fee", zb0008)
+					return
+				}
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			{
+				var zb0041 []byte
+				zb0041, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFee))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskFee")
+					return
+				}
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFee = bitmask(zb0041)
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			var zb0042 int
+			var zb0043 bool
+			zb0042, zb0043, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
+				return
+			}
+			if zb0042 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0042), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
+				return
+			}
+			if zb0043 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid = nil
+			} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid) >= zb0042 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid)[:zb0042]
+			} else {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid = make([]basics.Round, zb0042)
+			}
+			for zb0009 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid {
+				bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid[zb0009].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "FirstValid", zb0009)
+					return
+				}
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			{
+				var zb0044 []byte
+				zb0044, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskFirstValid")
+					return
+				}
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid = bitmask(zb0044)
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			var zb0045 int
+			var zb0046 bool
+			zb0045, zb0046, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LastValid")
+				return
+			}
+			if zb0045 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0045), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "LastValid")
+				return
+			}
+			if zb0046 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid = nil
+			} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid) >= zb0045 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid)[:zb0045]
+			} else {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid = make([]basics.Round, zb0045)
+			}
+			for zb0010 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid {
+				bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid[zb0010].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "LastValid", zb0010)
+					return
+				}
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			{
+				var zb0047 []byte
+				zb0047, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskLastValid")
+					return
+				}
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid = bitmask(zb0047)
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			var zb0048 int
+			var zb0049 bool
+			zb0048, zb0049, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Note")
+				return
+			}
+			if zb0048 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0048), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Note")
+				return
+			}
+			if zb0049 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note = nil
+			} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note) >= zb0048 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note)[:zb0048]
+			} else {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note = make([][]byte, zb0048)
+			}
+			for zb0011 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note[zb0011], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note[zb0011])
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Note", zb0011)
+					return
+				}
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			{
+				var zb0050 []byte
+				zb0050, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskNote")
+					return
+				}
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote = bitmask(zb0050)
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			var zb0051 int
+			var zb0052 bool
+			zb0051, zb0052, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0051 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0051), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0052 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID = nil
+			} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID) >= zb0051 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID)[:zb0051]
+			} else {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID = make([]string, zb0051)
+			}
+			for zb0012 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID[zb0012], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "GenesisID", zb0012)
+					return
+				}
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			{
+				var zb0053 []byte
+				zb0053, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskGenesisID")
+					return
+				}
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0053)
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			var zb0054 int
+			var zb0055 bool
+			zb0054, zb0055, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				return
+			}
+			if zb0054 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0054), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
+				return
+			}
+			if zb0055 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash = nil
+			} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash) >= zb0054 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash)[:zb0054]
+			} else {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash = make([]crypto.Digest, zb0054)
+			}
+			for zb0013 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash {
+				bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash[zb0013].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "GenesisHash", zb0013)
+					return
+				}
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			{
+				var zb0056 []byte
+				zb0056, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskGenesisHash")
+					return
+				}
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash = bitmask(zb0056)
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			var zb0057 int
+			var zb0058 bool
+			zb0057, zb0058, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Lease")
+				return
+			}
+			if zb0057 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0057), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "Lease")
+				return
+			}
+			if zb0058 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease = nil
+			} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) >= zb0057 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease)[:zb0057]
+			} else {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease = make([][32]byte, zb0057)
+			}
+			for zb0014 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease {
+				bts, err = msgp.ReadExactBytes(bts, ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease[zb0014])[:])
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Lease", zb0014)
+					return
+				}
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			{
+				var zb0059 []byte
+				zb0059, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskLease")
+					return
+				}
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease = bitmask(zb0059)
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			var zb0060 int
+			var zb0061 bool
+			zb0060, zb0061, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RekeyTo")
+				return
+			}
+			if zb0060 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0060), uint64(maxEncodedTransactionGroup))
+				err = msgp.WrapError(err, "struct-from-array", "RekeyTo")
+				return
+			}
+			if zb0061 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo = nil
+			} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo) >= zb0060 {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo)[:zb0060]
+			} else {
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo = make([]basics.Address, zb0060)
+			}
+			for zb0016 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo {
+				bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo[zb0016].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "RekeyTo", zb0016)
+					return
+				}
+			}
+		}
+		if zb0017 > 0 {
+			zb0017--
+			{
+				var zb0062 []byte
+				zb0062, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo))
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "BitmaskRekeyTo")
+					return
+				}
+				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo = bitmask(zb0062)
+			}
+		}
+		if zb0017 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0017)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -2688,11 +6882,11 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0008 {
+		if zb0018 {
 			(*z) = txGroupsEncodingStub{}
 		}
-		for zb0007 > 0 {
-			zb0007--
+		for zb0017 > 0 {
+			zb0017--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -2712,14 +6906,14 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "tgs":
-				var zb0026 int
-				zb0026, err = msgp.ReadBytesBytesHeader(bts)
+				var zb0063 int
+				zb0063, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TransactionGroupSizes")
 					return
 				}
-				if zb0026 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0026), uint64(maxEncodedTransactionGroup))
+				if zb0063 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0063), uint64(maxEncodedTransactionGroup))
 					return
 				}
 				(*z).TransactionGroupSizes, bts, err = msgp.ReadBytesBytes(bts, (*z).TransactionGroupSizes)
@@ -2728,24 +6922,24 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "st":
-				var zb0027 int
-				var zb0028 bool
-				zb0027, zb0028, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0064 int
+				var zb0065 bool
+				zb0064, zb0065, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "SignedTxns")
 					return
 				}
-				if zb0027 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0027), uint64(maxEncodedTransactionGroup))
+				if zb0064 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0064), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "SignedTxns")
 					return
 				}
-				if zb0028 {
+				if zb0065 {
 					(*z).SignedTxns = nil
-				} else if (*z).SignedTxns != nil && cap((*z).SignedTxns) >= zb0027 {
-					(*z).SignedTxns = ((*z).SignedTxns)[:zb0027]
+				} else if (*z).SignedTxns != nil && cap((*z).SignedTxns) >= zb0064 {
+					(*z).SignedTxns = ((*z).SignedTxns)[:zb0064]
 				} else {
-					(*z).SignedTxns = make([]transactions.SignedTxn, zb0027)
+					(*z).SignedTxns = make([]transactions.SignedTxn, zb0064)
 				}
 				for zb0001 := range (*z).SignedTxns {
 					bts, err = (*z).SignedTxns[zb0001].UnmarshalMsg(bts)
@@ -2755,24 +6949,24 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "sig":
-				var zb0029 int
-				var zb0030 bool
-				zb0029, zb0030, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0066 int
+				var zb0067 bool
+				zb0066, zb0067, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
-				if zb0029 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0029), uint64(maxEncodedTransactionGroup))
+				if zb0066 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0066), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
-				if zb0030 {
+				if zb0067 {
 					(*z).encodedSignedTxns.Sig = nil
-				} else if (*z).encodedSignedTxns.Sig != nil && cap((*z).encodedSignedTxns.Sig) >= zb0029 {
-					(*z).encodedSignedTxns.Sig = ((*z).encodedSignedTxns.Sig)[:zb0029]
+				} else if (*z).encodedSignedTxns.Sig != nil && cap((*z).encodedSignedTxns.Sig) >= zb0066 {
+					(*z).encodedSignedTxns.Sig = ((*z).encodedSignedTxns.Sig)[:zb0066]
 				} else {
-					(*z).encodedSignedTxns.Sig = make([]crypto.Signature, zb0029)
+					(*z).encodedSignedTxns.Sig = make([]crypto.Signature, zb0066)
 				}
 				for zb0002 := range (*z).encodedSignedTxns.Sig {
 					bts, err = (*z).encodedSignedTxns.Sig[zb0002].UnmarshalMsg(bts)
@@ -2783,33 +6977,33 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "sigbm":
 				{
-					var zb0031 []byte
-					zb0031, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskSig))
+					var zb0068 []byte
+					zb0068, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskSig))
 					if err != nil {
 						err = msgp.WrapError(err, "BitmaskSig")
 						return
 					}
-					(*z).encodedSignedTxns.BitmaskSig = bitmask(zb0031)
+					(*z).encodedSignedTxns.BitmaskSig = bitmask(zb0068)
 				}
 			case "msig":
-				var zb0032 int
-				var zb0033 bool
-				zb0032, zb0033, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0069 int
+				var zb0070 bool
+				zb0069, zb0070, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Msig")
 					return
 				}
-				if zb0032 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0032), uint64(maxEncodedTransactionGroup))
+				if zb0069 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0069), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "Msig")
 					return
 				}
-				if zb0033 {
+				if zb0070 {
 					(*z).encodedSignedTxns.Msig = nil
-				} else if (*z).encodedSignedTxns.Msig != nil && cap((*z).encodedSignedTxns.Msig) >= zb0032 {
-					(*z).encodedSignedTxns.Msig = ((*z).encodedSignedTxns.Msig)[:zb0032]
+				} else if (*z).encodedSignedTxns.Msig != nil && cap((*z).encodedSignedTxns.Msig) >= zb0069 {
+					(*z).encodedSignedTxns.Msig = ((*z).encodedSignedTxns.Msig)[:zb0069]
 				} else {
-					(*z).encodedSignedTxns.Msig = make([]crypto.MultisigSig, zb0032)
+					(*z).encodedSignedTxns.Msig = make([]crypto.MultisigSig, zb0069)
 				}
 				for zb0003 := range (*z).encodedSignedTxns.Msig {
 					bts, err = (*z).encodedSignedTxns.Msig[zb0003].UnmarshalMsg(bts)
@@ -2820,33 +7014,33 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "msigbm":
 				{
-					var zb0034 []byte
-					zb0034, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskMsig))
+					var zb0071 []byte
+					zb0071, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskMsig))
 					if err != nil {
 						err = msgp.WrapError(err, "BitmaskMsig")
 						return
 					}
-					(*z).encodedSignedTxns.BitmaskMsig = bitmask(zb0034)
+					(*z).encodedSignedTxns.BitmaskMsig = bitmask(zb0071)
 				}
 			case "lsig":
-				var zb0035 int
-				var zb0036 bool
-				zb0035, zb0036, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0072 int
+				var zb0073 bool
+				zb0072, zb0073, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Lsig")
 					return
 				}
-				if zb0035 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0035), uint64(maxEncodedTransactionGroup))
+				if zb0072 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0072), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "Lsig")
 					return
 				}
-				if zb0036 {
+				if zb0073 {
 					(*z).encodedSignedTxns.Lsig = nil
-				} else if (*z).encodedSignedTxns.Lsig != nil && cap((*z).encodedSignedTxns.Lsig) >= zb0035 {
-					(*z).encodedSignedTxns.Lsig = ((*z).encodedSignedTxns.Lsig)[:zb0035]
+				} else if (*z).encodedSignedTxns.Lsig != nil && cap((*z).encodedSignedTxns.Lsig) >= zb0072 {
+					(*z).encodedSignedTxns.Lsig = ((*z).encodedSignedTxns.Lsig)[:zb0072]
 				} else {
-					(*z).encodedSignedTxns.Lsig = make([]transactions.LogicSig, zb0035)
+					(*z).encodedSignedTxns.Lsig = make([]transactions.LogicSig, zb0072)
 				}
 				for zb0004 := range (*z).encodedSignedTxns.Lsig {
 					bts, err = (*z).encodedSignedTxns.Lsig[zb0004].UnmarshalMsg(bts)
@@ -2857,33 +7051,33 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "lsigb":
 				{
-					var zb0037 []byte
-					zb0037, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskLsig))
+					var zb0074 []byte
+					zb0074, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskLsig))
 					if err != nil {
 						err = msgp.WrapError(err, "BitmaskLsig")
 						return
 					}
-					(*z).encodedSignedTxns.BitmaskLsig = bitmask(zb0037)
+					(*z).encodedSignedTxns.BitmaskLsig = bitmask(zb0074)
 				}
 			case "sgnr":
-				var zb0038 int
-				var zb0039 bool
-				zb0038, zb0039, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0075 int
+				var zb0076 bool
+				zb0075, zb0076, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AuthAddr")
 					return
 				}
-				if zb0038 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0038), uint64(maxEncodedTransactionGroup))
+				if zb0075 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0075), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "AuthAddr")
 					return
 				}
-				if zb0039 {
+				if zb0076 {
 					(*z).encodedSignedTxns.AuthAddr = nil
-				} else if (*z).encodedSignedTxns.AuthAddr != nil && cap((*z).encodedSignedTxns.AuthAddr) >= zb0038 {
-					(*z).encodedSignedTxns.AuthAddr = ((*z).encodedSignedTxns.AuthAddr)[:zb0038]
+				} else if (*z).encodedSignedTxns.AuthAddr != nil && cap((*z).encodedSignedTxns.AuthAddr) >= zb0075 {
+					(*z).encodedSignedTxns.AuthAddr = ((*z).encodedSignedTxns.AuthAddr)[:zb0075]
 				} else {
-					(*z).encodedSignedTxns.AuthAddr = make([]basics.Address, zb0038)
+					(*z).encodedSignedTxns.AuthAddr = make([]basics.Address, zb0075)
 				}
 				for zb0005 := range (*z).encodedSignedTxns.AuthAddr {
 					bts, err = (*z).encodedSignedTxns.AuthAddr[zb0005].UnmarshalMsg(bts)
@@ -2894,33 +7088,33 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "sgnrbm":
 				{
-					var zb0040 []byte
-					zb0040, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskAuthAddr))
+					var zb0077 []byte
+					zb0077, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.BitmaskAuthAddr))
 					if err != nil {
 						err = msgp.WrapError(err, "BitmaskAuthAddr")
 						return
 					}
-					(*z).encodedSignedTxns.BitmaskAuthAddr = bitmask(zb0040)
+					(*z).encodedSignedTxns.BitmaskAuthAddr = bitmask(zb0077)
 				}
 			case "type":
-				var zb0041 int
-				var zb0042 bool
-				zb0041, zb0042, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0078 int
+				var zb0079 bool
+				zb0078, zb0079, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TxType")
 					return
 				}
-				if zb0041 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0041), uint64(maxEncodedTransactionGroup))
+				if zb0078 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0078), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "TxType")
 					return
 				}
-				if zb0042 {
+				if zb0079 {
 					(*z).encodedSignedTxns.encodedTxns.TxType = nil
-				} else if (*z).encodedSignedTxns.encodedTxns.TxType != nil && cap((*z).encodedSignedTxns.encodedTxns.TxType) >= zb0041 {
-					(*z).encodedSignedTxns.encodedTxns.TxType = ((*z).encodedSignedTxns.encodedTxns.TxType)[:zb0041]
+				} else if (*z).encodedSignedTxns.encodedTxns.TxType != nil && cap((*z).encodedSignedTxns.encodedTxns.TxType) >= zb0078 {
+					(*z).encodedSignedTxns.encodedTxns.TxType = ((*z).encodedSignedTxns.encodedTxns.TxType)[:zb0078]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.TxType = make([]protocol.TxType, zb0041)
+					(*z).encodedSignedTxns.encodedTxns.TxType = make([]protocol.TxType, zb0078)
 				}
 				for zb0006 := range (*z).encodedSignedTxns.encodedTxns.TxType {
 					bts, err = (*z).encodedSignedTxns.encodedTxns.TxType[zb0006].UnmarshalMsg(bts)
@@ -2928,6 +7122,339 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "TxType", zb0006)
 						return
 					}
+				}
+			case "snd":
+				var zb0080 int
+				var zb0081 bool
+				zb0080, zb0081, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Sender")
+					return
+				}
+				if zb0080 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0080), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Sender")
+					return
+				}
+				if zb0081 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender = nil
+				} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender) >= zb0080 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender)[:zb0080]
+				} else {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender = make([]basics.Address, zb0080)
+				}
+				for zb0007 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender {
+					bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender[zb0007].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Sender", zb0007)
+						return
+					}
+				}
+			case "sndbm":
+				{
+					var zb0082 []byte
+					zb0082, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskSender")
+						return
+					}
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender = bitmask(zb0082)
+				}
+			case "fee":
+				var zb0083 int
+				var zb0084 bool
+				zb0083, zb0084, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Fee")
+					return
+				}
+				if zb0083 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0083), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Fee")
+					return
+				}
+				if zb0084 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee = nil
+				} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee) >= zb0083 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee)[:zb0083]
+				} else {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee = make([]basics.MicroAlgos, zb0083)
+				}
+				for zb0008 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee {
+					bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee[zb0008].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Fee", zb0008)
+						return
+					}
+				}
+			case "feebm":
+				{
+					var zb0085 []byte
+					zb0085, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFee))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskFee")
+						return
+					}
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFee = bitmask(zb0085)
+				}
+			case "fv":
+				var zb0086 int
+				var zb0087 bool
+				zb0086, zb0087, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FirstValid")
+					return
+				}
+				if zb0086 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0086), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "FirstValid")
+					return
+				}
+				if zb0087 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid = nil
+				} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid) >= zb0086 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid)[:zb0086]
+				} else {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid = make([]basics.Round, zb0086)
+				}
+				for zb0009 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid {
+					bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid[zb0009].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "FirstValid", zb0009)
+						return
+					}
+				}
+			case "fvbm":
+				{
+					var zb0088 []byte
+					zb0088, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskFirstValid")
+						return
+					}
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid = bitmask(zb0088)
+				}
+			case "lv":
+				var zb0089 int
+				var zb0090 bool
+				zb0089, zb0090, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "LastValid")
+					return
+				}
+				if zb0089 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0089), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "LastValid")
+					return
+				}
+				if zb0090 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid = nil
+				} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid) >= zb0089 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid)[:zb0089]
+				} else {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid = make([]basics.Round, zb0089)
+				}
+				for zb0010 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid {
+					bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid[zb0010].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "LastValid", zb0010)
+						return
+					}
+				}
+			case "lvbm":
+				{
+					var zb0091 []byte
+					zb0091, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskLastValid")
+						return
+					}
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid = bitmask(zb0091)
+				}
+			case "note":
+				var zb0092 int
+				var zb0093 bool
+				zb0092, zb0093, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Note")
+					return
+				}
+				if zb0092 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0092), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Note")
+					return
+				}
+				if zb0093 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note = nil
+				} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note) >= zb0092 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note)[:zb0092]
+				} else {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note = make([][]byte, zb0092)
+				}
+				for zb0011 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note[zb0011], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note[zb0011])
+					if err != nil {
+						err = msgp.WrapError(err, "Note", zb0011)
+						return
+					}
+				}
+			case "notebm":
+				{
+					var zb0094 []byte
+					zb0094, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskNote")
+						return
+					}
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote = bitmask(zb0094)
+				}
+			case "gen":
+				var zb0095 int
+				var zb0096 bool
+				zb0095, zb0096, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0095 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0095), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0096 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID = nil
+				} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID) >= zb0095 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID)[:zb0095]
+				} else {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID = make([]string, zb0095)
+				}
+				for zb0012 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID[zb0012], bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "GenesisID", zb0012)
+						return
+					}
+				}
+			case "genbm":
+				{
+					var zb0097 []byte
+					zb0097, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskGenesisID")
+						return
+					}
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0097)
+				}
+			case "gh":
+				var zb0098 int
+				var zb0099 bool
+				zb0098, zb0099, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+				if zb0098 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0098), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "GenesisHash")
+					return
+				}
+				if zb0099 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash = nil
+				} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash) >= zb0098 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash)[:zb0098]
+				} else {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash = make([]crypto.Digest, zb0098)
+				}
+				for zb0013 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash {
+					bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash[zb0013].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "GenesisHash", zb0013)
+						return
+					}
+				}
+			case "ghbm":
+				{
+					var zb0100 []byte
+					zb0100, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskGenesisHash")
+						return
+					}
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash = bitmask(zb0100)
+				}
+			case "lx":
+				var zb0101 int
+				var zb0102 bool
+				zb0101, zb0102, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Lease")
+					return
+				}
+				if zb0101 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0101), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "Lease")
+					return
+				}
+				if zb0102 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease = nil
+				} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) >= zb0101 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease)[:zb0101]
+				} else {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease = make([][32]byte, zb0101)
+				}
+				for zb0014 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease {
+					bts, err = msgp.ReadExactBytes(bts, ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease[zb0014])[:])
+					if err != nil {
+						err = msgp.WrapError(err, "Lease", zb0014)
+						return
+					}
+				}
+			case "lxbm":
+				{
+					var zb0103 []byte
+					zb0103, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskLease")
+						return
+					}
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease = bitmask(zb0103)
+				}
+			case "rekey":
+				var zb0104 int
+				var zb0105 bool
+				zb0104, zb0105, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RekeyTo")
+					return
+				}
+				if zb0104 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0104), uint64(maxEncodedTransactionGroup))
+					err = msgp.WrapError(err, "RekeyTo")
+					return
+				}
+				if zb0105 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo = nil
+				} else if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo) >= zb0104 {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo = ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo)[:zb0104]
+				} else {
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo = make([]basics.Address, zb0104)
+				}
+				for zb0016 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo {
+					bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo[zb0016].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "RekeyTo", zb0016)
+						return
+					}
+				}
+			case "rekeybm":
+				{
+					var zb0106 []byte
+					zb0106, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo))
+					if err != nil {
+						err = msgp.WrapError(err, "BitmaskRekeyTo")
+						return
+					}
+					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo = bitmask(zb0106)
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -2949,7 +7476,7 @@ func (_ *txGroupsEncodingStub) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *txGroupsEncodingStub) Msgsize() (s int) {
-	s = 1 + 23 + msgp.Uint64Size + 22 + msgp.Uint64Size + 4 + msgp.BytesPrefixSize + len((*z).TransactionGroupSizes) + 3 + msgp.ArrayHeaderSize
+	s = 3 + 23 + msgp.Uint64Size + 22 + msgp.Uint64Size + 4 + msgp.BytesPrefixSize + len((*z).TransactionGroupSizes) + 3 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).SignedTxns {
 		s += (*z).SignedTxns[zb0001].Msgsize()
 	}
@@ -2973,12 +7500,45 @@ func (z *txGroupsEncodingStub) Msgsize() (s int) {
 	for zb0006 := range (*z).encodedSignedTxns.encodedTxns.TxType {
 		s += (*z).encodedSignedTxns.encodedTxns.TxType[zb0006].Msgsize()
 	}
+	s += 4 + msgp.ArrayHeaderSize
+	for zb0007 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender {
+		s += (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender[zb0007].Msgsize()
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender)) + 4 + msgp.ArrayHeaderSize
+	for zb0008 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee {
+		s += (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee[zb0008].Msgsize()
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFee)) + 3 + msgp.ArrayHeaderSize
+	for zb0009 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid {
+		s += (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid[zb0009].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid)) + 3 + msgp.ArrayHeaderSize
+	for zb0010 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid {
+		s += (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid[zb0010].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid)) + 5 + msgp.ArrayHeaderSize
+	for zb0011 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note {
+		s += msgp.BytesPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note[zb0011])
+	}
+	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote)) + 4 + msgp.ArrayHeaderSize
+	for zb0012 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID {
+		s += msgp.StringPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID[zb0012])
+	}
+	s += 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID)) + 3 + msgp.ArrayHeaderSize
+	for zb0013 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash {
+		s += (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash[zb0013].Msgsize()
+	}
+	s += 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash)) + 3 + msgp.ArrayHeaderSize + (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) * (32 * (msgp.ByteSize))) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease)) + 6 + msgp.ArrayHeaderSize
+	for zb0016 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo {
+		s += (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo[zb0016].Msgsize()
+	}
+	s += 8 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *txGroupsEncodingStub) MsgIsZero() bool {
-	return ((*z).TotalTransactionsCount == 0) && ((*z).TransactionGroupCount == 0) && (len((*z).TransactionGroupSizes) == 0) && (len((*z).SignedTxns) == 0) && (len((*z).encodedSignedTxns.Sig) == 0) && (len((*z).encodedSignedTxns.BitmaskSig) == 0) && (len((*z).encodedSignedTxns.Msig) == 0) && (len((*z).encodedSignedTxns.BitmaskMsig) == 0) && (len((*z).encodedSignedTxns.Lsig) == 0) && (len((*z).encodedSignedTxns.BitmaskLsig) == 0) && (len((*z).encodedSignedTxns.AuthAddr) == 0) && (len((*z).encodedSignedTxns.BitmaskAuthAddr) == 0) && (len((*z).encodedSignedTxns.encodedTxns.TxType) == 0)
+	return ((*z).TotalTransactionsCount == 0) && ((*z).TransactionGroupCount == 0) && (len((*z).TransactionGroupSizes) == 0) && (len((*z).SignedTxns) == 0) && (len((*z).encodedSignedTxns.Sig) == 0) && (len((*z).encodedSignedTxns.BitmaskSig) == 0) && (len((*z).encodedSignedTxns.Msig) == 0) && (len((*z).encodedSignedTxns.BitmaskMsig) == 0) && (len((*z).encodedSignedTxns.Lsig) == 0) && (len((*z).encodedSignedTxns.BitmaskLsig) == 0) && (len((*z).encodedSignedTxns.AuthAddr) == 0) && (len((*z).encodedSignedTxns.BitmaskAuthAddr) == 0) && (len((*z).encodedSignedTxns.encodedTxns.TxType) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFee) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
