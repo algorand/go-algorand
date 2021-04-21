@@ -54,6 +54,12 @@ type syncState struct {
 	// and compute it only once. Since this bloom filter could contain many hashes ( especially on relays )
 	// it's important to avoid recomputing it needlessly.
 	lastBloomFilter bloomFilter
+
+	profGetTxnsGroups   *element
+	profAssembleMessage *element
+	profSendMessage     *element
+	profMakeBloomFilter *element
+	profTxnsSelection   *element
 }
 
 func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
@@ -71,6 +77,21 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	roundSettings := s.node.GetCurrentRoundSettings()
 	s.onNewRoundEvent(MakeNewRoundEvent(roundSettings.Round, roundSettings.FetchTransactions))
 
+	// create a profiler, and it's profiling elements.
+	profiler := makeProfiler(200*time.Millisecond, s.clock, s.log)
+	profIdle := profiler.createElement("idle", false)
+	profTxChange := profiler.createElement("transactionPoolChangedEvent", false)
+	profNewRounnd := profiler.createElement("newRound", false)
+	profPeerState := profiler.createElement("peerState", false)
+	profIncomingMsg := profiler.createElement("incomingMsg", false)
+	profOutgoingMsg := profiler.createElement("outgoingMsg", false)
+	profNextOffset := profiler.createElement("nextOffset", false)
+	s.profGetTxnsGroups = profiler.createElement("getTxnGroups", true)
+	s.profAssembleMessage = profiler.createElement("assembleMessage", true)
+	s.profSendMessage = profiler.createElement("sendMessage", true)
+	s.profMakeBloomFilter = profiler.createElement("makeBloomFilter", true)
+	s.profTxnsSelection = profiler.createElement("selectPendingTransactions", true)
+
 	externalEvents := s.node.Events()
 	var nextPeerStateCh <-chan time.Time
 	for {
@@ -85,47 +106,79 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 		case ent := <-externalEvents:
 			switch ent.eventType {
 			case transactionPoolChangedEvent:
+				profTxChange.start()
 				s.onTransactionPoolChangedEvent(ent)
+				profTxChange.end()
 			case newRoundEvent:
+				profNewRounnd.start()
 				s.onNewRoundEvent(ent)
+				profNewRounnd.end()
 			}
 			continue
 		case <-nextPeerStateCh:
+			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
+			profPeerState.end()
 			continue
 		case incomingMsg := <-s.incomingMessagesCh:
+			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
+			profIncomingMsg.end()
 			continue
 		case msgSent := <-s.outgoingMessagesCallbackCh:
+			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)
+			profOutgoingMsg.end()
 			continue
 		case <-s.nextOffsetRollingCh:
+			profNextOffset.start()
 			s.rollOffsets()
+			profNextOffset.end()
 			continue
 		case <-serviceCtx.Done():
 			return
 		default:
 		}
 
+		profIdle.start()
 		select {
 		case ent := <-externalEvents:
+			profIdle.end()
 			switch ent.eventType {
 			case transactionPoolChangedEvent:
+				profTxChange.start()
 				s.onTransactionPoolChangedEvent(ent)
+				profTxChange.end()
 			case newRoundEvent:
+				profNewRounnd.start()
 				s.onNewRoundEvent(ent)
+				profNewRounnd.end()
 			}
 		case <-nextPeerStateCh:
+			profIdle.end()
+			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
+			profPeerState.end()
 		case incomingMsg := <-s.incomingMessagesCh:
+			profIdle.end()
+			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
+			profIncomingMsg.end()
 		case msgSent := <-s.outgoingMessagesCallbackCh:
+			profIdle.end()
+			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)
+			profOutgoingMsg.end()
 		case <-s.nextOffsetRollingCh:
+			profIdle.end()
+			profNextOffset.start()
 			s.rollOffsets()
+			profNextOffset.end()
 		case <-serviceCtx.Done():
+			profIdle.end()
 			return
 		case <-s.node.NotifyMonitor():
+			profIdle.end()
 		}
 	}
 }

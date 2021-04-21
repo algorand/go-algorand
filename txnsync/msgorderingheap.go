@@ -69,14 +69,15 @@ func (p *messageOrderingHeap) Less(i, j int) bool {
 	return p.messages[i].sequenceNumber < p.messages[j].sequenceNumber
 }
 
-func (p *messageOrderingHeap) enqueue(blockMsg transactionBlockMessage, sequenceNumber uint64, encodedBlockMsgLength int) error {
+// enqueue places a pending message on the heap, and returns the number of pending messages after adding the new message.
+func (p *messageOrderingHeap) enqueue(blockMsg transactionBlockMessage, sequenceNumber uint64, encodedBlockMsgLength int) (int, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(p.messages) > messageOrderingHeapLimit {
-		return errHeapReachedCapacity
+		return p.Len(), errHeapReachedCapacity
 	}
 	heap.Push(p, messageHeapItem{blockMsg: blockMsg, sequenceNumber: sequenceNumber, encodedBlockMsgLength: encodedBlockMsgLength})
-	return nil
+	return p.Len(), nil
 }
 
 func (p *messageOrderingHeap) peekSequence() (sequenceNumber uint64, err error) {

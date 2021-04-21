@@ -60,20 +60,22 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		}
 		return nil
 	}
-	err = peer.incomingMessages.enqueue(txMsg, sequenceNumber, len(message))
+	pendingIncomingMsgCount, err := peer.incomingMessages.enqueue(txMsg, sequenceNumber, len(message))
 	if err != nil {
 		// if the incoming message queue for this peer is full, disconnect from this peer.
-		s.log.Infof("unable to enqueue incoming message into peer incoming message backlog. disconnecting from peer.")
+		s.log.Infof("unable to enqueue incoming message into peer incoming message backlog. disconnecting from peer. pending peer message count : %d", pendingIncomingMsgCount)
 		return err
 	}
 
-	select {
-	case s.incomingMessagesCh <- incomingMessage{peer: peer}:
-	default:
-		// if we can't enqueue that, return an error, which would disconnect the peer.
-		//
-		s.log.Infof("unable to enqueue incoming message from a peer with txsync allocated data; incomingMessagesCh is full. disconnecting from peer.")
-		return errTransactionSyncIncomingMessageQueueFull
+	if pendingIncomingMsgCount == 1 {
+		select {
+		case s.incomingMessagesCh <- incomingMessage{peer: peer}:
+		default:
+			// if we can't enqueue that, return an error, which would disconnect the peer.
+			//
+			s.log.Infof("unable to enqueue incoming message from a peer with txsync allocated data; incomingMessagesCh is full. disconnecting from peer.")
+			return errTransactionSyncIncomingMessageQueueFull
+		}
 	}
 	return nil
 }
@@ -95,7 +97,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		} else {
 			peer = peerInfo.TxnSyncPeer
 		}
-		err := peer.incomingMessages.enqueue(message.message, message.sequenceNumber, message.encodedSize)
+		_, err := peer.incomingMessages.enqueue(message.message, message.sequenceNumber, message.encodedSize)
 		if err != nil {
 			// this is not really likely, since we won't saturate the peer heap right after creating it..
 			return
