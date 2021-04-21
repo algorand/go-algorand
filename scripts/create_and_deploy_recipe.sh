@@ -124,7 +124,7 @@ if [ -f "${NETWORK_PERF_RULES_PATH}" ]; then
     cp "${NETWORK_PERF_RULES_PATH}" "${ROOTDIR}/network_performance_rules"
 fi
 
-## Deploy binaries
+# Deploy binaries
 if [ "${NO_DEPLOY}" = "" ]; then
     # Now generate a private build using our custom genesis.json and deploy it to S3 also
     ${SRCPATH}/scripts/deploy_private_version.sh -c "${CHANNEL}" -f "${ROOTDIR}/genesisdata/genesis.json" -n "${NETWORK}" -b "${S3_RELEASE_BUCKET}"
