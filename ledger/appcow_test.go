@@ -407,7 +407,20 @@ func TestCowBuildDelta(t *testing.T) {
 	a.Contains(err.Error(), "could not find offset")
 	a.Empty(ed)
 
+	// check pre v27 behavior
 	txn.Sender = sender
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	a.NoError(err)
+	a.Equal(
+		basics.EvalDelta{
+			GlobalDelta: basics.StateDelta{},
+			LocalDeltas: map[uint64]basics.StateDelta{0: {}},
+		},
+		ed,
+	)
+
+	// check v27 behavior
+	cow.proto = config.Consensus[protocol.ConsensusCurrentVersion]
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(

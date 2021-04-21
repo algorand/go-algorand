@@ -348,6 +348,9 @@ type ConsensusParams struct {
 
 	// update the initial rewards rate calculation to take the reward pool minimum balance into account
 	InitialRewardsRateCalculation bool
+
+	// NoEmptyLocalDeltas updates how ApplyDelta.EvalDelta.LocalDeltas are stored
+	NoEmptyLocalDeltas bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -872,9 +875,24 @@ func initConsensusProtocols() {
 	v25.ApprovedUpgrades[protocol.ConsensusV26] = 140000
 	v24.ApprovedUpgrades[protocol.ConsensusV26] = 140000
 
+	// v27 updates ApplyDelta.EvalDelta.LocalDeltas format
+	v27 := v26
+	v27.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable the ApplyDelta.EvalDelta.LocalDeltas fix
+	v27.NoEmptyLocalDeltas = true
+
+	Consensus[protocol.ConsensusV27] = v27
+
+	// v26 can be upgraded to v27, with an update delay of 3 days
+	// 60279 = (3 * 24 * 60 * 60 / 4.3)
+	// for the sake of future manual calculations, we'll round that down
+	// a bit :
+	v26.ApprovedUpgrades[protocol.ConsensusV27] = 60000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v26
+	vFuture := v27
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
@@ -895,7 +913,7 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
-// Global defines global Algorand protocol parameters which should not be overriden.
+// Global defines global Algorand protocol parameters which should not be overridden.
 type Global struct {
 	SmallLambda time.Duration // min amount of time to wait for leader's credential (i.e., time to propagate one credential)
 	BigLambda   time.Duration // max amount of time to wait for leader's proposal (i.e., time to propagate one block)

@@ -469,8 +469,7 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 				}
 
 				d := sdelta.kvCow.serialize()
-				// ignore empty deltas
-				if len(d) != 0 {
+				if !cb.proto.NoEmptyLocalDeltas || len(d) != 0 {
 					evalDelta.LocalDeltas[addrOffset] = d
 				}
 			}
