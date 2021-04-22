@@ -844,3 +844,282 @@ return`
 	a.Empty(blk.Payset[1].ApplyData.EvalDelta.LocalDeltas)
 	a.Equal(transactions.ApplyData{}, blk.Payset[1].ApplyData)
 }
+
+func TestAppEmptyAccountsLocal(t *testing.T) {
+	a := require.New(t)
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+int 0
+byte "lk"
+byte "local"
+app_local_put
+success:
+int 1
+return`
+
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+
+	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+	userLocal, err := basics.UnmarshalChecksumAddress("UL5C6SRVLOROSB5FGAE6TY34VXPXVR7GNIELUB3DD5KTA4VT6JGOZ6WFAY")
+	a.NoError(err)
+
+	a.Contains(genesisInitState.Accounts, creator)
+	a.Contains(genesisInitState.Accounts, userLocal)
+
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), "TestAppEmptyAccounts", true, genesisInitState, cfg)
+	a.NoError(err)
+	defer l.Close()
+
+	genesisID := t.Name()
+	txHeader := transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	// create application
+	approvalProgram := program
+	clearStateProgram := []byte("\x02") // empty
+	appCreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 4},
+		LocalStateSchema:  basics.StateSchema{NumByteSlice: 2},
+	}
+	appCreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCreateFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	a.NoError(err)
+
+	appIdx := basics.AppIndex(1) // first tnx => idx = 1
+
+	// opt-in, write to local
+	txHeader.Sender = userLocal
+	appCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.OptInOC,
+		ApplicationID: appIdx,
+	}
+	appCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
+		EvalDelta: basics.EvalDelta{
+			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{
+				Action: basics.SetBytesAction,
+				Bytes:  "local",
+			}}},
+		},
+	})
+	a.NoError(err)
+
+	// close out
+	txHeader.Sender = userLocal
+	appCallFields = transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.CloseOutOC,
+		ApplicationID: appIdx,
+	}
+	appCall = transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	paymentFields := transactions.PaymentTxnFields{
+		Amount:           basics.MicroAlgos{Raw: 0},
+		Receiver:         creator,
+		CloseRemainderTo: creator,
+	}
+	payment := transactions.Transaction{
+		Type:             protocol.PaymentTx,
+		Header:           txHeader,
+		PaymentTxnFields: paymentFields,
+	}
+
+	data := genesisInitState.Accounts[userLocal]
+	balance := basics.MicroAlgos{Raw: data.MicroAlgos.Raw - txHeader.Fee.Raw*3}
+	stx1 := sign(initKeys, appCall)
+	stx2 := sign(initKeys, payment)
+
+	blk := makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{})
+	a.NoError(err)
+	txib2, err := blk.EncodeSignedTxn(stx2, transactions.ApplyData{ClosingAmount: balance})
+	a.NoError(err)
+	blk.TxnCounter = blk.TxnCounter + 2
+	blk.Payset = append(blk.Payset, txib1, txib2)
+	blk.TxnRoot, err = blk.PaysetCommit()
+	a.NoError(err)
+	err = l.appendUnvalidated(blk)
+	a.NoError(err)
+
+	// save data into DB and write into local state
+	l.accts.accountsWriting.Add(1)
+	l.accts.commitRound(3, 0, 0)
+	l.reloadLedger()
+
+	// check first write
+	blk, err = l.Block(2)
+	a.NoError(err)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas, uint64(0))
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[0], "lk")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[0]["lk"].Bytes, "local")
+
+	// check close out
+	blk, err = l.Block(3)
+	a.NoError(err)
+	a.Empty(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
+
+	pad, err := l.accts.accountsq.lookup(userLocal)
+	a.NoError(err)
+	a.Equal(basics.AccountData{}, pad.accountData)
+	a.Zero(pad.rowid)
+}
+
+func TestAppEmptyAccountsGlobal(t *testing.T) {
+	a := require.New(t)
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+byte "gk"
+byte "global"
+app_global_put
+success:
+int 1
+return`
+
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+
+	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+	userLocal, err := basics.UnmarshalChecksumAddress("UL5C6SRVLOROSB5FGAE6TY34VXPXVR7GNIELUB3DD5KTA4VT6JGOZ6WFAY")
+	a.NoError(err)
+
+	a.Contains(genesisInitState.Accounts, creator)
+	a.Contains(genesisInitState.Accounts, userLocal)
+
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), "TestAppEmptyAccounts", true, genesisInitState, cfg)
+	a.NoError(err)
+	defer l.Close()
+
+	genesisID := t.Name()
+	txHeader := transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	// create application
+	approvalProgram := program
+	clearStateProgram := []byte("\x02") // empty
+	appCreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 4},
+		LocalStateSchema:  basics.StateSchema{NumByteSlice: 2},
+	}
+	appCreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCreateFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	a.NoError(err)
+
+	appIdx := basics.AppIndex(1) // first tnx => idx = 1
+
+	// destoy the app
+	txHeader.Sender = creator
+	appCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.DeleteApplicationOC,
+		ApplicationID: appIdx,
+	}
+	appCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	paymentFields := transactions.PaymentTxnFields{
+		Amount:           basics.MicroAlgos{Raw: 0},
+		Receiver:         userLocal,
+		CloseRemainderTo: userLocal,
+	}
+	payment := transactions.Transaction{
+		Type:             protocol.PaymentTx,
+		Header:           txHeader,
+		PaymentTxnFields: paymentFields,
+	}
+
+	data := genesisInitState.Accounts[creator]
+	balance := basics.MicroAlgos{Raw: data.MicroAlgos.Raw - txHeader.Fee.Raw*3}
+	stx1 := sign(initKeys, appCall)
+	stx2 := sign(initKeys, payment)
+
+	blk := makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		GlobalDelta: basics.StateDelta{
+			"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"},
+		}},
+	})
+	a.NoError(err)
+	txib2, err := blk.EncodeSignedTxn(stx2, transactions.ApplyData{ClosingAmount: balance})
+	a.NoError(err)
+	blk.TxnCounter = blk.TxnCounter + 2
+	blk.Payset = append(blk.Payset, txib1, txib2)
+	blk.TxnRoot, err = blk.PaysetCommit()
+	a.NoError(err)
+	err = l.appendUnvalidated(blk)
+	a.NoError(err)
+
+	// save data into DB and write into local state
+	l.accts.accountsWriting.Add(1)
+	l.accts.commitRound(2, 0, 0)
+	l.reloadLedger()
+
+	// check first write
+	blk, err = l.Block(1)
+	a.NoError(err)
+	a.Nil(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
+	a.Nil(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta)
+
+	// check deletion out
+	blk, err = l.Block(2)
+	a.NoError(err)
+	a.Nil(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta["gk"].Bytes, "global")
+
+	pad, err := l.accts.accountsq.lookup(creator)
+	a.NoError(err)
+	a.Equal(basics.AccountData{}, pad.accountData)
+	a.Zero(pad.rowid)
+}

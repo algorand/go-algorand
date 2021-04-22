@@ -562,9 +562,12 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 	// duplicate code in branches is proven to be a bit faster than
 	// having basics.AppParams and basics.AppLocalState under a common interface with additional loops and type assertions
 	if aapp.global {
-		owned := make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
-		for k, v := range data.AppParams {
-			owned[k] = v
+		var owned map[basics.AppIndex]basics.AppParams
+		if len(data.AppParams) > 0 {
+			owned = make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
+			for k, v := range data.AppParams {
+				owned[k] = v
+			}
 		}
 
 		switch store.action {
@@ -600,9 +603,12 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 		data.AppParams = owned
 
 	} else {
-		owned := make(map[basics.AppIndex]basics.AppLocalState, len(data.AppLocalStates))
-		for k, v := range data.AppLocalStates {
-			owned[k] = v
+		var owned map[basics.AppIndex]basics.AppLocalState
+		if len(data.AppLocalStates) > 0 {
+			owned = make(map[basics.AppIndex]basics.AppLocalState, len(data.AppLocalStates))
+			for k, v := range data.AppLocalStates {
+				owned[k] = v
+			}
 		}
 
 		switch store.action {
@@ -610,7 +616,8 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 			delete(owned, aapp.aidx)
 		case allocAction, remainAllocAction:
 			// note: these should always exist because they were
-			// at least preceded by a call to Put?
+			// at least preceded by a call to Put (opting in),
+			// or the account has opted in before and local states are pre-allocated
 			states, ok := owned[aapp.aidx]
 			if !ok {
 				return basics.AccountData{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
