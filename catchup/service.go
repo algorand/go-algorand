@@ -183,7 +183,22 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 		// Stop retrying after a while.
 		if i > catchupRetryLimit {
-			s.log.Errorf("fetchAndWrite: block retrieval exceeded retry limit")
+			loggedMessage := fmt.Sprintf("fetchAndWrite(%d): block retrieval exceeded retry limit", r)
+			if _, initialSync := s.IsSynchronizing(); initialSync {
+				// on the initial sync, it's completly expected that we won't be able to get all the "next" blocks.
+				// Therefore info should suffice.
+				s.log.Info(loggedMessage)
+			} else {
+				// On any subsequent sync, we migth be looking for multiple rounds into the future, so it's completly
+				// reasonable that we would fail retrieving the future block.
+				// Generate a warning here only if we're failing to retrieve X+1 or below.
+				// All other block retrievals should not generate a warning.
+				if r > s.ledger.NextRound() {
+					s.log.Info(loggedMessage)
+				} else {
+					s.log.Warn(loggedMessage)
+				}
+			}
 			return false
 		}
 
