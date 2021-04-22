@@ -66,7 +66,7 @@ func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Tr
 	}
 }
 
-func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
+func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoPerAccount int) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
 	params := config.Consensus[proto]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
@@ -87,7 +87,7 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 	for i := range genaddrs {
 		initKeys[genaddrs[i]] = gensecrets[i]
 		// Give each account quite a bit more balance than MinFee or MinBalance
-		initAccounts[genaddrs[i]] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + 10000000000) * 100000)})
+		initAccounts[genaddrs[i]] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + baseAlgoPerAccount) * 100000)})
 	}
 	initKeys[poolAddr] = poolSecret
 	initAccounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})
@@ -244,7 +244,7 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 }
 
 func TestLedgerBasic(t *testing.T) {
-	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -257,7 +257,7 @@ func TestLedgerBasic(t *testing.T) {
 func TestLedgerBlockHeaders(t *testing.T) {
 	a := require.New(t)
 
-	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -401,7 +401,7 @@ func TestLedgerSingleTx(t *testing.T) {
 	// V15 is the earliest protocol version in active use.
 	// The genesis for betanet and testnet is at V15
 	// The genesis for mainnet is at V17
-	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV15)
+	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV15, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -599,7 +599,7 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	a := require.New(t)
 
 	protoName := protocol.ConsensusV24
-	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
+	genesisInitState, initSecrets := testGenerateInitState(t, protoName, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -768,7 +768,7 @@ func TestLedgerAppCrossRoundWrites(t *testing.T) {
 	a := require.New(t)
 
 	protoName := protocol.ConsensusV24
-	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
+	genesisInitState, initSecrets := testGenerateInitState(t, protoName, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -904,7 +904,7 @@ func TestLedgerAppMultiTxnWrites(t *testing.T) {
 	a := require.New(t)
 
 	protoName := protocol.ConsensusV24
-	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
+	genesisInitState, initSecrets := testGenerateInitState(t, protoName, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -1069,7 +1069,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	genesisInitState, initSecrets := testGenerateInitState(t, version)
+	genesisInitState, initSecrets := testGenerateInitState(t, version, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -1324,7 +1324,7 @@ func TestLedgerRegressionFaultyLeaseFirstValidCheckFuture(t *testing.T) {
 func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, version protocol.ConsensusVersion) {
 	a := require.New(t)
 
-	genesisInitState, initSecrets := testGenerateInitState(t, version)
+	genesisInitState, initSecrets := testGenerateInitState(t, version, 100)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -1445,7 +1445,7 @@ func TestLedgerReload(t *testing.T) {
 func TestGetLastCatchpointLabel(t *testing.T) {
 
 	//initLedger
-	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -1523,7 +1523,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	numElementsPerSegement := 10 // This is multiplied by 10. see randomCreatables
 
 	//initLedger
-	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -1580,7 +1580,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 func TestLedgerMemoryLeak(t *testing.T) {
 	t.Skip() // for manual runs only
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 10000000000)
 	const inMem = false
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
