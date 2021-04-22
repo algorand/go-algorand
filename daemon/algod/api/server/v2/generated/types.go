@@ -602,6 +602,9 @@ type SpeculationResponse struct {
 	// The round at which speculation begins
 	Base uint64 `json:"base"`
 
+	// The number of transactions preceeding each checkpoint.
+	Checkpoints *[]uint64 `json:"checkpoints,omitempty"`
+
 	// The persistent token by which the speculation can be referenced
 	Token string `json:"token"`
 }

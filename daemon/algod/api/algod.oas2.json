@@ -1170,6 +1170,59 @@
         }
       ]
     },
+    "/v2/speculation/{speculation}/{operation}": {
+      "post": {
+        "description": "Given a speculation token, perform a scope opening or closing operation",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Operates on a speculation object.",
+        "operationId": "SpeculationOperation",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "speculation",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "name": "operation",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/SpeculationResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/teal/dryrun": {
       "post": {
         "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configureation file sets EnableDeveloperAPI to true.",
@@ -2142,6 +2195,13 @@
           "token": {
             "description": "The persistent token by which the speculation can be referenced",
             "type": "string"
+          },
+          "checkpoints": {
+            "description": "The number of transactions preceeding each checkpoint.",
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
           }
         }
       }

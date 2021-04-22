@@ -622,6 +622,13 @@
                   "description": "The round at which speculation begins",
                   "type": "integer"
                 },
+                "checkpoints": {
+                  "description": "The number of transactions preceeding each checkpoint.",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
                 "token": {
                   "description": "The persistent token by which the speculation can be referenced",
                   "type": "string"
@@ -2129,6 +2136,13 @@
                       "description": "The round at which speculation begins",
                       "type": "integer"
                     },
+                    "checkpoints": {
+                      "description": "The number of transactions preceeding each checkpoint.",
+                      "items": {
+                        "type": "integer"
+                      },
+                      "type": "array"
+                    },
                     "token": {
                       "description": "The persistent token by which the speculation can be referenced",
                       "type": "string"
@@ -2641,6 +2655,99 @@
         "tags": [
           "private"
         ]
+      }
+    },
+    "/v2/speculation/{speculation}/{operation}": {
+      "post": {
+        "description": "Given a speculation token, perform a scope opening or closing operation",
+        "operationId": "SpeculationOperation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "speculation",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "operation",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Specifies the base round and token for speculation execution.",
+                  "properties": {
+                    "base": {
+                      "description": "The round at which speculation begins",
+                      "type": "integer"
+                    },
+                    "checkpoints": {
+                      "description": "The number of transactions preceeding each checkpoint.",
+                      "items": {
+                        "type": "integer"
+                      },
+                      "type": "array"
+                    },
+                    "token": {
+                      "description": "The persistent token by which the speculation can be referenced",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "base",
+                    "token"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Speculation information"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Operates on a speculation object."
       }
     },
     "/v2/status": {

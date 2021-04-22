@@ -31,22 +31,35 @@ import (
 // balances and such as we go.
 
 type SpeculationLedger struct {
+	baseLedger  *Ledger
+	baseRound   basics.Round
+	txgroups    [][]transactions.SignedTxn
+	Checkpoints []uint64
+
 	Evaluator *ledger.BlockEvaluator
-	baseRound basics.Round
 	Version   protocol.ConsensusVersion
 }
 
 func NewSpeculationLedger(l *Ledger, rnd basics.Round) (*SpeculationLedger, error) {
-	hdr, err := l.BlockHdr(rnd)
+	sl := &SpeculationLedger{baseLedger: l, baseRound: rnd}
+	err := sl.start()
+	return sl, err
+}
+
+// Note that start() does not manipulate txgroups or checkpoints, so
+// it can be used at construction time and during rollback.
+func (sl *SpeculationLedger) start() error {
+	hdr, err := sl.baseLedger.BlockHdr(sl.baseRound)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	evaluator, err := l.StartEvaluator(hdr, 0)
+	evaluator, err := sl.baseLedger.StartEvaluator(hdr, 0)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	sl := &SpeculationLedger{Evaluator: evaluator, baseRound: rnd, Version: hdr.CurrentProtocol}
-	return sl, nil
+	sl.Evaluator = evaluator
+	sl.Version = hdr.CurrentProtocol
+	return nil
 }
 
 func (sl *SpeculationLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -70,5 +83,43 @@ func (sl *SpeculationLedger) LookupWithoutRewards(rnd basics.Round, addr basics.
 	return acct, basics.Round(0), err
 }
 func (sl *SpeculationLedger) Apply(txgroup []transactions.SignedTxn) error {
-	return sl.Evaluator.TransactionGroup(txgroup)
+	err := sl.Evaluator.TransactionGroup(txgroup)
+	if err != nil {
+		return err
+	}
+	sl.txgroups = append(sl.txgroups, txgroup)
+	return nil
+}
+
+func (sl *SpeculationLedger) Checkpoint() error {
+	sl.Checkpoints = append(sl.Checkpoints, uint64(len(sl.txgroups)))
+	return nil
+}
+func (sl *SpeculationLedger) Rollback() error {
+	// Start the evaluator over again from the beginning
+	err := sl.start()
+	if err != nil {
+		return err
+	}
+
+	// Replay the txns up until the last checkpoint
+	last := len(sl.Checkpoints) - 1
+	replays := sl.txgroups[:sl.Checkpoints[last]]
+	sl.txgroups = nil
+	for _, txgroup := range replays {
+		err := sl.Apply(txgroup)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Discard that checkpoint
+	sl.Checkpoints = sl.Checkpoints[:last]
+	return nil
+}
+
+func (sl *SpeculationLedger) Commit() error {
+	last := len(sl.Checkpoints) - 1
+	sl.Checkpoints = sl.Checkpoints[:last]
+	return nil
 }

@@ -221,6 +221,58 @@ func (v2 *Handlers) CreateSpeculation(ctx echo.Context, round uint64) error {
 	})
 }
 
+// Perform operations on a speculation object.
+// (POST /v2/speculation/{token}/{operation})
+func (v2 *Handlers) SpeculationOperation(ctx echo.Context, speculation string, operation string) error {
+	if operation == "delete" {
+		v2.Node.DestroySpeculationLedger(speculation)
+		// XXX: return something more reasonable
+		return ctx.JSON(http.StatusOK, generated.SpeculationResponse{
+			Base:  0,
+			Token: speculation,
+		})
+	}
+	ledger, err := v2.Node.SpeculationLedger(speculation)
+	if err != nil {
+		return badRequest(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	if operation == "checkpoint" {
+		err := ledger.Checkpoint()
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		return ctx.JSON(http.StatusOK, generated.SpeculationResponse{
+			Base:        uint64(ledger.Latest()),
+			Checkpoints: &ledger.Checkpoints,
+			Token:       speculation,
+		})
+	}
+	if operation == "rollback" {
+		err := ledger.Rollback()
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		return ctx.JSON(http.StatusOK, generated.SpeculationResponse{
+			Base:        uint64(ledger.Latest()),
+			Checkpoints: &ledger.Checkpoints,
+			Token:       speculation,
+		})
+	}
+	if operation == "commit" {
+		ledger.Commit()
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		return ctx.JSON(http.StatusOK, generated.SpeculationResponse{
+			Base:        uint64(ledger.Latest()),
+			Checkpoints: &ledger.Checkpoints,
+			Token:       speculation,
+		})
+	}
+	message := fmt.Sprintf("unknown operation '%s'", operation)
+	return badRequest(ctx, errors.New(message), message, v2.Log)
+}
+
 // GetProof generates a Merkle proof for a transaction in a block.
 // (GET /v2/blocks/{round}/transactions/{txid}/proof)
 func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params generated.GetProofParams) error {
