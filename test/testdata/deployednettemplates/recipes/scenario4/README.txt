@@ -3,4 +3,8 @@ relays, such that the relays are distributed in 3 regions, and the
 nodes are in a 4th region.
 
 This scenario was designed to stress-test the situation where the
-agreement votes arrive late from different rounds. 
+agreement proposal arrives for the next round.
+
+
+
+
