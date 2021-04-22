@@ -843,6 +843,18 @@ func TestApplyStorageDelta(t *testing.T) {
 	data = applyAll(kv, &sdd)
 	testDuplicateKeys(data.AppParams[1].GlobalState, data.AppParams[2].GlobalState)
 	testDuplicateKeys(data.AppLocalStates[1].KeyValue, data.AppLocalStates[2].KeyValue)
+
+	sd := storageDelta{action: deallocAction, kvCow: map[string]valueDelta{}}
+	data, err := applyStorageDelta(basics.AccountData{}, storagePtr{1, true}, &sd)
+	a.NoError(err)
+	a.Nil(data.AppParams)
+	a.Nil(data.AppLocalStates)
+	a.True(data.IsZero())
+	data, err = applyStorageDelta(basics.AccountData{}, storagePtr{1, false}, &sd)
+	a.NoError(err)
+	a.Nil(data.AppParams)
+	a.Nil(data.AppLocalStates)
+	a.True(data.IsZero())
 }
 
 func TestCowAllocated(t *testing.T) {
