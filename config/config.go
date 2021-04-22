@@ -389,15 +389,18 @@ type Local struct {
 	// The archiver is randomly selected, if none is available, will return StatusNotFound (404).
 	EnableBlockServiceFallbackToArchiver bool `version[16]:"true"`
 
-	// CatchupBlockValidateMode defines the degree of validation used by the catchup service. This field is a bit-field, where the
-	// default enabled checks have their corresponding bit set as zero, and the default disabled checks have their corresponding bit clear.
-	// bit 0, default enable: verify the block certificate
-	// bit 1, default enable: verify payset committed hash in block header matches payset hash
-	// bit 2, default disable: verify the transaction signatures on the block are valid
-	// bit 3, default disable: verify that the hash of the recomputed payset matches the hash of the payset committed in the block header.
-	// not all permutation of the above bitset are currently functional. In particular, the two that are functional are:
-	// 0 : default behavior.
-	// 12 : perform all supported validation methods.
+	// CatchupBlockValidateMode is a development and testing configuration used by the catchup service.
+	// It can be used to omit certain validations to speed up the catchup process, or to apply extra validations which are redundant in normal operation.
+	// This field is a bit-field with:
+	// bit 0: (default 0) 0: verify the block certificate; 1: skip this validation
+	// bit 1: (default 0) 0: verify payset committed hash in block header matches payset hash; 1: skip this validation
+	// bit 2: (default 0) 0: don't verify the transaction signatures on the block are valid; 1: verify the transaction signatures on block
+	// bit 3: (default 0) 0: don't verify that the hash of the recomputed payset matches the hash of the payset committed in the block header; 1: do perform the above verification
+	// Note: not all permutations of the above bitset are currently functional. In particular, the ones that are functional are:
+	// 0  : default behavior.
+	// 3  : speed up catchup by skipping necessary validations
+	// 12 : perform all validation methods (normal and additional). These extra tests helps to verify the integrity of the compiled executable against
+	//      previously used executabled, and would not provide any additional security guarantees.
 	CatchupBlockValidateMode int `version[17]:"0"`
 }
 
