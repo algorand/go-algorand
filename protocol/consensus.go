@@ -143,6 +143,11 @@ const ConsensusV26 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff",
 )
 
+// ConsensusV27 updates ApplyDelta.EvalDelta.LocalDeltas format
+const ConsensusV27 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/d050b3cade6d5c664df8bd729bf219f179812595",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -155,7 +160,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV26
+const ConsensusCurrentVersion = ConsensusV27
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
