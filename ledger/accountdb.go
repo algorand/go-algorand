@@ -114,7 +114,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(4)
+var accountDBVersion = int32(5)
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -629,6 +629,45 @@ func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) erro
 	}
 
 	return rows.Err()
+}
+
+// removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
+// and optionally returns list of addresses that were eliminated
+func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, addresses []basics.Address, err error) {
+	if queryAddresses {
+		rows, err := tx.Query("SELECT address FROM accountbase where length(data) = 1 and data = x'80'") // empty AccountData is 0x80
+		if err != nil {
+			return 0, nil, err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var addrbuf []byte
+			err = rows.Scan(&addrbuf)
+			if err != nil {
+				return 0, nil, err
+			}
+			var addr basics.Address
+			if len(addrbuf) != len(addr) {
+				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				return 0, nil, err
+			}
+			copy(addr[:], addrbuf)
+			addresses = append(addresses, addr)
+		}
+	}
+
+	result, err := tx.Exec("DELETE from accountbase where length(data) = 1 and data = x'80'")
+	if err != nil {
+		return 0, nil, err
+	}
+	num, err = result.RowsAffected()
+	if err != nil {
+		// something wrong on getting rows count but data deleted, ignore the error
+		num = int64(len(addresses))
+		err = nil
+	}
+	return num, addresses, err
 }
 
 // accountDataToOnline returns the part of the AccountData that matters
