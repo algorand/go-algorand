@@ -407,6 +407,7 @@ func TestCowBuildDelta(t *testing.T) {
 	a.Contains(err.Error(), "could not find offset")
 	a.Empty(ed)
 
+	// check pre v27 behavior
 	txn.Sender = sender
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
@@ -414,6 +415,18 @@ func TestCowBuildDelta(t *testing.T) {
 		basics.EvalDelta{
 			GlobalDelta: basics.StateDelta{},
 			LocalDeltas: map[uint64]basics.StateDelta{0: {}},
+		},
+		ed,
+	)
+
+	// check v27 behavior
+	cow.proto = config.Consensus[protocol.ConsensusCurrentVersion]
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	a.NoError(err)
+	a.Equal(
+		basics.EvalDelta{
+			GlobalDelta: basics.StateDelta{},
+			LocalDeltas: map[uint64]basics.StateDelta{},
 		},
 		ed,
 	)
@@ -439,6 +452,80 @@ func TestCowBuildDelta(t *testing.T) {
 			LocalDeltas: map[uint64]basics.StateDelta{
 				0: {
 					"key1": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
+				},
+			},
+		},
+		ed,
+	)
+
+	// check empty sender delta (same key update) and non-empty others
+	delete(cow.sdeltas[sender], storagePtr{aidx, false})
+	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
+		action: remainAllocAction,
+		kvCow: stateDelta{
+			"key1": valueDelta{
+				old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				new:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				oldExists: true,
+				newExists: true,
+			},
+		},
+	}
+	txn.Accounts = append(txn.Accounts, creator)
+	cow.sdeltas[creator][storagePtr{aidx, false}] = &storageDelta{
+		action: remainAllocAction,
+		kvCow: stateDelta{
+			"key2": valueDelta{
+				old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				new:       basics.TealValue{Type: basics.TealUintType, Uint: 2},
+				oldExists: true,
+				newExists: true,
+			},
+		},
+	}
+
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	a.NoError(err)
+	a.Equal(
+		basics.EvalDelta{
+			GlobalDelta: basics.StateDelta(nil),
+			LocalDeltas: map[uint64]basics.StateDelta{
+				1: {
+					"key2": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
+				},
+			},
+		},
+		ed,
+	)
+
+	// check two keys: empty change and value update
+	delete(cow.sdeltas[sender], storagePtr{aidx, false})
+	delete(cow.sdeltas[creator], storagePtr{aidx, false})
+	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
+		action: remainAllocAction,
+		kvCow: stateDelta{
+			"key1": valueDelta{
+				old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				new:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				oldExists: true,
+				newExists: true,
+			},
+			"key2": valueDelta{
+				old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				new:       basics.TealValue{Type: basics.TealUintType, Uint: 2},
+				oldExists: true,
+				newExists: true,
+			},
+		},
+	}
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
+	a.NoError(err)
+	a.Equal(
+		basics.EvalDelta{
+			GlobalDelta: basics.StateDelta(nil),
+			LocalDeltas: map[uint64]basics.StateDelta{
+				0: {
+					"key2": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
 				},
 			},
 		},
@@ -756,6 +843,18 @@ func TestApplyStorageDelta(t *testing.T) {
 	data = applyAll(kv, &sdd)
 	testDuplicateKeys(data.AppParams[1].GlobalState, data.AppParams[2].GlobalState)
 	testDuplicateKeys(data.AppLocalStates[1].KeyValue, data.AppLocalStates[2].KeyValue)
+
+	sd := storageDelta{action: deallocAction, kvCow: map[string]valueDelta{}}
+	data, err := applyStorageDelta(basics.AccountData{}, storagePtr{1, true}, &sd)
+	a.NoError(err)
+	a.Nil(data.AppParams)
+	a.Nil(data.AppLocalStates)
+	a.True(data.IsZero())
+	data, err = applyStorageDelta(basics.AccountData{}, storagePtr{1, false}, &sd)
+	a.NoError(err)
+	a.Nil(data.AppParams)
+	a.Nil(data.AppLocalStates)
+	a.True(data.IsZero())
 }
 
 func TestCowAllocated(t *testing.T) {
