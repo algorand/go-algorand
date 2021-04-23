@@ -158,7 +158,7 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 				return nil, fmt.Errorf("failed to copy database file %s from %s to %s : %w", "bootstrapped.block.sqlite", filepath.Dir(nc.bootstrappedBlockFile), dest, err)
 			}
 			fmt.Fprintf(os.Stdout, "... copying tracker database file to ledger folder ...\n")
-			dest = filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.block.sqlite", config.LedgerFilenamePrefix))
+			dest = filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.tracker.sqlite", config.LedgerFilenamePrefix))
 			_, err = util.CopyFile(nc.bootstrappedTrackerFile, dest)
 			if err != nil {
 				return nil, fmt.Errorf("failed to copy database file %s from %s to %s : %w", "bootstrapped.tracker.sqlite", filepath.Dir(nc.bootstrappedBlockFile), dest, err)
