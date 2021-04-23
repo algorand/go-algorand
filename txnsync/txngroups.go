@@ -26,6 +26,7 @@ import (
 
 const maxEncodedTransactionGroup = 10000
 const maxEncodedTransactionGroupEntries = 10000
+const maxBitmaskSize = (maxEncodedTransactionGroup + 7) / 8 + 1
 
 //msgp:allocbound txnGroups maxEncodedTransactionGroupEntries
 type txnGroups []transactions.SignedTxn
@@ -33,8 +34,8 @@ type txnGroups []transactions.SignedTxn
 type txGroupsEncodingStub struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	TotalTransactionsCount uint64 // how many transactions in total do we have?
-	TransactionGroupCount uint64 // how many txgroups in total do we have?
+	TotalTransactionsCount uint64 `codec:"ttc"`
+	TransactionGroupCount uint64 `codec:"tgc"`
 	TransactionGroupSizes []byte `codec:"tgs,allocbound=maxEncodedTransactionGroup"`
 
 	SignedTxns []transactions.SignedTxn `codec:"st,allocbound=maxEncodedTransactionGroup"`
@@ -46,41 +47,48 @@ type encodedSignedTxns struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Sig      []crypto.Signature   `codec:"sig,allocbound=maxEncodedTransactionGroup"`
-	BitmaskSig bitmask `codec:"sigbm,allocbound=maxEncodedTransactionGroup"`
+	BitmaskSig bitmask `codec:"sigbm,allocbound=maxBitmaskSize"`
 	Msig     []crypto.MultisigSig `codec:"msig,allocbound=maxEncodedTransactionGroup"`
-	BitmaskMsig bitmask `codec:"msigbm,allocbound=maxEncodedTransactionGroup"`
+	BitmaskMsig bitmask `codec:"msigbm,allocbound=maxBitmaskSize"`
 	Lsig     []transactions.LogicSig           `codec:"lsig,allocbound=maxEncodedTransactionGroup"`
-	BitmaskLsig bitmask     `codec:"lsigb,allocbound=maxEncodedTransactionGroupm"`
+	BitmaskLsig bitmask     `codec:"lsigbm,allocbound=maxBitmaskSize"`
 	AuthAddr []basics.Address     `codec:"sgnr,allocbound=maxEncodedTransactionGroup"`
-	BitmaskAuthAddr bitmask   `codec:"sgnrbm,allocbound=maxEncodedTransactionGroup"`
+	BitmaskAuthAddr bitmask   `codec:"sgnrbm,allocbound=maxBitmaskSize"`
 
 	encodedTxns
 }
 
 type encodedTxns struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	TxType []protocol.TxType `codec:"type,allocbound=maxEncodedTransactionGroup"`
+	_struct struct{}          `codec:",omitempty,omitemptyarray"`
+	TxType  []protocol.TxType `codec:"type,allocbound=maxEncodedTransactionGroup"`
 
 	encodedTxnHeaders
+	encodedKeyregTxnFields
+	encodedPaymentTxnFields
+	encodedAssetConfigTxnFields
+	encodedAssetTransferTxnFields
+	encodedAssetFreezeTxnFields
+	encodedApplicationCallTxnFields
+	encodedCompactCertTxnFields
 }
 
 type encodedTxnHeaders struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Sender      []basics.Address    `codec:"snd,allocbound=maxEncodedTransactionGroup"`
-	BitmaskSender bitmask `codec:"sndbm,allocbound=maxEncodedTransactionGroup"`
+	BitmaskSender bitmask `codec:"sndbm,allocbound=maxBitmaskSize"`
 	Fee         []basics.MicroAlgos `codec:"fee,allocbound=maxEncodedTransactionGroup"`
-	BitmaskFee bitmask `codec:"feebm,allocbound=maxEncodedTransactionGroup"`
+	BitmaskFee bitmask `codec:"feebm,allocbound=maxBitmaskSize"`
 	FirstValid  []basics.Round      `codec:"fv,allocbound=maxEncodedTransactionGroup"`
-	BitmaskFirstValid bitmask `codec:"fvbm,allocbound=maxEncodedTransactionGroup"`
+	BitmaskFirstValid bitmask `codec:"fvbm,allocbound=maxBitmaskSize"`
 	LastValid   []basics.Round      `codec:"lv,allocbound=maxEncodedTransactionGroup"`
-	BitmaskLastValid bitmask `codec:"lvbm,allocbound=maxEncodedTransactionGroup"`
+	BitmaskLastValid bitmask `codec:"lvbm,allocbound=maxBitmaskSize"`
 	Note        [][]byte            `codec:"note,allocbound=maxEncodedTransactionGroup"` // TODO whats the correct allocbound?
-	BitmaskNote bitmask `codec:"notebm,allocbound=maxEncodedTransactionGroup"`
-	GenesisID   []string            `codec:"gen,allocbound=maxEncodedTransactionGroup"`
-	BitmaskGenesisID bitmask `codec:"genbm,allocbound=maxEncodedTransactionGroup"`
-	GenesisHash []crypto.Digest     `codec:"gh,allocbound=maxEncodedTransactionGroup"`
-	BitmaskGenesisHash bitmask `codec:"ghbm,allocbound=maxEncodedTransactionGroup"`
+	BitmaskNote bitmask `codec:"notebm,allocbound=maxBitmaskSize"`
+	GenesisID   string            `codec:"gen"`
+	BitmaskGenesisID bitmask `codec:"genbm,allocbound=maxBitmaskSize"`
+	GenesisHash crypto.Digest     `codec:"gh"`
+	BitmaskGenesisHash bitmask `codec:"ghbm,allocbound=maxBitmaskSize"`
 
 	// Lease enforces mutual exclusion of transactions.  If this field is
 	// nonzero, then once the transaction is confirmed, it acquires the
@@ -88,26 +96,42 @@ type encodedTxnHeaders struct {
 	// the LastValid round passes.  While this transaction possesses the
 	// lease, no other transaction specifying this lease can be confirmed.
 	Lease [][32]byte `codec:"lx,allocbound=maxEncodedTransactionGroup"`
-	BitmaskLease bitmask `codec:"lxbm,allocbound=maxEncodedTransactionGroup"`
+	BitmaskLease bitmask `codec:"lxbm,allocbound=maxBitmaskSize"`
 
 	// RekeyTo, if nonzero, sets the sender's AuthAddr to the given address
 	// If the RekeyTo address is the sender's actual address, the AuthAddr is set to zero
 	// This allows "re-keying" a long-lived account -- rotating the signing key, changing
 	// membership of a multisig account, etc.
 	RekeyTo []basics.Address `codec:"rekey,allocbound=maxEncodedTransactionGroup"`
-	BitmaskRekeyTo bitmask `codec:"rekeybm,allocbound=maxEncodedTransactionGroup"`
+	BitmaskRekeyTo bitmask `codec:"rekeybm,allocbound=maxBitmaskSize"`
 }
 
 type encodedKeyregTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-
+	VotePK           []crypto.OneTimeSignatureVerifier `codec:"votekey,allocbound=maxEncodedTransactionGroup"`
+	BitmaskVotePK bitmask`codec:"votekeybm,allocbound=maxBitmaskSize"`
+	SelectionPK      []crypto.VRFVerifier              `codec:"selkey,allocbound=maxEncodedTransactionGroup"`
+	BitmaskSelectionPK bitmask`codec:"selkeybm,allocbound=maxBitmaskSize"`
+	VoteFirst        []basics.Round                    `codec:"votefst,allocbound=maxEncodedTransactionGroup"`
+	BitmaskVoteFirst bitmask`codec:"votefstbm,allocbound=maxBitmaskSize"`
+	VoteLast         []basics.Round                    `codec:"votelst,allocbound=maxEncodedTransactionGroup"`
+	BitmaskVoteLast bitmask`codec:"votelstbm,allocbound=maxBitmaskSize"`
+	VoteKeyDilution  []uint64                          `codec:"votekd,allocbound=maxEncodedTransactionGroup"`
+	BitmaskVoteKeyDilution bitmask`codec:"votekdbm,allocbound=maxBitmaskSize"`
+	Nonparticipation []bool                            `codec:"nonpart,allocbound=maxEncodedTransactionGroup"`
+	BitmaskNonparticipation bitmask`codec:"nonpartbm,allocbound=maxBitmaskSize"`
 }
 
 type encodedPaymentTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
+	Receiver []basics.Address    `codec:"rcv,allocbound=maxEncodedTransactionGroup"`
+	BitmaskReceiver bitmask`codec:"rcvbm,allocbound=maxBitmaskSize"`
+	Amount   []basics.MicroAlgos `codec:"amt,allocbound=maxEncodedTransactionGroup"`
+	BitmaskAmount bitmask`codec:"amtbm,allocbound=maxBitmaskSize"`
 
+	CloseRemainderTo []basics.Address `codec:"close,allocbound=maxEncodedTransactionGroup"`
+	BitmaskCloseRemainderTo bitmask`codec:"closebm,allocbound=maxBitmaskSize"`
 }
 
 type encodedAssetConfigTxnFields struct {
@@ -215,6 +239,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 	}
 
 	deconstructSignedTransactions(&stub)
+	//stub.SignedTxns = nil
 
 	//newStub := txGroupsEncodingStub{
 	//	SignedTxns: stub.SignedTxns,
@@ -246,14 +271,25 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 		index += size
 	}
 
+	addGroupHashes(txnGroups)
+
+	return txnGroups, nil
+}
+
+func addGroupHashes(txnGroups []transactions.SignedTxGroup) {
 	for _, txns := range txnGroups {
-		var txGroup transactions.TxGroup
-		txGroup.TxGroupHashes = make([]crypto.Digest, len(txns.Transactions))
-		for i, tx := range txns.Transactions {
-			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
+		if len(txns.Transactions) > 1 {
+			var txGroup transactions.TxGroup
+			txGroup.TxGroupHashes = make([]crypto.Digest, len(txns.Transactions))
+			for i, tx := range txns.Transactions {
+				txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
+			}
+			groupHash := crypto.HashObj(txGroup)
+			for i := range txns.Transactions {
+				txns.Transactions[i].Txn.Group = groupHash
+			}
 		}
 	}
-	return txnGroups, nil
 }
 
 // deconstructs SignedTxn's into lists of fields and bitmasks
@@ -346,12 +382,12 @@ func deconstructTxnHeader(stub *txGroupsEncodingStub) {
 		}
 		if txn.Txn.GenesisID != "" {
 			stub.BitmaskGenesisID.SetBit(i)
-			stub.GenesisID = append(stub.GenesisID, txn.Txn.GenesisID)
+			stub.GenesisID = txn.Txn.GenesisID
 			stub.SignedTxns[i].Txn.GenesisID = ""
 		}
 		if !txn.Txn.GenesisHash.MsgIsZero() {
 			stub.BitmaskGenesisHash.SetBit(i)
-			stub.GenesisHash = append(stub.GenesisHash, txn.Txn.GenesisHash)
+			stub.GenesisHash = txn.Txn.GenesisHash
 			stub.SignedTxns[i].Txn.GenesisHash = crypto.Digest{}
 		}
 		if txn.Txn.Lease != ([32]byte{}) {
@@ -378,11 +414,80 @@ func deconstructTxnHeader(stub *txGroupsEncodingStub) {
 }
 
 func deconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
+	bitmaskLen := (len(stub.SignedTxns) + 7)/8+1
+	stub.BitmaskVotePK = make(bitmask, bitmaskLen)
+	stub.BitmaskSelectionPK = make(bitmask, bitmaskLen)
+	stub.BitmaskVoteFirst = make(bitmask, bitmaskLen)
+	stub.BitmaskVoteLast = make(bitmask, bitmaskLen)
+	stub.BitmaskVoteKeyDilution = make(bitmask, bitmaskLen)
+	stub.BitmaskNonparticipation = make(bitmask, bitmaskLen)
+	for i, txn := range stub.SignedTxns {
+		if !txn.Txn.VotePK.MsgIsZero() {
+			stub.BitmaskVotePK.SetBit(i)
+			stub.VotePK = append(stub.VotePK, txn.Txn.VotePK)
+			stub.SignedTxns[i].Txn.VotePK = crypto.OneTimeSignatureVerifier{}
+		}
+		if !txn.Txn.SelectionPK.MsgIsZero() {
+			stub.BitmaskSelectionPK.SetBit(i)
+			stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK)
+			stub.SignedTxns[i].Txn.SelectionPK = crypto.VRFVerifier{}
+		}
+		if !txn.Txn.VoteFirst.MsgIsZero() {
+			stub.BitmaskVoteFirst.SetBit(i)
+			stub.VoteFirst = append(stub.VoteFirst, txn.Txn.VoteFirst)
+			stub.SignedTxns[i].Txn.VoteFirst = 0
+		}
+		if !txn.Txn.VoteLast.MsgIsZero() {
+			stub.BitmaskVoteLast.SetBit(i)
+			stub.VoteLast = append(stub.VoteLast, txn.Txn.VoteLast)
+			stub.SignedTxns[i].Txn.VoteLast = 0
+		}
+		if txn.Txn.VoteKeyDilution > 0 {
+			stub.BitmaskVoteKeyDilution.SetBit(i)
+			stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
+			stub.SignedTxns[i].Txn.VoteKeyDilution = 0
+		}
+		if txn.Txn.Nonparticipation {
+			stub.BitmaskNonparticipation.SetBit(i)
+			stub.Nonparticipation = append(stub.Nonparticipation, txn.Txn.Nonparticipation) // can probably get rid of this
+			stub.SignedTxns[i].Txn.Nonparticipation = false
+		}
+	}
 
+	stub.BitmaskVotePK = trimBitmask(stub.BitmaskVotePK)
+	stub.BitmaskSelectionPK = trimBitmask(stub.BitmaskSelectionPK)
+	stub.BitmaskVoteFirst = trimBitmask(stub.BitmaskVoteFirst)
+	stub.BitmaskVoteLast = trimBitmask(stub.BitmaskVoteLast)
+	stub.BitmaskVoteKeyDilution = trimBitmask(stub.BitmaskVoteKeyDilution)
+	stub.BitmaskNonparticipation = trimBitmask(stub.BitmaskNonparticipation)
 }
 
 func deconstructPaymentTxnFields(stub *txGroupsEncodingStub) {
+	bitmaskLen := (len(stub.SignedTxns) + 7)/8+1
+	stub.BitmaskReceiver = make(bitmask, bitmaskLen)
+	stub.BitmaskAmount = make(bitmask, bitmaskLen)
+	stub.BitmaskCloseRemainderTo = make(bitmask, bitmaskLen)
+	for i, txn := range stub.SignedTxns {
+		if !txn.Txn.Receiver.MsgIsZero() {
+			stub.BitmaskReceiver.SetBit(i)
+			stub.Receiver = append(stub.Receiver, txn.Txn.Receiver)
+			stub.SignedTxns[i].Txn.Receiver = basics.Address{}
+		}
+		if !txn.Txn.Amount.MsgIsZero() {
+			stub.BitmaskAmount.SetBit(i)
+			stub.Amount = append(stub.Amount, txn.Txn.Amount)
+			stub.SignedTxns[i].Txn.Amount = basics.MicroAlgos{}
+		}
+		if !txn.Txn.CloseRemainderTo.MsgIsZero() {
+			stub.BitmaskCloseRemainderTo.SetBit(i)
+			stub.CloseRemainderTo = append(stub.CloseRemainderTo, txn.Txn.CloseRemainderTo)
+			stub.SignedTxns[i].Txn.CloseRemainderTo = basics.Address{}
+		}
+	}
 
+	stub.BitmaskReceiver = trimBitmask(stub.BitmaskReceiver)
+	stub.BitmaskAmount = trimBitmask(stub.BitmaskAmount)
+	stub.BitmaskCloseRemainderTo = trimBitmask(stub.BitmaskCloseRemainderTo)
 }
 
 func deconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
@@ -489,15 +594,22 @@ func reconstructTxnHeader(stub *txGroupsEncodingStub) {
 	}
 	index = 0
 	for i := range stub.SignedTxns {
+		if exists, _ := stub.BitmaskNote.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.Note = stub.Note[index]
+			index ++
+		}
+	}
+	index = 0
+	for i := range stub.SignedTxns {
 		if exists, _ := stub.BitmaskGenesisID.EntryExists(i, 0); exists {
-			stub.SignedTxns[i].Txn.GenesisID = stub.GenesisID[index]
+			stub.SignedTxns[i].Txn.GenesisID = stub.GenesisID
 			index ++
 		}
 	}
 	index = 0
 	for i := range stub.SignedTxns {
 		if exists, _ := stub.BitmaskGenesisHash.EntryExists(i, 0); exists {
-			stub.SignedTxns[i].Txn.GenesisHash = stub.GenesisHash[index]
+			stub.SignedTxns[i].Txn.GenesisHash = stub.GenesisHash
 			index ++
 		}
 	}
@@ -518,11 +630,74 @@ func reconstructTxnHeader(stub *txGroupsEncodingStub) {
 }
 
 func reconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
-
+	var index int
+	index = 0
+	for i := range stub.SignedTxns {
+		if exists, _ := stub.BitmaskVotePK.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.VotePK = stub.VotePK[index]
+			index ++
+		}
+	}
+	index = 0
+	for i := range stub.SignedTxns {
+		if exists, _ := stub.BitmaskSelectionPK.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.SelectionPK = stub.SelectionPK[index]
+			index ++
+		}
+	}
+	index = 0
+	for i := range stub.SignedTxns {
+		if exists, _ := stub.BitmaskVoteFirst.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.VoteFirst = stub.VoteFirst[index]
+			index ++
+		}
+	}
+	index = 0
+	for i := range stub.SignedTxns {
+		if exists, _ := stub.BitmaskVoteLast.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.VoteLast = stub.VoteLast[index]
+			index ++
+		}
+	}
+	index = 0
+	for i := range stub.SignedTxns {
+		if exists, _ := stub.BitmaskVoteLast.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.VoteLast = stub.VoteLast[index]
+			index ++
+		}
+	}
+	index = 0
+	for i := range stub.SignedTxns {
+		if exists, _ := stub.BitmaskNonparticipation.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.Nonparticipation = stub.Nonparticipation[index]
+			index ++
+		}
+	}
 }
 
 func reconstructPaymentTxnFields(stub *txGroupsEncodingStub) {
-
+	var index int
+	index = 0
+	for i := range stub.SignedTxns {
+		if exists, _ := stub.BitmaskReceiver.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.Receiver = stub.Receiver[index]
+			index ++
+		}
+	}
+	index = 0
+	for i := range stub.SignedTxns {
+		if exists, _ := stub.BitmaskAmount.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.Amount = stub.Amount[index]
+			index ++
+		}
+	}
+	index = 0
+	for i := range stub.SignedTxns {
+		if exists, _ := stub.BitmaskCloseRemainderTo.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.CloseRemainderTo = stub.CloseRemainderTo[index]
+			index ++
+		}
+	}
 }
 
 func reconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {

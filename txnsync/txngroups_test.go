@@ -18,6 +18,9 @@ package txnsync
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/rpcs"
+	"io"
+	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,7 +31,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func TestTxnGroupEncoding(t *testing.T) {
+func TestTxnGroupEncodingSmall(t *testing.T) {
+	genesisHash := crypto.Hash([]byte("gh"))
 
 	inTxnGroups := []transactions.SignedTxGroup{
 		transactions.SignedTxGroup{
@@ -39,6 +43,7 @@ func TestTxnGroupEncoding(t *testing.T) {
 						Header: transactions.Header{
 							Sender: basics.Address(crypto.Hash([]byte("2"))),
 							Fee: basics.MicroAlgos{Raw: 100},
+							GenesisHash: genesisHash,
 						},
 						PaymentTxnFields: transactions.PaymentTxnFields{
 							Receiver: basics.Address(crypto.Hash([]byte("4"))),
@@ -57,6 +62,7 @@ func TestTxnGroupEncoding(t *testing.T) {
 						Header: transactions.Header{
 							Sender: basics.Address(crypto.Hash([]byte("1"))),
 							Fee: basics.MicroAlgos{Raw: 100},
+							GenesisHash: genesisHash,
 						},
 						PaymentTxnFields: transactions.PaymentTxnFields{
 							Receiver: basics.Address(crypto.Hash([]byte("2"))),
@@ -70,6 +76,7 @@ func TestTxnGroupEncoding(t *testing.T) {
 						Type: protocol.KeyRegistrationTx,
 						Header: transactions.Header{
 							Sender: basics.Address(crypto.Hash([]byte("1"))),
+							GenesisHash: genesisHash,
 						},
 					},
 					Sig: crypto.Signature{3},
@@ -84,6 +91,7 @@ func TestTxnGroupEncoding(t *testing.T) {
 						Header: transactions.Header{
 							Sender: basics.Address(crypto.Hash([]byte("1"))),
 							Fee: basics.MicroAlgos{Raw: 100},
+							GenesisHash: genesisHash,
 						},
 					},
 					Sig: crypto.Signature{4},
@@ -93,6 +101,7 @@ func TestTxnGroupEncoding(t *testing.T) {
 						Type: protocol.AssetFreezeTx,
 						Header: transactions.Header{
 							Sender: basics.Address(crypto.Hash([]byte("1"))),
+							GenesisHash: genesisHash,
 						},
 					},
 					Sig: crypto.Signature{5},
@@ -102,6 +111,7 @@ func TestTxnGroupEncoding(t *testing.T) {
 						Type: protocol.CompactCertTx,
 						Header: transactions.Header{
 							Sender: basics.Address(crypto.Hash([]byte("1"))),
+							GenesisHash: genesisHash,
 						},
 					},
 					Msig: crypto.MultisigSig{Version: 1},
@@ -109,16 +119,62 @@ func TestTxnGroupEncoding(t *testing.T) {
 			},
 		},
 	}
-	for _, txns := range inTxnGroups {
-		var txGroup transactions.TxGroup
-		txGroup.TxGroupHashes = make([]crypto.Digest, len(txns.Transactions))
-		for i, tx := range txns.Transactions {
-			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
-		}
-	}
+	addGroupHashes(inTxnGroups)
 	encodedGroupsBytes := encodeTransactionGroups(inTxnGroups)
 	fmt.Println(len(encodedGroupsBytes))
+	fmt.Println(string(encodedGroupsBytes))
 	out, err := decodeTransactionGroups(encodedGroupsBytes)
 	require.NoError(t, err)
 	require.ElementsMatch(t, inTxnGroups, out)
+}
+
+func TestTxnGroupEncodingLarge(t *testing.T) {
+	dat, err := ioutil.ReadFile("/Users/nicholas/Downloads/txns.txt")
+	require.NoError(t, err)
+	dec := protocol.NewDecoderBytes(dat)
+	ntx := 0
+	blocksData := make([]rpcs.EncodedBlockCert, 1)
+	for {
+		if len(blocksData) == ntx {
+			n := make([]rpcs.EncodedBlockCert, len(blocksData)*2)
+			copy(n, blocksData)
+			blocksData = n
+		}
+
+		err := dec.Decode(&blocksData[ntx])
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		ntx++
+	}
+	blocksData = blocksData[:ntx]
+	fmt.Println(len(blocksData))
+
+	var txnGroups []transactions.SignedTxGroup
+	for _, blockData := range blocksData {
+		block := blockData.Block
+		payset, err := block.DecodePaysetGroups()
+		require.NoError(t, err)
+		for _, txns := range payset {
+			var txnGroup transactions.SignedTxGroup
+			for _, txn := range txns {
+				txnGroup.Transactions = append(txnGroup.Transactions, txn.SignedTxn)
+			}
+			txnGroups = append(txnGroups, txnGroup)
+		}
+	}
+	fmt.Println(len(txnGroups))
+
+	encodedGroupsBytes := encodeTransactionGroups(txnGroups)
+	fmt.Println(len(encodedGroupsBytes))
+	out, err := decodeTransactionGroups(encodedGroupsBytes)
+	require.NoError(t, err)
+	require.ElementsMatch(t, txnGroups, out)
+
+	fmt.Println(len(txnGroups[0].Transactions))
+	fmt.Println(len(out[0].Transactions))
+
+	fmt.Println(txnGroups[0].Transactions[0].Txn.Group)
+	fmt.Println(out[0].Transactions[0].Txn.Group)
 }
