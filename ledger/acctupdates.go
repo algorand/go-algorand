@@ -712,18 +712,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 
 	offset = uint64(newBase - au.dbRound)
 
-	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
-	// consensus version.
-	if au.versions[1] != au.versions[offset] {
-		// find the tip point.
-		tipPoint := sort.Search(int(offset), func(i int) bool {
-			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
-			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
-			return au.versions[1] != au.versions[1+i]
-		})
-		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
-		offset = uint64(tipPoint)
-	}
+	offset = au.consecutiveVersion(offset)
 
 	// check to see if this is a catchpoint round
 	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
@@ -757,6 +746,22 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		au.accountsWriting.Add(1)
 	}
 	return
+}
+
+func (au *accountUpdates) consecutiveVersion(offset uint64) uint64 {
+	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
+	// consensus version.
+	if au.versions[1] != au.versions[offset] {
+		// find the tip point.
+		tipPoint := sort.Search(int(offset), func(i int) bool {
+			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
+			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
+			return au.versions[1] != au.versions[1+i]
+		})
+		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
+		offset = uint64(tipPoint)
+	}
+	return offset
 }
 
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
@@ -1232,6 +1237,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
+			case 4:
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1485,6 +1496,59 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 3 to 4: %v", err)
 	}
 	return 4, nil
+}
+
+// upgradeDatabaseSchema4 does not change the schema but migrates data:
+// remove empty AccountData entries from accountbase table
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+
+	queryAddresses := au.catchpointInterval != 0
+	numDeleted, addresses, err := removeEmptyAccountData(tx, queryAddresses)
+	if err != nil {
+		return 0, err
+	}
+
+	if queryAddresses {
+		mc, err := MakeMerkleCommitter(tx, false)
+		if err != nil {
+			// at this point record deleted and DB is pruned for account data
+			// if hash deletion fails just log it and do not about startup
+			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle committer: %v", err)
+			goto done
+		}
+		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		if err != nil {
+			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle trie: %v", err)
+			goto done
+		}
+
+		var totalHashesDeleted int
+		for _, addr := range addresses {
+			hash := accountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
+			deleted, err := trie.Delete(hash)
+			if err != nil {
+				au.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, err)
+			} else {
+				if !deleted {
+					au.log.Warnf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(hash), addr)
+				} else {
+					totalHashesDeleted++
+				}
+			}
+		}
+		trie.Commit()
+		au.log.Infof("upgradeDatabaseSchema4: deleted %d hashes", totalHashesDeleted)
+	}
+
+done:
+	au.log.Infof("upgradeDatabaseSchema4: deleted %d rows", numDeleted)
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 5)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 4 to 5: %v", err)
+	}
+	return 5, nil
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
@@ -1986,6 +2050,15 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// adjust the offset according to what happened meanwhile..
 	offset -= uint64(au.dbRound - dbRound)
+
+	// if this iteration need to flush out zero rounds, just return right away.
+	// this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
+	// flush, without the commitRound have a chance of committing these rounds.
+	if offset == 0 {
+		au.accountsMu.RUnlock()
+		return
+	}
+
 	dbRound = au.dbRound
 
 	newBase := basics.Round(offset) + dbRound
@@ -2002,6 +2075,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
+		au.accountsMu.RUnlock()
 		au.log.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 		return
 	}

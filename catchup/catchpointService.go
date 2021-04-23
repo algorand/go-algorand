@@ -339,6 +339,8 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 	if ledgerBlock, err := cs.ledger.Block(blockRound); err == nil {
 		blk = &ledgerBlock
 	}
+	var protoParams config.ConsensusParams
+	var ok bool
 
 	for {
 		attemptsCount++
@@ -356,7 +358,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		}
 
 		// check block protocol version support.
-		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
+		if protoParams, ok = config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
 			cs.log.Warnf("processStageLastestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
 
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
@@ -366,6 +368,18 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol))
+		}
+
+		// We need to compare explicitly the genesis hash since we're not doing any block validation. This would ensure the genesis.json file matches the block that we've receieved.
+		if protoParams.SupportGenesisHash && blk.GenesisHash() != cs.ledger.GenesisHash() {
+			cs.log.Warnf("processStageLastestBlockDownload: genesis hash mismatches : genesis hash on genesis.json file is %v while genesis hash of downloaded block is %v", cs.ledger.GenesisHash(), blk.GenesisHash())
+			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
+				// try again.
+				blk = nil
+				cs.blocksDownloadPeerSelector.RankPeer(peer, peerRankInvalidDownload)
+				continue
+			}
+			return cs.abort(fmt.Errorf("processStageLastestBlockDownload: genesis hash mismatches : genesis hash on genesis.json file is %v while genesis hash of downloaded block is %v", cs.ledger.GenesisHash(), blk.GenesisHash()))
 		}
 
 		// check to see that the block header and the block payset aligns
