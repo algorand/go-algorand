@@ -149,10 +149,12 @@ func runBuildNetwork() (err error) {
 			return fmt.Errorf("error resolving bootstrap file: %v", err)
 		}
 		net.BootstrappedNet = fileTemplate
+		net.SetUseBoostrappedFiles(bootstrapLoadingFile)
+	} else {
+		net.SetUseBoostrappedFiles(false)
 	}
 
 	net.SetUseExistingGenesisFiles(networkUseGenesisFiles)
-	net.SetUseBoostrappedFiles(bootstrapLoadingFile)
 	err = net.Validate(buildConfig, networkRootDir)
 	if err != nil {
 		return fmt.Errorf("error validating Network Config file: %v", err)
