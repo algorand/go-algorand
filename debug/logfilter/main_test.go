@@ -48,12 +48,16 @@ func TestLogFilterExamples(t *testing.T) {
 		expectedOutFile := strings.Replace(exampleFileName, ".in", ".out.expected", 1)
 		expectedOutBytes, err := ioutil.ReadFile(expectedOutFile)
 		require.NoError(t, err)
+		expectedErrorCode := 0
+		if strings.Contains(string(expectedOutBytes), "FAIL") {
+			expectedErrorCode = 1
+		}
 
 		inFile, err := os.Open(exampleFileName)
 		require.NoError(t, err)
 		writingBuffer := bytes.NewBuffer(nil)
 		errCode := logFilter(inFile, writingBuffer)
-		require.Zero(t, errCode)
+		require.Equal(t, expectedErrorCode, errCode)
 		require.Equal(t, string(expectedOutBytes), writingBuffer.String())
 	}
 }
