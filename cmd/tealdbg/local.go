@@ -61,14 +61,14 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, err
 	// 1. Attempt json - a single transaction
 	var txn transactions.SignedTxn
 	err1 := protocol.DecodeJSON(data, &txn)
-	if err == nil {
+	if err1 == nil {
 		txnGroup = append(txnGroup, txn)
 		return
 	}
 
 	// 2. Attempt json - array of transactions
 	err2 := protocol.DecodeJSON(data, &txnGroup)
-	if err == nil {
+	if err2 == nil {
 		return
 	}
 
