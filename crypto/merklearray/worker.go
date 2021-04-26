@@ -25,6 +25,11 @@ import (
 // workerState describes a group of goroutines processing a sequential list
 // of maxidx elements starting from 0.
 type workerState struct {
+	// maxidx is the total number of elements to process, and nextidx
+	// is the next element that a worker should process.
+	maxidx  uint64
+	nextidx uint64
+
 	// nworkers is the number of workers that can be started.
 	// This field gets decremented once workers are launched,
 	// and represents the number of remaining workers that can
@@ -43,11 +48,6 @@ type workerState struct {
 	// wg tracks outstanding workers, to determine when all workers
 	// have finished their processing.
 	wg sync.WaitGroup
-
-	// maxidx is the total number of elements to process, and nextidx
-	// is the next element that a worker should process.
-	maxidx  uint64
-	nextidx uint64
 }
 
 func newWorkerState(max uint64) *workerState {
