@@ -63,7 +63,7 @@ func (ml *mockLedger) allocated(addr basics.Address, aidx basics.AppIndex, globa
 	return true, nil
 }
 
-func (ml *mockLedger) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+func (ml *mockLedger) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
 	return basics.TealValue{}, false, nil
 }
 
