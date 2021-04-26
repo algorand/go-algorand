@@ -1200,7 +1200,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 
 	// explicitly trigger compatibility mode
 	proto := config.Consensus[protocol.ConsensusV24]
-	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusV24, 100)
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusV24)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)
