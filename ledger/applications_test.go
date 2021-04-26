@@ -74,7 +74,7 @@ func (c *mockCowForLogicLedger) GetCreator(cidx basics.CreatableIndex, ctype bas
 	return addr, found, nil
 }
 
-func (c *mockCowForLogicLedger) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+func (c *mockCowForLogicLedger) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
 	kv, ok := c.stores[storeLocator{addr, aidx, global}]
 	if !ok {
 		return basics.TealValue{}, false, fmt.Errorf("no store for (%s %d %v) in mock cow", addr.String(), aidx, global)
@@ -87,7 +87,7 @@ func (c *mockCowForLogicLedger) BuildEvalDelta(aidx basics.AppIndex, txn *transa
 	return basics.EvalDelta{}, nil
 }
 
-func (c *mockCowForLogicLedger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error {
+func (c *mockCowForLogicLedger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error {
 	kv, ok := c.stores[storeLocator{addr, aidx, global}]
 	if !ok {
 		return fmt.Errorf("no store for (%s %d %v) in mock cow", addr.String(), aidx, global)
@@ -97,7 +97,7 @@ func (c *mockCowForLogicLedger) SetKey(addr basics.Address, aidx basics.AppIndex
 	return nil
 }
 
-func (c *mockCowForLogicLedger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) error {
+func (c *mockCowForLogicLedger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error {
 	kv, ok := c.stores[storeLocator{addr, aidx, global}]
 	if !ok {
 		return fmt.Errorf("no store for (%s %d %v) in mock cow", addr.String(), aidx, global)
@@ -277,7 +277,7 @@ func TestLogicLedgerGetKey(t *testing.T) {
 
 	// check local
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, false}: {"lkey": tv}}
-	val, ok, err = l.GetLocal(addr, aidx, "lkey")
+	val, ok, err = l.GetLocal(addr, aidx, "lkey", 0)
 	a.NoError(err)
 	a.True(ok)
 	a.Equal(tv, val)
@@ -307,7 +307,7 @@ func TestLogicLedgerSetKey(t *testing.T) {
 
 	// check local
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, false}: {"lkey": tv}}
-	err = l.SetLocal(addr, "lkey", tv2)
+	err = l.SetLocal(addr, "lkey", tv2, 0)
 	a.NoError(err)
 }
 
@@ -334,7 +334,7 @@ func TestLogicLedgerDelKey(t *testing.T) {
 
 	addr1 := getRandomAddress(a)
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr1, aidx, false}: {"lkey": tv}}
-	err = l.DelLocal(addr1, "lkey")
+	err = l.DelLocal(addr1, "lkey", 0)
 	a.NoError(err)
 }
 
@@ -632,7 +632,7 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), "TestAppAccountDelta", true, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 
@@ -877,7 +877,7 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), "TestAppEmptyAccounts", true, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 
@@ -1024,7 +1024,7 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), "TestAppEmptyAccounts", true, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 
@@ -1122,4 +1122,168 @@ return`
 	a.NoError(err)
 	a.Equal(basics.AccountData{}, pad.accountData)
 	a.Zero(pad.rowid)
+}
+
+func TestAppAccountDeltaIndicesCompatibility1(t *testing.T) {
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+int 0
+byte "lk0"
+byte "local0"
+app_local_put
+int 1
+byte "lk1"
+byte "local1"
+app_local_put
+success:
+int 1
+`
+	// put into sender account as idx 0, expect 0
+	testAppAccountDeltaIndicesCompatibility(t, source, 0)
+}
+
+func TestAppAccountDeltaIndicesCompatibility2(t *testing.T) {
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+int 1
+byte "lk1"
+byte "local1"
+app_local_put
+int 0
+byte "lk0"
+byte "local0"
+app_local_put
+success:
+int 1
+`
+	// put into sender account as idx 1, expect 1
+	testAppAccountDeltaIndicesCompatibility(t, source, 1)
+}
+
+func TestAppAccountDeltaIndicesCompatibility3(t *testing.T) {
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+int 1
+byte "lk"
+app_local_get
+pop
+int 0
+byte "lk0"
+byte "local0"
+app_local_put
+int 1
+byte "lk1"
+byte "local1"
+app_local_put
+success:
+int 1
+`
+	// get sender account as idx 1 but put into sender account as idx 0, expect 1
+	testAppAccountDeltaIndicesCompatibility(t, source, 1)
+}
+
+func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accountIdx uint64) {
+	a := require.New(t)
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+
+	// explicitly trigger compatibility mode
+	proto := config.Consensus[protocol.ConsensusV24]
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusV24, 100)
+
+	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+	userLocal, err := basics.UnmarshalChecksumAddress("UL5C6SRVLOROSB5FGAE6TY34VXPXVR7GNIELUB3DD5KTA4VT6JGOZ6WFAY")
+	a.NoError(err)
+
+	a.Contains(genesisInitState.Accounts, creator)
+	a.Contains(genesisInitState.Accounts, userLocal)
+
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	a.NoError(err)
+	defer l.Close()
+
+	genesisID := t.Name()
+	txHeader := transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	// create application
+	approvalProgram := program
+	clearStateProgram := []byte("\x02") // empty
+	appCreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 4},
+		LocalStateSchema:  basics.StateSchema{NumByteSlice: 2},
+	}
+	appCreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCreateFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	a.NoError(err)
+
+	appIdx := basics.AppIndex(1) // first tnx => idx = 1
+
+	// opt-in
+	txHeader.Sender = userLocal
+	appCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.OptInOC,
+		ApplicationID: appIdx,
+		Accounts:      []basics.Address{userLocal},
+	}
+	appCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
+		EvalDelta: basics.EvalDelta{
+			LocalDeltas: map[uint64]basics.StateDelta{
+				accountIdx: {
+					"lk0": basics.ValueDelta{
+						Action: basics.SetBytesAction,
+						Bytes:  "local0",
+					},
+					"lk1": basics.ValueDelta{
+						Action: basics.SetBytesAction,
+						Bytes:  "local1"},
+				},
+			},
+		},
+	})
+	a.NoError(err)
+
+	// save data into DB and write into local state
+	l.accts.accountsWriting.Add(1)
+	l.accts.commitRound(2, 0, 0)
+	l.reloadLedger()
+
+	// check first write
+	blk, err := l.Block(2)
+	a.NoError(err)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas, accountIdx)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx], "lk0")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk0"].Bytes, "local0")
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx], "lk1")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk1"].Bytes, "local1")
 }
