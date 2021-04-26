@@ -1340,7 +1340,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 		return 0, err
 	}
 
-	if queryAddresses {
+	if queryAddresses && len(addresses) > 0 {
 		mc, err := MakeMerkleCommitter(tx, false)
 		if err != nil {
 			// at this point record deleted and DB is pruned for account data
@@ -1368,7 +1368,11 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 				}
 			}
 		}
-		trie.Commit()
+
+		if _, err = trie.Commit(); err != nil {
+			au.log.Errorf("upgradeDatabaseSchema4: failed to commit changes to merkle trie: %v", err)
+		}
+
 		au.log.Infof("upgradeDatabaseSchema4: deleted %d hashes", totalHashesDeleted)
 	}
 
