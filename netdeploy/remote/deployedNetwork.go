@@ -368,14 +368,16 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		comment := strings.ToLower(alloc.Comment)
 		addr, err = basics.UnmarshalChecksumAddress(alloc.Address)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal %s address %w", alloc.Comment, err)
+			return fmt.Errorf("failed to unmarshal '%s' address '%v' %w", alloc.Comment, alloc.Address, err)
 		}
-		if comment == srcWalletName {
+		switch comment {
+		case srcWalletName:
 			src = addr
-		} else if comment == "feesink" {
+		case "feesink":
 			poolAddr = addr
-		} else if comment == "rewardspool" {
+		case "rewardspool":
 			sinkAddr = addr
+		default:
 		}
 
 		accounts[addr] = alloc.State
