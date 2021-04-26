@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -166,15 +167,24 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 	}
 	fmt.Println("txngroups: ", len(txnGroups))
 
+	start := time.Now()
 	encodedGroupsBytes := encodeTransactionGroups(txnGroups)
 	fmt.Println("new data: ", len(encodedGroupsBytes))
+	fmt.Println("time: ", time.Now().Sub(start))
+	start = time.Now()
 	out, err := decodeTransactionGroups(encodedGroupsBytes)
+	fmt.Println("time: ", time.Now().Sub(start))
+	start = time.Now()
 	require.NoError(t, err)
 	require.ElementsMatch(t, txnGroups, out)
 
 	encodedGroupsBytes = encodeTransactionGroupsOld(txnGroups)
 	fmt.Println("old data: ", len(encodedGroupsBytes))
+	fmt.Println("time: ", time.Now().Sub(start))
+	start = time.Now()
 	out, err = decodeTransactionGroupsOld(encodedGroupsBytes)
+	fmt.Println("time: ", time.Now().Sub(start))
+	start = time.Now()
 	require.NoError(t, err)
 	require.ElementsMatch(t, txnGroups, out)
 }

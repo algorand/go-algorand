@@ -62,7 +62,8 @@ type encodedSignedTxns struct {
 
 type encodedTxns struct {
 	_struct struct{}          `codec:",omitempty,omitemptyarray"`
-	TxType  []protocol.TxType `codec:"type,allocbound=maxEncodedTransactionGroup"`
+	TxType  []byte `codec:"type,allocbound=maxEncodedTransactionGroup"`
+	BitmaskTxType bitmask   `codec:"typebm,allocbound=maxBitmaskSize"`
 
 	encodedTxnHeaders
 	encodedKeyregTxnFields
@@ -351,10 +352,17 @@ func deconstructSignedTransactions(stub *txGroupsEncodingStub) {
 }
 
 func deconstructTransactions(stub *txGroupsEncodingStub) {
+	bitmaskLen := (len(stub.SignedTxns) + 7)/8+1
+	stub.BitmaskTxType = make(bitmask, bitmaskLen)
 	for i, txn := range stub.SignedTxns {
-		stub.TxType = append(stub.TxType, txn.Txn.Type)
+		txTypeByte := protocol.TxTypeToByte(txn.Txn.Type)
+		if txTypeByte != 0 {
+			stub.BitmaskTxType.SetBit(i)
+			stub.TxType = append(stub.TxType, txTypeByte)
+		}
 		stub.SignedTxns[i].Txn.Type = ""
 	}
+	stub.BitmaskTxType = trimBitmask(stub.BitmaskTxType)
 	deconstructTxnHeader(stub)
 	deconstructKeyregTxnFields(stub)
 	deconstructPaymentTxnFields(stub)
@@ -570,8 +578,15 @@ func reconstructSignedTransactions(stub *txGroupsEncodingStub) {
 }
 
 func reconstructTransactions(stub *txGroupsEncodingStub) {
+	var index int
+	index = 0
 	for i := range stub.SignedTxns {
-		stub.SignedTxns[i].Txn.Type = stub.TxType[i]
+		if exists, _ := stub.BitmaskTxType.EntryExists(i, 0); exists {
+			stub.SignedTxns[i].Txn.Type = protocol.ByteToTxType(stub.TxType[index])
+			index ++
+		} else {
+			stub.SignedTxns[i].Txn.Type = protocol.PaymentTx
+		}
 	}
 
 	reconstructTxnHeader(stub)

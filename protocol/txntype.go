@@ -47,3 +47,29 @@ const (
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"
 )
+
+func TxTypeToByte(t TxType) byte {
+	switch t {
+	case PaymentTx:
+		return 0
+	case KeyRegistrationTx:
+		return 1
+	case AssetConfigTx:
+		return 2
+	case AssetTransferTx:
+		return 3
+	case AssetFreezeTx:
+		return 4
+	case ApplicationCallTx:
+		return 5
+	case CompactCertTx:
+		return 6
+	default:
+		return 7
+	}
+}
+
+func ByteToTxType(b byte) TxType {
+	txTypes := []TxType{PaymentTx, KeyRegistrationTx, AssetConfigTx, AssetTransferTx, AssetFreezeTx, ApplicationCallTx, CompactCertTx, UnknownTx}
+	return txTypes[b]
+}
