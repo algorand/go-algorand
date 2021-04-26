@@ -1512,7 +1512,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 		mc, err := MakeMerkleCommitter(tx, false)
 		if err != nil {
 			// at this point record deleted and DB is pruned for account data
-			// if hash deletion fails just log it and do not about startup
+			// if hash deletion fails just log it and do not abort startup
 			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle committer: %v", err)
 			goto done
 		}
