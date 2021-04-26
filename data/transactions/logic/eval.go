@@ -134,9 +134,9 @@ type LedgerForLogic interface {
 	CreatorAddress() basics.Address
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
 
-	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error)
-	SetLocal(addr basics.Address, key string, value basics.TealValue) error
-	DelLocal(addr basics.Address, key string) error
+	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (value basics.TealValue, exists bool, err error)
+	SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error
+	DelLocal(addr basics.Address, key string, accountIdx uint64) error
 
 	GetGlobal(appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error)
 	SetGlobal(key string, value basics.TealValue) error
@@ -2059,7 +2059,7 @@ func (cx *evalContext) appReadLocalKey(appIdx uint64, accountIdx uint64, key str
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
-	return cx.Ledger.GetLocal(addr, basics.AppIndex(appIdx), key)
+	return cx.Ledger.GetLocal(addr, basics.AppIndex(appIdx), key, accountIdx)
 }
 
 // appWriteLocalKey writes value to local key/value cow
@@ -2069,7 +2069,7 @@ func (cx *evalContext) appWriteLocalKey(accountIdx uint64, key string, tv basics
 	if err != nil {
 		return err
 	}
-	return cx.Ledger.SetLocal(addr, key, tv)
+	return cx.Ledger.SetLocal(addr, key, tv, accountIdx)
 }
 
 // appDeleteLocalKey deletes a value from the key/value cow
@@ -2079,7 +2079,7 @@ func (cx *evalContext) appDeleteLocalKey(accountIdx uint64, key string) error {
 	if err != nil {
 		return err
 	}
-	return cx.Ledger.DelLocal(addr, key)
+	return cx.Ledger.DelLocal(addr, key, accountIdx)
 }
 
 func (cx *evalContext) appReadGlobalKey(foreignAppsIndex uint64, key string) (basics.TealValue, bool, error) {
