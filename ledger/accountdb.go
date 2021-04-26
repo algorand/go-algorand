@@ -655,6 +655,11 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 			copy(addr[:], addrbuf)
 			addresses = append(addresses, addr)
 		}
+
+		// if the above loop was abrupted by an error, test it now.
+		if err = rows.Err(); err != nil {
+			return 0, nil, err
+		}
 	}
 
 	result, err := tx.Exec("DELETE from accountbase where length(data) = 1 and data = x'80'")
