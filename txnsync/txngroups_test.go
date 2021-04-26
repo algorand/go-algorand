@@ -18,7 +18,6 @@ package txnsync
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/rpcs"
 	"io"
 	"io/ioutil"
 	"testing"
@@ -29,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 func TestTxnGroupEncodingSmall(t *testing.T) {
@@ -149,7 +149,7 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 		ntx++
 	}
 	blocksData = blocksData[:ntx]
-	fmt.Println(len(blocksData))
+	fmt.Println("blocks: ", len(blocksData))
 
 	var txnGroups []transactions.SignedTxGroup
 	for _, blockData := range blocksData {
@@ -164,17 +164,17 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 			txnGroups = append(txnGroups, txnGroup)
 		}
 	}
-	fmt.Println(len(txnGroups))
+	fmt.Println("txngroups: ", len(txnGroups))
 
 	encodedGroupsBytes := encodeTransactionGroups(txnGroups)
-	fmt.Println(len(encodedGroupsBytes))
+	fmt.Println("new data: ", len(encodedGroupsBytes))
 	out, err := decodeTransactionGroups(encodedGroupsBytes)
 	require.NoError(t, err)
 	require.ElementsMatch(t, txnGroups, out)
 
-	fmt.Println(len(txnGroups[0].Transactions))
-	fmt.Println(len(out[0].Transactions))
-
-	fmt.Println(txnGroups[0].Transactions[0].Txn.Group)
-	fmt.Println(out[0].Transactions[0].Txn.Group)
+	encodedGroupsBytes = encodeTransactionGroupsOld(txnGroups)
+	fmt.Println("old data: ", len(encodedGroupsBytes))
+	out, err = decodeTransactionGroupsOld(encodedGroupsBytes)
+	require.NoError(t, err)
+	require.ElementsMatch(t, txnGroups, out)
 }

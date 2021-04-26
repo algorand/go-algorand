@@ -41,6 +41,8 @@ type txGroupsEncodingStub struct {
 	SignedTxns []transactions.SignedTxn `codec:"st,allocbound=maxEncodedTransactionGroup"`
 
 	encodedSignedTxns
+
+	TxnGroups []txnGroups `codec:"t,allocbound=maxEncodedTransactionGroup"`
 }
 
 type encodedSignedTxns struct {
@@ -208,6 +210,33 @@ func trimBitmask(b bitmask) bitmask {
 	return bytes.TrimRight(b, string(0))
 }
 
+func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte {
+	stub := txGroupsEncodingStub{
+		TxnGroups: make([]txnGroups, len(inTxnGroups)),
+	}
+	for i := range inTxnGroups {
+		stub.TxnGroups[i] = inTxnGroups[i].Transactions
+	}
+
+	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
+}
+
+func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTxGroup, err error) {
+	if len(bytes) == 0 {
+		return nil, nil
+	}
+	var stub txGroupsEncodingStub
+	_, err = stub.UnmarshalMsg(bytes)
+	if err != nil {
+		return nil, err
+	}
+	txnGroups = make([]transactions.SignedTxGroup, len(stub.TxnGroups))
+	for i := range stub.TxnGroups {
+		txnGroups[i].Transactions = stub.TxnGroups[i]
+	}
+	return txnGroups, nil
+}
+
 func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 	txnCount := 0
 	for _, txGroup := range inTxnGroups {
@@ -239,13 +268,6 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 	}
 
 	deconstructSignedTransactions(&stub)
-	//stub.SignedTxns = nil
-
-	//newStub := txGroupsEncodingStub{
-	//	SignedTxns: stub.SignedTxns,
-	//}
-	//
-	//return newStub.MarshalMsg([]byte{})
 	return stub.MarshalMsg([]byte{})
 }
 
