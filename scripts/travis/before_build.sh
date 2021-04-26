@@ -76,3 +76,7 @@ runGoLint
 
 echo "Running check_license..."
 ./scripts/check_license.sh
+
+echo "Delete swagger.json files to force regeneration"
+find . -name swagger.json -delete
+find . -name swagger.json.validated -delete
