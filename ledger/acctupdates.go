@@ -1341,14 +1341,14 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 	}
 
 	if queryAddresses && len(addresses) > 0 {
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := makeMerkleCommitter(tx, false)
 		if err != nil {
 			// at this point record deleted and DB is pruned for account data
 			// if hash deletion fails just log it and do not about startup
 			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle committer: %v", err)
 			goto done
 		}
-		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(mc, trieMemoryConfig)
 		if err != nil {
 			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle trie: %v", err)
 			goto done
