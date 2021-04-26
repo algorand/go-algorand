@@ -140,6 +140,30 @@ func (m RoundTimingMetrics) Identifier() Metric {
 	return roundTimingMetricsIdentifier
 }
 
+//-------------------------------------------------------
+// AccountsUpdate
+const accountsUpdateMetricsIdentifier Metric = "AccountsUpdate"
+
+// AccountsUpdateMetrics contain timing details for common message types.
+// All times (except round start time) are offset times, in int64 ns
+// precision relative to RoundTimingMetrics.LRoundStart.
+type AccountsUpdateMetrics struct {
+	StartRound                uint64
+	RoundsCount               uint64
+	OldAccountPreloadDuration time.Duration
+	MerkleTrieUpdateDuration  time.Duration
+	AccountsWritingDuration   time.Duration
+	DatabaseCommitDuration    time.Duration
+	MemoryUpdatesDuration     time.Duration
+	UpdatedAccountsCount      uint64
+	UpdatedCreatablesCount    uint64
+}
+
+// Identifier implements the required MetricDetails interface, retrieving the Identifier for this set of metrics.
+func (m AccountsUpdateMetrics) Identifier() Metric {
+	return accountsUpdateMetricsIdentifier
+}
+
 type transactionProcessingTimeDistibution struct {
 	// 10 buckets: 0-100Kns, 100Kns-200Kns .. 900Kns-1ms
 	// 9 buckets: 1ms-2ms .. 9ms-10ms

@@ -228,6 +228,12 @@ type Local struct {
 	// Generate ProcessBlockMetrics telemetry event
 	EnableProcessBlockStats bool `version[0]:""`
 
+	// Generate ProcessBlockMetrics telemetry event
+	EnableAccountUpdatesStats bool `version[0]:""`
+
+	// Generate AccountUpdates telemetry event
+	AccountUpdatesStatsFrequency time.Duration `version[17]:"120"`
+
 	// SuggestedFeeSlidingWindowSize is number of past blocks that will be considered in computing the suggested fee
 	SuggestedFeeSlidingWindowSize uint32 `version[3]:"50"`
 
