@@ -79,8 +79,11 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 
+	// compatibilityMode retains producing application' eval deltas under the following rule:
+	// local delta has account index as it specified in TEAL either in set/del key or prior get key calls.
+	// The predicate is that complex in order to cover all the block seen on testnet and mainnet.
 	compatibilityMode := (hdr.CurrentProtocol == protocol.ConsensusV24) &&
-		(hdr.NextProtocol != protocol.ConsensusV26 || (hdr.UpgradePropose == "" && hdr.UpgradeApprove == false))
+		(hdr.NextProtocol != protocol.ConsensusV26 || (hdr.UpgradePropose == "" && hdr.UpgradeApprove == false && hdr.Round < hdr.UpgradeState.NextProtocolVoteBefore))
 	if compatibilityMode {
 		cb.compatibilityMode = true
 		cb.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
