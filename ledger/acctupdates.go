@@ -249,6 +249,11 @@ type accountUpdates struct {
 
 	// the synchronous mode that would be used while the accounts database is being rebuilt.
 	accountsRebuildSynchronousMode db.SynchronousMode
+
+	//Metrics collection
+	logAccountUpdateMetrics bool
+	logAccountUpdateFreq    time.Duration
+	lastMetricsLogTime      time.Time
 }
 
 type deferredCommit struct {
@@ -324,6 +329,11 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
 	au.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
 	au.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
+
+	//	log metrics
+	au.logAccountUpdateMetrics = cfg.EnableTopAccountsReporting
+	au.logAccountUpdateFreq = cfg.AccountUpdatesStatsFrequency
+
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -2034,6 +2044,10 @@ func (au *accountUpdates) commitSyncer(deferedCommits chan deferredCommit) {
 
 // commitRound write to the database a "chunk" of rounds, and update the dbRound accordingly.
 func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookback basics.Round) {
+	var stats telemetryspec.AccountsUpdateMetrics
+
+	updateStats := au.logAccountUpdateMetrics && time.Now().Sub(au.lastMetricsLogTime) >= au.logAccountUpdateFreq
+
 	defer au.accountsWriting.Done()
 	au.accountsMu.RLock()
 
@@ -2138,9 +2152,18 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 
-		err = compactDeltas.accountsLoadOld(tx)
-		if err != nil {
-			return err
+		if updateStats {
+			begin := time.Now()
+			err = compactDeltas.accountsLoadOld(tx)
+			if err != nil {
+				return err
+			}
+			stats.OldAccountPreloadDuration = time.Now().Sub(begin)
+		} else {
+			err = compactDeltas.accountsLoadOld(tx)
+			if err != nil {
+				return err
+			}
 		}
 
 		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
@@ -2148,16 +2171,34 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
-		err = au.accountsUpdateBalances(compactDeltas)
-		if err != nil {
-			return err
+		if updateStats {
+			begin := time.Now()
+			err = au.accountsUpdateBalances(compactDeltas)
+			if err != nil {
+				return err
+			}
+			stats.MerkleTrieUpdateDuration = time.Now().Sub(begin)
+		} else {
+			err = au.accountsUpdateBalances(compactDeltas)
+			if err != nil {
+				return err
+			}
 		}
 
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 		// so that we can update the base account back.
-		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
-		if err != nil {
-			return err
+		if updateStats {
+			begin := time.Now()
+			updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
+			if err != nil {
+				return err
+			}
+			stats.AccountsWritingDuration = time.Now().Sub(begin)
+		} else {
+			updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
+			if err != nil {
+				return err
+			}
 		}
 
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
@@ -2180,6 +2221,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		return
 	}
 
+	if updateStats {
+		stats.DatabaseCommitDuration = time.Now().Sub(start)
+	}
+
 	if isCatchpointRound {
 		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
 		if err != nil {
@@ -2198,6 +2243,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 	updatingBalancesDuration := time.Now().Sub(beforeUpdatingBalancesTime)
 
+	start = time.Now()
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
@@ -2250,12 +2296,32 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.lastFlushTime = flushTime
 
 	au.accountsMu.Unlock()
+
+	if updateStats {
+		stats.MemoryUpdatesDuration = time.Now().Sub(start)
+	}
+
 	au.accountsReadCond.Broadcast()
 
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
 		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
+	}
+
+	// log metrics
+	if updateStats {
+		au.lastMetricsLogTime = time.Now()
+
+		stats.StartRound = uint64(dbRound)
+		stats.RoundsCount = offset
+		stats.UpdatedAccountsCount = uint64(len(updatedPersistedAccounts))
+		stats.UpdatedCreatablesCount = uint64(len(compactCreatableDeltas))
+
+		var details struct {
+		}
+		au.log.Metrics(telemetryspec.Accounts, stats, details)
+
 	}
 
 }
