@@ -251,7 +251,7 @@ int 1
 pushint 2000
 int 0
 int 2
-divw
+divmodw
 callsub stuff
 b next
 stuff:

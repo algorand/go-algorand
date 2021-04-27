@@ -791,7 +791,7 @@ func uint128(hi uint64, lo uint64) *big.Int {
 	return whole
 }
 
-func opDivwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
+func opDivModwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
 	dividend := uint128(hiNum, loNum)
 	divisor := uint128(hiDen, loDen)
 
@@ -802,7 +802,7 @@ func opDivwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, 
 		rem.Uint64()
 }
 
-func opDivw(cx *evalContext) {
+func opDivModw(cx *evalContext) {
 	loDen := len(cx.stack) - 1
 	hiDen := loDen - 1
 	if cx.stack[loDen].Uint == 0 && cx.stack[hiDen].Uint == 0 {
@@ -812,7 +812,7 @@ func opDivw(cx *evalContext) {
 	loNum := loDen - 2
 	hiNum := loDen - 3
 	hiQuo, loQuo, hiRem, loRem :=
-		opDivwImpl(cx.stack[hiNum].Uint, cx.stack[loNum].Uint, cx.stack[hiDen].Uint, cx.stack[loDen].Uint)
+		opDivModwImpl(cx.stack[hiNum].Uint, cx.stack[loNum].Uint, cx.stack[hiDen].Uint, cx.stack[loDen].Uint)
 	cx.stack[hiNum].Uint = hiQuo
 	cx.stack[loNum].Uint = loQuo
 	cx.stack[hiDen].Uint = hiRem

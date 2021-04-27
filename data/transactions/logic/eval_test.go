@@ -548,17 +548,17 @@ func TestUint128(t *testing.T) {
 	require.Equal(t, x.String(), "340282366920938463463374607431768211455")
 }
 
-func TestDivw(t *testing.T) {
+func TestDivModw(t *testing.T) {
 	t.Parallel()
 	// 2:0 / 1:0 == 2r0 == 0:2,0:0
-	testAccepts(t, `int 2; int 0; int 1; int 0; divw;
+	testAccepts(t, `int 2; int 0; int 1; int 0; divmodw;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 2; ==; assert;
                         int 0; ==; assert; int 1`, 4)
 
 	// 2:0 / 0:1 == 2:0r0 == 2:0,0:0
-	testAccepts(t, `int 2; int 0; int 0; int 1; divw;
+	testAccepts(t, `int 2; int 0; int 0; int 1; divmodw;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 0; ==; assert;
@@ -580,14 +580,14 @@ func TestDivw(t *testing.T) {
                         int 0; ==; assert; int 1`, 4)
 
 	// 0:7777 / 1:0 == 0:0r7777 == 0:0,0:7777
-	testAccepts(t, `int 0; int 7777; int 1; int 0; divw;
+	testAccepts(t, `int 0; int 7777; int 1; int 0; divmodw;
                         int 7777; ==; assert;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 0; ==; assert; int 1`, 4)
 
 	// 10:0 / 0:0 ==> panic
-	testPanics(t, `int 10; int 0; int 0; int 0; divw;
+	testPanics(t, `int 10; int 0; int 0; int 0; divmodw;
 	               pop; pop; pop; pop; int 1`, 4)
 }
 

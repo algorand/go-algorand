@@ -155,7 +155,7 @@ var OpSpecs = []OpSpec{
 	{0x1c, "~", opBitNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opDefault},
 	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opDefault},
 	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opDefault},
-	{0x1f, "divw", opDivw, asmDefault, disDefault, twoInts.plus(twoInts), twoInts.plus(twoInts), 4, modeAny, opDefault},
+	{0x1f, "divmodw", opDivModw, asmDefault, disDefault, twoInts.plus(twoInts), twoInts.plus(twoInts), 4, modeAny, opDefault},
 
 	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, varies(checkIntConstBlock, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, immediates("i")},
@@ -240,8 +240,6 @@ var OpSpecs = []OpSpec{
 	// More math
 	{0x90, "shl", opShiftLeft, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
 	{0x91, "shr", opShiftRight, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
-	// divw, modw convenience
-	// expmod
 }
 
 type sortByOpcode []OpSpec

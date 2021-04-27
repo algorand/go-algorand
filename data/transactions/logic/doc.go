@@ -54,7 +54,7 @@ var opDocByName = map[string]string{
 	"shr":               "A divided by 2^B",
 	"mulw":              "A times B out to 128-bit long result as low (top) and high uint64 values on the stack",
 	"addw":              "A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack",
-	"divw":              "Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top.",
+	"divmodw":           "Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top.",
 	"intcblock":         "prepare block of uint64 constants for use by intc",
 	"intc":              "push Ith constant from intcblock to stack",
 	"intc_0":            "push constant 0 from intcblock to stack",
@@ -166,7 +166,7 @@ var opDocExtras = map[string]string{
 	"bytecblock":        "`bytecblock` loads the following program bytes into an array of byte-array constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script.",
 	"*":                 "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.",
 	"+":                 "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.",
-	"/":                 "`divw` is available to divide the two-element values produced by `mulw` and `addw`.",
+	"/":                 "`divmodw` is available to divide the two-element values produced by `mulw` and `addw`.",
 	"txn":               "FirstValidTime causes the program to fail. The field is reserved for future use.",
 	"gtxn":              "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
 	"gtxns":             "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
@@ -202,7 +202,7 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"}},
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert", "callsub", "retsub"}},
 	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
