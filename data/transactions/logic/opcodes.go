@@ -231,6 +231,16 @@ var OpSpecs = []OpSpec{
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, varies(checkPushBytes, "bytes", immBytes)},
 	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, varies(checkPushInt, "uint", immInt)},
+
+	// "Function oriented"
+	{0x88, "callsub", opCallSub, assembleBranch, disBranch, oneInt, nil, 4, modeAny, opBranch},
+	{0x89, "retsub", opRetSub, asmDefault, disDefault, nil, nil, 4, modeAny, opDefault},
+	// Leave a little room for indirect function calls, or similar
+
+	// More math
+	// shl, shr
+	// divw, modw convenience
+	// expmod
 }
 
 type sortByOpcode []OpSpec

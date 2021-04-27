@@ -224,15 +224,16 @@ func (ep EvalParams) log() logging.Logger {
 type evalContext struct {
 	EvalParams
 
-	stack   []stackValue
-	program []byte // txn.Lsig.Logic ?
-	pc      int
-	nextpc  int
-	err     error
-	intc    []uint64
-	bytec   [][]byte
-	version uint64
-	scratch [256]stackValue
+	stack     []stackValue
+	callstack []int
+	program   []byte // txn.Lsig.Logic ?
+	pc        int
+	nextpc    int
+	err       error
+	intc      []uint64
+	bytec     [][]byte
+	version   uint64
+	scratch   [256]stackValue
 
 	cost int // cost incurred so far
 
@@ -1251,6 +1252,22 @@ func opB(cx *evalContext) {
 		cx.err = err
 		return
 	}
+	cx.nextpc = target
+}
+
+func opCallSub(cx *evalContext) {
+	cx.callstack = append(cx.callstack, cx.pc+3)
+	opB(cx)
+}
+
+func opRetSub(cx *evalContext) {
+	top := len(cx.callstack) - 1
+	if top < 0 {
+		cx.err = errors.New("retsub with empty callstack")
+		return
+	}
+	target := cx.callstack[top]
+	cx.callstack = cx.callstack[:top]
 	cx.nextpc = target
 }
 

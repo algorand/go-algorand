@@ -4018,3 +4018,31 @@ func TestLoop(t *testing.T) {
 	// Infinite loop because multiply by one instead of two
 	testPanics(t, "int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", 4)
 }
+
+func TestSubroutine(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 1; callsub double; int 2; ==; return; double: dup; +; retsub;", 4)
+	testAccepts(t, `
+b main;
+fact:
+  dup
+  int 2
+  <
+  bz recur
+  retsub
+recur:
+  dup
+  int 1
+  -
+  callsub fact
+  *
+  retsub
+
+main:
+  int 5
+  callsub fact
+  int 120
+  ==
+`, 4)
+	testPanics(t, "int 1; retsub", 4)
+}
