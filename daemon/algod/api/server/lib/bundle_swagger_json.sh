@@ -2,7 +2,11 @@
 
 THISDIR=$(dirname $0)
 
-cat <<EOM | gofmt > $THISDIR/bundledSpecInject.go
+LICENSE_LOCATION="$THISDIR"/../../../../../scripts/LICENSE_HEADER
+LICENSE=$(sed "s/{DATE_Y}/$(date +"%Y")/" "$LICENSE_LOCATION")
+
+printf "%s\n" "$LICENSE" > $THISDIR/bundledSpecInject.go
+cat <<EOM | gofmt >> $THISDIR/bundledSpecInject.go
 // Code generated during build process, along with swagger.json. DO NOT EDIT.
 package lib
 
