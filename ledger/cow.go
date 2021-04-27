@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 //   ___________________
@@ -47,7 +48,7 @@ type roundCowParent interface {
 	// and is provided to optimize state schema lookups
 	getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
-	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
+	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
 }
 
 type roundCowState struct {
@@ -61,16 +62,33 @@ type roundCowState struct {
 	// 2. Stateful TEAL evaluation (see SetKey/DelKey)
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
+
+	// either or not maintain compatibility with original app refactoring behavior
+	// this is needed for generating old eval delta in new code
+	compatibilityMode bool
+	// cache mainaining accountIdx used in getKey for local keys access
+	compatibilityGetKeyCache map[basics.Address]map[storagePtr]uint64
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
-	return &roundCowState{
+	cb := roundCowState{
 		lookupParent: b,
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
+
+	// compatibilityMode retains producing application' eval deltas under the following rule:
+	// local delta has account index as it specified in TEAL either in set/del key or prior get key calls.
+	// The predicate is that complex in order to cover all the block seen on testnet and mainnet.
+	compatibilityMode := (hdr.CurrentProtocol == protocol.ConsensusV24) &&
+		(hdr.NextProtocol != protocol.ConsensusV26 || (hdr.UpgradePropose == "" && hdr.UpgradeApprove == false && hdr.Round < hdr.UpgradeState.NextProtocolVoteBefore))
+	if compatibilityMode {
+		cb.compatibilityMode = true
+		cb.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
+	}
+	return &cb
 }
 
 func (cb *roundCowState) deltas() ledgercore.StateDelta {
@@ -196,13 +214,19 @@ func (cb *roundCowState) setCompactCertNext(rnd basics.Round) {
 }
 
 func (cb *roundCowState) child(hint int) *roundCowState {
-	return &roundCowState{
+	ch := roundCowState{
 		lookupParent: cb,
 		commitParent: cb,
 		proto:        cb.proto,
 		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
+
+	if cb.compatibilityMode {
+		ch.compatibilityMode = cb.compatibilityMode
+		ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
+	}
+	return &ch
 }
 
 func (cb *roundCowState) commitToParent() {
