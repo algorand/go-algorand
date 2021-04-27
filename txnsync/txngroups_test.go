@@ -42,13 +42,13 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 					Txn: transactions.Transaction{
 						Type: protocol.PaymentTx,
 						Header: transactions.Header{
-							Sender: basics.Address(crypto.Hash([]byte("2"))),
-							Fee: basics.MicroAlgos{Raw: 100},
+							Sender:      basics.Address(crypto.Hash([]byte("2"))),
+							Fee:         basics.MicroAlgos{Raw: 100},
 							GenesisHash: genesisHash,
 						},
 						PaymentTxnFields: transactions.PaymentTxnFields{
 							Receiver: basics.Address(crypto.Hash([]byte("4"))),
-							Amount: basics.MicroAlgos{Raw: 1000},
+							Amount:   basics.MicroAlgos{Raw: 1000},
 						},
 					},
 					Sig: crypto.Signature{1},
@@ -61,13 +61,13 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 					Txn: transactions.Transaction{
 						Type: protocol.PaymentTx,
 						Header: transactions.Header{
-							Sender: basics.Address(crypto.Hash([]byte("1"))),
-							Fee: basics.MicroAlgos{Raw: 100},
+							Sender:      basics.Address(crypto.Hash([]byte("1"))),
+							Fee:         basics.MicroAlgos{Raw: 100},
 							GenesisHash: genesisHash,
 						},
 						PaymentTxnFields: transactions.PaymentTxnFields{
 							Receiver: basics.Address(crypto.Hash([]byte("2"))),
-							Amount: basics.MicroAlgos{Raw: 1000},
+							Amount:   basics.MicroAlgos{Raw: 1000},
 						},
 					},
 					Sig: crypto.Signature{2},
@@ -76,7 +76,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 					Txn: transactions.Transaction{
 						Type: protocol.KeyRegistrationTx,
 						Header: transactions.Header{
-							Sender: basics.Address(crypto.Hash([]byte("1"))),
+							Sender:      basics.Address(crypto.Hash([]byte("1"))),
 							GenesisHash: genesisHash,
 						},
 					},
@@ -90,8 +90,8 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 					Txn: transactions.Transaction{
 						Type: protocol.AssetConfigTx,
 						Header: transactions.Header{
-							Sender: basics.Address(crypto.Hash([]byte("1"))),
-							Fee: basics.MicroAlgos{Raw: 100},
+							Sender:      basics.Address(crypto.Hash([]byte("1"))),
+							Fee:         basics.MicroAlgos{Raw: 100},
 							GenesisHash: genesisHash,
 						},
 					},
@@ -101,7 +101,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 					Txn: transactions.Transaction{
 						Type: protocol.AssetFreezeTx,
 						Header: transactions.Header{
-							Sender: basics.Address(crypto.Hash([]byte("1"))),
+							Sender:      basics.Address(crypto.Hash([]byte("1"))),
 							GenesisHash: genesisHash,
 						},
 					},
@@ -111,7 +111,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 					Txn: transactions.Transaction{
 						Type: protocol.CompactCertTx,
 						Header: transactions.Header{
-							Sender: basics.Address(crypto.Hash([]byte("1"))),
+							Sender:      basics.Address(crypto.Hash([]byte("1"))),
 							GenesisHash: genesisHash,
 						},
 					},

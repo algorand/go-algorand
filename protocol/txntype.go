@@ -48,6 +48,7 @@ const (
 	UnknownTx TxType = "unknown"
 )
 
+// TxTypeToByte converts a TxType to byte encoding
 func TxTypeToByte(t TxType) byte {
 	switch t {
 	case PaymentTx:
@@ -69,6 +70,7 @@ func TxTypeToByte(t TxType) byte {
 	}
 }
 
+// ByteToTxType converts a byte encoding to TxType
 func ByteToTxType(b byte) TxType {
 	txTypes := []TxType{PaymentTx, KeyRegistrationTx, AssetConfigTx, AssetTransferTx, AssetFreezeTx, ApplicationCallTx, CompactCertTx, UnknownTx}
 	return txTypes[b]
