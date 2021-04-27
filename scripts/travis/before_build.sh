@@ -78,4 +78,4 @@ echo "Running check_license..."
 ./scripts/check_license.sh
 
 echo "Rebuild swagger.json files"
-make generate
+make rebuild_swagger
