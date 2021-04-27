@@ -4010,10 +4010,10 @@ func TestPush(t *testing.T) {
 func TestLoop(t *testing.T) {
 	t.Parallel()
 	// Double until > 10. Should be 16
-	testAccepts(t, "int 1; loop:; int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
+	testAccepts(t, "int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
 
 	// Why does this label on line with instruction cause trouble?
-	testAccepts(t, "int 1; loop:; int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
+	testAccepts(t, "int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
 
 	// Infinite loop because multiply by one instead of two
 	testPanics(t, "int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", 4)

@@ -1033,11 +1033,22 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			ops.trace("%d: no fields\n", ops.sourceLine)
 			continue
 		}
-		// we're going to process opcodes, so fix the Version
+		// we're about to begin processing opcodes, so fix the Version
 		if ops.Version == assemblerNoVersion {
 			ops.Version = AssemblerDefaultVersion
 		}
 		opstring := fields[0]
+
+		if opstring[len(opstring)-1] == ':' {
+			ops.createLabel(opstring[:len(opstring)-1])
+			fields = fields[1:]
+			if len(fields) == 0 {
+				// There was a label, not need to ops.trace this
+				continue
+			}
+			opstring = fields[0]
+		}
+
 		spec, ok := OpsByName[ops.Version][opstring]
 		if !ok {
 			spec, ok = keywords[opstring]
@@ -1051,10 +1062,6 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			ops.checkArgs(spec)
 			spec.asm(ops, &spec, fields[1:])
 			ops.trace("\n")
-			continue
-		}
-		if opstring[len(opstring)-1] == ':' {
-			ops.createLabel(opstring[:len(opstring)-1])
 			continue
 		}
 		// unknown opcode, let's report a good error if version problem
