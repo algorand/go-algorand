@@ -186,7 +186,7 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 		// if this is the case, the transaction would not be included in the blockchain, and we can exit right
 		// here.
 		if stat.LastRound >= transactionLastValidRound {
-			return fmt.Errorf(errorTransactionExpired, txid)
+			return v1.Transaction{}, fmt.Errorf(errorTransactionExpired, txid)
 		}
 
 		reportInfof(infoTxPending, txid, stat.LastRound)
