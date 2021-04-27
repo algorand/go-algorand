@@ -155,7 +155,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&noSourceMap, "no-source-map", false, "Do not generate source maps")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 
-	debugCmd.Flags().StringVarP(&proto, "proto", "p", "", "Consensus protocol version for TEAL")
+	debugCmd.Flags().StringVarP(&proto, "proto", "p", "", "Consensus protocol version for TEAL evaluation")
 	debugCmd.Flags().StringVarP(&txnFile, "txn", "t", "", "Transaction(s) to evaluate TEAL on in form of json or msgpack file")
 	debugCmd.Flags().IntVarP(&groupIndex, "group-index", "g", 0, "Transaction index in a txn group")
 	debugCmd.Flags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")

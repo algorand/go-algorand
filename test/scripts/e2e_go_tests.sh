@@ -3,6 +3,7 @@ echo "######################################################################"
 echo "  e2e_go_tests"
 echo "######################################################################"
 set -e
+set -o pipefail
 
 export GOPATH=$(go env GOPATH)
 export GO111MODULE=on
@@ -95,14 +96,14 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
         for TEST_DIR in ${TESTS_DIRECTORIES[@]}; do
             TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com" || true)
             for TEST_NAME in ${TESTS[@]}; do
-                go test ${RACE_OPTION} -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR}
-                KMD_INSTANCES_COUNT=$(ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
+                go test ${RACE_OPTION} -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR} | logfilter
+                KMD_INSTANCES_COUNT=$(set +o pipefail; ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
                 if [ "${KMD_INSTANCES_COUNT}" != "0" ]; then
                     echo "One or more than one KMD instances remains running:"
                     ps -Af | grep kmd | grep -v "grep"
                     exit 1
                 fi
-                ALGOD_INSTANCES_COUNT=$(ps -Af | grep algod | grep -v "grep" | wc -l | tr -d ' ')
+                ALGOD_INSTANCES_COUNT=$(set +o pipefail; ps -Af | grep algod | grep -v "grep" | wc -l | tr -d ' ')
                 if [ "${ALGOD_INSTANCES_COUNT}" != "0" ]; then
                     echo "One or more than one algod instances remains running:"
                     ps -Af | grep algod | grep -v "grep"
@@ -111,11 +112,11 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
             done
         done
     else
-        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} ./...
+        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} ./... | logfilter
     fi
 else
     for TEST in ${TESTPATTERNS[@]}; do
-        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
+        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./... | logfilter
     done
 fi
 

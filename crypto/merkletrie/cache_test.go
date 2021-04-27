@@ -474,7 +474,7 @@ func TestCacheLoadingDeferedPage(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify that the cache doesn't reset the mtc.deferedPageLoad on loading a non-defered page.
-	dupMem := memoryCommitter1.Duplicate()
+	dupMem := memoryCommitter1.Duplicate(false)
 	mt2, _ := MakeTrie(dupMem, defaultTestMemoryConfig)
 	lastPage := int64(mt2.nextNodeID) / defaultTestMemoryConfig.NodesCountPerPage
 	require.Equal(t, uint64(lastPage), mt2.cache.deferedPageLoad)

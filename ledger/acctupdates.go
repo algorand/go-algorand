@@ -99,7 +99,8 @@ const initializingAccountCachesMessageTimeout = 3 * time.Second
 // where we end up batching up to 1000 rounds in a single update.
 const accountsUpdatePerRoundHighWatermark = 1 * time.Second
 
-var trieMemoryConfig = merkletrie.MemoryConfig{
+// TrieMemoryConfig is the memory configuration setup used for the merkle trie.
+var TrieMemoryConfig = merkletrie.MemoryConfig{
 	NodesCountPerPage:         merkleCommitterNodesPerPage,
 	CachedNodesCount:          trieCachedNodesCount,
 	PageFillFactor:            0.95,
@@ -711,18 +712,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 
 	offset = uint64(newBase - au.dbRound)
 
-	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
-	// consensus version.
-	if au.versions[1] != au.versions[offset] {
-		// find the tip point.
-		tipPoint := sort.Search(int(offset), func(i int) bool {
-			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
-			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
-			return au.versions[1] != au.versions[1+i]
-		})
-		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
-		offset = uint64(tipPoint)
-	}
+	offset = au.consecutiveVersion(offset)
 
 	// check to see if this is a catchpoint round
 	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
@@ -756,6 +746,22 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		au.accountsWriting.Add(1)
 	}
 	return
+}
+
+func (au *accountUpdates) consecutiveVersion(offset uint64) uint64 {
+	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
+	// consensus version.
+	if au.versions[1] != au.versions[offset] {
+		// find the tip point.
+		tipPoint := sort.Search(int(offset), func(i int) bool {
+			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
+			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
+			return au.versions[1] != au.versions[1+i]
+		})
+		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
+		offset = uint64(tipPoint)
+	}
+	return offset
 }
 
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
@@ -1231,6 +1237,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
+			case 4:
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1258,12 +1270,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	}
 
 	// create the merkle trie for the balances
-	committer, err := makeMerkleCommitter(tx, false)
+	committer, err := MakeMerkleCommitter(tx, false)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
 
-	trie, err := merkletrie.MakeTrie(committer, trieMemoryConfig)
+	trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
@@ -1486,6 +1498,63 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 	return 4, nil
 }
 
+// upgradeDatabaseSchema4 does not change the schema but migrates data:
+// remove empty AccountData entries from accountbase table
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+
+	queryAddresses := au.catchpointInterval != 0
+	numDeleted, addresses, err := removeEmptyAccountData(tx, queryAddresses)
+	if err != nil {
+		return 0, err
+	}
+
+	if queryAddresses && len(addresses) > 0 {
+		mc, err := MakeMerkleCommitter(tx, false)
+		if err != nil {
+			// at this point record deleted and DB is pruned for account data
+			// if hash deletion fails just log it and do not abort startup
+			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle committer: %v", err)
+			goto done
+		}
+		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		if err != nil {
+			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle trie: %v", err)
+			goto done
+		}
+
+		var totalHashesDeleted int
+		for _, addr := range addresses {
+			hash := accountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
+			deleted, err := trie.Delete(hash)
+			if err != nil {
+				au.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, err)
+			} else {
+				if !deleted {
+					au.log.Warnf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(hash), addr)
+				} else {
+					totalHashesDeleted++
+				}
+			}
+		}
+
+		if _, err = trie.Commit(); err != nil {
+			au.log.Errorf("upgradeDatabaseSchema4: failed to commit changes to merkle trie: %v", err)
+		}
+
+		au.log.Infof("upgradeDatabaseSchema4: deleted %d hashes", totalHashesDeleted)
+	}
+
+done:
+	au.log.Infof("upgradeDatabaseSchema4: deleted %d rows", numDeleted)
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 5)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 4 to 5: %v", err)
+	}
+	return 5, nil
+}
+
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
 // once all the files have been deleted, it would go ahead and remove the entries from the table.
 func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries) (err error) {
@@ -1533,7 +1602,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
 			deleted, err = au.balancesTrie.Delete(deleteHash)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
 			}
 			if !deleted {
 				au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
@@ -1546,7 +1615,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
 			added, err = au.balancesTrie.Add(addHash)
 			if err != nil {
-				return err
+				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
 			}
 			if !added {
 				au.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
@@ -1567,6 +1636,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 	if accumulatedChanges > 0 {
 		_, err = au.balancesTrie.Commit()
 	}
+
 	return
 }
 
@@ -1984,6 +2054,15 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// adjust the offset according to what happened meanwhile..
 	offset -= uint64(au.dbRound - dbRound)
+
+	// if this iteration need to flush out zero rounds, just return right away.
+	// this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
+	// flush, without the commitRound have a chance of committing these rounds.
+	if offset == 0 {
+		au.accountsMu.RUnlock()
+		return
+	}
+
 	dbRound = au.dbRound
 
 	newBase := basics.Round(offset) + dbRound
@@ -2000,6 +2079,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
+		au.accountsMu.RUnlock()
 		au.log.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 		return
 	}
@@ -2039,12 +2119,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
-			mc, err0 := makeMerkleCommitter(tx, false)
+			mc, err0 := MakeMerkleCommitter(tx, false)
 			if err0 != nil {
 				return err0
 			}
 			if au.balancesTrie == nil {
-				trie, err := merkletrie.MakeTrie(mc, trieMemoryConfig)
+				trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
 				if err != nil {
 					au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
 					return err

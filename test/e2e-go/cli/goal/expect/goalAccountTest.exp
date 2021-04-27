@@ -32,6 +32,33 @@ if { [catch {
     # Determine primary account
     set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
 
+    # try to generate an expired transaction for 5 times before giving up.
+    set TEST_TRANSACTION_EXPIRATION 5
+    while {$TEST_TRANSACTION_EXPIRATION > 0} {
+        # Get the lastest block
+        set LAST_COMMITTED_BLOCK [::AlgorandGoal::GetNodeLastCommittedBlock $TEST_PRIMARY_NODE_DIR]
+
+        # test that sending a transaction where the last round is equal to the current round end up resulting in "Transaction %s expired before it could be included in a block" error.
+        spawn goal clerk send -a 10 --fee 1000 --firstvalid [expr {$LAST_COMMITTED_BLOCK + 1}] --lastvalid [expr {$LAST_COMMITTED_BLOCK + 1}] -f $PRIMARY_ACCOUNT_ADDRESS -t $PRIMARY_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+        expect {
+            timeout { close; ::AlgorandGoal::Abort "goal clerk send timeout" }
+            -re {Transaction ([A-Z0-9]+) expired before it could be included in a block} {
+                break;
+                close;
+            }
+            -re {Transaction ([A-Z0-9]+) kicked out of local node pool} {
+                # this is a legit possible case, so just keep iterating if we hit this one.
+                close;
+            }
+            -re {Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: txn dead: round ([0-9]+) outside of ([0-9]+)--([0-9]+)} {
+                # this is a legit possible case, so just keep iterating if we hit this one.
+                close;
+            }
+            eof { ::AlgorandGoal::CheckEOF "Failed to send a dummy transaction" }
+        }
+        set TEST_TRANSACTION_EXPIRATION [expr {$TEST_TRANSACTION_EXPIRATION - 1}]
+    }
+
     set MN "advice pudding treat near rule blouse same whisper inner electric quit surface sunny dismiss leader blood seat clown cost exist hospital century reform able sponsor"
     spawn goal account import -m $MN --datadir $TEST_PRIMARY_NODE_DIR
     expect {
