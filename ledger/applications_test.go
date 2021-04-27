@@ -74,7 +74,7 @@ func (c *mockCowForLogicLedger) GetCreator(cidx basics.CreatableIndex, ctype bas
 	return addr, found, nil
 }
 
-func (c *mockCowForLogicLedger) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+func (c *mockCowForLogicLedger) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
 	kv, ok := c.stores[storeLocator{addr, aidx, global}]
 	if !ok {
 		return basics.TealValue{}, false, fmt.Errorf("no store for (%s %d %v) in mock cow", addr.String(), aidx, global)
@@ -87,7 +87,7 @@ func (c *mockCowForLogicLedger) BuildEvalDelta(aidx basics.AppIndex, txn *transa
 	return basics.EvalDelta{}, nil
 }
 
-func (c *mockCowForLogicLedger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error {
+func (c *mockCowForLogicLedger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error {
 	kv, ok := c.stores[storeLocator{addr, aidx, global}]
 	if !ok {
 		return fmt.Errorf("no store for (%s %d %v) in mock cow", addr.String(), aidx, global)
@@ -97,7 +97,7 @@ func (c *mockCowForLogicLedger) SetKey(addr basics.Address, aidx basics.AppIndex
 	return nil
 }
 
-func (c *mockCowForLogicLedger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) error {
+func (c *mockCowForLogicLedger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error {
 	kv, ok := c.stores[storeLocator{addr, aidx, global}]
 	if !ok {
 		return fmt.Errorf("no store for (%s %d %v) in mock cow", addr.String(), aidx, global)
@@ -277,7 +277,7 @@ func TestLogicLedgerGetKey(t *testing.T) {
 
 	// check local
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, false}: {"lkey": tv}}
-	val, ok, err = l.GetLocal(addr, aidx, "lkey")
+	val, ok, err = l.GetLocal(addr, aidx, "lkey", 0)
 	a.NoError(err)
 	a.True(ok)
 	a.Equal(tv, val)
@@ -307,7 +307,7 @@ func TestLogicLedgerSetKey(t *testing.T) {
 
 	// check local
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, false}: {"lkey": tv}}
-	err = l.SetLocal(addr, "lkey", tv2)
+	err = l.SetLocal(addr, "lkey", tv2, 0)
 	a.NoError(err)
 }
 
@@ -334,7 +334,7 @@ func TestLogicLedgerDelKey(t *testing.T) {
 
 	addr1 := getRandomAddress(a)
 	c.stores = map[storeLocator]basics.TealKeyValue{{addr1, aidx, false}: {"lkey": tv}}
-	err = l.DelLocal(addr1, "lkey")
+	err = l.DelLocal(addr1, "lkey", 0)
 	a.NoError(err)
 }
 
@@ -566,4 +566,724 @@ return`
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "local"}}}},
 		})
 	a.NoError(err)
+}
+
+func TestAppAccountDelta(t *testing.T) {
+	a := require.New(t)
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+// if no args then write local
+// otherwise check args and write local or global
+txn NumAppArgs
+int 0
+==
+bnz writelocal
+txna ApplicationArgs 0
+byte "local"
+==
+bnz writelocal
+txna ApplicationArgs 0
+byte "local1"
+==
+bnz writelocal1
+txna ApplicationArgs 0
+byte "global"
+==
+bnz writeglobal
+int 0
+return
+writelocal:
+int 0
+byte "lk"
+byte "local"
+app_local_put
+b success
+writelocal1:
+int 0
+byte "lk1"
+byte "local1"
+app_local_put
+b success
+writeglobal:
+byte "gk"
+byte "global"
+app_global_put
+success:
+int 1
+return`
+
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+
+	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+	userLocal, err := basics.UnmarshalChecksumAddress("UL5C6SRVLOROSB5FGAE6TY34VXPXVR7GNIELUB3DD5KTA4VT6JGOZ6WFAY")
+	a.NoError(err)
+
+	a.Contains(genesisInitState.Accounts, creator)
+	a.Contains(genesisInitState.Accounts, userLocal)
+
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	a.NoError(err)
+	defer l.Close()
+
+	genesisID := t.Name()
+	txHeader := transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	// create application
+	approvalProgram := program
+	clearStateProgram := []byte("\x02") // empty
+	appCreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 4},
+		LocalStateSchema:  basics.StateSchema{NumByteSlice: 2},
+	}
+	appCreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCreateFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	a.NoError(err)
+
+	appIdx := basics.AppIndex(1) // first tnx => idx = 1
+
+	// opt-in, write to local
+	txHeader.Sender = userLocal
+	appCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.OptInOC,
+		ApplicationID: appIdx,
+	}
+	appCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
+		EvalDelta: basics.EvalDelta{
+			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{
+				Action: basics.SetBytesAction,
+				Bytes:  "local",
+			}}},
+		},
+	})
+	a.NoError(err)
+
+	txHeader.Sender = userLocal
+	appCallFields = transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.NoOpOC,
+		ApplicationID: appIdx,
+	}
+	appCall = transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{})
+	a.NoError(err)
+
+	// save data into DB and write into local state
+	l.accts.accountsWriting.Add(1)
+	l.accts.commitRound(3, 0, 0)
+	l.reloadLedger()
+
+	// check first write
+	blk, err := l.Block(2)
+	a.NoError(err)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas, uint64(0))
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[0], "lk")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[0]["lk"].Bytes, "local")
+	expectedAD := transactions.ApplyData{}
+	dec, err := hex.DecodeString("81a2647481a26c64810081a26c6b82a2617401a26273a56c6f63616c")
+	a.NoError(err)
+	err = protocol.Decode(dec, &expectedAD)
+	a.NoError(err)
+	a.Equal(expectedAD, blk.Payset[0].ApplyData)
+
+	// check repeated write
+	blk, err = l.Block(3)
+	a.NoError(err)
+	a.Empty(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
+	expectedAD = transactions.ApplyData{}
+	dec, err = hex.DecodeString("80")
+	a.NoError(err)
+	err = protocol.Decode(dec, &expectedAD)
+	a.NoError(err)
+	a.Equal(expectedAD, blk.Payset[0].ApplyData)
+
+	txHeader.Sender = creator
+	appCallFields = transactions.ApplicationCallTxnFields{
+		OnCompletion:    transactions.NoOpOC,
+		ApplicationID:   appIdx,
+		ApplicationArgs: [][]byte{[]byte("global")},
+	}
+	appCall = transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall,
+		transactions.ApplyData{EvalDelta: basics.EvalDelta{
+			GlobalDelta: basics.StateDelta{"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"}}},
+		})
+	a.NoError(err)
+
+	// repeat writing into global state
+	txHeader.Lease = [32]byte{1}
+	appCall = transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{})
+	a.NoError(err)
+
+	// save data into DB
+	l.accts.accountsWriting.Add(1)
+	l.accts.commitRound(2, 3, 0)
+	l.reloadLedger()
+
+	// check first write
+	blk, err = l.Block(4)
+	a.NoError(err)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta["gk"].Bytes, "global")
+	expectedAD = transactions.ApplyData{}
+	dec, err = hex.DecodeString("81a2647481a2676481a2676b82a2617401a26273a6676c6f62616c")
+	a.NoError(err)
+	err = protocol.Decode(dec, &expectedAD)
+	a.NoError(err)
+	a.Equal(expectedAD, blk.Payset[0].ApplyData)
+
+	// check repeated write
+	blk, err = l.Block(5)
+	a.NoError(err)
+	a.NotContains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
+	expectedAD = transactions.ApplyData{}
+	dec, err = hex.DecodeString("80")
+	a.NoError(err)
+	err = protocol.Decode(dec, &expectedAD)
+	a.NoError(err)
+	a.Equal(expectedAD, blk.Payset[0].ApplyData)
+
+	// check same key update in the same block
+	txHeader.Sender = userLocal
+	txHeader.Lease = [32]byte{2}
+	appCallFields = transactions.ApplicationCallTxnFields{
+		OnCompletion:    transactions.NoOpOC,
+		ApplicationID:   appIdx,
+		ApplicationArgs: [][]byte{[]byte("local1")},
+	}
+	appCall1 := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+
+	txHeader.Lease = [32]byte{3}
+	appCall2 := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+
+	stx1 := sign(initKeys, appCall1)
+	stx2 := sign(initKeys, appCall2)
+
+	blk = makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	ad1 := transactions.ApplyData{
+		EvalDelta: basics.EvalDelta{
+			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk1": basics.ValueDelta{
+				Action: basics.SetBytesAction,
+				Bytes:  "local1",
+			}}},
+		},
+	}
+	txib1, err := blk.EncodeSignedTxn(stx1, ad1)
+	a.NoError(err)
+	txib2, err := blk.EncodeSignedTxn(stx2, transactions.ApplyData{})
+	a.NoError(err)
+	blk.TxnCounter = blk.TxnCounter + 2
+	blk.Payset = append(blk.Payset, txib1, txib2)
+	blk.TxnRoot, err = blk.PaysetCommit()
+	a.NoError(err)
+	err = l.appendUnvalidated(blk)
+	a.NoError(err)
+
+	// first txn has delta
+	blk, err = l.Block(6)
+	a.NoError(err)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas, uint64(0))
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[0], "lk1")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[0]["lk1"].Bytes, "local1")
+	expectedAD = transactions.ApplyData{}
+	dec, err = hex.DecodeString("81a2647481a26c64810081a36c6b3182a2617401a26273a66c6f63616c31")
+	a.NoError(err)
+	err = protocol.Decode(dec, &expectedAD)
+	a.NoError(err)
+	a.Equal(expectedAD, blk.Payset[0].ApplyData)
+
+	// second txn does not have delta (same key/value update)
+	a.Empty(blk.Payset[1].ApplyData.EvalDelta.LocalDeltas)
+	a.Equal(transactions.ApplyData{}, blk.Payset[1].ApplyData)
+}
+
+func TestAppEmptyAccountsLocal(t *testing.T) {
+	a := require.New(t)
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+int 0
+byte "lk"
+byte "local"
+app_local_put
+success:
+int 1
+return`
+
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+
+	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+	userLocal, err := basics.UnmarshalChecksumAddress("UL5C6SRVLOROSB5FGAE6TY34VXPXVR7GNIELUB3DD5KTA4VT6JGOZ6WFAY")
+	a.NoError(err)
+
+	a.Contains(genesisInitState.Accounts, creator)
+	a.Contains(genesisInitState.Accounts, userLocal)
+
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	a.NoError(err)
+	defer l.Close()
+
+	genesisID := t.Name()
+	txHeader := transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	// create application
+	approvalProgram := program
+	clearStateProgram := []byte("\x02") // empty
+	appCreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 4},
+		LocalStateSchema:  basics.StateSchema{NumByteSlice: 2},
+	}
+	appCreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCreateFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	a.NoError(err)
+
+	appIdx := basics.AppIndex(1) // first tnx => idx = 1
+
+	// opt-in, write to local
+	txHeader.Sender = userLocal
+	appCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.OptInOC,
+		ApplicationID: appIdx,
+	}
+	appCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
+		EvalDelta: basics.EvalDelta{
+			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{
+				Action: basics.SetBytesAction,
+				Bytes:  "local",
+			}}},
+		},
+	})
+	a.NoError(err)
+
+	// close out
+	txHeader.Sender = userLocal
+	appCallFields = transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.CloseOutOC,
+		ApplicationID: appIdx,
+	}
+	appCall = transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	paymentFields := transactions.PaymentTxnFields{
+		Amount:           basics.MicroAlgos{Raw: 0},
+		Receiver:         creator,
+		CloseRemainderTo: creator,
+	}
+	payment := transactions.Transaction{
+		Type:             protocol.PaymentTx,
+		Header:           txHeader,
+		PaymentTxnFields: paymentFields,
+	}
+
+	data := genesisInitState.Accounts[userLocal]
+	balance := basics.MicroAlgos{Raw: data.MicroAlgos.Raw - txHeader.Fee.Raw*3}
+	stx1 := sign(initKeys, appCall)
+	stx2 := sign(initKeys, payment)
+
+	blk := makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{})
+	a.NoError(err)
+	txib2, err := blk.EncodeSignedTxn(stx2, transactions.ApplyData{ClosingAmount: balance})
+	a.NoError(err)
+	blk.TxnCounter = blk.TxnCounter + 2
+	blk.Payset = append(blk.Payset, txib1, txib2)
+	blk.TxnRoot, err = blk.PaysetCommit()
+	a.NoError(err)
+	err = l.appendUnvalidated(blk)
+	a.NoError(err)
+
+	// save data into DB and write into local state
+	l.accts.accountsWriting.Add(1)
+	l.accts.commitRound(3, 0, 0)
+	l.reloadLedger()
+
+	// check first write
+	blk, err = l.Block(2)
+	a.NoError(err)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas, uint64(0))
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[0], "lk")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[0]["lk"].Bytes, "local")
+
+	// check close out
+	blk, err = l.Block(3)
+	a.NoError(err)
+	a.Empty(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
+
+	pad, err := l.accts.accountsq.lookup(userLocal)
+	a.NoError(err)
+	a.Equal(basics.AccountData{}, pad.accountData)
+	a.Zero(pad.rowid)
+}
+
+func TestAppEmptyAccountsGlobal(t *testing.T) {
+	a := require.New(t)
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+byte "gk"
+byte "global"
+app_global_put
+success:
+int 1
+return`
+
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+
+	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+	userLocal, err := basics.UnmarshalChecksumAddress("UL5C6SRVLOROSB5FGAE6TY34VXPXVR7GNIELUB3DD5KTA4VT6JGOZ6WFAY")
+	a.NoError(err)
+
+	a.Contains(genesisInitState.Accounts, creator)
+	a.Contains(genesisInitState.Accounts, userLocal)
+
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	a.NoError(err)
+	defer l.Close()
+
+	genesisID := t.Name()
+	txHeader := transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	// create application
+	approvalProgram := program
+	clearStateProgram := []byte("\x02") // empty
+	appCreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 4},
+		LocalStateSchema:  basics.StateSchema{NumByteSlice: 2},
+	}
+	appCreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCreateFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	a.NoError(err)
+
+	appIdx := basics.AppIndex(1) // first tnx => idx = 1
+
+	// destoy the app
+	txHeader.Sender = creator
+	appCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.DeleteApplicationOC,
+		ApplicationID: appIdx,
+	}
+	appCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	paymentFields := transactions.PaymentTxnFields{
+		Amount:           basics.MicroAlgos{Raw: 0},
+		Receiver:         userLocal,
+		CloseRemainderTo: userLocal,
+	}
+	payment := transactions.Transaction{
+		Type:             protocol.PaymentTx,
+		Header:           txHeader,
+		PaymentTxnFields: paymentFields,
+	}
+
+	data := genesisInitState.Accounts[creator]
+	balance := basics.MicroAlgos{Raw: data.MicroAlgos.Raw - txHeader.Fee.Raw*3}
+	stx1 := sign(initKeys, appCall)
+	stx2 := sign(initKeys, payment)
+
+	blk := makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		GlobalDelta: basics.StateDelta{
+			"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"},
+		}},
+	})
+	a.NoError(err)
+	txib2, err := blk.EncodeSignedTxn(stx2, transactions.ApplyData{ClosingAmount: balance})
+	a.NoError(err)
+	blk.TxnCounter = blk.TxnCounter + 2
+	blk.Payset = append(blk.Payset, txib1, txib2)
+	blk.TxnRoot, err = blk.PaysetCommit()
+	a.NoError(err)
+	err = l.appendUnvalidated(blk)
+	a.NoError(err)
+
+	// save data into DB and write into local state
+	l.accts.accountsWriting.Add(1)
+	l.accts.commitRound(2, 0, 0)
+	l.reloadLedger()
+
+	// check first write
+	blk, err = l.Block(1)
+	a.NoError(err)
+	a.Nil(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
+	a.Nil(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta)
+
+	// check deletion out
+	blk, err = l.Block(2)
+	a.NoError(err)
+	a.Nil(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta["gk"].Bytes, "global")
+
+	pad, err := l.accts.accountsq.lookup(creator)
+	a.NoError(err)
+	a.Equal(basics.AccountData{}, pad.accountData)
+	a.Zero(pad.rowid)
+}
+
+func TestAppAccountDeltaIndicesCompatibility1(t *testing.T) {
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+int 0
+byte "lk0"
+byte "local0"
+app_local_put
+int 1
+byte "lk1"
+byte "local1"
+app_local_put
+success:
+int 1
+`
+	// put into sender account as idx 0, expect 0
+	testAppAccountDeltaIndicesCompatibility(t, source, 0)
+}
+
+func TestAppAccountDeltaIndicesCompatibility2(t *testing.T) {
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+int 1
+byte "lk1"
+byte "local1"
+app_local_put
+int 0
+byte "lk0"
+byte "local0"
+app_local_put
+success:
+int 1
+`
+	// put into sender account as idx 1, expect 1
+	testAppAccountDeltaIndicesCompatibility(t, source, 1)
+}
+
+func TestAppAccountDeltaIndicesCompatibility3(t *testing.T) {
+	source := `#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz success
+int 1
+byte "lk"
+app_local_get
+pop
+int 0
+byte "lk0"
+byte "local0"
+app_local_put
+int 1
+byte "lk1"
+byte "local1"
+app_local_put
+success:
+int 1
+`
+	// get sender account as idx 1 but put into sender account as idx 0, expect 1
+	testAppAccountDeltaIndicesCompatibility(t, source, 1)
+}
+
+func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accountIdx uint64) {
+	a := require.New(t)
+	ops, err := logic.AssembleString(source)
+	a.NoError(err)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+
+	// explicitly trigger compatibility mode
+	proto := config.Consensus[protocol.ConsensusV24]
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusV24)
+
+	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+	userLocal, err := basics.UnmarshalChecksumAddress("UL5C6SRVLOROSB5FGAE6TY34VXPXVR7GNIELUB3DD5KTA4VT6JGOZ6WFAY")
+	a.NoError(err)
+
+	a.Contains(genesisInitState.Accounts, creator)
+	a.Contains(genesisInitState.Accounts, userLocal)
+
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	a.NoError(err)
+	defer l.Close()
+
+	genesisID := t.Name()
+	txHeader := transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	// create application
+	approvalProgram := program
+	clearStateProgram := []byte("\x02") // empty
+	appCreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 4},
+		LocalStateSchema:  basics.StateSchema{NumByteSlice: 2},
+	}
+	appCreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCreateFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{})
+	a.NoError(err)
+
+	appIdx := basics.AppIndex(1) // first tnx => idx = 1
+
+	// opt-in
+	txHeader.Sender = userLocal
+	appCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.OptInOC,
+		ApplicationID: appIdx,
+		Accounts:      []basics.Address{userLocal},
+	}
+	appCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
+		EvalDelta: basics.EvalDelta{
+			LocalDeltas: map[uint64]basics.StateDelta{
+				accountIdx: {
+					"lk0": basics.ValueDelta{
+						Action: basics.SetBytesAction,
+						Bytes:  "local0",
+					},
+					"lk1": basics.ValueDelta{
+						Action: basics.SetBytesAction,
+						Bytes:  "local1"},
+				},
+			},
+		},
+	})
+	a.NoError(err)
+
+	// save data into DB and write into local state
+	l.accts.accountsWriting.Add(1)
+	l.accts.commitRound(2, 0, 0)
+	l.reloadLedger()
+
+	// check first write
+	blk, err := l.Block(2)
+	a.NoError(err)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas, accountIdx)
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx], "lk0")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk0"].Bytes, "local0")
+	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx], "lk1")
+	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk1"].Bytes, "local1")
 }
