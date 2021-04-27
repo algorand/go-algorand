@@ -662,6 +662,7 @@ func (cx *evalContext) checkStep() (int, error) {
 		return 0, fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 	}
 	prevpc := cx.pc
+	cx.cost += deets.Cost
 	if deets.checkFunc != nil {
 		err := deets.checkFunc(cx)
 		if err != nil {
