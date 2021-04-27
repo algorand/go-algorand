@@ -24,6 +24,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
@@ -38,14 +39,25 @@ type CreatablesInfo struct {
 	OptIns      map[uint64][]string
 }
 
+// WorkerState object holds a running pingpong worker
+type WorkerState struct {
+	cfg      PpConfig
+	accounts map[string]uint64
+	cinfo    CreatablesInfo
+
+	nftStartTime  int64
+	localNftIndex uint64
+	nftHolders    map[string]int
+}
+
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
-func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, cinfo CreatablesInfo, cfg PpConfig, err error) {
-	cfg = initCfg
-	accounts, cfg, err = ensureAccounts(ac, cfg)
+func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
+	pps.accounts, pps.cfg, err = ensureAccounts(ac, pps.cfg)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "ensure accounts failed %v\n", err)
 		return
 	}
+	cfg := pps.cfg
 
 	wallet, walletErr := ac.GetUnencryptedWalletHandle()
 	if err != nil {
@@ -58,48 +70,49 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 		cfg.MaxAmt = 0
 
 		var assetAccounts map[string]uint64
-		assetAccounts, err = prepareNewAccounts(ac, cfg, wallet, accounts)
+		assetAccounts, err = prepareNewAccounts(ac, cfg, wallet, pps.accounts)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
 			return
 		}
 
-		cinfo.AssetParams, cinfo.OptIns, err = prepareAssets(assetAccounts, ac, cfg)
+		pps.cinfo.AssetParams, pps.cinfo.OptIns, err = pps.prepareAssets(assetAccounts, ac)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare assets failed %v\n", err)
 			return
 		}
 
 		if !cfg.Quiet {
-			for addr := range accounts {
-				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, accounts[addr])
+			for addr := range pps.accounts {
+				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, pps.accounts[addr])
 			}
 		}
 	} else if cfg.NumApp > 0 {
 
 		var appAccounts map[string]uint64
-		appAccounts, err = prepareNewAccounts(ac, cfg, wallet, accounts)
+		appAccounts, err = prepareNewAccounts(ac, cfg, wallet, pps.accounts)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
 			return
 		}
-		cinfo.AppParams, cinfo.OptIns, err = prepareApps(appAccounts, ac, cfg)
+		pps.cinfo.AppParams, pps.cinfo.OptIns, err = prepareApps(appAccounts, ac, cfg)
 		if err != nil {
 			return
 		}
 		if !cfg.Quiet {
-			for addr := range accounts {
-				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, accounts[addr])
+			for addr := range pps.accounts {
+				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, pps.accounts[addr])
 			}
 		}
 	} else {
-		err = fundAccounts(accounts, ac, cfg)
+		err = fundAccounts(pps.accounts, ac, cfg)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
 			return
 		}
 	}
 
+	pps.cfg = cfg
 	return
 }
 
@@ -268,8 +281,10 @@ func listSufficientAccounts(accounts map[string]uint64, minimumAmount uint64, ex
 	return out
 }
 
+var logPeriod = 5 * time.Second
+
 // RunPingPong starts ping pong process
-func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uint64, cinfo CreatablesInfo, cfg PpConfig) {
+func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 	// Infinite loop given:
 	//  - accounts -> map of accounts to include in transfers (including src account, which we don't want to use)
 	//  - cfg      -> configuration for how to proceed
@@ -286,6 +301,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	//			error = fundAccounts()
 	//  }
 
+	cfg := pps.cfg
 	var runTime time.Duration
 	if cfg.RunTime > 0 {
 		runTime = cfg.RunTime
@@ -299,6 +315,14 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	restTime := cfg.RestTime
 	refreshTime := time.Now().Add(cfg.RefreshTime)
 
+	var nftThrottler *throttler
+	if pps.cfg.NftAsaPerSecond > 0 {
+		nftThrottler = newThrottler(20, float64(pps.cfg.NftAsaPerSecond))
+	}
+
+	lastLog := time.Now()
+	nextLog := lastLog.Add(logPeriod)
+
 	for {
 		if ctx.Err() != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "error bad context in RunPingPong: %v\n", ctx.Err())
@@ -307,22 +331,46 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 		startTime := time.Now()
 		stopTime := startTime.Add(runTime)
 
-		var totalSent, totalSucceeded uint64
-		for !time.Now().After(stopTime) {
+		var totalSent, totalSucceeded, lastTotalSent uint64
+		for {
+			now := time.Now()
+			if now.After(stopTime) {
+				break
+			}
+			if now.After(nextLog) {
+				dt := now.Sub(lastLog)
+				fmt.Printf("%d sent, %0.2f/s (%d total)\n", totalSent-lastTotalSent, float64(totalSent-lastTotalSent)/dt.Seconds(), totalSent)
+				lastTotalSent = totalSent
+				for now.After(nextLog) {
+					nextLog = nextLog.Add(logPeriod)
+				}
+				lastLog = now
+			}
+
 			if cfg.MaxRuntime > 0 && time.Now().After(endTime) {
 				fmt.Printf("Terminating after max run time of %.f seconds\n", cfg.MaxRuntime.Seconds())
 				return
 			}
 
+			if pps.cfg.NftAsaPerSecond > 0 {
+				sent, err := pps.makeNftTraffic(ac)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "error sending nft transactions: %v\n", err)
+				}
+				nftThrottler.maybeSleep(int(sent))
+				totalSent += sent
+				continue
+			}
+
 			minimumAmount := cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*2
-			fromList := listSufficientAccounts(accounts, minimumAmount, cfg.SrcAccount)
+			fromList := listSufficientAccounts(pps.accounts, minimumAmount, cfg.SrcAccount)
 			// in group tests txns are sent back and forth, so both parties need funds
 			if cfg.GroupSize == 1 {
 				minimumAmount = 0
 			}
-			toList := listSufficientAccounts(accounts, minimumAmount, cfg.SrcAccount)
+			toList := listSufficientAccounts(pps.accounts, minimumAmount, cfg.SrcAccount)
 
-			sent, succeeded, err := sendFromTo(fromList, toList, accounts, cinfo, ac, cfg)
+			sent, succeeded, err := pps.sendFromTo(fromList, toList, ac)
 			totalSent += sent
 			totalSucceeded += succeeded
 			if err != nil {
@@ -330,7 +378,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 			}
 
 			if cfg.RefreshTime > 0 && time.Now().After(refreshTime) {
-				err = refreshAccounts(accounts, ac, cfg)
+				err = refreshAccounts(pps.accounts, ac, cfg)
 				if err != nil {
 					_, _ = fmt.Fprintf(os.Stderr, "error refreshing: %v\n", err)
 				}
@@ -348,6 +396,11 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 			time.Sleep(restTime)
 		}
 	}
+}
+
+// NewPingpong creates a new pingpong WorkerState
+func NewPingpong(cfg PpConfig) *WorkerState {
+	return &WorkerState{cfg: cfg, nftHolders: make(map[string]int)}
 }
 
 func getCreatableID(cfg PpConfig, cinfo CreatablesInfo) (aidx uint64) {
@@ -375,14 +428,96 @@ func getCreatableID(cfg PpConfig, cinfo CreatablesInfo) (aidx uint64) {
 	return
 }
 
-func sendFromTo(
-	fromList, toList []string, accounts map[string]uint64,
-	cinfo CreatablesInfo,
-	client libgoal.Client, cfg PpConfig,
+func (pps *WorkerState) fee() uint64 {
+	cfg := pps.cfg
+	fee := cfg.MaxFee
+	if cfg.RandomizeFee {
+		fee = rand.Uint64()%(cfg.MaxFee-cfg.MinFee) + cfg.MinFee
+	}
+	return fee
+}
+
+func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64, err error) {
+	fee := pps.fee()
+	if (len(pps.nftHolders) == 0) || ((float64(int(pps.cfg.NftAsaAccountInFlight)-len(pps.nftHolders)) / float64(pps.cfg.NftAsaAccountInFlight)) >= rand.Float64()) {
+		var addr string
+		var wallet []byte
+		wallet, err = client.GetUnencryptedWalletHandle()
+		if err != nil {
+			return
+		}
+		addr, err = client.GenerateAddress(wallet)
+		if err != nil {
+			return
+		}
+		fmt.Printf("new NFT holder %s\n", addr)
+		var proto config.ConsensusParams
+		proto, err = getProto(client)
+		if err != nil {
+			return
+		}
+		// enough for the per-asa minbalance and more than enough for the txns to create them
+		toSend := proto.MinBalance * uint64(pps.cfg.NftAsaPerAccount+1) * 2
+		pps.nftHolders[addr] = 0
+		_, err = sendPaymentFromUnencryptedWallet(client, pps.cfg.SrcAccount, addr, fee, toSend, nil)
+		if err != nil {
+			return
+		}
+		sentCount++
+		// we ran one txn above already to fund the new addr,
+		// we'll run a second txn below
+	}
+	// pick a random sender from nft holder sub accounts
+	pick := rand.Intn(len(pps.nftHolders))
+	pos := 0
+	var sender string
+	var senderNftCount int
+	for addr, nftCount := range pps.nftHolders {
+		sender = addr
+		senderNftCount = nftCount
+		if pos == pick {
+			break
+		}
+		pos++
+
+	}
+	var meta [32]byte
+	rand.Read(meta[:])
+	assetName := pps.nftSpamAssetName()
+	const totalSupply = 1
+	txn, err := client.MakeUnsignedAssetCreateTx(totalSupply, false, sender, sender, sender, sender, "ping", assetName, "", meta[:], 0)
+	if err != nil {
+		fmt.Printf("Cannot make asset create txn with meta %v\n", meta)
+		return
+	}
+	txn, err = client.FillUnsignedTxTemplate(sender, 0, 0, pps.cfg.MaxFee, txn)
+	if err != nil {
+		fmt.Printf("Cannot fill asset creation txn\n")
+		return
+	}
+	if senderNftCount+1 >= int(pps.cfg.NftAsaPerAccount) {
+		delete(pps.nftHolders, sender)
+	} else {
+		pps.nftHolders[sender] = senderNftCount + 1
+	}
+	stxn, err := signTxn(sender, txn, client, pps.cfg)
+	if err != nil {
+		return
+	}
+	sentCount++
+	_, err = client.BroadcastTransaction(stxn)
+	return
+}
+
+func (pps *WorkerState) sendFromTo(
+	fromList, toList []string,
+	client libgoal.Client,
 ) (sentCount, successCount uint64, err error) {
+	accounts := pps.accounts
+	cinfo := pps.cinfo
+	cfg := pps.cfg
 
 	amt := cfg.MaxAmt
-	fee := cfg.MaxFee
 
 	assetsByCreator := make(map[string][]*v1.AssetParams)
 	for _, p := range cinfo.AssetParams {
@@ -394,9 +529,7 @@ func sendFromTo(
 			amt = rand.Uint64()%cfg.MaxAmt + 1
 		}
 
-		if cfg.RandomizeFee {
-			fee = rand.Uint64()%(cfg.MaxFee-cfg.MinFee) + cfg.MinFee
-		}
+		fee := pps.fee()
 
 		to := toList[i]
 		if cfg.RandomizeDst {
@@ -417,7 +550,7 @@ func sendFromTo(
 			// generate random assetID or appId if we send asset/app txns
 			aidx := getCreatableID(cfg, cinfo)
 			// Construct single txn
-			txn, consErr := constructTxn(from, to, fee, amt, aidx, cinfo, client, cfg)
+			txn, consErr := pps.constructTxn(from, to, fee, amt, aidx, client)
 			if consErr != nil {
 				err = consErr
 				_, _ = fmt.Fprintf(os.Stderr, "constructTxn failed: %v\n", err)
@@ -460,17 +593,17 @@ func sendFromTo(
 				var txn transactions.Transaction
 				var signer string
 				if j%2 == 0 {
-					txn, err = constructTxn(from, to, fee, amt, 0, cinfo, client, cfg)
+					txn, err = pps.constructTxn(from, to, fee, amt, 0, client)
 					fromBalanceChange -= int64(txn.Fee.Raw + amt)
 					toBalanceChange += int64(amt)
 					signer = from
 				} else if cfg.GroupSize == 2 && cfg.Rekey {
-					txn, err = constructTxn(from, to, fee, amt, 0, cinfo, client, cfg)
+					txn, err = pps.constructTxn(from, to, fee, amt, 0, client)
 					fromBalanceChange -= int64(txn.Fee.Raw + amt)
 					toBalanceChange += int64(amt)
 					signer = to
 				} else {
-					txn, err = constructTxn(to, from, fee, amt, 0, cinfo, client, cfg)
+					txn, err = pps.constructTxn(to, from, fee, amt, 0, client)
 					toBalanceChange -= int64(txn.Fee.Raw + amt)
 					fromBalanceChange += int64(amt)
 					signer = to
@@ -553,7 +686,17 @@ func sendFromTo(
 	return
 }
 
-func constructTxn(from, to string, fee, amt, aidx uint64, cinfo CreatablesInfo, client libgoal.Client, cfg PpConfig) (txn transactions.Transaction, err error) {
+func (pps *WorkerState) nftSpamAssetName() string {
+	if pps.nftStartTime == 0 {
+		pps.nftStartTime = time.Now().Unix()
+	}
+	pps.localNftIndex++
+	return fmt.Sprintf("nft%d_%d", pps.nftStartTime, pps.localNftIndex)
+}
+
+func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client) (txn transactions.Transaction, err error) {
+	cfg := pps.cfg
+	cinfo := pps.cinfo
 	var noteField []byte
 	const pingpongTag = "pingpong"
 	const tagLen = uint32(len(pingpongTag))
@@ -674,4 +817,54 @@ func signTxn(signer string, txn transactions.Transaction, client libgoal.Client,
 		stxn, err = client.SignTransactionWithWallet(h, nil, txn)
 	}
 	return
+}
+
+type timeCount struct {
+	when  time.Time
+	count int
+}
+
+type throttler struct {
+	times []timeCount
+
+	next int
+
+	// target x per-second
+	xps float64
+
+	// rough proportional + integral control
+	iterm float64
+}
+
+func newThrottler(windowSize int, targetPerSecond float64) *throttler {
+	return &throttler{times: make([]timeCount, windowSize), xps: targetPerSecond, iterm: 0.0}
+}
+
+func (t *throttler) maybeSleep(count int) {
+	now := time.Now()
+	t.times[t.next].when = now
+	t.times[t.next].count = count
+	nn := (t.next + 1) % len(t.times)
+	t.next = nn
+	if t.times[nn].when.IsZero() {
+		return
+	}
+	dt := now.Sub(t.times[nn].when)
+	countsum := 0
+	for i, tc := range t.times {
+		if i != nn {
+			countsum += tc.count
+		}
+	}
+	rate := float64(countsum) / dt.Seconds()
+	if rate > t.xps {
+		// rate too high, slow down
+		desiredSeconds := float64(countsum) / t.xps
+		extraSeconds := desiredSeconds - dt.Seconds()
+		t.iterm += 0.1 * extraSeconds / float64(len(t.times))
+		time.Sleep(time.Duration(int64(1000000000.0 * (extraSeconds + t.iterm) / float64(len(t.times)))))
+
+	} else {
+		t.iterm *= 0.95
+	}
 }

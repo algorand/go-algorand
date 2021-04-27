@@ -1,0 +1,206 @@
+
+--- FAIL: TestGoalWithExpect (1991.52s)
+    --- PASS: TestGoalWithExpect/catchpointCatchupTest.exp (131.36s)
+    --- PASS: TestGoalWithExpect/createWalletTest.exp (103.91s)
+    --- PASS: TestGoalWithExpect/doubleSpendingTest.exp (63.10s)
+    --- PASS: TestGoalWithExpect/goalFormattingTest.exp (0.25s)
+    --- PASS: TestGoalWithExpect/goalNodeSystemdTest.exp (0.24s)
+    --- PASS: TestGoalWithExpect/goalNodeTest.exp (16.24s)
+    --- PASS: TestGoalWithExpect/statefulTealAppInfoTest.exp (23.72s)
+    --- PASS: TestGoalWithExpect/corsTest.exp (8.28s)
+    --- PASS: TestGoalWithExpect/goalAppAccountAddressTest.exp (90.79s)
+    --- PASS: TestGoalWithExpect/listExpiredParticipationKeyTest.exp (74.16s)
+    --- PASS: TestGoalWithExpect/goalNodeStatusTest.exp (19.26s)
+    --- PASS: TestGoalWithExpect/goalTxValidityTest.exp (9.42s)
+    --- PASS: TestGoalWithExpect/ledgerTest.exp (7.30s)
+
+    expectFixture.go:120: algoDir: /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod
+        testDataDir:/home/travis/gopath/src/github.com/algorand/go-algorand/test/testdata
+    expectFixture.go:157: err running 'tealAndStatefulTealTest.exp': exit status 1
+        stdout: TEST_ALGO_DIR: /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod
+        TEST_DATA_DIR: /home/travis/gopath/src/github.com/algorand/go-algorand/test/testdata
+        network create test_net_expect_1617038539
+        spawn goal network create --network test_net_expect_1617038539 --template /home/travis/gopath/src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json --datadir /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod --rootdir /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root
+        Created new rootkey: /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Wallet1.rootkey
+        Created new rootkey: /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Wallet2.rootkey
+        Created new partkey: /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Wallet2.0.3000000.partkey
+        Created new partkey: /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Wallet1.0.3000000.partkey
+        future 100000
+        Network test_net_expect_1617038539 created under /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root
+        network start test_net_expect_1617038539
+        spawn goal network start -r /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root
+        Network Started under /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root
+        network status test_net_expect_1617038539
+        spawn goal network status -r /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root
+        
+        [Primary]
+        Last committed block: 0
+        Time since last block: 0.0s
+        Sync Time: 0.0s
+        Last consensus protocol: future
+        Next consensus protocol: future
+        Round for next consensus protocol: 1
+        Next consensus protocol supported: true
+        
+        [Node]
+        Last committed block: 0
+        Time since last block: 0.0s
+        Sync Time: 0.2s
+        Last consensus protocol: future
+        Next consensus protocol: future
+        Round for next consensus protocol: 1
+        Next consensus protocol supported: true
+        
+        StartNetwork complete
+        Primary node address is: 127.0.0.1:34369
+        Primary Node Address: 127.0.0.1:34369
+        spawn goal account list -w unencrypted-default-wallet -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        [online]	IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A	IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A	5000000000000000 microAlgos
+        Account Address: IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A   Balance: 5000000000000000
+        spawn goal account balance -w unencrypted-default-wallet -a IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        5000000000000000 microAlgos
+        Wallet: unencrypted-default-wallet, Account: IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A, Balance: 5000000000000000
+        Primary Account Balance: 5000000000000000
+        spawn goal account rewards -w unencrypted-default-wallet -a IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        0 microAlgosWallet: unencrypted-default-wallet, Account: IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A, Rewards: 0
+        Primary Account Rewards: 0
+        spawn goal wallet new Wallet_1_1617038539 -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        Please choose a password for wallet 'Wallet_1_1617038539': 
+        Please confirm the password: 
+        Creating wallet...
+        Created wallet 'Wallet_1_1617038539'
+        Your new wallet has a backup phrase that can be used for recovery.
+        Keeping this backup phrase safe is extremely important.
+        Would you like to see it now? (Y/n): y
+        Your backup phrase is printed below.
+        Keep this information safe -- never share it with anyone!
+        
+        One or more non-printable characters were ommited from the subsequent line:
+        [32mtest faculty trash brick need involve stand run jelly genius clap business zero ticket head grief rib fox ladder soap injury thrive balance able tissue[0m
+        WALLET_1_PASSPHRASE: test faculty trash brick need involve stand run jelly genius clap business zero ticket head grief rib fox ladder soap injury thrive balance able tissue
+        spawn goal wallet list -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        ##################################################
+        Wallet:	Wallet_1_1617038539
+        ID:	f6c68ab0105dccf477e2dc3de44dda18
+        ##################################################
+        Wallet:	unencrypted-default-wallet
+        ID:	2bc05b49cc7176c389a384a28d622f90
+        spawn goal account new -w Wallet_1_1617038539 -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        Please enter the password for wallet 'Wallet_1_1617038539': 
+        Created new account with address UFEBEPVGFZKIFJFM5DJ5S462YKQGXPKOC5BVM3BW5JCWVHQS64COI4W7GI
+        Account Address: UFEBEPVGFZKIFJFM5DJ5S462YKQGXPKOC5BVM3BW5JCWVHQS64COI4W7GI
+        spawn goal account list -w Wallet_1_1617038539 -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        [offline]	Unnamed-0	UFEBEPVGFZKIFJFM5DJ5S462YKQGXPKOC5BVM3BW5JCWVHQS64COI4W7GI	0 microAlgos	*Default
+        Account Address: UFEBEPVGFZKIFJFM5DJ5S462YKQGXPKOC5BVM3BW5JCWVHQS64COI4W7GI 
+        spawn goal wallet new Wallet_2_1617038539 -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        Please choose a password for wallet 'Wallet_2_1617038539': 
+        Please confirm the password: 
+        Creating wallet...
+        Created wallet 'Wallet_2_1617038539'
+        Your new wallet has a backup phrase that can be used for recovery.
+        Keeping this backup phrase safe is extremely important.
+        Would you like to see it now? (Y/n): y
+        Your backup phrase is printed below.
+        Keep this information safe -- never share it with anyone!
+        
+        One or more non-printable characters were ommited from the subsequent line:
+        [32mpowder sing write danger match cabin order oblige shrug slide tragic select true rule gym celery wool vendor salon goat summer rule dove able collect[0m
+        WALLET_2_PASSPHRASE: powder sing write danger match cabin order oblige shrug slide tragic select true rule gym celery wool vendor salon goat summer rule dove able collect
+        spawn goal wallet list -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        ##################################################
+        Wallet:	Wallet_1_1617038539
+        ID:	f6c68ab0105dccf477e2dc3de44dda18
+        ##################################################
+        Wallet:	Wallet_2_1617038539
+        ID:	d3768bb0e3c128910cc02e0bc2b357de
+        spawn goal account new -w Wallet_2_1617038539 -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        Please enter the password for wallet 'Wallet_2_1617038539': 
+        Created new account with address OMG5A7QINNBSJSCJQMQ5ARZ2H44Z5KNNDT7FQ2JMCZ45HSEOYVTFTQNHFI
+        Account Address: OMG5A7QINNBSJSCJQMQ5ARZ2H44Z5KNNDT7FQ2JMCZ45HSEOYVTFTQNHFI
+        spawn goal account list -w Wallet_2_1617038539 -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        [offline]	Unnamed-1	OMG5A7QINNBSJSCJQMQ5ARZ2H44Z5KNNDT7FQ2JMCZ45HSEOYVTFTQNHFI	0 microAlgos
+        Account Address: OMG5A7QINNBSJSCJQMQ5ARZ2H44Z5KNNDT7FQ2JMCZ45HSEOYVTFTQNHFI 
+        spawn goal clerk send --fee 1000 --wallet unencrypted-default-wallet --amount 1000000000 --from IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A --to UFEBEPVGFZKIFJFM5DJ5S462YKQGXPKOC5BVM3BW5JCWVHQS64COI4W7GI -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        Sent 1000000000 MicroAlgos from account IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A to address UFEBEPVGFZKIFJFM5DJ5S462YKQGXPKOC5BVM3BW5JCWVHQS64COI4W7GI, transaction ID: YXFXNI3MOJEUHPAC2SLZTHLA5ENKBHNHH6C65J5734SK4RC5NVMQ. Fee set to 1000
+        Transaction YXFXNI3MOJEUHPAC2SLZTHLA5ENKBHNHH6C65J5734SK4RC5NVMQ still pending as of round 4
+        Transaction YXFXNI3MOJEUHPAC2SLZTHLA5ENKBHNHH6C65J5734SK4RC5NVMQ committed in round 6
+        TRANSACTION_ID 1: YXFXNI3MOJEUHPAC2SLZTHLA5ENKBHNHH6C65J5734SK4RC5NVMQ
+        spawn goal account balance -a UFEBEPVGFZKIFJFM5DJ5S462YKQGXPKOC5BVM3BW5JCWVHQS64COI4W7GI -w Wallet_1_1617038539 -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        1000000000 microAlgos
+        Account Balance: 1000000000
+        Account balance OK: 1000000000
+        spawn goal clerk send --fee 1000 --wallet unencrypted-default-wallet --amount 1000000000 --from IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A --to OMG5A7QINNBSJSCJQMQ5ARZ2H44Z5KNNDT7FQ2JMCZ45HSEOYVTFTQNHFI -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        Sent 1000000000 MicroAlgos from account IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A to address OMG5A7QINNBSJSCJQMQ5ARZ2H44Z5KNNDT7FQ2JMCZ45HSEOYVTFTQNHFI, transaction ID: JC2HLHKP37M6O5675MWIRNA6PSTL34ALHTTAXDJQZY2GTKKXBEJQ. Fee set to 1000
+        Transaction JC2HLHKP37M6O5675MWIRNA6PSTL34ALHTTAXDJQZY2GTKKXBEJQ still pending as of round 6
+        Transaction JC2HLHKP37M6O5675MWIRNA6PSTL34ALHTTAXDJQZY2GTKKXBEJQ committed in round 8
+        TRANSACTION_ID 2: JC2HLHKP37M6O5675MWIRNA6PSTL34ALHTTAXDJQZY2GTKKXBEJQ
+        spawn goal account balance -a OMG5A7QINNBSJSCJQMQ5ARZ2H44Z5KNNDT7FQ2JMCZ45HSEOYVTFTQNHFI -w Wallet_2_1617038539 -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        1000000000 microAlgos
+        Account Balance: 1000000000
+        Account balance OK: 1000000000
+        setting up working dir /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/work
+        
+        writing teal script to file '/home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/work/simple.teal'
+        reading from file /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/work/simple.teal
+        #pragma version 2
+        int 1
+        
+        spawn goal clerk compile /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/work/simple.teal
+        /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/work/simple.teal: YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646MKKCPDA
+        spawn goal clerk send --fee 1000 --wallet unencrypted-default-wallet --amount 1000000000 --from IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A --to YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646MKKCPDA -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        Sent 1000000000 MicroAlgos from account IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A to address YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646MKKCPDA, transaction ID: WP3XSFI2IEK23AOQ5IVCIJ4DYE7JGUFALYWR3YBRVYVME5F6UJUQ. Fee set to 1000
+        Transaction WP3XSFI2IEK23AOQ5IVCIJ4DYE7JGUFALYWR3YBRVYVME5F6UJUQ still pending as of round 8
+        Transaction WP3XSFI2IEK23AOQ5IVCIJ4DYE7JGUFALYWR3YBRVYVME5F6UJUQ committed in round 10
+        TRANSACTION_ID_APP: WP3XSFI2IEK23AOQ5IVCIJ4DYE7JGUFALYWR3YBRVYVME5F6UJUQ, APP_ACCOUNT_ADDRESS: YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646MKKCPDA
+        spawn goal account balance -a YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646MKKCPDA -w Wallet_1_1617038539 -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        1000000000 microAlgos
+        Account Balance: 1000000000
+        Account balance OK: 1000000000
+        calling app create
+        calling goal app create
+        spawn goal app create --creator IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A --approval-prog /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/work/simple.teal --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/work/simple.teal -w unencrypted-default-wallet -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
+        Attempting to create app (approval size 5, hash YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646A; clear size 5, hash YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646A)
+        Issued transaction from account IX34TQYLCJI2AZ4GCXL2Q3DWIWGQXEYN77ILPH4B2FCVTNKNTXGUO6YK3A, txid FRAKID57TZRVVQIM342JHZFMEJ7LTEZAJM6CCMCRDUUN5F564LJQ (fee 1000)
+        Transaction FRAKID57TZRVVQIM342JHZFMEJ7LTEZAJM6CCMCRDUUN5F564LJQ still pending as of round 11
+        Transaction FRAKID57TZRVVQIM342JHZFMEJ7LTEZAJM6CCMCRDUUN5F564LJQ committed in round 13
+        Created app with app index 4
+        App ID 4
+        spawn goal clerk sign -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/ -w Wallet_1_1617038539 -i unsginedtransaction1.tx -o sginedtransaction1.tx
+        Please enter the password for wallet 'Wallet_1_1617038539': 
+        form combined transaction
+        create group transaction
+        spawn goal clerk group -i combinedtransactions.tx -o groupedtransactions.tx
+        split transaction
+        spawn goal clerk split -i groupedtransactions.tx -o split.tx
+        Wrote transaction 0 to split-0.tx
+        Wrote transaction 1 to split-1.tx
+        sign the split transaction
+        spawn goal clerk sign -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/ -w Wallet_1_1617038539 -i split-0.tx -o signout-0.tx
+        Aborting with Error: Timed out signing transaction
+        GLOBAL_TEST_ROOT_DIR /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root
+        GLOBAL_NETWORK_NAME test_net_expect_1617038539
+        Stopping network: test_net_expect_1617038539
+        spawn goal network stop -r /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root
+        Network Stopped under /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root
+        Network Stopped under /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root
+        
+        stderr: 
+    --- FAIL: TestGoalWithExpect/tealAndStatefulTealTest.exp (83.90s)
+    --- PASS: TestGoalWithExpect/goalAccountTest.exp (91.38s)
+    --- PASS: TestGoalWithExpect/statefulTealAppReadTest.exp (100.50s)
+    --- PASS: TestGoalWithExpect/statefulTealCreateAppTest.exp (276.31s)
+    --- PASS: TestGoalWithExpect/basicExpectTest.exp (0.03s)
+    --- PASS: TestGoalWithExpect/basicGoalTest.exp (52.36s)
+    --- PASS: TestGoalWithExpect/goalAssetTest.exp (24.90s)
+    --- PASS: TestGoalWithExpect/goalClerkGroupTest.exp (18.57s)
+    --- PASS: TestGoalWithExpect/goalNodeConnectionTest.exp (7.81s)
+    --- PASS: TestGoalWithExpect/multisigCreationDeletionTest.exp (11.85s)
+    --- PASS: TestGoalWithExpect/pingpongTest.exp (516.38s)
+    --- PASS: TestGoalWithExpect/goalAccountInfoTest.exp (111.10s)
+    --- PASS: TestGoalWithExpect/goalDryrunRestTest.exp (25.73s)
+    --- PASS: TestGoalWithExpect/limitOrderTest.exp (107.48s)
+    --- PASS: TestGoalWithExpect/reportTest.exp (5.93s)
+    --- PASS: TestGoalWithExpect/tealConsensusTest.exp (5.96s)
+    --- PASS: TestGoalWithExpect/goalCmdFlagsTest.exp (0.76s)
+    --- PASS: TestGoalWithExpect/testInfraTest.exp (2.52s)
+FAIL	github.com/algorand/go-algorand/test/e2e-go/cli/goal/expect	1991.565s

@@ -49,6 +49,11 @@ type syncState struct {
 	outgoingMessagesCallbackCh chan *messageSentCallback
 	nextOffsetRollingCh        <-chan time.Time
 	requestsOffset             uint64
+
+	// The lastBloomFilter allows us to share the same bloom filter across multiples messages,
+	// and compute it only once. Since this bloom filter could contain many hashes ( especially on relays )
+	// it's important to avoid recomputing it needlessly.
+	lastBloomFilter bloomFilter
 }
 
 func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {

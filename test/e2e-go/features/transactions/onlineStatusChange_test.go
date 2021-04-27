@@ -40,7 +40,7 @@ func TestAccountsCanChangeOnlineStateInTheFuture(t *testing.T) {
 func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, templatePath)

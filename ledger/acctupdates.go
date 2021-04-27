@@ -99,7 +99,8 @@ const initializingAccountCachesMessageTimeout = 3 * time.Second
 // where we end up batching up to 1000 rounds in a single update.
 const accountsUpdatePerRoundHighWatermark = 1 * time.Second
 
-var trieMemoryConfig = merkletrie.MemoryConfig{
+// TrieMemoryConfig is the memory configuration setup used for the merkle trie.
+var TrieMemoryConfig = merkletrie.MemoryConfig{
 	NodesCountPerPage:         merkleCommitterNodesPerPage,
 	CachedNodesCount:          trieCachedNodesCount,
 	PageFillFactor:            0.95,
@@ -127,7 +128,7 @@ type accountUpdates struct {
 	// initAccounts specifies initial account values for database.
 	initAccounts map[basics.Address]basics.AccountData
 
-	// initProto specifies the initial consensus parameters.
+	// initProto specifies the initial consensus parameters at the genesis block.
 	initProto config.ConsensusParams
 
 	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directroy for the catchup files to be generated
@@ -172,9 +173,9 @@ type accountUpdates struct {
 	// appears in creatableDeltas
 	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	// protos stores consensus parameters dbRound and every
-	// round after it; i.e., protos is one longer than deltas.
-	protos []config.ConsensusParams
+	// versions stores consensus version dbRound and every
+	// round after it; i.e., versions is one longer than deltas.
+	versions []protocol.ConsensusVersion
 
 	// totals stores the totals for dbRound and every round after it;
 	// i.e., totals is one longer than deltas.
@@ -651,11 +652,10 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 			au.committedOffset <- dc
 		}
 	}()
-
 	retRound = basics.Round(0)
 	var pendingDeltas int
 
-	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
+	lookback := basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
 	if committedRound < lookback {
 		return
 	}
@@ -711,6 +711,19 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	}
 
 	offset = uint64(newBase - au.dbRound)
+
+	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
+	// consensus version.
+	if au.versions[1] != au.versions[offset] {
+		// find the tip point.
+		tipPoint := sort.Search(int(offset), func(i int) bool {
+			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
+			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
+			return au.versions[1] != au.versions[1+i]
+		})
+		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
+		offset = uint64(tipPoint)
+	}
 
 	// check to see if this is a catchpoint round
 	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
@@ -1134,7 +1147,8 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	if err != nil {
 		return
 	}
-	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
+
+	au.versions = []protocol.ConsensusVersion{hdr.CurrentProtocol}
 	au.deltas = nil
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
@@ -1245,12 +1259,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	}
 
 	// create the merkle trie for the balances
-	committer, err := makeMerkleCommitter(tx, false)
+	committer, err := MakeMerkleCommitter(tx, false)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
 
-	trie, err := merkletrie.MakeTrie(committer, trieMemoryConfig)
+	trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
@@ -1520,7 +1534,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
 			deleted, err = au.balancesTrie.Delete(deleteHash)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
 			}
 			if !deleted {
 				au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
@@ -1533,7 +1547,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
 			added, err = au.balancesTrie.Add(addHash)
 			if err != nil {
-				return err
+				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
 			}
 			if !added {
 				au.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
@@ -1554,6 +1568,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 	if accumulatedChanges > 0 {
 		_, err = au.balancesTrie.Commit()
 	}
+
 	return
 }
 
@@ -1572,7 +1587,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
 	}
 	au.deltas = append(au.deltas, delta.Accts)
-	au.protos = append(au.protos, proto)
+	au.versions = append(au.versions, blk.CurrentProtocol)
 	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
 	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
@@ -1662,7 +1677,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			return
 		}
 
-		rewardsProto = au.protos[offset]
+		rewardsProto = config.Consensus[au.versions[offset]]
 		rewardsLevel = au.roundTotals[offset].RewardsLevel
 
 		// we're testing the withRewards here and setting the defer function only once, and only if withRewards is true.
@@ -1981,11 +1996,16 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	deltas := make([]ledgercore.AccountDeltas, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset, offset)
 	roundTotals := make([]ledgercore.AccountTotals, offset+1, offset+1)
-	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])
 	copy(roundTotals, au.roundTotals[:offset+1])
-	copy(protos, au.protos[:offset+1])
+
+	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
+	if au.versions[1] != au.versions[offset] {
+		au.log.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
+		return
+	}
+	consensusVersion := au.versions[1]
 
 	var committedRoundDigest crypto.Digest
 
@@ -2021,12 +2041,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
-			mc, err0 := makeMerkleCommitter(tx, false)
+			mc, err0 := MakeMerkleCommitter(tx, false)
 			if err0 != nil {
 				return err0
 			}
 			if au.balancesTrie == nil {
-				trie, err := merkletrie.MakeTrie(mc, trieMemoryConfig)
+				trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
 				if err != nil {
 					au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
 					return err
@@ -2045,7 +2065,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
-		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], protos[1:offset+1])
+		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
 		if err != nil {
 			return err
 		}
@@ -2145,7 +2165,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.deltas = au.deltas[offset:]
 	au.deltasAccum = au.deltasAccum[offset:]
 	au.roundDigest = au.roundDigest[offset:]
-	au.protos = au.protos[offset:]
+	au.versions = au.versions[offset:]
 	au.roundTotals = au.roundTotals[offset:]
 	au.creatableDeltas = au.creatableDeltas[offset:]
 	au.dbRound = newBase

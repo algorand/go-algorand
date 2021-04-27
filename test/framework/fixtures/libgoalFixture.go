@@ -50,7 +50,7 @@ type LibGoalFixture struct {
 	rootDir        string
 	Name           string
 	network        netdeploy.Network
-	t              TestingT
+	t              TestingTB
 	tMu            deadlock.RWMutex
 	clientPartKeys map[string][]account.Participation
 	consensus      config.ConsensusProtocols
@@ -63,13 +63,13 @@ func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
 }
 
 // Setup is called to initialize the test fixture for the test(s)
-func (f *LibGoalFixture) Setup(t TestingT, templateFile string) {
+func (f *LibGoalFixture) Setup(t TestingTB, templateFile string) {
 	f.setup(t, t.Name(), templateFile, true)
 }
 
 // SetupNoStart is called to initialize the test fixture for the test(s)
 // but does not start the network before returning.  Call NC.Start() to start later.
-func (f *LibGoalFixture) SetupNoStart(t TestingT, templateFile string) {
+func (f *LibGoalFixture) SetupNoStart(t TestingTB, templateFile string) {
 	f.setup(t, t.Name(), templateFile, false)
 }
 
@@ -83,10 +83,10 @@ func (f *LibGoalFixture) Genesis() gen.GenesisData {
 	return f.network.Genesis()
 }
 
-func (f *LibGoalFixture) setup(test TestingT, testName string, templateFile string, startNetwork bool) {
+func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile string, startNetwork bool) {
 	// Call initialize for our base implementation
 	f.initialize(f)
-	f.t = test
+	f.t = SynchronizedTest(test)
 	f.rootDir = filepath.Join(f.testDir, testName)
 
 	// In case we're running tests against the same rootDir, purge it to avoid errors from already-exists
@@ -186,13 +186,17 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			if err != nil {
 				// Couldn't read it, skip it
 				err = nil
+				handle.Close()
 				continue
 			}
 
 			// Early reject partkeys if we already have a rootkey for the account
 			if !accountsWithRootKeys[participation.Address().String()] {
-				allPartKeys = append(allPartKeys, participation)
+				allPartKeys = append(allPartKeys, participation.Participation)
 			}
+
+			// close the database handle.
+			participation.Close()
 		}
 	}
 
@@ -273,10 +277,10 @@ func (f *LibGoalFixture) Start() {
 // SetTestContext should be called within each test using a shared fixture.
 // It ensures the current test context is set and then reset after the test ends
 // It should be called in the form of "defer fixture.SetTestContext(t)()"
-func (f *LibGoalFixture) SetTestContext(t TestingT) func() {
+func (f *LibGoalFixture) SetTestContext(t TestingTB) func() {
 	f.tMu.Lock()
 	defer f.tMu.Unlock()
-	f.t = t
+	f.t = SynchronizedTest(t)
 	return func() {
 		f.tMu.Lock()
 		defer f.tMu.Unlock()

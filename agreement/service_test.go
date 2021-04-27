@@ -678,21 +678,12 @@ func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) 
 
 		// save partkeys to db
 		{
-			partAccess, err := db.MakeAccessor(t.Name()+"part"+strconv.Itoa(i+off), false, true)
-			if err != nil {
-				panic(err)
-			}
 			accounts[i] = account.Participation{
 				Parent:     rootAddress,
 				VRF:        generatePseudoRandomVRF(i),
 				Voting:     v,
 				FirstValid: firstValid,
 				LastValid:  lastValid,
-				Store:      partAccess,
-			}
-			err = accounts[i].Persist()
-			if err != nil {
-				panic(err)
 			}
 		}
 

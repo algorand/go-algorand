@@ -418,6 +418,10 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
+		// we want to shut down the compactCert last, since the oldKeyDeletionThread might depend on it when making the
+		// call to LatestSigsFromThisNode.
+		node.compactCert.Shutdown()
+		node.compactCert = nil
 	}()
 
 	node.net.ClearHandlers()
@@ -438,7 +442,6 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
-	node.compactCert.Shutdown()
 	if node.indexer != nil {
 		node.indexer.Shutdown()
 	}
@@ -702,7 +705,7 @@ func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
 // GetPendingTxnsFromPool returns a snapshot of every pending transactions from the node's transaction pool in a slice.
 // Transactions are sorted in decreasing order. If no transactions, returns an empty slice.
 func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
-	poolGroups := node.transactionPool.PendingTxGroups()
+	poolGroups, _ := node.transactionPool.PendingTxGroups()
 	txnGroups := make([][]transactions.SignedTxn, len(poolGroups))
 	for i := range txnGroups {
 		txnGroups[i] = poolGroups[i].Transactions

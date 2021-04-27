@@ -259,7 +259,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 	}
 
 	deconstructSignedTransactions(&stub)
-	return stub.MarshalMsg([]byte{})
+	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
 }
 
 func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGroup, err error) {
@@ -745,4 +745,12 @@ func reconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 
 func reconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
 
+}
+
+func releaseEncodedTransactionGroups(buffer []byte) {
+	if buffer == nil {
+		return
+	}
+
+	protocol.PutEncodingBuf(buffer[:0])
 }
