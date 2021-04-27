@@ -1494,7 +1494,7 @@
       "x-go-package": "github.com/algorand/go-algorand/protocol"
     },
     "VersionsRequest": {
-      "description": "VersionsRequest is the request for `GET /versions`",
+      "description": "APIV1RequestEnvelope is a common envelope that all API V1 requests must embed",
       "type": "object",
       "x-go-name": "APIV1RequestEnvelope",
       "x-go-package": "github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
