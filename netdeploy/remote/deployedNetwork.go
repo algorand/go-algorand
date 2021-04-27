@@ -357,34 +357,35 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		return err
 	}
 
-	srcWallet := getGenesisAlloc(fileCfgs.SourceWalletName, genesis.Allocation)
-	if srcWallet.Address == "" {
-		return fmt.Errorf("error finding source wallet address")
-	}
+	var src basics.Address
+	var addr basics.Address
+	var poolAddr basics.Address
+	var sinkAddr basics.Address
 
-	rewardsPool := getGenesisAlloc("RewardsPool", genesis.Allocation)
-	if rewardsPool.Address == "" {
-		return fmt.Errorf("error finding source rewards ppol address")
-	}
+	srcWalletName := strings.ToLower(fileCfgs.SourceWalletName)
 
-	feeSink := getGenesisAlloc("FeeSink", genesis.Allocation)
-	if feeSink.Address == "" {
-		return fmt.Errorf("error finding fee sink address")
-	}
-	src, err := basics.UnmarshalChecksumAddress(srcWallet.Address)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal src address : %w", err)
-	}
-	poolAddr, err := basics.UnmarshalChecksumAddress(rewardsPool.Address)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal rewards pool address %w", err)
-	}
-	sinkAddr, err := basics.UnmarshalChecksumAddress(feeSink.Address)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal fee sink address %w", err)
+	for _, alloc := range genesis.Allocation {
+		comment := strings.ToLower(alloc.Comment)
+		addr, err = basics.UnmarshalChecksumAddress(alloc.Address)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal '%s' address '%v' %w", alloc.Comment, alloc.Address, err)
+		}
+		switch comment {
+		case srcWalletName:
+			src = addr
+		case "feesink":
+			poolAddr = addr
+		case "rewardspool":
+			sinkAddr = addr
+		default:
+		}
+
+		accounts[addr] = alloc.State
+
 	}
 
 	//initial state
+
 	bootstrappedNet := netState{
 		nAssets:       fileCfgs.GeneratedAssetsCount,
 		nApplications: fileCfgs.GeneratedApplicationCount,
@@ -393,6 +394,8 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		round:         basics.Round(0),
 		genesisID:     genesis.ID(),
 		genesisHash:   crypto.HashObj(genesis),
+		poolAddr:      poolAddr,
+		sinkAddr:      sinkAddr,
 	}
 
 	var params config.ConsensusParams
@@ -409,15 +412,11 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	} else {
 		bootstrappedNet.nAccounts = nAccounts
 	}
-	accounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, rewardsPool.State.MicroAlgos)
-	accounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, feeSink.State.MicroAlgos)
+
 	//fund src account with enough funding
 	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bootstrappedNet.nAssets) * params.MinBalance * 2}
-	totalFunds := srcWallet.State.MicroAlgos.Raw + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts + bootstrappedNet.roundTxnCnt*fileCfgs.NumRounds
+	totalFunds := accounts[src].MicroAlgos.Raw + bootstrappedNet.fundPerAccount.Raw*bootstrappedNet.nAccounts + bootstrappedNet.roundTxnCnt*fileCfgs.NumRounds
 	accounts[src] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: totalFunds})
-
-	bootstrappedNet.poolAddr = poolAddr
-	bootstrappedNet.sinkAddr = sinkAddr
 
 	//init block
 	initState, err := generateInitState(accounts, &bootstrappedNet)
