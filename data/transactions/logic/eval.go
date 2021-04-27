@@ -28,7 +28,6 @@ import (
 	"math"
 	"math/big"
 	"runtime"
-	"sort"
 	"strings"
 
 	"golang.org/x/crypto/sha3"
@@ -176,7 +175,7 @@ type EvalParams struct {
 }
 
 type opEvalFunc func(cx *evalContext)
-type opCheckFunc func(cx *evalContext) int
+type opCheckFunc func(cx *evalContext) error
 
 type runMode uint64
 
@@ -208,6 +207,13 @@ func (r runMode) String() string {
 	return "Unknown"
 }
 
+func (ep EvalParams) budget() int {
+	if ep.runModeFlags == runModeSignature {
+		return int(ep.Proto.LogicSigMaxCost)
+	}
+	return ep.Proto.MaxAppProgramCost
+}
+
 func (ep EvalParams) log() logging.Logger {
 	if ep.Logger != nil {
 		return ep.Logger
@@ -228,12 +234,17 @@ type evalContext struct {
 	version uint64
 	scratch [256]stackValue
 
-	stepCount int
-	cost      int
+	cost int // cost incurred so far
 
-	// Ordered set of pc values that a branch could go to.
-	// If Check pc skips a target, the source branch was invalid!
-	branchTargets []int
+	// Set of PC values that branches we've seen so far might
+	// go. So, if checkStep() skips one, that branch is trying to
+	// jump into the middle of a multibyte instruction
+	branchTargets map[int]bool
+
+	// Set of PC values that we have begun a checkStep() with. So
+	// if a back jump is going to a value that isn't here, it's
+	// jumping into the middle of multibyte instruction.
+	instructionStarts map[int]bool
 
 	programHashCached crypto.Digest
 	txidCache         map[int]transactions.Txid
@@ -297,11 +308,7 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, err error) {
 	var cx evalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
-
-	// Evaluate the program
-	pass, err = eval(program, &cx)
-
-	return pass, err
+	return eval(program, &cx)
 }
 
 // Eval checks to see if a transaction passes logic
@@ -376,8 +383,8 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		minVersion = *cx.EvalParams.MinTealVersion
 	}
 	if version < minVersion {
-		err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
-		return
+		cx.err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+		return false, cx.err
 	}
 
 	cx.version = version
@@ -400,10 +407,6 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		}
 
 		cx.step()
-		cx.stepCount++
-		if cx.stepCount > len(cx.program) {
-			return false, errLoopDetected
-		}
 	}
 	if cx.err != nil {
 		if cx.Trace != nil {
@@ -461,19 +464,15 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		err = errLogicSigNotSupported
 		return
 	}
-	var cx evalContext
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
-		cx.err = errors.New("invalid version")
-		return 0, cx.err
+		return 0, errors.New("invalid version")
 	}
 	if version > EvalMaxVersion {
-		err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
-		return
+		return 0, fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 	}
 	if version > params.Proto.LogicSigVersion {
-		err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
-		return
+		return 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 	}
 
 	var minVersion uint64
@@ -483,10 +482,10 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		minVersion = *params.MinTealVersion
 	}
 	if version < minVersion {
-		err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
-		return
+		return 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
 	}
 
+	var cx evalContext
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
@@ -494,20 +493,19 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 
 	for cx.pc < len(cx.program) {
 		prevpc := cx.pc
-		cost += cx.checkStep()
-		if cx.err != nil {
-			break
+		err := cx.checkStep()
+		if err != nil {
+			return cx.cost, fmt.Errorf("%3d %w", cx.pc, err)
 		}
 		if cx.pc <= prevpc {
-			err = fmt.Errorf("pc did not advance, stuck at %d", cx.pc)
-			return
+			// Recall, this is advancing through opcodes
+			// without evaluation. It always goes forward,
+			// even if we're in v4 and the jump would go
+			// back.
+			return cx.cost, fmt.Errorf("pc did not advance, stuck at %d", cx.pc)
 		}
 	}
-	if cx.err != nil {
-		err = fmt.Errorf("%3d %s", cx.pc, cx.err)
-		return
-	}
-	return
+	return cx.cost, cx.err
 }
 
 func opCompat(expected, got StackType) bool {
@@ -568,6 +566,10 @@ func (cx *evalContext) step() {
 		return
 	}
 	cx.cost += deets.Cost
+	if cx.cost > cx.budget() {
+		cx.err = fmt.Errorf("%3d %s budget exceeded", cx.pc, spec.Name)
+		return
+	}
 	spec.op(cx)
 	if cx.Trace != nil {
 		// This code used to do a little disassembly on its
@@ -631,25 +633,26 @@ func (cx *evalContext) step() {
 	}
 }
 
-func (cx *evalContext) checkStep() (cost int) {
+func (cx *evalContext) checkStep() error {
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
 	if spec.op == nil {
-		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
-		return 1
+		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 	}
 	if (cx.runModeFlags & spec.Modes) == 0 {
-		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
-		return
+		return fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
 	deets := spec.Details
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
-		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
-		return 1
+		return fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 	}
 	prevpc := cx.pc
+	cx.cost += deets.Cost
 	if deets.checkFunc != nil {
-		cost = deets.checkFunc(cx)
+		err := deets.checkFunc(cx)
+		if err != nil {
+			return err
+		}
 		if cx.nextpc != 0 {
 			cx.pc = cx.nextpc
 			cx.nextpc = 0
@@ -657,26 +660,19 @@ func (cx *evalContext) checkStep() (cost int) {
 			cx.pc += deets.Size
 		}
 	} else {
-		cost = deets.Cost
 		cx.pc += deets.Size
 	}
 	if cx.Trace != nil {
 		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
-	if cx.err != nil {
-		return 1
-	}
-	if len(cx.branchTargets) > 0 {
-		if cx.branchTargets[0] < cx.pc {
-			cx.err = fmt.Errorf("branch target at %d not an aligned instruction", cx.branchTargets[0])
-			return 1
-		}
-		for len(cx.branchTargets) > 0 && cx.branchTargets[0] == cx.pc {
-			// checks okay
-			cx.branchTargets = cx.branchTargets[1:]
+	if cx.err == nil && cx.branchTargets != nil {
+		for pc := prevpc + 1; pc < cx.pc; pc++ {
+			if _, ok := cx.branchTargets[pc]; ok {
+				return fmt.Errorf("branch target %d is not an aligned instruction", pc)
+			}
 		}
 	}
-	return
+	return nil
 }
 
 func opErr(cx *evalContext) {
@@ -1186,29 +1182,38 @@ func opArg3(cx *evalContext) {
 	opArgN(cx, 3)
 }
 
-// checks any branch that is {op} {int16 be offset}
-func checkBranch(cx *evalContext) int {
-	offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
-	if offset > 0x7fff {
-		cx.err = fmt.Errorf("branch offset %x too large", offset)
-		return 1
+func branchTarget(cx *evalContext) (int, error) {
+	offset := int16(uint16(cx.program[cx.pc+1])<<8 | uint16(cx.program[cx.pc+2]))
+	if offset < 0 && cx.version < backBranchEnabledVersion {
+		return 0, fmt.Errorf("negative branch offset %x", offset)
 	}
-	cx.nextpc = cx.pc + 3
-	target := cx.nextpc + int(offset)
+	target := cx.pc + 3 + int(offset)
 	var branchTooFar bool
 	if cx.version >= 2 {
 		// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction, is okay and ends normally
-		branchTooFar = target > len(cx.program)
+		branchTooFar = target > len(cx.program) || target < 0
 	} else {
-		branchTooFar = target >= len(cx.program)
+		branchTooFar = target >= len(cx.program) || target < 0
 	}
 	if branchTooFar {
-		cx.err = errors.New("branch target beyond end of program")
-		return 1
+		return 0, errors.New("branch target beyond end of program")
 	}
-	cx.branchTargets = append(cx.branchTargets, target)
-	sort.Ints(cx.branchTargets)
-	return 1
+
+	return target, nil
+}
+
+// checks any branch that is {op} {int16 be offset}
+func checkBranch(cx *evalContext) error {
+	cx.nextpc = cx.pc + 3
+	target, err := branchTarget(cx)
+	if err != nil {
+		return err
+	}
+	if cx.branchTargets == nil {
+		cx.branchTargets = make(map[int]bool)
+	}
+	cx.branchTargets[target] = true
+	return nil
 }
 func opBnz(cx *evalContext) {
 	last := len(cx.stack) - 1
@@ -1216,12 +1221,12 @@ func opBnz(cx *evalContext) {
 	isNonZero := cx.stack[last].Uint != 0
 	cx.stack = cx.stack[:last] // pop
 	if isNonZero {
-		offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
-		if offset > 0x7fff {
-			cx.err = fmt.Errorf("bnz offset %x too large", offset)
+		target, err := branchTarget(cx)
+		if err != nil {
+			cx.err = err
 			return
 		}
-		cx.nextpc += int(offset)
+		cx.nextpc = target
 	}
 }
 
@@ -1231,22 +1236,22 @@ func opBz(cx *evalContext) {
 	isZero := cx.stack[last].Uint == 0
 	cx.stack = cx.stack[:last] // pop
 	if isZero {
-		offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
-		if offset > 0x7fff {
-			cx.err = fmt.Errorf("bz offset %x too large", offset)
+		target, err := branchTarget(cx)
+		if err != nil {
+			cx.err = err
 			return
 		}
-		cx.nextpc += int(offset)
+		cx.nextpc = target
 	}
 }
 
 func opB(cx *evalContext) {
-	offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
-	if offset > 0x7fff {
-		cx.err = fmt.Errorf("b offset %x too large", offset)
+	target, err := branchTarget(cx)
+	if err != nil {
+		cx.err = err
 		return
 	}
-	cx.nextpc = cx.pc + 3 + int(offset)
+	cx.nextpc = target
 }
 
 func opPop(cx *evalContext) {

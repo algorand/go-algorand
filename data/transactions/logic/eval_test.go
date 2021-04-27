@@ -51,6 +51,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 	return config.ConsensusParams{
 		LogicSigVersion:     version,
 		LogicSigMaxCost:     20000,
+		MaxAppProgramCost:   700,
 		MaxAppKeyLen:        64,
 		MaxAppBytesValueLen: 64,
 		// These must be identical to keep an old backward compat test working
@@ -1098,11 +1099,12 @@ func TestGlobal(t *testing.T) {
 			block.BlockHeader.Round = 999999
 			block.BlockHeader.TimeStamp = 2069
 			proto := config.ConsensusParams{
-				MinTxnFee:       123,
-				MinBalance:      1000000,
-				MaxTxnLife:      999,
-				LogicSigVersion: LogicVersion,
-				LogicSigMaxCost: 20000,
+				MinTxnFee:         123,
+				MinBalance:        1000000,
+				MaxTxnLife:        999,
+				LogicSigVersion:   LogicVersion,
+				LogicSigMaxCost:   20000,
+				MaxAppProgramCost: 700,
 			}
 			ep := defaultEvalParams(&sb, &txn)
 			ep.TxnGroup = txgroup
@@ -2635,7 +2637,7 @@ const panicString = "out of memory, buffer overrun, stack overflow, divide by ze
 func opPanic(cx *evalContext) {
 	panic(panicString)
 }
-func checkPanic(cx *evalContext) int {
+func checkPanic(cx *evalContext) error {
 	panic(panicString)
 }
 
@@ -2801,18 +2803,18 @@ bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
 int 1`, v)
 			require.NoError(t, err)
-			//t.Log(hex.EncodeToString(ops.Program))
+			//t.Log(hex.EncodeToString(ops.Program))                  brhilo
 			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
-			ops.Program[6] = 0xff // clobber the branch offset
+			ops.Program[6] = 0x70 // clobber hi byte of branch offset
 			_, err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "too large")
+			require.Contains(t, err.Error(), "beyond")
 			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "too large")
+			require.Contains(t, err.Error(), "beyond")
 			require.False(t, pass)
 			isNotPanic(t, err)
 		})
@@ -2832,14 +2834,14 @@ int 1
 			source := fmt.Sprintf(template, line)
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
-			ops.Program[7] = 0xff // clobber the branch offset
+			ops.Program[7] = 0xf0 // clobber the branch offset - highly negative
 			ops.Program[8] = 0xff // clobber the branch offset
 			_, err = Check(ops.Program, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "too large")
+			require.Contains(t, err.Error(), "beyond")
 			pass, err := Eval(ops.Program, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "too large")
+			require.Contains(t, err.Error(), "beyond")
 			require.False(t, pass)
 		})
 	}
@@ -3845,21 +3847,27 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			if v < introduced {
-				testProg(t, obfuscate(program), v, expect{0, "...opcode was introduced..."})
+				testProg(t, obfuscate(program), v, expect{0, "...was introduced..."})
 				return
 			}
 			ops := testProg(t, program, v)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			sb := strings.Builder{}
+			cost, err := Check(ops.Program, defaultEvalParams(&sb, nil))
+			if err != nil {
+				t.Log(hex.EncodeToString(ops.Program))
+				t.Log(sb.String())
+			}
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
-			sb := strings.Builder{}
+			sb = strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
 			ok := tester(pass, err)
 			if !ok {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(sb.String())
+				t.Log(err)
 			}
 			require.True(t, ok)
 			isNotPanic(t, err) // Never want a Go level panic.
@@ -3997,4 +4005,16 @@ func TestPush(t *testing.T) {
 	ops1 = testProg(t, "int 2; int 3; int 5; int 6; int 1", 3)
 	ops2 = testProg(t, "int 2; int 3; int 5; int 6; pushint 1", 3)
 	require.Less(t, len(ops2.Program), len(ops1.Program))
+}
+
+func TestLoop(t *testing.T) {
+	t.Parallel()
+	// Double until > 10. Should be 16
+	testAccepts(t, "int 1; loop:; int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
+
+	// Why does this label on line with instruction cause trouble?
+	testAccepts(t, "int 1; loop:; int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
+
+	// Infinite loop because multiply by one instead of two
+	testPanics(t, "int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", 4)
 }

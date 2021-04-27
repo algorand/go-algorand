@@ -771,9 +771,14 @@ func TestAssembleRejectNegJump(t *testing.T) {
 int 1
 bnz wat
 int 2`
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+	for v := uint64(1); v < backBranchEnabledVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			testProg(t, source, v, expect{3, "label wat is before reference but only forward jumps are allowed"})
+			testProg(t, source, v, expect{3, "label wat is a back reference..."})
+		})
+	}
+	for v := uint64(backBranchEnabledVersion); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			testProg(t, source, v)
 		})
 	}
 }
@@ -1641,8 +1646,8 @@ func TestErrShortBytecblock(t *testing.T) {
 
 	var cx evalContext
 	cx.program = ops.Program
-	checkIntConstBlock(&cx)
-	require.Equal(t, cx.err, errShortIntcblock)
+	err = checkIntConstBlock(&cx)
+	require.Equal(t, err, errShortIntcblock)
 }
 
 func TestBranchAssemblyTypeCheck(t *testing.T) {

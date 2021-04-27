@@ -1148,8 +1148,8 @@ func (ops *OpStream) resolveLabels() {
 		}
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
 		naturalPc := lr.position + 3
-		if dest < naturalPc {
-			ops.errorf("label %v is before reference but only forward jumps are allowed", lr.label)
+		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
+			ops.errorf("label %v is a back reference, back jump support was introduced in TEAL v4", lr.label)
 			continue
 		}
 		jump := dest - naturalPc
@@ -1376,33 +1376,29 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 	return
 }
 
-func checkIntConstBlock(cx *evalContext) int {
+func checkIntConstBlock(cx *evalContext) error {
 	pos := cx.pc + 1
 	numInts, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
-		cx.err = fmt.Errorf("could not decode int const block size at pc=%d", pos)
-		return 1
+		return fmt.Errorf("could not decode int const block size at pc=%d", pos)
 	}
 	pos += bytesUsed
 	if numInts > uint64(len(cx.program)) {
-		cx.err = errTooManyIntc
-		return 0
+		return errTooManyIntc
 	}
 	//intc = make([]uint64, numInts)
 	for i := uint64(0); i < numInts; i++ {
 		if pos >= len(cx.program) {
-			cx.err = errShortIntcblock
-			return 0
+			return errShortIntcblock
 		}
 		_, bytesUsed = binary.Uvarint(cx.program[pos:])
 		if bytesUsed <= 0 {
-			cx.err = fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
-			return 1
+			return fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
 		}
 		pos += bytesUsed
 	}
 	cx.nextpc = pos
-	return 1
+	return nil
 }
 
 var errShortBytecblock = errors.New("bytecblock ran past end of program")
@@ -1448,44 +1444,38 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 	return
 }
 
-func checkByteConstBlock(cx *evalContext) int {
+func checkByteConstBlock(cx *evalContext) error {
 	pos := cx.pc + 1
 	numItems, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
-		cx.err = fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
-		return 1
+		return fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
 	}
 	pos += bytesUsed
 	if numItems > uint64(len(cx.program)) {
-		cx.err = errTooManyItems
-		return 0
+		return errTooManyItems
 	}
 	//bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
 		if pos >= len(cx.program) {
-			cx.err = errShortBytecblock
-			return 0
+			return errShortBytecblock
 		}
 		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
 		if bytesUsed <= 0 {
-			cx.err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
-			return 1
+			return fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
 		}
 		pos += bytesUsed
 		if pos >= len(cx.program) {
-			cx.err = errShortBytecblock
-			return 0
+			return errShortBytecblock
 		}
 		end := uint64(pos) + itemLen
 		if end > uint64(len(cx.program)) || end < uint64(pos) {
-			cx.err = errShortBytecblock
-			return 0
+			return errShortBytecblock
 		}
 		//bytec[i] = program[pos : pos+int(itemLen)]
 		pos += int(itemLen)
 	}
 	cx.nextpc = pos
-	return 1
+	return nil
 }
 
 func disIntcblock(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -1612,9 +1602,9 @@ func disPushInt(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = pos + bytesUsed
 	return fmt.Sprintf("%s %d", spec.Name, val), nil
 }
-func checkPushInt(cx *evalContext) int {
+func checkPushInt(cx *evalContext) error {
 	opPushInt(cx)
-	return 1
+	return cx.err
 }
 
 func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -1632,9 +1622,9 @@ func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = int(end)
 	return fmt.Sprintf("%s 0x%s", spec.Name, hex.EncodeToString(bytes)), nil
 }
-func checkPushBytes(cx *evalContext) int {
+func checkPushBytes(cx *evalContext) error {
 	opPushBytes(cx)
-	return 1
+	return cx.err
 }
 
 // This is also used to disassemble gtxns

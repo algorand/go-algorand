@@ -33,6 +33,10 @@ const rekeyingEnabledVersion = 2
 // from being used with applications. Do not edit!
 const appsEnabledVersion = 2
 
+// backBranchEabledVersion is the version of TEAL where branches could
+// go back (and cost accounting was done during execution)
+const backBranchEnabledVersion = 4
+
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
 type opDetails struct {
