@@ -36,7 +36,7 @@ import (
 )
 
 func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
-	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion, 100)
 	const inMem = false
 	log := logging.TestingLog(b)
 	cfg := config.GetDefaultLocal()

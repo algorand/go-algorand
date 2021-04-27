@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -760,7 +760,7 @@ var changeOnlineCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			part = &partkey
+			part = &partkey.Participation
 			if accountAddress == "" {
 				accountAddress = part.Parent.String()
 			}
@@ -810,7 +810,8 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 		return nil
 	}
 
-	return waitForCommit(client, txid)
+	_, err = waitForCommit(client, txid, lastTxRound)
+	return err
 }
 
 var addParticipationKeyCmd = &cobra.Command{
@@ -859,11 +860,10 @@ No --delete-input flag specified, exiting without installing key.`)
 		dataDir := ensureSingleDataDir()
 
 		client := ensureAlgodClient(dataDir)
-		partKey, _, err := client.InstallParticipationKeys(partKeyFile)
+		_, _, err := client.InstallParticipationKeys(partKeyFile)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-		partKey.Close()
 		fmt.Println("Participation key installed successfully")
 	},
 }
@@ -926,7 +926,6 @@ func generateAndRegisterPartKey(address string, currentRound, lastValidRound uin
 	txFile := ""
 	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, lastValidRound, fee, leaseBytes, dataDir, client)
 	if err != nil {
-		part.Close()
 		os.Remove(keyPath)
 		fmt.Fprintf(os.Stderr, "  Error registering keys - deleting newly-generated key file: %s\n", keyPath)
 	}
@@ -1325,7 +1324,7 @@ var markNonparticipatingCmd = &cobra.Command{
 			return
 		}
 
-		err = waitForCommit(client, txid)
+		_, err = waitForCommit(client, txid, lastTxRound)
 		if err != nil {
 			reportErrorf("error waiting for transaction to be committed: %v", err)
 		}

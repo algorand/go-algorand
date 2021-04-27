@@ -1891,3 +1891,31 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	au.waitAccountsWriting()
 	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.dbRound)
 }
+
+// TestConsecutiveVersion tests the consecutiveVersion method correctness.
+func TestConsecutiveVersion(t *testing.T) {
+	var au accountUpdates
+	au.versions = []protocol.ConsensusVersion{
+		protocol.ConsensusV19,
+		protocol.ConsensusV20,
+		protocol.ConsensusV20,
+		protocol.ConsensusV20,
+		protocol.ConsensusV20,
+		protocol.ConsensusV21,
+		protocol.ConsensusV21,
+		protocol.ConsensusV21,
+		protocol.ConsensusV21,
+		protocol.ConsensusV21,
+		protocol.ConsensusV21,
+		protocol.ConsensusV22,
+	}
+	for offset := uint64(1); offset < uint64(len(au.versions)); offset++ {
+		co := au.consecutiveVersion(offset)
+		require.Equal(t, au.versions[1], au.versions[co])
+	}
+	au.versions = []protocol.ConsensusVersion{
+		protocol.ConsensusV19,
+		protocol.ConsensusV20,
+		protocol.ConsensusV21,
+	}
+}
