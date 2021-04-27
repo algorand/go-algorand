@@ -52,7 +52,7 @@ var databaseCmd = &cobra.Command{
 		outFile := os.Stdout
 		var err error
 		if outFileName != "" {
-			outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_CREATE, 0755)
+			outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
 			if err != nil {
 				reportErrorf("Unable to create file '%s' : %v", outFileName, err)
 			}

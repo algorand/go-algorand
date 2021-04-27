@@ -810,7 +810,8 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 		return nil
 	}
 
-	return waitForCommit(client, txid, lastTxRound)
+	_, err = waitForCommit(client, txid, lastTxRound)
+	return err
 }
 
 var addParticipationKeyCmd = &cobra.Command{
@@ -1323,7 +1324,7 @@ var markNonparticipatingCmd = &cobra.Command{
 			return
 		}
 
-		err = waitForCommit(client, txid, lastTxRound)
+		_, err = waitForCommit(client, txid, lastTxRound)
 		if err != nil {
 			reportErrorf("error waiting for transaction to be committed: %v", err)
 		}

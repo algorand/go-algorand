@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                 16,
+	Version:                                 17,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
 	Archival:                                false,
@@ -32,6 +32,7 @@ var defaultLocal = Local{
 	CatchpointInterval:                      10000,
 	CatchpointTracking:                      0,
 	CatchupBlockDownloadRetryAttempts:       1000,
+	CatchupBlockValidateMode:                0,
 	CatchupFailurePeerRefreshRate:           10,
 	CatchupGossipBlockFetchTimeoutSec:       4,
 	CatchupHTTPBlockFetchTimeoutSec:         4,
