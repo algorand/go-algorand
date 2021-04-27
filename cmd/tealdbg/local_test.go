@@ -337,7 +337,8 @@ func TestDebugEnvironment(t *testing.T) {
 
 	// create sample programs that checks all the environment:
 	// transaction fields, global properties,
-	source := `global Round
+	source := `#pragma version 2
+global Round
 int 222
 ==
 global LatestTimestamp
@@ -476,7 +477,8 @@ int 100
 	a.True(pass)
 
 	// check relaxed - opted in for both
-	source = `int 1
+	source = `#pragma version 2
+int 1
 int 100
 app_opted_in
 int 1
@@ -499,7 +501,7 @@ int 1
 	ds.Painless = false
 
 	// check ForeignApp
-	source = `
+	source = `#pragma version 2
 int 300
 byte 0x676b657962797465 // gkeybyte
 app_global_get_ex

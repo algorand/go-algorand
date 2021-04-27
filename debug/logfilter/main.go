@@ -35,6 +35,7 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 
 	tests := make(map[string]test)
 	currentTestName := ""
+	incomingFails := false
 	// packageOutputBuffer is used to buffer messages that are package-oriented. i.e. TestMain() generated messages,
 	// which are called before any test starts to run.
 	packageOutputBuffer := ""
@@ -74,23 +75,28 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			var testName string
 			fmt.Sscanf(line[idx:], "--- PASS: %s", &testName)
 			if _, have := tests[testName]; !have {
-				panic(fmt.Errorf("test '%s' is missing, when parsing '%s'", testName, line))
+				fmt.Fprintf(outFile, "%s\r\n%s\r\n", line, packageOutputBuffer)
+				packageOutputBuffer = ""
+			} else {
+				fmt.Fprintf(outFile, line+"\r\n")
+				delete(tests, testName)
 			}
-			fmt.Fprintf(outFile, line+"\r\n")
-			delete(tests, testName)
 			continue
 		}
 		if idx := strings.Index(line, "--- FAIL:"); idx >= 0 {
+			incomingFails = true
 			var testName string
 			fmt.Sscanf(line[idx:], "--- FAIL: %s", &testName)
 			test, have := tests[testName]
 			if !have {
-				panic(fmt.Errorf("test %s is missing", testName))
+				fmt.Fprintf(outFile, "%s\r\n%s\r\n", line, packageOutputBuffer)
+				packageOutputBuffer = ""
+			} else {
+				fmt.Fprintf(outFile, test.outputBuffer+"\r\n")
+				fmt.Fprintf(outFile, line+"\r\n")
+				test.outputBuffer = ""
+				tests[testName] = test
 			}
-			fmt.Fprintf(outFile, test.outputBuffer+"\r\n")
-			fmt.Fprintf(outFile, line+"\r\n")
-			test.outputBuffer = ""
-			tests[testName] = test
 			continue
 		}
 		// otherwise, add the line to the current test ( if there is such )
@@ -110,6 +116,7 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			continue
 		}
 		if strings.HasPrefix(line, "FAIL	") {
+			incomingFails = true
 			if len(packageOutputBuffer) > 0 {
 				fmt.Fprintf(outFile, line+"...\r\n%s\r\n", packageOutputBuffer)
 			}
@@ -126,7 +133,9 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			fmt.Fprint(outFile, tests[currentTestName].outputBuffer)
 		}
 		fmt.Fprintf(outFile, "logfilter: the following error received on the input stream : %v\r\n", scannerErr)
-		return 0
+	}
+	if incomingFails {
+		return 1
 	}
 	return 0
 }

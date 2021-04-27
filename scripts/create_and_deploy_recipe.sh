@@ -40,6 +40,7 @@ FORCE_OPTION=""
 SCHEMA_MODIFIER=""
 BUCKET=""
 SKIP_BUILD=""
+BOOTSTRAP=""
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -72,6 +73,9 @@ while [ "$1" != "" ]; do
         -b)
             shift
             BUCKET="$1"
+            ;;
+        --skip-dbfiles)
+            BOOTSTRAP="false"
             ;;
         --skip-build)
             SKIP_BUILD="true"
@@ -108,7 +112,7 @@ if [[ "${SKIP_BUILD}" != "true" || ! -f ${GOPATH}/bin/netgoal ]]; then
 fi
 
 # Generate the nodecfg package directory
-${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}"
+${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFILE}" "${FORCE_OPTION}" -m "${SCHEMA_MODIFIER}" -b=${BOOTSTRAP:-true}
 
 # Package and upload the config package
 export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"

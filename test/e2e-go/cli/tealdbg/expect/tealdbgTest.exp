@@ -75,7 +75,52 @@ if { [catch {
 
     exec rm $TEAL_PROG_FILE
 
+    puts "Shutting down tealdbg"
+    close -i $tealdbg_spawn_id
+}
+
+if { [catch {
+
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set timeout 30
+
+    set TEST_DIR $TEST_ALGO_DIR
+    exec mkdir -p $TEST_DIR
+
+    set TEAL_PROG_FILE "$TEST_DIR/trivial.teal"
+    # this is ConsensusV25
+    set PROTOCOL_VERSION_2 "https://github.com/algorandfoundation/specs/tree/bea19289bf41217d2c0af30522fa222ef1366466"
+
+    # this is ConsensusV26
+    set PROTOCOL_VERSION_3 "https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff"
+
+    # run the test using version 2 on protocol version 2:
+    exec printf "#pragma version 2\nint 1\ndup\n+\n" > $TEAL_PROG_FILE
+    TestTealdbg $TEAL_PROG_FILE $PROTOCOL_VERSION_2 ""
+
+    # run the test using version 2 on protocol version 3:
+    TestTealdbg $TEAL_PROG_FILE $PROTOCOL_VERSION_3 "--remote-debugging-port 9392 --listen 127.0.0.1"
+
+    # run the test using version 3 on protocol version 3:
+    exec printf "#pragma version 3\nint 1\ndup\n+\n" > $TEAL_PROG_FILE
+    TestTealdbg $TEAL_PROG_FILE $PROTOCOL_VERSION_3 "--remote-debugging-port 9392 --listen 127.0.0.1"
+
+    # run the test using version 3 on protocol version 2 (this should fail)
+    set FAILED 0
+    spawn tealdbg debug -v $TEAL_PROG_FILE -p $PROTOCOL_VERSION_2 --remote-debugging-port 9392 --listen 127.0.0.1
+    expect {
+        timeout { puts "tealdbg debug timed out"; exit 1 }
+        -re {Debug error: Program version \([0-9]+\) is beyond the maximum supported protocol version \([0-9]+\)} { set FAILED 1; close }
+    }
+    if { $FAILED == 0 } {
+        puts "ERROR: the command should have failed"
+        exit 1
+    }
+    puts "The command failed as expected"
+
+    exec rm $TEAL_PROG_FILE
+
 } EXCEPTION ] } {
-    puts "ERROR in teadbgTest: $EXCEPTION"
+    puts "ERROR in tealdbgTest: $EXCEPTION"
     exit 1
 }

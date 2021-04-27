@@ -438,6 +438,12 @@ func dbretry(obj error) bool {
 	return ok && (err.Code == sqlite3.ErrLocked || err.Code == sqlite3.ErrBusy)
 }
 
+// IsErrBusy examine the input inerr varaible of type error and determine if it's a sqlite3 error for the ErrBusy error code.
+func IsErrBusy(inerr error) bool {
+	err, ok := inerr.(sqlite3.Error)
+	return ok && (err.Code == sqlite3.ErrBusy)
+}
+
 type idemFn func(ctx context.Context, tx *sql.Tx) error
 
 const infoTxRetries = 5
