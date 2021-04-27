@@ -35,7 +35,9 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 
 	tests := make(map[string]test)
 	currentTestName := ""
-	// packageOutputBuffer is used to buffer messages that are package-oriented. i.e. TestMain() generated messages,
+	incomingFails := false
+
+  // packageOutputBuffer is used to buffer messages that are package-oriented. i.e. TestMain() generated messages,
 	// which are called before any test starts to run.
 	packageOutputBuffer := ""
 	for scanner.Scan() {
@@ -83,6 +85,7 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			continue
 		}
 		if idx := strings.Index(line, "--- FAIL:"); idx >= 0 {
+			incomingFails = true
 			var testName string
 			fmt.Sscanf(line[idx:], "--- FAIL: %s", &testName)
 			test, have := tests[testName]
@@ -114,6 +117,7 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			continue
 		}
 		if strings.HasPrefix(line, "FAIL	") {
+			incomingFails = true
 			if len(packageOutputBuffer) > 0 {
 				fmt.Fprintf(outFile, line+"...\r\n%s\r\n", packageOutputBuffer)
 			}
@@ -130,7 +134,9 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			fmt.Fprint(outFile, tests[currentTestName].outputBuffer)
 		}
 		fmt.Fprintf(outFile, "logfilter: the following error received on the input stream : %v\r\n", scannerErr)
-		return 0
+	}
+	if incomingFails {
+		return 1
 	}
 	return 0
 }
