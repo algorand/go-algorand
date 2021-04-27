@@ -238,7 +238,8 @@ var OpSpecs = []OpSpec{
 	// Leave a little room for indirect function calls, or similar
 
 	// More math
-	// shl, shr
+	{0x90, "shl", opShiftLeft, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
+	{0x91, "shr", opShiftRight, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
 	// divw, modw convenience
 	// expmod
 }

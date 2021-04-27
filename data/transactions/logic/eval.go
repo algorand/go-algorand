@@ -1085,6 +1085,27 @@ func opBitNot(cx *evalContext) {
 	cx.stack[last].Uint = cx.stack[last].Uint ^ 0xffffffffffffffff
 }
 
+func opShiftLeft(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	if cx.stack[last].Uint > 63 {
+		cx.err = fmt.Errorf("shl arg too big, (%d)", cx.stack[last].Uint)
+		return
+	}
+	cx.stack[prev].Uint = cx.stack[prev].Uint << cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
+}
+func opShiftRight(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	if cx.stack[last].Uint > 63 {
+		cx.err = fmt.Errorf("shr arg too big, (%d)", cx.stack[last].Uint)
+		return
+	}
+	cx.stack[prev].Uint = cx.stack[prev].Uint >> cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
+}
+
 func opIntConstBlock(cx *evalContext) {
 	cx.intc, cx.nextpc, cx.err = parseIntcblock(cx.program, cx.pc)
 }

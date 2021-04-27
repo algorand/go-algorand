@@ -4144,3 +4144,18 @@ main:
 
 	testPanics(t, "int 1; recur: callsub recur; int 1", 4)
 }
+
+func TestShifts(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 1; int 1; shl; int 2; ==", 4)
+	testAccepts(t, "int 1; int 2; shl; int 4; ==", 4)
+	testAccepts(t, "int 3; int 2; shl; int 12; ==", 4)
+	testAccepts(t, "int 2; int 63; shl; int 0; ==", 4)
+
+	testAccepts(t, "int 1; int 1; shr; int 0; ==", 4)
+	testAccepts(t, "int 1; int 2; shr; int 0; ==", 4)
+	testAccepts(t, "int 3; int 1; shr; int 1; ==", 4)
+	testAccepts(t, "int 96; int 3; shr; int 12; ==", 4)
+	testAccepts(t, "int 8756675; int 63; shr; int 0; ==", 4)
+
+}
