@@ -4159,3 +4159,50 @@ func TestShifts(t *testing.T) {
 	testAccepts(t, "int 8756675; int 63; shr; int 0; ==", 4)
 
 }
+
+func TestSqrt(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 0; sqrt; int 0; ==", 4)
+	testAccepts(t, "int 1; sqrt; int 1; ==", 4)
+	testAccepts(t, "int 2; sqrt; int 1; ==", 4)
+	testAccepts(t, "int 4; sqrt; int 2; ==", 4)
+	testAccepts(t, "int 5; sqrt; int 2; ==", 4)
+
+	testAccepts(t, "int 3735928559; sqrt; int 61122; ==", 4)
+	testAccepts(t, "int 244837814094590; sqrt; int 15647294; ==", 4)
+
+	testAccepts(t, "int 2024; sqrt; int 44; ==", 4)
+	testAccepts(t, "int 2025; sqrt; int 45; ==", 4)
+	testAccepts(t, "int 2026; sqrt; int 45; ==", 4)
+
+	// Largest possible uint64
+	testAccepts(t, "int 18446744073709551615; sqrt; int 4294967295; ==", 4)
+
+	// The actual square of that largest possible sqrt
+	testAccepts(t, "int 18446744065119617025; sqrt; int 4294967295; ==", 4)
+	testAccepts(t, "int 18446744065119617024; sqrt; int 4294967294; ==", 4)
+
+}
+
+func TestExp(t *testing.T) {
+	testPanics(t, "int 0; int 0; exp; int 1; ==", 4)
+	testAccepts(t, "int 0; int 200; exp; int 0; ==", 4)
+	testAccepts(t, "int 1000; int 0; exp; int 1; ==", 4)
+	testAccepts(t, "int 1; int 2; exp; int 1; ==", 4)
+	testAccepts(t, "int 3; int 1; exp; int 3; ==", 4)
+	testAccepts(t, "int 96; int 3; exp; int 884736; ==", 4)
+	testPanics(t, "int 96; int 15; exp; int 884736; >", 4)
+}
+
+func TestExpw(t *testing.T) {
+	testPanics(t, "int 0; int 0; expw; int 1; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 0; int 200; expw; int 0; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 1000; int 0; expw; int 1; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 1; int 2; expw; int 1; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 3; int 1; expw; int 3; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 96; int 3; expw; int 884736; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 64; int 21; expw; pop; pop; int 1", 4) // (2^6)^21 = 2^126
+	testPanics(t, "int 64; int 22; expw; pop; pop; int 1", 4)  // (2^6)^22 = 2^132
+
+	testAccepts(t, "int 97; int 15; expw; int 10271255586529954209; ==; assert; int 34328615749; ==;", 4)
+}

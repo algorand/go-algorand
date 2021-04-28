@@ -1095,6 +1095,7 @@ func opShiftLeft(cx *evalContext) {
 	cx.stack[prev].Uint = cx.stack[prev].Uint << cx.stack[last].Uint
 	cx.stack = cx.stack[:last]
 }
+
 func opShiftRight(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
@@ -1104,6 +1105,125 @@ func opShiftRight(cx *evalContext) {
 	}
 	cx.stack[prev].Uint = cx.stack[prev].Uint >> cx.stack[last].Uint
 	cx.stack = cx.stack[:last]
+}
+
+func opSqrt(cx *evalContext) {
+	/*
+		        It would not be safe to use math.Sqrt, because we would have to
+			convert our u64 to an f64, but f64 cannot represent all u64s exactly.
+
+			This algorithm comes from Jack W. Crenshaw's 1998 article in Embedded:
+			http://www.embedded.com/electronics-blogs/programmer-s-toolbox/4219659/Integer-Square-Roots
+	*/
+
+	last := len(cx.stack) - 1
+
+	sq := cx.stack[last].Uint
+	var rem uint64 = 0
+	var root uint64 = 0
+
+	for i := 0; i < 32; i++ {
+		root <<= 1
+		rem = (rem << 2) | (sq >> (64 - 2))
+		sq <<= 2
+		if root < rem {
+			rem -= root | 1
+			root += 2
+		}
+	}
+	cx.stack[last].Uint = root >> 1
+}
+
+func opExpImpl(base uint64, exp uint64) (uint64, error) {
+	// These checks are slightly repetive but the clarity of
+	// avoiding nested checks seems worth it.
+	if exp == 0 && base == 0 {
+		return 0, errors.New("0^0 is undefined")
+	}
+	if base == 0 {
+		return 0, nil
+	}
+	if exp == 0 || base == 1 {
+		return 1, nil
+	}
+	// base is now at least 2, so exp can not be over 64
+	if exp > 64 {
+		return 0, fmt.Errorf("%d^%d overflow", base, exp)
+	}
+	answer := base
+	// safe to cast exp, because it is known to fit in int (it's <= 64)
+	for i := 1; i < int(exp); i++ {
+		next := answer * base
+		if next/answer != base {
+			return 0, fmt.Errorf("%d^%d overflow", base, exp)
+		}
+		answer = next
+	}
+	return answer, nil
+}
+
+func opExp(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	exp := cx.stack[last].Uint
+	base := cx.stack[prev].Uint
+	val, err := opExpImpl(base, exp)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[prev].Uint = val
+	cx.stack = cx.stack[:last]
+}
+
+func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
+	// These checks are slightly repetive but the clarity of
+	// avoiding nested checks seems worth it.
+	if exp == 0 && base == 0 {
+		return &big.Int{}, errors.New("0^0 is undefined")
+	}
+	if base == 0 {
+		return &big.Int{}, nil
+	}
+	if exp == 0 || base == 1 {
+		return new(big.Int).SetUint64(1), nil
+	}
+	// base is now at least 2, so exp can not be over 128
+	if exp > 128 {
+		return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
+	}
+
+	answer := new(big.Int).SetUint64(base)
+	bigbase := new(big.Int).SetUint64(base)
+	// safe to cast exp, because it is known to fit in int (it's <= 128)
+	for i := 1; i < int(exp); i++ {
+		next := answer.Mul(answer, bigbase)
+		answer = next
+		if answer.BitLen() > 128 {
+			return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
+		}
+	}
+	return answer, nil
+
+}
+
+func opExpw(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	exp := cx.stack[last].Uint
+	base := cx.stack[prev].Uint
+	val, err := opExpwImpl(base, exp)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	hi := new(big.Int).Rsh(val, 64).Uint64()
+	lo := val.Uint64()
+
+	cx.stack[prev].Uint = hi
+	cx.stack[last].Uint = lo
 }
 
 func opIntConstBlock(cx *evalContext) {

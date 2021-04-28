@@ -240,6 +240,10 @@ var OpSpecs = []OpSpec{
 	// More math
 	{0x90, "shl", opShiftLeft, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
 	{0x91, "shr", opShiftRight, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
+	{0x92, "sqrt", opSqrt, asmDefault, disDefault, oneInt, oneInt, 4, modeAny, opDefault},
+	{0x93, "exp", opExp, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
+	{0x94, "expw", opExpw, asmDefault, disDefault, twoInts, twoInts, 4, modeAny, opDefault},
+	// {0x93, "ln", opNatLog, asmDefault, disDefault, oneInt, oneInt, 4, modeAny, opDefault},
 }
 
 type sortByOpcode []OpSpec
