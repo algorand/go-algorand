@@ -69,10 +69,10 @@ type Trie struct {
 
 // Stats structure is a helper for finding underlaying statistics about the trie
 type Stats struct {
-	nodesCount uint
-	leafCount  uint
-	depth      int
-	size       int
+	NodesCount uint
+	LeafCount  uint
+	Depth      int
+	Size       int
 }
 
 // MakeTrie creates a merkle trie

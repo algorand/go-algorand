@@ -37,6 +37,7 @@ var miscStringStringTokens []string
 
 var networkUseGenesisFiles bool
 var networkIgnoreExistingDir bool
+var bootstrapLoadingFile bool
 
 func init() {
 	rootCmd.AddCommand(networkBuildCmd)
@@ -50,6 +51,7 @@ func init() {
 	networkBuildCmd.MarkFlagRequired("recipe")
 
 	networkBuildCmd.Flags().BoolVarP(&networkUseGenesisFiles, "use-existing-files", "e", false, "Use existing genesis files.")
+	networkBuildCmd.Flags().BoolVarP(&bootstrapLoadingFile, "gen-db-files", "b", false, "Generate database files.")
 	networkBuildCmd.Flags().BoolVarP(&networkIgnoreExistingDir, "force", "f", false, "Force generation into existing directory.")
 	networkBuildCmd.Flags().StringSliceVarP(&miscStringStringTokens, "val", "v", nil, "name=value, may be reapeated")
 
@@ -138,6 +140,18 @@ func runBuildNetwork() (err error) {
 
 	if networkGenesisVersionModifier != "" {
 		net.GenesisData.VersionModifier = networkGenesisVersionModifier
+	}
+
+	bootstrappedFile := resolveFile(r.BootstrappedFile, templateBaseDir)
+	if util.FileExists(bootstrappedFile) && bootstrapLoadingFile {
+		fileTemplate, err := remote.LoadBootstrappedData(bootstrappedFile)
+		if err != nil {
+			return fmt.Errorf("error resolving bootstrap file: %v", err)
+		}
+		net.BootstrappedNet = fileTemplate
+		net.SetUseBoostrappedFiles(bootstrapLoadingFile)
+	} else {
+		net.SetUseBoostrappedFiles(false)
 	}
 
 	net.SetUseExistingGenesisFiles(networkUseGenesisFiles)

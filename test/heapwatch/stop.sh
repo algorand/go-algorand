@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# clean up what was started by heapstart.sh
+# clean up what was started by start.sh or bwstart.sh
 
 set -e
 set -o pipefail
@@ -19,6 +19,10 @@ done
 TESTDIR=$1
 if [ -z "${TESTDIR}" ]; then
     TESTDIR=/tmp/heap_testnetwork
+fi
+if [ -d "${TESTDIR}/net" ]; then
+    # started with bwstart.sh
+    TESTDIR="${TESTDIR}/net"
 fi
 
 goal network stop -r "${TESTDIR}"

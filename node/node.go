@@ -261,7 +261,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.agreementService = agreement.MakeService(agreementParameters)
 
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
-	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates)
+	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 	node.txnSyncConnector = makeTranscationSyncNodeConnector(node)
 	node.txnSyncService = txnsync.MakeTranscationSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "")
@@ -750,7 +750,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		// Fetch a handle to this database
 		handle, err := node.getExistingPartHandle(filename)
 		if err != nil {
-			if err.Error() == "database is locked" {
+			if db.IsErrBusy(err) {
 				// this is a special case:
 				// we might get "database is locked" when we attempt to access a database that is conurrently updates it's participation keys.
 				// that database is clearly already on the account manager, and doesn't need to be processed through this logic, and therefore

@@ -34,7 +34,7 @@ import (
 type AccountManager struct {
 	mu deadlock.Mutex
 
-	partIntervals map[account.ParticipationInterval]account.Participation
+	partIntervals map[account.ParticipationInterval]account.PersistedParticipation
 
 	// Map to keep track of accounts for which we've sent
 	// AccountRegistered telemetry events
@@ -47,7 +47,7 @@ type AccountManager struct {
 func MakeAccountManager(log logging.Logger) *AccountManager {
 	manager := &AccountManager{}
 	manager.log = log
-	manager.partIntervals = make(map[account.ParticipationInterval]account.Participation)
+	manager.partIntervals = make(map[account.ParticipationInterval]account.PersistedParticipation)
 	manager.registeredAccounts = make(map[string]bool)
 
 	return manager
@@ -59,7 +59,7 @@ func (manager *AccountManager) Keys() (out []account.Participation) {
 	defer manager.mu.Unlock()
 
 	for _, part := range manager.partIntervals {
-		out = append(out, part)
+		out = append(out, part.Participation)
 	}
 	return out
 }
@@ -81,7 +81,7 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 // AddParticipation adds a new account.Participation to be managed.
 // The return value indicates if the key has been added (true) or
 // if this is a duplicate key (false).
-func (manager *AccountManager) AddParticipation(participation account.Participation) bool {
+func (manager *AccountManager) AddParticipation(participation account.PersistedParticipation) bool {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 

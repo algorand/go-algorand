@@ -1052,7 +1052,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 
 func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder bool) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion, 100)
 	const inMem = false
 	log := logging.TestingLog(b)
 	cfg := config.GetDefaultLocal()
