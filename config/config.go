@@ -228,12 +228,6 @@ type Local struct {
 	// Generate ProcessBlockMetrics telemetry event
 	EnableProcessBlockStats bool `version[0]:""`
 
-	// Generate AccountUpdates telemetry event
-	EnableAccountUpdatesStats bool `version[17]:"false"`
-
-	// Frequency for generating accountUpdates telemetry event
-	AccountUpdatesStatsFrequency time.Duration `version[17]:"5"`
-
 	// SuggestedFeeSlidingWindowSize is number of past blocks that will be considered in computing the suggested fee
 	SuggestedFeeSlidingWindowSize uint32 `version[3]:"50"`
 
@@ -408,6 +402,12 @@ type Local struct {
 	// 12 : perform all validation methods (normal and additional). These extra tests helps to verify the integrity of the compiled executable against
 	//      previously used executabled, and would not provide any additional security guarantees.
 	CatchupBlockValidateMode int `version[17]:"0"`
+
+	// Generate AccountUpdates telemetry event
+	EnableAccountUpdatesStats bool `version[17]:"false"`
+
+	// Frequency for generating accountUpdates telemetry event
+	AccountUpdatesStatsFrequency time.Duration `version[17]:"5"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
