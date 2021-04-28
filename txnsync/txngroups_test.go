@@ -21,7 +21,6 @@ import (
 	"io"
 	"io/ioutil"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -129,9 +128,11 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 	require.ElementsMatch(t, inTxnGroups, out)
 }
 
-func TestTxnGroupEncodingLarge(t *testing.T) {
-	dat, err := ioutil.ReadFile("/Users/nicholas/Downloads/txns.txt")
-	require.NoError(t, err)
+func txnGroupsData() ([]transactions.SignedTxGroup, error) {
+	dat, err := ioutil.ReadFile("txns.txt")
+	if err != nil {
+		return nil, err
+	}
 	dec := protocol.NewDecoderBytes(dat)
 	ntx := 0
 	blocksData := make([]rpcs.EncodedBlockCert, 1)
@@ -146,17 +147,20 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 		if err == io.EOF {
 			break
 		}
-		require.NoError(t, err)
+		if err != nil {
+			return nil, err
+		}
 		ntx++
 	}
 	blocksData = blocksData[:ntx]
-	fmt.Println("blocks: ", len(blocksData))
 
 	var txnGroups []transactions.SignedTxGroup
 	for _, blockData := range blocksData {
 		block := blockData.Block
 		payset, err := block.DecodePaysetGroups()
-		require.NoError(t, err)
+		if err != nil {
+			return nil, err
+		}
 		for _, txns := range payset {
 			var txnGroup transactions.SignedTxGroup
 			for _, txn := range txns {
@@ -165,26 +169,78 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 			txnGroups = append(txnGroups, txnGroup)
 		}
 	}
-	fmt.Println("txngroups: ", len(txnGroups))
+	return txnGroups, nil
+}
 
-	start := time.Now()
+func TestTxnGroupEncodingLarge(t *testing.T) {
+	txnGroups, err := txnGroupsData()
+	require.NoError(t, err)
+
 	encodedGroupsBytes := encodeTransactionGroups(txnGroups)
-	fmt.Println("new data: ", len(encodedGroupsBytes))
-	fmt.Println("time: ", time.Now().Sub(start))
-	start = time.Now()
 	out, err := decodeTransactionGroups(encodedGroupsBytes)
-	fmt.Println("time: ", time.Now().Sub(start))
-	start = time.Now()
 	require.NoError(t, err)
 	require.ElementsMatch(t, txnGroups, out)
 
 	encodedGroupsBytes = encodeTransactionGroupsOld(txnGroups)
-	fmt.Println("old data: ", len(encodedGroupsBytes))
-	fmt.Println("time: ", time.Now().Sub(start))
-	start = time.Now()
 	out, err = decodeTransactionGroupsOld(encodedGroupsBytes)
-	fmt.Println("time: ", time.Now().Sub(start))
-	start = time.Now()
 	require.NoError(t, err)
 	require.ElementsMatch(t, txnGroups, out)
+}
+
+func BenchmarkTxnGroupEncoding (b *testing.B) {
+	txnGroups, err := txnGroupsData()
+	require.NoError(b, err)
+	var encodedGroupsBytes []byte
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		encodedGroupsBytes = encodeTransactionGroups(txnGroups)
+		releaseEncodedTransactionGroups(encodedGroupsBytes)
+	}
+
+	fmt.Println("new data: ", len(encodedGroupsBytes))
+}
+
+func BenchmarkTxnGroupDecoding (b *testing.B) {
+	txnGroups, err := txnGroupsData()
+	require.NoError(b, err)
+
+	encodedGroupsBytes := encodeTransactionGroups(txnGroups)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = decodeTransactionGroups(encodedGroupsBytes)
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkTxnGroupEncodingOld (b *testing.B) {
+	txnGroups, err := txnGroupsData()
+	require.NoError(b, err)
+	var encodedGroupsBytes []byte
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		encodedGroupsBytes = encodeTransactionGroupsOld(txnGroups)
+		releaseEncodedTransactionGroups(encodedGroupsBytes)
+	}
+
+	fmt.Println("old data: ", len(encodedGroupsBytes))
+}
+
+func BenchmarkTxnGroupDecodingOld (b *testing.B) {
+	txnGroups, err := txnGroupsData()
+	require.NoError(b, err)
+
+	encodedGroupsBytes := encodeTransactionGroupsOld(txnGroups)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = decodeTransactionGroupsOld(encodedGroupsBytes)
+		require.NoError(b, err)
+	}
 }

@@ -24,8 +24,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const maxEncodedTransactionGroup = 10000
-const maxEncodedTransactionGroupEntries = 10000
+const maxEncodedTransactionGroup = 30000
+const maxEncodedTransactionGroupEntries = 30000
 const maxBitmaskSize = (maxEncodedTransactionGroup+7)/8 + 1
 
 //msgp:allocbound txnGroups maxEncodedTransactionGroupEntries
