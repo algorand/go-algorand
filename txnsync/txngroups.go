@@ -157,6 +157,56 @@ type encodedCompactCertTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 }
 
+type TxType byte
+
+const (
+	PaymentTx = iota
+	KeyRegistrationTx
+	AssetConfigTx
+	AssetTransferTx
+	AssetFreezeTx
+	ApplicationCallTx
+	CompactCertTx
+	UnknownTx
+)
+
+// TxTypeToByte converts a TxType to byte encoding
+func TxTypeToByte(t protocol.TxType) byte {
+	switch t {
+	case protocol.PaymentTx:
+		return PaymentTx
+	case protocol.KeyRegistrationTx:
+		return KeyRegistrationTx
+	case protocol.AssetConfigTx:
+		return AssetConfigTx
+	case protocol.AssetTransferTx:
+		return AssetTransferTx
+	case protocol.AssetFreezeTx:
+		return AssetFreezeTx
+	case protocol.ApplicationCallTx:
+		return ApplicationCallTx
+	case protocol.CompactCertTx:
+		return CompactCertTx
+	default:
+		return UnknownTx
+	}
+}
+
+// ByteToTxType converts a byte encoding to TxType
+func ByteToTxType(b byte) protocol.TxType {
+	txTypes := []protocol.TxType{
+		protocol.PaymentTx,
+		protocol.KeyRegistrationTx,
+		protocol.AssetConfigTx,
+		protocol.AssetTransferTx,
+		protocol.AssetFreezeTx,
+		protocol.ApplicationCallTx,
+		protocol.CompactCertTx,
+		protocol.UnknownTx,
+	}
+	return txTypes[b]
+}
+
 type bitmask []byte
 
 // assumed to be in mode 0, sets bit at index to 1
@@ -169,6 +219,8 @@ func (b bitmask) EntryExists(index int, hint int) (bool, int) {
 	option := 0
 	if len(b) > 0 {
 		option = int(b[0])
+	} else {
+		return false, 0
 	}
 	switch option {
 	case 0: // if we have the bit 1 then we have an entry at the corresponding bit index.
@@ -197,8 +249,12 @@ func (b bitmask) EntryExists(index int, hint int) (bool, int) {
 	return false, 0 // need error message isntead
 }
 
-func trimBitmask(b bitmask) bitmask {
-	return bytes.TrimRight(b, string(0))
+func (b *bitmask) trimBitmask() {
+	*b = bytes.TrimRight(*b, string(0))
+}
+
+func getSlice(b []byte, index int, size int) []byte {
+	return b[index*size:index*size+size]
 }
 
 func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte {
@@ -334,10 +390,10 @@ func deconstructSignedTransactions(stub *txGroupsEncodingStub) {
 			stub.SignedTxns[i].AuthAddr = basics.Address{}
 		}
 	}
-	stub.BitmaskAuthAddr = trimBitmask(stub.BitmaskAuthAddr)
-	stub.BitmaskLsig = trimBitmask(stub.BitmaskLsig)
-	stub.BitmaskMsig = trimBitmask(stub.BitmaskMsig)
-	stub.BitmaskSig = trimBitmask(stub.BitmaskSig)
+	stub.BitmaskAuthAddr.trimBitmask()
+	stub.BitmaskLsig.trimBitmask()
+	stub.BitmaskMsig.trimBitmask()
+	stub.BitmaskSig.trimBitmask()
 	deconstructTransactions(stub)
 }
 
@@ -345,14 +401,14 @@ func deconstructTransactions(stub *txGroupsEncodingStub) {
 	bitmaskLen := (len(stub.SignedTxns)+7)/8 + 1
 	stub.BitmaskTxType = make(bitmask, bitmaskLen)
 	for i, txn := range stub.SignedTxns {
-		txTypeByte := protocol.TxTypeToByte(txn.Txn.Type)
+		txTypeByte := TxTypeToByte(txn.Txn.Type)
 		if txTypeByte != 0 {
 			stub.BitmaskTxType.SetBit(i)
 			stub.TxType = append(stub.TxType, txTypeByte)
 		}
 		stub.SignedTxns[i].Txn.Type = ""
 	}
-	stub.BitmaskTxType = trimBitmask(stub.BitmaskTxType)
+	stub.BitmaskTxType.trimBitmask()
 	deconstructTxnHeader(stub)
 	deconstructKeyregTxnFields(stub)
 	deconstructPaymentTxnFields(stub)
@@ -422,15 +478,15 @@ func deconstructTxnHeader(stub *txGroupsEncodingStub) {
 		}
 	}
 
-	stub.BitmaskSender = trimBitmask(stub.BitmaskSender)
-	stub.BitmaskFee = trimBitmask(stub.BitmaskFee)
-	stub.BitmaskFirstValid = trimBitmask(stub.BitmaskFirstValid)
-	stub.BitmaskLastValid = trimBitmask(stub.BitmaskLastValid)
-	stub.BitmaskNote = trimBitmask(stub.BitmaskNote)
-	stub.BitmaskGenesisID = trimBitmask(stub.BitmaskGenesisID)
-	stub.BitmaskGenesisHash = trimBitmask(stub.BitmaskGenesisHash)
-	stub.BitmaskLease = trimBitmask(stub.BitmaskLease)
-	stub.BitmaskRekeyTo = trimBitmask(stub.BitmaskRekeyTo)
+	stub.BitmaskSender.trimBitmask()
+	stub.BitmaskFee.trimBitmask()
+	stub.BitmaskFirstValid.trimBitmask()
+	stub.BitmaskLastValid.trimBitmask()
+	stub.BitmaskNote.trimBitmask()
+	stub.BitmaskGenesisID.trimBitmask()
+	stub.BitmaskGenesisHash.trimBitmask()
+	stub.BitmaskLease.trimBitmask()
+	stub.BitmaskRekeyTo.trimBitmask()
 }
 
 func deconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
@@ -474,12 +530,12 @@ func deconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
 		}
 	}
 
-	stub.BitmaskVotePK = trimBitmask(stub.BitmaskVotePK)
-	stub.BitmaskSelectionPK = trimBitmask(stub.BitmaskSelectionPK)
-	stub.BitmaskVoteFirst = trimBitmask(stub.BitmaskVoteFirst)
-	stub.BitmaskVoteLast = trimBitmask(stub.BitmaskVoteLast)
-	stub.BitmaskVoteKeyDilution = trimBitmask(stub.BitmaskVoteKeyDilution)
-	stub.BitmaskNonparticipation = trimBitmask(stub.BitmaskNonparticipation)
+	stub.BitmaskVotePK.trimBitmask()
+	stub.BitmaskSelectionPK.trimBitmask()
+	stub.BitmaskVoteFirst.trimBitmask()
+	stub.BitmaskVoteLast.trimBitmask()
+	stub.BitmaskVoteKeyDilution.trimBitmask()
+	stub.BitmaskNonparticipation.trimBitmask()
 }
 
 func deconstructPaymentTxnFields(stub *txGroupsEncodingStub) {
@@ -505,9 +561,9 @@ func deconstructPaymentTxnFields(stub *txGroupsEncodingStub) {
 		}
 	}
 
-	stub.BitmaskReceiver = trimBitmask(stub.BitmaskReceiver)
-	stub.BitmaskAmount = trimBitmask(stub.BitmaskAmount)
-	stub.BitmaskCloseRemainderTo = trimBitmask(stub.BitmaskCloseRemainderTo)
+	stub.BitmaskReceiver.trimBitmask()
+	stub.BitmaskAmount.trimBitmask()
+	stub.BitmaskCloseRemainderTo.trimBitmask()
 }
 
 func deconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
@@ -572,7 +628,7 @@ func reconstructTransactions(stub *txGroupsEncodingStub) {
 	index = 0
 	for i := range stub.SignedTxns {
 		if exists, _ := stub.BitmaskTxType.EntryExists(i, 0); exists {
-			stub.SignedTxns[i].Txn.Type = protocol.ByteToTxType(stub.TxType[index])
+			stub.SignedTxns[i].Txn.Type = ByteToTxType(stub.TxType[index])
 			index++
 		} else {
 			stub.SignedTxns[i].Txn.Type = protocol.PaymentTx
