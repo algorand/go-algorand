@@ -250,7 +250,7 @@ type accountUpdates struct {
 	// the synchronous mode that would be used while the accounts database is being rebuilt.
 	accountsRebuildSynchronousMode db.SynchronousMode
 
-	//Metrics collection
+	// Metrics collection
 	logAccountUpdateMetrics bool
 	logAccountUpdateFreq    time.Duration
 	lastMetricsLogTime      time.Time
@@ -330,7 +330,7 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
 	au.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
 
-	//	log metrics
+	// log metrics
 	au.logAccountUpdateMetrics = cfg.EnableAccountUpdatesStats
 	au.logAccountUpdateFreq = cfg.AccountUpdatesStatsFrequency
 

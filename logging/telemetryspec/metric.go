@@ -144,9 +144,7 @@ func (m RoundTimingMetrics) Identifier() Metric {
 // AccountsUpdate
 const accountsUpdateMetricsIdentifier Metric = "AccountsUpdate"
 
-// AccountsUpdateMetrics contain timing details for common message types.
-// All times (except round start time) are offset times, in int64 ns
-// precision relative to RoundTimingMetrics.LRoundStart.
+// AccountsUpdateMetrics is the set of metrics captured when we process accountUpdates.commitRound
 type AccountsUpdateMetrics struct {
 	StartRound                uint64
 	RoundsCount               uint64
