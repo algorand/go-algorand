@@ -27,6 +27,7 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"math/bits"
 	"runtime"
 	"strings"
 
@@ -1132,6 +1133,17 @@ func opSqrt(cx *evalContext) {
 		}
 	}
 	cx.stack[last].Uint = root >> 1
+}
+
+func opLog2(cx *evalContext) {
+	/* All log bases are pretty much equally powerful.  By giving
+	   log2() the implementation is drop dead simple - the index
+	   of the leftmost bit.  And that may be directly useful as well.
+	*/
+
+	last := len(cx.stack) - 1
+
+	cx.stack[last].Uint = uint64(bits.Len64(cx.stack[last].Uint))
 }
 
 func opExpImpl(base uint64, exp uint64) (uint64, error) {

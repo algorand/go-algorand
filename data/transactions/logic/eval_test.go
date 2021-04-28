@@ -4206,3 +4206,12 @@ func TestExpw(t *testing.T) {
 
 	testAccepts(t, "int 97; int 15; expw; int 10271255586529954209; ==; assert; int 34328615749; ==;", 4)
 }
+
+func TestLog2(t *testing.T) {
+	testAccepts(t, "int 0; log2; int 0; ==", 4)
+	testAccepts(t, "int 1; log2; int 1; ==", 4)
+	testAccepts(t, "int 2; log2; int 2; ==", 4)
+	testAccepts(t, "int 4; log2; int 3; ==", 4)
+	testAccepts(t, "int 5; log2; int 3; ==", 4)
+	testAccepts(t, "int 8; log2; int 4; ==", 4)
+}
