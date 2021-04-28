@@ -1069,6 +1069,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
+			case 4:
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1322,6 +1328,63 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 3 to 4: %v", err)
 	}
 	return 4, nil
+}
+
+// upgradeDatabaseSchema4 does not change the schema but migrates data:
+// remove empty AccountData entries from accountbase table
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+
+	queryAddresses := au.catchpointInterval != 0
+	numDeleted, addresses, err := removeEmptyAccountData(tx, queryAddresses)
+	if err != nil {
+		return 0, err
+	}
+
+	if queryAddresses && len(addresses) > 0 {
+		mc, err := makeMerkleCommitter(tx, false)
+		if err != nil {
+			// at this point record deleted and DB is pruned for account data
+			// if hash deletion fails just log it and do not about startup
+			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle committer: %v", err)
+			goto done
+		}
+		trie, err := merkletrie.MakeTrie(mc, trieMemoryConfig)
+		if err != nil {
+			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle trie: %v", err)
+			goto done
+		}
+
+		var totalHashesDeleted int
+		for _, addr := range addresses {
+			hash := accountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
+			deleted, err := trie.Delete(hash)
+			if err != nil {
+				au.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, err)
+			} else {
+				if !deleted {
+					au.log.Warnf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(hash), addr)
+				} else {
+					totalHashesDeleted++
+				}
+			}
+		}
+
+		if _, err = trie.Commit(); err != nil {
+			au.log.Errorf("upgradeDatabaseSchema4: failed to commit changes to merkle trie: %v", err)
+		}
+
+		au.log.Infof("upgradeDatabaseSchema4: deleted %d hashes", totalHashesDeleted)
+	}
+
+done:
+	au.log.Infof("upgradeDatabaseSchema4: deleted %d rows", numDeleted)
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 5)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 4 to 5: %v", err)
+	}
+	return 5, nil
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
