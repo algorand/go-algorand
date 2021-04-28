@@ -2156,9 +2156,9 @@ func TestAccountsNewCRUD(t *testing.T) {
 	}
 
 	delta = accountDelta{
-		old:      old,
-		new:      ledgercore.PersistedAccountData{AccountData: updated, ExtendedAssetHolding: old.pad.ExtendedAssetHolding},
-		holdings: deltaHoldings,
+		old:    old,
+		new:    ledgercore.PersistedAccountData{AccountData: updated, ExtendedAssetHolding: old.pad.ExtendedAssetHolding},
+		assets: deltaHoldings,
 	}
 
 	updatedAccounts, err = accountsNewUpdate(
@@ -2273,9 +2273,9 @@ func TestAccountsNewCRUD(t *testing.T) {
 	}
 
 	delta = accountDelta{
-		old:      old,
-		new:      ledgercore.PersistedAccountData{AccountData: updated, ExtendedAssetHolding: old.pad.ExtendedAssetHolding},
-		holdings: deltaHoldings,
+		old:    old,
+		new:    ledgercore.PersistedAccountData{AccountData: updated, ExtendedAssetHolding: old.pad.ExtendedAssetHolding},
+		assets: deltaHoldings,
 	}
 
 	updatedAccounts, err = accountsNewUpdate(

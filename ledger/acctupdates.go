@@ -2306,6 +2306,19 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
 	}
 
+	// move newly created assets into deltas
+	for i := uint64(0); i < offset; i++ {
+		for cidx, creatable := range creatableDeltas[i] {
+			if creatable.Ctype == basics.AssetCreatable {
+				action := ledgercore.ActionParamDelete
+				if creatable.Created {
+					action = ledgercore.ActionParamCreate
+				}
+				deltas[i].SetHoldingDelta(creatable.Creator, basics.AssetIndex(cidx), action)
+			}
+		}
+	}
+
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
 	compactDeltas := makeCompactAccountDeltas(deltas, au.baseAccounts)

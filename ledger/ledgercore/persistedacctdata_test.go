@@ -159,7 +159,7 @@ type groupSpec struct {
 	count int
 }
 
-func genExtendedHolding(t *testing.T, spec []groupSpec) (e ExtendedAssetHolding) {
+func genExtendedHolding(t testing.TB, spec []groupSpec) (e ExtendedAssetHolding) {
 	e.Groups = make([]AssetsHoldingGroup, len(spec))
 	for i, s := range spec {
 		e.Groups[i].Count = uint32(s.count)
@@ -898,7 +898,7 @@ func TestFindLoadedSiblings(t *testing.T) {
 
 // generate groups from sizes. group N increments each asset id by N
 // i.e. Group[0] = [aidx, aidx+1, aidx+2,...]
-func genExtendedHoldingGroupsFromSizes(t *testing.T, sizes []int, aidx basics.AssetIndex) (e ExtendedAssetHolding) {
+func genExtendedHoldingGroupsFromSizes(t testing.TB, sizes []int, aidx basics.AssetIndex) (e ExtendedAssetHolding) {
 	spec := make([]groupSpec, 0, len(sizes))
 	for i, size := range sizes {
 		increment := i + 1
@@ -1068,4 +1068,39 @@ func TestGroupMerge(t *testing.T) {
 	newHoldings := getAllHoldings(e)
 	a.Equal(oldHoldings, newHoldings)
 
+}
+
+func viaInterface(agl AbstractAssetGroupList) (total int64) {
+	for i := 0; i < agl.Len(); i++ {
+		total += int64(len(agl.Get(i).Encode()))
+		agl.Get(i).SetKey(total)
+	}
+	return total
+}
+
+func viaType(a *ExtendedAssetHolding) (total int64) {
+	for i := 0; i < len(a.Groups); i++ {
+		total += int64(len(a.Groups[i].Encode()))
+		a.Groups[i].SetKey(total)
+	}
+	return total
+}
+
+var result int64
+
+func BenchmarkSliceVsInterface(b *testing.B) {
+	tests := []bool{false, true}
+	sizes := []int{128, 179, 128, 142, 128, 164, 128, 156, 147}
+	e := genExtendedHoldingGroupsFromSizes(b, sizes, basics.AssetIndex(1))
+	for _, isSlice := range tests {
+		b.Run(fmt.Sprintf("slice=%v", isSlice), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if isSlice {
+					result += viaType(&e)
+				} else {
+					result += viaInterface(&e)
+				}
+			}
+		})
+	}
 }

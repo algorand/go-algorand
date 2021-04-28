@@ -166,6 +166,9 @@ type AbstractAssetGroup interface {
 	GroupData() AbstractAssetGroupData
 	AssetCount() uint32
 	Update(idx int, data interface{})
+	Encode() []byte
+	Key() int64
+	SetKey(key int64)
 }
 type AbstractAssetGroupList interface {
 	// Get returns abstract group
@@ -269,6 +272,12 @@ func (g AssetsHoldingGroup) GetHolding(ai int) basics.AssetHolding {
 
 // Encode returns msgp-encoded group data
 func (g AssetsHoldingGroup) Encode() []byte {
+	// TODO: use GetEncodingBuf/PutEncodingBuf
+	return protocol.Encode(&g.groupData)
+}
+
+// Encode returns msgp-encoded group data
+func (g AssetsParamGroup) Encode() []byte {
 	// TODO: use GetEncodingBuf/PutEncodingBuf
 	return protocol.Encode(&g.groupData)
 }
@@ -395,6 +404,14 @@ func (g *AssetGroupDesc) MaxAsset() basics.AssetIndex {
 
 func (g *AssetGroupDesc) AssetCount() uint32 {
 	return g.Count
+}
+
+func (g *AssetGroupDesc) SetKey(key int64) {
+	g.AssetGroupKey = key
+}
+
+func (g *AssetGroupDesc) Key() int64 {
+	return g.AssetGroupKey
 }
 
 func (g *AssetsHoldingGroup) GroupData() AbstractAssetGroupData {

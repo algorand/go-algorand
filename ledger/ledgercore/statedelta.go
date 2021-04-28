@@ -91,6 +91,10 @@ const (
 	ActionCreate HoldingAction = 1 + iota
 	// ActionDelete is for asset holding creation
 	ActionDelete
+	// ActionParamCreate is for asset holding creation
+	ActionParamCreate
+	// ActionParamDelete is for asset holding creation
+	ActionParamDelete
 )
 
 // AccountDeltas stores ordered accounts and allows fast lookup by address

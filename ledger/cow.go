@@ -66,7 +66,10 @@ type roundCowState struct {
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 
 	// getPadCache provides compatibility between mods that uses PersistedAccountData
-	// and balances interface implementation (Get, GetEx, Put, PutWithCreatable) that work with AccountData view to PersistedAccountData
+	// and balances interface implementation (Get, GetEx, Put, PutWithCreatable)
+	// that work with AccountData view to PersistedAccountData.
+	// The idea is Getters populate getPadCache and return AccountData portion,
+	// and Putters find corresponding PersistedAccountData there without looking into DB
 	getPadCache map[basics.Address]ledgercore.PersistedAccountData
 
 	// either or not maintain compatibility with original app refactoring behavior

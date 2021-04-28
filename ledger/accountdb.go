@@ -156,10 +156,10 @@ type compactAccountDeltas struct {
 }
 
 type accountDelta struct {
-	old      dbAccountData
-	new      ledgercore.PersistedAccountData
-	holdings map[basics.AssetIndex]ledgercore.HoldingAction
-	ndeltas  int
+	old     dbAccountData
+	new     ledgercore.PersistedAccountData
+	assets  map[basics.AssetIndex]ledgercore.HoldingAction
+	ndeltas int
 }
 
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
@@ -228,17 +228,17 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 			hmap := roundDelta.GetHoldingDeltas(addr)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
 				outAccountDeltas.update(idx, accountDelta{ // update instead of upsert economizes one map lookup
-					old:      prev.old,
-					new:      acctDelta,
-					holdings: hmap,
-					ndeltas:  prev.ndeltas + 1,
+					old:     prev.old,
+					new:     acctDelta,
+					assets:  hmap,
+					ndeltas: prev.ndeltas + 1,
 				})
 			} else {
 				// it's a new entry.
 				newEntry := accountDelta{
-					new:      acctDelta,
-					holdings: hmap,
-					ndeltas:  1,
+					new:     acctDelta,
+					assets:  hmap,
+					ndeltas: 1,
 				}
 				if baseAccountData, has := baseAccounts.read(addr); has {
 					newEntry.old = baseAccountData
@@ -302,7 +302,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 					}
 
 					// load created and deleted asset holding groups
-					for aidx, action := range delta.holdings {
+					for aidx, action := range delta.assets {
 						gi := -1
 						if action == ledgercore.ActionCreate {
 							// use FindGroup to find a possible matching group for insertion
@@ -1306,33 +1306,64 @@ func loadHoldingGroupData(stmt *sql.Stmt, key int64) (group ledgercore.AssetsHol
 	return
 }
 
-func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, pad ledgercore.PersistedAccountData, genesisProto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
+// TODO: benchmark
+func modifyAssetGroup(query *sql.Stmt, agl ledgercore.AbstractAssetGroupList) (err error) {
+	var result sql.Result
+	for i := 0; i < agl.Len(); i++ {
+		result, err = query.Exec(agl.Get(i).Encode())
+		if err != nil {
+			break
+		}
+		key, err := result.LastInsertId()
+		if err != nil {
+			break
+		}
+		agl.Get(i).SetKey(key)
+	}
+	return err
+}
+
+func deleteAssetGroup(query *sql.Stmt, agl ledgercore.AbstractAssetGroupList) (err error) {
+	for i := 0; i < agl.Len(); i++ {
+		_, err = query.Exec(agl.Get(i).Key())
+		if err != nil {
+			break
+		}
+	}
+	return err
+}
+
+func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, pad ledgercore.PersistedAccountData, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
 	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 	if len(pad.Assets) > assetsThreshold {
 		pad.ExtendedAssetHolding.ConvertToGroups(pad.Assets)
 		pad.AccountData.Assets = nil
 	}
 
-	var result sql.Result
-	var err error
-	for i := 0; i < len(pad.ExtendedAssetHolding.Groups); i++ {
-		result, err = qaei.Exec(pad.ExtendedAssetHolding.Groups[i].Encode())
-		if err != nil {
-			break
-		}
-		pad.ExtendedAssetHolding.Groups[i].AssetGroupKey, err = result.LastInsertId()
-		if err != nil {
-			break
-		}
+	if len(pad.AssetParams) > assetsThreshold {
+		pad.ExtendedAssetParam.ConvertToGroups(pad.AssetParams)
+		pad.AccountData.AssetParams = nil
 	}
 
+	// save holdings
+	var result sql.Result
+	var err error
+	err = modifyAssetGroup(qaei, &pad.ExtendedAssetHolding)
+	if err != nil {
+		return updatedAccounts, err
+	}
+
+	// save params
+	err = modifyAssetGroup(qaei, &pad.ExtendedAssetParam)
+	if err != nil {
+		return updatedAccounts, err
+	}
+
+	normBalance := pad.AccountData.NormalizedOnlineBalance(proto)
+	result, err = qabi.Exec(addr[:], normBalance, protocol.Encode(&pad))
 	if err == nil {
-		normBalance := pad.AccountData.NormalizedOnlineBalance(genesisProto)
-		result, err = qabi.Exec(addr[:], normBalance, protocol.Encode(&pad))
-		if err == nil {
-			updatedAccounts[updateIdx].rowid, err = result.LastInsertId()
-			updatedAccounts[updateIdx].pad = pad
-		}
+		updatedAccounts[updateIdx].rowid, err = result.LastInsertId()
+		updatedAccounts[updateIdx].pad = pad
 	}
 	return updatedAccounts, err
 }
@@ -1351,12 +1382,10 @@ func accountsNewDelete(qabd *sql.Stmt, qaed *sql.Stmt, addr basics.Address, dbad
 	if rowsAffected != 1 {
 		err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, dbad.rowid)
 	} else {
-		// if no error delete extension records
-		for _, g := range dbad.pad.ExtendedAssetHolding.Groups {
-			result, err = qaed.Exec(g.AssetGroupKey)
-			if err != nil {
-				break
-			}
+		// if no error => delete extension records
+		err = deleteAssetGroup(qaed, &dbad.pad.ExtendedAssetHolding)
+		if err == nil {
+			err = deleteAssetGroup(qaed, &dbad.pad.ExtendedAssetParam)
 		}
 	}
 	return updatedAccounts, err
@@ -1392,22 +1421,12 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 		pad.AccountData.Assets = nil
 
 		// update group data DB table
-		var result sql.Result
-		for i := 0; i < len(pad.ExtendedAssetHolding.Groups); i++ {
-			result, err = qaei.Exec(pad.ExtendedAssetHolding.Groups[i].Encode())
-			if err != nil {
-				break
-			}
-			pad.ExtendedAssetHolding.Groups[i].AssetGroupKey, err = result.LastInsertId()
-			if err != nil {
-				break
-			}
-		}
+		err = modifyAssetGroup(qaei, &pad.ExtendedAssetHolding)
 	} else { // default case: delta.old.pad.NumAssetHoldings() > assetsThreshold
-		deleted := make([]basics.AssetIndex, 0, len(delta.holdings))
-		created := make([]basics.AssetIndex, 0, len(delta.holdings))
+		deleted := make([]basics.AssetIndex, 0, len(delta.assets))
+		created := make([]basics.AssetIndex, 0, len(delta.assets))
 
-		for aidx, action := range delta.holdings {
+		for aidx, action := range delta.assets {
 			if action == ledgercore.ActionDelete {
 				deleted = append(deleted, aidx)
 			} else {
@@ -1446,7 +1465,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 
 			updated := make([]basics.AssetIndex, 0, len(delta.new.Assets))
 			for aidx := range delta.new.Assets {
-				if _, ok := delta.holdings[aidx]; !ok {
+				if _, ok := delta.assets[aidx]; !ok {
 					updated = append(updated, aidx)
 				}
 			}
