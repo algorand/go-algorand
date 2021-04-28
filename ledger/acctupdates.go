@@ -331,7 +331,7 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
 
 	//	log metrics
-	au.logAccountUpdateMetrics = cfg.EnableTopAccountsReporting
+	au.logAccountUpdateMetrics = cfg.EnableAccountUpdatesStats
 	au.logAccountUpdateFreq = cfg.AccountUpdatesStatsFrequency
 
 }
