@@ -2196,7 +2196,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		if updateStats {
 			now := time.Duration(time.Now().UnixNano())
 			stats.MerkleTrieUpdateDuration = now - stats.MerkleTrieUpdateDuration
-			stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano())
+			stats.AccountsWritingDuration = now
 		}
 
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
