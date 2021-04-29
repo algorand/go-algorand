@@ -365,8 +365,8 @@ func BenchmarkUnmarshalAssetsHoldingGroupData(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalAssetsParamGroup(t *testing.T) {
-	v := AssetsParamGroup{}
+func TestMarshalUnmarshalAssetsParamsGroup(t *testing.T) {
+	v := AssetsParamsGroup{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -385,12 +385,12 @@ func TestMarshalUnmarshalAssetsParamGroup(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingAssetsParamGroup(t *testing.T) {
-	protocol.RunEncodingTest(t, &AssetsParamGroup{})
+func TestRandomizedEncodingAssetsParamsGroup(t *testing.T) {
+	protocol.RunEncodingTest(t, &AssetsParamsGroup{})
 }
 
-func BenchmarkMarshalMsgAssetsParamGroup(b *testing.B) {
-	v := AssetsParamGroup{}
+func BenchmarkMarshalMsgAssetsParamsGroup(b *testing.B) {
+	v := AssetsParamsGroup{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -398,8 +398,8 @@ func BenchmarkMarshalMsgAssetsParamGroup(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgAssetsParamGroup(b *testing.B) {
-	v := AssetsParamGroup{}
+func BenchmarkAppendMsgAssetsParamsGroup(b *testing.B) {
+	v := AssetsParamsGroup{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -410,8 +410,8 @@ func BenchmarkAppendMsgAssetsParamGroup(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalAssetsParamGroup(b *testing.B) {
-	v := AssetsParamGroup{}
+func BenchmarkUnmarshalAssetsParamsGroup(b *testing.B) {
+	v := AssetsParamsGroup{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -424,8 +424,8 @@ func BenchmarkUnmarshalAssetsParamGroup(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalAssetsParamGroupData(t *testing.T) {
-	v := AssetsParamGroupData{}
+func TestMarshalUnmarshalAssetsParamsGroupData(t *testing.T) {
+	v := AssetsParamsGroupData{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -444,12 +444,12 @@ func TestMarshalUnmarshalAssetsParamGroupData(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingAssetsParamGroupData(t *testing.T) {
-	protocol.RunEncodingTest(t, &AssetsParamGroupData{})
+func TestRandomizedEncodingAssetsParamsGroupData(t *testing.T) {
+	protocol.RunEncodingTest(t, &AssetsParamsGroupData{})
 }
 
-func BenchmarkMarshalMsgAssetsParamGroupData(b *testing.B) {
-	v := AssetsParamGroupData{}
+func BenchmarkMarshalMsgAssetsParamsGroupData(b *testing.B) {
+	v := AssetsParamsGroupData{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -457,8 +457,8 @@ func BenchmarkMarshalMsgAssetsParamGroupData(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgAssetsParamGroupData(b *testing.B) {
-	v := AssetsParamGroupData{}
+func BenchmarkAppendMsgAssetsParamsGroupData(b *testing.B) {
+	v := AssetsParamsGroupData{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -469,8 +469,8 @@ func BenchmarkAppendMsgAssetsParamGroupData(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalAssetsParamGroupData(b *testing.B) {
-	v := AssetsParamGroupData{}
+func BenchmarkUnmarshalAssetsParamsGroupData(b *testing.B) {
+	v := AssetsParamsGroupData{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -542,8 +542,8 @@ func BenchmarkUnmarshalExtendedAssetHolding(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalExtendedAssetParam(t *testing.T) {
-	v := ExtendedAssetParam{}
+func TestMarshalUnmarshalExtendedAssetParams(t *testing.T) {
+	v := ExtendedAssetParams{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -562,12 +562,12 @@ func TestMarshalUnmarshalExtendedAssetParam(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingExtendedAssetParam(t *testing.T) {
-	protocol.RunEncodingTest(t, &ExtendedAssetParam{})
+func TestRandomizedEncodingExtendedAssetParams(t *testing.T) {
+	protocol.RunEncodingTest(t, &ExtendedAssetParams{})
 }
 
-func BenchmarkMarshalMsgExtendedAssetParam(b *testing.B) {
-	v := ExtendedAssetParam{}
+func BenchmarkMarshalMsgExtendedAssetParams(b *testing.B) {
+	v := ExtendedAssetParams{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -575,8 +575,8 @@ func BenchmarkMarshalMsgExtendedAssetParam(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgExtendedAssetParam(b *testing.B) {
-	v := ExtendedAssetParam{}
+func BenchmarkAppendMsgExtendedAssetParams(b *testing.B) {
+	v := ExtendedAssetParams{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -587,8 +587,8 @@ func BenchmarkAppendMsgExtendedAssetParam(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalExtendedAssetParam(b *testing.B) {
-	v := ExtendedAssetParam{}
+func BenchmarkUnmarshalExtendedAssetParams(b *testing.B) {
+	v := ExtendedAssetParams{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

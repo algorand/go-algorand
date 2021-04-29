@@ -58,7 +58,7 @@ import (
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
 //
-// AssetsParamGroup
+// AssetsParamsGroup
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
@@ -66,7 +66,7 @@ import (
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
 //
-// AssetsParamGroupData
+// AssetsParamsGroupData
 //           |-----> (*) MarshalMsg
 //           |-----> (*) CanMarshalMsg
 //           |-----> (*) UnmarshalMsg
@@ -82,7 +82,7 @@ import (
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
 //
-// ExtendedAssetParam
+// ExtendedAssetParams
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
 //          |-----> (*) UnmarshalMsg
@@ -1665,7 +1665,7 @@ func (z *AssetsHoldingGroupData) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AssetsParamGroup) MarshalMsg(b []byte) (o []byte) {
+func (z *AssetsParamsGroup) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
@@ -1713,13 +1713,13 @@ func (z *AssetsParamGroup) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *AssetsParamGroup) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*AssetsParamGroup)
+func (_ *AssetsParamsGroup) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*AssetsParamsGroup)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AssetsParamGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *AssetsParamsGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -1776,7 +1776,7 @@ func (z *AssetsParamGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if zb0002 {
-			(*z) = AssetsParamGroup{}
+			(*z) = AssetsParamsGroup{}
 		}
 		for zb0001 > 0 {
 			zb0001--
@@ -1823,24 +1823,24 @@ func (z *AssetsParamGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *AssetsParamGroup) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*AssetsParamGroup)
+func (_ *AssetsParamsGroup) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*AssetsParamsGroup)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *AssetsParamGroup) Msgsize() (s int) {
+func (z *AssetsParamsGroup) Msgsize() (s int) {
 	s = 1 + 2 + msgp.Uint32Size + 2 + (*z).AssetGroupDesc.MinAssetIndex.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Int64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *AssetsParamGroup) MsgIsZero() bool {
+func (z *AssetsParamsGroup) MsgIsZero() bool {
 	return ((*z).AssetGroupDesc.Count == 0) && ((*z).AssetGroupDesc.MinAssetIndex.MsgIsZero()) && ((*z).AssetGroupDesc.DeltaMaxAssetIndex == 0) && ((*z).AssetGroupDesc.AssetGroupKey == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *AssetsParamGroupData) MarshalMsg(b []byte) (o []byte) {
+func (z *AssetsParamsGroupData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0013Len := uint32(11)
@@ -2028,13 +2028,13 @@ func (z *AssetsParamGroupData) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *AssetsParamGroupData) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*AssetsParamGroupData)
+func (_ *AssetsParamsGroupData) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*AssetsParamsGroupData)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AssetsParamGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0013 int
@@ -2378,7 +2378,7 @@ func (z *AssetsParamGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if zb0014 {
-			(*z) = AssetsParamGroupData{}
+			(*z) = AssetsParamsGroupData{}
 		}
 		for zb0013 > 0 {
 			zb0013--
@@ -2698,13 +2698,13 @@ func (z *AssetsParamGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *AssetsParamGroupData) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*AssetsParamGroupData)
+func (_ *AssetsParamsGroupData) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*AssetsParamsGroupData)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *AssetsParamGroupData) Msgsize() (s int) {
+func (z *AssetsParamsGroupData) Msgsize() (s int) {
 	s = 1 + 3 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).AssetsCommonGroupData.AssetOffsets {
 		s += (*z).AssetsCommonGroupData.AssetOffsets[zb0001].Msgsize()
@@ -2741,7 +2741,7 @@ func (z *AssetsParamGroupData) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *AssetsParamGroupData) MsgIsZero() bool {
+func (z *AssetsParamsGroupData) MsgIsZero() bool {
 	return (len((*z).AssetsCommonGroupData.AssetOffsets) == 0) && (len((*z).Totals) == 0) && (len((*z).DefaultFrozens) == 0) && (len((*z).UnitNames) == 0) && (len((*z).AssetNames) == 0) && (len((*z).URLs) == 0) && (len((*z).MetadataHash) == 0) && (len((*z).Managers) == 0) && (len((*z).Reserves) == 0) && (len((*z).Freezes) == 0) && (len((*z).Clawbacks) == 0)
 }
 
@@ -2927,7 +2927,7 @@ func (z *ExtendedAssetHolding) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *ExtendedAssetParam) MarshalMsg(b []byte) (o []byte) {
+func (z *ExtendedAssetParams) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(2)
@@ -2964,13 +2964,13 @@ func (z *ExtendedAssetParam) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *ExtendedAssetParam) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*ExtendedAssetParam)
+func (_ *ExtendedAssetParams) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ExtendedAssetParams)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ExtendedAssetParam) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ExtendedAssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -3009,7 +3009,7 @@ func (z *ExtendedAssetParam) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).Groups != nil && cap((*z).Groups) >= zb0004 {
 				(*z).Groups = ((*z).Groups)[:zb0004]
 			} else {
-				(*z).Groups = make([]AssetsParamGroup, zb0004)
+				(*z).Groups = make([]AssetsParamsGroup, zb0004)
 			}
 			for zb0001 := range (*z).Groups {
 				bts, err = (*z).Groups[zb0001].UnmarshalMsg(bts)
@@ -3032,7 +3032,7 @@ func (z *ExtendedAssetParam) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if zb0003 {
-			(*z) = ExtendedAssetParam{}
+			(*z) = ExtendedAssetParams{}
 		}
 		for zb0002 > 0 {
 			zb0002--
@@ -3066,7 +3066,7 @@ func (z *ExtendedAssetParam) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).Groups != nil && cap((*z).Groups) >= zb0006 {
 					(*z).Groups = ((*z).Groups)[:zb0006]
 				} else {
-					(*z).Groups = make([]AssetsParamGroup, zb0006)
+					(*z).Groups = make([]AssetsParamsGroup, zb0006)
 				}
 				for zb0001 := range (*z).Groups {
 					bts, err = (*z).Groups[zb0001].UnmarshalMsg(bts)
@@ -3088,13 +3088,13 @@ func (z *ExtendedAssetParam) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *ExtendedAssetParam) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*ExtendedAssetParam)
+func (_ *ExtendedAssetParams) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ExtendedAssetParams)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *ExtendedAssetParam) Msgsize() (s int) {
+func (z *ExtendedAssetParams) Msgsize() (s int) {
 	s = 1 + 2 + msgp.Uint32Size + 3 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).Groups {
 		s += (*z).Groups[zb0001].Msgsize()
@@ -3103,7 +3103,7 @@ func (z *ExtendedAssetParam) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *ExtendedAssetParam) MsgIsZero() bool {
+func (z *ExtendedAssetParams) MsgIsZero() bool {
 	return ((*z).Count == 0) && (len((*z).Groups) == 0)
 }
 
@@ -3137,7 +3137,7 @@ func (z *PersistedAccountData) MarshalMsg(b []byte) (o []byte) {
 		zb0009Len--
 		zb0009Mask |= 0x80
 	}
-	if (*z).ExtendedAssetParam.MsgIsZero() {
+	if (*z).ExtendedAssetParams.MsgIsZero() {
 		zb0009Len--
 		zb0009Mask |= 0x100
 	}
@@ -3277,7 +3277,7 @@ func (z *PersistedAccountData) MarshalMsg(b []byte) (o []byte) {
 		if (zb0009Mask & 0x100) == 0 { // if not empty
 			// string "eap"
 			o = append(o, 0xa3, 0x65, 0x61, 0x70)
-			o = (*z).ExtendedAssetParam.MarshalMsg(o)
+			o = (*z).ExtendedAssetParams.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x200) == 0 { // if not empty
 			// string "ebase"
@@ -3593,9 +3593,9 @@ func (z *PersistedAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0009 > 0 {
 			zb0009--
-			bts, err = (*z).ExtendedAssetParam.UnmarshalMsg(bts)
+			bts, err = (*z).ExtendedAssetParams.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ExtendedAssetParam")
+				err = msgp.WrapError(err, "struct-from-array", "ExtendedAssetParams")
 				return
 			}
 		}
@@ -3831,9 +3831,9 @@ func (z *PersistedAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "eap":
-				bts, err = (*z).ExtendedAssetParam.UnmarshalMsg(bts)
+				bts, err = (*z).ExtendedAssetParams.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ExtendedAssetParam")
+					err = msgp.WrapError(err, "ExtendedAssetParams")
 					return
 				}
 			default:
@@ -3888,11 +3888,11 @@ func (z *PersistedAccountData) Msgsize() (s int) {
 			s += 0 + zb0007.Msgsize() + zb0008.Msgsize()
 		}
 	}
-	s += 5 + (*z).AccountData.TotalAppSchema.Msgsize() + 4 + (*z).ExtendedAssetHolding.Msgsize() + 4 + (*z).ExtendedAssetParam.Msgsize()
+	s += 5 + (*z).AccountData.TotalAppSchema.Msgsize() + 4 + (*z).ExtendedAssetHolding.Msgsize() + 4 + (*z).ExtendedAssetParams.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *PersistedAccountData) MsgIsZero() bool {
-	return ((*z).AccountData.Status.MsgIsZero()) && ((*z).AccountData.MicroAlgos.MsgIsZero()) && ((*z).AccountData.RewardsBase == 0) && ((*z).AccountData.RewardedMicroAlgos.MsgIsZero()) && ((*z).AccountData.VoteID.MsgIsZero()) && ((*z).AccountData.SelectionID.MsgIsZero()) && ((*z).AccountData.VoteFirstValid.MsgIsZero()) && ((*z).AccountData.VoteLastValid.MsgIsZero()) && ((*z).AccountData.VoteKeyDilution == 0) && (len((*z).AccountData.AssetParams) == 0) && (len((*z).AccountData.Assets) == 0) && ((*z).AccountData.AuthAddr.MsgIsZero()) && (len((*z).AccountData.AppLocalStates) == 0) && (len((*z).AccountData.AppParams) == 0) && ((*z).AccountData.TotalAppSchema.MsgIsZero()) && ((*z).ExtendedAssetHolding.MsgIsZero()) && ((*z).ExtendedAssetParam.MsgIsZero())
+	return ((*z).AccountData.Status.MsgIsZero()) && ((*z).AccountData.MicroAlgos.MsgIsZero()) && ((*z).AccountData.RewardsBase == 0) && ((*z).AccountData.RewardedMicroAlgos.MsgIsZero()) && ((*z).AccountData.VoteID.MsgIsZero()) && ((*z).AccountData.SelectionID.MsgIsZero()) && ((*z).AccountData.VoteFirstValid.MsgIsZero()) && ((*z).AccountData.VoteLastValid.MsgIsZero()) && ((*z).AccountData.VoteKeyDilution == 0) && (len((*z).AccountData.AssetParams) == 0) && (len((*z).AccountData.Assets) == 0) && ((*z).AccountData.AuthAddr.MsgIsZero()) && (len((*z).AccountData.AppLocalStates) == 0) && (len((*z).AccountData.AppParams) == 0) && ((*z).AccountData.TotalAppSchema.MsgIsZero()) && ((*z).ExtendedAssetHolding.MsgIsZero()) && ((*z).ExtendedAssetParams.MsgIsZero())
 }

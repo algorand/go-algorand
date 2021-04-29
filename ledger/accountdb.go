@@ -1341,7 +1341,7 @@ func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, pad 
 	}
 
 	if len(pad.AssetParams) > assetsThreshold {
-		pad.ExtendedAssetParam.ConvertToGroups(pad.AssetParams)
+		pad.ExtendedAssetParams.ConvertToGroups(pad.AssetParams)
 		pad.AccountData.AssetParams = nil
 	}
 
@@ -1354,7 +1354,7 @@ func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, pad 
 	}
 
 	// save params
-	err = modifyAssetGroup(qaei, &pad.ExtendedAssetParam)
+	err = modifyAssetGroup(qaei, &pad.ExtendedAssetParams)
 	if err != nil {
 		return updatedAccounts, err
 	}
@@ -1385,7 +1385,7 @@ func accountsNewDelete(qabd *sql.Stmt, qaed *sql.Stmt, addr basics.Address, dbad
 		// if no error => delete extension records
 		err = deleteAssetGroup(qaed, &dbad.pad.ExtendedAssetHolding)
 		if err == nil {
-			err = deleteAssetGroup(qaed, &dbad.pad.ExtendedAssetParam)
+			err = deleteAssetGroup(qaed, &dbad.pad.ExtendedAssetParams)
 		}
 	}
 	return updatedAccounts, err
