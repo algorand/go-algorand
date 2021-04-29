@@ -402,6 +402,13 @@ type Local struct {
 	// 12 : perform all validation methods (normal and additional). These extra tests helps to verify the integrity of the compiled executable against
 	//      previously used executabled, and would not provide any additional security guarantees.
 	CatchupBlockValidateMode int `version[17]:"0"`
+
+	// Generate AccountUpdates telemetry event
+	EnableAccountUpdatesStats bool `version[17]:"false"`
+
+	//
+	// Time interval in ns for generating accountUpdates telemetry event
+	AccountUpdatesStatsInterval time.Duration `version[17]:"5000000000"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
