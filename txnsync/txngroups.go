@@ -93,6 +93,8 @@ type encodedTxnHeaders struct {
 	GenesisHash        crypto.Digest       `codec:"gh"`
 	BitmaskGenesisHash bitmask             `codec:"ghbm,allocbound=maxBitmaskSize"`
 
+	BitmaskGroup bitmask                 `codec:"grpbm,allocbound=maxBitmaskSize"`
+
 	// Lease enforces mutual exclusion of transactions.  If this field is
 	// nonzero, then once the transaction is confirmed, it acquires the
 	// lease identified by the (Sender, Lease) pair of the transaction until
@@ -310,7 +312,13 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 			}
 		}
 	}
+
+	bitmaskLen := (len(stub.SignedTxns)+7)/8 + 1
+	stub.BitmaskGroup = make(bitmask, bitmaskLen)
 	for i := range stub.SignedTxns {
+		if !stub.SignedTxns[i].Txn.Group.MsgIsZero() {
+			stub.BitmaskGroup.SetBit(i)
+		}
 		stub.SignedTxns[i].Txn.Group = crypto.Digest{}
 	}
 
@@ -340,23 +348,25 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 		index += size
 	}
 
-	addGroupHashes(txnGroups)
+	addGroupHashes(txnGroups, stub.BitmaskGroup)
 
 	return txnGroups, nil
 }
 
-func addGroupHashes(txnGroups []transactions.SignedTxGroup) {
+func addGroupHashes(txnGroups []transactions.SignedTxGroup, b bitmask) {
+	index := 0
 	for _, txns := range txnGroups {
-		if len(txns.Transactions) > 1 {
-			var txGroup transactions.TxGroup
-			txGroup.TxGroupHashes = make([]crypto.Digest, len(txns.Transactions))
-			for i, tx := range txns.Transactions {
-				txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
-			}
-			groupHash := crypto.HashObj(txGroup)
-			for i := range txns.Transactions {
+		var txGroup transactions.TxGroup
+		txGroup.TxGroupHashes = make([]crypto.Digest, len(txns.Transactions))
+		for i, tx := range txns.Transactions {
+			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
+		}
+		groupHash := crypto.HashObj(txGroup)
+		for i := range txns.Transactions {
+			if exists, _ := b.EntryExists(index, 0); exists {
 				txns.Transactions[i].Txn.Group = groupHash
 			}
+			index++
 		}
 	}
 }

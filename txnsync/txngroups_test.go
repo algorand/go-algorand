@@ -119,7 +119,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 			},
 		},
 	}
-	addGroupHashes(inTxnGroups)
+	addGroupHashes(inTxnGroups, []byte{1})
 	encodedGroupsBytes := encodeTransactionGroups(inTxnGroups)
 	fmt.Println(len(encodedGroupsBytes))
 	fmt.Println(string(encodedGroupsBytes))
