@@ -408,6 +408,15 @@ func deconstructSignedTransactions(stub *txGroupsEncodingStub) {
 }
 
 func deconstructTransactions(stub *txGroupsEncodingStub) {
+	deconstructTxnHeader(stub)
+	deconstructKeyregTxnFields(stub)
+	deconstructPaymentTxnFields(stub)
+	deconstructAssetConfigTxnFields(stub)
+	deconstructAssetTransferTxnFields(stub)
+	deconstructAssetFreezeTxnFields(stub)
+	deconstructApplicationCallTxnFields(stub)
+	deconstructCompactCertTxnFields(stub)
+
 	bitmaskLen := (len(stub.SignedTxns)+7)/8 + 1
 	stub.BitmaskTxType = make(bitmask, bitmaskLen)
 	for i, txn := range stub.SignedTxns {
@@ -419,14 +428,6 @@ func deconstructTransactions(stub *txGroupsEncodingStub) {
 		stub.SignedTxns[i].Txn.Type = ""
 	}
 	stub.BitmaskTxType.trimBitmask()
-	deconstructTxnHeader(stub)
-	deconstructKeyregTxnFields(stub)
-	deconstructPaymentTxnFields(stub)
-	deconstructAssetConfigTxnFields(stub)
-	deconstructAssetTransferTxnFields(stub)
-	deconstructAssetFreezeTxnFields(stub)
-	deconstructApplicationCallTxnFields(stub)
-	deconstructCompactCertTxnFields(stub)
 }
 
 func deconstructTxnHeader(stub *txGroupsEncodingStub) {
@@ -508,35 +509,37 @@ func deconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
 	stub.BitmaskVoteKeyDilution = make(bitmask, bitmaskLen)
 	stub.BitmaskNonparticipation = make(bitmask, bitmaskLen)
 	for i, txn := range stub.SignedTxns {
-		if !txn.Txn.VotePK.MsgIsZero() {
-			stub.BitmaskVotePK.SetBit(i)
-			stub.VotePK = append(stub.VotePK, txn.Txn.VotePK)
-			stub.SignedTxns[i].Txn.VotePK = crypto.OneTimeSignatureVerifier{}
-		}
-		if !txn.Txn.SelectionPK.MsgIsZero() {
-			stub.BitmaskSelectionPK.SetBit(i)
-			stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK)
-			stub.SignedTxns[i].Txn.SelectionPK = crypto.VRFVerifier{}
-		}
-		if !txn.Txn.VoteFirst.MsgIsZero() {
-			stub.BitmaskVoteFirst.SetBit(i)
-			stub.VoteFirst = append(stub.VoteFirst, txn.Txn.VoteFirst)
-			stub.SignedTxns[i].Txn.VoteFirst = 0
-		}
-		if !txn.Txn.VoteLast.MsgIsZero() {
-			stub.BitmaskVoteLast.SetBit(i)
-			stub.VoteLast = append(stub.VoteLast, txn.Txn.VoteLast)
-			stub.SignedTxns[i].Txn.VoteLast = 0
-		}
-		if txn.Txn.VoteKeyDilution > 0 {
-			stub.BitmaskVoteKeyDilution.SetBit(i)
-			stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
-			stub.SignedTxns[i].Txn.VoteKeyDilution = 0
-		}
-		if txn.Txn.Nonparticipation {
-			stub.BitmaskNonparticipation.SetBit(i)
-			stub.Nonparticipation = append(stub.Nonparticipation, txn.Txn.Nonparticipation) // can probably get rid of this
-			stub.SignedTxns[i].Txn.Nonparticipation = false
+		if txn.Txn.Type == protocol.KeyRegistrationTx {
+			if !txn.Txn.VotePK.MsgIsZero() {
+				stub.BitmaskVotePK.SetBit(i)
+				stub.VotePK = append(stub.VotePK, txn.Txn.VotePK)
+				stub.SignedTxns[i].Txn.VotePK = crypto.OneTimeSignatureVerifier{}
+			}
+			if !txn.Txn.SelectionPK.MsgIsZero() {
+				stub.BitmaskSelectionPK.SetBit(i)
+				stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK)
+				stub.SignedTxns[i].Txn.SelectionPK = crypto.VRFVerifier{}
+			}
+			if !txn.Txn.VoteFirst.MsgIsZero() {
+				stub.BitmaskVoteFirst.SetBit(i)
+				stub.VoteFirst = append(stub.VoteFirst, txn.Txn.VoteFirst)
+				stub.SignedTxns[i].Txn.VoteFirst = 0
+			}
+			if !txn.Txn.VoteLast.MsgIsZero() {
+				stub.BitmaskVoteLast.SetBit(i)
+				stub.VoteLast = append(stub.VoteLast, txn.Txn.VoteLast)
+				stub.SignedTxns[i].Txn.VoteLast = 0
+			}
+			if txn.Txn.VoteKeyDilution > 0 {
+				stub.BitmaskVoteKeyDilution.SetBit(i)
+				stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
+				stub.SignedTxns[i].Txn.VoteKeyDilution = 0
+			}
+			if txn.Txn.Nonparticipation {
+				stub.BitmaskNonparticipation.SetBit(i)
+				stub.Nonparticipation = append(stub.Nonparticipation, txn.Txn.Nonparticipation) // can probably get rid of this
+				stub.SignedTxns[i].Txn.Nonparticipation = false
+			}
 		}
 	}
 
@@ -554,20 +557,22 @@ func deconstructPaymentTxnFields(stub *txGroupsEncodingStub) {
 	stub.BitmaskAmount = make(bitmask, bitmaskLen)
 	stub.BitmaskCloseRemainderTo = make(bitmask, bitmaskLen)
 	for i, txn := range stub.SignedTxns {
-		if !txn.Txn.Receiver.MsgIsZero() {
-			stub.BitmaskReceiver.SetBit(i)
-			stub.Receiver = append(stub.Receiver, txn.Txn.Receiver)
-			stub.SignedTxns[i].Txn.Receiver = basics.Address{}
-		}
-		if !txn.Txn.Amount.MsgIsZero() {
-			stub.BitmaskAmount.SetBit(i)
-			stub.Amount = append(stub.Amount, txn.Txn.Amount)
-			stub.SignedTxns[i].Txn.Amount = basics.MicroAlgos{}
-		}
-		if !txn.Txn.CloseRemainderTo.MsgIsZero() {
-			stub.BitmaskCloseRemainderTo.SetBit(i)
-			stub.CloseRemainderTo = append(stub.CloseRemainderTo, txn.Txn.CloseRemainderTo)
-			stub.SignedTxns[i].Txn.CloseRemainderTo = basics.Address{}
+		if txn.Txn.Type == protocol.PaymentTx {
+			if !txn.Txn.Receiver.MsgIsZero() {
+				stub.BitmaskReceiver.SetBit(i)
+				stub.Receiver = append(stub.Receiver, txn.Txn.Receiver)
+				stub.SignedTxns[i].Txn.Receiver = basics.Address{}
+			}
+			if !txn.Txn.Amount.MsgIsZero() {
+				stub.BitmaskAmount.SetBit(i)
+				stub.Amount = append(stub.Amount, txn.Txn.Amount)
+				stub.SignedTxns[i].Txn.Amount = basics.MicroAlgos{}
+			}
+			if !txn.Txn.CloseRemainderTo.MsgIsZero() {
+				stub.BitmaskCloseRemainderTo.SetBit(i)
+				stub.CloseRemainderTo = append(stub.CloseRemainderTo, txn.Txn.CloseRemainderTo)
+				stub.SignedTxns[i].Txn.CloseRemainderTo = basics.Address{}
+			}
 		}
 	}
 
