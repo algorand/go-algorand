@@ -250,10 +250,14 @@ type accountUpdates struct {
 	// the synchronous mode that would be used while the accounts database is being rebuilt.
 	accountsRebuildSynchronousMode db.SynchronousMode
 
-	// Metrics collection
-	logAccountUpdateMetrics bool
-	logAccountUpdateFreq    time.Duration
-	lastMetricsLogTime      time.Time
+	// logAccountUpdatesMetrics is a flag for enable/disable metrics logging
+	logAccountUpdatesMetrics bool
+
+	// logAccountUpdatesInterval sets a time interval for metrics logging
+	logAccountUpdatesInterval time.Duration
+
+	// lastMetricsLogTime is the time when the previous metrics logging occurred
+	lastMetricsLogTime time.Time
 }
 
 type deferredCommit struct {
@@ -331,8 +335,8 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
 
 	// log metrics
-	au.logAccountUpdateMetrics = cfg.EnableAccountUpdatesStats
-	au.logAccountUpdateFreq = cfg.AccountUpdatesStatsFrequency
+	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
+	au.logAccountUpdatesInterval = cfg.AccountUpdatesStatsInterval
 
 }
 
@@ -2045,8 +2049,15 @@ func (au *accountUpdates) commitSyncer(deferedCommits chan deferredCommit) {
 // commitRound write to the database a "chunk" of rounds, and update the dbRound accordingly.
 func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookback basics.Round) {
 	var stats telemetryspec.AccountsUpdateMetrics
+	var updateStats bool
 
-	updateStats := au.logAccountUpdateMetrics && time.Now().Sub(au.lastMetricsLogTime) >= au.logAccountUpdateFreq
+	if au.logAccountUpdatesMetrics {
+		now := time.Now()
+		if now.Sub(au.lastMetricsLogTime) >= au.logAccountUpdatesInterval {
+			updateStats = true
+			au.lastMetricsLogTime = now
+		}
+	}
 
 	defer au.accountsWriting.Done()
 	au.accountsMu.RLock()
@@ -2130,6 +2141,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	var updatedPersistedAccounts []persistedAccountData
+	if updateStats {
+		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano())
+	}
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -2153,17 +2167,16 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 
 		if updateStats {
-			begin := time.Now()
-			err = compactDeltas.accountsLoadOld(tx)
-			if err != nil {
-				return err
-			}
-			stats.OldAccountPreloadDuration = time.Now().Sub(begin)
-		} else {
-			err = compactDeltas.accountsLoadOld(tx)
-			if err != nil {
-				return err
-			}
+			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
+		}
+
+		err = compactDeltas.accountsLoadOld(tx)
+		if err != nil {
+			return err
+		}
+
+		if updateStats {
+			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - stats.OldAccountPreloadDuration
 		}
 
 		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
@@ -2172,33 +2185,30 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 
 		if updateStats {
-			begin := time.Now()
-			err = au.accountsUpdateBalances(compactDeltas)
-			if err != nil {
-				return err
-			}
-			stats.MerkleTrieUpdateDuration = time.Now().Sub(begin)
-		} else {
-			err = au.accountsUpdateBalances(compactDeltas)
-			if err != nil {
-				return err
-			}
+			stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano())
 		}
 
+		err = au.accountsUpdateBalances(compactDeltas)
+		if err != nil {
+			return err
+		}
+
+		if updateStats {
+			stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano()) - stats.MerkleTrieUpdateDuration
+		}
+
+		if updateStats {
+			stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano())
+		}
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 		// so that we can update the base account back.
+		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
+		if err != nil {
+			return err
+		}
+
 		if updateStats {
-			begin := time.Now()
-			updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
-			if err != nil {
-				return err
-			}
-			stats.AccountsWritingDuration = time.Now().Sub(begin)
-		} else {
-			updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
-			if err != nil {
-				return err
-			}
+			stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano()) - stats.AccountsWritingDuration
 		}
 
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
@@ -2222,7 +2232,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 
 	if updateStats {
-		stats.DatabaseCommitDuration = time.Now().Sub(start)
+		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano()) - stats.DatabaseCommitDuration
 	}
 
 	if isCatchpointRound {
@@ -2243,7 +2253,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 	updatingBalancesDuration := time.Now().Sub(beforeUpdatingBalancesTime)
 
-	start = time.Now()
+	if updateStats {
+		stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
+	}
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
@@ -2298,7 +2310,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.accountsMu.Unlock()
 
 	if updateStats {
-		stats.MemoryUpdatesDuration = time.Now().Sub(start)
+		stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano()) - stats.MemoryUpdatesDuration
 	}
 
 	au.accountsReadCond.Broadcast()
@@ -2309,10 +2321,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
 	}
 
-	// log metrics
+	// log telemetry event
 	if updateStats {
-		au.lastMetricsLogTime = time.Now()
-
 		stats.StartRound = uint64(dbRound)
 		stats.RoundsCount = offset
 		stats.UpdatedAccountsCount = uint64(len(updatedPersistedAccounts))
@@ -2321,7 +2331,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		var details struct {
 		}
 		au.log.Metrics(telemetryspec.Accounts, stats, details)
-
 	}
 
 }

@@ -406,8 +406,9 @@ type Local struct {
 	// Generate AccountUpdates telemetry event
 	EnableAccountUpdatesStats bool `version[17]:"false"`
 
-	// Frequency for generating accountUpdates telemetry event
-	AccountUpdatesStatsFrequency time.Duration `version[17]:"5"`
+	//
+	// Time interval in ns for generating accountUpdates telemetry event
+	AccountUpdatesStatsInterval time.Duration `version[17]:"5000000000"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
