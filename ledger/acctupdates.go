@@ -2194,12 +2194,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 
 		if updateStats {
-			stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano()) - stats.MerkleTrieUpdateDuration
-		}
-
-		if updateStats {
+			now := time.Duration(time.Now().UnixNano())
+			stats.MerkleTrieUpdateDuration = now - stats.MerkleTrieUpdateDuration
 			stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano())
 		}
+
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 		// so that we can update the base account back.
 		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
@@ -2232,7 +2231,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 
 	if updateStats {
-		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano()) - stats.DatabaseCommitDuration
+		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano()) - stats.DatabaseCommitDuration - stats.AccountsWritingDuration - stats.MerkleTrieUpdateDuration - stats.OldAccountPreloadDuration
 	}
 
 	if isCatchpointRound {
