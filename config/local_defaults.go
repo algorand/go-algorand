@@ -21,6 +21,7 @@ package config
 
 var defaultLocal = Local{
 	Version:                                 17,
+	AccountUpdatesStatsInterval:             5000000000,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
 	Archival:                                false,
@@ -45,6 +46,7 @@ var defaultLocal = Local{
 	DeadlockDetection:                       0,
 	DisableLocalhostConnectionRateLimit:     true,
 	DisableOutgoingConnectionThrottling:     false,
+	EnableAccountUpdatesStats:               false,
 	EnableAgreementReporting:                false,
 	EnableAgreementTimeMetrics:              false,
 	EnableAssembleStats:                     false,
