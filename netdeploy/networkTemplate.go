@@ -71,6 +71,8 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 	}
 	genesisVer = strings.TrimSpace(genesisVer)
 
+	relaysCount := countRelayNodes(t.Nodes)
+
 	for _, cfg := range t.Nodes {
 		nodeDir := filepath.Join(targetFolder, cfg.Name)
 		err = os.Mkdir(nodeDir, os.ModePerm)
@@ -138,7 +140,7 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 
 		// Create any necessary config.json file for this node
 		nodeCfg := filepath.Join(nodeDir, config.ConfigFilename)
-		err = createConfigFile(cfg, nodeCfg, len(t.Nodes)-1) // minus 1 to avoid counting self
+		err = createConfigFile(cfg, nodeCfg, len(t.Nodes)-1, relaysCount) // minus 1 to avoid counting self
 		if err != nil {
 			return
 		}
@@ -200,11 +202,7 @@ func (t NetworkTemplate) Validate() error {
 	// No wallet can be assigned to more than one node
 	// At least one relay is required
 	wallets := make(map[string]bool)
-	relayCount := 0
 	for _, cfg := range t.Nodes {
-		if cfg.IsRelay {
-			relayCount++
-		}
 		for _, wallet := range cfg.Wallets {
 			upperWallet := strings.ToUpper(wallet.Name)
 			if _, found := wallets[upperWallet]; found {
@@ -213,20 +211,30 @@ func (t NetworkTemplate) Validate() error {
 			wallets[upperWallet] = true
 		}
 	}
-	if relayCount == 0 {
-		return fmt.Errorf("invalid template: at least one relay is required")
-	}
 
 	return nil
 }
 
-func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int) error {
+// countRelayNodes counts the total number of relays
+func countRelayNodes(nodeCfgs []remote.NodeConfigGoal) (relayCount int) {
+	for _, cfg := range nodeCfgs {
+		if cfg.IsRelay {
+			relayCount++
+		}
+	}
+	return
+}
+
+func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int, relaysCount int) error {
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = numNodes
 	// Override default :8080 REST endpoint, and disable SRV lookup
 	cfg.EndpointAddress = "127.0.0.1:0"
 	cfg.DNSBootstrapID = ""
 	cfg.EnableProfiler = true
+	if relaysCount == 0 {
+		cfg.DisableNetwork = true
+	}
 
 	if node.IsRelay {
 		// Have relays listen on any localhost port

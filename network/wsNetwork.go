@@ -455,6 +455,10 @@ func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 // TODO: add `priority` argument so that we don't have to guess it based on tag
 func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
+	if wn.config.DisableNetwork {
+		return nil
+	}
+
 	if len(tags) != len(data) {
 		return errBcastInvalidArray
 	}
@@ -723,6 +727,9 @@ func (wn *WebsocketNetwork) setup() {
 
 // Start makes network connections and threads
 func (wn *WebsocketNetwork) Start() {
+	if wn.config.DisableNetwork {
+		return
+	}
 	var err error
 	if wn.config.IncomingConnectionsLimit < 0 {
 		wn.config.IncomingConnectionsLimit = MaxInt
@@ -827,6 +834,11 @@ func (wn *WebsocketNetwork) innerStop() {
 // Stop blocks until all activity on this node is done.
 func (wn *WebsocketNetwork) Stop() {
 	wn.handlers.ClearHandlers([]Tag{})
+
+	if wn.config.DisableNetwork {
+		return
+	}
+
 	wn.innerStop()
 	var listenAddr string
 	if wn.listener != nil {

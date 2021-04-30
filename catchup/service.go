@@ -498,7 +498,7 @@ func (s *Service) periodicSync() {
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
 		case <-time.After(sleepDuration):
-			if sleepDuration < s.deadlineTimeout {
+			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetwork {
 				sleepDuration = s.deadlineTimeout
 				continue
 			}
@@ -516,6 +516,10 @@ func (s *Service) periodicSync() {
 			s.sync()
 		case cert := <-s.unmatchedPendingCertificates:
 			// the agreement service has a valid certificate for a block, but not the block itself.
+			if s.cfg.DisableNetwork {
+				s.log.Warnf("the local node is missing block %d, however, the catchup would not be able to provide it when the network is disabled.", cert.Cert.Round)
+				continue
+			}
 			s.syncCert(&cert)
 		}
 
