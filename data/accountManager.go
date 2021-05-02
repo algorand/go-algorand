@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -30,11 +31,23 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// A ParticipationKeyIdentity defines the parameters that makes a pariticpation key unique.
+type ParticipationKeyIdentity struct {
+	basics.Address // the address this participation key is used to vote for.
+
+	// FirstValid and LastValid are inclusive.
+	FirstValid basics.Round
+	LastValid  basics.Round
+
+	VoteID      crypto.OneTimeSignatureVerifier
+	SelectionID crypto.VrfPubkey
+}
+
 // AccountManager loads and manages accounts for the node
 type AccountManager struct {
 	mu deadlock.Mutex
 
-	partIntervals map[account.ParticipationInterval]account.PersistedParticipation
+	partKeys map[ParticipationKeyIdentity]account.PersistedParticipation
 
 	// Map to keep track of accounts for which we've sent
 	// AccountRegistered telemetry events
@@ -47,7 +60,7 @@ type AccountManager struct {
 func MakeAccountManager(log logging.Logger) *AccountManager {
 	manager := &AccountManager{}
 	manager.log = log
-	manager.partIntervals = make(map[account.ParticipationInterval]account.PersistedParticipation)
+	manager.partKeys = make(map[ParticipationKeyIdentity]account.PersistedParticipation)
 	manager.registeredAccounts = make(map[string]bool)
 
 	return manager
@@ -58,7 +71,7 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	for _, part := range manager.partIntervals {
+	for _, part := range manager.partKeys {
 		if part.OverlapsInterval(rnd, rnd) {
 			out = append(out, part.Participation)
 		}
@@ -72,7 +85,7 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	for _, part := range manager.partIntervals {
+	for _, part := range manager.partKeys {
 		if part.OverlapsInterval(from, to) {
 			return true
 		}
@@ -90,19 +103,21 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 	address := participation.Address()
 
 	first, last := participation.ValidInterval()
-	interval := account.ParticipationInterval{
-		Address:    address,
-		FirstValid: first,
-		LastValid:  last,
+	partkeyID := ParticipationKeyIdentity{
+		Address:     address,
+		FirstValid:  first,
+		LastValid:   last,
+		VoteID:      participation.Voting.OneTimeSignatureVerifier,
+		SelectionID: participation.VRF.PK,
 	}
 
 	// Check if we already have participation keys for this address in this interval
-	_, alreadyPresent := manager.partIntervals[interval]
+	_, alreadyPresent := manager.partKeys[partkeyID]
 	if alreadyPresent {
 		return false
 	}
 
-	manager.partIntervals[interval] = participation
+	manager.partKeys[partkeyID] = participation
 
 	addressString := address.String()
 	manager.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.PartKeyRegisteredEvent, telemetryspec.PartKeyRegisteredEventDetails{
@@ -129,10 +144,10 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 	latestProto := config.Consensus[latestHdr.CurrentProtocol]
 
 	manager.mu.Lock()
-	pendingItems := make(map[string]<-chan error, len(manager.partIntervals))
+	pendingItems := make(map[string]<-chan error, len(manager.partKeys))
 	func() {
 		defer manager.mu.Unlock()
-		for _, part := range manager.partIntervals {
+		for _, part := range manager.partKeys {
 			// We need a key for round r+1 for agreement.
 			nextRound := latestHdr.Round + 1
 
