@@ -23,15 +23,12 @@ import (
 
 type simpleKeyManager []account.Participation
 
-func (m simpleKeyManager) Keys() []account.Participation {
-	return m
-}
-
-func (m simpleKeyManager) HasLiveKeys(from, to basics.Round) bool {
+func (m simpleKeyManager) Keys(rnd basics.Round) []account.Participation {
+	var km []account.Participation
 	for _, acc := range m {
-		if acc.OverlapsInterval(from, to) {
-			return true
+		if acc.OverlapsInterval(rnd, rnd) {
+			km = append(km, acc)
 		}
 	}
-	return false
+	return km
 }
