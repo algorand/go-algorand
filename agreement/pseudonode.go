@@ -204,17 +204,7 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(round basics.Round) {
 	}
 
 	// otherwise, we want to load the participation keys.
-	keys := n.keys.Keys(round)
-	participations := make([]account.Participation, 0, len(keys))
-	for _, part := range keys {
-		firstValid, lastValid := part.ValidInterval()
-		if round < firstValid || round > lastValid {
-			n.log.Debugf("loadRoundParticipationKeys: Account %v not participating: %d not in [%d, %d]", part.Address(), round, firstValid, lastValid)
-			continue
-		}
-		participations = append(participations, part)
-	}
-	n.participationKeys = participations
+	n.participationKeys = n.keys.Keys(round)
 	n.participationKeysRound = round
 }
 

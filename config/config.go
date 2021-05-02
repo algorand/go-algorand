@@ -409,6 +409,10 @@ type Local struct {
 	//
 	// Time interval in ns for generating accountUpdates telemetry event
 	AccountUpdatesStatsInterval time.Duration `version[17]:"5000000000"`
+
+	// ParticipationKeysRefreshInterval is the duration between two consecutive checks to see if new participation
+	// keys have been placed on the genesis directory.
+	ParticipationKeysRefreshInterval time.Duration `version[17]:"60000000000"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
