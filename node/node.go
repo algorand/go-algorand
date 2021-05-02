@@ -250,7 +250,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		Ledger:         agreementLedger,
 		BlockFactory:   node,
 		BlockValidator: blockValidator,
-		KeyManager:     node.accountManager,
+		KeyManager:     node,
 		RandomSource:   node,
 		BacklogPool:    node.highPriorityCryptoVerificationPool,
 	}
@@ -1059,4 +1059,35 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 		return nil, err
 	}
 	return validatedBlock{vb: lvb}, nil
+}
+
+// Keys implements the key maanger's Keys method, and provides additional validation with the ledger.
+// that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
+func (node *AlgorandFullNode) Keys(rnd basics.Round) []account.Participation {
+	keys := node.accountManager.Keys(rnd)
+	participations := make([]account.Participation, 0, len(keys))
+	accountsData := make(map[basics.Address]basics.AccountData, len(keys))
+	for _, part := range keys {
+		acctData, hasAccountData := accountsData[part.Parent]
+		if !hasAccountData {
+			var err error
+			acctData, err = node.ledger.Lookup(rnd, part.Parent)
+			if err != nil {
+				node.log.Warnf("node.Keys: Account %v not participating: cannot locate account for round %d", part.Address(), rnd)
+				continue
+			}
+			accountsData[part.Parent] = acctData
+		}
+
+		if acctData.VoteID != part.Voting.OneTimeSignatureVerifier {
+			node.log.Warnf("node.Keys: Account %v not participating: on chain voting key differ from participation voting key for round %d", part.Address(), rnd)
+			continue
+		}
+		if acctData.SelectionID != part.VRF.PK {
+			node.log.Warnf("node.Keys: Account %v not participating: on chain selection key differ from participation selection key for round %d", part.Address(), rnd)
+			continue
+		}
+		participations = append(participations, part)
+	}
+	return participations
 }

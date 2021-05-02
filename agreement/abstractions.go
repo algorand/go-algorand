@@ -226,12 +226,8 @@ type LedgerWriter interface {
 // A KeyManager stores and deletes participation keys.
 type KeyManager interface {
 	// Keys returns an immutable array of participation intervals to
-	// participating accounts.
-	Keys() []account.Participation
-
-	// HasLiveKeys returns true if we have any Participation
-	// keys valid for the specified round range (inclusive)
-	HasLiveKeys(from, to basics.Round) bool
+	// participating accounts that contains the provided round.
+	Keys(basics.Round) []account.Participation
 }
 
 // MessageHandle is an ID referring to a specific message.

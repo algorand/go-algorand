@@ -25,23 +25,14 @@ import (
 type SimpleKeyManager []account.Participation
 
 // Keys implements KeyManager.Keys.
-func (m SimpleKeyManager) Keys() []account.Participation {
+func (m SimpleKeyManager) Keys(rnd basics.Round) []account.Participation {
 	var km []account.Participation
 	for _, acc := range m {
-		km = append(km, acc)
-	}
-	return km
-}
-
-// HasLiveKeys returns true if we have any Participation
-// keys valid for the specified round range (inclusive)
-func (m SimpleKeyManager) HasLiveKeys(from, to basics.Round) bool {
-	for _, acc := range m {
-		if acc.OverlapsInterval(from, to) {
-			return true
+		if acc.FirstValid <= rnd && rnd <= acc.LastValid {
+			km = append(km, acc)
 		}
 	}
-	return false
+	return km
 }
 
 // DeleteOldKeys implements KeyManager.DeleteOldKeys.

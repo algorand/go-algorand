@@ -67,14 +67,16 @@ type pseudonode interface {
 
 // asyncPseudonode creates proposals and votes asynchronously.
 type asyncPseudonode struct {
-	factory   BlockFactory
-	validator BlockValidator
-	keys      KeyManager
-	ledger    Ledger
-	log       serviceLogger
-	quit      chan struct{}   // a quit signal for the verifier goroutines
-	closeWg   *sync.WaitGroup // frontend waitgroup to get notified when all the verifier goroutines are done.
-	monitor   *coserviceMonitor
+	factory                BlockFactory
+	validator              BlockValidator
+	keys                   KeyManager
+	ledger                 Ledger
+	log                    serviceLogger
+	quit                   chan struct{}   // a quit signal for the verifier goroutines
+	closeWg                *sync.WaitGroup // frontend waitgroup to get notified when all the verifier goroutines are done.
+	monitor                *coserviceMonitor
+	participationKeysRound basics.Round            // the round to which the participationKeys matches
+	participationKeys      []account.Participation // the list of the participation keys for round participationKeysRound
 
 	proposalsVerifier *pseudonodeVerifier // dynamically generated verifier goroutine that manages incoming proposals making request.
 	votesVerifier     *pseudonodeVerifier // dynamically generated verifier goroutine that manages incoming votes making request.
@@ -193,33 +195,54 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 	}
 }
 
+// load the participation keys from the account manager ( as needed ) for the
+// current round.
+func (n asyncPseudonode) loadRoundParticipationKeys(round basics.Round) {
+	// if we've already loaded up the keys, then just skip loading them.
+	if n.participationKeysRound >= round {
+		return
+	}
+	// otherwise, we want to load the participation keys.
+	keys := n.keys.Keys(round)
+	participations := make([]account.Participation, 0, len(keys))
+	for _, part := range keys {
+		firstValid, lastValid := part.ValidInterval()
+		if round < firstValid || round > lastValid {
+			n.log.Debugf("loadRoundParticipationKeys: Account %v not participating: %d not in [%d, %d]", part.Address(), round, firstValid, lastValid)
+			continue
+		}
+		participations = append(participations, part)
+	}
+	n.participationKeys = participations
+}
+
 func (n asyncPseudonode) makeProposalsTask(ctx context.Context, r round, p period) pseudonodeProposalsTask {
-	participation := n.getParticipations("asyncPseudonode.makeProposalsTask", r)
+	n.loadRoundParticipationKeys(r)
 
 	pt := pseudonodeProposalsTask{
 		pseudonodeBaseTask: pseudonodeBaseTask{
 			node:          &n,
 			context:       ctx,
-			participation: participation,
+			participation: n.participationKeys,
 			out:           make(chan externalEvent),
 		},
 		round:  r,
 		period: p,
 	}
-	if len(participation) == 0 {
+	if len(n.participationKeys) == 0 {
 		close(pt.out)
 	}
 	return pt
 }
 
 func (n asyncPseudonode) makeVotesTask(ctx context.Context, r round, p period, s step, prop proposalValue, persistStateDone chan error) pseudonodeVotesTask {
-	participation := n.getParticipations("asyncPseudonode.makeVotesTask", r)
+	n.loadRoundParticipationKeys(r)
 
 	pvt := pseudonodeVotesTask{
 		pseudonodeBaseTask: pseudonodeBaseTask{
 			node:          &n,
 			context:       ctx,
-			participation: participation,
+			participation: n.participationKeys,
 			out:           make(chan externalEvent),
 		},
 		round:            r,
@@ -228,7 +251,7 @@ func (n asyncPseudonode) makeVotesTask(ctx context.Context, r round, p period, s
 		prop:             prop,
 		persistStateDone: persistStateDone,
 	}
-	if len(participation) == 0 {
+	if len(n.participationKeys) == 0 {
 		close(pvt.out)
 	}
 	return pvt
@@ -242,21 +265,6 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 	n.closeWg.Add(1)
 	go pv.verifierLoop(&n)
 	return pv
-}
-
-// getParticipations retrieves the participation accounts for a given round.
-func (n asyncPseudonode) getParticipations(procName string, round basics.Round) []account.Participation {
-	keys := n.keys.Keys()
-	participations := make([]account.Participation, 0, len(keys))
-	for _, part := range keys {
-		firstValid, lastValid := part.ValidInterval()
-		if round < firstValid || round > lastValid {
-			n.log.Debugf("%v (round=%v): Account %v not participating: %v not in [%v, %v]", procName, round, part.Address(), round, firstValid, lastValid)
-			continue
-		}
-		participations = append(participations, part)
-	}
-	return participations
 }
 
 // makeProposals creates a slice of block proposals for the given round and period.

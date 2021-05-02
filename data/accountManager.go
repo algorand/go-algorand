@@ -54,12 +54,14 @@ func MakeAccountManager(log logging.Logger) *AccountManager {
 }
 
 // Keys returns a list of Participation accounts.
-func (manager *AccountManager) Keys() (out []account.Participation) {
+func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participation) {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
 	for _, part := range manager.partIntervals {
-		out = append(out, part.Participation)
+		if part.OverlapsInterval(rnd, rnd) {
+			out = append(out, part.Participation)
+		}
 	}
 	return out
 }
