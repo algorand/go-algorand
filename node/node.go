@@ -1071,7 +1071,7 @@ func (node *AlgorandFullNode) Keys(rnd basics.Round) []account.Participation {
 		acctData, hasAccountData := accountsData[part.Parent]
 		if !hasAccountData {
 			var err error
-			acctData, err = node.ledger.Lookup(rnd, part.Parent)
+			acctData, _, err = node.ledger.LookupWithoutRewards(rnd, part.Parent)
 			if err != nil {
 				node.log.Warnf("node.Keys: Account %v not participating: cannot locate account for round %d", part.Address(), rnd)
 				continue
