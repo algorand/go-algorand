@@ -82,6 +82,7 @@ type AssetsParamsGroupData struct {
 
 	// same number of elements as in AssetOffsets
 	Totals         []uint64         `codec:"t,allocbound=MaxHoldingGroupSize"`
+	Decimals       []uint32         `codec:"d,allocbound=MaxHoldingGroupSize"`
 	DefaultFrozens []bool           `codec:"f,allocbound=MaxHoldingGroupSize"`
 	UnitNames      []string         `codec:"u,allocbound=MaxHoldingGroupSize"`
 	AssetNames     []string         `codec:"n,allocbound=MaxHoldingGroupSize"`
@@ -114,9 +115,10 @@ type ExtendedAssetHolding struct {
 
 // ExtendedAssetParams is AccountData's extension for storing asset params
 type ExtendedAssetParams struct {
-	_struct struct{}            `codec:",omitempty,omitemptyarray"`
-	Count   uint32              `codec:"c"`
-	Groups  []AssetsParamsGroup `codec:"gs,allocbound=4096"` // 1M asset params
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Count  uint32              `codec:"c"`
+	Groups []AssetsParamsGroup `codec:"gs,allocbound=4096"` // 1M asset params
 }
 
 // PersistedAccountData represents actual data stored in DB
@@ -149,6 +151,7 @@ func (a SortAppIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 // AbstractAssetGroupData abstacts common properties for Holding and Params group data
 type AbstractAssetGroupData interface {
 	Find(aidx basics.AssetIndex, base basics.AssetIndex) int
+	AssetDeltaValue(ai int) basics.AssetIndex
 }
 
 // AbstractAssetGroup represets interface for Holding and Params group
@@ -163,6 +166,9 @@ type AbstractAssetGroup interface {
 	Encode() []byte
 	Key() int64
 	SetKey(key int64)
+	Reset()
+
+	delete(ai int)
 }
 
 // AbstractAssetGroupList enables operations on concrete Holding or Params groups
@@ -177,6 +183,10 @@ type AbstractAssetGroupList interface {
 	Reset(count uint32, length int)
 	// Assign assigns to value group to group[idx]
 	Assign(idx int, group interface{})
+	// ReleaseGroup removes group gi from the groups list
+	ReleaseGroup(gi int)
+
+	deleteByIndex(gi int, ai int)
 }
 
 type groupBuilder interface {
@@ -223,6 +233,7 @@ func (gd *AssetsHoldingGroupData) update(ai int, hodl basics.AssetHolding) {
 
 func (gd *AssetsParamsGroupData) update(ai int, params basics.AssetParams) {
 	gd.Totals[ai] = params.Total
+	gd.Decimals[ai] = params.Decimals
 	gd.DefaultFrozens[ai] = params.DefaultFrozen
 	gd.UnitNames[ai] = params.UnitName
 	gd.AssetNames[ai] = params.AssetName
@@ -253,6 +264,51 @@ func (gd *AssetsHoldingGroupData) delete(ai int) {
 		gd.Amounts = gd.Amounts[:len(gd.Amounts)-1]
 		copy(gd.Frozens[ai:], gd.Frozens[ai+1:])
 		gd.Frozens = gd.Frozens[:len(gd.Frozens)-1]
+	}
+}
+
+func (gd *AssetsParamsGroupData) slice(start, end int) {
+	gd.Totals = gd.Totals[start:end]
+	gd.Decimals = gd.Decimals[start:end]
+	gd.DefaultFrozens = gd.DefaultFrozens[start:end]
+	gd.UnitNames = gd.UnitNames[start:end]
+	gd.AssetNames = gd.AssetNames[start:end]
+	gd.URLs = gd.URLs[start:end]
+	gd.MetadataHash = gd.MetadataHash[start:end]
+	gd.Managers = gd.Managers[start:end]
+	gd.Reserves = gd.Reserves[start:end]
+	gd.Freezes = gd.Freezes[start:end]
+	gd.Clawbacks = gd.Clawbacks[start:end]
+}
+
+func (gd *AssetsParamsGroupData) delete(ai int) {
+	if ai == 0 {
+		gd.AssetOffsets = gd.AssetOffsets[1:]
+		gd.AssetOffsets[0] = 0
+		gd.slice(1, len(gd.AssetOffsets))
+	} else if ai == len(gd.AssetOffsets)-1 {
+		gd.AssetOffsets = gd.AssetOffsets[:len(gd.AssetOffsets)-1]
+		gd.Totals = gd.Totals[:len(gd.Totals)-1]
+		gd.slice(0, len(gd.AssetOffsets)-1)
+	} else {
+		gd.AssetOffsets[ai+1] += gd.AssetOffsets[ai]
+		copy(gd.AssetOffsets[ai:], gd.AssetOffsets[ai+1:])
+		gd.AssetOffsets = gd.AssetOffsets[:len(gd.AssetOffsets)-1]
+
+		// copy all and them slice all
+		copy(gd.Totals[ai:], gd.Totals[ai+1:])
+		copy(gd.Decimals[ai:], gd.Decimals[ai+1:])
+		copy(gd.DefaultFrozens[ai:], gd.DefaultFrozens[ai+1:])
+		copy(gd.UnitNames[ai:], gd.UnitNames[ai+1:])
+		copy(gd.AssetNames[ai:], gd.AssetNames[ai+1:])
+		copy(gd.URLs[ai:], gd.URLs[ai+1:])
+		copy(gd.MetadataHash[ai:], gd.MetadataHash[ai+1:])
+		copy(gd.Managers[ai:], gd.Managers[ai+1:])
+		copy(gd.Reserves[ai:], gd.Reserves[ai+1:])
+		copy(gd.Freezes[ai:], gd.Freezes[ai+1:])
+		copy(gd.Clawbacks[ai:], gd.Clawbacks[ai+1:])
+
+		gd.slice(0, len(gd.AssetOffsets)-1)
 	}
 }
 
@@ -299,25 +355,36 @@ func (g *AssetsHoldingGroup) Load(gd AssetsHoldingGroupData) {
 	g.loaded = true
 }
 
-// delete an asset at position ai in this group
-func (g *AssetsHoldingGroup) delete(ai int) {
+// Delete removes asset by index ai from a group
+func (g *AssetGroupDesc) Delete(ai int, ag AbstractAssetGroup) {
 	// although a group with only one element is handled by a caller
 	// add a safety check here
-	if g.Count == 1 {
-		*g = AssetsHoldingGroup{}
+	if ag.AssetCount() == 1 {
+		ag.Reset()
 		return
 	}
 
+	agd := ag.GroupData()
 	if ai == 0 {
 		// when deleting the first element, update MinAssetIndex and DeltaMaxAssetIndex
-		g.MinAssetIndex += g.groupData.AssetOffsets[1]
-		g.DeltaMaxAssetIndex -= uint64(g.groupData.AssetOffsets[1])
+		g.MinAssetIndex += agd.AssetDeltaValue(1)
+		g.DeltaMaxAssetIndex -= uint64(agd.AssetDeltaValue(1))
 	} else if uint32(ai) == g.Count-1 {
 		// when deleting the last element, update DeltaMaxAssetIndex
-		g.DeltaMaxAssetIndex -= uint64(g.groupData.AssetOffsets[len(g.groupData.AssetOffsets)-1])
+		g.DeltaMaxAssetIndex -= uint64(agd.AssetDeltaValue(int(ag.AssetCount() - 1)))
 	}
-	g.groupData.delete(ai)
+
+	ag.delete(ai)
 	g.Count--
+	return
+}
+
+func (g *AssetsHoldingGroup) delete(ai int) {
+	g.groupData.delete(ai)
+}
+
+func (g *AssetsParamsGroup) delete(ai int) {
+	g.groupData.delete(ai)
 }
 
 // insert asset aidx into current group. It should not exist in the group
@@ -387,6 +454,12 @@ func (g *AssetsCommonGroupData) Find(aidx basics.AssetIndex, base basics.AssetIn
 	return -1
 }
 
+// AssetDeltaValue returns asset offset value at index ai.
+// It does not check boundaries.
+func (g *AssetsCommonGroupData) AssetDeltaValue(ai int) basics.AssetIndex {
+	return g.AssetOffsets[ai]
+}
+
 // HasSpace returns true if this group has space to accommodate one more asset entry
 func (g *AssetGroupDesc) HasSpace() bool {
 	return g.Count < MaxHoldingGroupSize
@@ -425,6 +498,16 @@ func (g *AssetsHoldingGroup) GroupData() AbstractAssetGroupData {
 // GroupData returns interface to AbstractAssetGroupData for this group data
 func (g *AssetsParamsGroup) GroupData() AbstractAssetGroupData {
 	return &g.groupData.AssetsCommonGroupData
+}
+
+// GroupData returns interface to AbstractAssetGroupData for this group data
+func (g *AssetsHoldingGroup) Reset() {
+	*g = AssetsHoldingGroup{}
+}
+
+// GroupData returns interface to AbstractAssetGroupData for this group data
+func (g *AssetsParamsGroup) Reset() {
+	*g = AssetsParamsGroup{}
 }
 
 // Update sets group data by asset index
@@ -482,42 +565,71 @@ func update(updated []basics.AssetIndex, agl AbstractAssetGroupList, assets asse
 	return nil
 }
 
-// Delete asset holdings identified by asset indexes in assets list
-// Function returns list of group keys that needs to be removed from DB
-func (e *ExtendedAssetHolding) Delete(assets []basics.AssetIndex) (deleted []int64, err error) {
+func deleteAssets(assets []basics.AssetIndex, agl AbstractAssetGroupList) (deleted []int64, err error) {
 	// TODO: possible optimizations:
 	// 1. pad.NumAssetHoldings() == len(deleted)
 	// 2. deletion of entire group
 	sort.SliceStable(assets, func(i, j int) bool { return assets[i] < assets[j] })
 	gi, ai := 0, 0
 	for _, aidx := range assets {
-		gi, ai = e.FindAsset(aidx, gi)
+		gi, ai = findAsset(aidx, gi, agl)
 		if gi == -1 || ai == -1 {
 			err = fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
 			return
 		}
 		// group data is loaded in accountsLoadOld
-		key := e.Groups[gi].AssetGroupKey
-		if e.delete(gi, ai) {
+		ag := agl.Get(gi)
+		if ag.AssetCount() == 1 {
+			key := ag.Key()
+			agl.ReleaseGroup(gi)
 			deleted = append(deleted, key)
+		} else {
+			agl.deleteByIndex(gi, ai)
 		}
 	}
 	return
 }
 
-func (e *ExtendedAssetHolding) delete(gi int, ai int) bool {
-	if e.Groups[gi].Count == 1 {
-		if gi < len(e.Groups)-1 {
-			copy(e.Groups[gi:], e.Groups[gi+1:])
-		}
-		e.Groups[len(e.Groups)-1] = AssetsHoldingGroup{} // release AssetsHoldingGroup data
-		e.Groups = e.Groups[:len(e.Groups)-1]
-		e.Count--
-		return true
+// Delete asset holdings identified by asset indexes in assets list
+// Function returns list of group keys that needs to be removed from DB
+func (e *ExtendedAssetHolding) Delete(assets []basics.AssetIndex) (deleted []int64, err error) {
+	return deleteAssets(assets, e)
+}
+
+// Delete asset holdings identified by asset indexes in assets list
+// Function returns list of group keys that needs to be removed from DB
+func (e *ExtendedAssetParams) Delete(assets []basics.AssetIndex) (deleted []int64, err error) {
+	return deleteAssets(assets, e)
+}
+
+func (e *ExtendedAssetHolding) ReleaseGroup(gi int) {
+	count := e.Groups[gi].AssetCount()
+	if gi < len(e.Groups)-1 {
+		copy(e.Groups[gi:], e.Groups[gi+1:])
 	}
-	e.Groups[gi].delete(ai)
+	e.Groups[len(e.Groups)-1] = AssetsHoldingGroup{} // release AssetsHoldingGroup data
+	e.Groups = e.Groups[:len(e.Groups)-1]
+	e.Count -= count
+}
+
+func (e *ExtendedAssetParams) ReleaseGroup(gi int) {
+	count := e.Groups[gi].AssetCount()
+	if gi < len(e.Groups)-1 {
+		copy(e.Groups[gi:], e.Groups[gi+1:])
+	}
+	e.Groups[len(e.Groups)-1] = AssetsParamsGroup{} // release AssetsParamsGroup data
+	e.Groups = e.Groups[:len(e.Groups)-1]
+	e.Count -= count
+}
+
+func (e *ExtendedAssetHolding) deleteByIndex(gi int, ai int) {
+	e.Groups[gi].Delete(ai, &e.Groups[gi])
 	e.Count--
-	return false
+}
+
+func (e *ExtendedAssetParams) deleteByIndex(gi int, ai int) {
+	e.Groups[gi].Delete(ai, &e.Groups[gi])
+	e.Count--
 }
 
 // splitInsert splits the group identified by gi
@@ -815,6 +927,7 @@ func (b *assetParamsGroupBuilder) newGroup(size int) {
 	b.gd = AssetsParamsGroupData{
 		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, size, size)},
 		Totals:                make([]uint64, size, size),
+		Decimals:              make([]uint32, size, size),
 		DefaultFrozens:        make([]bool, size, size),
 		UnitNames:             make([]string, size, size),
 		AssetNames:            make([]string, size, size),
@@ -844,6 +957,7 @@ func (b *assetParamsGroupBuilder) newElement(offset basics.AssetIndex, data inte
 	b.gd.AssetOffsets[b.idx] = offset
 	params := data.(basics.AssetParams)
 	b.gd.Totals[b.idx] = params.Total
+	b.gd.Decimals[b.idx] = params.Decimals
 	b.gd.DefaultFrozens[b.idx] = params.DefaultFrozen
 	b.gd.UnitNames[b.idx] = params.UnitName
 	b.gd.AssetNames[b.idx] = params.AssetName

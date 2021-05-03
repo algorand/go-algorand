@@ -678,7 +678,7 @@ func TestAssetHoldingDelete(t *testing.T) {
 	}
 
 	// delete a group with only one item
-	e.delete(1, 0)
+	e.Delete([]basics.AssetIndex{spec[1].start})
 	a.Equal(oldCount-1, e.Count)
 	a.Equal(len(spec)-1, len(e.Groups))
 
@@ -687,7 +687,7 @@ func TestAssetHoldingDelete(t *testing.T) {
 	// delete first entry in a group
 	e = genExtendedHolding(t, spec)
 	aidx = assetByIndex(0, 0, e)
-	e.delete(0, 0)
+	e.deleteByIndex(0, 0)
 	a.Equal(oldCount-1, e.Count)
 	a.Equal(len(spec), len(e.Groups))
 	a.Equal(spec[0].start+basics.AssetIndex(gap), e.Groups[0].MinAssetIndex)
@@ -697,7 +697,7 @@ func TestAssetHoldingDelete(t *testing.T) {
 	// delete last entry in a group
 	e = genExtendedHolding(t, spec)
 	aidx = assetByIndex(0, spec[0].count-1, e)
-	e.delete(0, spec[0].count-1)
+	e.deleteByIndex(0, spec[0].count-1)
 	a.Equal(oldCount-1, e.Count)
 	a.Equal(len(spec), len(e.Groups))
 	a.Equal(spec[0].start, e.Groups[0].MinAssetIndex)
@@ -710,7 +710,7 @@ func TestAssetHoldingDelete(t *testing.T) {
 	// delete some middle entry
 	e = genExtendedHolding(t, spec)
 	aidx = assetByIndex(0, 1, e)
-	e.delete(0, 1)
+	e.deleteByIndex(0, 1)
 	a.Equal(oldCount-1, e.Count)
 	a.Equal(len(spec), len(e.Groups))
 	a.Equal(spec[0].start, e.Groups[0].MinAssetIndex)
@@ -745,7 +745,7 @@ func TestAssetHoldingDeleteRepeat(t *testing.T) {
 			delOrder := rand.Perm(maxIdx)
 			for _, i := range delOrder {
 				if i < int(e.Groups[0].Count) {
-					e.delete(0, i)
+					e.deleteByIndex(0, i)
 				}
 			}
 		} else {

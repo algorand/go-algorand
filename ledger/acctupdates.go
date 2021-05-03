@@ -2310,11 +2310,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	for i := uint64(0); i < offset; i++ {
 		for cidx, creatable := range creatableDeltas[i] {
 			if creatable.Ctype == basics.AssetCreatable {
-				action := ledgercore.ActionParamDelete
+				action := ledgercore.ActionParamsDelete
 				if creatable.Created {
-					action = ledgercore.ActionParamCreate
+					action = ledgercore.ActionParamsCreate
 				}
-				deltas[i].SetHoldingDelta(creatable.Creator, basics.AssetIndex(cidx), action)
+				deltas[i].SetAssetDelta(creatable.Creator, basics.AssetIndex(cidx), action)
 			}
 		}
 	}

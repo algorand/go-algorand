@@ -82,19 +82,19 @@ type StateDelta struct {
 	initialTransactionsCount int
 }
 
-// HoldingAction is an enum of actions on holdings
-//msgp:ignore HoldingAction
-type HoldingAction uint64
+// AssetAction is an enum of actions on holdings
+//msgp:ignore AssetAction
+type AssetAction uint64
 
 const (
-	// ActionCreate is for asset holding creation
-	ActionCreate HoldingAction = 1 + iota
-	// ActionDelete is for asset holding creation
-	ActionDelete
-	// ActionParamCreate is for asset holding creation
-	ActionParamCreate
-	// ActionParamDelete is for asset holding creation
-	ActionParamDelete
+	// ActionHoldingCreate is for asset holding creation
+	ActionHoldingCreate AssetAction = 1 + iota
+	// ActionHoldingDelete is for asset holding creation
+	ActionHoldingDelete
+	// ActionParamsCreate is for asset holding creation
+	ActionParamsCreate
+	// ActionParamsDelete is for asset holding creation
+	ActionParamsDelete
 )
 
 // AccountDeltas stores ordered accounts and allows fast lookup by address
@@ -103,8 +103,8 @@ type AccountDeltas struct {
 	accts []PersistedBalanceRecord
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
-	// holdings keeps track of created and deleted holdings per address
-	holdings map[basics.Address]map[basics.AssetIndex]HoldingAction
+	// assetAlt keeps track of created and deleted assets and params per address
+	assetAlt map[basics.Address]map[basics.AssetIndex]AssetAction
 }
 
 // PersistedBalanceRecord is similar to BalanceRecord but contains PersistedAccountData
@@ -122,7 +122,7 @@ func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int,
 		Accts: AccountDeltas{
 			accts:      make([]PersistedBalanceRecord, 0, hint*2),
 			acctsCache: make(map[basics.Address]int, hint*2),
-			holdings:   make(map[basics.Address]map[basics.AssetIndex]HoldingAction),
+			assetAlt:   make(map[basics.Address]map[basics.AssetIndex]AssetAction),
 		},
 		Txids:    make(map[transactions.Txid]basics.Round, hint),
 		Txleases: make(map[Txlease]basics.Round, hint),
@@ -192,27 +192,27 @@ func (ad *AccountDeltas) upsert(pbr PersistedBalanceRecord) {
 	ad.acctsCache[addr] = last
 }
 
-// SetHoldingDelta saves creation/deletion info about asset holding
+// SetAssetDelta saves creation/deletion info about asset holding
 // Creation is not really important since the holding is already in ad.accts,
 // but saving deleteion info is only the way to know if the asset gone
-func (ad *AccountDeltas) SetHoldingDelta(addr basics.Address, aidx basics.AssetIndex, action HoldingAction) {
-	hmap, ok := ad.holdings[addr]
+func (ad *AccountDeltas) SetAssetDelta(addr basics.Address, aidx basics.AssetIndex, action AssetAction) {
+	hmap, ok := ad.assetAlt[addr]
 	if !ok {
 		// in most cases there will be only one asset modification per account
-		hmap = map[basics.AssetIndex]HoldingAction{aidx: action}
+		hmap = map[basics.AssetIndex]AssetAction{aidx: action}
 	} else {
 		hmap[aidx] = action
 	}
 
-	if ad.holdings == nil {
-		ad.holdings = make(map[basics.Address]map[basics.AssetIndex]HoldingAction)
+	if ad.assetAlt == nil {
+		ad.assetAlt = make(map[basics.Address]map[basics.AssetIndex]AssetAction)
 	}
-	ad.holdings[addr] = hmap
+	ad.assetAlt[addr] = hmap
 }
 
-// GetHoldingDeltas return map of created/deleted asset holdings
-func (ad AccountDeltas) GetHoldingDeltas(addr basics.Address) map[basics.AssetIndex]HoldingAction {
-	return ad.holdings[addr]
+// GetAssetDeltas return map of created/deleted asset holdings
+func (ad AccountDeltas) GetAssetDeltas(addr basics.Address) map[basics.AssetIndex]AssetAction {
+	return ad.assetAlt[addr]
 }
 
 // OptimizeAllocatedMemory by reallocating maps to needed capacity
