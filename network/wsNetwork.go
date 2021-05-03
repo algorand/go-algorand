@@ -727,9 +727,6 @@ func (wn *WebsocketNetwork) setup() {
 
 // Start makes network connections and threads
 func (wn *WebsocketNetwork) Start() {
-	if wn.config.DisableNetwork {
-		return
-	}
 	var err error
 	if wn.config.IncomingConnectionsLimit < 0 {
 		wn.config.IncomingConnectionsLimit = MaxInt
@@ -834,10 +831,6 @@ func (wn *WebsocketNetwork) innerStop() {
 // Stop blocks until all activity on this node is done.
 func (wn *WebsocketNetwork) Stop() {
 	wn.handlers.ClearHandlers([]Tag{})
-
-	if wn.config.DisableNetwork {
-		return
-	}
 
 	wn.innerStop()
 	var listenAddr string
