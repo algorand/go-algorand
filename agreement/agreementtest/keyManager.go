@@ -24,11 +24,11 @@ import (
 // SimpleKeyManager provides a simple implementation of a KeyManager.
 type SimpleKeyManager []account.Participation
 
-// Keys implements KeyManager.Keys.
-func (m SimpleKeyManager) Keys(rnd basics.Round) []account.Participation {
+// VotingKeys implements KeyManager.VotingKeys.
+func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
 	var km []account.Participation
 	for _, acc := range m {
-		if acc.FirstValid <= rnd && rnd <= acc.LastValid {
+		if acc.FirstValid <= votingRound && votingRound <= acc.LastValid {
 			km = append(km, acc)
 		}
 	}

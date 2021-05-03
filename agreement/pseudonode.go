@@ -197,15 +197,21 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 
 // load the participation keys from the account manager ( as needed ) for the
 // current round.
-func (n *asyncPseudonode) loadRoundParticipationKeys(round basics.Round) {
+func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) {
 	// if we've already loaded up the keys, then just skip loading them.
-	if n.participationKeysRound == round {
+	if n.participationKeysRound == voteRound {
 		return
 	}
 
+	cparams, err := n.ledger.ConsensusParams(ParamsRound(voteRound))
+	if err != nil {
+		return
+	}
+	balanceRound := balanceRound(voteRound, cparams)
+
 	// otherwise, we want to load the participation keys.
-	n.participationKeys = n.keys.Keys(round)
-	n.participationKeysRound = round
+	n.participationKeys = n.keys.VotingKeys(voteRound, balanceRound)
+	n.participationKeysRound = voteRound
 }
 
 func (n asyncPseudonode) makeProposalsTask(ctx context.Context, r round, p period) pseudonodeProposalsTask {

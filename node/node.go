@@ -1063,30 +1063,30 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 	return validatedBlock{vb: lvb}, nil
 }
 
-// Keys implements the key maanger's Keys method, and provides additional validation with the ledger.
+// VotingKeys implements the key maanger's VotingKeys method, and provides additional validation with the ledger.
 // that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
-func (node *AlgorandFullNode) Keys(rnd basics.Round) []account.Participation {
-	keys := node.accountManager.Keys(rnd)
+func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.Participation {
+	keys := node.accountManager.Keys(votingRound)
 	participations := make([]account.Participation, 0, len(keys))
 	accountsData := make(map[basics.Address]basics.AccountData, len(keys))
 	for _, part := range keys {
 		acctData, hasAccountData := accountsData[part.Parent]
 		if !hasAccountData {
 			var err error
-			acctData, _, err = node.ledger.LookupWithoutRewards(rnd.SubSaturate(1), part.Parent)
+			acctData, _, err = node.ledger.LookupWithoutRewards(keysRound, part.Parent)
 			if err != nil {
-				node.log.Warnf("node.Keys: Account %v not participating: cannot locate account for round %d : %v", part.Address(), rnd, err)
+				node.log.Warnf("node.Keys: Account %v not participating: cannot locate account for round %d : %v", part.Address(), keysRound, err)
 				continue
 			}
 			accountsData[part.Parent] = acctData
 		}
 
 		if acctData.VoteID != part.Voting.OneTimeSignatureVerifier {
-			node.log.Warnf("node.Keys: Account %v not participating: on chain voting key differ from participation voting key for round %d", part.Address(), rnd)
+			node.log.Warnf("node.Keys: Account %v not participating: on chain voting key differ from participation voting key for round %d", part.Address(), keysRound)
 			continue
 		}
 		if acctData.SelectionID != part.VRF.PK {
-			node.log.Warnf("node.Keys: Account %v not participating: on chain selection key differ from participation selection key for round %d", part.Address(), rnd)
+			node.log.Warnf("node.Keys: Account %v not participating: on chain selection key differ from participation selection key for round %d", part.Address(), keysRound)
 			continue
 		}
 		participations = append(participations, part)

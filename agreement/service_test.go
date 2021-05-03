@@ -106,10 +106,10 @@ func (c *testingClock) fire(d time.Duration) {
 
 type simpleKeyManager []account.Participation
 
-func (m simpleKeyManager) Keys(rnd basics.Round) []account.Participation {
+func (m simpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
 	var km []account.Participation
 	for _, acc := range m {
-		if acc.OverlapsInterval(rnd, rnd) {
+		if acc.OverlapsInterval(votingRound, votingRound) {
 			km = append(km, acc)
 		}
 	}
