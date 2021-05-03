@@ -236,7 +236,7 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	cfg.DNSBootstrapID = ""
 	cfg.EnableProfiler = true
 	if relaysCount == 0 {
-		cfg.DisableNetwork = true
+		cfg.DisableNetworking = true
 	}
 
 	if node.IsRelay {

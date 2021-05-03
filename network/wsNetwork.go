@@ -455,7 +455,7 @@ func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 // TODO: add `priority` argument so that we don't have to guess it based on tag
 func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
-	if wn.config.DisableNetwork {
+	if wn.config.DisableNetworking {
 		return nil
 	}
 

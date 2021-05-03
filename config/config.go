@@ -409,11 +409,11 @@ type Local struct {
 	// Time interval in nanoseconds for generating accountUpdates telemetry event
 	AccountUpdatesStatsInterval time.Duration `version[17]:"5000000000"`
 
-	// DisableNetwork disables all the incoming and outgoing communication a node would perform. This is useful
+	// DisableNetworking disables all the incoming and outgoing communication a node would perform. This is useful
 	// we we have a single-node private network, where there is no other nodes that need to be communicated with.
 	// features like catchpoint catchup would be rendered completly non-operational, and many of the node inner
 	// working would be completly dis-functional.
-	DisableNetwork bool `version[17]:"false"`
+	DisableNetworking bool `version[17]:"false"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
