@@ -31,6 +31,30 @@ import (
 	"github.com/algorand/go-algorand/rpcs"
 )
 
+func TestBitmask(t *testing.T) {
+	b := make(bitmask, 12)
+	b.SetBit(0)
+	b.SetBit(2)
+	b.SetBit(69)
+	for i := 0; i < 80; i++ {
+		exists, _ := b.EntryExists(i, 0)
+		if i == 0 || i == 2 || i == 69 {
+			require.True(t, exists)
+		} else {
+			require.False(t, exists)
+		}
+	}
+	b.trimBitmask(80)
+	for i := 0; i < 80; i++ {
+		exists, _ := b.EntryExists(i, 0)
+		if i == 0 || i == 2 || i == 69 {
+			require.True(t, exists)
+		} else {
+			require.False(t, exists)
+		}
+	}
+}
+
 func TestTxnGroupEncodingSmall(t *testing.T) {
 	genesisHash := crypto.Hash([]byte("gh"))
 
