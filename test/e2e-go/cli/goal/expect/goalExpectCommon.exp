@@ -429,11 +429,21 @@ proc ::AlgorandGoal::GetAccountRewards { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMAR
 
 # Account Transfer
 proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FROM_ACCOUNT_ADDRESS TRANSFER_AMOUNT TO_ACCOUNT_ADDRESS FEE_AMOUNT TEST_PRIMARY_NODE_DIR OUT_FILE } {
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransferWait $FROM_WALLET_NAME $FROM_WALLET_PASSWORD $FROM_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $TO_ACCOUNT_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR $OUT_FILE "true"]
+    return $TRANSACTION_ID
+}
+
+# Account Transfer ( with optional wait flag)
+proc ::AlgorandGoal::AccountTransferWait { FROM_WALLET_NAME FROM_WALLET_PASSWORD FROM_ACCOUNT_ADDRESS TRANSFER_AMOUNT TO_ACCOUNT_ADDRESS FEE_AMOUNT TEST_PRIMARY_NODE_DIR OUT_FILE WAIT} {
     set timeout 60
     if { [ catch {
         set TRANSACTION_ID "NOT SET"
         if { $OUT_FILE == "" } {
-            spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+             if { $WAIT == "" } {
+                 spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --no-wait
+             } else {
+                 spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+             }
         } else {
             spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --out $OUT_FILE
         }
@@ -809,7 +819,7 @@ proc ::AlgorandGoal::DeleteMultisigAccount { MULTISIG_ADDRESS TEST_PRIMARY_NODE_
     }
 }
 
-# Wait for node to reach a specific round
+# Retrieve the node last catchpoint
 proc ::AlgorandGoal::GetNodeLastCatchpoint { NODE_DATA_DIR } {
     set CATCHPOINT ""
     if { [catch {

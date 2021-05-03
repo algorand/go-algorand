@@ -1,0 +1,33 @@
+{
+  "Genesis": {
+    "NetworkName": "snn",
+    "Wallets": [
+      {
+        "Name": "Wallet1",
+        "Stake": 50,
+        "Online": true
+      },
+      {
+        "Name": "Wallet2",
+        "Stake": 25,
+        "Online": true
+      },
+      {
+        "Name": "Wallet3",
+        "Stake": 25,
+        "Online": true
+      }
+    ]
+  },
+  "Nodes": [
+    {
+      "Name": "Primary",
+      "IsRelay": false,
+      "Wallets": [
+        { "Name": "Wallet1", "ParticipationOnly": false },
+        { "Name": "Wallet2", "ParticipationOnly": false },
+        { "Name": "Wallet3", "ParticipationOnly": false }
+      ]
+    }
+  ]
+}
