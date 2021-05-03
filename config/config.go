@@ -410,7 +410,7 @@ type Local struct {
 	AccountUpdatesStatsInterval time.Duration `version[17]:"5000000000"`
 
 	// DisableNetworking disables all the incoming and outgoing communication a node would perform. This is useful
-	// we we have a single-node private network, where there is no other nodes that need to be communicated with.
+	// when we have a single-node private network, where there is no other nodes that need to be communicated with.
 	// features like catchpoint catchup would be rendered completly non-operational, and many of the node inner
 	// working would be completly dis-functional.
 	DisableNetworking bool `version[17]:"false"`

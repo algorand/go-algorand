@@ -480,7 +480,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 func (s *Service) periodicSync() {
 	defer close(s.done)
 	// if the catchup is disabled in the config file, just skip it.
-	if s.parallelBlocks != 0 {
+	if s.parallelBlocks != 0 && !s.cfg.DisableNetworking {
 		s.sync()
 	}
 	stuckInARow := 0
