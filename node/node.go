@@ -340,8 +340,10 @@ func (node *AlgorandFullNode) Start() {
 	// Set up a context we can use to cancel goroutines on Stop()
 	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
 
-	// start accepting connections
-	node.net.Start()
+	if !node.config.DisableNetworking {
+		// start accepting connections
+		node.net.Start()
+	}
 	node.config.NetAddress, _ = node.net.Address()
 
 	if node.catchpointCatchupService != nil {
@@ -415,7 +417,9 @@ func (node *AlgorandFullNode) Stop() {
 	}()
 
 	node.net.ClearHandlers()
-	node.net.Stop()
+	if !node.config.DisableNetworking {
+		node.net.Stop()
+	}
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
