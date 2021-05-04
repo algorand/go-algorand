@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -92,12 +93,18 @@ func TestValidateCompactCert(t *testing.T) {
 	require.NotNil(t, err)
 
 	// TODO: a case that actually passes with no err?
+	// Above cases leave validateCompactCert() with 100% coverage.
+	// crypto/compactcert.Verify has its own test that covers success
 }
 
 // TODO: coverage of cases in AcceptableCompactCertWeight()
 func TestAcceptableCompactCertWeight(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var firstValid basics.Round
+	logger = logging.TestingLog(t)
+	defer func() {
+		logger = logging.Base()
+	}()
 
 	votersHdr.CurrentProtocol = "TestAcceptableCompactCertWeight"
 	proto := config.Consensus[votersHdr.CurrentProtocol]
@@ -105,6 +112,37 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	out := AcceptableCompactCertWeight(votersHdr, firstValid)
 	require.Equal(t, uint64(0), out)
+
+	votersHdr.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
+	cc := votersHdr.CompactCert[protocol.CompactCertBasic]
+	cc.CompactCertVotersTotal.Raw = 100
+	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
+	out = AcceptableCompactCertWeight(votersHdr, firstValid)
+	require.Equal(t, uint64(100), out)
+
+	// this should exercise the second return case
+	firstValid = basics.Round(5)
+	out = AcceptableCompactCertWeight(votersHdr, firstValid)
+	require.Equal(t, uint64(100), out)
+
+	firstValid = basics.Round(6)
+	proto.CompactCertWeightThreshold = 999999999
+	config.Consensus[votersHdr.CurrentProtocol] = proto
+	out = AcceptableCompactCertWeight(votersHdr, firstValid)
+	require.Equal(t, uint64(0x17), out)
+
+	proto.CompactCertRounds = 10000
+	votersHdr.Round = 10000
+	firstValid = basics.Round(29000)
+	config.Consensus[votersHdr.CurrentProtocol] = proto
+	cc.CompactCertVotersTotal.Raw = 0x7fffffffffffffff
+	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
+	proto.CompactCertWeightThreshold = 0x7fffffff
+	config.Consensus[votersHdr.CurrentProtocol] = proto
+	out = AcceptableCompactCertWeight(votersHdr, firstValid)
+	require.Equal(t, uint64(0x4cd35a85213a92a2), out)
+
+	// Covers everything except "overdlow that shouldn't happen" branches
 }
 
 // TODO: coverage of cases in CompactCertParams()

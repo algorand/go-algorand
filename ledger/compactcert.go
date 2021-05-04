@@ -27,6 +27,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+var logger logging.Logger = logging.Base()
+
 // AcceptableCompactCertWeight computes the acceptable signed weight
 // of a compact cert if it were to appear in a transaction with a
 // particular firstValid round.  Earlier rounds require a smaller cert.
@@ -71,7 +73,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	provenWeight, overflowed := basics.Muldiv(total.ToUint64(), uint64(proto.CompactCertWeightThreshold), 1<<32)
 	if overflowed || provenWeight > total.ToUint64() {
 		// Shouldn't happen, but a safe fallback is to accept a larger cert.
-		logging.Base().Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight",
+		logger.Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight",
 			total, proto.CompactCertRounds, certRound, firstValid)
 		return 0
 	}
@@ -83,7 +85,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	scaledWeight, overflowed := basics.Muldiv(total.ToUint64()-provenWeight, proto.CompactCertRounds/2-uint64(offset), proto.CompactCertRounds/2)
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger cert.
-		logging.Base().Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow scaledWeight",
+		logger.Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow scaledWeight",
 			total, proto.CompactCertRounds, certRound, firstValid)
 		return 0
 	}
@@ -91,7 +93,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	w, overflowed := basics.OAdd(provenWeight, scaledWeight)
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger cert.
-		logging.Base().Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight (%d) + scaledWeight (%d)",
+		logger.Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight (%d) + scaledWeight (%d)",
 			total, proto.CompactCertRounds, certRound, firstValid, provenWeight, scaledWeight)
 		return 0
 	}
