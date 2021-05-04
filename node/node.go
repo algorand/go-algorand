@@ -1067,29 +1067,49 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 // that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
 func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.Participation {
 	keys := node.accountManager.Keys(votingRound)
+
 	participations := make([]account.Participation, 0, len(keys))
 	accountsData := make(map[basics.Address]basics.AccountData, len(keys))
+	matchingAccountsKeys := make(map[basics.Address]bool)
+	mismatchingAccountsKeys := make(map[basics.Address]int)
+	const bitMismatchingVotingKey = 1
+	const bitMismatchingSelectionKey = 2
 	for _, part := range keys {
 		acctData, hasAccountData := accountsData[part.Parent]
 		if !hasAccountData {
 			var err error
 			acctData, _, err = node.ledger.LookupWithoutRewards(keysRound, part.Parent)
 			if err != nil {
-				node.log.Warnf("node.Keys: Account %v not participating: cannot locate account for round %d : %v", part.Address(), keysRound, err)
+				node.log.Warnf("node.VotingKeys: Account %v not participating: cannot locate account for round %d : %v", part.Address(), keysRound, err)
 				continue
 			}
 			accountsData[part.Parent] = acctData
 		}
 
 		if acctData.VoteID != part.Voting.OneTimeSignatureVerifier {
-			node.log.Warnf("node.Keys: Account %v not participating: on chain voting key differ from participation voting key for round %d", part.Address(), keysRound)
+			mismatchingAccountsKeys[part.Address()] = mismatchingAccountsKeys[part.Address()] | bitMismatchingVotingKey
 			continue
 		}
 		if acctData.SelectionID != part.VRF.PK {
-			node.log.Warnf("node.Keys: Account %v not participating: on chain selection key differ from participation selection key for round %d", part.Address(), keysRound)
+			mismatchingAccountsKeys[part.Address()] = mismatchingAccountsKeys[part.Address()] | bitMismatchingSelectionKey
 			continue
 		}
 		participations = append(participations, part)
+		matchingAccountsKeys[part.Address()] = true
+	}
+	// write the warnings per account only if we couldn't find a single valid key for that account.
+	for mismatchingAddr, warningFlags := range mismatchingAccountsKeys {
+		if matchingAccountsKeys[mismatchingAddr] {
+			continue
+		}
+		if warningFlags&bitMismatchingVotingKey == bitMismatchingVotingKey {
+			node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d", mismatchingAddr, votingRound, keysRound)
+			continue
+		}
+		if warningFlags&bitMismatchingSelectionKey == bitMismatchingSelectionKey {
+			node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain selection key differ from participation selection key for round %d", mismatchingAddr, votingRound, keysRound)
+			continue
+		}
 	}
 	return participations
 }
