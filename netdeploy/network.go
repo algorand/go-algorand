@@ -227,7 +227,7 @@ func (n *Network) scanForNodes() error {
 		genesisFile := filepath.Join(n.getNodeFullPath(nodeName), genesisFileName)
 		fileExists := util.FileExists(genesisFile)
 		if fileExists {
-			isPrimeDir := strings.EqualFold(nodeName, n.cfg.RelayDirs[0])
+			isPrimeDir := len(n.cfg.RelayDirs) > 0 && strings.EqualFold(nodeName, n.cfg.RelayDirs[0])
 			if isPrimeDir {
 				sawPrimeDir = true
 			} else {
@@ -235,7 +235,7 @@ func (n *Network) scanForNodes() error {
 			}
 		}
 	}
-	if !sawPrimeDir {
+	if !sawPrimeDir && len(nodes) > 1 {
 		return fmt.Errorf("primary relay directory (%s) invalid - can't run", n.cfg.RelayDirs[0])
 	}
 	n.nodeDirs = nodes
