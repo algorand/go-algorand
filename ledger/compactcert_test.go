@@ -140,7 +140,7 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 	out = AcceptableCompactCertWeight(votersHdr, firstValid)
 	require.Equal(t, uint64(0x4cd35a85213a92a2), out)
 
-	// Covers everything except "overdlow that shouldn't happen" branches
+	// Covers everything except "overflow that shouldn't happen" branches
 }
 
 func TestCompactCertParams(t *testing.T) {
