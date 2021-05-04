@@ -261,16 +261,18 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
-	selectStmt, err := tx.Prepare("SELECT rowid, data FROM accountbase WHERE address=?")
+	selectStmt, err := tx.Prepare(lookupAcctBaseQuery)
 	if err != nil {
 		return
 	}
 	defer selectStmt.Close()
-	loadStmt, err := tx.Prepare("SELECT data FROM accountext WHERE id=?")
+
+	loadStmt, err := tx.Prepare(loadAcctExtQuery)
 	if err != nil {
 		return
 	}
 	defer loadStmt.Close()
+
 	defer func() {
 		a.misses = nil
 	}()
@@ -279,7 +281,8 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 	for _, idx := range a.misses {
 		addr := a.addresses[idx]
 		dbad := dbAccountData{addr: addr}
-		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
+		adRound := basics.Round(0)
+		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &adRound, &acctDataBuf)
 		switch err {
 		case nil:
 			dbad.rowid = rowid.Int64
@@ -311,9 +314,14 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 						if gi != -1 {
 							g := &dbad.pad.ExtendedAssetHolding.Groups[gi]
 							if !g.Loaded() {
-								groupData, err := loadHoldingGroupData(loadStmt, g.AssetGroupKey)
+								groupData, gdRound, err := loadHoldingGroupData(loadStmt, g.AssetGroupKey)
 								if err != nil {
 									return err
+								}
+								if gdRound != adRound {
+									// this should not never happen since accountsLoadOld is called as part of DB update procedure,
+									// so the DB cannot be changed
+									return &MismatchingDatabaseRoundError{databaseRound: gdRound, memoryRound: adRound}
 								}
 								g.Load(groupData)
 							}
@@ -326,9 +334,14 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 						if gi != -1 {
 							g := &dbad.pad.ExtendedAssetHolding.Groups[gi]
 							if !g.Loaded() {
-								groupData, err := loadHoldingGroupData(loadStmt, g.AssetGroupKey)
+								groupData, gdRound, err := loadHoldingGroupData(loadStmt, g.AssetGroupKey)
 								if err != nil {
 									return err
+								}
+								if gdRound != adRound {
+									// this should not never happen since accountsLoadOld is called as part of DB update procedure,
+									// so the DB cannot be changed
+									return &MismatchingDatabaseRoundError{databaseRound: gdRound, memoryRound: adRound}
 								}
 								g.Load(groupData)
 							}
@@ -802,7 +815,7 @@ func accountsRound(tx *sql.Tx) (rnd basics.Round, hashrnd basics.Round, err erro
 }
 
 const lookupAcctBaseQuery string = "SELECT accountbase.rowid, rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'"
-const loadAcctExtQuery string = "SELECT data FROM accountext WHERE id=?"
+const loadAcctExtQuery string = "SELECT rnd, data FROM acctrounds LEFT JOIN accountext ON accountext.id=? WHERE acctrounds.id='acctbase'"
 
 func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) {
 	var err error
@@ -965,49 +978,60 @@ func lookupImpl(lookupStmt *sql.Stmt, addr basics.Address) (data dbAccountData, 
 }
 
 func lookupExt(rdb db.Accessor, addr basics.Address, extension func(*sql.Stmt, *ledgercore.PersistedAccountData) error) (data dbAccountData, err error) {
-	rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		lookupStmt, err := tx.Prepare(lookupAcctBaseQuery)
-		if err != nil {
-			return err
-		}
-		loadStmt, err := tx.Prepare(loadAcctExtQuery)
-		if err != nil {
-			return err
-		}
+	err = db.Retry(func() error {
+		err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			lookupStmt, err := tx.Prepare(lookupAcctBaseQuery)
+			if err != nil {
+				return err
+			}
+			defer lookupStmt.Close()
 
-		data, err = lookupImpl(lookupStmt, addr)
-		if err != nil {
-			return err
-		}
+			loadStmt, err := tx.Prepare(loadAcctExtQuery)
+			if err != nil {
+				return err
+			}
+			defer loadStmt.Close()
 
-		if extension != nil && data.pad.ExtendedAssetHolding.Count > 0 {
-			err = extension(loadStmt, &data.pad)
-		}
+			data, err = lookupImpl(lookupStmt, addr)
+			if err != nil {
+				return err
+			}
+
+			if extension != nil && data.pad.ExtendedAssetHolding.Count > 0 {
+				err = extension(loadStmt, &data.pad)
+			}
+			return err
+		})
 		return err
 	})
-
 	return
 }
 
 // lookupFull atomically loads base account data and all extension groups
-func lookupFull(rdb db.Accessor, addr basics.Address) (data dbAccountData, err error) {
-	rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		lookupStmt, err := tx.Prepare(lookupAcctBaseQuery)
-		if err != nil {
-			return err
-		}
-		loadStmt, err := tx.Prepare(loadAcctExtQuery)
-		if err != nil {
-			return err
-		}
+func lookupFull(rdb db.Accessor, addr basics.Address) (dbad dbAccountData, err error) {
+	err = db.Retry(func() error {
+		err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			lookupStmt, err := tx.Prepare(lookupAcctBaseQuery)
+			if err != nil {
+				return err
+			}
+			defer lookupStmt.Close()
 
-		data, err = lookupImpl(lookupStmt, addr)
-		if err != nil {
+			loadStmt, err := tx.Prepare(loadAcctExtQuery)
+			if err != nil {
+				return err
+			}
+			defer loadStmt.Close()
+
+			dbad, err = lookupImpl(lookupStmt, addr)
+			if err != nil {
+				return err
+			}
+			if dbad.pad.ExtendedAssetHolding.Count > 0 {
+				dbad.pad.Assets, dbad.pad.ExtendedAssetHolding, err = loadHoldings(loadStmt, dbad.pad.ExtendedAssetHolding, dbad.round)
+			}
 			return err
-		}
-		if data.pad.ExtendedAssetHolding.Count > 0 {
-			data.pad.Assets, data.pad.ExtendedAssetHolding, err = loadHoldings(loadStmt, data.pad.ExtendedAssetHolding)
-		}
+		})
 		return err
 	})
 	return
@@ -1139,11 +1163,8 @@ func (qs *accountsDbQueries) close() {
 	}
 }
 
-func (qs *accountsDbQueries) loadHoldings(eah ledgercore.ExtendedAssetHolding) (holdings map[basics.AssetIndex]basics.AssetHolding, result ledgercore.ExtendedAssetHolding, err error) {
-	err = db.Retry(func() error {
-		holdings, result, err = loadHoldings(qs.loadAccountGroupDataStmt, eah)
-		return err
-	})
+func (qs *accountsDbQueries) loadHoldings(eah ledgercore.ExtendedAssetHolding, rnd basics.Round) (holdings map[basics.AssetIndex]basics.AssetHolding, result ledgercore.ExtendedAssetHolding, err error) {
+	holdings, result, err = loadHoldings(qs.loadAccountGroupDataStmt, eah, rnd)
 	return
 }
 
@@ -1220,17 +1241,23 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 }
 
 // loadHoldings initiates all holdings leading mentioned in ExtendedAssetHolding groups.
-func loadHoldings(stmt *sql.Stmt, eah ledgercore.ExtendedAssetHolding) (map[basics.AssetIndex]basics.AssetHolding, ledgercore.ExtendedAssetHolding, error) {
+// baseRound specified a round number records need satisfy to. If baseRound is zero any data are OK.
+func loadHoldings(stmt *sql.Stmt, eah ledgercore.ExtendedAssetHolding, baseRound basics.Round) (map[basics.AssetIndex]basics.AssetHolding, ledgercore.ExtendedAssetHolding, error) {
 	if len(eah.Groups) == 0 {
 		return nil, ledgercore.ExtendedAssetHolding{}, nil
 	}
 	var err error
 	holdings := make(map[basics.AssetIndex]basics.AssetHolding, eah.Count)
 	groups := make([]ledgercore.AssetsHoldingGroup, len(eah.Groups), len(eah.Groups))
+
+	fetchedRound := basics.Round(0)
 	for gi := range eah.Groups {
-		holdings, groups[gi], err = loadHoldingGroup(stmt, eah.Groups[gi], holdings)
+		holdings, groups[gi], fetchedRound, err = loadHoldingGroup(stmt, eah.Groups[gi], holdings)
 		if err != nil {
 			return nil, ledgercore.ExtendedAssetHolding{}, err
+		}
+		if baseRound != 0 && baseRound != fetchedRound {
+			return nil, ledgercore.ExtendedAssetHolding{}, &MismatchingDatabaseRoundError{databaseRound: fetchedRound, memoryRound: baseRound}
 		}
 	}
 	eah.Groups = groups
@@ -1238,28 +1265,36 @@ func loadHoldings(stmt *sql.Stmt, eah ledgercore.ExtendedAssetHolding) (map[basi
 	return holdings, eah, nil
 }
 
-func loadHoldingGroup(stmt *sql.Stmt, g ledgercore.AssetsHoldingGroup, holdings map[basics.AssetIndex]basics.AssetHolding) (map[basics.AssetIndex]basics.AssetHolding, ledgercore.AssetsHoldingGroup, error) {
-	groupData, err := loadHoldingGroupData(stmt, g.AssetGroupKey)
+func loadHoldingGroup(stmt *sql.Stmt, g ledgercore.AssetsHoldingGroup, holdings map[basics.AssetIndex]basics.AssetHolding) (map[basics.AssetIndex]basics.AssetHolding, ledgercore.AssetsHoldingGroup, basics.Round, error) {
+	var groupData ledgercore.AssetsHoldingGroupData
+	var rnd basics.Round
+	var err error
+	err = db.Retry(func() error {
+		groupData, rnd, err = loadHoldingGroupData(stmt, g.AssetGroupKey)
+		return err
+	})
 	if err != nil {
-		return nil, ledgercore.AssetsHoldingGroup{}, err
+		return nil, ledgercore.AssetsHoldingGroup{}, 0, err
 	}
-	aidx := g.MinAssetIndex
-	for i := 0; i < len(groupData.AssetOffsets); i++ {
-		aidx += groupData.AssetOffsets[i]
-		if holdings != nil {
+
+	if holdings != nil {
+		aidx := g.MinAssetIndex
+		for i := 0; i < len(groupData.AssetOffsets); i++ {
+			aidx += groupData.AssetOffsets[i]
 			holdings[aidx] = groupData.GetHolding(i)
 		}
 	}
 	g.Load(groupData)
-	return holdings, g, nil
+	return holdings, g, rnd, nil
 }
 
 // loadHoldingGroupData loads a single holdings group data
-func loadHoldingGroupData(stmt *sql.Stmt, key int64) (group ledgercore.AssetsHoldingGroupData, err error) {
+func loadHoldingGroupData(stmt *sql.Stmt, key int64) (group ledgercore.AssetsHoldingGroupData, rnd basics.Round, err error) {
 	var buf []byte
-	err = stmt.QueryRow(key).Scan(&buf)
+	err = stmt.QueryRow(key).Scan(&rnd, &buf)
 	if err == sql.ErrNoRows {
-		return ledgercore.AssetsHoldingGroupData{}, fmt.Errorf("loadHoldingGroupData failed to retrive data for key %d", key)
+		err = fmt.Errorf("loadHoldingGroupData failed to retrive data for key %d", key)
+		return
 	}
 
 	// Some other database error
@@ -1372,9 +1407,6 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 		deleted := make([]basics.AssetIndex, 0, len(delta.holdings))
 		created := make([]basics.AssetIndex, 0, len(delta.holdings))
 
-		pad = delta.new
-		oldPad := delta.old.pad
-
 		for aidx, action := range delta.holdings {
 			if action == ledgercore.ActionDelete {
 				deleted = append(deleted, aidx)
@@ -1383,10 +1415,14 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 			}
 		}
 
+		pad = delta.new
+		oldPad := delta.old.pad
+		oldPadRound := delta.old.round
+
 		newCount := oldPad.NumAssetHoldings() + len(created) - len(deleted)
 		if newCount < assetsThreshold {
 			// Move all assets from groups to Assets field
-			assets, _, err := loadHoldings(qabq, oldPad.ExtendedAssetHolding)
+			assets, _, err := loadHoldings(qabq, oldPad.ExtendedAssetHolding, oldPadRound)
 			if err != nil {
 				return updatedAccounts, err
 			}
@@ -1542,7 +1578,7 @@ func makeAccountsNewQueries(db db.Queryable) (q accountsNewQueries, err error) {
 		return
 	}
 
-	if q.queryGroupDataStmt, err = db.Prepare("SELECT data FROM accountext WHERE id = ?"); err != nil {
+	if q.queryGroupDataStmt, err = db.Prepare(loadAcctExtQuery); err != nil {
 		return
 	}
 

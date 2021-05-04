@@ -1559,6 +1559,17 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(sample2, data)
 }
 
+// cleanPad copies and clears non-serializable loaded nad groupData fields to match account data
+func cleanPad(pad ledgercore.PersistedAccountData) ledgercore.PersistedAccountData {
+	clean := pad
+	if len(clean.ExtendedAssetHolding.Groups) > 0 {
+		clean.ExtendedAssetHolding.Groups = make([]ledgercore.AssetsHoldingGroup, len(pad.ExtendedAssetHolding.Groups))
+		copy(clean.ExtendedAssetHolding.Groups, pad.ExtendedAssetHolding.Groups)
+		clean.ExtendedAssetHolding.Clear() // group data ignored on serialization, reset
+	}
+	return clean
+}
+
 func TestAccountsNewCRUD(t *testing.T) {
 	a := require.New(t)
 
@@ -1594,17 +1605,6 @@ func TestAccountsNewCRUD(t *testing.T) {
 		{0}, {1}, {assetsThreshold + 1},
 	}
 	temp := randomAccountData(100)
-
-	// cleanPad copies and clears non-serializable loaded nad groupData fields to match account data
-	cleanPad := func(pad ledgercore.PersistedAccountData) ledgercore.PersistedAccountData {
-		clean := pad
-		if len(clean.ExtendedAssetHolding.Groups) > 0 {
-			clean.ExtendedAssetHolding.Groups = make([]ledgercore.AssetsHoldingGroup, len(pad.ExtendedAssetHolding.Groups))
-			copy(clean.ExtendedAssetHolding.Groups, pad.ExtendedAssetHolding.Groups)
-			clean.ExtendedAssetHolding.Clear() // group data ignored on serialization, reset
-		}
-		return clean
-	}
 
 	for _, test := range createDeleteTests {
 		t.Run(fmt.Sprintf("create-asset-%d", test.count), func(t *testing.T) {
@@ -1835,7 +1835,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		a.NotEqual(-1, gi, aidx)
 		g := &old.pad.ExtendedAssetHolding.Groups[gi]
 		if !g.Loaded() {
-			groupData, err := loadHoldingGroupData(qs.loadAccountGroupDataStmt, g.AssetGroupKey)
+			groupData, _, err := loadHoldingGroupData(qs.loadAccountGroupDataStmt, g.AssetGroupKey)
 			a.NoError(err)
 			g.Load(groupData)
 			loaded[gi] = true
@@ -1932,7 +1932,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 	for gi := range old.pad.ExtendedAssetHolding.Groups {
 		g := &old.pad.ExtendedAssetHolding.Groups[gi]
 		if !g.Loaded() {
-			groupData, err := loadHoldingGroupData(qs.loadAccountGroupDataStmt, g.AssetGroupKey)
+			groupData, _, err := loadHoldingGroupData(qs.loadAccountGroupDataStmt, g.AssetGroupKey)
 			a.NoError(err)
 			g.Load(groupData)
 		}
@@ -1953,7 +1953,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 	// len(old.Assets) > assetsThreshold
 	// new count > assetsThreshold => delete most and update, create some
 
-	holdingMap, _, err := loadHoldings(qs.loadAccountGroupDataStmt, old.pad.ExtendedAssetHolding)
+	holdingMap, _, err := loadHoldings(qs.loadAccountGroupDataStmt, old.pad.ExtendedAssetHolding, 0)
 	a.Equal(len(savedAssets), len(holdingMap))
 	for k := range savedAssets {
 		a.Contains(holdingMap, k)
@@ -2025,4 +2025,111 @@ func TestAccountsNewCRUD(t *testing.T) {
 	for _, aidx := range append(upd, crt...) {
 		a.Contains(old.pad.AccountData.Assets, aidx)
 	}
+}
+
+// TestLoadHolding verifies ExtendedAssetHolding.Group copying, and baseRound error handling
+func TestLoadHolding(t *testing.T) {
+	a := require.New(t)
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	err = initTestAccountDB(tx, nil, proto)
+	a.NoError(err)
+	tx.Commit()
+
+	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
+	a.NoError(err)
+
+	q, err := makeAccountsNewQueries(dbs.Wdb.Handle)
+	a.NoError(err)
+
+	addr := randomAddress()
+	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
+
+	updatedAccounts := []dbAccountData{{pad: ledgercore.PersistedAccountData{AccountData: randomAccountData(100)}}}
+	updatedAccountIdx := 0
+
+	// first create a basic record with 10 assets
+	ad := basics.AccountData{}
+	numBaseAssets := 10
+	ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numBaseAssets)
+	for i := 1; i <= numBaseAssets; i++ {
+		ad.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
+	}
+
+	updatedAccounts, err = accountsNewCreate(
+		q.insertStmt, q.insertGroupDataStmt,
+		addr, ledgercore.PersistedAccountData{AccountData: ad}, proto,
+		updatedAccounts, updatedAccountIdx,
+	)
+
+	// use it as OLD
+	old, err := qs.lookup(addr)
+
+	// now create additional 1000 assets to exceed assetsThreshold
+	numNewAssets := assetsThreshold
+	updated := basics.AccountData{}
+	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numBaseAssets)
+	for k, v := range old.pad.Assets {
+		updated.Assets[k] = v
+	}
+	for i := 2001; i <= 2000+numNewAssets; i++ {
+		updated.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
+	}
+
+	delta := accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}}
+	updatedAccounts, err = accountsNewUpdate(
+		q.updateStmt, q.queryGroupDataStmt,
+		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+		addr, delta, proto,
+		updatedAccounts, updatedAccountIdx)
+
+	a.NoError(err)
+	// ensure correctness of the data written
+	a.NotEmpty(updatedAccounts[updatedAccountIdx])
+
+	var buf []byte
+	var rowid sql.NullInt64
+	var rnd uint64
+	var pad ledgercore.PersistedAccountData
+
+	// check raw accountbase data
+	err = qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &rnd, &buf)
+	a.NoError(err)
+	a.True(rowid.Valid)
+	a.NoError(protocol.Decode(buf, &pad))
+	mempad := cleanPad(updatedAccounts[updatedAccountIdx].pad)
+	a.Equal(mempad, pad)
+
+	old, err = qs.lookup(addr)
+	a.Equal(0, len(old.pad.AccountData.Assets))
+	a.Equal(numBaseAssets+numNewAssets, old.pad.NumAssetHoldings())
+	a.NotEmpty(old.rowid)
+
+	clone := func(s ledgercore.ExtendedAssetHolding) (t ledgercore.ExtendedAssetHolding) {
+		t = s
+		t.Groups = make([]ledgercore.AssetsHoldingGroup, len(s.Groups))
+		for i, g := range s.Groups {
+			t.Groups[i] = g
+		}
+		return
+	}
+
+	saved := clone(old.pad.ExtendedAssetHolding)
+	_, eah, err := loadHoldings(qs.loadAccountGroupDataStmt, old.pad.ExtendedAssetHolding, 0)
+	a.NoError(err)
+	a.Equal(saved, old.pad.ExtendedAssetHolding)
+	a.NotEqual(eah, old.pad.ExtendedAssetHolding)
+
+	_, eah, err = loadHoldings(qs.loadAccountGroupDataStmt, old.pad.ExtendedAssetHolding, old.round)
+	a.NoError(err)
+
+	_, eah, err = loadHoldings(qs.loadAccountGroupDataStmt, old.pad.ExtendedAssetHolding, old.round+1)
+	a.Error(err)
+	a.IsType(&MismatchingDatabaseRoundError{}, err)
 }

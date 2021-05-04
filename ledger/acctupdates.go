@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -1811,11 +1812,43 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
 		macct, indeltas := au.accounts[addr]
 		if indeltas {
+			// this is a helper method for loading full account data if needed
+			loadFull := func(addr basics.Address, delta *ledgercore.AccountDeltas, data *ledgercore.PersistedAccountData) (ledgercore.PersistedAccountData, error) {
+				// load existing holdings and apply deltas
+				// note, data.Assets are explicitly copied below (to preserve map data in au.accounts),
+				// and data.ExtendedAssetHolding.Groups are implicitly copied in loadHoldings
+				var holdings map[basics.AssetIndex]basics.AssetHolding
+				holdings, data.ExtendedAssetHolding, err = au.accountsq.loadHoldings(data.ExtendedAssetHolding, 0)
+				if err != nil {
+					return ledgercore.PersistedAccountData{}, err
+				}
+				assets := make(map[basics.AssetIndex]basics.AssetHolding, len(data.Assets)+len(holdings))
+				// apply loaded extended holdings
+				for aidx, holding := range holdings {
+					assets[aidx] = holding
+				}
+				// apply deltas
+				for aidx, holding := range data.Assets {
+					assets[aidx] = holding
+				}
+
+				// remove deleted assets that might come from loadHoldings
+				mods := delta.GetHoldingDeltas(addr)
+				for aidx, action := range mods {
+					if action == ledgercore.ActionDelete {
+						delete(assets, aidx)
+					}
+				}
+
+				data.Assets = assets
+				return *data, nil
+			}
+
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
 				if full && macct.data.ExtendedAssetHolding.Count != 0 {
-					macct.data.Assets, macct.data.ExtendedAssetHolding, err = au.accountsq.loadHoldings(macct.data.ExtendedAssetHolding)
+					macct.data, err = loadFull(addr, &au.deltas[offset-1], &macct.data)
 				}
 				return macct.data, err
 			}
@@ -1827,8 +1860,9 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 				offset--
 				d, ok := au.deltas[offset].Get(addr)
 				if ok {
+					// load existing holdings and apply deltas
 					if full && d.ExtendedAssetHolding.Count != 0 {
-						d.Assets, d.ExtendedAssetHolding, err = au.accountsq.loadHoldings(d.ExtendedAssetHolding)
+						d, err = loadFull(addr, &au.deltas[offset], &d)
 					}
 					return d, err
 				}
@@ -1841,7 +1875,13 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
 			if full && macct.pad.ExtendedAssetHolding.Count != 0 {
-				macct.pad.Assets, macct.pad.ExtendedAssetHolding, err = au.accountsq.loadHoldings(macct.pad.ExtendedAssetHolding)
+				macct.pad.Assets, macct.pad.ExtendedAssetHolding, err = au.accountsq.loadHoldings(macct.pad.ExtendedAssetHolding, macct.round)
+				var mismatchRoundErr *MismatchingDatabaseRoundError
+				if errors.As(err, &mismatchRoundErr) {
+					// go to waiting
+					// note, au.accountsMu is still held
+					goto retryLocked
+				}
 			}
 			return macct.pad, err
 		}
@@ -1856,9 +1896,18 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 		// against the database.
 		if full {
 			dbad, err = lookupFull(au.dbs.Rdb, addr)
+			var mismatchRoundErr *MismatchingDatabaseRoundError
+			if errors.As(err, &mismatchRoundErr) {
+				goto retryAcquireLock
+			}
 		} else {
 			dbad, err = au.accountsq.lookup(addr)
 		}
+
+		if err != nil {
+			return ledgercore.PersistedAccountData{}, err
+		}
+
 		if dbad.round == currentDbRound {
 			au.baseAccounts.writePending(dbad)
 			return dbad.pad, err
@@ -1868,8 +1917,12 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			au.log.Errorf("accountUpdates.lookupWithRewards: database round %d is behind in-memory round %d", dbad.round, currentDbRound)
 			return ledgercore.PersistedAccountData{}, &StaleDatabaseRoundError{databaseRound: dbad.round, memoryRound: currentDbRound}
 		}
+
+	retryAcquireLock:
 		au.accountsMu.RLock()
 		needUnlock = true
+
+	retryLocked:
 		for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
 			au.accountsReadCond.Wait()
 		}
@@ -1892,10 +1945,16 @@ func (au *accountUpdates) lookupHoldingWithoutRewards(rnd basics.Round, addr bas
 			if gi != -1 {
 				// if matching group found but the group is not loaded then load it
 				if ai == -1 {
-					_, pad.ExtendedAssetHolding.Groups[gi], err = loadHoldingGroup(loadStmt, pad.ExtendedAssetHolding.Groups[gi], nil)
+					var round basics.Round
+					_, pad.ExtendedAssetHolding.Groups[gi], round, err = loadHoldingGroup(loadStmt, pad.ExtendedAssetHolding.Groups[gi], nil)
 					if err != nil {
 						return err
 					}
+					if round != rnd {
+						au.log.Errorf("accountUpdates.lookupHoldingWithoutRewards: database round %d mismatching in-memory round %d", round, rnd)
+						return &MismatchingDatabaseRoundError{databaseRound: round, memoryRound: rnd}
+					}
+
 					_, ai = pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(cidx), gi)
 				}
 				if ai != -1 {
@@ -2259,6 +2318,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		err = compactDeltas.accountsLoadOld(tx)
 		if err != nil {
+			if e, ok := err.(*MismatchingDatabaseRoundError); ok {
+				au.log.Errorf("accountsLoadOld: database extension round %d mismatching base round %d", e.databaseRound, e.memoryRound)
+			}
 			return err
 		}
 

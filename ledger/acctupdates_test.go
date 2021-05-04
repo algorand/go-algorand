@@ -1184,7 +1184,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]ledgercore.PersistedAccoun
 	}
 	defer rows.Close()
 
-	stmt, err := tx.Prepare("SELECT data FROM accountext WHERE id=?")
+	stmt, err := tx.Prepare(loadAcctExtQuery)
 	if err != nil {
 		return
 	}
@@ -1211,7 +1211,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]ledgercore.PersistedAccoun
 			return
 		}
 		if pad.ExtendedAssetHolding.Count > 0 {
-			pad.AccountData.Assets, pad.ExtendedAssetHolding, err = loadHoldings(stmt, pad.ExtendedAssetHolding)
+			pad.AccountData.Assets, pad.ExtendedAssetHolding, err = loadHoldings(stmt, pad.ExtendedAssetHolding, 0)
 		}
 
 		copy(addr[:], addrbuf)
