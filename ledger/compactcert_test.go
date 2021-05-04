@@ -92,12 +92,10 @@ func TestValidateCompactCert(t *testing.T) {
 	t.Log(err)
 	require.NotNil(t, err)
 
-	// TODO: a case that actually passes with no err?
 	// Above cases leave validateCompactCert() with 100% coverage.
-	// crypto/compactcert.Verify has its own test that covers success
+	// crypto/compactcert.Verify has its own tests
 }
 
-// TODO: coverage of cases in AcceptableCompactCertWeight()
 func TestAcceptableCompactCertWeight(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var firstValid basics.Round
@@ -145,4 +143,29 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 	// Covers everything except "overdlow that shouldn't happen" branches
 }
 
-// TODO: coverage of cases in CompactCertParams()
+func TestCompactCertParams(t *testing.T) {
+	var votersHdr bookkeeping.BlockHeader
+	var hdr bookkeeping.BlockHeader
+
+	res, err := CompactCertParams(votersHdr, hdr)
+	require.Error(t, err) // not enabled
+
+	votersHdr.CurrentProtocol = "TestCompactCertParams"
+	proto := config.Consensus[votersHdr.CurrentProtocol]
+	proto.CompactCertRounds = 2
+	config.Consensus[votersHdr.CurrentProtocol] = proto
+	votersHdr.Round = 1
+	res, err = CompactCertParams(votersHdr, hdr)
+	require.Error(t, err) // wrong round
+
+	votersHdr.Round = 2
+	hdr.Round = 3
+	res, err = CompactCertParams(votersHdr, hdr)
+	require.Error(t, err) // wrong round
+
+	hdr.Round = 4
+	res, err = CompactCertParams(votersHdr, hdr)
+	require.Equal(t, hdr.Round+1, res.SigRound)
+
+	// Covers all cases except overflow
+}
