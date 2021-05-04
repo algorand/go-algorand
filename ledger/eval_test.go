@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -571,4 +573,60 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 	b.ReportMetric(float64(abTime)/float64(numTxns*b.N), "ns/eval_validate_tx")
 
 	b.StopTimer()
+}
+
+func TestCowCompactCert(t *testing.T) {
+	var certRnd basics.Round
+	var certType protocol.CompactCertType
+	var cert compactcert.Cert
+	var atRound basics.Round
+	var validate bool
+	accts0 := randomAccounts(20, true)
+	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
+	blockErr := make(map[basics.Round]error)
+	ml := mockLedger{balanceMap: accts0, blocks: blocks, blockErr: blockErr}
+	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
+
+	certType = protocol.CompactCertType(1234) // bad cert type
+	err := c0.compactCert(certRnd, certType, cert, atRound, validate)
+	require.Error(t, err)
+
+	// no certRnd block
+	certType = protocol.CompactCertBasic
+	noBlockErr := errors.New("no block")
+	blockErr[3] = noBlockErr
+	certRnd = 3
+	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	require.Error(t, err)
+
+	// no votersRnd block
+	// this is slightly a mess of things that don't quite line up with likely usage
+	validate = true
+	var certHdr bookkeeping.BlockHeader
+	certHdr.CurrentProtocol = "TestCowCompactCert"
+	certHdr.Round = 1
+	proto := config.Consensus[certHdr.CurrentProtocol]
+	proto.CompactCertRounds = 2
+	config.Consensus[certHdr.CurrentProtocol] = proto
+	blocks[certHdr.Round] = certHdr
+
+	certHdr.Round = 15
+	blocks[certHdr.Round] = certHdr
+	certRnd = certHdr.Round
+	blockErr[13] = noBlockErr
+	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	require.Error(t, err)
+
+	// validate fail
+	certHdr.Round = 1
+	certRnd = certHdr.Round
+	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	require.Error(t, err)
+
+	// fall through to no err
+	validate = false
+	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	require.NoError(t, err)
+
+	// 100% coverage
 }
