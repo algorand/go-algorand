@@ -51,6 +51,14 @@ func init() {
 	minFee = basics.MicroAlgos{Raw: params.MinTxnFee}
 }
 
+func gadify(txgroup []transactions.SignedTxn) []transactions.SignedTxnWithAD {
+	txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
+	for i, tx := range txgroup {
+		txgroupad[i].SignedTxn = tx
+	}
+	return txgroupad
+}
+
 func TestBlockEvaluator(t *testing.T) {
 	genesisInitState, addrs, keys := genesis(10)
 
@@ -87,6 +95,52 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.Transaction(st, transactions.ApplyData{})
 	require.NoError(t, err)
 
+	// Broken signature should fail
+	stbad := st
+	st.Sig[2] ^= 8
+	txgroup := []transactions.SignedTxn{stbad}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+
+	// Repeat should fail
+	txgroup = []transactions.SignedTxn{st}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.Error(t, err)
+
+	// out of range should fail
+	btxn := txn
+	btxn.FirstValid++
+	btxn.LastValid += 2
+	st = btxn.Sign(keys[0])
+	txgroup = []transactions.SignedTxn{st}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.Error(t, err)
+
+	// bogus group should fail
+	btxn = txn
+	btxn.Group[1] = 1
+	st = btxn.Sign(keys[0])
+	txgroup = []transactions.SignedTxn{st}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.Error(t, err)
+
+	// mixed fields should fail
+	btxn = txn
+	btxn.XferAsset = 3
+	st = btxn.Sign(keys[0])
+	txgroup = []transactions.SignedTxn{st}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	// Because they fail TestTransactionGroup they won't get added to the txn pool and so they won't actually be run; actually running the txn doesn't check txn.WellFormed()
+	// err = eval.Transaction(st, transactions.ApplyData{})
+	// require.Error(t, err)
+
 	selfTxn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -101,8 +155,57 @@ func TestBlockEvaluator(t *testing.T) {
 			Amount:   basics.MicroAlgos{Raw: 100},
 		},
 	}
-	err = eval.Transaction(selfTxn.Sign(keys[2]), transactions.ApplyData{})
+	stxn := selfTxn.Sign(keys[2])
+
+	// TestTransactionGroup() and Transaction() should have the same outcome, but work slightly different code paths.
+	txgroup = []transactions.SignedTxn{stxn}
+	err = eval.TestTransactionGroup(txgroup)
 	require.NoError(t, err)
+
+	err = eval.Transaction(stxn, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	t3 := txn
+	t3.Amount.Raw++
+	t4 := selfTxn
+	t4.Amount.Raw++
+
+	// a group without .Group should fail
+	s3 := t3.Sign(keys[0])
+	s4 := t4.Sign(keys[2])
+	txgroup = []transactions.SignedTxn{s3, s4}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	txgroupad := gadify(txgroup)
+	err = eval.TransactionGroup(txgroupad)
+	require.Error(t, err)
+
+	// Test a group that should work
+	var group transactions.TxGroup
+	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(t3), crypto.HashObj(t4)}
+	t3.Group = crypto.HashObj(group)
+	t4.Group = t3.Group
+	s3 = t3.Sign(keys[0])
+	s4 = t4.Sign(keys[2])
+	txgroup = []transactions.SignedTxn{s3, s4}
+	err = eval.TestTransactionGroup(txgroup)
+	require.NoError(t, err)
+
+	// disagreement on Group id should fail
+	t4bad := t4
+	t4bad.Group[3] ^= 3
+	s4bad := t4bad.Sign(keys[2])
+	txgroup = []transactions.SignedTxn{s3, s4bad}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	txgroupad = gadify(txgroup)
+	err = eval.TransactionGroup(txgroupad)
+	require.Error(t, err)
+
+	// missing part of the group should fail
+	txgroup = []transactions.SignedTxn{s3}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
 
 	validatedBlock, err := eval.GenerateBlock()
 	require.NoError(t, err)
@@ -422,6 +525,11 @@ ok:
 				}},
 		},
 	}
+	txgroup := []transactions.SignedTxn{stxn1, stxn2}
+	err = eval.TestTransactionGroup(txgroup)
+	if err != nil {
+		return eval, addrs[0], err
+	}
 	err = eval.transactionGroup(g)
 	return eval, addrs[0], err
 }
@@ -629,4 +737,32 @@ func TestCowCompactCert(t *testing.T) {
 	require.NoError(t, err)
 
 	// 100% coverage
+}
+
+// a couple trivial tests that don't need setup
+// see TestBlockEvaluator for more
+func TestTestTransactionGroup(t *testing.T) {
+	var txgroup []transactions.SignedTxn
+	eval := BlockEvaluator{}
+	err := eval.TestTransactionGroup(txgroup)
+	require.NoError(t, err) // nothing to do, no problem
+
+	eval.proto.MaxTxGroupSize = 16
+	txgroup = make([]transactions.SignedTxn, 17)
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err) // too many
+}
+
+// test BlockEvaluator.transactionGroup()
+// some trivial checks that require no setup
+func TestPrivateTransactionGroup(t *testing.T) {
+	var txgroup []transactions.SignedTxnWithAD
+	eval := BlockEvaluator{}
+	err := eval.transactionGroup(txgroup)
+	require.NoError(t, err) // nothing to do, no problem
+
+	eval.proto.MaxTxGroupSize = 16
+	txgroup = make([]transactions.SignedTxnWithAD, 17)
+	err = eval.transactionGroup(txgroup)
+	require.Error(t, err) // too many
 }
