@@ -201,7 +201,9 @@ func resolveFile(filename string, baseDir string) string {
 	if filepath.IsAbs(filename) {
 		return filename
 	}
-
+	if filename == "" {
+		return ""
+	}
 	// Assume path is relative to the directory of the template file
 	return filepath.Join(baseDir, filename)
 }
