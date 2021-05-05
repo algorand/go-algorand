@@ -134,14 +134,13 @@ func compareEventChannels(t *testing.T, ch1, ch2 <-chan externalEvent) bool {
 func TestPseudonode(t *testing.T) {
 	t.Parallel()
 
-	logging.Base().SetLevel(logging.Warn)
-
 	// generate a nice, fixed hash.
 	rootSeed := sha256.Sum256([]byte(t.Name()))
 	accounts, balances := createTestAccountsAndBalances(t, 10, rootSeed[:])
 	ledger := makeTestLedger(balances)
 
-	sLogger := serviceLogger{logging.Base()}
+	sLogger := serviceLogger{logging.NewLogger()}
+	sLogger.SetLevel(logging.Warn)
 
 	keyManager := simpleKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
@@ -391,14 +390,13 @@ func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []a
 func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	t.Parallel()
 
-	logging.Base().SetLevel(logging.Warn)
-
 	// generate a nice, fixed hash.
 	rootSeed := sha256.Sum256([]byte(t.Name()))
 	accounts, balances := createTestAccountsAndBalances(t, 10, rootSeed[:])
 	ledger := makeTestLedger(balances)
 
-	sLogger := serviceLogger{logging.Base()}
+	sLogger := serviceLogger{logging.NewLogger()}
+	sLogger.SetLevel(logging.Warn)
 
 	keyManager := simpleKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
