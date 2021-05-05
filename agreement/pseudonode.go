@@ -205,6 +205,11 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) {
 
 	cparams, err := n.ledger.ConsensusParams(ParamsRound(voteRound))
 	if err != nil {
+		// if we cannot figure out the balance round number, reset the parameters so that we won't be sending
+		// any vote.
+		n.log.Warnf("asyncPseudonode: unable to retrieve consensus parameters for voting round %d : %v", voteRound, err)
+		n.participationKeysRound = basics.Round(0)
+		n.participationKeys = nil
 		return
 	}
 	balanceRound := balanceRound(voteRound, cparams)

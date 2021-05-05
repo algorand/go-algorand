@@ -225,7 +225,7 @@ type LedgerWriter interface {
 
 // A KeyManager stores and deletes participation keys.
 type KeyManager interface {
-	// Keys returns an immutable array of voting keys that are
+	// VotingKeys returns an immutable array of voting keys that are
 	// valid for the provided votingRound, and were available at
 	// keysRound.
 	VotingKeys(votingRound, keysRound basics.Round) []account.Participation
