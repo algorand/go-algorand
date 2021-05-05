@@ -27,25 +27,25 @@ const (
 	// number of ApplicationArgs that a transaction decoded off of the wire
 	// can contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
-	encodedMaxApplicationArgs = 32
+	EncodedMaxApplicationArgs = 32
 
 	// encodedMaxAccounts sets the allocation bound for the maximum number
 	// of Accounts that a transaction decoded off of the wire can contain.
 	// Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
-	encodedMaxAccounts = 32
+	EncodedMaxAccounts = 32
 
 	// encodedMaxForeignApps sets the allocation bound for the maximum
 	// number of ForeignApps that a transaction decoded off of the wire can
 	// contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
-	encodedMaxForeignApps = 32
+	EncodedMaxForeignApps = 32
 
 	// encodedMaxForeignAssets sets the allocation bound for the maximum
 	// number of ForeignAssets that a transaction decoded off of the wire
 	// can contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
-	encodedMaxForeignAssets = 32
+	EncodedMaxForeignAssets = 32
 )
 
 // OnCompletion is an enum representing some layer 1 side effect that an
@@ -100,22 +100,22 @@ type ApplicationCallTxnFields struct {
 
 	// ApplicationArgs are arguments accessible to the executing
 	// ApprovalProgram or ClearStateProgram.
-	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs"`
+	ApplicationArgs [][]byte `codec:"apaa,allocbound=EncodedMaxApplicationArgs"`
 
 	// Accounts are accounts whose balance records are accessible by the
 	// executing ApprovalProgram or ClearStateProgram. To access LocalState
 	// for an account besides the sender, that account's address must be
 	// listed here.
-	Accounts []basics.Address `codec:"apat,allocbound=encodedMaxAccounts"`
+	Accounts []basics.Address `codec:"apat,allocbound=EncodedMaxAccounts"`
 
 	// ForeignApps are application IDs for applications besides this one
 	// whose GlobalState may be read by the executing ApprovalProgram or
 	// ClearStateProgram.
-	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
+	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=EncodedMaxForeignApps"`
 
 	// ForeignAssets are asset IDs for assets whose AssetParams may be read
 	// by the executing ApprovalProgram or ClearStateProgram.
-	ForeignAssets []basics.AssetIndex `codec:"apas,allocbound=encodedMaxForeignAssets"`
+	ForeignAssets []basics.AssetIndex `codec:"apas,allocbound=EncodedMaxForeignAssets"`
 
 	// LocalStateSchema specifies the maximum number of each type that may
 	// appear in the local key/value store of users who opt in to this

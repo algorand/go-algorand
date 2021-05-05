@@ -209,6 +209,14 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 	out, err = decodeTransactionGroupsOld(encodedGroupsBytes)
 	require.NoError(t, err)
 	require.ElementsMatch(t, txnGroups, out)
+
+	count := make(map[protocol.TxType]int)
+	for _, txg := range txnGroups {
+		for _, txn := range txg.Transactions {
+			count[txn.Txn.Type] += 1
+		}
+	}
+	fmt.Println(count)
 }
 
 func BenchmarkTxnGroupEncoding (b *testing.B) {
