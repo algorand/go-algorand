@@ -217,13 +217,13 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 	count := make(map[protocol.TxType]int)
 	for _, txg := range txnGroups {
 		for _, txn := range txg.Transactions {
-			count[txn.Txn.Type] += 1
+			count[txn.Txn.Type]++
 		}
 	}
 	fmt.Println(count)
 }
 
-func BenchmarkTxnGroupEncoding (b *testing.B) {
+func BenchmarkTxnGroupEncoding(b *testing.B) {
 	txnGroups, err := txnGroupsData()
 	require.NoError(b, err)
 	var encodedGroupsBytes []byte
@@ -238,7 +238,7 @@ func BenchmarkTxnGroupEncoding (b *testing.B) {
 	fmt.Println("new data: ", len(encodedGroupsBytes))
 }
 
-func BenchmarkTxnGroupDecoding (b *testing.B) {
+func BenchmarkTxnGroupDecoding(b *testing.B) {
 	txnGroups, err := txnGroupsData()
 	require.NoError(b, err)
 
@@ -252,7 +252,7 @@ func BenchmarkTxnGroupDecoding (b *testing.B) {
 	}
 }
 
-func BenchmarkTxnGroupEncodingOld (b *testing.B) {
+func BenchmarkTxnGroupEncodingOld(b *testing.B) {
 	txnGroups, err := txnGroupsData()
 	require.NoError(b, err)
 	var encodedGroupsBytes []byte
@@ -267,7 +267,7 @@ func BenchmarkTxnGroupEncodingOld (b *testing.B) {
 	fmt.Println("old data: ", len(encodedGroupsBytes))
 }
 
-func BenchmarkTxnGroupDecodingOld (b *testing.B) {
+func BenchmarkTxnGroupDecodingOld(b *testing.B) {
 	txnGroups, err := txnGroupsData()
 	require.NoError(b, err)
 

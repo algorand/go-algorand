@@ -11,8 +11,8 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-func TestMarshalUnmarshalAddresses(t *testing.T) {
-	v := Addresses{}
+func TestMarshalUnmarshaladdresses(t *testing.T) {
+	v := addresses{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -31,12 +31,12 @@ func TestMarshalUnmarshalAddresses(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingAddresses(t *testing.T) {
-	protocol.RunEncodingTest(t, &Addresses{})
+func TestRandomizedEncodingaddresses(t *testing.T) {
+	protocol.RunEncodingTest(t, &addresses{})
 }
 
-func BenchmarkMarshalMsgAddresses(b *testing.B) {
-	v := Addresses{}
+func BenchmarkMarshalMsgaddresses(b *testing.B) {
+	v := addresses{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -44,8 +44,8 @@ func BenchmarkMarshalMsgAddresses(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgAddresses(b *testing.B) {
-	v := Addresses{}
+func BenchmarkAppendMsgaddresses(b *testing.B) {
+	v := addresses{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -56,8 +56,8 @@ func BenchmarkAppendMsgAddresses(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalAddresses(b *testing.B) {
-	v := Addresses{}
+func BenchmarkUnmarshaladdresses(b *testing.B) {
+	v := addresses{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -70,8 +70,8 @@ func BenchmarkUnmarshalAddresses(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalAppIndeces(t *testing.T) {
-	v := AppIndeces{}
+func TestMarshalUnmarshalappIndeces(t *testing.T) {
+	v := appIndeces{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -90,12 +90,12 @@ func TestMarshalUnmarshalAppIndeces(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingAppIndeces(t *testing.T) {
-	protocol.RunEncodingTest(t, &AppIndeces{})
+func TestRandomizedEncodingappIndeces(t *testing.T) {
+	protocol.RunEncodingTest(t, &appIndeces{})
 }
 
-func BenchmarkMarshalMsgAppIndeces(b *testing.B) {
-	v := AppIndeces{}
+func BenchmarkMarshalMsgappIndeces(b *testing.B) {
+	v := appIndeces{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -103,8 +103,8 @@ func BenchmarkMarshalMsgAppIndeces(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgAppIndeces(b *testing.B) {
-	v := AppIndeces{}
+func BenchmarkAppendMsgappIndeces(b *testing.B) {
+	v := appIndeces{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -115,8 +115,8 @@ func BenchmarkAppendMsgAppIndeces(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalAppIndeces(b *testing.B) {
-	v := AppIndeces{}
+func BenchmarkUnmarshalappIndeces(b *testing.B) {
+	v := appIndeces{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -129,8 +129,8 @@ func BenchmarkUnmarshalAppIndeces(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalApplicationArgs(t *testing.T) {
-	v := ApplicationArgs{}
+func TestMarshalUnmarshalapplicationArgs(t *testing.T) {
+	v := applicationArgs{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -149,12 +149,12 @@ func TestMarshalUnmarshalApplicationArgs(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingApplicationArgs(t *testing.T) {
-	protocol.RunEncodingTest(t, &ApplicationArgs{})
+func TestRandomizedEncodingapplicationArgs(t *testing.T) {
+	protocol.RunEncodingTest(t, &applicationArgs{})
 }
 
-func BenchmarkMarshalMsgApplicationArgs(b *testing.B) {
-	v := ApplicationArgs{}
+func BenchmarkMarshalMsgapplicationArgs(b *testing.B) {
+	v := applicationArgs{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -162,8 +162,8 @@ func BenchmarkMarshalMsgApplicationArgs(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgApplicationArgs(b *testing.B) {
-	v := ApplicationArgs{}
+func BenchmarkAppendMsgapplicationArgs(b *testing.B) {
+	v := applicationArgs{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -174,8 +174,8 @@ func BenchmarkAppendMsgApplicationArgs(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalApplicationArgs(b *testing.B) {
-	v := ApplicationArgs{}
+func BenchmarkUnmarshalapplicationArgs(b *testing.B) {
+	v := applicationArgs{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -188,8 +188,8 @@ func BenchmarkUnmarshalApplicationArgs(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalAssetIndeces(t *testing.T) {
-	v := AssetIndeces{}
+func TestMarshalUnmarshalassetIndeces(t *testing.T) {
+	v := assetIndeces{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -208,12 +208,12 @@ func TestMarshalUnmarshalAssetIndeces(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingAssetIndeces(t *testing.T) {
-	protocol.RunEncodingTest(t, &AssetIndeces{})
+func TestRandomizedEncodingassetIndeces(t *testing.T) {
+	protocol.RunEncodingTest(t, &assetIndeces{})
 }
 
-func BenchmarkMarshalMsgAssetIndeces(b *testing.B) {
-	v := AssetIndeces{}
+func BenchmarkMarshalMsgassetIndeces(b *testing.B) {
+	v := assetIndeces{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -221,8 +221,8 @@ func BenchmarkMarshalMsgAssetIndeces(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgAssetIndeces(b *testing.B) {
-	v := AssetIndeces{}
+func BenchmarkAppendMsgassetIndeces(b *testing.B) {
+	v := assetIndeces{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -233,8 +233,8 @@ func BenchmarkAppendMsgAssetIndeces(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalAssetIndeces(b *testing.B) {
-	v := AssetIndeces{}
+func BenchmarkUnmarshalassetIndeces(b *testing.B) {
+	v := assetIndeces{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

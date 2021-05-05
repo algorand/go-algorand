@@ -23,25 +23,25 @@ import (
 )
 
 const (
-	// encodedMaxApplicationArgs sets the allocation bound for the maximum
+	// EncodedMaxApplicationArgs sets the allocation bound for the maximum
 	// number of ApplicationArgs that a transaction decoded off of the wire
 	// can contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
 	EncodedMaxApplicationArgs = 32
 
-	// encodedMaxAccounts sets the allocation bound for the maximum number
+	// EncodedMaxAccounts sets the allocation bound for the maximum number
 	// of Accounts that a transaction decoded off of the wire can contain.
 	// Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
 	EncodedMaxAccounts = 32
 
-	// encodedMaxForeignApps sets the allocation bound for the maximum
+	// EncodedMaxForeignApps sets the allocation bound for the maximum
 	// number of ForeignApps that a transaction decoded off of the wire can
 	// contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
 	EncodedMaxForeignApps = 32
 
-	// encodedMaxForeignAssets sets the allocation bound for the maximum
+	// EncodedMaxForeignAssets sets the allocation bound for the maximum
 	// number of ForeignAssets that a transaction decoded off of the wire
 	// can contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds

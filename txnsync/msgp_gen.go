@@ -13,7 +13,7 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// Addresses
+// addresses
 //     |-----> MarshalMsg
 //     |-----> CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
@@ -21,7 +21,7 @@ import (
 //     |-----> Msgsize
 //     |-----> MsgIsZero
 //
-// AppIndeces
+// appIndeces
 //      |-----> MarshalMsg
 //      |-----> CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
@@ -29,7 +29,7 @@ import (
 //      |-----> Msgsize
 //      |-----> MsgIsZero
 //
-// ApplicationArgs
+// applicationArgs
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
@@ -37,29 +37,13 @@ import (
 //        |-----> Msgsize
 //        |-----> MsgIsZero
 //
-// AssetIndeces
+// assetIndeces
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> Msgsize
 //       |-----> MsgIsZero
-//
-// Program
-//    |-----> MarshalMsg
-//    |-----> CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> Msgsize
-//    |-----> MsgIsZero
-//
-// TxType
-//    |-----> MarshalMsg
-//    |-----> CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> Msgsize
-//    |-----> MsgIsZero
 //
 // bitmask
 //    |-----> MarshalMsg
@@ -165,6 +149,14 @@ import (
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
 //
+// program
+//    |-----> MarshalMsg
+//    |-----> CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> Msgsize
+//    |-----> MsgIsZero
+//
 // requestParams
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
@@ -207,29 +199,29 @@ import (
 //
 
 // MarshalMsg implements msgp.Marshaler
-func (z Addresses) MarshalMsg(b []byte) (o []byte) {
+func (z addresses) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	if z == nil {
 		o = msgp.AppendNil(o)
 	} else {
 		o = msgp.AppendArrayHeader(o, uint32(len(z)))
 	}
-	for za0001 := range z {
-		o = z[za0001].MarshalMsg(o)
+	for za0003 := range z {
+		o = z[za0003].MarshalMsg(o)
 	}
 	return
 }
 
-func (_ Addresses) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(Addresses)
+func (_ addresses) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(addresses)
 	if !ok {
-		_, ok = (z).(*Addresses)
+		_, ok = (z).(*addresses)
 	}
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Addresses) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *addresses) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -247,7 +239,7 @@ func (z *Addresses) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	} else if (*z) != nil && cap((*z)) >= zb0002 {
 		(*z) = (*z)[:zb0002]
 	} else {
-		(*z) = make(Addresses, zb0002)
+		(*z) = make(addresses, zb0002)
 	}
 	for zb0001 := range *z {
 		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
@@ -260,27 +252,27 @@ func (z *Addresses) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *Addresses) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Addresses)
+func (_ *addresses) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*addresses)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z Addresses) Msgsize() (s int) {
+func (z addresses) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
-	for za0001 := range z {
-		s += z[za0001].Msgsize()
+	for za0003 := range z {
+		s += z[za0003].Msgsize()
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z Addresses) MsgIsZero() bool {
+func (z addresses) MsgIsZero() bool {
 	return len(z) == 0
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z AppIndeces) MarshalMsg(b []byte) (o []byte) {
+func (z appIndeces) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	if z == nil {
 		o = msgp.AppendNil(o)
@@ -293,16 +285,16 @@ func (z AppIndeces) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ AppIndeces) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(AppIndeces)
+func (_ appIndeces) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(appIndeces)
 	if !ok {
-		_, ok = (z).(*AppIndeces)
+		_, ok = (z).(*appIndeces)
 	}
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AppIndeces) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *appIndeces) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -320,7 +312,7 @@ func (z *AppIndeces) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	} else if (*z) != nil && cap((*z)) >= zb0002 {
 		(*z) = (*z)[:zb0002]
 	} else {
-		(*z) = make(AppIndeces, zb0002)
+		(*z) = make(appIndeces, zb0002)
 	}
 	for zb0001 := range *z {
 		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
@@ -333,13 +325,13 @@ func (z *AppIndeces) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *AppIndeces) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*AppIndeces)
+func (_ *appIndeces) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*appIndeces)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z AppIndeces) Msgsize() (s int) {
+func (z appIndeces) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
 	for za0001 := range z {
 		s += z[za0001].Msgsize()
@@ -348,12 +340,12 @@ func (z AppIndeces) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z AppIndeces) MsgIsZero() bool {
+func (z appIndeces) MsgIsZero() bool {
 	return len(z) == 0
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z ApplicationArgs) MarshalMsg(b []byte) (o []byte) {
+func (z applicationArgs) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	if z == nil {
 		o = msgp.AppendNil(o)
@@ -366,16 +358,16 @@ func (z ApplicationArgs) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ ApplicationArgs) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(ApplicationArgs)
+func (_ applicationArgs) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(applicationArgs)
 	if !ok {
-		_, ok = (z).(*ApplicationArgs)
+		_, ok = (z).(*applicationArgs)
 	}
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ApplicationArgs) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *applicationArgs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -393,7 +385,7 @@ func (z *ApplicationArgs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	} else if (*z) != nil && cap((*z)) >= zb0002 {
 		(*z) = (*z)[:zb0002]
 	} else {
-		(*z) = make(ApplicationArgs, zb0002)
+		(*z) = make(applicationArgs, zb0002)
 	}
 	for zb0001 := range *z {
 		(*z)[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z)[zb0001])
@@ -406,13 +398,13 @@ func (z *ApplicationArgs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *ApplicationArgs) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*ApplicationArgs)
+func (_ *applicationArgs) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*applicationArgs)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z ApplicationArgs) Msgsize() (s int) {
+func (z applicationArgs) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
 	for za0001 := range z {
 		s += msgp.BytesPrefixSize + len(z[za0001])
@@ -421,12 +413,12 @@ func (z ApplicationArgs) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z ApplicationArgs) MsgIsZero() bool {
+func (z applicationArgs) MsgIsZero() bool {
 	return len(z) == 0
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z AssetIndeces) MarshalMsg(b []byte) (o []byte) {
+func (z assetIndeces) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	if z == nil {
 		o = msgp.AppendNil(o)
@@ -439,16 +431,16 @@ func (z AssetIndeces) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ AssetIndeces) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(AssetIndeces)
+func (_ assetIndeces) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(assetIndeces)
 	if !ok {
-		_, ok = (z).(*AssetIndeces)
+		_, ok = (z).(*assetIndeces)
 	}
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AssetIndeces) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *assetIndeces) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -466,7 +458,7 @@ func (z *AssetIndeces) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	} else if (*z) != nil && cap((*z)) >= zb0002 {
 		(*z) = (*z)[:zb0002]
 	} else {
-		(*z) = make(AssetIndeces, zb0002)
+		(*z) = make(assetIndeces, zb0002)
 	}
 	for zb0001 := range *z {
 		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
@@ -479,13 +471,13 @@ func (z *AssetIndeces) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
-func (_ *AssetIndeces) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*AssetIndeces)
+func (_ *assetIndeces) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*assetIndeces)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z AssetIndeces) Msgsize() (s int) {
+func (z assetIndeces) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
 	for za0001 := range z {
 		s += z[za0001].Msgsize()
@@ -494,110 +486,8 @@ func (z AssetIndeces) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z AssetIndeces) MsgIsZero() bool {
+func (z assetIndeces) MsgIsZero() bool {
 	return len(z) == 0
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z Program) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendBytes(o, []byte(z))
-	return
-}
-
-func (_ Program) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(Program)
-	if !ok {
-		_, ok = (z).(*Program)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *Program) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 []byte
-		var zb0002 int
-		zb0002, err = msgp.ReadBytesBytesHeader(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 > config.MaxAppProgramLen {
-			err = msgp.ErrOverflow(uint64(zb0002), uint64(config.MaxAppProgramLen))
-			return
-		}
-		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = Program(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *Program) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Program)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z Program) Msgsize() (s int) {
-	s = msgp.BytesPrefixSize + len([]byte(z))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z Program) MsgIsZero() bool {
-	return len(z) == 0
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z TxType) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendByte(o, byte(z))
-	return
-}
-
-func (_ TxType) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(TxType)
-	if !ok {
-		_, ok = (z).(*TxType)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 byte
-		zb0001, bts, err = msgp.ReadByteBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = TxType(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *TxType) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*TxType)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z TxType) Msgsize() (s int) {
-	s = msgp.ByteSize
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z TxType) MsgIsZero() bool {
-	return z == 0
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1086,7 +976,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 			} else if (*z).ApplicationArgs != nil && cap((*z).ApplicationArgs) >= zb0025 {
 				(*z).ApplicationArgs = ((*z).ApplicationArgs)[:zb0025]
 			} else {
-				(*z).ApplicationArgs = make([]ApplicationArgs, zb0025)
+				(*z).ApplicationArgs = make([]applicationArgs, zb0025)
 			}
 			for zb0003 := range (*z).ApplicationArgs {
 				var zb0027 int
@@ -1106,7 +996,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				} else if (*z).ApplicationArgs[zb0003] != nil && cap((*z).ApplicationArgs[zb0003]) >= zb0027 {
 					(*z).ApplicationArgs[zb0003] = ((*z).ApplicationArgs[zb0003])[:zb0027]
 				} else {
-					(*z).ApplicationArgs[zb0003] = make(ApplicationArgs, zb0027)
+					(*z).ApplicationArgs[zb0003] = make(applicationArgs, zb0027)
 				}
 				for zb0004 := range (*z).ApplicationArgs[zb0003] {
 					(*z).ApplicationArgs[zb0003][zb0004], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationArgs[zb0003][zb0004])
@@ -1158,7 +1048,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 			} else if (*z).Accounts != nil && cap((*z).Accounts) >= zb0031 {
 				(*z).Accounts = ((*z).Accounts)[:zb0031]
 			} else {
-				(*z).Accounts = make([]Addresses, zb0031)
+				(*z).Accounts = make([]addresses, zb0031)
 			}
 			for zb0005 := range (*z).Accounts {
 				var zb0033 int
@@ -1178,7 +1068,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				} else if (*z).Accounts[zb0005] != nil && cap((*z).Accounts[zb0005]) >= zb0033 {
 					(*z).Accounts[zb0005] = ((*z).Accounts[zb0005])[:zb0033]
 				} else {
-					(*z).Accounts[zb0005] = make(Addresses, zb0033)
+					(*z).Accounts[zb0005] = make(addresses, zb0033)
 				}
 				for zb0006 := range (*z).Accounts[zb0005] {
 					bts, err = (*z).Accounts[zb0005][zb0006].UnmarshalMsg(bts)
@@ -1230,7 +1120,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 			} else if (*z).ForeignApps != nil && cap((*z).ForeignApps) >= zb0037 {
 				(*z).ForeignApps = ((*z).ForeignApps)[:zb0037]
 			} else {
-				(*z).ForeignApps = make([]AppIndeces, zb0037)
+				(*z).ForeignApps = make([]appIndeces, zb0037)
 			}
 			for zb0007 := range (*z).ForeignApps {
 				var zb0039 int
@@ -1250,7 +1140,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				} else if (*z).ForeignApps[zb0007] != nil && cap((*z).ForeignApps[zb0007]) >= zb0039 {
 					(*z).ForeignApps[zb0007] = ((*z).ForeignApps[zb0007])[:zb0039]
 				} else {
-					(*z).ForeignApps[zb0007] = make(AppIndeces, zb0039)
+					(*z).ForeignApps[zb0007] = make(appIndeces, zb0039)
 				}
 				for zb0008 := range (*z).ForeignApps[zb0007] {
 					bts, err = (*z).ForeignApps[zb0007][zb0008].UnmarshalMsg(bts)
@@ -1302,7 +1192,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 			} else if (*z).ForeignAssets != nil && cap((*z).ForeignAssets) >= zb0043 {
 				(*z).ForeignAssets = ((*z).ForeignAssets)[:zb0043]
 			} else {
-				(*z).ForeignAssets = make([]AssetIndeces, zb0043)
+				(*z).ForeignAssets = make([]assetIndeces, zb0043)
 			}
 			for zb0009 := range (*z).ForeignAssets {
 				var zb0045 int
@@ -1322,7 +1212,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				} else if (*z).ForeignAssets[zb0009] != nil && cap((*z).ForeignAssets[zb0009]) >= zb0045 {
 					(*z).ForeignAssets[zb0009] = ((*z).ForeignAssets[zb0009])[:zb0045]
 				} else {
-					(*z).ForeignAssets[zb0009] = make(AssetIndeces, zb0045)
+					(*z).ForeignAssets[zb0009] = make(assetIndeces, zb0045)
 				}
 				for zb0010 := range (*z).ForeignAssets[zb0009] {
 					bts, err = (*z).ForeignAssets[zb0009][zb0010].UnmarshalMsg(bts)
@@ -1476,7 +1366,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 			} else if (*z).ApprovalProgram != nil && cap((*z).ApprovalProgram) >= zb0057 {
 				(*z).ApprovalProgram = ((*z).ApprovalProgram)[:zb0057]
 			} else {
-				(*z).ApprovalProgram = make([]Program, zb0057)
+				(*z).ApprovalProgram = make([]program, zb0057)
 			}
 			for zb0013 := range (*z).ApprovalProgram {
 				{
@@ -1496,7 +1386,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 						err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram", zb0013)
 						return
 					}
-					(*z).ApprovalProgram[zb0013] = Program(zb0059)
+					(*z).ApprovalProgram[zb0013] = program(zb0059)
 				}
 			}
 		}
@@ -1541,7 +1431,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 			} else if (*z).ClearStateProgram != nil && cap((*z).ClearStateProgram) >= zb0063 {
 				(*z).ClearStateProgram = ((*z).ClearStateProgram)[:zb0063]
 			} else {
-				(*z).ClearStateProgram = make([]Program, zb0063)
+				(*z).ClearStateProgram = make([]program, zb0063)
 			}
 			for zb0014 := range (*z).ClearStateProgram {
 				{
@@ -1561,7 +1451,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 						err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram", zb0014)
 						return
 					}
-					(*z).ClearStateProgram[zb0014] = Program(zb0065)
+					(*z).ClearStateProgram[zb0014] = program(zb0065)
 				}
 			}
 		}
@@ -1722,7 +1612,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				} else if (*z).ApplicationArgs != nil && cap((*z).ApplicationArgs) >= zb0077 {
 					(*z).ApplicationArgs = ((*z).ApplicationArgs)[:zb0077]
 				} else {
-					(*z).ApplicationArgs = make([]ApplicationArgs, zb0077)
+					(*z).ApplicationArgs = make([]applicationArgs, zb0077)
 				}
 				for zb0003 := range (*z).ApplicationArgs {
 					var zb0079 int
@@ -1742,7 +1632,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					} else if (*z).ApplicationArgs[zb0003] != nil && cap((*z).ApplicationArgs[zb0003]) >= zb0079 {
 						(*z).ApplicationArgs[zb0003] = ((*z).ApplicationArgs[zb0003])[:zb0079]
 					} else {
-						(*z).ApplicationArgs[zb0003] = make(ApplicationArgs, zb0079)
+						(*z).ApplicationArgs[zb0003] = make(applicationArgs, zb0079)
 					}
 					for zb0004 := range (*z).ApplicationArgs[zb0003] {
 						(*z).ApplicationArgs[zb0003][zb0004], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationArgs[zb0003][zb0004])
@@ -1790,7 +1680,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				} else if (*z).Accounts != nil && cap((*z).Accounts) >= zb0083 {
 					(*z).Accounts = ((*z).Accounts)[:zb0083]
 				} else {
-					(*z).Accounts = make([]Addresses, zb0083)
+					(*z).Accounts = make([]addresses, zb0083)
 				}
 				for zb0005 := range (*z).Accounts {
 					var zb0085 int
@@ -1810,7 +1700,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					} else if (*z).Accounts[zb0005] != nil && cap((*z).Accounts[zb0005]) >= zb0085 {
 						(*z).Accounts[zb0005] = ((*z).Accounts[zb0005])[:zb0085]
 					} else {
-						(*z).Accounts[zb0005] = make(Addresses, zb0085)
+						(*z).Accounts[zb0005] = make(addresses, zb0085)
 					}
 					for zb0006 := range (*z).Accounts[zb0005] {
 						bts, err = (*z).Accounts[zb0005][zb0006].UnmarshalMsg(bts)
@@ -1858,7 +1748,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				} else if (*z).ForeignApps != nil && cap((*z).ForeignApps) >= zb0089 {
 					(*z).ForeignApps = ((*z).ForeignApps)[:zb0089]
 				} else {
-					(*z).ForeignApps = make([]AppIndeces, zb0089)
+					(*z).ForeignApps = make([]appIndeces, zb0089)
 				}
 				for zb0007 := range (*z).ForeignApps {
 					var zb0091 int
@@ -1878,7 +1768,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					} else if (*z).ForeignApps[zb0007] != nil && cap((*z).ForeignApps[zb0007]) >= zb0091 {
 						(*z).ForeignApps[zb0007] = ((*z).ForeignApps[zb0007])[:zb0091]
 					} else {
-						(*z).ForeignApps[zb0007] = make(AppIndeces, zb0091)
+						(*z).ForeignApps[zb0007] = make(appIndeces, zb0091)
 					}
 					for zb0008 := range (*z).ForeignApps[zb0007] {
 						bts, err = (*z).ForeignApps[zb0007][zb0008].UnmarshalMsg(bts)
@@ -1926,7 +1816,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				} else if (*z).ForeignAssets != nil && cap((*z).ForeignAssets) >= zb0095 {
 					(*z).ForeignAssets = ((*z).ForeignAssets)[:zb0095]
 				} else {
-					(*z).ForeignAssets = make([]AssetIndeces, zb0095)
+					(*z).ForeignAssets = make([]assetIndeces, zb0095)
 				}
 				for zb0009 := range (*z).ForeignAssets {
 					var zb0097 int
@@ -1946,7 +1836,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 					} else if (*z).ForeignAssets[zb0009] != nil && cap((*z).ForeignAssets[zb0009]) >= zb0097 {
 						(*z).ForeignAssets[zb0009] = ((*z).ForeignAssets[zb0009])[:zb0097]
 					} else {
-						(*z).ForeignAssets[zb0009] = make(AssetIndeces, zb0097)
+						(*z).ForeignAssets[zb0009] = make(assetIndeces, zb0097)
 					}
 					for zb0010 := range (*z).ForeignAssets[zb0009] {
 						bts, err = (*z).ForeignAssets[zb0009][zb0010].UnmarshalMsg(bts)
@@ -2088,7 +1978,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				} else if (*z).ApprovalProgram != nil && cap((*z).ApprovalProgram) >= zb0109 {
 					(*z).ApprovalProgram = ((*z).ApprovalProgram)[:zb0109]
 				} else {
-					(*z).ApprovalProgram = make([]Program, zb0109)
+					(*z).ApprovalProgram = make([]program, zb0109)
 				}
 				for zb0013 := range (*z).ApprovalProgram {
 					{
@@ -2108,7 +1998,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 							err = msgp.WrapError(err, "ApprovalProgram", zb0013)
 							return
 						}
-						(*z).ApprovalProgram[zb0013] = Program(zb0111)
+						(*z).ApprovalProgram[zb0013] = program(zb0111)
 					}
 				}
 			case "apapbm":
@@ -2149,7 +2039,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 				} else if (*z).ClearStateProgram != nil && cap((*z).ClearStateProgram) >= zb0115 {
 					(*z).ClearStateProgram = ((*z).ClearStateProgram)[:zb0115]
 				} else {
-					(*z).ClearStateProgram = make([]Program, zb0115)
+					(*z).ClearStateProgram = make([]program, zb0115)
 				}
 				for zb0014 := range (*z).ClearStateProgram {
 					{
@@ -2169,7 +2059,7 @@ func (z *encodedApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, er
 							err = msgp.WrapError(err, "ClearStateProgram", zb0014)
 							return
 						}
-						(*z).ClearStateProgram[zb0014] = Program(zb0117)
+						(*z).ClearStateProgram[zb0014] = program(zb0117)
 					}
 				}
 			case "apsubm":
@@ -8366,7 +8256,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs) >= zb0161 {
 				(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = ((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs)[:zb0161]
 			} else {
-				(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = make([]ApplicationArgs, zb0161)
+				(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = make([]applicationArgs, zb0161)
 			}
 			for zb0020 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs {
 				var zb0163 int
@@ -8386,7 +8276,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020] != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020]) >= zb0163 {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020] = ((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020])[:zb0163]
 				} else {
-					(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020] = make(ApplicationArgs, zb0163)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020] = make(applicationArgs, zb0163)
 				}
 				for zb0021 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020] {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020][zb0021], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020][zb0021])
@@ -8438,7 +8328,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedTxns.encodedApplicationCallTxnFields.Accounts != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.Accounts) >= zb0167 {
 				(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts = ((*z).encodedTxns.encodedApplicationCallTxnFields.Accounts)[:zb0167]
 			} else {
-				(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts = make([]Addresses, zb0167)
+				(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts = make([]addresses, zb0167)
 			}
 			for zb0022 := range (*z).encodedTxns.encodedApplicationCallTxnFields.Accounts {
 				var zb0169 int
@@ -8458,7 +8348,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022] != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022]) >= zb0169 {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022] = ((*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022])[:zb0169]
 				} else {
-					(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022] = make(Addresses, zb0169)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022] = make(addresses, zb0169)
 				}
 				for zb0023 := range (*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022] {
 					bts, err = (*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022][zb0023].UnmarshalMsg(bts)
@@ -8510,7 +8400,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps) >= zb0173 {
 				(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps = ((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps)[:zb0173]
 			} else {
-				(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps = make([]AppIndeces, zb0173)
+				(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps = make([]appIndeces, zb0173)
 			}
 			for zb0024 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps {
 				var zb0175 int
@@ -8530,7 +8420,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024] != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024]) >= zb0175 {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024] = ((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024])[:zb0175]
 				} else {
-					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024] = make(AppIndeces, zb0175)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024] = make(appIndeces, zb0175)
 				}
 				for zb0025 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024] {
 					bts, err = (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024][zb0025].UnmarshalMsg(bts)
@@ -8582,7 +8472,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets) >= zb0179 {
 				(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = ((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets)[:zb0179]
 			} else {
-				(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = make([]AssetIndeces, zb0179)
+				(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = make([]assetIndeces, zb0179)
 			}
 			for zb0026 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets {
 				var zb0181 int
@@ -8602,7 +8492,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026] != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026]) >= zb0181 {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026] = ((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026])[:zb0181]
 				} else {
-					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026] = make(AssetIndeces, zb0181)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026] = make(assetIndeces, zb0181)
 				}
 				for zb0027 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026] {
 					bts, err = (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026][zb0027].UnmarshalMsg(bts)
@@ -8756,7 +8646,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram) >= zb0193 {
 				(*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = ((*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram)[:zb0193]
 			} else {
-				(*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = make([]Program, zb0193)
+				(*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = make([]program, zb0193)
 			}
 			for zb0030 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram {
 				{
@@ -8776,7 +8666,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram", zb0030)
 						return
 					}
-					(*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0030] = Program(zb0195)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0030] = program(zb0195)
 				}
 			}
 		}
@@ -8821,7 +8711,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram) >= zb0199 {
 				(*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = ((*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram)[:zb0199]
 			} else {
-				(*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = make([]Program, zb0199)
+				(*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = make([]program, zb0199)
 			}
 			for zb0031 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram {
 				{
@@ -8841,7 +8731,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram", zb0031)
 						return
 					}
-					(*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0031] = Program(zb0201)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0031] = program(zb0201)
 				}
 			}
 		}
@@ -10530,7 +10420,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs) >= zb0341 {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = ((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs)[:zb0341]
 				} else {
-					(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = make([]ApplicationArgs, zb0341)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = make([]applicationArgs, zb0341)
 				}
 				for zb0020 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs {
 					var zb0343 int
@@ -10550,7 +10440,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020] != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020]) >= zb0343 {
 						(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020] = ((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020])[:zb0343]
 					} else {
-						(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020] = make(ApplicationArgs, zb0343)
+						(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020] = make(applicationArgs, zb0343)
 					}
 					for zb0021 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020] {
 						(*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020][zb0021], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0020][zb0021])
@@ -10598,7 +10488,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedTxns.encodedApplicationCallTxnFields.Accounts != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.Accounts) >= zb0347 {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts = ((*z).encodedTxns.encodedApplicationCallTxnFields.Accounts)[:zb0347]
 				} else {
-					(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts = make([]Addresses, zb0347)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts = make([]addresses, zb0347)
 				}
 				for zb0022 := range (*z).encodedTxns.encodedApplicationCallTxnFields.Accounts {
 					var zb0349 int
@@ -10618,7 +10508,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022] != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022]) >= zb0349 {
 						(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022] = ((*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022])[:zb0349]
 					} else {
-						(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022] = make(Addresses, zb0349)
+						(*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022] = make(addresses, zb0349)
 					}
 					for zb0023 := range (*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022] {
 						bts, err = (*z).encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0022][zb0023].UnmarshalMsg(bts)
@@ -10666,7 +10556,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps) >= zb0353 {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps = ((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps)[:zb0353]
 				} else {
-					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps = make([]AppIndeces, zb0353)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps = make([]appIndeces, zb0353)
 				}
 				for zb0024 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps {
 					var zb0355 int
@@ -10686,7 +10576,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024] != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024]) >= zb0355 {
 						(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024] = ((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024])[:zb0355]
 					} else {
-						(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024] = make(AppIndeces, zb0355)
+						(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024] = make(appIndeces, zb0355)
 					}
 					for zb0025 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024] {
 						bts, err = (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0024][zb0025].UnmarshalMsg(bts)
@@ -10734,7 +10624,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets) >= zb0359 {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = ((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets)[:zb0359]
 				} else {
-					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = make([]AssetIndeces, zb0359)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = make([]assetIndeces, zb0359)
 				}
 				for zb0026 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets {
 					var zb0361 int
@@ -10754,7 +10644,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026] != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026]) >= zb0361 {
 						(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026] = ((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026])[:zb0361]
 					} else {
-						(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026] = make(AssetIndeces, zb0361)
+						(*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026] = make(assetIndeces, zb0361)
 					}
 					for zb0027 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026] {
 						bts, err = (*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0026][zb0027].UnmarshalMsg(bts)
@@ -10896,7 +10786,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram) >= zb0373 {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = ((*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram)[:zb0373]
 				} else {
-					(*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = make([]Program, zb0373)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = make([]program, zb0373)
 				}
 				for zb0030 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram {
 					{
@@ -10916,7 +10806,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ApprovalProgram", zb0030)
 							return
 						}
-						(*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0030] = Program(zb0375)
+						(*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0030] = program(zb0375)
 					}
 				}
 			case "apapbm":
@@ -10957,7 +10847,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram != nil && cap((*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram) >= zb0379 {
 					(*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = ((*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram)[:zb0379]
 				} else {
-					(*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = make([]Program, zb0379)
+					(*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = make([]program, zb0379)
 				}
 				for zb0031 := range (*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram {
 					{
@@ -10977,7 +10867,7 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ClearStateProgram", zb0031)
 							return
 						}
-						(*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0031] = Program(zb0381)
+						(*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0031] = program(zb0381)
 					}
 				}
 			case "apsubm":
@@ -14826,7 +14716,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).encodedApplicationCallTxnFields.ApplicationArgs) >= zb0145 {
 				(*z).encodedApplicationCallTxnFields.ApplicationArgs = ((*z).encodedApplicationCallTxnFields.ApplicationArgs)[:zb0145]
 			} else {
-				(*z).encodedApplicationCallTxnFields.ApplicationArgs = make([]ApplicationArgs, zb0145)
+				(*z).encodedApplicationCallTxnFields.ApplicationArgs = make([]applicationArgs, zb0145)
 			}
 			for zb0018 := range (*z).encodedApplicationCallTxnFields.ApplicationArgs {
 				var zb0147 int
@@ -14846,7 +14736,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018] != nil && cap((*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018]) >= zb0147 {
 					(*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018] = ((*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018])[:zb0147]
 				} else {
-					(*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018] = make(ApplicationArgs, zb0147)
+					(*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018] = make(applicationArgs, zb0147)
 				}
 				for zb0019 := range (*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018] {
 					(*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018][zb0019], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018][zb0019])
@@ -14898,7 +14788,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedApplicationCallTxnFields.Accounts != nil && cap((*z).encodedApplicationCallTxnFields.Accounts) >= zb0151 {
 				(*z).encodedApplicationCallTxnFields.Accounts = ((*z).encodedApplicationCallTxnFields.Accounts)[:zb0151]
 			} else {
-				(*z).encodedApplicationCallTxnFields.Accounts = make([]Addresses, zb0151)
+				(*z).encodedApplicationCallTxnFields.Accounts = make([]addresses, zb0151)
 			}
 			for zb0020 := range (*z).encodedApplicationCallTxnFields.Accounts {
 				var zb0153 int
@@ -14918,7 +14808,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedApplicationCallTxnFields.Accounts[zb0020] != nil && cap((*z).encodedApplicationCallTxnFields.Accounts[zb0020]) >= zb0153 {
 					(*z).encodedApplicationCallTxnFields.Accounts[zb0020] = ((*z).encodedApplicationCallTxnFields.Accounts[zb0020])[:zb0153]
 				} else {
-					(*z).encodedApplicationCallTxnFields.Accounts[zb0020] = make(Addresses, zb0153)
+					(*z).encodedApplicationCallTxnFields.Accounts[zb0020] = make(addresses, zb0153)
 				}
 				for zb0021 := range (*z).encodedApplicationCallTxnFields.Accounts[zb0020] {
 					bts, err = (*z).encodedApplicationCallTxnFields.Accounts[zb0020][zb0021].UnmarshalMsg(bts)
@@ -14970,7 +14860,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedApplicationCallTxnFields.ForeignApps != nil && cap((*z).encodedApplicationCallTxnFields.ForeignApps) >= zb0157 {
 				(*z).encodedApplicationCallTxnFields.ForeignApps = ((*z).encodedApplicationCallTxnFields.ForeignApps)[:zb0157]
 			} else {
-				(*z).encodedApplicationCallTxnFields.ForeignApps = make([]AppIndeces, zb0157)
+				(*z).encodedApplicationCallTxnFields.ForeignApps = make([]appIndeces, zb0157)
 			}
 			for zb0022 := range (*z).encodedApplicationCallTxnFields.ForeignApps {
 				var zb0159 int
@@ -14990,7 +14880,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedApplicationCallTxnFields.ForeignApps[zb0022] != nil && cap((*z).encodedApplicationCallTxnFields.ForeignApps[zb0022]) >= zb0159 {
 					(*z).encodedApplicationCallTxnFields.ForeignApps[zb0022] = ((*z).encodedApplicationCallTxnFields.ForeignApps[zb0022])[:zb0159]
 				} else {
-					(*z).encodedApplicationCallTxnFields.ForeignApps[zb0022] = make(AppIndeces, zb0159)
+					(*z).encodedApplicationCallTxnFields.ForeignApps[zb0022] = make(appIndeces, zb0159)
 				}
 				for zb0023 := range (*z).encodedApplicationCallTxnFields.ForeignApps[zb0022] {
 					bts, err = (*z).encodedApplicationCallTxnFields.ForeignApps[zb0022][zb0023].UnmarshalMsg(bts)
@@ -15042,7 +14932,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedApplicationCallTxnFields.ForeignAssets != nil && cap((*z).encodedApplicationCallTxnFields.ForeignAssets) >= zb0163 {
 				(*z).encodedApplicationCallTxnFields.ForeignAssets = ((*z).encodedApplicationCallTxnFields.ForeignAssets)[:zb0163]
 			} else {
-				(*z).encodedApplicationCallTxnFields.ForeignAssets = make([]AssetIndeces, zb0163)
+				(*z).encodedApplicationCallTxnFields.ForeignAssets = make([]assetIndeces, zb0163)
 			}
 			for zb0024 := range (*z).encodedApplicationCallTxnFields.ForeignAssets {
 				var zb0165 int
@@ -15062,7 +14952,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024] != nil && cap((*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024]) >= zb0165 {
 					(*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024] = ((*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024])[:zb0165]
 				} else {
-					(*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024] = make(AssetIndeces, zb0165)
+					(*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024] = make(assetIndeces, zb0165)
 				}
 				for zb0025 := range (*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024] {
 					bts, err = (*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024][zb0025].UnmarshalMsg(bts)
@@ -15216,7 +15106,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedApplicationCallTxnFields.ApprovalProgram != nil && cap((*z).encodedApplicationCallTxnFields.ApprovalProgram) >= zb0177 {
 				(*z).encodedApplicationCallTxnFields.ApprovalProgram = ((*z).encodedApplicationCallTxnFields.ApprovalProgram)[:zb0177]
 			} else {
-				(*z).encodedApplicationCallTxnFields.ApprovalProgram = make([]Program, zb0177)
+				(*z).encodedApplicationCallTxnFields.ApprovalProgram = make([]program, zb0177)
 			}
 			for zb0028 := range (*z).encodedApplicationCallTxnFields.ApprovalProgram {
 				{
@@ -15236,7 +15126,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram", zb0028)
 						return
 					}
-					(*z).encodedApplicationCallTxnFields.ApprovalProgram[zb0028] = Program(zb0179)
+					(*z).encodedApplicationCallTxnFields.ApprovalProgram[zb0028] = program(zb0179)
 				}
 			}
 		}
@@ -15281,7 +15171,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedApplicationCallTxnFields.ClearStateProgram != nil && cap((*z).encodedApplicationCallTxnFields.ClearStateProgram) >= zb0183 {
 				(*z).encodedApplicationCallTxnFields.ClearStateProgram = ((*z).encodedApplicationCallTxnFields.ClearStateProgram)[:zb0183]
 			} else {
-				(*z).encodedApplicationCallTxnFields.ClearStateProgram = make([]Program, zb0183)
+				(*z).encodedApplicationCallTxnFields.ClearStateProgram = make([]program, zb0183)
 			}
 			for zb0029 := range (*z).encodedApplicationCallTxnFields.ClearStateProgram {
 				{
@@ -15301,7 +15191,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram", zb0029)
 						return
 					}
-					(*z).encodedApplicationCallTxnFields.ClearStateProgram[zb0029] = Program(zb0185)
+					(*z).encodedApplicationCallTxnFields.ClearStateProgram[zb0029] = program(zb0185)
 				}
 			}
 		}
@@ -16824,7 +16714,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).encodedApplicationCallTxnFields.ApplicationArgs) >= zb0311 {
 					(*z).encodedApplicationCallTxnFields.ApplicationArgs = ((*z).encodedApplicationCallTxnFields.ApplicationArgs)[:zb0311]
 				} else {
-					(*z).encodedApplicationCallTxnFields.ApplicationArgs = make([]ApplicationArgs, zb0311)
+					(*z).encodedApplicationCallTxnFields.ApplicationArgs = make([]applicationArgs, zb0311)
 				}
 				for zb0018 := range (*z).encodedApplicationCallTxnFields.ApplicationArgs {
 					var zb0313 int
@@ -16844,7 +16734,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018] != nil && cap((*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018]) >= zb0313 {
 						(*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018] = ((*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018])[:zb0313]
 					} else {
-						(*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018] = make(ApplicationArgs, zb0313)
+						(*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018] = make(applicationArgs, zb0313)
 					}
 					for zb0019 := range (*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018] {
 						(*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018][zb0019], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedApplicationCallTxnFields.ApplicationArgs[zb0018][zb0019])
@@ -16892,7 +16782,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedApplicationCallTxnFields.Accounts != nil && cap((*z).encodedApplicationCallTxnFields.Accounts) >= zb0317 {
 					(*z).encodedApplicationCallTxnFields.Accounts = ((*z).encodedApplicationCallTxnFields.Accounts)[:zb0317]
 				} else {
-					(*z).encodedApplicationCallTxnFields.Accounts = make([]Addresses, zb0317)
+					(*z).encodedApplicationCallTxnFields.Accounts = make([]addresses, zb0317)
 				}
 				for zb0020 := range (*z).encodedApplicationCallTxnFields.Accounts {
 					var zb0319 int
@@ -16912,7 +16802,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedApplicationCallTxnFields.Accounts[zb0020] != nil && cap((*z).encodedApplicationCallTxnFields.Accounts[zb0020]) >= zb0319 {
 						(*z).encodedApplicationCallTxnFields.Accounts[zb0020] = ((*z).encodedApplicationCallTxnFields.Accounts[zb0020])[:zb0319]
 					} else {
-						(*z).encodedApplicationCallTxnFields.Accounts[zb0020] = make(Addresses, zb0319)
+						(*z).encodedApplicationCallTxnFields.Accounts[zb0020] = make(addresses, zb0319)
 					}
 					for zb0021 := range (*z).encodedApplicationCallTxnFields.Accounts[zb0020] {
 						bts, err = (*z).encodedApplicationCallTxnFields.Accounts[zb0020][zb0021].UnmarshalMsg(bts)
@@ -16960,7 +16850,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedApplicationCallTxnFields.ForeignApps != nil && cap((*z).encodedApplicationCallTxnFields.ForeignApps) >= zb0323 {
 					(*z).encodedApplicationCallTxnFields.ForeignApps = ((*z).encodedApplicationCallTxnFields.ForeignApps)[:zb0323]
 				} else {
-					(*z).encodedApplicationCallTxnFields.ForeignApps = make([]AppIndeces, zb0323)
+					(*z).encodedApplicationCallTxnFields.ForeignApps = make([]appIndeces, zb0323)
 				}
 				for zb0022 := range (*z).encodedApplicationCallTxnFields.ForeignApps {
 					var zb0325 int
@@ -16980,7 +16870,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedApplicationCallTxnFields.ForeignApps[zb0022] != nil && cap((*z).encodedApplicationCallTxnFields.ForeignApps[zb0022]) >= zb0325 {
 						(*z).encodedApplicationCallTxnFields.ForeignApps[zb0022] = ((*z).encodedApplicationCallTxnFields.ForeignApps[zb0022])[:zb0325]
 					} else {
-						(*z).encodedApplicationCallTxnFields.ForeignApps[zb0022] = make(AppIndeces, zb0325)
+						(*z).encodedApplicationCallTxnFields.ForeignApps[zb0022] = make(appIndeces, zb0325)
 					}
 					for zb0023 := range (*z).encodedApplicationCallTxnFields.ForeignApps[zb0022] {
 						bts, err = (*z).encodedApplicationCallTxnFields.ForeignApps[zb0022][zb0023].UnmarshalMsg(bts)
@@ -17028,7 +16918,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedApplicationCallTxnFields.ForeignAssets != nil && cap((*z).encodedApplicationCallTxnFields.ForeignAssets) >= zb0329 {
 					(*z).encodedApplicationCallTxnFields.ForeignAssets = ((*z).encodedApplicationCallTxnFields.ForeignAssets)[:zb0329]
 				} else {
-					(*z).encodedApplicationCallTxnFields.ForeignAssets = make([]AssetIndeces, zb0329)
+					(*z).encodedApplicationCallTxnFields.ForeignAssets = make([]assetIndeces, zb0329)
 				}
 				for zb0024 := range (*z).encodedApplicationCallTxnFields.ForeignAssets {
 					var zb0331 int
@@ -17048,7 +16938,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024] != nil && cap((*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024]) >= zb0331 {
 						(*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024] = ((*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024])[:zb0331]
 					} else {
-						(*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024] = make(AssetIndeces, zb0331)
+						(*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024] = make(assetIndeces, zb0331)
 					}
 					for zb0025 := range (*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024] {
 						bts, err = (*z).encodedApplicationCallTxnFields.ForeignAssets[zb0024][zb0025].UnmarshalMsg(bts)
@@ -17190,7 +17080,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedApplicationCallTxnFields.ApprovalProgram != nil && cap((*z).encodedApplicationCallTxnFields.ApprovalProgram) >= zb0343 {
 					(*z).encodedApplicationCallTxnFields.ApprovalProgram = ((*z).encodedApplicationCallTxnFields.ApprovalProgram)[:zb0343]
 				} else {
-					(*z).encodedApplicationCallTxnFields.ApprovalProgram = make([]Program, zb0343)
+					(*z).encodedApplicationCallTxnFields.ApprovalProgram = make([]program, zb0343)
 				}
 				for zb0028 := range (*z).encodedApplicationCallTxnFields.ApprovalProgram {
 					{
@@ -17210,7 +17100,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ApprovalProgram", zb0028)
 							return
 						}
-						(*z).encodedApplicationCallTxnFields.ApprovalProgram[zb0028] = Program(zb0345)
+						(*z).encodedApplicationCallTxnFields.ApprovalProgram[zb0028] = program(zb0345)
 					}
 				}
 			case "apapbm":
@@ -17251,7 +17141,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedApplicationCallTxnFields.ClearStateProgram != nil && cap((*z).encodedApplicationCallTxnFields.ClearStateProgram) >= zb0349 {
 					(*z).encodedApplicationCallTxnFields.ClearStateProgram = ((*z).encodedApplicationCallTxnFields.ClearStateProgram)[:zb0349]
 				} else {
-					(*z).encodedApplicationCallTxnFields.ClearStateProgram = make([]Program, zb0349)
+					(*z).encodedApplicationCallTxnFields.ClearStateProgram = make([]program, zb0349)
 				}
 				for zb0029 := range (*z).encodedApplicationCallTxnFields.ClearStateProgram {
 					{
@@ -17271,7 +17161,7 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ClearStateProgram", zb0029)
 							return
 						}
-						(*z).encodedApplicationCallTxnFields.ClearStateProgram[zb0029] = Program(zb0351)
+						(*z).encodedApplicationCallTxnFields.ClearStateProgram[zb0029] = program(zb0351)
 					}
 				}
 			case "apsubm":
@@ -17696,6 +17586,62 @@ func (z *packedTransactionGroups) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *packedTransactionGroups) MsgIsZero() bool {
 	return (len((*z).Bytes) == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z program) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ program) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(program)
+	if !ok {
+		_, ok = (z).(*program)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *program) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > config.MaxAppProgramLen {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(config.MaxAppProgramLen))
+			return
+		}
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = program(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *program) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*program)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z program) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z program) MsgIsZero() bool {
+	return len(z) == 0
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -21440,7 +21386,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs) >= zb0167 {
 				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs)[:zb0167]
 			} else {
-				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = make([]ApplicationArgs, zb0167)
+				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = make([]applicationArgs, zb0167)
 			}
 			for zb0021 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs {
 				var zb0169 int
@@ -21460,7 +21406,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021] != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021]) >= zb0169 {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021] = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021])[:zb0169]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021] = make(ApplicationArgs, zb0169)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021] = make(applicationArgs, zb0169)
 				}
 				for zb0022 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021] {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021][zb0022], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021][zb0022])
@@ -21512,7 +21458,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts) >= zb0173 {
 				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts)[:zb0173]
 			} else {
-				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts = make([]Addresses, zb0173)
+				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts = make([]addresses, zb0173)
 			}
 			for zb0023 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts {
 				var zb0175 int
@@ -21532,7 +21478,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023] != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023]) >= zb0175 {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023] = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023])[:zb0175]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023] = make(Addresses, zb0175)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023] = make(addresses, zb0175)
 				}
 				for zb0024 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023] {
 					bts, err = (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023][zb0024].UnmarshalMsg(bts)
@@ -21584,7 +21530,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps) >= zb0179 {
 				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps)[:zb0179]
 			} else {
-				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps = make([]AppIndeces, zb0179)
+				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps = make([]appIndeces, zb0179)
 			}
 			for zb0025 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps {
 				var zb0181 int
@@ -21604,7 +21550,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025] != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025]) >= zb0181 {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025] = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025])[:zb0181]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025] = make(AppIndeces, zb0181)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025] = make(appIndeces, zb0181)
 				}
 				for zb0026 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025] {
 					bts, err = (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025][zb0026].UnmarshalMsg(bts)
@@ -21656,7 +21602,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets) >= zb0185 {
 				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets)[:zb0185]
 			} else {
-				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = make([]AssetIndeces, zb0185)
+				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = make([]assetIndeces, zb0185)
 			}
 			for zb0027 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets {
 				var zb0187 int
@@ -21676,7 +21622,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027] != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027]) >= zb0187 {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027] = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027])[:zb0187]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027] = make(AssetIndeces, zb0187)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027] = make(assetIndeces, zb0187)
 				}
 				for zb0028 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027] {
 					bts, err = (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027][zb0028].UnmarshalMsg(bts)
@@ -21830,7 +21776,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram) >= zb0199 {
 				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram)[:zb0199]
 			} else {
-				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = make([]Program, zb0199)
+				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = make([]program, zb0199)
 			}
 			for zb0031 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram {
 				{
@@ -21850,7 +21796,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram", zb0031)
 						return
 					}
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0031] = Program(zb0201)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0031] = program(zb0201)
 				}
 			}
 		}
@@ -21895,7 +21841,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram) >= zb0205 {
 				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram)[:zb0205]
 			} else {
-				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = make([]Program, zb0205)
+				(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = make([]program, zb0205)
 			}
 			for zb0032 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram {
 				{
@@ -21915,7 +21861,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram", zb0032)
 						return
 					}
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0032] = Program(zb0207)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0032] = program(zb0207)
 				}
 			}
 		}
@@ -23709,7 +23655,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs) >= zb0354 {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs)[:zb0354]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = make([]ApplicationArgs, zb0354)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs = make([]applicationArgs, zb0354)
 				}
 				for zb0021 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs {
 					var zb0356 int
@@ -23729,7 +23675,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021] != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021]) >= zb0356 {
 						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021] = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021])[:zb0356]
 					} else {
-						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021] = make(ApplicationArgs, zb0356)
+						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021] = make(applicationArgs, zb0356)
 					}
 					for zb0022 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021] {
 						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021][zb0022], bts, err = msgp.ReadBytesBytes(bts, (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs[zb0021][zb0022])
@@ -23777,7 +23723,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts) >= zb0360 {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts)[:zb0360]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts = make([]Addresses, zb0360)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts = make([]addresses, zb0360)
 				}
 				for zb0023 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts {
 					var zb0362 int
@@ -23797,7 +23743,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023] != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023]) >= zb0362 {
 						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023] = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023])[:zb0362]
 					} else {
-						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023] = make(Addresses, zb0362)
+						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023] = make(addresses, zb0362)
 					}
 					for zb0024 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023] {
 						bts, err = (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts[zb0023][zb0024].UnmarshalMsg(bts)
@@ -23845,7 +23791,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps) >= zb0366 {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps)[:zb0366]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps = make([]AppIndeces, zb0366)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps = make([]appIndeces, zb0366)
 				}
 				for zb0025 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps {
 					var zb0368 int
@@ -23865,7 +23811,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025] != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025]) >= zb0368 {
 						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025] = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025])[:zb0368]
 					} else {
-						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025] = make(AppIndeces, zb0368)
+						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025] = make(appIndeces, zb0368)
 					}
 					for zb0026 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025] {
 						bts, err = (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps[zb0025][zb0026].UnmarshalMsg(bts)
@@ -23913,7 +23859,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets) >= zb0372 {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets)[:zb0372]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = make([]AssetIndeces, zb0372)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets = make([]assetIndeces, zb0372)
 				}
 				for zb0027 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets {
 					var zb0374 int
@@ -23933,7 +23879,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027] != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027]) >= zb0374 {
 						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027] = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027])[:zb0374]
 					} else {
-						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027] = make(AssetIndeces, zb0374)
+						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027] = make(assetIndeces, zb0374)
 					}
 					for zb0028 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027] {
 						bts, err = (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets[zb0027][zb0028].UnmarshalMsg(bts)
@@ -24075,7 +24021,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram) >= zb0386 {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram)[:zb0386]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = make([]Program, zb0386)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram = make([]program, zb0386)
 				}
 				for zb0031 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram {
 					{
@@ -24095,7 +24041,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ApprovalProgram", zb0031)
 							return
 						}
-						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0031] = Program(zb0388)
+						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram[zb0031] = program(zb0388)
 					}
 				}
 			case "apapbm":
@@ -24136,7 +24082,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram != nil && cap((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram) >= zb0392 {
 					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = ((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram)[:zb0392]
 				} else {
-					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = make([]Program, zb0392)
+					(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram = make([]program, zb0392)
 				}
 				for zb0032 := range (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram {
 					{
@@ -24156,7 +24102,7 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "ClearStateProgram", zb0032)
 							return
 						}
-						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0032] = Program(zb0394)
+						(*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram[zb0032] = program(zb0394)
 					}
 				}
 			case "apsubm":
