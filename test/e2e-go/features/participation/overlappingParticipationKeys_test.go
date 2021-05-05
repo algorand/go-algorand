@@ -80,9 +80,11 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 			continue
 		}
 		acctIdx := (round - 1) % 10
-		startRound := round + 2
-		endRound := startRound + 36 + 10
-		err = prepareParticipationKey(a, &fixture, acctIdx, startRound, endRound, genesisHash, rootKeys, regTransactions)
+		txStartRound := round
+		txEndRound := txStartRound + 36 + 10
+		regStartRound := round + 32
+		regEndRound := regStartRound + 11
+		err = prepareParticipationKey(a, &fixture, acctIdx, txStartRound, txEndRound, regStartRound, regEndRound, genesisHash, rootKeys, regTransactions)
 		a.NoError(err)
 	}
 
@@ -96,10 +98,12 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 		if (currentRound-1)%10 < uint64(accountsNum) {
 			acctIdx := (currentRound - 1) % 10
 			startRound := currentRound + 2
-			endRound := startRound + 36 + 10
+			endRound := startRound + 36 + 10 - 2
+			regStartRound := currentRound + 32
+			regEndRound := regStartRound + 11
 			err = addParticipationKey(a, &fixture, acctIdx, startRound, endRound, regTransactions)
 			a.NoError(err)
-			t.Logf("[.] Round %d, Added reg key for node %d range [%d..%d]\n", currentRound, acctIdx, startRound, endRound)
+			t.Logf("[.] Round %d, Added reg key for node %d range [%d..%d]\n", currentRound, acctIdx, regStartRound, regEndRound)
 		} else {
 			t.Logf("[.] Round %d\n", currentRound)
 		}
@@ -117,14 +121,10 @@ func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixt
 	genesisDir, err := nc.GetGenesisDir()
 
 	partKeyName := filepath.Join(dataDir, config.PartKeyFilename("Wallet", startRound, endRound))
+	partKeyNameTarget := filepath.Join(genesisDir, config.PartKeyFilename("Wallet", startRound, endRound))
 
-	// now that the file was created on the data directroy, move it to the genesis directroy.
-	// ( this is required since we don't want to compete with algod opening this file for reading *while* we're still writing it.)
-	err = os.Rename(partKeyName, filepath.Join(genesisDir, config.PartKeyFilename("Wallet", startRound, endRound)))
-	if err != nil {
-		a.NoError(err)
-		return err
-	}
+	// make the rename in the background to ensure it won't take too long. We have ~32 rounds to complete this.
+	go os.Rename(partKeyName, partKeyNameTarget)
 
 	signedTxn := regTransactions[int(startRound-2)]
 	a.NotEmpty(signedTxn.Sig)
@@ -136,7 +136,7 @@ func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixt
 	return err
 }
 
-func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum uint64, startRound, endRound uint64, genesisHash crypto.Digest, rootKeys map[int]*account.Root, regTransactions map[int]transactions.SignedTxn) error {
+func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum uint64, txStartRound, txEndRound, regStartRound, regEndRound uint64, genesisHash crypto.Digest, rootKeys map[int]*account.Root, regTransactions map[int]transactions.SignedTxn) error {
 	dataDir := fixture.NodeDataDirs()[acctNum]
 
 	nc := fixture.GetNodeControllerForDataDir(dataDir)
@@ -182,7 +182,7 @@ func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClient
 	}
 	rootAccount = *rootKeys[int(acctNum)]
 
-	partKeyName := filepath.Join(dataDir, config.PartKeyFilename("Wallet", startRound, endRound))
+	partKeyName := filepath.Join(dataDir, config.PartKeyFilename("Wallet", txStartRound+2, txEndRound))
 
 	partkeyHandle, err := db.MakeAccessor(partKeyName, false, false)
 	if err != nil {
@@ -190,7 +190,7 @@ func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClient
 		return err
 	}
 
-	persistedPerticipation, err := account.FillDBWithParticipationKeys(partkeyHandle, rootAccount.Address(), basics.Round(startRound), basics.Round(endRound), 36)
+	persistedPerticipation, err := account.FillDBWithParticipationKeys(partkeyHandle, rootAccount.Address(), basics.Round(regStartRound), basics.Round(regEndRound), fixture.LibGoalFixture.Genesis().PartKeyDilution)
 	if err != nil {
 		a.NoError(err)
 		return err
@@ -198,12 +198,12 @@ func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClient
 	partkeyHandle.Vacuum(context.Background())
 	persistedPerticipation.Close()
 
-	unsignedTxn := persistedPerticipation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, basics.Round(startRound-2), basics.Round(endRound), [32]byte{})
+	unsignedTxn := persistedPerticipation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, basics.Round(txStartRound), basics.Round(txEndRound), [32]byte{})
 	copy(unsignedTxn.GenesisHash[:], genesisHash[:])
 	if err != nil {
 		a.NoError(err)
 		return err
 	}
-	regTransactions[int(startRound-2)] = unsignedTxn.Sign(rootAccount.Secrets())
+	regTransactions[int(txStartRound)] = unsignedTxn.Sign(rootAccount.Secrets())
 	return err
 }
