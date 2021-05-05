@@ -28,7 +28,7 @@ type SimpleKeyManager []account.Participation
 func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
 	var km []account.Participation
 	for _, acc := range m {
-		if acc.FirstValid <= votingRound && votingRound <= acc.LastValid {
+		if acc.OverlapsInterval(votingRound, votingRound) {
 			km = append(km, acc)
 		}
 	}
