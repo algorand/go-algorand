@@ -55,8 +55,6 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
-const participationKeyCheckSecs = 60
-
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
 	LastRound                          basics.Round
@@ -704,7 +702,7 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 // Reload participation keys from disk periodically
 func (node *AlgorandFullNode) checkForParticipationKeys() {
 	defer node.monitoringRoutinesWaitGroup.Done()
-	ticker := time.NewTicker(participationKeyCheckSecs * time.Second)
+	ticker := time.NewTicker(node.config.ParticipationKeysRefreshInterval)
 	for {
 		select {
 		case <-ticker.C:
