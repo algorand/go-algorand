@@ -15,6 +15,10 @@ assignees: ''
 
 <!-- A clear and concise description of what you want to happen. -->
 
+## Are you planning to submit a pull request?
+
+<!-- If yes, please describe how you plan to implement the solution. -->
+
 ## Additional context.
 
 <!-- Add any other context or screenshots about the feature request here. -->
