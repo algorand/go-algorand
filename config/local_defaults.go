@@ -88,6 +88,7 @@ var defaultLocal = Local{
 	OptimizeAccountsDatabaseOnStartup:       false,
 	OutgoingMessageFilterBucketCount:        3,
 	OutgoingMessageFilterBucketSize:         128,
+	ParticipationKeysRefreshInterval:        60000000000,
 	PeerConnectionsUpdateInterval:           3600,
 	PeerPingPeriodSeconds:                   0,
 	PriorityPeers:                           map[string]bool{},
