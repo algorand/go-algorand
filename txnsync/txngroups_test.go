@@ -37,7 +37,7 @@ func TestBitmask(t *testing.T) {
 	b.SetBit(2)
 	b.SetBit(69)
 	for i := 0; i < 80; i++ {
-		exists, _ := b.EntryExists(i, 0)
+		exists := b.EntryExists(i)
 		if i == 0 || i == 2 || i == 69 {
 			require.True(t, exists)
 		} else {
@@ -45,8 +45,9 @@ func TestBitmask(t *testing.T) {
 		}
 	}
 	b.trimBitmask(80)
+	b.expandBitmask(80)
 	for i := 0; i < 80; i++ {
-		exists, _ := b.EntryExists(i, 0)
+		exists := b.EntryExists(i)
 		if i == 0 || i == 2 || i == 69 {
 			require.True(t, exists)
 		} else {
@@ -143,7 +144,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 			},
 		},
 	}
-	addGroupHashes(inTxnGroups, []byte{1})
+	addGroupHashes(inTxnGroups, 6, []byte{1})
 	encodedGroupsBytes := encodeTransactionGroups(inTxnGroups)
 	fmt.Println(len(encodedGroupsBytes))
 	fmt.Println(string(encodedGroupsBytes))

@@ -299,38 +299,9 @@ func (b bitmask) SetBit(index int) {
 	b[byteIndex] |= 1 << (index % 8)
 }
 
-func (b bitmask) EntryExists(index int, hint int) (bool, int) {
-	option := 0
-	if len(b) > 0 {
-		option = int(b[0])
-	} else {
-		return false, 0
-	}
-	switch option {
-	case 0: // if we have the bit 1 then we have an entry at the corresponding bit index.
-		byteIndex := index/8 + 1
-		return byteIndex < len(b) && (b[byteIndex]&(1<<(index%8)) != 0), 0
-	case 1: // if we have the bit 0 then we have an entry at the corresponding bit index.
-		byteIndex := index/8 + 1
-		return byteIndex >= len(b) || (b[byteIndex]&(1<<(index%8)) == 0), 0
-	case 2: // contains a list of bytes designating the transaction bit index
-		for hint*2+2 < len(b) && index >= int(b[hint*2+1]) * 256 + int(b[hint*2+2]) {
-			if index == int(b[hint*2+1]) * 256 + int(b[hint*2+2])  {
-				return true, hint
-			}
-			hint++
-		}
-		return false, hint
-	case 3: // contain a list of bytes designating the negative transaction bit index
-		for hint*2+2 < len(b) && index >= int(b[hint*2+1]) * 256 + int(b[hint*2+2]) {
-			if index == int(b[hint*2+1]) * 256 + int(b[hint*2+2]) {
-				return false, hint
-			}
-			hint++
-		}
-		return true, hint
-	}
-	return false, 0 // need error message isntead
+func (b bitmask) EntryExists(index int) bool {
+	byteIndex := index/8 + 1
+	return byteIndex < len(b) && (b[byteIndex]&(1<<(index%8)) != 0)
 }
 
 func (b *bitmask) trimBitmask(entries int) {
@@ -371,10 +342,13 @@ func (b *bitmask) trimBitmask(entries int) {
 	case 2:
 		newBitmask := make(bitmask, 1, bestSize)
 		newBitmask[0] = 2
+		last := 0
 		for i := 0; i < entries; i++ {
 			byteIndex := i/8 + 1
 			if (*b)[byteIndex] & (1 << (i % 8)) != 0 {
-				newBitmask = append(newBitmask, byte(i / 256), byte(i % 256))
+				diff := i - last
+				newBitmask = append(newBitmask, byte(diff / 256), byte(diff % 256))
+				last = i
 			}
 		}
 		*b = newBitmask
@@ -382,10 +356,13 @@ func (b *bitmask) trimBitmask(entries int) {
 	case 3:
 		newBitmask := make(bitmask, 1, bestSize)
 		newBitmask[0] = 3
+		last := 0
 		for i := 0; i < entries; i++ {
 			byteIndex := i/8 + 1
 			if (*b)[byteIndex] & (1 << (i % 8)) == 0 {
-				newBitmask = append(newBitmask, byte(i / 256), byte(i % 256))
+				diff := i - last
+				newBitmask = append(newBitmask, byte(diff / 256), byte(diff % 256))
+				last = i
 			}
 		}
 		*b = newBitmask
@@ -394,6 +371,52 @@ func (b *bitmask) trimBitmask(entries int) {
 	}
 
 	*b = bytes.TrimRight(*b, string(0))
+}
+
+func (b *bitmask) expandBitmask(entries int) {
+	option := 0
+	if len(*b) > 0 {
+		option = int((*b)[0])
+	} else {
+		return
+	}
+	switch option {
+	case 0: // if we have the bit 1 then we have an entry at the corresponding bit index.
+		return
+	case 1: // if we have the bit 0 then we have an entry at the corresponding bit index.
+		newBitmask := make(bitmask, bytesNeededBitmask(entries))
+		for i := range newBitmask {
+			if i != 0 {
+				if i < len(*b) {
+					newBitmask[i] = 255 -(*b)[i] // invert bits
+				} else {
+					newBitmask[i] = 255
+				}
+			}
+		}
+		*b = newBitmask
+	case 2: // contains a list of bytes designating the transaction bit index
+		newBitmask := make(bitmask, bytesNeededBitmask(entries))
+		sum := 0
+		for i := 0; i*2+2 < len(*b); i++ {
+			sum += int((*b)[i*2+1]) * 256 + int((*b)[i*2+2])
+			newBitmask.SetBit(sum)
+		}
+		*b = newBitmask
+	case 3: // contain a list of bytes designating the negative transaction bit index
+		newBitmask := make(bitmask, bytesNeededBitmask(entries))
+		sum := 0
+		for i := 0; i*2+2 < len(*b); i++ {
+			sum += int((*b)[i*2+1]) * 256 + int((*b)[i*2+2])
+			newBitmask.SetBit(sum)
+		}
+		*b = newBitmask
+		for i := range *b {
+			if i != 0 {
+				(*b)[i] = 255 -(*b)[i] // invert bits
+			}
+		}
+	}
 }
 
 func bytesNeededBitmask(elements int) int {
@@ -461,16 +484,16 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 		}
 	}
 
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskGroup = make(bitmask, bitmaskLen)
 	for i := range stub.SignedTxns {
 		if !stub.SignedTxns[i].Txn.Group.MsgIsZero() {
 			stub.BitmaskGroup.SetBit(i)
 		}
-		stub.SignedTxns[i].Txn.Group = crypto.Digest{}
 	}
 
 	deconstructSignedTransactions(&stub)
+	stub.SignedTxns = nil
 
 	//return []byte{}
 
@@ -501,12 +524,12 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 		index += size
 	}
 
-	addGroupHashes(txnGroups, stub.BitmaskGroup)
+	addGroupHashes(txnGroups, int(stub.TotalTransactionsCount), stub.BitmaskGroup)
 
 	return txnGroups, nil
 }
 
-func addGroupHashes(txnGroups []transactions.SignedTxGroup, b bitmask) {
+func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitmask) {
 	index := 0
 	for _, txns := range txnGroups {
 		var txGroup transactions.TxGroup
@@ -515,8 +538,9 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, b bitmask) {
 			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
 		}
 		groupHash := crypto.HashObj(txGroup)
+		b.expandBitmask(txnCount)
 		for i := range txns.Transactions {
-			if exists, _ := b.EntryExists(index, 0); exists {
+			if exists := b.EntryExists(index); exists {
 				txns.Transactions[i].Txn.Group = groupHash
 			}
 			index++
@@ -526,41 +550,37 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, b bitmask) {
 
 // deconstructs SignedTxn's into lists of fields and bitmasks
 func deconstructSignedTransactions(stub *txGroupsEncodingStub) {
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskAuthAddr = make(bitmask, bitmaskLen)
-	stub.AuthAddr = make([]byte, 0, len(stub.SignedTxns)*addressSize)
+	stub.AuthAddr = make([]byte, 0, int(stub.TotalTransactionsCount)*addressSize)
 	stub.BitmaskLsig = make(bitmask, bitmaskLen)
-	stub.Lsig = make([]transactions.LogicSig, 0, len(stub.SignedTxns))
+	stub.Lsig = make([]transactions.LogicSig, 0, int(stub.TotalTransactionsCount))
 	stub.BitmaskMsig = make(bitmask, bitmaskLen)
-	stub.Msig = make([]crypto.MultisigSig, 0, len(stub.SignedTxns))
+	stub.Msig = make([]crypto.MultisigSig, 0, int(stub.TotalTransactionsCount))
 	stub.BitmaskSig = make(bitmask, bitmaskLen)
-	stub.Sig = make([]byte, 0, len(stub.SignedTxns)*signatureSize)
+	stub.Sig = make([]byte, 0, int(stub.TotalTransactionsCount)*signatureSize)
 	for i, txn := range stub.SignedTxns {
 		if !txn.Sig.MsgIsZero() {
 			stub.BitmaskSig.SetBit(i)
 			stub.Sig = append(stub.Sig, txn.Sig[:]...)
-			stub.SignedTxns[i].Sig = crypto.Signature{}
 		}
 		if !txn.Msig.MsgIsZero() {
 			stub.BitmaskMsig.SetBit(i)
 			stub.Msig = append(stub.Msig, txn.Msig)
-			stub.SignedTxns[i].Msig = crypto.MultisigSig{}
 		}
 		if !txn.Lsig.MsgIsZero() {
 			stub.BitmaskLsig.SetBit(i)
 			stub.Lsig = append(stub.Lsig, txn.Lsig)
-			stub.SignedTxns[i].Lsig = transactions.LogicSig{}
 		}
 		if !txn.AuthAddr.MsgIsZero() {
 			stub.BitmaskAuthAddr.SetBit(i)
 			stub.AuthAddr = append(stub.AuthAddr, txn.AuthAddr[:]...)
-			stub.SignedTxns[i].AuthAddr = basics.Address{}
 		}
 	}
-	stub.BitmaskAuthAddr.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskLsig.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskMsig.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskSig.trimBitmask(len(stub.SignedTxns))
+	stub.BitmaskAuthAddr.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskLsig.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskMsig.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskSig.trimBitmask(int(stub.TotalTransactionsCount))
 	deconstructTransactions(stub)
 }
 
@@ -574,9 +594,9 @@ func deconstructTransactions(stub *txGroupsEncodingStub) {
 	deconstructApplicationCallTxnFields(stub)
 	deconstructCompactCertTxnFields(stub)
 
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskTxType = make(bitmask, bitmaskLen)
-	stub.TxType = make([]byte, 0, len(stub.SignedTxns))
+	stub.TxType = make([]byte, 0, int(stub.TotalTransactionsCount))
 	for i, txn := range stub.SignedTxns {
 		txTypeByte := TxTypeToByte(txn.Txn.Type)
 		if txTypeByte != 0 {
@@ -585,88 +605,79 @@ func deconstructTransactions(stub *txGroupsEncodingStub) {
 		}
 		stub.SignedTxns[i].Txn.Type = ""
 	}
-	stub.BitmaskTxType.trimBitmask(len(stub.SignedTxns))
+	stub.BitmaskTxType.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func deconstructTxnHeader(stub *txGroupsEncodingStub) {
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskSender = make(bitmask, bitmaskLen)
-	stub.Sender = make([]byte, 0, len(stub.SignedTxns)*addressSize)
+	stub.Sender = make([]byte, 0, int(stub.TotalTransactionsCount)*addressSize)
 	stub.BitmaskFee = make(bitmask, bitmaskLen)
-	stub.Fee = make([]basics.MicroAlgos, 0, len(stub.SignedTxns))
+	stub.Fee = make([]basics.MicroAlgos, 0, int(stub.TotalTransactionsCount))
 	stub.BitmaskFirstValid = make(bitmask, bitmaskLen)
-	stub.FirstValid = make([]basics.Round, 0, len(stub.SignedTxns))
+	stub.FirstValid = make([]basics.Round, 0, int(stub.TotalTransactionsCount))
 	stub.BitmaskLastValid = make(bitmask, bitmaskLen)
-	stub.LastValid = make([]basics.Round, 0, len(stub.SignedTxns))
+	stub.LastValid = make([]basics.Round, 0, int(stub.TotalTransactionsCount))
 	stub.BitmaskNote = make(bitmask, bitmaskLen)
-	stub.Note = make([][]byte, 0, len(stub.SignedTxns))
+	stub.Note = make([][]byte, 0, int(stub.TotalTransactionsCount))
 	stub.BitmaskGenesisID = make(bitmask, bitmaskLen)
 	stub.BitmaskGenesisHash = make(bitmask, bitmaskLen)
 	stub.BitmaskLease = make(bitmask, bitmaskLen)
-	stub.Lease = make([]byte, 0, len(stub.SignedTxns)*addressSize)
+	stub.Lease = make([]byte, 0, int(stub.TotalTransactionsCount)*addressSize)
 	stub.BitmaskRekeyTo = make(bitmask, bitmaskLen)
-	stub.RekeyTo = make([]byte, 0, len(stub.SignedTxns)*addressSize)
+	stub.RekeyTo = make([]byte, 0, int(stub.TotalTransactionsCount)*addressSize)
 	for i, txn := range stub.SignedTxns {
 		if !txn.Txn.Sender.MsgIsZero() {
 			stub.BitmaskSender.SetBit(i)
 			stub.Sender = append(stub.Sender, txn.Txn.Sender[:]...)
-			stub.SignedTxns[i].Txn.Sender = basics.Address{}
 		}
 		if !txn.Txn.Fee.MsgIsZero() {
 			stub.BitmaskFee.SetBit(i)
 			stub.Fee = append(stub.Fee, txn.Txn.Fee)
-			stub.SignedTxns[i].Txn.Fee = basics.MicroAlgos{}
 		}
 		if !txn.Txn.FirstValid.MsgIsZero() {
 			stub.BitmaskFirstValid.SetBit(i)
 			stub.FirstValid = append(stub.FirstValid, txn.Txn.FirstValid)
-			stub.SignedTxns[i].Txn.FirstValid = 0
 		}
 		if !txn.Txn.LastValid.MsgIsZero() {
 			stub.BitmaskLastValid.SetBit(i)
 			stub.LastValid = append(stub.LastValid, txn.Txn.LastValid)
-			stub.SignedTxns[i].Txn.LastValid = 0
 		}
 		if txn.Txn.Note != nil && len(txn.Txn.Note) > 0 {
 			stub.BitmaskNote.SetBit(i)
 			stub.Note = append(stub.Note, txn.Txn.Note)
-			stub.SignedTxns[i].Txn.Note = nil
 		}
 		if txn.Txn.GenesisID != "" {
 			stub.BitmaskGenesisID.SetBit(i)
 			stub.GenesisID = txn.Txn.GenesisID
-			stub.SignedTxns[i].Txn.GenesisID = ""
 		}
 		if !txn.Txn.GenesisHash.MsgIsZero() {
 			stub.BitmaskGenesisHash.SetBit(i)
 			stub.GenesisHash = txn.Txn.GenesisHash
-			stub.SignedTxns[i].Txn.GenesisHash = crypto.Digest{}
 		}
 		if txn.Txn.Lease != ([32]byte{}) {
 			stub.BitmaskLease.SetBit(i)
 			stub.Lease = append(stub.Lease, txn.Txn.Lease[:]...)
-			stub.SignedTxns[i].Txn.Lease = [32]byte{}
 		}
 		if !txn.Txn.RekeyTo.MsgIsZero() {
 			stub.BitmaskRekeyTo.SetBit(i)
 			stub.RekeyTo = append(stub.RekeyTo, txn.Txn.RekeyTo[:]...)
-			stub.SignedTxns[i].Txn.RekeyTo = basics.Address{}
 		}
 	}
 
-	stub.BitmaskSender.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskFee.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskFirstValid.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskLastValid.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskNote.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskGenesisID.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskGenesisHash.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskLease.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskRekeyTo.trimBitmask(len(stub.SignedTxns))
+	stub.BitmaskSender.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskFee.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskFirstValid.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskLastValid.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskNote.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskGenesisID.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskGenesisHash.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskLease.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskRekeyTo.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func deconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskVotePK = make(bitmask, bitmaskLen)
 	stub.BitmaskSelectionPK = make(bitmask, bitmaskLen)
 	stub.BitmaskVoteFirst = make(bitmask, bitmaskLen)
@@ -678,79 +689,70 @@ func deconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
 			if !txn.Txn.VotePK.MsgIsZero() {
 				stub.BitmaskVotePK.SetBit(i)
 				stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
-				stub.SignedTxns[i].Txn.VotePK = crypto.OneTimeSignatureVerifier{}
 			}
 			if !txn.Txn.SelectionPK.MsgIsZero() {
 				stub.BitmaskSelectionPK.SetBit(i)
 				stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK[:]...)
-				stub.SignedTxns[i].Txn.SelectionPK = crypto.VRFVerifier{}
 			}
 			if !txn.Txn.VoteFirst.MsgIsZero() {
 				stub.BitmaskVoteFirst.SetBit(i)
 				stub.VoteFirst = append(stub.VoteFirst, txn.Txn.VoteFirst)
-				stub.SignedTxns[i].Txn.VoteFirst = 0
 			}
 			if !txn.Txn.VoteLast.MsgIsZero() {
 				stub.BitmaskVoteLast.SetBit(i)
 				stub.VoteLast = append(stub.VoteLast, txn.Txn.VoteLast)
-				stub.SignedTxns[i].Txn.VoteLast = 0
 			}
 			if txn.Txn.VoteKeyDilution > 0 {
 				stub.BitmaskVoteKeyDilution.SetBit(i)
 				stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
-				stub.SignedTxns[i].Txn.VoteKeyDilution = 0
 			}
 			if txn.Txn.Nonparticipation {
 				stub.BitmaskNonparticipation.SetBit(i)
 				stub.Nonparticipation = append(stub.Nonparticipation, txn.Txn.Nonparticipation) // can probably get rid of this
-				stub.SignedTxns[i].Txn.Nonparticipation = false
 			}
 		}
 	}
 
-	stub.BitmaskVotePK.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskSelectionPK.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskVoteFirst.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskVoteLast.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskVoteKeyDilution.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskNonparticipation.trimBitmask(len(stub.SignedTxns))
+	stub.BitmaskVotePK.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskSelectionPK.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskVoteFirst.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskVoteLast.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskVoteKeyDilution.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskNonparticipation.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func deconstructPaymentTxnFields(stub *txGroupsEncodingStub) {
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskReceiver = make(bitmask, bitmaskLen)
-	stub.Receiver = make([]byte, 0, len(stub.SignedTxns)*addressSize)
+	stub.Receiver = make([]byte, 0, int(stub.TotalTransactionsCount)*addressSize)
 	stub.BitmaskAmount = make(bitmask, bitmaskLen)
-	stub.Amount = make([]basics.MicroAlgos, 0, len(stub.SignedTxns))
+	stub.Amount = make([]basics.MicroAlgos, 0, int(stub.TotalTransactionsCount))
 	stub.BitmaskCloseRemainderTo = make(bitmask, bitmaskLen)
-	stub.CloseRemainderTo = make([]byte, 0, len(stub.SignedTxns)*addressSize)
+	stub.CloseRemainderTo = make([]byte, 0, int(stub.TotalTransactionsCount)*addressSize)
 	for i, txn := range stub.SignedTxns {
 		if txn.Txn.Type == protocol.PaymentTx {
 			if !txn.Txn.Receiver.MsgIsZero() {
 				stub.BitmaskReceiver.SetBit(i)
 				stub.Receiver = append(stub.Receiver, txn.Txn.Receiver[:]...)
-				stub.SignedTxns[i].Txn.Receiver = basics.Address{}
 			}
 			if !txn.Txn.Amount.MsgIsZero() {
 				stub.BitmaskAmount.SetBit(i)
 				stub.Amount = append(stub.Amount, txn.Txn.Amount)
-				stub.SignedTxns[i].Txn.Amount = basics.MicroAlgos{}
 			}
 			if !txn.Txn.CloseRemainderTo.MsgIsZero() {
 				stub.BitmaskCloseRemainderTo.SetBit(i)
 				stub.CloseRemainderTo = append(stub.CloseRemainderTo, txn.Txn.CloseRemainderTo[:]...)
-				stub.SignedTxns[i].Txn.CloseRemainderTo = basics.Address{}
 			}
 		}
 	}
 
-	stub.BitmaskReceiver.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskAmount.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskCloseRemainderTo.trimBitmask(len(stub.SignedTxns))
+	stub.BitmaskReceiver.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskAmount.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskCloseRemainderTo.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func deconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskConfigAsset = make(bitmask, bitmaskLen)
 	stub.BitmaskAssetParams = make(bitmask, bitmaskLen)
 	for i, txn := range stub.SignedTxns {
@@ -758,22 +760,20 @@ func deconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
 			if !txn.Txn.ConfigAsset.MsgIsZero() {
 				stub.BitmaskConfigAsset.SetBit(i)
 				stub.ConfigAsset = append(stub.ConfigAsset, txn.Txn.ConfigAsset)
-				stub.SignedTxns[i].Txn.ConfigAsset = 0
 			}
 			if !txn.Txn.AssetParams.MsgIsZero() {
 				stub.BitmaskAssetParams.SetBit(i)
 				stub.AssetParams = append(stub.AssetParams, txn.Txn.AssetParams)
-				stub.SignedTxns[i].Txn.AssetParams = basics.AssetParams{}
 			}
 		}
 	}
 
-	stub.BitmaskConfigAsset.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskAssetParams.trimBitmask(len(stub.SignedTxns))
+	stub.BitmaskConfigAsset.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskAssetParams.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func deconstructAssetTransferTxnFields(stub *txGroupsEncodingStub) {
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskXferAsset = make(bitmask, bitmaskLen)
 	stub.BitmaskAssetAmount = make(bitmask, bitmaskLen)
 	stub.BitmaskAssetSender = make(bitmask, bitmaskLen)
@@ -784,40 +784,35 @@ func deconstructAssetTransferTxnFields(stub *txGroupsEncodingStub) {
 			if !txn.Txn.XferAsset.MsgIsZero() {
 				stub.BitmaskXferAsset.SetBit(i)
 				stub.XferAsset = append(stub.XferAsset, txn.Txn.XferAsset)
-				stub.SignedTxns[i].Txn.XferAsset = 0
 			}
 			if txn.Txn.AssetAmount != 0 {
 				stub.BitmaskAssetAmount.SetBit(i)
 				stub.AssetAmount = append(stub.AssetAmount, txn.Txn.AssetAmount)
-				stub.SignedTxns[i].Txn.AssetAmount = 0
 			}
 			if !txn.Txn.AssetSender.MsgIsZero() {
 				stub.BitmaskAssetSender.SetBit(i)
 				stub.AssetSender = append(stub.AssetSender, txn.Txn.AssetSender[:]...)
-				stub.SignedTxns[i].Txn.AssetSender = basics.Address{}
 			}
 			if !txn.Txn.AssetReceiver.MsgIsZero() {
 				stub.BitmaskAssetReceiver.SetBit(i)
 				stub.AssetReceiver = append(stub.AssetReceiver, txn.Txn.AssetReceiver[:]...)
-				stub.SignedTxns[i].Txn.AssetReceiver = basics.Address{}
 			}
 			if !txn.Txn.AssetCloseTo.MsgIsZero() {
 				stub.BitmaskAssetCloseTo.SetBit(i)
 				stub.AssetCloseTo = append(stub.AssetCloseTo, txn.Txn.AssetCloseTo[:]...)
-				stub.SignedTxns[i].Txn.AssetCloseTo = basics.Address{}
 			}
 		}
 	}
 
-	stub.BitmaskXferAsset.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskAssetAmount.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskAssetSender.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskAssetReceiver.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskAssetCloseTo.trimBitmask(len(stub.SignedTxns))
+	stub.BitmaskXferAsset.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskAssetAmount.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskAssetSender.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskAssetReceiver.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskAssetCloseTo.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func deconstructAssetFreezeTxnFields(stub *txGroupsEncodingStub) {
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskFreezeAccount = make(bitmask, bitmaskLen)
 	stub.BitmaskFreezeAsset = make(bitmask, bitmaskLen)
 	stub.BitmaskAssetFrozen = make(bitmask, bitmaskLen)
@@ -826,28 +821,25 @@ func deconstructAssetFreezeTxnFields(stub *txGroupsEncodingStub) {
 			if !txn.Txn.FreezeAccount.MsgIsZero() {
 				stub.BitmaskFreezeAccount.SetBit(i)
 				stub.FreezeAccount = append(stub.FreezeAccount, txn.Txn.FreezeAccount[:]...)
-				stub.SignedTxns[i].Txn.FreezeAccount = basics.Address{}
 			}
 			if txn.Txn.FreezeAsset != 0 {
 				stub.BitmaskFreezeAsset.SetBit(i)
 				stub.FreezeAsset = append(stub.FreezeAsset, txn.Txn.FreezeAsset)
-				stub.SignedTxns[i].Txn.FreezeAsset = 0
 			}
 			if txn.Txn.AssetFrozen {
 				stub.BitmaskAssetFrozen.SetBit(i)
 				stub.AssetFrozen = append(stub.AssetFrozen, txn.Txn.AssetFrozen) // can probably get rid of this too
-				stub.SignedTxns[i].Txn.AssetFrozen = false
 			}
 		}
 	}
 
-	stub.BitmaskFreezeAccount.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskFreezeAsset.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskAssetFrozen.trimBitmask(len(stub.SignedTxns))
+	stub.BitmaskFreezeAccount.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskFreezeAsset.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskAssetFrozen.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func deconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskApplicationID = make(bitmask, bitmaskLen)
 	stub.BitmaskOnCompletion = make(bitmask, bitmaskLen)
 	stub.BitmaskApplicationArgs = make(bitmask, bitmaskLen)
@@ -863,70 +855,60 @@ func deconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 			if !txn.Txn.ApplicationID.MsgIsZero() {
 				stub.BitmaskApplicationID.SetBit(i)
 				stub.ApplicationID = append(stub.ApplicationID, txn.Txn.ApplicationID)
-				stub.SignedTxns[i].Txn.ApplicationID = 0
 			}
 			if txn.Txn.OnCompletion != 0 {
 				stub.BitmaskOnCompletion.SetBit(i)
 				stub.OnCompletion = append(stub.OnCompletion, txn.Txn.OnCompletion)
-				stub.SignedTxns[i].Txn.OnCompletion = 0
 			}
 			if txn.Txn.ApplicationArgs != nil {
 				stub.BitmaskApplicationArgs.SetBit(i)
 				stub.ApplicationArgs = append(stub.ApplicationArgs, txn.Txn.ApplicationArgs)
-				stub.SignedTxns[i].Txn.ApplicationArgs = nil
 			}
 			if txn.Txn.Accounts != nil {
 				stub.BitmaskAccounts.SetBit(i)
 				stub.Accounts = append(stub.Accounts, txn.Txn.Accounts)
-				stub.SignedTxns[i].Txn.Accounts = nil
 			}
 			if txn.Txn.ForeignApps != nil  {
 				stub.BitmaskForeignApps.SetBit(i)
 				stub.ForeignApps = append(stub.ForeignApps, txn.Txn.ForeignApps)
-				stub.SignedTxns[i].Txn.ForeignApps = nil
 			}
 			if txn.Txn.ForeignAssets != nil {
 				stub.BitmaskForeignAssets.SetBit(i)
 				stub.ForeignAssets = append(stub.ForeignAssets, txn.Txn.ForeignAssets)
-				stub.SignedTxns[i].Txn.ForeignAssets = nil
 			}
 			if !txn.Txn.LocalStateSchema.MsgIsZero() {
 				stub.BitmaskLocalStateSchema.SetBit(i)
 				stub.LocalStateSchema = append(stub.LocalStateSchema, txn.Txn.LocalStateSchema)
-				stub.SignedTxns[i].Txn.LocalStateSchema = basics.StateSchema{}
 			}
 			if !txn.Txn.GlobalStateSchema.MsgIsZero() {
 				stub.BitmaskGlobalStateSchema.SetBit(i)
 				stub.GlobalStateSchema = append(stub.GlobalStateSchema, txn.Txn.GlobalStateSchema)
-				stub.SignedTxns[i].Txn.GlobalStateSchema = basics.StateSchema{}
 			}
 			if txn.Txn.ApprovalProgram != nil {
 				stub.BitmaskApprovalProgram.SetBit(i)
 				stub.ApprovalProgram = append(stub.ApprovalProgram, txn.Txn.ApprovalProgram)
-				stub.SignedTxns[i].Txn.ApprovalProgram = nil
 			}
 			if txn.Txn.ClearStateProgram != nil {
 				stub.BitmaskClearStateProgram.SetBit(i)
 				stub.ClearStateProgram = append(stub.ClearStateProgram, txn.Txn.ClearStateProgram)
-				stub.SignedTxns[i].Txn.ClearStateProgram = nil
 			}
 		}
 	}
 
-	stub.BitmaskApplicationID.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskOnCompletion.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskApplicationArgs.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskAccounts.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskForeignApps.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskForeignAssets.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskLocalStateSchema.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskGlobalStateSchema.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskApprovalProgram.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskClearStateProgram.trimBitmask(len(stub.SignedTxns))
+	stub.BitmaskApplicationID.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskOnCompletion.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskApplicationArgs.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskAccounts.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskForeignApps.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskForeignAssets.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskLocalStateSchema.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskGlobalStateSchema.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskApprovalProgram.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskClearStateProgram.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func deconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
-	bitmaskLen := bytesNeededBitmask(len(stub.SignedTxns))
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskCertRound = make(bitmask, bitmaskLen)
 	stub.BitmaskCertType = make(bitmask, bitmaskLen)
 	stub.BitmaskCert = make(bitmask, bitmaskLen)
@@ -935,55 +917,53 @@ func deconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
 			if !txn.Txn.CertRound.MsgIsZero() {
 				stub.BitmaskCertRound.SetBit(i)
 				stub.CertRound = append(stub.CertRound, txn.Txn.CertRound)
-				stub.SignedTxns[i].Txn.CertRound = 0
 			}
 			if txn.Txn.CertType != 0 {
 				stub.BitmaskCertType.SetBit(i)
 				stub.CertType = append(stub.CertType, txn.Txn.CertType)
-				stub.SignedTxns[i].Txn.CertType = 0
 			}
 			if !txn.Txn.Cert.MsgIsZero() {
 				stub.BitmaskCert.SetBit(i)
 				stub.Cert = append(stub.Cert, txn.Txn.Cert)
-				stub.SignedTxns[i].Txn.Cert = compactcert.Cert{}
 			}
 		}
 	}
 
-	stub.BitmaskCertRound.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskCertType.trimBitmask(len(stub.SignedTxns))
-	stub.BitmaskCert.trimBitmask(len(stub.SignedTxns))
+	stub.BitmaskCertRound.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskCertType.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskCert.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func reconstructSignedTransactions(stub *txGroupsEncodingStub) {
 	var index int
 	index = 0
+	stub.BitmaskSig.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskSig.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskSig.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Sig[:], getSlice(stub.Sig, index, signatureSize))
 			index++
 		}
 	}
-
 	index = 0
+	stub.BitmaskMsig.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskMsig.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskMsig.EntryExists(i); exists {
 			stub.SignedTxns[i].Msig = stub.Msig[index]
 			index++
 		}
 	}
-
 	index = 0
+	stub.BitmaskLsig.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskLsig.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskLsig.EntryExists(i); exists {
 			stub.SignedTxns[i].Lsig = stub.Lsig[index]
 			index++
 		}
 	}
-
 	index = 0
+	stub.BitmaskAuthAddr.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskAuthAddr.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskAuthAddr.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].AuthAddr[:], getSlice(stub.AuthAddr, index, addressSize))
 			index++
 		}
@@ -995,8 +975,9 @@ func reconstructSignedTransactions(stub *txGroupsEncodingStub) {
 func reconstructTransactions(stub *txGroupsEncodingStub) {
 	var index int
 	index = 0
+	stub.BitmaskTxType.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskTxType.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskTxType.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.Type = ByteToTxType(stub.TxType[index])
 			index++
 		} else {
@@ -1017,64 +998,73 @@ func reconstructTransactions(stub *txGroupsEncodingStub) {
 func reconstructTxnHeader(stub *txGroupsEncodingStub) {
 	var index int
 	index = 0
+	stub.BitmaskSender.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskSender.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskSender.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.Sender[:], getSlice(stub.Sender, index, addressSize))
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskFee.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskFee.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskFee.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.Fee = stub.Fee[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskFirstValid.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskFirstValid.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskFirstValid.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.FirstValid = stub.FirstValid[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskLastValid.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskLastValid.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskLastValid.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.LastValid = stub.LastValid[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskNote.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskNote.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskNote.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.Note = stub.Note[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskGenesisID.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskGenesisID.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskGenesisID.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.GenesisID = stub.GenesisID
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskGenesisHash.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskGenesisHash.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskGenesisHash.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.GenesisHash = stub.GenesisHash
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskLease.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskLease.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskLease.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.Lease[:], getSlice(stub.Lease, index, addressSize))
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskRekeyTo.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskRekeyTo.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskRekeyTo.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.RekeyTo[:], getSlice(stub.RekeyTo, index, addressSize))
 			index++
 		}
@@ -1084,43 +1074,49 @@ func reconstructTxnHeader(stub *txGroupsEncodingStub) {
 func reconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
 	var index int
 	index = 0
+	stub.BitmaskVotePK.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskVotePK.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskVotePK.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.VotePK[:], getSlice(stub.VotePK, index, addressSize))
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskSelectionPK.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskSelectionPK.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskSelectionPK.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.SelectionPK[:], getSlice(stub.SelectionPK, index, addressSize))
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskVoteFirst.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskVoteFirst.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskVoteFirst.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.VoteFirst = stub.VoteFirst[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskVoteLast.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskVoteLast.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskVoteLast.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.VoteLast = stub.VoteLast[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskVoteKeyDilution.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskVoteLast.EntryExists(i, 0); exists {
-			stub.SignedTxns[i].Txn.VoteLast = stub.VoteLast[index]
+		if exists := stub.BitmaskVoteKeyDilution.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.VoteKeyDilution = stub.VoteKeyDilution[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskNonparticipation.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskNonparticipation.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskNonparticipation.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.Nonparticipation = stub.Nonparticipation[index]
 			index++
 		}
@@ -1130,22 +1126,25 @@ func reconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
 func reconstructPaymentTxnFields(stub *txGroupsEncodingStub) {
 	var index int
 	index = 0
+	stub.BitmaskReceiver.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskReceiver.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskReceiver.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.Receiver[:], getSlice(stub.Receiver, index, addressSize))
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskAmount.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskAmount.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskAmount.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.Amount = stub.Amount[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskCloseRemainderTo.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskCloseRemainderTo.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskCloseRemainderTo.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.CloseRemainderTo[:], getSlice(stub.CloseRemainderTo, index, addressSize))
 			index++
 		}
@@ -1155,15 +1154,17 @@ func reconstructPaymentTxnFields(stub *txGroupsEncodingStub) {
 func reconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
 	var index int
 	index = 0
+	stub.BitmaskConfigAsset.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskConfigAsset.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskConfigAsset.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.ConfigAsset = stub.ConfigAsset[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskAssetParams.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskAssetParams.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskAssetParams.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.AssetParams = stub.AssetParams[index]
 			index++
 		}
@@ -1173,36 +1174,41 @@ func reconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
 func reconstructAssetTransferTxnFields(stub *txGroupsEncodingStub) {
 	var index int
 	index = 0
+	stub.BitmaskXferAsset.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskXferAsset.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskXferAsset.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.XferAsset = stub.XferAsset[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskAssetAmount.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskAssetAmount.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskAssetAmount.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.AssetAmount = stub.AssetAmount[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskAssetSender.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskAssetSender.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskAssetSender.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.AssetSender[:], getSlice(stub.AssetSender, index, addressSize))
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskAssetReceiver.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskAssetReceiver.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskAssetReceiver.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.AssetReceiver[:], getSlice(stub.AssetReceiver, index, addressSize))
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskAssetCloseTo.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskAssetCloseTo.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskAssetCloseTo.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.AssetCloseTo[:], getSlice(stub.AssetCloseTo, index, addressSize))
 			index++
 		}
@@ -1212,22 +1218,25 @@ func reconstructAssetTransferTxnFields(stub *txGroupsEncodingStub) {
 func reconstructAssetFreezeTxnFields(stub *txGroupsEncodingStub) {
 	var index int
 	index = 0
+	stub.BitmaskFreezeAccount.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskFreezeAccount.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskFreezeAccount.EntryExists(i); exists {
 			copy(stub.SignedTxns[i].Txn.FreezeAccount[:], getSlice(stub.FreezeAccount, index, addressSize))
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskFreezeAsset.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskFreezeAsset.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskFreezeAsset.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.FreezeAsset = stub.FreezeAsset[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskAssetFrozen.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskAssetFrozen.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskAssetFrozen.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.AssetFrozen = stub.AssetFrozen[index]
 			index++
 		}
@@ -1237,71 +1246,81 @@ func reconstructAssetFreezeTxnFields(stub *txGroupsEncodingStub) {
 func reconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 	var index int
 	index = 0
+	stub.BitmaskApplicationID.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskApplicationID.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskApplicationID.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.ApplicationID = stub.ApplicationID[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskOnCompletion.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskOnCompletion.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskOnCompletion.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.OnCompletion = stub.OnCompletion[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskApplicationArgs.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskApplicationArgs.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskApplicationArgs.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.ApplicationArgs = stub.ApplicationArgs[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskForeignApps.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskForeignApps.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskForeignApps.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.ForeignApps = stub.ForeignApps[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskForeignAssets.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskForeignAssets.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskForeignAssets.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.ForeignAssets = stub.ForeignAssets[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskApplicationArgs.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskApplicationArgs.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskApplicationArgs.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.ApplicationArgs = stub.ApplicationArgs[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskLocalStateSchema.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskLocalStateSchema.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskLocalStateSchema.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.LocalStateSchema = stub.LocalStateSchema[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskGlobalStateSchema.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskGlobalStateSchema.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskGlobalStateSchema.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.GlobalStateSchema = stub.GlobalStateSchema[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskApprovalProgram.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskApprovalProgram.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskApprovalProgram.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.ApprovalProgram = stub.ApprovalProgram[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskClearStateProgram.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskClearStateProgram.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskClearStateProgram.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.ClearStateProgram = stub.ClearStateProgram[index]
 			index++
 		}
@@ -1311,22 +1330,25 @@ func reconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 func reconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
 	var index int
 	index = 0
+	stub.BitmaskCertRound.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskCertRound.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskCertRound.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.CertRound = stub.CertRound[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskCertType.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskCertType.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskCertType.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.CertType = stub.CertType[index]
 			index++
 		}
 	}
 	index = 0
+	stub.BitmaskCert.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists, _ := stub.BitmaskCert.EntryExists(i, 0); exists {
+		if exists := stub.BitmaskCert.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.Cert = stub.Cert[index]
 			index++
 		}
