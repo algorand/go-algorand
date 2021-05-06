@@ -44,7 +44,8 @@ func (balances keyregTestBalances) GetCreator(cidx basics.CreatableIndex, ctype 
 	return basics.Address{}, true, nil
 }
 
-func (balances keyregTestBalances) Put(basics.Address, basics.AccountData) error {
+func (balances keyregTestBalances) Put(addr basics.Address, ad basics.AccountData) error {
+	balances.addrs[addr] = ad
 	return nil
 }
 
@@ -120,6 +121,83 @@ func TestKeyregApply(t *testing.T) {
 
 		// Nonparticipatory accounts should not be able to change status
 		mockBal.addrs[src] = basics.AccountData{Status: basics.NotParticipating}
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+		require.Error(t, err)
+	}
+
+	mockBal.version = "future"
+	if mockBal.ConsensusParams().EnableKeyregCoherencyCheck {
+		// Test trying to set a going online with missing VotePK
+		mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
+		tx.KeyregTxnFields.VotePK = crypto.OneTimeSignatureVerifier{}
+		tx.KeyregTxnFields.SelectionPK = vrfSecrets.PK
+		tx.KeyregTxnFields.VoteKeyDilution = 10
+		tx.KeyregTxnFields.Nonparticipation = false
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+		require.Error(t, err)
+
+		// Test trying to set a going online with missing SelectionPK
+		mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
+		tx.KeyregTxnFields.VotePK = crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier)
+		tx.KeyregTxnFields.SelectionPK = crypto.VRFVerifier{}
+		tx.KeyregTxnFields.VoteKeyDilution = 10
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+		require.Error(t, err)
+
+		// Test trying to set a going online with missing VoteKeyDilution
+		mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
+		tx.KeyregTxnFields.VotePK = crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier)
+		tx.KeyregTxnFields.SelectionPK = vrfSecrets.PK
+		tx.KeyregTxnFields.VoteKeyDilution = 0
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+		require.Error(t, err)
+
+		// Test trying to set a going online with flipped VoteFirst & VoteLast
+		mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
+		tx.KeyregTxnFields.VotePK = crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier)
+		tx.KeyregTxnFields.SelectionPK = vrfSecrets.PK
+		tx.KeyregTxnFields.VoteKeyDilution = 10
+		tx.KeyregTxnFields.VoteFirst = 10
+		tx.KeyregTxnFields.VoteLast = 9
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+		require.Error(t, err)
+
+		// Test trying to set a going offline with VoteFirst set.
+		mockBal.addrs[src] = basics.AccountData{Status: basics.Online}
+		tx.KeyregTxnFields.VotePK = crypto.OneTimeSignatureVerifier{}
+		tx.KeyregTxnFields.SelectionPK = crypto.VRFVerifier{}
+		tx.KeyregTxnFields.VoteKeyDilution = 0
+		tx.KeyregTxnFields.VoteFirst = 10
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+		require.Error(t, err)
+
+		// Test trying to set a going offline with VoteLast set.
+		mockBal.addrs[src] = basics.AccountData{Status: basics.Online}
+		tx.KeyregTxnFields.VotePK = crypto.OneTimeSignatureVerifier{}
+		tx.KeyregTxnFields.SelectionPK = crypto.VRFVerifier{}
+		tx.KeyregTxnFields.VoteKeyDilution = 0
+		tx.KeyregTxnFields.VoteFirst = 0
+		tx.KeyregTxnFields.VoteLast = 10
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+		require.Error(t, err)
+
+		// Test trying to set a going offline.
+		mockBal.addrs[src] = basics.AccountData{Status: basics.Online}
+		tx.KeyregTxnFields.VotePK = crypto.OneTimeSignatureVerifier{}
+		tx.KeyregTxnFields.SelectionPK = crypto.VRFVerifier{}
+		tx.KeyregTxnFields.VoteKeyDilution = 0
+		tx.KeyregTxnFields.VoteLast = 0
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+		require.NoError(t, err)
+
+		// Test trying to go online with the Nonparticipation set.
+		mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
+		tx.KeyregTxnFields.VotePK = crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier)
+		tx.KeyregTxnFields.SelectionPK = vrfSecrets.PK
+		tx.KeyregTxnFields.VoteKeyDilution = 5
+		tx.KeyregTxnFields.VoteFirst = 1
+		tx.KeyregTxnFields.VoteLast = 3
+		tx.KeyregTxnFields.Nonparticipation = true
 		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 		require.Error(t, err)
 	}
