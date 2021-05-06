@@ -409,6 +409,10 @@ type Local struct {
 	// Time interval in nanoseconds for generating accountUpdates telemetry event
 	AccountUpdatesStatsInterval time.Duration `version[17]:"5000000000"`
 
+	// ParticipationKeysRefreshInterval is the duration between two consecutive checks to see if new participation
+	// keys have been placed on the genesis directory.
+	ParticipationKeysRefreshInterval time.Duration `version[17]:"60000000000"`
+
 	// DisableNetworking disables all the incoming and outgoing communication a node would perform. This is useful
 	// when we have a single-node private network, where there is no other nodes that need to be communicated with.
 	// features like catchpoint catchup would be rendered completly non-operational, and many of the node inner

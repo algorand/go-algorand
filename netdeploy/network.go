@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -146,6 +147,7 @@ func (n Network) NodeDataDirs() []string {
 	for _, nodeDir := range n.nodeDirs {
 		directories = append(directories, n.getNodeFullPath(nodeDir))
 	}
+	sort.Strings(directories)
 	return directories
 }
 
