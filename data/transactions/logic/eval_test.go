@@ -4065,4 +4065,6 @@ main:
   ==
 `, 4)
 	testPanics(t, "int 1; retsub", 4)
+
+	testPanics(t, "int 1; recur: callsub recur; int 1", 4)
 }

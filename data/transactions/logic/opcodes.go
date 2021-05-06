@@ -233,7 +233,7 @@ var OpSpecs = []OpSpec{
 	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, varies(checkPushInt, "uint", immInt)},
 
 	// "Function oriented"
-	{0x88, "callsub", opCallSub, assembleBranch, disBranch, oneInt, nil, 4, modeAny, opBranch},
+	{0x88, "callsub", opCallSub, assembleBranch, disBranch, nil, nil, 4, modeAny, opBranch},
 	{0x89, "retsub", opRetSub, asmDefault, disDefault, nil, nil, 4, modeAny, opDefault},
 	// Leave a little room for indirect function calls, or similar
 
