@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -321,7 +322,7 @@ func (ccw *Worker) tryBuilding() {
 
 	for rnd, b := range ccw.builders {
 		firstValid := ccw.ledger.Latest() + 1
-		acceptableWeight := ledger.AcceptableCompactCertWeight(b.votersHdr, firstValid, nil)
+		acceptableWeight := ledger.AcceptableCompactCertWeight(b.votersHdr, firstValid, logging.Base())
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the cert at this time..
 			continue
