@@ -118,8 +118,33 @@ func TestOverlapsInterval(t *testing.T) {
 	a.True(interval.OverlapsInterval(end, end))
 	a.True(interval.OverlapsInterval(end, after))
 }
-
 func BenchmarkOldKeysDeletion(b *testing.B) {
+	a := require.New(b)
+
+	var rootAddr basics.Address
+	crypto.RandBytes(rootAddr[:])
+
+	partDB, err := db.MakeErasableAccessor(b.Name() + "_part")
+	a.NoError(err)
+	a.NotNil(partDB)
+	defer func() {
+		os.Remove(b.Name() + "_part")
+	}()
+
+	part, err := FillDBWithParticipationKeys(partDB, rootAddr, 0, 3000000, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	a.NoError(err)
+	a.NotNil(part)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		next, err := part.ReDeleteOldKeys(basics.Round(i), config.Consensus[protocol.ConsensusCurrentVersion])
+		a.NoError(err)
+		part = next
+	}
+	part.Close()
+}
+
+func BenchmarkOldKeysDeletionPrev(b *testing.B) {
 	a := require.New(b)
 
 	var rootAddr basics.Address
@@ -141,6 +166,7 @@ func BenchmarkOldKeysDeletion(b *testing.B) {
 		errCh := part.DeleteOldKeys(basics.Round(i), config.Consensus[protocol.ConsensusCurrentVersion])
 		err := <-errCh
 		a.NoError(err)
+		//part = next
 	}
 	part.Close()
 }

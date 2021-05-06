@@ -18,6 +18,7 @@ package data
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/algorand/go-deadlock"
 
@@ -59,7 +60,7 @@ func (manager *AccountManager) Keys() (out []account.Participation) {
 	defer manager.mu.Unlock()
 
 	for _, part := range manager.partIntervals {
-		out = append(out, part.Participation)
+		out = append(out, part.Participation.Duplicate())
 	}
 	return out
 }
@@ -127,10 +128,11 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 	latestProto := config.Consensus[latestHdr.CurrentProtocol]
 
 	manager.mu.Lock()
-	pendingItems := make(map[string]<-chan error, len(manager.partIntervals))
+	var wg sync.WaitGroup
 	func() {
 		defer manager.mu.Unlock()
-		for _, part := range manager.partIntervals {
+		wg.Add(len(manager.partIntervals))
+		for interval, part := range manager.partIntervals {
 			// We need a key for round r+1 for agreement.
 			nextRound := latestHdr.Round + 1
 
@@ -150,21 +152,25 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 				}
 			}
 
-			// we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
-			first, last := part.ValidInterval()
-			errString := fmt.Sprintf("AccountManager.DeleteOldKeys(): key for %s (%d-%d), nextRound %d",
-				part.Address().String(), first, last, nextRound)
-			errCh := part.DeleteOldKeys(nextRound, agreementProto)
+			go func(interval account.ParticipationInterval, part account.PersistedParticipation) {
+				defer wg.Done()
+				updatedPart, err := part.ReDeleteOldKeys(nextRound, agreementProto)
+				if err != nil {
+					// we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
+					first, last := part.ValidInterval()
+					errString := fmt.Sprintf("AccountManager.DeleteOldKeys(): key for %s (%d-%d), nextRound %d",
+						part.Address().String(), first, last, nextRound)
+					logging.Base().Warnf("%s: %v", errString, err)
+					return
+				}
+				manager.mu.Lock()
+				manager.partIntervals[interval] = updatedPart
+				manager.mu.Unlock()
 
-			pendingItems[errString] = errCh
+			}(interval, part)
 		}
 	}()
 
-	// wait all all disk flushes, and report errors as they appear.
-	for errString, errCh := range pendingItems {
-		err := <-errCh
-		if err != nil {
-			logging.Base().Warnf("%s: %v", errString, err)
-		}
-	}
+	wg.Wait()
+
 }
