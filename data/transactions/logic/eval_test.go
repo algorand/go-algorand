@@ -540,10 +540,14 @@ int 1                   // ret 1
 func TestUint128(t *testing.T) {
 	x := uint128(0, 3)
 	require.Equal(t, x.String(), "3")
+	x = uint128(0, 0)
+	require.Equal(t, x.String(), "0")
 	x = uint128(1, 3)
 	require.Equal(t, x.String(), "18446744073709551619")
 	x = uint128(1, 5)
 	require.Equal(t, x.String(), "18446744073709551621")
+	x = uint128(^uint64(0), ^uint64(0)) // maximum uint128 = 2^64-1
+	require.Equal(t, x.String(), "340282366920938463463374607431768211455")
 }
 
 func TestDivw(t *testing.T) {
@@ -561,6 +565,21 @@ func TestDivw(t *testing.T) {
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 2; ==; assert; int 1`, 4)
+
+	// 0:0 / 0:7 == 0r0
+	testAccepts(t, `int 0; int 0; int 0; int 7; divw;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 0; ==; assert; int 1`, 4)
+
+	// maxu64:maxu64 / maxu64:maxu64 == 1r0
+	testAccepts(t, `int 18446744073709551615; int 18446744073709551615; int 18446744073709551615; int 18446744073709551615;
+                        divw;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 1; ==; assert;
+                        int 0; ==; assert; int 1`, 4)
 
 	// 0:7777 / 1:0 == 0:0r7777 == 0:0,0:7777
 	testAccepts(t, `int 0; int 7777; int 1; int 0; divw;
@@ -2803,7 +2822,8 @@ bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
 int 1`, v)
 			require.NoError(t, err)
-			//t.Log(hex.EncodeToString(ops.Program))                  brhilo
+			//t.Log(hex.EncodeToString(ops.Program))
+			// (br)anch byte, (hi)gh byte of offset,  (lo)w byte:     brhilo
 			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
