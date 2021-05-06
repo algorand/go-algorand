@@ -2781,6 +2781,22 @@ int 1`, v)
 			require.Error(t, err)
 			require.False(t, pass)
 			isNotPanic(t, err)
+
+			// back branches are checked differently, so test misaligned back branch
+			ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
+			ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
+			_, err = Check(ops.Program, defaultEvalParams(nil, nil))
+			require.Error(t, err)
+			if v < backBranchEnabledVersion {
+				require.Contains(t, err.Error(), "negative branch")
+			} else {
+				require.Contains(t, err.Error(), "back branch")
+				require.Contains(t, err.Error(), "aligned")
+			}
+			pass, err = Eval(ops.Program, defaultEvalParams(nil, nil))
+			require.Error(t, err)
+			require.False(t, pass)
+			isNotPanic(t, err)
 		})
 	}
 }

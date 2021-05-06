@@ -491,6 +491,8 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 	cx.pc = vlen
 	cx.EvalParams = params
 	cx.program = program
+	cx.branchTargets = make(map[int]bool)
+	cx.instructionStarts = make(map[int]bool)
 
 	for cx.pc < len(cx.program) {
 		prevpc := cx.pc
@@ -635,6 +637,7 @@ func (cx *evalContext) step() {
 }
 
 func (cx *evalContext) checkStep() error {
+	cx.instructionStarts[cx.pc] = true
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
 	if spec.op == nil {
@@ -666,7 +669,7 @@ func (cx *evalContext) checkStep() error {
 	if cx.Trace != nil {
 		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
-	if cx.err == nil && cx.branchTargets != nil {
+	if cx.err == nil {
 		for pc := prevpc + 1; pc < cx.pc; pc++ {
 			if _, ok := cx.branchTargets[pc]; ok {
 				return fmt.Errorf("branch target %d is not an aligned instruction", pc)
@@ -1210,8 +1213,11 @@ func checkBranch(cx *evalContext) error {
 	if err != nil {
 		return err
 	}
-	if cx.branchTargets == nil {
-		cx.branchTargets = make(map[int]bool)
+	if target < cx.nextpc {
+		// If a branch goes backwards, we should have already noted that an instruction began at that location.
+		if _, ok := cx.instructionStarts[target]; !ok {
+			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
+		}
 	}
 	cx.branchTargets[target] = true
 	return nil
