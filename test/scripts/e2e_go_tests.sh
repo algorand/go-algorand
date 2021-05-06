@@ -112,11 +112,11 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
             done
         done
     else
-        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} ./...
+        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} ./... | logfilter
     fi
 else
     for TEST in ${TESTPATTERNS[@]}; do
-        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
+        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./... | logfilter
     done
 fi
 
