@@ -1,0 +1,47 @@
+=== RUN   TestParticipationKeyOnlyAccountParticipatesCorrectly
+=== PAUSE TestParticipationKeyOnlyAccountParticipatesCorrectly
+=== RUN   TestNewAccountCanGoOnlineAndParticipate
+    onlineOfflineParticipation_test.go:105: 
+--- SKIP: TestNewAccountCanGoOnlineAndParticipate (0.00s)
+=== RUN   TestOverlappingParticipationKeys
+=== PAUSE TestOverlappingParticipationKeys
+=== RUN   TestOnlineOfflineRewards
+=== PAUSE TestOnlineOfflineRewards
+=== RUN   TestPartkeyOnlyRewards
+    participationRewards_test.go:139: 
+--- SKIP: TestPartkeyOnlyRewards (0.00s)
+=== RUN   TestRewardUnitThreshold
+=== PAUSE TestRewardUnitThreshold
+=== RUN   TestRewardRateRecalculation
+=== PAUSE TestRewardRateRecalculation
+=== CONT  TestOverlappingParticipationKeys
+=== CONT  TestRewardRateRecalculation
+--- FAIL: TestOverlappingParticipationKeys (0.00s)
+panic: CreateNetworkFromTemplate failed: open /home/travis/gopath/src/github.com/algorand/go-algorand/test/testdata/nettemplates/ShortParticipationKeys.json: no such file or directory [recovered]
+	panic: CreateNetworkFromTemplate failed: open /home/travis/gopath/src/github.com/algorand/go-algorand/test/testdata/nettemplates/ShortParticipationKeys.json: no such file or directory
+
+goroutine 119 [running]:
+testing.tRunner.func1.1(0x1515200, 0xc0002f0880)
+	/home/travis/.gimme/versions/go1.14.7.linux.amd64/src/testing/testing.go:988 +0x452
+testing.tRunner.func1(0xc0002377a0)
+	/home/travis/.gimme/versions/go1.14.7.linux.amd64/src/testing/testing.go:991 +0x600
+panic(0x1515200, 0xc0002f0880)
+	/home/travis/.gimme/versions/go1.14.7.linux.amd64/src/runtime/panic.go:975 +0x3e3
+github.com/algorand/go-algorand/test/framework/fixtures.(*baseFixture).failOnError(...)
+	/home/travis/gopath/src/github.com/algorand/go-algorand/test/framework/fixtures/baseFixture.go:69
+github.com/algorand/go-algorand/test/framework/fixtures.(*LibGoalFixture).failOnError(0xc0001d6800, 0x19ee400, 0xc0002db290, 0x16d71fc, 0x24)
+	/home/travis/gopath/src/github.com/algorand/go-algorand/test/framework/fixtures/libgoalFixture.go:329 +0x1d8
+github.com/algorand/go-algorand/test/framework/fixtures.(*LibGoalFixture).setup(0xc0001d6800, 0x1a19280, 0xc0002377a0, 0x16d25f5, 0x20, 0xc000104ea0, 0x28, 0xc000091000)
+	/home/travis/gopath/src/github.com/algorand/go-algorand/test/framework/fixtures/libgoalFixture.go:97 +0x490
+github.com/algorand/go-algorand/test/framework/fixtures.(*LibGoalFixture).SetupNoStart(0xc0001d6800, 0x1a19280, 0xc0002377a0, 0xc000104ea0, 0x28)
+	/home/travis/gopath/src/github.com/algorand/go-algorand/test/framework/fixtures/libgoalFixture.go:73 +0x92
+github.com/algorand/go-algorand/test/framework/fixtures.(*RestClientFixture).SetupNoStart(...)
+	/home/travis/gopath/src/github.com/algorand/go-algorand/test/framework/fixtures/restClientFixture.go:50
+github.com/algorand/go-algorand/test/e2e-go/features/participation.TestOverlappingParticipationKeys(0xc0002377a0)
+	/home/travis/gopath/src/github.com/algorand/go-algorand/test/e2e-go/features/participation/overlappingParticipationKeys_test.go:58 +0x3a0
+testing.tRunner(0xc0002377a0, 0x17230a0)
+	/home/travis/.gimme/versions/go1.14.7.linux.amd64/src/testing/testing.go:1039 +0x1ec
+created by testing.(*T).Run
+	/home/travis/.gimme/versions/go1.14.7.linux.amd64/src/testing/testing.go:1090 +0x701
+FAIL	github.com/algorand/go-algorand/test/e2e-go/features/participation	0.069s
+

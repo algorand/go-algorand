@@ -67,14 +67,16 @@ type pseudonode interface {
 
 // asyncPseudonode creates proposals and votes asynchronously.
 type asyncPseudonode struct {
-	factory   BlockFactory
-	validator BlockValidator
-	keys      KeyManager
-	ledger    Ledger
-	log       serviceLogger
-	quit      chan struct{}   // a quit signal for the verifier goroutines
-	closeWg   *sync.WaitGroup // frontend waitgroup to get notified when all the verifier goroutines are done.
-	monitor   *coserviceMonitor
+	factory                BlockFactory
+	validator              BlockValidator
+	keys                   KeyManager
+	ledger                 Ledger
+	log                    serviceLogger
+	quit                   chan struct{}   // a quit signal for the verifier goroutines
+	closeWg                *sync.WaitGroup // frontend waitgroup to get notified when all the verifier goroutines are done.
+	monitor                *coserviceMonitor
+	participationKeysRound basics.Round            // the round to which the participationKeys matches
+	participationKeys      []account.Participation // the list of the participation keys for round participationKeysRound
 
 	proposalsVerifier *pseudonodeVerifier // dynamically generated verifier goroutine that manages incoming proposals making request.
 	votesVerifier     *pseudonodeVerifier // dynamically generated verifier goroutine that manages incoming votes making request.
@@ -193,34 +195,53 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 	}
 }
 
-func (n asyncPseudonode) makeProposalsTask(ctx context.Context, r round, p period) pseudonodeProposalsTask {
-	participation := n.getParticipations("asyncPseudonode.makeProposalsTask", r)
+// load the participation keys from the account manager ( as needed ) for the
+// current round.
+func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []account.Participation {
+	// if we've already loaded up the keys, then just skip loading them.
+	if n.participationKeysRound == voteRound {
+		return n.participationKeys
+	}
 
+	cparams, err := n.ledger.ConsensusParams(ParamsRound(voteRound))
+	if err != nil {
+		// if we cannot figure out the balance round number, reset the parameters so that we won't be sending
+		// any vote.
+		n.log.Warnf("asyncPseudonode: unable to retrieve consensus parameters for voting round %d : %v", voteRound, err)
+		n.participationKeysRound = basics.Round(0)
+		n.participationKeys = nil
+		return nil
+	}
+	balanceRound := balanceRound(voteRound, cparams)
+
+	// otherwise, we want to load the participation keys.
+	n.participationKeys = n.keys.VotingKeys(voteRound, balanceRound)
+	n.participationKeysRound = voteRound
+	return n.participationKeys
+}
+
+func (n asyncPseudonode) makeProposalsTask(ctx context.Context, r round, p period) pseudonodeProposalsTask {
 	pt := pseudonodeProposalsTask{
 		pseudonodeBaseTask: pseudonodeBaseTask{
-			node:          &n,
-			context:       ctx,
-			participation: participation,
-			out:           make(chan externalEvent),
+			node:    &n,
+			context: ctx,
+			out:     make(chan externalEvent),
 		},
 		round:  r,
 		period: p,
 	}
-	if len(participation) == 0 {
+	if !pt.populateParticipationKeys(r) {
 		close(pt.out)
 	}
 	return pt
 }
 
 func (n asyncPseudonode) makeVotesTask(ctx context.Context, r round, p period, s step, prop proposalValue, persistStateDone chan error) pseudonodeVotesTask {
-	participation := n.getParticipations("asyncPseudonode.makeVotesTask", r)
-
 	pvt := pseudonodeVotesTask{
 		pseudonodeBaseTask: pseudonodeBaseTask{
-			node:          &n,
-			context:       ctx,
-			participation: participation,
-			out:           make(chan externalEvent),
+			node:    &n,
+			context: ctx,
+			out:     make(chan externalEvent),
 		},
 		round:            r,
 		period:           p,
@@ -228,7 +249,7 @@ func (n asyncPseudonode) makeVotesTask(ctx context.Context, r round, p period, s
 		prop:             prop,
 		persistStateDone: persistStateDone,
 	}
-	if len(participation) == 0 {
+	if !pvt.populateParticipationKeys(r) {
 		close(pvt.out)
 	}
 	return pvt
@@ -242,21 +263,6 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 	n.closeWg.Add(1)
 	go pv.verifierLoop(&n)
 	return pv
-}
-
-// getParticipations retrieves the participation accounts for a given round.
-func (n asyncPseudonode) getParticipations(procName string, round basics.Round) []account.Participation {
-	keys := n.keys.Keys()
-	participations := make([]account.Participation, 0, len(keys))
-	for _, part := range keys {
-		firstValid, lastValid := part.ValidInterval()
-		if round < firstValid || round > lastValid {
-			n.log.Debugf("%v (round=%v): Account %v not participating: %v not in [%v, %v]", procName, round, part.Address(), round, firstValid, lastValid)
-			continue
-		}
-		participations = append(participations, part)
-	}
-	return participations
 }
 
 // makeProposals creates a slice of block proposals for the given round and period.
@@ -332,6 +338,14 @@ func (pv *pseudonodeVerifier) verifierLoop(n *asyncPseudonode) {
 		}
 		task.execute(pv.verifier, n.quit)
 	}
+}
+
+// populateParticipationKeys refreshes the participation key cache ( as needed ), and updates the
+// task with the loaded participation keys. It returns whether we have any participation keys
+// for the given round.
+func (t *pseudonodeBaseTask) populateParticipationKeys(r round) bool {
+	t.participation = t.node.loadRoundParticipationKeys(r)
+	return len(t.participation) > 0
 }
 
 func (t pseudonodeBaseTask) outputChannel() chan externalEvent {

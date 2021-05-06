@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -85,10 +86,11 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 		return n, err
 	}
 
-	n.cfg.RelayDirs, n.nodeDirs, n.gen, err = template.createNodeDirectories(rootDir, binDir, importKeys)
+	n.cfg.RelayDirs, n.nodeDirs, err = template.createNodeDirectories(rootDir, binDir, importKeys)
 	if err != nil {
 		return n, err
 	}
+	n.gen = template.Genesis
 
 	err = n.Save(rootDir)
 	n.SetConsensus(binDir, consensus)
@@ -146,6 +148,7 @@ func (n Network) NodeDataDirs() []string {
 	for _, nodeDir := range n.nodeDirs {
 		directories = append(directories, n.getNodeFullPath(nodeDir))
 	}
+	sort.Strings(directories)
 	return directories
 }
 
