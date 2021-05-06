@@ -100,7 +100,7 @@ _sodium_dummy_symbol_to_prevent_memzero_lto(void *const  pnt,
 /* LCOV_EXCL_STOP */
 
 void
-sodium_memzero(void *const pnt, const size_t len)
+sodium_memzero(void * const pnt, const size_t len)
 {
 #ifdef _WIN32
     SecureZeroMemory(pnt, len);
@@ -113,8 +113,10 @@ sodium_memzero(void *const pnt, const size_t len)
 #elif defined(HAVE_EXPLICIT_MEMSET)
     explicit_memset(pnt, 0, len);
 #elif HAVE_WEAK_SYMBOLS
-    memset(pnt, 0, len);
-    _sodium_dummy_symbol_to_prevent_memzero_lto(pnt, len);
+    if (len > 0U) {
+        memset(pnt, 0, len);
+        _sodium_dummy_symbol_to_prevent_memzero_lto(pnt, len);
+    }
 # ifdef HAVE_INLINE_ASM
     __asm__ __volatile__ ("" : : "r"(pnt) : "memory");
 # endif
@@ -481,10 +483,12 @@ _mprotect_readwrite(void *ptr, size_t size)
 __attribute__((noreturn)) static void
 _out_of_bounds(void)
 {
-# ifdef SIGSEGV
+# ifndef __wasm__
+#  ifdef SIGSEGV
     raise(SIGSEGV);
-# elif defined(SIGKILL)
+#  elif defined(SIGKILL)
     raise(SIGKILL);
+#  endif
 # endif
     abort(); /* not something we want any higher-level API to catch */
 } /* LCOV_EXCL_LINE */
