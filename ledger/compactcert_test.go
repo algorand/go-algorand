@@ -99,34 +99,31 @@ func TestValidateCompactCert(t *testing.T) {
 func TestAcceptableCompactCertWeight(t *testing.T) {
 	var votersHdr bookkeeping.BlockHeader
 	var firstValid basics.Round
-	logger = logging.TestingLog(t)
-	defer func() {
-		logger = logging.Base()
-	}()
+	logger := logging.TestingLog(t)
 
 	votersHdr.CurrentProtocol = "TestAcceptableCompactCertWeight"
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 	proto.CompactCertRounds = 2
 	config.Consensus[votersHdr.CurrentProtocol] = proto
-	out := AcceptableCompactCertWeight(votersHdr, firstValid)
+	out := AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0), out)
 
 	votersHdr.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
 	cc := votersHdr.CompactCert[protocol.CompactCertBasic]
 	cc.CompactCertVotersTotal.Raw = 100
 	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
-	out = AcceptableCompactCertWeight(votersHdr, firstValid)
+	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
 
 	// this should exercise the second return case
 	firstValid = basics.Round(5)
-	out = AcceptableCompactCertWeight(votersHdr, firstValid)
+	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(100), out)
 
 	firstValid = basics.Round(6)
 	proto.CompactCertWeightThreshold = 999999999
 	config.Consensus[votersHdr.CurrentProtocol] = proto
-	out = AcceptableCompactCertWeight(votersHdr, firstValid)
+	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0x17), out)
 
 	proto.CompactCertRounds = 10000
@@ -137,7 +134,7 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 	votersHdr.CompactCert[protocol.CompactCertBasic] = cc
 	proto.CompactCertWeightThreshold = 0x7fffffff
 	config.Consensus[votersHdr.CurrentProtocol] = proto
-	out = AcceptableCompactCertWeight(votersHdr, firstValid)
+	out = AcceptableCompactCertWeight(votersHdr, firstValid, logger)
 	require.Equal(t, uint64(0x4cd35a85213a92a2), out)
 
 	// Covers everything except "overflow that shouldn't happen" branches

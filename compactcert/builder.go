@@ -321,7 +321,7 @@ func (ccw *Worker) tryBuilding() {
 
 	for rnd, b := range ccw.builders {
 		firstValid := ccw.ledger.Latest() + 1
-		acceptableWeight := ledger.AcceptableCompactCertWeight(b.votersHdr, firstValid)
+		acceptableWeight := ledger.AcceptableCompactCertWeight(b.votersHdr, firstValid, nil)
 		if b.SignedWeight() < acceptableWeight {
 			// Haven't signed enough to build the cert at this time..
 			continue

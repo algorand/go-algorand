@@ -27,15 +27,16 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var logger logging.Logger = logging.Base()
-
 // AcceptableCompactCertWeight computes the acceptable signed weight
 // of a compact cert if it were to appear in a transaction with a
 // particular firstValid round.  Earlier rounds require a smaller cert.
 // votersHdr specifies the block that contains the Merkle commitment of
 // the voters for this compact cert (and thus the compact cert is for
 // votersHdr.Round() + CompactCertRounds).
-func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round) uint64 {
+func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
+	if logger == nil {
+		logger = logging.Base()
+	}
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 	certRound := votersHdr.Round + basics.Round(proto.CompactCertRounds)
 	total := votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal
@@ -163,7 +164,7 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 			nextCertRnd, certHdr.Round, votersRound)
 	}
 
-	acceptableWeight := AcceptableCompactCertWeight(votersHdr, atRound)
+	acceptableWeight := AcceptableCompactCertWeight(votersHdr, atRound, nil)
 	if cert.SignedWeight < acceptableWeight {
 		return fmt.Errorf("insufficient weight at %d: %d < %d",
 			atRound, cert.SignedWeight, acceptableWeight)
