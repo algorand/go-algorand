@@ -565,7 +565,7 @@ func TestDivModw(t *testing.T) {
                         int 2; ==; assert; int 1`, 4)
 
 	// 0:0 / 0:7 == 0r0
-	testAccepts(t, `int 0; int 0; int 0; int 7; divw;
+	testAccepts(t, `int 0; int 0; int 0; int 7; divmodw;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 0; ==; assert;
@@ -573,7 +573,7 @@ func TestDivModw(t *testing.T) {
 
 	// maxu64:maxu64 / maxu64:maxu64 == 1r0
 	testAccepts(t, `int 18446744073709551615; int 18446744073709551615; int 18446744073709551615; int 18446744073709551615;
-                        divw;
+                        divmodw;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 1; ==; assert;
