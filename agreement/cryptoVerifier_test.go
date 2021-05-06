@@ -317,7 +317,8 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 	}
 
 	Period := period(0)
-	participation := pn.getParticipations("BenchmarkCryptoVerifierProposalVertification", ledger.NextRound())
+	pn.loadRoundParticipationKeys(ledger.NextRound())
+	participation := pn.participationKeys
 
 	proposals, _ := pn.makeProposals(ledger.NextRound(), Period, participation)
 

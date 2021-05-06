@@ -55,12 +55,8 @@ func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName, bi
 
 // Create data folders for all NodeConfigs, configuring relays appropriately and
 // returning the full path to the 'prime' relay and node folders (the first one created) and the genesis data used in this network.
-func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir string, importKeys bool) (relayDirs []string, nodeDirs map[string]string, genData gen.GenesisData, err error) {
+func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir string, importKeys bool) (relayDirs []string, nodeDirs map[string]string, err error) {
 	genesisFile := filepath.Join(targetFolder, genesisFileName)
-	genData, err = gen.LoadGenesisData(genesisFile)
-	if err != nil {
-		return
-	}
 
 	nodeDirs = make(map[string]string)
 	getGenesisVerCmd := filepath.Join(binDir, "algod")
