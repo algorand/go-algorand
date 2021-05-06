@@ -424,9 +424,10 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	require.Nil(t, pb.participationKeys)
 
 	// check that it's being updated when asked with a different round number.
-	pb.loadRoundParticipationKeys(basics.Round(2))
+	returnedPartKeys := pb.loadRoundParticipationKeys(basics.Round(2))
 	require.Equal(t, basics.Round(2), pb.participationKeysRound)
 	require.NotEmpty(t, pb.participationKeys)
+	require.Equal(t, pb.participationKeys, returnedPartKeys)
 
 	// test to see that loadRoundParticipationKeys is calling VotingKeys with the correct parameters.
 	keyManagerProxy := &KeyManagerProxy{}
