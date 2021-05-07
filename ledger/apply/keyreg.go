@@ -41,32 +41,6 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		return fmt.Errorf("cannot change online/offline status of non-participating account %v", header.Sender)
 	}
 
-	if balances.ConsensusParams().EnableKeyregCoherencyCheck {
-		// ensure that the VoteLast is greater or equal to the VoteFirst
-		if keyreg.VoteFirst > keyreg.VoteLast {
-			return fmt.Errorf("the transaction first voting round need to be less than its last voting round")
-		}
-
-		// The trio of [VotePK, SelectionPK, VoteKeyDilution] needs to be all zeros or all non-zero for the transaction to be valid.
-		if !((keyreg.VotePK == crypto.OneTimeSignatureVerifier{} && keyreg.SelectionPK == crypto.VRFVerifier{} && keyreg.VoteKeyDilution == 0) ||
-			(keyreg.VotePK != crypto.OneTimeSignatureVerifier{} && keyreg.SelectionPK != crypto.VRFVerifier{} && keyreg.VoteKeyDilution != 0)) {
-			return fmt.Errorf("the following transaction fields need to be clear/set togather : votekey, selkey, votekd")
-		}
-
-		// if it's a going offline transaction
-		if keyreg.VoteKeyDilution == 0 {
-			// check that we don't have any VoteFirst/VoteLast fields.
-			if keyreg.VoteFirst != 0 || keyreg.VoteLast != 0 {
-				return fmt.Errorf("on going offline key registration transaction, the vote first and vote last fields should not be set")
-			}
-		} else {
-			// we're going online
-			if keyreg.Nonparticipation {
-				return fmt.Errorf("on going online transactions, the nonpart field is expected to be clear")
-			}
-		}
-	}
-
 	// Update the registered keys and mark account as online
 	// (or, if the voting or selection keys are zero, offline/not-participating)
 	record.VoteID = keyreg.VotePK

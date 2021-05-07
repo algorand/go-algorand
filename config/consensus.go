@@ -356,7 +356,6 @@ type ConsensusParams struct {
 	// 1. checking that [VotePK/SelectionPK/VoteKeyDilution] are all set or all clear.
 	// 2. checking that the VoteFirst is less or equal to VoteLast
 	// 3. checking that in the case of going offline, both the VoteFirst and VoteLast are clear
-	// 4. checking that in case of going online, the Nonparticipation field is clear
 	EnableKeyregCoherencyCheck bool
 }
 
