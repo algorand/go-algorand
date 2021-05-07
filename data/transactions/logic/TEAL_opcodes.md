@@ -74,7 +74,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pushes: uint64
 - A divided by B. Panic if B == 0.
 
-`divw` is available to divide the two-element values produced by `mulw` and `addw`.
+`divmodw` is available to divide the two-element values produced by `mulw` and `addw`.
 
 ## *
 
@@ -221,7 +221,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack
 - LogicSigVersion >= 2
 
-## divw
+## divmodw
 
 - Opcode: 0x1f
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {uint64 C}, {uint64 D}
@@ -878,6 +878,166 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: _None_
 - Pushes: _None_
 - pop the top instruction from the call stack and branch to it
+- LogicSigVersion >= 4
+
+## shl
+
+- Opcode: 0x90
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: uint64
+- A times 2^B, modulo 2^64
+- LogicSigVersion >= 4
+
+## shr
+
+- Opcode: 0x91
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: uint64
+- A divided by 2^B
+- LogicSigVersion >= 4
+
+## sqrt
+
+- Opcode: 0x92
+- Pops: *... stack*, uint64
+- Pushes: uint64
+- The largest integer X such that X^2 <= A
+- LogicSigVersion >= 4
+
+## log2
+
+- Opcode: 0x93
+- Pops: *... stack*, uint64
+- Pushes: uint64
+- The largest integer X such that 2^X <= A
+- LogicSigVersion >= 4
+
+## exp
+
+- Opcode: 0x94
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: uint64
+- A raised to the Bth power. Panic if A == B == 0 and on overflow
+- LogicSigVersion >= 4
+
+## expw
+
+- Opcode: 0x95
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: *... stack*, uint64, uint64
+- A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1
+- LogicSigVersion >= 4
+
+## b+
+
+- Opcode: 0xa0
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: []byte
+- A plus B, where A and B are byteslices interpreted as big-endian unsigned integers
+- LogicSigVersion >= 4
+
+## b-
+
+- Opcode: 0xa1
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: []byte
+- A minus B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic on underflow.
+- LogicSigVersion >= 4
+
+## b/
+
+- Opcode: 0xa2
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: []byte
+- A divided by B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic if B is zero.
+- LogicSigVersion >= 4
+
+## b*
+
+- Opcode: 0xa3
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: []byte
+- A times B, where A and B are byteslices interpreted as big-endian unsigned integers.
+- LogicSigVersion >= 4
+
+## b<
+
+- Opcode: 0xa4
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: uint64
+- A is less than B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- LogicSigVersion >= 4
+
+## b>
+
+- Opcode: 0xa5
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: uint64
+- A is greater than B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- LogicSigVersion >= 4
+
+## b<=
+
+- Opcode: 0xa6
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: uint64
+- A is less than or equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- LogicSigVersion >= 4
+
+## b>=
+
+- Opcode: 0xa7
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: uint64
+- A is greater than or equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- LogicSigVersion >= 4
+
+## b==
+
+- Opcode: 0xa8
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: uint64
+- A is equals to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- LogicSigVersion >= 4
+
+## b!=
+
+- Opcode: 0xa9
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: uint64
+- A is not equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- LogicSigVersion >= 4
+
+## b%
+
+- Opcode: 0xaa
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: []byte
+- A modulo B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic if B is zero.
+- LogicSigVersion >= 4
+
+## b|
+
+- Opcode: 0xab
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: []byte
+- A bitwise-or B, where A and B are byteslices interpreted as big-endian unsigned integers.
+- LogicSigVersion >= 4
+
+## b&
+
+- Opcode: 0xac
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: []byte
+- A bitwise-and B, where A and B are byteslices interpreted as big-endian unsigned integers.
+- LogicSigVersion >= 4
+
+## b^
+
+- Opcode: 0xad
+- Pops: *... stack*, {[]byte A}, {[]byte B}
+- Pushes: []byte
+- A bitwise-xor B, where A and B are byteslices interpreted as big-endian unsigned integers.
 - LogicSigVersion >= 4
 
 The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.`

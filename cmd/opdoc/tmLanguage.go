@@ -172,6 +172,7 @@ func buildSyntaxHighlight() *tmLanguage {
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(names, "|")),
 			})
 		case "Arithmetic":
+		case "Byteslice Arithmetic":
 			escape := map[rune]bool{
 				'*': true,
 				'+': true,

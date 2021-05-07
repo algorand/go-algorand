@@ -111,6 +111,11 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `>=` | A greater than or equal to B => {0 or 1} |
 | `&&` | A is not zero and B is not zero => {0 or 1} |
 | `\|\|` | A is not zero or B is not zero => {0 or 1} |
+| `shl` | A times 2^B, modulo 2^64 |
+| `shr` | A divided by 2^B |
+| `sqrt` | The largest integer X such that X^2 <= A |
+| `log2` | The largest integer X such that 2^X <= A |
+| `exp` | A raised to the Bth power. Panic if A == B == 0 and on overflow |
 | `==` | A is equal to B => {0 or 1} |
 | `!=` | A is not equal to B => {0 or 1} |
 | `!` | X == 0 yields 1; else 0 |
@@ -124,7 +129,8 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `~` | bitwise invert value X |
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 | `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
-| `divw` | Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top. |
+| `divmodw` | Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top. |
+| `expw` | A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1 |
 | `getbit` | pop a target A (integer or byte-array), and index B. Push the Bth bit of A. |
 | `setbit` | pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result |
 | `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
