@@ -23,7 +23,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -131,14 +134,13 @@ func compareEventChannels(t *testing.T, ch1, ch2 <-chan externalEvent) bool {
 func TestPseudonode(t *testing.T) {
 	t.Parallel()
 
-	logging.Base().SetLevel(logging.Warn)
-
 	// generate a nice, fixed hash.
 	rootSeed := sha256.Sum256([]byte(t.Name()))
 	accounts, balances := createTestAccountsAndBalances(t, 10, rootSeed[:])
 	ledger := makeTestLedger(balances)
 
-	sLogger := serviceLogger{logging.Base()}
+	sLogger := serviceLogger{logging.NewLogger()}
+	sLogger.SetLevel(logging.Warn)
 
 	keyManager := simpleKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
@@ -281,7 +283,8 @@ func (n serializedPseudonode) MakeProposals(ctx context.Context, r round, p peri
 	verifier := makeCryptoVerifier(n.ledger, n.validator, MakeAsyncVoteVerifier(nil), n.log)
 	defer verifier.Quit()
 
-	participation := n.getParticipations("serializedPseudonode.MakeProposals", r)
+	n.loadRoundParticipationKeys(n.ledger.NextRound())
+	participation := n.participationKeys
 
 	proposals, votes := n.makeProposals(r, p, participation)
 
@@ -337,7 +340,8 @@ func (n serializedPseudonode) MakeVotes(ctx context.Context, r round, p period, 
 	verifier := makeCryptoVerifier(n.ledger, n.validator, MakeAsyncVoteVerifier(nil), n.log)
 	defer verifier.Quit()
 
-	participation := n.getParticipations("serializedPseudonode.MakeVotes", r)
+	n.loadRoundParticipationKeys(r)
+	participation := n.participationKeys
 
 	votes := n.makeVotes(r, p, s, prop, participation)
 
@@ -373,4 +377,68 @@ func (n serializedPseudonode) MakeVotes(ctx context.Context, r round, p period, 
 
 func (n serializedPseudonode) Quit() {
 	// nothing to do ! this serializedPseudonode is so simplified that no destructor is needed.
+}
+
+type KeyManagerProxy struct {
+	target func(basics.Round, basics.Round) []account.Participation
+}
+
+func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []account.Participation {
+	return k.target(votingRound, balanceRound)
+}
+
+func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
+	t.Parallel()
+
+	// generate a nice, fixed hash.
+	rootSeed := sha256.Sum256([]byte(t.Name()))
+	accounts, balances := createTestAccountsAndBalances(t, 10, rootSeed[:])
+	ledger := makeTestLedger(balances)
+
+	sLogger := serviceLogger{logging.NewLogger()}
+	sLogger.SetLevel(logging.Warn)
+
+	keyManager := simpleKeyManager(accounts)
+	pb := makePseudonode(pseudonodeParams{
+		factory:      testBlockFactory{Owner: 0},
+		validator:    testBlockValidator{},
+		keys:         keyManager,
+		ledger:       ledger,
+		voteVerifier: MakeAsyncVoteVerifier(nil),
+		log:          sLogger,
+		monitor:      nil,
+	}).(asyncPseudonode)
+	// verify start condition -
+	require.Zero(t, pb.participationKeysRound)
+	require.Empty(t, pb.participationKeys)
+
+	// check after round 1
+	pb.loadRoundParticipationKeys(basics.Round(1))
+	require.Equal(t, basics.Round(1), pb.participationKeysRound)
+	require.NotEmpty(t, pb.participationKeys)
+
+	// check the participationKeys retain their prev valud after a call to loadRoundParticipationKeys with 1.
+	pb.participationKeys = nil
+	pb.loadRoundParticipationKeys(basics.Round(1))
+	require.Equal(t, basics.Round(1), pb.participationKeysRound)
+	require.Nil(t, pb.participationKeys)
+
+	// check that it's being updated when asked with a different round number.
+	returnedPartKeys := pb.loadRoundParticipationKeys(basics.Round(2))
+	require.Equal(t, basics.Round(2), pb.participationKeysRound)
+	require.NotEmpty(t, pb.participationKeys)
+	require.Equal(t, pb.participationKeys, returnedPartKeys)
+
+	// test to see that loadRoundParticipationKeys is calling VotingKeys with the correct parameters.
+	keyManagerProxy := &KeyManagerProxy{}
+	pb.keys = keyManagerProxy
+	cparams, _ := ledger.ConsensusParams(0)
+	for rnd := basics.Round(3); rnd < 1000; rnd += 43 {
+		keyManagerProxy.target = func(votingRound, balanceRnd basics.Round) []account.Participation {
+			require.Equal(t, rnd, votingRound)
+			require.Equal(t, balanceRound(rnd, cparams), balanceRnd)
+			return keyManager.VotingKeys(votingRound, balanceRnd)
+		}
+		pb.loadRoundParticipationKeys(basics.Round(rnd))
+	}
 }

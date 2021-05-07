@@ -93,16 +93,16 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	keys := ccw.accts.Keys()
-	if len(keys) == 0 {
-		// No keys, nothing to do.
-		return
-	}
-
 	// Compact cert gets signed by the next round after the block,
 	// because by the time agreement is reached on the block,
 	// ephemeral keys for that round could be deleted.
 	sigKeyRound := hdr.Round + 1
+
+	keys := ccw.accts.Keys(sigKeyRound)
+	if len(keys) == 0 {
+		// No keys, nothing to do.
+		return
+	}
 
 	// votersRound is the round containing the merkle root commitment
 	// for the voters that are going to sign this block.
