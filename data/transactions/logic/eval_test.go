@@ -375,6 +375,12 @@ func TestItob(t *testing.T) {
 func TestBtoi(t *testing.T) {
 	t.Parallel()
 	testAccepts(t, "int 0x1234567812345678; byte 0x1234567812345678; btoi; ==", 1)
+	testAccepts(t, "int 0x34567812345678; byte 0x34567812345678; btoi; ==", 1)
+	testAccepts(t, "int 0x567812345678; byte 0x567812345678; btoi; ==", 1)
+	testAccepts(t, "int 0x7812345678; byte 0x7812345678; btoi; ==", 1)
+	testAccepts(t, "int 0x12345678; byte 0x12345678; btoi; ==", 1)
+	testAccepts(t, "int 0x345678; byte 0x345678; btoi; ==", 1)
+	testAccepts(t, "int 0; byte b64(); btoi; ==", 1)
 }
 
 func TestBtoiTooLong(t *testing.T) {
@@ -598,77 +604,17 @@ func TestDivZero(t *testing.T) {
 
 func TestModZero(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 0x111111111
-int 0
-%
-pop
-int 1`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			require.Error(t, err)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "int 0x111111111; int 0; %; pop; int 1", 1)
 }
 
 func TestErr(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`err
-int 1`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			require.Error(t, err)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "err; int 1", 1)
 }
 
 func TestModSubMulOk(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 35
-int 16
-%
-int 1
--
-int 2
-*
-int 4
-==`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+	testAccepts(t, "int 35; int 16; %; int 1; -; int 2; *; int 4; ==", 1)
 }
 
 func TestPop(t *testing.T) {
@@ -688,100 +634,22 @@ func TestStackBytesLeftover(t *testing.T) {
 
 func TestStackEmpty(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1
-int 1
-pop
-pop`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "int 1; int 1; pop; pop", 1)
 }
 
 func TestArgTooFar(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`arg_1
-btoi`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			sb := strings.Builder{}
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			txn.Lsig.Args = nil
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "arg_1; btoi", 1)
 }
 
 func TestIntcTooFar(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`intc_1`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			sb := strings.Builder{}
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			txn.Lsig.Args = nil
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "intc_1", 1)
 }
 
 func TestBytecTooFar(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`bytec_1
-btoi`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			sb := strings.Builder{}
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			txn.Lsig.Args = nil
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "bytec_1", 1)
 }
 
 func TestTxnBadField(t *testing.T) {
@@ -4182,4 +4050,9 @@ func TestBytesBits(t *testing.T) {
 	testAccepts(t, "byte 0x0201; byte 0x10f1; b^; byte 0x12f0; ==", 4)
 	testAccepts(t, "byte 0x0001; byte 0x00f1; b^; byte 0xf0; ==", 4)
 
+}
+
+func TestBytesConversions(t *testing.T) {
+	testAccepts(t, "byte 0x11; byte 0x10; b+; btoi; int 0x21; ==", 4)
+	testAccepts(t, "byte 0x0011; byte 0x10; b+; btoi; int 0x21; ==", 4)
 }

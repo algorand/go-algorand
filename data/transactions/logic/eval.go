@@ -560,15 +560,14 @@ func (cx *evalContext) step() {
 		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
 		return
 	}
-	argsTypes := spec.Args
 
 	// check args for stack underflow and types
-	if len(cx.stack) < len(argsTypes) {
+	if len(cx.stack) < len(spec.Args) {
 		cx.err = fmt.Errorf("stack underflow in %s", spec.Name)
 		return
 	}
-	first := len(cx.stack) - len(argsTypes)
-	for i, argType := range argsTypes {
+	first := len(cx.stack) - len(spec.Args)
+	for i, argType := range spec.Args {
 		if !opCompat(argType, cx.stack[first+i].argType()) {
 			cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType.String(), cx.stack[first+i].typeName())
 			return
@@ -586,6 +585,17 @@ func (cx *evalContext) step() {
 		return
 	}
 	spec.op(cx)
+
+	if cx.err == nil {
+		first = len(cx.stack) - len(spec.Returns)
+		for i, argType := range spec.Returns {
+			if !opCompat(argType, cx.stack[first+i].argType()) {
+				cx.err = fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType.String())
+				return
+			}
+		}
+	}
+
 	if cx.Trace != nil {
 		// This code used to do a little disassembly on its
 		// own, but then it missed out on some nuances like
