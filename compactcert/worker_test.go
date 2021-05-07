@@ -96,8 +96,13 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	}
 }
 
-func (s *testWorkerStubs) Keys() (out []account.Participation) {
-	return s.keys
+func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.Participation) {
+	for _, part := range s.keys {
+		if part.OverlapsInterval(rnd, rnd) {
+			out = append(out, part)
+		}
+	}
+	return
 }
 
 func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {

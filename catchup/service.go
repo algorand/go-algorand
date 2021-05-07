@@ -480,7 +480,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 func (s *Service) periodicSync() {
 	defer close(s.done)
 	// if the catchup is disabled in the config file, just skip it.
-	if s.parallelBlocks != 0 {
+	if s.parallelBlocks != 0 && !s.cfg.DisableNetworking {
 		s.sync()
 	}
 	stuckInARow := 0
@@ -498,7 +498,7 @@ func (s *Service) periodicSync() {
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
 		case <-time.After(sleepDuration):
-			if sleepDuration < s.deadlineTimeout {
+			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
 				sleepDuration = s.deadlineTimeout
 				continue
 			}
@@ -516,6 +516,10 @@ func (s *Service) periodicSync() {
 			s.sync()
 		case cert := <-s.unmatchedPendingCertificates:
 			// the agreement service has a valid certificate for a block, but not the block itself.
+			if s.cfg.DisableNetworking {
+				s.log.Warnf("the local node is missing block %d, however, the catchup would not be able to provide it when the network is disabled.", cert.Cert.Round)
+				continue
+			}
 			s.syncCert(&cert)
 		}
 

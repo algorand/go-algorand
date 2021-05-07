@@ -106,7 +106,7 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
-func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte, params config.ConsensusParams) transactions.Transaction {
+func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) transactions.Transaction {
 	t := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
@@ -191,7 +191,6 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 		},
 		Store: store,
 	}
-
 	// Persist the Participation into the database
 	err = part.Persist()
 	return part, err
@@ -203,19 +202,24 @@ func (part PersistedParticipation) Persist() error {
 	voting := part.Voting.Snapshot()
 	rawVoting := protocol.Encode(&voting)
 
-	return part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := partInstallDatabase(tx)
 		if err != nil {
-			return fmt.Errorf("Participation.persist: failed to install database: %v", err)
+			return fmt.Errorf("failed to install database: %w", err)
 		}
 
 		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?)",
 			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution)
 		if err != nil {
-			return fmt.Errorf("Participation.persist: failed to insert account: %v", err)
+			return fmt.Errorf("failed to insert account: %w", err)
 		}
 		return nil
 	})
+
+	if err != nil {
+		err = fmt.Errorf("PersistedParticipation.Persist: %w", err)
+	}
+	return err
 }
 
 // Migrate is called when loading participation keys.
