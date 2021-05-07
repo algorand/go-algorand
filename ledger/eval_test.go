@@ -51,14 +51,6 @@ func init() {
 	minFee = basics.MicroAlgos{Raw: params.MinTxnFee}
 }
 
-func gadify(txgroup []transactions.SignedTxn) []transactions.SignedTxnWithAD {
-	txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
-	for i, tx := range txgroup {
-		txgroupad[i].SignedTxn = tx
-	}
-	return txgroupad
-}
-
 func TestBlockEvaluator(t *testing.T) {
 	genesisInitState, addrs, keys := genesis(10)
 
@@ -176,7 +168,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{s3, s4}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	txgroupad := gadify(txgroup)
+	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
 	err = eval.TransactionGroup(txgroupad)
 	require.Error(t, err)
 
@@ -198,7 +190,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{s3, s4bad}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	txgroupad = gadify(txgroup)
+	txgroupad = transactions.WrapSignedTxnsWithAD(txgroup)
 	err = eval.TransactionGroup(txgroupad)
 	require.Error(t, err)
 
@@ -747,8 +739,8 @@ func TestTestTransactionGroup(t *testing.T) {
 	err := eval.TestTransactionGroup(txgroup)
 	require.NoError(t, err) // nothing to do, no problem
 
-	eval.proto.MaxTxGroupSize = 16
-	txgroup = make([]transactions.SignedTxn, 17)
+	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
+	txgroup = make([]transactions.SignedTxn, eval.proto.MaxTxGroupSize+1)
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err) // too many
 }
@@ -761,8 +753,94 @@ func TestPrivateTransactionGroup(t *testing.T) {
 	err := eval.transactionGroup(txgroup)
 	require.NoError(t, err) // nothing to do, no problem
 
-	eval.proto.MaxTxGroupSize = 16
-	txgroup = make([]transactions.SignedTxnWithAD, 17)
+	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
+	txgroup = make([]transactions.SignedTxnWithAD, eval.proto.MaxTxGroupSize+1)
 	err = eval.transactionGroup(txgroup)
 	require.Error(t, err) // too many
+}
+
+// BlockEvaluator.workaroundOverspentRewards() fixed a couple issues on testnet.
+// This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happenning.
+func TestTestnetFixup(t *testing.T) {
+	eval := &BlockEvaluator{}
+	var rewardPoolBalance basics.AccountData
+	rewardPoolBalance.MicroAlgos.Raw = 1234
+	var headerRound basics.Round
+	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
+
+	// not a fixup round, no change
+	headerRound = 1
+	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
+	require.Equal(t, rewardPoolBalance, poolOld)
+	require.NoError(t, err)
+
+	eval.genesisHash = testnetGenesisHash
+	eval.genesisHash[3]++
+
+	specialRounds := []basics.Round{1499995, 2926564}
+	for _, headerRound = range specialRounds {
+		poolOld, err = eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
+		require.Equal(t, rewardPoolBalance, poolOld)
+		require.NoError(t, err)
+	}
+
+	for _, headerRound = range specialRounds {
+		testnetFixupExecution(t, headerRound, 20000000000)
+	}
+	// do all the setup and do nothing for not a special round
+	testnetFixupExecution(t, specialRounds[0]+1, 0)
+}
+
+func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uint64) {
+	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
+	// big setup so we can move some algos
+	// boilerplate like TestBlockEvaluator, but pretend to be testnet
+	genesisInitState, addrs, keys := genesis(10)
+	genesisInitState.Block.BlockHeader.GenesisHash = testnetGenesisHash
+	genesisInitState.Block.BlockHeader.GenesisID = "testnet"
+	genesisInitState.GenesisHash = testnetGenesisHash
+
+	// for addr, adata := range genesisInitState.Accounts {
+	// 	t.Logf("%s: %+v", addr.String(), adata)
+	// }
+	rewardPoolBalance := genesisInitState.Accounts[testPoolAddr]
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	require.NoError(t, err)
+
+	bankAddr, _ := basics.UnmarshalChecksumAddress("GD64YIY3TWGDMCNPP553DZPPR6LDUSFQOIJVFDPPXWEG3FVOJCCDBBHU5A")
+
+	// put some algos in the bank so that fixup can pull from this account
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addrs[0],
+			Fee:         minFee,
+			FirstValid:  newBlock.Round(),
+			LastValid:   newBlock.Round(),
+			GenesisHash: testnetGenesisHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: bankAddr,
+			Amount:   basics.MicroAlgos{Raw: 20000000000 * 10},
+		},
+	}
+	st := txn.Sign(keys[0])
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	nextPoolBalance := rewardPoolBalance.MicroAlgos.Raw + poolBonus
+
+	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
+	require.Equal(t, nextPoolBalance, poolOld.MicroAlgos.Raw)
+	require.NoError(t, err)
 }
