@@ -119,3 +119,13 @@ func (s *SignedTxnInBlock) Hash() crypto.Digest {
 	defer protocol.PutEncodingBuf(enc)
 	return crypto.Hash(enc)
 }
+
+// WrapSignedTxnsWithAD takes an array SignedTxn and returns the same as SignedTxnWithAD
+// Each txn's ApplyData is the default empty state.
+func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
+	txgroupad := make([]SignedTxnWithAD, len(txgroup))
+	for i, tx := range txgroup {
+		txgroupad[i].SignedTxn = tx
+	}
+	return txgroupad
+}

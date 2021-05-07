@@ -47,6 +47,9 @@ func genesis(naccts int) (InitState, []basics.Address, []*crypto.SignatureSecret
 	keys := []*crypto.SignatureSecrets{}
 	accts := make(map[basics.Address]basics.AccountData)
 
+	// 10 billion microalgos, across N accounts and pool and sink
+	amount := 10 * 1000000000 * 1000000 / uint64(naccts+2)
+
 	for i := 0; i < naccts; i++ {
 		var seed crypto.Seed
 		crypto.RandBytes(seed[:])
@@ -57,17 +60,17 @@ func genesis(naccts int) (InitState, []basics.Address, []*crypto.SignatureSecret
 		addrs = append(addrs, addr)
 
 		adata := basics.AccountData{}
-		adata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 / uint64(naccts)
+		adata.MicroAlgos.Raw = amount //1000 * 1000 * 1000 * 1000 / uint64(naccts)
 		accts[addr] = adata
 	}
 
 	pooldata := basics.AccountData{}
-	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.MicroAlgos.Raw = amount //1000 * 1000 * 1000 * 1000
 	pooldata.Status = basics.NotParticipating
 	accts[testPoolAddr] = pooldata
 
 	sinkdata := basics.AccountData{}
-	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.MicroAlgos.Raw = amount //1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[testSinkAddr] = sinkdata
 
