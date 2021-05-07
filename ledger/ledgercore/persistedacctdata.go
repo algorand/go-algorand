@@ -133,21 +133,24 @@ func (gd *AssetsHoldingGroupData) update(ai int, hodl basics.AssetHolding) {
 
 // delete the ai-th element in the group holding array. The method expect the ai to be a valid index.
 func (gd *AssetsHoldingGroupData) delete(ai int) {
-	copy(gd.Amounts[ai:], gd.Amounts[ai+1:])
-	gd.Amounts = gd.Amounts[:len(gd.Amounts)-1]
-
-	copy(gd.Frozens[ai:], gd.Frozens[ai+1:])
-	gd.Frozens = gd.Frozens[:len(gd.Frozens)-1]
-
 	if ai == 0 {
 		gd.AssetOffsets = gd.AssetOffsets[1:]
 		gd.AssetOffsets[0] = 0
+		gd.Amounts = gd.Amounts[1:]
+		gd.Frozens = gd.Frozens[1:]
 	} else if ai == len(gd.AssetOffsets)-1 {
 		gd.AssetOffsets = gd.AssetOffsets[:len(gd.AssetOffsets)-1]
+		gd.Amounts = gd.Amounts[:len(gd.Amounts)-1]
+		gd.Frozens = gd.Frozens[:len(gd.Frozens)-1]
 	} else {
 		gd.AssetOffsets[ai+1] += gd.AssetOffsets[ai]
 		copy(gd.AssetOffsets[ai:], gd.AssetOffsets[ai+1:])
 		gd.AssetOffsets = gd.AssetOffsets[:len(gd.AssetOffsets)-1]
+
+		copy(gd.Amounts[ai:], gd.Amounts[ai+1:])
+		gd.Amounts = gd.Amounts[:len(gd.Amounts)-1]
+		copy(gd.Frozens[ai:], gd.Frozens[ai+1:])
+		gd.Frozens = gd.Frozens[:len(gd.Frozens)-1]
 	}
 }
 
@@ -197,8 +200,9 @@ func (g *AssetsHoldingGroup) delete(ai int) {
 	}
 
 	if ai == 0 {
-		// when deleting the first element, update MinAssetIndex
+		// when deleting the first element, update MinAssetIndex and DeltaMaxAssetIndex
 		g.MinAssetIndex += g.groupData.AssetOffsets[1]
+		g.DeltaMaxAssetIndex -= uint64(g.groupData.AssetOffsets[1])
 	} else if uint32(ai) == g.Count-1 {
 		// when deleting the last element, update DeltaMaxAssetIndex
 		g.DeltaMaxAssetIndex -= uint64(g.groupData.AssetOffsets[len(g.groupData.AssetOffsets)-1])
@@ -215,6 +219,7 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 		g.groupData.Frozens = append([]bool{holding.Frozen}, g.groupData.Frozens...)
 		g.groupData.AssetOffsets[0] = g.MinAssetIndex - aidx
 		g.groupData.AssetOffsets = append([]basics.AssetIndex{0}, g.groupData.AssetOffsets...)
+		g.DeltaMaxAssetIndex += uint64(g.MinAssetIndex - aidx)
 		g.MinAssetIndex = aidx
 	} else if aidx > g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
 		// append
@@ -451,6 +456,15 @@ func (e ExtendedAssetHolding) findGroup(aidx basics.AssetIndex, startIdx int) fg
 
 	// no matching groups then add a new group at the end
 	return fgres{found: false, gi: len(e.Groups) - 1, split: false}
+}
+
+// FindGroup returns a group suitable for asset insertion
+func (e ExtendedAssetHolding) FindGroup(aidx basics.AssetIndex, startIdx int) int {
+	res := e.findGroup(aidx, startIdx)
+	if res.found {
+		return res.gi
+	}
+	return -1
 }
 
 // FindAsset returns group index and asset index if found and (-1, -1) otherwise.

@@ -31,8 +31,12 @@ type mockLedger struct {
 	balanceMap map[basics.Address]basics.AccountData
 }
 
-func (ml *mockLedger) lookup(addr basics.Address) (basics.AccountData, error) {
-	return ml.balanceMap[addr], nil
+func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.PersistedAccountData, error) {
+	return ledgercore.PersistedAccountData{AccountData: ml.balanceMap[addr]}, nil
+}
+
+func (ml *mockLedger) lookupHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.PersistedAccountData, error) {
+	return ledgercore.PersistedAccountData{AccountData: ml.balanceMap[addr]}, nil
 }
 
 func (ml *mockLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
@@ -83,18 +87,19 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	for addr, data := range accts {
 		d, err := cow.lookup(addr)
 		require.NoError(t, err)
-		require.Equal(t, d, data)
+		require.Equal(t, d.AccountData, data)
 	}
 
-	d, err := cow.lookup(randomAddress())
+	pad, err := cow.lookup(randomAddress())
 	require.NoError(t, err)
-	require.Equal(t, d, basics.AccountData{})
+	require.Equal(t, pad, ledgercore.PersistedAccountData{})
 }
 
 func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
 	for i := 0; i < updates.Len(); i++ {
-		addr, delta := updates.GetByIdx(i)
-		cow.put(addr, delta, nil, nil)
+		addr, pad := updates.GetByIdx(i)
+		cow.lookup(addr) // populate getPadCache
+		cow.put(addr, pad.AccountData, nil, nil)
 	}
 }
 
@@ -108,6 +113,10 @@ func TestCowBalance(t *testing.T) {
 	c1 := c0.child(0)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts0)
+
+	require.Panics(t, func() {
+		c1.put(randomAddress(), basics.AccountData{}, nil, nil)
+	})
 
 	updates1, accts1, _ := randomDeltas(10, accts0, 0)
 	applyUpdates(c1, updates1)
