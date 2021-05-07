@@ -54,5 +54,5 @@ type Network interface {
 // Accounts captures the aspects of the AccountManager that are used by
 // this package.
 type Accounts interface {
-	Keys() []account.Participation
+	Keys(basics.Round) []account.Participation
 }
