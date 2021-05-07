@@ -570,7 +570,7 @@ func (cx *evalContext) step() {
 	}
 	cx.cost += deets.Cost
 	if cx.cost > cx.budget() {
-		cx.err = fmt.Errorf("%3d %s budget exceeded", cx.pc, spec.Name)
+		cx.err = fmt.Errorf("budget of %d exceeded at pc=%d, executing %s", cx.budget(), cx.pc, spec.Name)
 		return
 	}
 	spec.op(cx)
