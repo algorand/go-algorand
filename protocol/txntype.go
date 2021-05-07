@@ -47,3 +47,15 @@ const (
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"
 )
+
+// TxnTypes is an array containing all the defined transaction types
+var TxnTypes = []TxType{
+	UnknownTx,
+	PaymentTx,
+	KeyRegistrationTx,
+	AssetConfigTx,
+	AssetTransferTx,
+	AssetFreezeTx,
+	ApplicationCallTx,
+	CompactCertTx,
+}

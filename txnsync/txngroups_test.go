@@ -280,3 +280,87 @@ func BenchmarkTxnGroupDecodingOld(b *testing.B) {
 		require.NoError(b, err)
 	}
 }
+
+// RunEncodingTest runs several iterations of encoding/decoding
+// consistency testing of object type specified by template.
+func TestTxnGroupEncodingReflection(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		v0, err := protocol.RandomizeObject(&transactions.SignedTxn{})
+		require.NoError(t, err)
+		stx, ok := v0.(*transactions.SignedTxn)
+		require.True(t, ok)
+
+		var txns []transactions.SignedTxn
+		for _, txType := range protocol.TxnTypes {
+			txn := *stx
+			txn.Txn.PaymentTxnFields = transactions.PaymentTxnFields{}
+			txn.Txn.KeyregTxnFields = transactions.KeyregTxnFields{}
+			txn.Txn.AssetConfigTxnFields = transactions.AssetConfigTxnFields{}
+			txn.Txn.AssetTransferTxnFields = transactions.AssetTransferTxnFields{}
+			txn.Txn.AssetFreezeTxnFields = transactions.AssetFreezeTxnFields{}
+			txn.Txn.ApplicationCallTxnFields = transactions.ApplicationCallTxnFields{}
+			txn.Txn.CompactCertTxnFields = transactions.CompactCertTxnFields{}
+			txn.Txn.Type = txType
+			switch txType {
+			case protocol.UnknownTx:
+				continue
+			case protocol.PaymentTx:
+				v0, err := protocol.RandomizeObject(&txn.Txn.PaymentTxnFields)
+				require.NoError(t, err)
+				PaymentTxnFields, ok := v0.(*transactions.PaymentTxnFields)
+				require.True(t, ok)
+				txn.Txn.PaymentTxnFields = *PaymentTxnFields
+			case protocol.KeyRegistrationTx:
+				v0, err := protocol.RandomizeObject(&txn.Txn.KeyregTxnFields)
+				require.NoError(t, err)
+				KeyregTxnFields, ok := v0.(*transactions.KeyregTxnFields)
+				require.True(t, ok)
+				txn.Txn.KeyregTxnFields = *KeyregTxnFields
+			case protocol.AssetConfigTx:
+				v0, err := protocol.RandomizeObject(&txn.Txn.AssetConfigTxnFields)
+				require.NoError(t, err)
+				AssetConfigTxnFields, ok := v0.(*transactions.AssetConfigTxnFields)
+				require.True(t, ok)
+				txn.Txn.AssetConfigTxnFields = *AssetConfigTxnFields
+			case protocol.AssetTransferTx:
+				v0, err := protocol.RandomizeObject(&txn.Txn.AssetTransferTxnFields)
+				require.NoError(t, err)
+				AssetTransferTxnFields, ok := v0.(*transactions.AssetTransferTxnFields)
+				require.True(t, ok)
+				txn.Txn.AssetTransferTxnFields = *AssetTransferTxnFields
+			case protocol.AssetFreezeTx:
+				v0, err := protocol.RandomizeObject(&txn.Txn.AssetFreezeTxnFields)
+				require.NoError(t, err)
+				AssetFreezeTxnFields, ok := v0.(*transactions.AssetFreezeTxnFields)
+				require.True(t, ok)
+				txn.Txn.AssetFreezeTxnFields = *AssetFreezeTxnFields
+			case protocol.ApplicationCallTx:
+				v0, err := protocol.RandomizeObject(&txn.Txn.ApplicationCallTxnFields)
+				require.NoError(t, err)
+				ApplicationCallTxnFields, ok := v0.(*transactions.ApplicationCallTxnFields)
+				require.True(t, ok)
+				txn.Txn.ApplicationCallTxnFields = *ApplicationCallTxnFields
+			case protocol.CompactCertTx:
+				v0, err := protocol.RandomizeObject(&txn.Txn.CompactCertTxnFields)
+				require.NoError(t, err)
+				CompactCertTxnFields, ok := v0.(*transactions.CompactCertTxnFields)
+				require.True(t, ok)
+				txn.Txn.CompactCertTxnFields = *CompactCertTxnFields
+			default:
+				require.Fail(t, "unsupported txntype for txnsync msg encoding")
+			}
+			txns = append(txns, txn)
+		}
+		txnGroups := []transactions.SignedTxGroup{
+			transactions.SignedTxGroup{
+				Transactions: txns,
+			},
+		}
+		addGroupHashes(txnGroups, 6, []byte{1})
+
+		encodedGroupsBytes := encodeTransactionGroupsOld(txnGroups)
+		out, err := decodeTransactionGroupsOld(encodedGroupsBytes)
+		require.NoError(t, err)
+		require.ElementsMatch(t, txnGroups, out)
+	}
+}
