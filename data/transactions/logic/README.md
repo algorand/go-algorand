@@ -139,6 +139,28 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
 
+Opcodes prefixed with `b` are intended to take and return byteslice
+values that are interpretted as big-endian unsigned integers.
+Returned values are as the shortest byteslice that can represent the
+returned value.  For example, the zero value is the empty byteslice.
+
+| Op | Description |
+| --- | --- |
+| `b+` | A plus B, where A and B are byteslices interpreted as big-endian unsigned integers |
+| `b-` | A minus B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic on underflow. |
+| `b/` | A divided by B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic if B is zero. |
+| `b*` | A times B, where A and B are byteslices interpreted as big-endian unsigned integers. |
+| `b<` | A is less than B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b>` | A is greater than B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b<=` | A is less than or equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b>=` | A is greater than or equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b==` | A is equals to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b!=` | A is not equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b%` | A modulo B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic if B is zero. |
+| `b\|` | A bitwise-or B, where A and B are byteslices interpreted as big-endian unsigned integers. |
+| `b&` | A bitwise-and B, where A and B are byteslices interpreted as big-endian unsigned integers. |
+| `b^` | A bitwise-xor B, where A and B are byteslices interpreted as big-endian unsigned integers. |
+
 ### Loading Values
 
 Opcodes for getting data onto the stack.

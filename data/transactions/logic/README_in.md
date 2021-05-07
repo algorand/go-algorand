@@ -74,6 +74,13 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 
 @@ Arithmetic.md @@
 
+Opcodes prefixed with `b` are intended to take and return byteslice
+values that are interpretted as big-endian unsigned integers.
+Returned values are as the shortest byteslice that can represent the
+returned value.  For example, the zero value is the empty byteslice.
+
+@@ Byteslice_Arithmetic.md @@
+
 ### Loading Values
 
 Opcodes for getting data onto the stack.
