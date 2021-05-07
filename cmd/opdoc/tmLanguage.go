@@ -152,16 +152,16 @@ func buildSyntaxHighlight() *tmLanguage {
 			},
 		},
 	}
-	for _, opgroup := range logic.OpGroupList {
-		switch opgroup.GroupName {
+	for grp, names := range logic.OpGroups {
+		switch grp {
 		case "Flow Control":
 			keywords.Patterns = append(keywords.Patterns, pattern{
 				Name:  "keyword.control.teal",
-				Match: fmt.Sprintf("^(%s)\\b", strings.Join(opgroup.Ops, "|")),
+				Match: fmt.Sprintf("^(%s)\\b", strings.Join(names, "|")),
 			})
 		case "Loading Values":
 			loading := []string{"int", "byte", "addr"}
-			loading = append(loading, opgroup.Ops...)
+			loading = append(loading, names...)
 			keywords.Patterns = append(keywords.Patterns, pattern{
 				Name:  "keyword.other.teal",
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(loading, "|")),
@@ -169,7 +169,7 @@ func buildSyntaxHighlight() *tmLanguage {
 		case "State Access":
 			keywords.Patterns = append(keywords.Patterns, pattern{
 				Name:  "keyword.other.unit.teal",
-				Match: fmt.Sprintf("^(%s)\\b", strings.Join(opgroup.Ops, "|")),
+				Match: fmt.Sprintf("^(%s)\\b", strings.Join(names, "|")),
 			})
 		case "Arithmetic":
 			escape := map[rune]bool{
@@ -187,7 +187,7 @@ func buildSyntaxHighlight() *tmLanguage {
 				'>': true,
 			}
 			var allArithmetics []string
-			for _, op := range opgroup.Ops {
+			for _, op := range names {
 				if len(op) < 3 {
 					// all symbol-based opcodes are under 3 chars, and no trigraphs so far
 					escaped := make([]byte, 0, len(op)*2)
@@ -207,7 +207,7 @@ func buildSyntaxHighlight() *tmLanguage {
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(allArithmetics, "|")),
 			})
 		default:
-			panic(fmt.Sprintf("Unknown ops group: %s", opgroup.GroupName))
+			panic(fmt.Sprintf("Unknown ops group: %s", grp))
 		}
 	}
 	tm.Repository["keywords"] = keywords

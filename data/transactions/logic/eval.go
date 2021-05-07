@@ -912,39 +912,18 @@ func opLt(cx *evalContext) {
 }
 
 func opGt(cx *evalContext) {
-	last := len(cx.stack) - 1
-	prev := last - 1
-	cond := cx.stack[prev].Uint > cx.stack[last].Uint
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
-	cx.stack = cx.stack[:last]
+	opSwap(cx)
+	opLt(cx)
 }
 
 func opLe(cx *evalContext) {
-	last := len(cx.stack) - 1
-	prev := last - 1
-	cond := cx.stack[prev].Uint <= cx.stack[last].Uint
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
-	cx.stack = cx.stack[:last]
+	opGt(cx)
+	opNot(cx)
 }
 
 func opGe(cx *evalContext) {
-	last := len(cx.stack) - 1
-	prev := last - 1
-	cond := cx.stack[prev].Uint >= cx.stack[last].Uint
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
-	cx.stack = cx.stack[:last]
+	opLt(cx)
+	opNot(cx)
 }
 
 func opAnd(cx *evalContext) {
@@ -977,7 +956,7 @@ func opEq(cx *evalContext) {
 	ta := cx.stack[prev].argType()
 	tb := cx.stack[last].argType()
 	if ta != tb {
-		cx.err = fmt.Errorf("cannot compare (%s == %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
+		cx.err = fmt.Errorf("cannot compare (%s to %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
 		return
 	}
 	var cond bool
@@ -996,27 +975,8 @@ func opEq(cx *evalContext) {
 }
 
 func opNeq(cx *evalContext) {
-	last := len(cx.stack) - 1
-	prev := last - 1
-	ta := cx.stack[prev].argType()
-	tb := cx.stack[last].argType()
-	if ta != tb {
-		cx.err = fmt.Errorf("cannot compare (%s == %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
-		return
-	}
-	var cond bool
-	if ta == StackBytes {
-		cond = bytes.Compare(cx.stack[prev].Bytes, cx.stack[last].Bytes) != 0
-		cx.stack[prev].Bytes = nil
-	} else {
-		cond = cx.stack[prev].Uint != cx.stack[last].Uint
-	}
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
-	cx.stack = cx.stack[:last]
+	opEq(cx)
+	opNot(cx)
 }
 
 func opNot(cx *evalContext) {
@@ -1236,6 +1196,132 @@ func opExpw(cx *evalContext) {
 
 	cx.stack[prev].Uint = hi
 	cx.stack[last].Uint = lo
+}
+
+func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.Int) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
+	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
+	op(lhs, rhs) // op's receiver has already been bound to result
+	if result.Sign() < 0 {
+		cx.err = errors.New("byte math would have negative result")
+		return
+	}
+	cx.stack[prev].Bytes = result.Bytes()
+	cx.stack = cx.stack[:last]
+}
+
+func opBytesPlus(cx *evalContext) {
+	result := new(big.Int)
+	opBytesBinOp(cx, result, result.Add)
+}
+
+func opBytesMinus(cx *evalContext) {
+	result := new(big.Int)
+	opBytesBinOp(cx, result, result.Sub)
+}
+
+func opBytesDiv(cx *evalContext) {
+	result := new(big.Int)
+	checkDiv := func(x, y *big.Int) *big.Int {
+		if y.BitLen() == 0 {
+			cx.err = errors.New("division by zero")
+			return new(big.Int)
+		}
+		return result.Div(x, y)
+	}
+	opBytesBinOp(cx, result, checkDiv)
+}
+
+func opBytesMul(cx *evalContext) {
+	result := new(big.Int)
+	opBytesBinOp(cx, result, result.Mul)
+}
+
+func opBytesLt(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
+	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
+	cx.stack[prev].Bytes = nil
+	if lhs.Cmp(rhs) < 0 {
+		cx.stack[prev].Uint = 1
+	} else {
+		cx.stack[prev].Uint = 0
+	}
+	cx.stack = cx.stack[:last]
+}
+
+func opBytesGt(cx *evalContext) {
+	opSwap(cx)
+	opBytesLt(cx)
+}
+
+func opBytesLe(cx *evalContext) {
+	opBytesGt(cx)
+	opNot(cx)
+}
+
+func opBytesGe(cx *evalContext) {
+	opBytesLt(cx)
+	opNot(cx)
+}
+
+func opBytesEq(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
+	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
+	cx.stack[prev].Bytes = nil
+	if lhs.Cmp(rhs) == 0 {
+		cx.stack[prev].Uint = 1
+	} else {
+		cx.stack[prev].Uint = 0
+	}
+	cx.stack = cx.stack[:last]
+}
+
+func opBytesNeq(cx *evalContext) {
+	opBytesEq(cx)
+	opNot(cx)
+}
+
+func opBytesModulo(cx *evalContext) {
+	result := new(big.Int)
+	checkMod := func(x, y *big.Int) *big.Int {
+		if y.BitLen() == 0 {
+			cx.err = errors.New("modulo by zero")
+			return new(big.Int)
+		}
+		return result.Mod(x, y)
+	}
+	opBytesBinOp(cx, result, checkMod)
+}
+
+func opBytesBitOr(cx *evalContext) {
+	result := new(big.Int)
+	opBytesBinOp(cx, result, result.Or)
+}
+
+func opBytesBitAnd(cx *evalContext) {
+	result := new(big.Int)
+	opBytesBinOp(cx, result, result.And)
+}
+
+func opBytesBitXor(cx *evalContext) {
+	result := new(big.Int)
+	opBytesBinOp(cx, result, result.Xor)
+}
+
+func opBytesBitNot(cx *evalContext) {
+	last := len(cx.stack) - 1
+
+	val := new(big.Int).SetBytes(cx.stack[last].Bytes)
+	cx.stack[last].Bytes = new(big.Int).Not(val).Bytes()
 }
 
 func opIntConstBlock(cx *evalContext) {

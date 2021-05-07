@@ -120,6 +120,21 @@ var opDocByName = map[string]string{
 	"assert":            "immediately fail unless value X is a non-zero number",
 	"callsub":           "branch unconditionally to TARGET, saving the next instruction on the call stack",
 	"retsub":            "pop the top instruction from the call stack and branch to it",
+
+	"b+":  "A plus B, where A and B are byteslices interpreted as big-endian unsigned integers",
+	"b-":  "A minus B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic on underflow.",
+	"b/":  "A divided by B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic if B is zero.",
+	"b*":  "A times B, where A and B are byteslices interpreted as big-endian unsigned integers.",
+	"b<":  "A is less than B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b>":  "A is greater than B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b<=": "A is less than or equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b>=": "A is greater than or equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b==": "A is equals to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b!=": "A is not equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b%":  "A modulo B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic if B is zero.",
+	"b|":  "A bitwise-or B, where A and B are byteslices interpreted as big-endian unsigned integers.",
+	"b&":  "A bitwise-and B, where A and B are byteslices interpreted as big-endian unsigned integers.",
+	"b^":  "A bitwise-xor B, where A and B are byteslices interpreted as big-endian unsigned integers.",
 }
 
 // OpDoc returns a description of the op
@@ -197,19 +212,13 @@ func OpDocExtra(opName string) string {
 	return opDocExtras[opName]
 }
 
-// OpGroup is a grouping of ops for documentation purposes.
-// e.g. "Arithmetic", ["+": "-", ...]
-type OpGroup struct {
-	GroupName string
-	Ops       []string
-}
-
-// OpGroupList is groupings of ops for documentation purposes.
-var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "log2", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"}},
-	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store"}},
-	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert", "callsub", "retsub"}},
-	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
+// OpGroups is groupings of ops for documentation purposes.
+var OpGroups = map[string][]string{
+	"Arithmetic":           {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "log2", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"},
+	"Byteslice Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "b|", "b&", "b^"},
+	"Loading Values":       {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store"},
+	"Flow Control":         {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert", "callsub", "retsub"},
+	"State Access":         {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"},
 }
 
 // OpCost indicates the cost of an operation over the range of

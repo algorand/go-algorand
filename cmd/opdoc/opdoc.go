@@ -314,14 +314,14 @@ func main() {
 	opsToMarkdown(opcodesMd)
 	opcodesMd.Close()
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
-	for _, og := range logic.OpGroupList {
-		fname := fmt.Sprintf("%s.md", og.GroupName)
+	for grp, names := range logic.OpGroups {
+		fname := fmt.Sprintf("%s.md", grp)
 		fname = strings.ReplaceAll(fname, " ", "_")
 		fout, _ := os.Create(fname)
-		opGroupMarkdownTable(&og, fout)
+		opGroupMarkdownTable(&names, fout)
 		fout.Close()
-		for _, opname := range og.Ops {
-			opGroups[opname] = append(opGroups[opname], og.GroupName)
+		for _, opname := range names {
+			opGroups[opname] = append(opGroups[opname], grp)
 		}
 	}
 	constants, _ := os.Create("named_integer_constants.md")
