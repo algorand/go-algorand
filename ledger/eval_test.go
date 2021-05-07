@@ -129,7 +129,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	// Because they fail TestTransactionGroup they won't get added to the txn pool and so they won't actually be run; actually running the txn doesn't check txn.WellFormed()
+	// We don't test eval.Transaction() here because it doesn't check txn.WellFormed(), instead relying on that to have already been checked by the transaction pool.
 	// err = eval.Transaction(st, transactions.ApplyData{})
 	// require.Error(t, err)
 
