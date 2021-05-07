@@ -804,6 +804,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	// 	t.Logf("%s: %+v", addr.String(), adata)
 	// }
 	rewardPoolBalance := genesisInitState.Accounts[testPoolAddr]
+	nextPoolBalance := rewardPoolBalance.MicroAlgos.Raw + poolBonus
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	const inMem = true
@@ -816,6 +817,12 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(t, err)
+
+	// won't work before funding bank
+	if poolBonus > 0 {
+		_, err = eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
+		require.Error(t, err)
+	}
 
 	bankAddr, _ := basics.UnmarshalChecksumAddress("GD64YIY3TWGDMCNPP553DZPPR6LDUSFQOIJVFDPPXWEG3FVOJCCDBBHU5A")
 
@@ -837,8 +844,6 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	st := txn.Sign(keys[0])
 	err = eval.Transaction(st, transactions.ApplyData{})
 	require.NoError(t, err)
-
-	nextPoolBalance := rewardPoolBalance.MicroAlgos.Raw + poolBonus
 
 	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
 	require.Equal(t, nextPoolBalance, poolOld.MicroAlgos.Raw)
