@@ -96,11 +96,11 @@ func TestKeyregApply(t *testing.T) {
 			SelectionPK: vrfSecrets.PK,
 		},
 	}
-	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	tx.Sender = feeSink
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.Error(t, err)
 
 	tx.Sender = src
@@ -109,19 +109,48 @@ func TestKeyregApply(t *testing.T) {
 
 	// Going from offline to online should be okay
 	mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	// Going from online to nonparticipatory should be okay, if the protocol supports that
 	if mockBal.ConsensusParams().SupportBecomeNonParticipatingTransactions {
 		tx.KeyregTxnFields = transactions.KeyregTxnFields{}
 		tx.KeyregTxnFields.Nonparticipation = true
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 		require.NoError(t, err)
 
 		// Nonparticipatory accounts should not be able to change status
 		mockBal.addrs[src] = basics.AccountData{Status: basics.NotParticipating}
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+		require.Error(t, err)
+	}
+
+	mockBal.version = "future"
+	if mockBal.ConsensusParams().EnableKeyregCoherencyCheck {
+		tx = transactions.Transaction{
+			Type: protocol.KeyRegistrationTx,
+			Header: transactions.Header{
+				Sender:     src,
+				Fee:        basics.MicroAlgos{Raw: 1},
+				FirstValid: basics.Round(1000),
+				LastValid:  basics.Round(1200),
+			},
+			KeyregTxnFields: transactions.KeyregTxnFields{
+				VotePK:          crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
+				SelectionPK:     vrfSecrets.PK,
+				VoteKeyDilution: 1000,
+				VoteFirst:       500,
+				VoteLast:        1000,
+			},
+		}
+		mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(999))
+		require.NoError(t, err)
+
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1000))
+		require.Error(t, err)
+
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1001))
 		require.Error(t, err)
 	}
 }

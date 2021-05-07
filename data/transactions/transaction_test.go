@@ -199,7 +199,7 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 								tx.KeyregTxnFields.VoteKeyDilution = voteKeyDilution
 								tx.KeyregTxnFields.Nonparticipation = nonParticipation
 								err = tx.WellFormed(spec, curProto)
-								require.Equal(t, expectedErrors[checkIdx], err)
+								require.Equalf(t, expectedErrors[checkIdx], err, "index : %d", checkIdx)
 								checkIdx++
 							}
 						}
@@ -352,8 +352,8 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 	curProto.SupportBecomeNonParticipatingTransactions = true
 	curProto.EnableKeyregCoherencyCheck = true
 	expectedErrors = []error{
-		nil,
-		nil,
+		nil, // going offline transaction.
+		nil, // going offline, with Nonparticipation = true
 		errKeyregTxnNonCoherentVotingKeys,
 		errKeyregTxnNonCoherentVotingKeys,
 		errKeyregTxnOfflineTransactionHasVotingRounds,
@@ -402,19 +402,19 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		errKeyregTxnNonCoherentVotingKeys,
 		errKeyregTxnNonCoherentVotingKeys,
 		errKeyregTxnNonCoherentVotingKeys,
-		nil,
+		errKeyregTxnGoingOnlineWithZeroVoteLast,
+		errKeyregTxnGoingOnlineWithZeroVoteLast,
+		errKeyregTxnNonCoherentVotingKeys,
+		errKeyregTxnNonCoherentVotingKeys,
+		nil, // going online, first valid = 0
 		errKeyregTxnGoingOnlineWithNonParticipating,
-		errKeyregTxnNonCoherentVotingKeys,
-		errKeyregTxnNonCoherentVotingKeys,
-		nil,
-		errKeyregTxnGoingOnlineWithNonParticipating,
 		errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound,
 		errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound,
 		errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound,
 		errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound,
 		errKeyregTxnNonCoherentVotingKeys,
 		errKeyregTxnNonCoherentVotingKeys,
-		nil,
+		nil, // going online
 		errKeyregTxnGoingOnlineWithNonParticipating,
 	}
 	testPermutations(curProto, expectedErrors)

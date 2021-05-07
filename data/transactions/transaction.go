@@ -247,6 +247,7 @@ var errKeyregTxnNonCoherentVotingKeys = fmt.Errorf("the following transaction fi
 var errKeyregTxnOfflineTransactionHasVotingRounds = fmt.Errorf("on going offline key registration transaction, the vote first and vote last fields should not be set")
 var errKeyregTxnUnsupportedSwitchToNonParticipating = fmt.Errorf("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
 var errKeyregTxnGoingOnlineWithNonParticipating = fmt.Errorf("transaction tries to register keys to go online, but nonparticipatory flag is set")
+var errKeyregTxnGoingOnlineWithZeroVoteLast = fmt.Errorf("transaction tries to register keys to go online, but vote last is set to zero")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
@@ -276,6 +277,11 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 				// check that we don't have any VoteFirst/VoteLast fields.
 				if tx.KeyregTxnFields.VoteFirst != 0 || tx.KeyregTxnFields.VoteLast != 0 {
 					return errKeyregTxnOfflineTransactionHasVotingRounds
+				}
+			} else {
+				// going online
+				if tx.KeyregTxnFields.VoteLast == 0 {
+					return errKeyregTxnGoingOnlineWithZeroVoteLast
 				}
 			}
 		}

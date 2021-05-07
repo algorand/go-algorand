@@ -25,7 +25,7 @@ import (
 )
 
 // Keyreg applies a KeyRegistration transaction using the Balances interface.
-func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData) error {
+func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, round basics.Round) error {
 	if header.Sender == spec.FeeSink {
 		return fmt.Errorf("cannot register participation key for fee sink's address %v ", header.Sender)
 	}
@@ -59,6 +59,12 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteLastValid = 0
 		record.VoteKeyDilution = 0
 	} else {
+
+		if balances.ConsensusParams().EnableKeyregCoherencyCheck {
+			if keyreg.VoteLast <= round {
+				return fmt.Errorf("transaction tries to mark an account as online with last voting round in the past")
+			}
+		}
 		record.Status = basics.Online
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
