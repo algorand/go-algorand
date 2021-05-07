@@ -584,10 +584,18 @@ func (cx *evalContext) step() {
 		cx.err = fmt.Errorf("pc=%3d dynamic cost budget of %d exceeded, executing %s", cx.pc, cx.budget(), spec.Name)
 		return
 	}
+
+	preheight := len(cx.stack)
 	spec.op(cx)
 
 	if cx.err == nil {
-		first = len(cx.stack) - len(spec.Returns)
+		postheight := len(cx.stack)
+		if spec.Name != "return" && postheight-preheight != len(spec.Returns)-len(spec.Args) {
+			cx.err = fmt.Errorf("%s changed stack height imporperly %d != %d",
+				spec.Name, postheight-preheight, len(spec.Returns)-len(spec.Args))
+			return
+		}
+		first = postheight - len(spec.Returns)
 		for i, argType := range spec.Returns {
 			if !opCompat(argType, cx.stack[first+i].argType()) {
 				cx.err = fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType.String())

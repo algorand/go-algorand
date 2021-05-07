@@ -3214,34 +3214,14 @@ pop
 	require.Contains(t, err.Error(), "illegal opcode 0x36") // txna
 }
 
-func TestStepErrors(t *testing.T) {
-	// This test modifies opsByName table, do not run in parallel
-
-	source := `intcblock 0
-intc_0
-intc_0
-+
-`
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-
-	ep := defaultEvalParams(nil, nil)
-
-	origSpec := OpsByName[LogicVersion]["+"]
-	spec := origSpec
-	defer func() {
-		// restore, opsByOpcode is global
-		opsByOpcode[LogicVersion][spec.Opcode] = origSpec
-	}()
-
-	spec.op = func(cx *evalContext) {
-		// overflow
-		cx.stack = make([]stackValue, 2000)
+func TestStackOverflow(t *testing.T) {
+	t.Parallel()
+	source := "int 1; int 2;"
+	for i := 1; i < MaxStackDepth/2; i++ {
+		source += "dup2;"
 	}
-	opsByOpcode[LogicVersion][spec.Opcode] = spec
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "stack overflow")
+	testAccepts(t, source+"return", 2)
+	testPanics(t, source+"dup2; return", 2)
 }
 
 func TestDup(t *testing.T) {
@@ -3274,24 +3254,9 @@ err
 exit:
 int 1
 `
-	ep := defaultEvalParams(nil, nil)
-
-	ops := testProg(t, text, AssemblerMaxVersion)
-	pass, err := Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-
-	text = `int 1; int 2; dup2; pop; pop; pop`
-	ops = testProg(t, text, AssemblerMaxVersion)
-	pass, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-
-	text = `int 1; int 2; dup2; pop; pop`
-	ops = testProg(t, text, AssemblerMaxVersion)
-	pass, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.False(t, pass)
+	testAccepts(t, text, 2)
+	testAccepts(t, "int 1; int 2; dup2; pop; pop; pop", 2)
+	testPanics(t, "int 1; int 2; dup2; pop; pop", 2)
 }
 
 func TestStringLiteral(t *testing.T) {
@@ -3301,43 +3266,25 @@ func TestStringLiteral(t *testing.T) {
 byte b64(Zm9vIGJhcg==)
 ==
 `
-	ep := defaultEvalParams(nil, nil)
-
-	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err := Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testAccepts(t, text, 1)
 
 	text = `byte "foo bar // not a comment"
 byte b64(Zm9vIGJhciAvLyBub3QgYSBjb21tZW50)
 ==
 `
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testAccepts(t, text, 1)
 
 	text = `byte ""
 byte 0x
 ==
 `
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testAccepts(t, text, 1)
 
 	text = `byte "" // empty string literal
 byte 0x // empty byte constant
 ==
 `
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testAccepts(t, text, 1)
 }
 
 func TestArgType(t *testing.T) {
