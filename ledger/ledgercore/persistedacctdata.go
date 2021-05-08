@@ -162,36 +162,50 @@ type AbstractAssetGroup interface {
 	Loaded() bool
 	GroupData() AbstractAssetGroupData
 	AssetCount() uint32
-	Update(idx int, data interface{})
+	AssetAt(ai int) basics.AssetIndex
+	Update(ai int, data interface{})
 	Encode() []byte
 	Key() int64
 	SetKey(key int64)
 	Reset()
 
 	delete(ai int)
+	slice(pos uint32, maxDelta uint64)
+	groupFromPosition(pos uint32, length uint32, capacity uint32, minAssetIndex basics.AssetIndex, maxDelta uint64) interface{}
 }
 
 // AbstractAssetGroupList enables operations on concrete Holding or Params groups
 type AbstractAssetGroupList interface {
 	// Get returns abstract group
-	Get(idx int) AbstractAssetGroup
+	Get(gi int) AbstractAssetGroup
 	// Len returns number of groups in the list
 	Len() int
 	// Totals returns number of assets inside all the the groups
 	Total() uint32
 	// Reset initializes group to hold count assets in length groups
 	Reset(count uint32, length int)
-	// Assign assigns to value group to group[idx]
-	Assign(idx int, group interface{})
+	// Assign assigns to value group to group[gi]
+	Assign(gi int, group interface{})
 	// ReleaseGroup removes group gi from the groups list
 	ReleaseGroup(gi int)
 
+	// delete asset by index ai from group gi
 	deleteByIndex(gi int, ai int)
+	// prependNewGroup, prependNewGroup and insertNewGroupAfter create new group with one data element
+	prependNewGroup(aidx basics.AssetIndex, data interface{})
+	appendNewGroup(aidx basics.AssetIndex, data interface{})
+	insertNewGroupAfter(gi int, aidx basics.AssetIndex, data interface{})
+	// insertInto adds new asset data into group at index gi
+	insertInto(gi int, aidx basics.AssetIndex, data interface{})
+	// insertAfter inserts a group into position gi+1
+	insertAfter(gi int, group interface{})
+	// split group at index gi into two groups, and returns group index suitable for asset aidx insertion
+	split(gi int, aidx basics.AssetIndex) int
 }
 
 type groupBuilder interface {
-	newGroup(size int)
-	newElement(offset basics.AssetIndex, data interface{})
+	newGroup(size int) groupBuilder
+	newElement(offset basics.AssetIndex, data interface{}) groupBuilder
 	build(desc AssetGroupDesc) interface{}
 }
 
@@ -393,6 +407,7 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 		// prepend
 		g.groupData.Amounts = append([]uint64{holding.Amount}, g.groupData.Amounts...)
 		g.groupData.Frozens = append([]bool{holding.Frozen}, g.groupData.Frozens...)
+
 		g.groupData.AssetOffsets[0] = g.MinAssetIndex - aidx
 		g.groupData.AssetOffsets = append([]basics.AssetIndex{0}, g.groupData.AssetOffsets...)
 		g.DeltaMaxAssetIndex += uint64(g.MinAssetIndex - aidx)
@@ -401,6 +416,7 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 		// append
 		g.groupData.Amounts = append(g.groupData.Amounts, holding.Amount)
 		g.groupData.Frozens = append(g.groupData.Frozens, holding.Frozen)
+
 		lastAssetIndex := g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex)
 		delta := aidx - lastAssetIndex
 		g.groupData.AssetOffsets = append(g.groupData.AssetOffsets, delta)
@@ -430,6 +446,107 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 		}
 	}
 	g.Count++
+}
+
+func (g *AssetsParamsGroup) insert(aidx basics.AssetIndex, params basics.AssetParams) {
+	if aidx < g.MinAssetIndex {
+		// prepend
+		g.groupData.Totals = append([]uint64{params.Total}, g.groupData.Totals...)
+		g.groupData.Decimals = append([]uint32{params.Decimals}, g.groupData.Decimals...)
+		g.groupData.DefaultFrozens = append([]bool{params.DefaultFrozen}, g.groupData.DefaultFrozens...)
+		g.groupData.UnitNames = append([]string{params.UnitName}, g.groupData.UnitNames...)
+		g.groupData.AssetNames = append([]string{params.AssetName}, g.groupData.AssetNames...)
+		g.groupData.URLs = append([]string{params.URL}, g.groupData.URLs...)
+		g.groupData.MetadataHash = append([][32]byte{params.MetadataHash}, g.groupData.MetadataHash...)
+		g.groupData.Managers = append([]basics.Address{params.Manager}, g.groupData.Managers...)
+		g.groupData.Reserves = append([]basics.Address{params.Reserve}, g.groupData.Reserves...)
+		g.groupData.Freezes = append([]basics.Address{params.Freeze}, g.groupData.Freezes...)
+		g.groupData.Clawbacks = append([]basics.Address{params.Clawback}, g.groupData.Clawbacks...)
+
+		g.groupData.AssetOffsets[0] = g.MinAssetIndex - aidx
+		g.groupData.AssetOffsets = append([]basics.AssetIndex{0}, g.groupData.AssetOffsets...)
+		g.DeltaMaxAssetIndex += uint64(g.MinAssetIndex - aidx)
+		g.MinAssetIndex = aidx
+	} else if aidx > g.MinAssetIndex+basics.AssetIndex(g.DeltaMaxAssetIndex) {
+		// append
+		g.groupData.Totals = append(g.groupData.Totals, params.Total)
+		g.groupData.Decimals = append(g.groupData.Decimals, params.Decimals)
+		g.groupData.DefaultFrozens = append(g.groupData.DefaultFrozens, params.DefaultFrozen)
+		g.groupData.UnitNames = append(g.groupData.UnitNames, params.UnitName)
+		g.groupData.AssetNames = append(g.groupData.AssetNames, params.AssetName)
+		g.groupData.URLs = append(g.groupData.URLs, params.URL)
+		g.groupData.MetadataHash = append(g.groupData.MetadataHash, params.MetadataHash)
+		g.groupData.Managers = append(g.groupData.Managers, params.Manager)
+		g.groupData.Reserves = append(g.groupData.Reserves, params.Reserve)
+		g.groupData.Freezes = append(g.groupData.Freezes, params.Freeze)
+		g.groupData.Clawbacks = append(g.groupData.Clawbacks, params.Clawback)
+
+		lastAssetIndex := g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex)
+		delta := aidx - lastAssetIndex
+		g.groupData.AssetOffsets = append(g.groupData.AssetOffsets, delta)
+		g.DeltaMaxAssetIndex = uint64(aidx - g.MinAssetIndex)
+	} else {
+		// find position and insert
+		cur := g.MinAssetIndex
+		for ai, d := range g.groupData.AssetOffsets {
+			cur += d
+			if aidx < cur {
+				g.groupData.AssetOffsets = append(g.groupData.AssetOffsets, 0)
+				copy(g.groupData.AssetOffsets[ai:], g.groupData.AssetOffsets[ai-1:])
+				prev := cur - d
+				g.groupData.AssetOffsets[ai] = aidx - prev
+				g.groupData.AssetOffsets[ai+1] = cur - aidx
+
+				g.groupData.Totals = append(g.groupData.Totals, 0)
+				copy(g.groupData.Totals[ai:], g.groupData.Totals[ai-1:])
+				g.groupData.Totals[ai] = params.Total
+
+				g.groupData.Decimals = append(g.groupData.Decimals, 0)
+				copy(g.groupData.Decimals[ai:], g.groupData.Decimals[ai-1:])
+				g.groupData.Decimals[ai] = params.Decimals
+
+				g.groupData.DefaultFrozens = append(g.groupData.DefaultFrozens, false)
+				copy(g.groupData.DefaultFrozens[ai:], g.groupData.DefaultFrozens[ai-1:])
+				g.groupData.DefaultFrozens[ai] = params.DefaultFrozen
+
+				g.groupData.UnitNames = append(g.groupData.UnitNames, "")
+				copy(g.groupData.UnitNames[ai:], g.groupData.UnitNames[ai-1:])
+				g.groupData.UnitNames[ai] = params.UnitName
+
+				g.groupData.AssetNames = append(g.groupData.AssetNames, "")
+				copy(g.groupData.AssetNames[ai:], g.groupData.AssetNames[ai-1:])
+				g.groupData.AssetNames[ai] = params.AssetName
+
+				g.groupData.URLs = append(g.groupData.URLs, "")
+				copy(g.groupData.URLs[ai:], g.groupData.URLs[ai-1:])
+				g.groupData.URLs[ai] = params.URL
+
+				g.groupData.MetadataHash = append(g.groupData.MetadataHash, [32]byte{})
+				copy(g.groupData.MetadataHash[ai:], g.groupData.MetadataHash[ai-1:])
+				g.groupData.MetadataHash[ai] = params.MetadataHash
+
+				g.groupData.Managers = append(g.groupData.Managers, basics.Address{})
+				copy(g.groupData.Managers[ai:], g.groupData.Managers[ai-1:])
+				g.groupData.Managers[ai] = params.Manager
+
+				g.groupData.Reserves = append(g.groupData.Reserves, basics.Address{})
+				copy(g.groupData.Reserves[ai:], g.groupData.Reserves[ai-1:])
+				g.groupData.Reserves[ai] = params.Reserve
+
+				g.groupData.Freezes = append(g.groupData.Freezes, basics.Address{})
+				copy(g.groupData.Freezes[ai:], g.groupData.Freezes[ai-1:])
+				g.groupData.Freezes[ai] = params.Freeze
+
+				g.groupData.Clawbacks = append(g.groupData.Clawbacks, basics.Address{})
+				copy(g.groupData.Clawbacks[ai:], g.groupData.Clawbacks[ai-1:])
+				g.groupData.Clawbacks[ai] = params.Clawback
+
+				break
+			}
+		}
+	}
+	g.Count++
+
 }
 
 // Loaded return a boolean flag indicated if the group loaded or not
@@ -488,6 +605,22 @@ func (g *AssetGroupDesc) SetKey(key int64) {
 // Key returns id of a DB record containing actual this group data
 func (g *AssetGroupDesc) Key() int64 {
 	return g.AssetGroupKey
+}
+
+func (g *AssetsHoldingGroup) AssetAt(ai int) basics.AssetIndex {
+	asset := g.MinAssetIndex
+	for i := 0; i < int(ai); i++ {
+		asset += g.groupData.AssetOffsets[i]
+	}
+	return asset
+}
+
+func (g *AssetsParamsGroup) AssetAt(ai int) basics.AssetIndex {
+	asset := g.MinAssetIndex
+	for i := 0; i < int(ai); i++ {
+		asset += g.groupData.AssetOffsets[i]
+	}
+	return asset
 }
 
 // GroupData returns interface to AbstractAssetGroupData for this group data
@@ -632,110 +765,328 @@ func (e *ExtendedAssetParams) deleteByIndex(gi int, ai int) {
 	e.Count--
 }
 
-// splitInsert splits the group identified by gi
-// and inserts a new asset into appropriate left or right part of the split.
-func (e *ExtendedAssetHolding) splitInsert(gi int, aidx basics.AssetIndex, holding basics.AssetHolding) {
-	g := e.Groups[gi]
-	pos := g.Count / 2
-	asset := g.MinAssetIndex
-	for i := 0; i < int(pos); i++ {
-		asset += g.groupData.AssetOffsets[i]
-	}
-	rgCount := g.Count - g.Count/2
-	rgMinAssetIndex := asset + g.groupData.AssetOffsets[pos]
-	rgDeltaMaxIndex := g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex) - rgMinAssetIndex
-	lgMinAssetIndex := g.MinAssetIndex
-	lgCount := g.Count - rgCount
-	lgDeltaMaxIndex := asset - g.MinAssetIndex
+// split Groups[i] in preparation to insertion of asset aidx.
+// It returns group index where to insert.
+func (e *ExtendedAssetHolding) split(gi int, aidx basics.AssetIndex) int {
+	return split(gi, aidx, e)
+}
+
+func (e *ExtendedAssetParams) split(gi int, aidx basics.AssetIndex) int {
+	return split(gi, aidx, e)
+}
+
+func split(gi int, aidx basics.AssetIndex, agl AbstractAssetGroupList) int {
+	g := agl.Get(gi)
+	pos := g.AssetCount() / 2
+	asset := g.AssetAt(int(pos))
+
+	rgCount := g.AssetCount() - pos
+	lgCount := pos
+	rgMinAssetIndex := asset + g.GroupData().AssetDeltaValue(int(pos))
+	lgMinAssetIndex := g.MinAsset()
+	rgDeltaMaxIndex := g.MaxAsset() - rgMinAssetIndex
+	lgDeltaMaxIndex := asset - g.MinAsset()
 
 	rgCap := rgCount
 	if aidx >= lgMinAssetIndex+lgDeltaMaxIndex {
 		// if new asset goes into right group, reserve space
 		rgCap++
 	}
+
+	// make a right group
+	rightGroup := g.groupFromPosition(pos, rgCount, rgCap, rgMinAssetIndex, uint64(rgDeltaMaxIndex))
+
+	// modify left group
+	g.slice(lgCount, uint64(lgDeltaMaxIndex))
+
+	// insert rightGroup after gi
+	// slice reallocation may happen, so the left group needs to modifed before possible array reallocation in insertAfter
+	agl.insertAfter(gi, rightGroup)
+
+	if aidx < lgMinAssetIndex+lgDeltaMaxIndex {
+		return gi
+	}
+	return gi + 1
+}
+
+func (g *AssetsHoldingGroup) slice(pos uint32, maxDelta uint64) {
+	g.Count = pos
+	g.DeltaMaxAssetIndex = maxDelta
+	g.groupData = AssetsHoldingGroupData{
+		Amounts: g.groupData.Amounts[:pos],
+		Frozens: g.groupData.Frozens[:pos],
+		AssetsCommonGroupData: AssetsCommonGroupData{
+			AssetOffsets: g.groupData.AssetOffsets[:pos],
+		},
+	}
+}
+
+func (g *AssetsParamsGroup) slice(pos uint32, maxDelta uint64) {
+	g.Count = pos
+	g.DeltaMaxAssetIndex = maxDelta
+	g.groupData = AssetsParamsGroupData{
+		Totals:         g.groupData.Totals[:pos],
+		Decimals:       g.groupData.Decimals[:pos],
+		DefaultFrozens: g.groupData.DefaultFrozens[:pos],
+		UnitNames:      g.groupData.UnitNames[:pos],
+		AssetNames:     g.groupData.AssetNames[:pos],
+		URLs:           g.groupData.URLs[:pos],
+		MetadataHash:   g.groupData.MetadataHash[:pos],
+		Managers:       g.groupData.Managers[:pos],
+		Reserves:       g.groupData.Reserves[:pos],
+		Freezes:        g.groupData.Freezes[:pos],
+		Clawbacks:      g.groupData.Clawbacks[:pos],
+		AssetsCommonGroupData: AssetsCommonGroupData{
+			AssetOffsets: g.groupData.AssetOffsets[:pos],
+		},
+	}
+}
+
+// groupFromPosition creates a new group from the data at position [pos:]
+func (g *AssetsHoldingGroup) groupFromPosition(pos uint32, length, capacity uint32, minAssetIndex basics.AssetIndex, maxDelta uint64) interface{} {
 	rgd := AssetsHoldingGroupData{
-		Amounts:               make([]uint64, rgCount, rgCap),
-		Frozens:               make([]bool, rgCount, rgCap),
-		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, rgCount, rgCap)},
+		Amounts:               make([]uint64, length, capacity),
+		Frozens:               make([]bool, length, capacity),
+		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, length, capacity)},
 	}
 	copy(rgd.Amounts, g.groupData.Amounts[pos:])
 	copy(rgd.Frozens, g.groupData.Frozens[pos:])
 	copy(rgd.AssetOffsets, g.groupData.AssetOffsets[pos:])
 	rightGroup := AssetsHoldingGroup{
 		AssetGroupDesc: AssetGroupDesc{
-			Count:              rgCount,
-			MinAssetIndex:      rgMinAssetIndex,
-			DeltaMaxAssetIndex: uint64(rgDeltaMaxIndex),
+			Count:              length,
+			MinAssetIndex:      minAssetIndex,
+			DeltaMaxAssetIndex: maxDelta,
 		},
 		groupData: rgd,
 		loaded:    true,
 	}
 	rightGroup.groupData.AssetOffsets[0] = 0
+	return rightGroup
+}
 
-	e.Groups[gi].Count = lgCount
-	e.Groups[gi].DeltaMaxAssetIndex = uint64(lgDeltaMaxIndex)
-	e.Groups[gi].groupData = AssetsHoldingGroupData{
-		Amounts:               g.groupData.Amounts[:pos],
-		Frozens:               g.groupData.Frozens[:pos],
-		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: g.groupData.AssetOffsets[:pos]},
+func (g *AssetsParamsGroup) groupFromPosition(pos uint32, length, capacity uint32, minAssetIndex basics.AssetIndex, maxDelta uint64) interface{} {
+	rgd := AssetsParamsGroupData{
+		Totals:                make([]uint64, length, capacity),
+		Decimals:              make([]uint32, length, capacity),
+		DefaultFrozens:        make([]bool, length, capacity),
+		UnitNames:             make([]string, length, capacity),
+		AssetNames:            make([]string, length, capacity),
+		URLs:                  make([]string, length, capacity),
+		MetadataHash:          make([][32]byte, length, capacity),
+		Managers:              make([]basics.Address, length, capacity),
+		Reserves:              make([]basics.Address, length, capacity),
+		Freezes:               make([]basics.Address, length, capacity),
+		Clawbacks:             make([]basics.Address, length, capacity),
+		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, length, capacity)},
 	}
-	if aidx < lgMinAssetIndex+lgDeltaMaxIndex {
-		e.Groups[gi].insert(aidx, holding)
-	} else {
-		rightGroup.insert(aidx, holding)
+	copy(rgd.Totals, g.groupData.Totals[pos:])
+	copy(rgd.Decimals, g.groupData.Decimals[pos:])
+	copy(rgd.DefaultFrozens, g.groupData.DefaultFrozens[pos:])
+	copy(rgd.UnitNames, g.groupData.UnitNames[pos:])
+	copy(rgd.AssetNames, g.groupData.AssetNames[pos:])
+	copy(rgd.URLs, g.groupData.URLs[pos:])
+	copy(rgd.MetadataHash, g.groupData.MetadataHash[pos:])
+	copy(rgd.Managers, g.groupData.Managers[pos:])
+	copy(rgd.Reserves, g.groupData.Reserves[pos:])
+	copy(rgd.Freezes, g.groupData.Freezes[pos:])
+	copy(rgd.Clawbacks, g.groupData.Clawbacks[pos:])
+	copy(rgd.AssetOffsets, g.groupData.AssetOffsets[pos:])
+	rightGroup := AssetsParamsGroup{
+		AssetGroupDesc: AssetGroupDesc{
+			Count:              length,
+			MinAssetIndex:      minAssetIndex,
+			DeltaMaxAssetIndex: maxDelta,
+		},
+		groupData: rgd,
+		loaded:    true,
 	}
+	rightGroup.groupData.AssetOffsets[0] = 0
+	return rightGroup
+}
 
+// // splitInsert splits the group identified by gi
+// // and inserts a new asset into appropriate left or right part of the split.
+// func (e *ExtendedAssetHolding) splitInsert(gi int, aidx basics.AssetIndex, holding basics.AssetHolding) {
+// 	g := e.Groups[gi]
+// 	pos := g.Count / 2
+// 	asset := g.MinAssetIndex
+// 	for i := 0; i < int(pos); i++ {
+// 		asset += g.groupData.AssetOffsets[i]
+// 	}
+// 	rgCount := g.Count - g.Count/2
+// 	rgMinAssetIndex := asset + g.groupData.AssetOffsets[pos]
+// 	rgDeltaMaxIndex := g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex) - rgMinAssetIndex
+// 	lgMinAssetIndex := g.MinAssetIndex
+// 	lgCount := g.Count - rgCount
+// 	lgDeltaMaxIndex := asset - g.MinAssetIndex
+
+// 	rgCap := rgCount
+// 	if aidx >= lgMinAssetIndex+lgDeltaMaxIndex {
+// 		// if new asset goes into right group, reserve space
+// 		rgCap++
+// 	}
+// 	rgd := AssetsHoldingGroupData{
+// 		Amounts:               make([]uint64, rgCount, rgCap),
+// 		Frozens:               make([]bool, rgCount, rgCap),
+// 		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, rgCount, rgCap)},
+// 	}
+// 	copy(rgd.Amounts, g.groupData.Amounts[pos:])
+// 	copy(rgd.Frozens, g.groupData.Frozens[pos:])
+// 	copy(rgd.AssetOffsets, g.groupData.AssetOffsets[pos:])
+// 	rightGroup := AssetsHoldingGroup{
+// 		AssetGroupDesc: AssetGroupDesc{
+// 			Count:              rgCount,
+// 			MinAssetIndex:      rgMinAssetIndex,
+// 			DeltaMaxAssetIndex: uint64(rgDeltaMaxIndex),
+// 		},
+// 		groupData: rgd,
+// 		loaded:    true,
+// 	}
+// 	rightGroup.groupData.AssetOffsets[0] = 0
+
+// 	e.Groups[gi].Count = lgCount
+// 	e.Groups[gi].DeltaMaxAssetIndex = uint64(lgDeltaMaxIndex)
+// 	e.Groups[gi].groupData = AssetsHoldingGroupData{
+// 		Amounts:               g.groupData.Amounts[:pos],
+// 		Frozens:               g.groupData.Frozens[:pos],
+// 		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: g.groupData.AssetOffsets[:pos]},
+// 	}
+// 	if aidx < lgMinAssetIndex+lgDeltaMaxIndex {
+// 		e.Groups[gi].insert(aidx, holding)
+// 	} else {
+// 		rightGroup.insert(aidx, holding)
+// 	}
+
+// 	e.Count++
+// 	e.Groups = append(e.Groups, AssetsHoldingGroup{})
+// 	copy(e.Groups[gi+1:], e.Groups[gi:])
+// 	e.Groups[gi+1] = rightGroup
+// }
+
+func makeAssetGroup(aidx basics.AssetIndex, data interface{}, b groupBuilder) interface{} {
+	desc := AssetGroupDesc{
+		Count:              1,
+		MinAssetIndex:      aidx,
+		DeltaMaxAssetIndex: 0,
+		AssetGroupKey:      0,
+	}
+	return b.newGroup(1).newElement(0, data).build(desc)
+}
+
+func makeAssetHoldingGroup(aidx basics.AssetIndex, data interface{}) AssetsHoldingGroup {
+	g := makeAssetGroup(aidx, data, &assetHoldingGroupBuilder{})
+	return g.(AssetsHoldingGroup)
+}
+
+func makeAssetParamsGroup(aidx basics.AssetIndex, data interface{}) AssetsParamsGroup {
+	g := makeAssetGroup(aidx, data, &assetParamsGroupBuilder{})
+	return g.(AssetsParamsGroup)
+}
+
+func (e *ExtendedAssetHolding) prependNewGroup(aidx basics.AssetIndex, data interface{}) {
+	g := makeAssetHoldingGroup(aidx, data)
+	e.Groups = append([]AssetsHoldingGroup{g}, e.Groups...)
 	e.Count++
+}
+
+func (e *ExtendedAssetHolding) appendNewGroup(aidx basics.AssetIndex, data interface{}) {
+	g := makeAssetHoldingGroup(aidx, data)
+	e.Groups = append(e.Groups, g)
+	e.Count++
+}
+
+// insertAfter adds a new group after idx (at newly allocated position idx+1)
+func (e *ExtendedAssetHolding) insertNewGroupAfter(gi int, aidx basics.AssetIndex, data interface{}) {
+	g := makeAssetHoldingGroup(aidx, data)
+	e.insertAfter(gi, g)
+	e.Count++
+}
+
+func (e *ExtendedAssetHolding) insertAfter(gi int, group interface{}) {
 	e.Groups = append(e.Groups, AssetsHoldingGroup{})
 	copy(e.Groups[gi+1:], e.Groups[gi:])
-	e.Groups[gi+1] = rightGroup
+	e.Groups[gi+1] = group.(AssetsHoldingGroup)
+}
+
+func (e *ExtendedAssetHolding) insertInto(idx int, aidx basics.AssetIndex, data interface{}) {
+	e.Groups[idx].insert(aidx, data.(basics.AssetHolding))
+	e.Count++
+}
+
+func (e *ExtendedAssetParams) prependNewGroup(aidx basics.AssetIndex, data interface{}) {
+	g := makeAssetParamsGroup(aidx, data)
+	e.Groups = append([]AssetsParamsGroup{g}, e.Groups...)
+	e.Count++
+}
+
+func (e *ExtendedAssetParams) appendNewGroup(aidx basics.AssetIndex, data interface{}) {
+	g := makeAssetParamsGroup(aidx, data)
+	e.Groups = append(e.Groups, g)
+	e.Count++
+}
+
+// insertAfter adds new group after idx (at newly allocated position idx+1)
+func (e *ExtendedAssetParams) insertNewGroupAfter(gi int, aidx basics.AssetIndex, data interface{}) {
+	g := makeAssetParamsGroup(aidx, data)
+	e.insertAfter(gi, g)
+	e.Count++
+}
+
+func (e *ExtendedAssetParams) insertAfter(gi int, group interface{}) {
+	e.Groups = append(e.Groups, AssetsParamsGroup{})
+	copy(e.Groups[gi+1:], e.Groups[gi:])
+	e.Groups[gi+1] = group.(AssetsParamsGroup)
+}
+
+func (e *ExtendedAssetParams) insertInto(idx int, aidx basics.AssetIndex, data interface{}) {
+	e.Groups[idx].insert(aidx, data.(basics.AssetParams))
+	e.Count++
 }
 
 // Insert takes an array of asset holdings into ExtendedAssetHolding.
 // The input sequence must be sorted.
 func (e *ExtendedAssetHolding) Insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetHolding) {
-	sort.SliceStable(input, func(i, j int) bool { return input[i] < input[j] })
+	flatten := make([]flattenAsset, len(input), len(input))
+	for i, aidx := range input {
+		flatten[i] = flattenAsset{aidx, data[aidx]}
+	}
+	sort.SliceStable(flatten, func(i, j int) bool { return flatten[i].aidx < flatten[j].aidx })
+	insert(flatten, e)
+}
+
+func (e *ExtendedAssetParams) Insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetParams) {
+	flatten := make([]flattenAsset, len(input), len(input))
+	for i, aidx := range input {
+		flatten[i] = flattenAsset{aidx, data[aidx]}
+	}
+	sort.SliceStable(flatten, func(i, j int) bool { return flatten[i].aidx < flatten[j].aidx })
+	insert(flatten, e)
+}
+
+// func insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetHolding, agl AbstractAssetGroupList) {
+func insert(assets []flattenAsset, agl AbstractAssetGroupList) {
 	gi := 0
-	for _, aidx := range input {
-		result := findGroup(aidx, gi, e)
+	for _, asset := range assets {
+		result := findGroup(asset.aidx, gi, agl)
 		if result.found {
 			if result.split {
-				e.splitInsert(result.gi, aidx, data[aidx])
+				// e.splitInsert(result.gi, aidx, data[aidx])
+				pos := agl.split(result.gi, asset.aidx)
+				agl.insertInto(pos, asset.aidx, asset.data)
 			} else {
-				e.Groups[result.gi].insert(aidx, data[aidx])
-				e.Count++
+				agl.insertInto(result.gi, asset.aidx, asset.data)
 			}
 			gi = result.gi // advance group search offset (input is ordered, it is safe to search from the last match)
 		} else {
 			insertAfter := result.gi
-			holding := data[aidx]
-			g := AssetsHoldingGroup{
-				AssetGroupDesc: AssetGroupDesc{
-					Count:              1,
-					MinAssetIndex:      aidx,
-					DeltaMaxAssetIndex: 0,
-					AssetGroupKey:      0,
-				},
-				groupData: AssetsHoldingGroupData{
-					AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: []basics.AssetIndex{0}},
-					Amounts:               []uint64{holding.Amount},
-					Frozens:               []bool{holding.Frozen},
-				},
-				loaded: true,
-			}
 			if insertAfter == -1 {
-				// special case, prepend
-				e.Groups = append([]AssetsHoldingGroup{g}, e.Groups...)
-			} else if insertAfter == len(e.Groups)-1 {
-				// save on two copying compare to the default branch below
-				e.Groups = append(e.Groups, g)
+				agl.prependNewGroup(asset.aidx, asset.data)
+			} else if insertAfter == agl.Len()-1 {
+				agl.appendNewGroup(asset.aidx, asset.data)
 			} else {
-				// insert after result.gi
-				e.Groups = append(e.Groups, AssetsHoldingGroup{})
-				copy(e.Groups[result.gi+1:], e.Groups[result.gi:])
-				e.Groups[result.gi+1] = g
+				agl.insertNewGroupAfter(result.gi, asset.aidx, asset.data)
 			}
-			e.Count++
 			gi = result.gi + 1
 		}
 	}
@@ -859,17 +1210,20 @@ func (e ExtendedAssetParams) FindAsset(aidx basics.AssetIndex, startIdx int) (in
 // If a matching group found but the group is not loaded yet, it returns (groupIdx, -1).
 // It is suitable for searchin within AbstractAssetGroupList that is either holding or params types.
 func findAsset(aidx basics.AssetIndex, startIdx int, agl AbstractAssetGroupList) (int, int) {
+	const notFound int = -1
+
 	if agl.Total() == 0 {
-		return -1, -1
+		return notFound, notFound
 	}
 
+	// TODO: binary search
 	for i := startIdx; i < agl.Len(); i++ {
 		g := agl.Get(i)
 		if aidx >= g.MinAsset() && aidx <= g.MaxAsset() {
 			if !g.Loaded() {
 				// groupData not loaded, but the group boundaries match
 				// return group match and -1 as asset index indicating loading is need
-				return i, -1
+				return i, notFound
 			}
 
 			if ai := g.GroupData().Find(aidx, g.MinAsset()); ai != -1 {
@@ -877,10 +1231,10 @@ func findAsset(aidx basics.AssetIndex, startIdx int, agl AbstractAssetGroupList)
 			}
 
 			// the group is loaded and the asset not found
-			return -1, -1
+			return notFound, notFound
 		}
 	}
-	return -1, -1
+	return notFound, notFound
 }
 
 type assetHoldingGroupBuilder struct {
@@ -888,13 +1242,14 @@ type assetHoldingGroupBuilder struct {
 	idx int
 }
 
-func (b *assetHoldingGroupBuilder) newGroup(size int) {
+func (b *assetHoldingGroupBuilder) newGroup(size int) groupBuilder {
 	b.gd = AssetsHoldingGroupData{
 		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, size, size)},
 		Amounts:               make([]uint64, size, size),
 		Frozens:               make([]bool, size, size),
 	}
 	b.idx = 0
+	return b
 }
 
 func (b *assetHoldingGroupBuilder) build(desc AssetGroupDesc) interface{} {
@@ -910,12 +1265,13 @@ func (b *assetHoldingGroupBuilder) build(desc AssetGroupDesc) interface{} {
 	}
 }
 
-func (b *assetHoldingGroupBuilder) newElement(offset basics.AssetIndex, data interface{}) {
+func (b *assetHoldingGroupBuilder) newElement(offset basics.AssetIndex, data interface{}) groupBuilder {
 	b.gd.AssetOffsets[b.idx] = offset
 	holding := data.(basics.AssetHolding)
 	b.gd.Amounts[b.idx] = holding.Amount
 	b.gd.Frozens[b.idx] = holding.Frozen
 	b.idx++
+	return b
 }
 
 type assetParamsGroupBuilder struct {
@@ -923,7 +1279,7 @@ type assetParamsGroupBuilder struct {
 	idx int
 }
 
-func (b *assetParamsGroupBuilder) newGroup(size int) {
+func (b *assetParamsGroupBuilder) newGroup(size int) groupBuilder {
 	b.gd = AssetsParamsGroupData{
 		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, size, size)},
 		Totals:                make([]uint64, size, size),
@@ -939,7 +1295,9 @@ func (b *assetParamsGroupBuilder) newGroup(size int) {
 		Clawbacks:             make([]basics.Address, size, size),
 	}
 	b.idx = 0
+	return b
 }
+
 func (b *assetParamsGroupBuilder) build(desc AssetGroupDesc) interface{} {
 	defer func() {
 		b.gd = AssetsParamsGroupData{}
@@ -953,7 +1311,7 @@ func (b *assetParamsGroupBuilder) build(desc AssetGroupDesc) interface{} {
 	}
 }
 
-func (b *assetParamsGroupBuilder) newElement(offset basics.AssetIndex, data interface{}) {
+func (b *assetParamsGroupBuilder) newElement(offset basics.AssetIndex, data interface{}) groupBuilder {
 	b.gd.AssetOffsets[b.idx] = offset
 	params := data.(basics.AssetParams)
 	b.gd.Totals[b.idx] = params.Total
@@ -969,6 +1327,8 @@ func (b *assetParamsGroupBuilder) newElement(offset basics.AssetIndex, data inte
 	copy(b.gd.Freezes[b.idx][:], params.Freeze[:])
 	copy(b.gd.Clawbacks[b.idx][:], params.Clawback[:])
 	b.idx++
+
+	return b
 }
 
 type assetFlattener struct {
@@ -1217,8 +1577,8 @@ func (e *ExtendedAssetHolding) TestClearGroupData() {
 }
 
 // Get returns AbstractAssetGroup interface by group index
-func (e *ExtendedAssetHolding) Get(idx int) AbstractAssetGroup {
-	return &(e.Groups[idx])
+func (e *ExtendedAssetHolding) Get(gi int) AbstractAssetGroup {
+	return &(e.Groups[gi])
 }
 
 // Len returns number of groups
@@ -1238,13 +1598,13 @@ func (e *ExtendedAssetHolding) Reset(count uint32, length int) {
 }
 
 // Assign sets group at group index position
-func (e *ExtendedAssetHolding) Assign(idx int, group interface{}) {
-	e.Groups[idx] = group.(AssetsHoldingGroup)
+func (e *ExtendedAssetHolding) Assign(gi int, group interface{}) {
+	e.Groups[gi] = group.(AssetsHoldingGroup)
 }
 
 // Get returns AbstractAssetGroup interface by group index
-func (e *ExtendedAssetParams) Get(idx int) AbstractAssetGroup {
-	return &(e.Groups[idx])
+func (e *ExtendedAssetParams) Get(gi int) AbstractAssetGroup {
+	return &(e.Groups[gi])
 }
 
 // Len returns number of groups
@@ -1264,6 +1624,6 @@ func (e *ExtendedAssetParams) Reset(count uint32, length int) {
 }
 
 // Assign sets group at group index position
-func (e *ExtendedAssetParams) Assign(idx int, group interface{}) {
-	e.Groups[idx] = group.(AssetsParamsGroup)
+func (e *ExtendedAssetParams) Assign(gi int, group interface{}) {
+	e.Groups[gi] = group.(AssetsParamsGroup)
 }

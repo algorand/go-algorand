@@ -1606,7 +1606,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 			}
 
 			if len(created) > 0 {
-				// pad.ExtendedAssetParams.Insert(created, delta.new.AssetParams)
+				pad.ExtendedAssetParams.Insert(created, delta.new.AssetParams)
 			}
 
 			// loaded, deletedKeys := pad.ExtendedAssetParams.Merge()
