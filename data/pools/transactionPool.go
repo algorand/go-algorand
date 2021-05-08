@@ -556,10 +556,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		}
 	}
 
-	txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
-	for i, tx := range txgroup {
-		txgroupad[i].SignedTxn = tx
-	}
+	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
 
 	transactionGroupStartsTime := time.Time{}
 	if recomputing {
