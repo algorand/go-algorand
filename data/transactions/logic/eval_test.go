@@ -73,6 +73,12 @@ func defaultEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalPar
 	return defaultEvalParamsWithVersion(sb, txn, LogicVersion)
 }
 
+func benchmarkEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalParams {
+	ep := defaultEvalParamsWithVersion(sb, txn, LogicVersion)
+	ep.Proto.LogicSigMaxCost = 1000 * 1000
+	return ep
+}
+
 func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedTxn, version uint64) EvalParams {
 	proto := defaultEvalProtoWithVersion(version)
 
@@ -97,8 +103,7 @@ func TestTooManyArgs(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, "int 1", v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			args := [transactions.EvalMaxArgs + 1][]byte{}
@@ -189,8 +194,7 @@ func TestWrongProtoVersion(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, "int 1", v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			sb := strings.Builder{}
@@ -223,11 +227,10 @@ func TestSha256EqArg(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`arg 0
+			ops := testProg(t, `arg 0
 sha256
 byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
-==`, 1)
-			require.NoError(t, err)
+==`, v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
@@ -284,8 +287,7 @@ func TestTLHC(t *testing.T) {
 			a1, _ := basics.UnmarshalChecksumAddress("DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE")
 			a2, _ := basics.UnmarshalChecksumAddress("YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ")
 			secret, _ := base64.StdEncoding.DecodeString("xPUB+DJir1wsH7g2iEY1QwYqHqYH1vUJtzZKW4RxXsY=")
-			ops, err := AssembleStringWithVersion(tlhcProgramText, v)
-			require.NoError(t, err)
+			ops := testProg(t, tlhcProgramText, v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			// right answer
@@ -677,8 +679,7 @@ func TestTxnBadField(t *testing.T) {
 	fields := []TxnField{ApplicationArgs, Accounts}
 	for _, field := range fields {
 		source := fmt.Sprintf("txn %s 0", field.String())
-		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-		require.NoError(t, err)
+		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
 		pass, err = Eval(ops.Program, defaultEvalParams(&sb, &txn))
@@ -740,8 +741,7 @@ func TestGtxnBadField(t *testing.T) {
 	fields := []TxnField{ApplicationArgs, Accounts}
 	for _, field := range fields {
 		source := fmt.Sprintf("txn %s 0", field.String())
-		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-		require.NoError(t, err)
+		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
 		pass, err = Eval(ops.Program, defaultEvalParams(&sb, &txn))
@@ -774,7 +774,7 @@ func TestArg(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`arg 0
+			ops := testProg(t, `arg 0
 arg 1
 ==
 arg 2
@@ -978,7 +978,6 @@ int %s
 					txn.Txn.Type = tt
 					sb := strings.Builder{}
 					ep := defaultEvalParams(&sb, &txn)
-					ep.GroupIndex = 3
 					pass, err := Eval(ops.Program, ep)
 					if !pass {
 						t.Log(hex.EncodeToString(ops.Program))
@@ -1015,26 +1014,13 @@ func TestOnCompletionConstants(t *testing.T) {
 	}
 
 	// check constants matching to their values
-	ep := defaultEvalParams(nil, nil)
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			for i := 0; i < last; i++ {
-				oc := OnCompletionConstType(i)
-				symbol := oc.String()
-				require.Contains(t, onCompletionConstToUint64, symbol)
-				require.Equal(t, uint64(i), onCompletionConstToUint64[symbol])
-				t.Run(symbol, func(t *testing.T) {
-					text := fmt.Sprintf(`int %s
-int %s
-==
-`, symbol, oc)
-					ops, err := AssembleStringWithVersion(text, v)
-					require.NoError(t, err)
-					pass, err := Eval(ops.Program, ep)
-					require.NoError(t, err)
-					require.True(t, pass)
-				})
-			}
+	for i := 0; i < last; i++ {
+		oc := OnCompletionConstType(i)
+		symbol := oc.String()
+		require.Contains(t, onCompletionConstToUint64, symbol)
+		require.Equal(t, uint64(i), onCompletionConstToUint64[symbol])
+		t.Run(symbol, func(t *testing.T) {
+			testAccepts(t, fmt.Sprintf("int %s; int %s; ==;", symbol, oc), 1)
 		})
 	}
 }
@@ -1371,8 +1357,7 @@ func TestTxn(t *testing.T) {
 		3: testTxnProgramTextV3,
 	}
 
-	clearOps, err := AssembleStringWithVersion("int 1", 1)
-	require.NoError(t, err)
+	clearOps := testProg(t, "int 1", 1)
 
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -1627,8 +1612,7 @@ func TestTxna(t *testing.T) {
 txna ApplicationArgs 0
 ==
 `
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, source, AssemblerMaxVersion)
 	var txn transactions.SignedTxn
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Sender
@@ -1638,7 +1622,7 @@ txna ApplicationArgs 0
 	txgroup[0] = txn
 	ep := defaultEvalParams(nil, &txn)
 	ep.TxnGroup = txgroup
-	_, err = Eval(ops.Program, ep)
+	_, err := Eval(ops.Program, ep)
 	require.NoError(t, err)
 
 	// modify txn field
@@ -1677,8 +1661,7 @@ txna ApplicationArgs 0
 txn Sender
 ==
 `
-	ops2, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops2 := testProg(t, source, AssemblerMaxVersion)
 	var txn2 transactions.SignedTxn
 	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
 	ep2 := defaultEvalParams(nil, &txn2)
@@ -1690,7 +1673,7 @@ txn Sender
 	source = `gtxna 0 Accounts 1
 txna ApplicationArgs 0
 ==`
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	_, err = Eval(ops.Program, ep)
 	require.NoError(t, err)
@@ -1731,8 +1714,7 @@ txna ApplicationArgs 0
 txn Sender
 ==
 `
-	ops3, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops3 := testProg(t, source, AssemblerMaxVersion)
 	var txn3 transactions.SignedTxn
 	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
 	txgroup3 := make([]transactions.SignedTxn, 1)
@@ -1752,8 +1734,7 @@ btoi
 int 0
 ==
 `
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, source, AssemblerMaxVersion)
 
 	var txn transactions.SignedTxn
 	txn.Txn.ApplicationArgs = make([][]byte, 1)
@@ -1776,8 +1757,7 @@ int 0
 global ZeroAddress
 ==
 `
-	ops2, err := AssembleStringWithVersion(source2, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops2 := testProg(t, source2, AssemblerMaxVersion)
 
 	var txn2 transactions.SignedTxn
 	txn2.Txn.Accounts = make([]basics.Address, 1)
@@ -1799,9 +1779,7 @@ global ZeroAddress
 
 func TestBitOps(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 0x17
+	testAccepts(t, `int 0x17
 int 0x3e
 & // == 0x16
 int 0x0a
@@ -1812,25 +1790,12 @@ int 0x0f
 int 0x300
 |
 int 0x310
-==`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+==`, 1)
 }
 
 func TestStringOps(t *testing.T) {
 	t.Parallel()
-	ops := testProg(t, `byte 0x123456789abc
+	testAccepts(t, `byte 0x123456789abc
 substring 1 3
 byte 0x3456
 ==
@@ -1856,22 +1821,12 @@ substring3
 len
 int 0
 ==
-&&`, 2)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-	if !pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.NoError(t, err)
-	require.True(t, pass)
+&&`, 2) // substring, concat, substring3 came in v2
 }
 
 func TestConsOverflow(t *testing.T) {
 	t.Parallel()
-	ops := testProg(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 dup
 concat
 dup
@@ -1909,81 +1864,41 @@ concat
 dup
 concat
 len`, 2)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-	if pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.False(t, pass)
-	require.Error(t, err)
-	isNotPanic(t, err)
 }
 
 func TestSubstringFlop(t *testing.T) {
 	t.Parallel()
 	// fails in compiler
-	ops := testProg(t, `byte 0xf000000000000000
+	testProg(t, `byte 0xf000000000000000
 substring 4 2
 len`, 2, expect{2, "substring end is before start"})
 
 	// fails at runtime
-	ops = testProg(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 int 4
 int 2
 substring3
 len`, 2)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-	if pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.False(t, pass)
-	require.Error(t, err)
-	isNotPanic(t, err)
 
 	// fails at runtime
-	ops = testProg(t, `byte 0xf000000000000000
+	err := testPanics(t, `byte 0xf000000000000000
 int 4
 int 0xFFFFFFFFFFFFFFFE
 substring3
 len`, 2)
-	err = Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	pass, err = Eval(ops.Program, defaultEvalParams(nil, nil))
-	require.False(t, pass)
-	require.Error(t, err)
 	require.Contains(t, err.Error(), "substring range beyond length of string")
 }
 
 func TestSubstringRange(t *testing.T) {
 	t.Parallel()
-	ops := testProg(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 substring 2 99
 len`, 2)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-	if pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.False(t, pass)
-	require.Error(t, err)
-	isNotPanic(t, err)
 }
 
 func TestLoadStore(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 37
+	testAccepts(t, `int 37
 int 37
 store 1
 byte 0xabbacafe
@@ -1997,19 +1912,7 @@ byte 0xabbacafe
 load 0
 load 1
 +
-&&`, v)
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+&&`, 1)
 }
 
 func TestLoadStore2(t *testing.T) {
@@ -2025,21 +1928,7 @@ load 42
 +
 int 5
 ==`
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, progText, v)
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+	testAccepts(t, progText, 1)
 }
 
 const testCompareProgramText = `int 35
@@ -2968,7 +2857,7 @@ func benchmarkExpensiveProgram(b *testing.B, source string) {
 	b.ResetTimer()
 	sb := strings.Builder{} // Trace: &sb
 	for i := 0; i < b.N; i++ {
-		pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
+		pass, err := Eval(ops.Program, benchmarkEvalParams(&sb, nil))
 		if !pass {
 			b.Log(sb.String())
 		}
@@ -3118,7 +3007,10 @@ addr %s
 ed25519verify`, pkStr), AssemblerMaxVersion)
 		require.NoError(b, err)
 		programs = append(programs, ops.Program)
-		sig := secret.SignBytes(buffer[:])
+		sig := secret.Sign(Msg{
+			ProgramHash: crypto.HashObj(Program(ops.Program)),
+			Data:        buffer[:],
+		})
 		signatures = append(signatures, sig)
 	}
 
@@ -3192,13 +3084,12 @@ func TestEvalVersions(t *testing.T) {
 txna ApplicationArgs 0
 pop
 `
-	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, text, AssemblerMaxVersion)
 
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &transactions.SignedTxn{}
 	ep.Txn.Txn.ApplicationArgs = [][]byte{[]byte("test")}
-	_, err = Eval(ops.Program, ep)
+	_, err := Eval(ops.Program, ep)
 	require.NoError(t, err)
 
 	ep = defaultEvalParamsV1(nil, nil)
@@ -3599,7 +3490,8 @@ func obfuscate(program string) string {
 
 type evalTester func(pass bool, err error) bool
 
-func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) {
+func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) error {
+	var outer error
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			if v < introduced {
@@ -3633,8 +3525,15 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					isNotPanic(t, err) // Never want a Go level panic.
 				})
 			}
+			require.True(t, ok)
+			isNotPanic(t, err) // Never want a Go level panic.
+			if err != nil {
+				// Use wisely. This could probably return any of the concurrent runs' errors.
+				outer = err
+			}
 		})
 	}
+	return outer
 }
 
 func testAccepts(t *testing.T, program string, introduced uint64) {
@@ -3648,8 +3547,8 @@ func testRejects(t *testing.T, program string, introduced uint64) {
 		return !pass && err == nil
 	})
 }
-func testPanics(t *testing.T, program string, introduced uint64) {
-	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
+func testPanics(t *testing.T, program string, introduced uint64) error {
+	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// TEAL panic! not just reject at exit
 		return !pass && err != nil
 	})
