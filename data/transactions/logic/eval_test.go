@@ -202,7 +202,7 @@ func TestWrongProtoVersion(t *testing.T) {
 			proto.LogicSigVersion = 0
 			ep := defaultEvalParams(&sb, &txn)
 			ep.Proto = &proto
-			err = Check(ops.Program, ep)
+			err := Check(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "LogicSig not supported")
 			pass, err := Eval(ops.Program, ep)
@@ -236,7 +236,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 			txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
-			err = Check(ops.Program, ep)
+			err := Check(ops.Program, ep)
 			require.NoError(t, err)
 			pass, err := Eval(ops.Program, ep)
 			require.True(t, pass)
@@ -296,7 +296,7 @@ func TestTLHC(t *testing.T) {
 			sb := strings.Builder{}
 			block := bookkeeping.Block{}
 			ep := defaultEvalParams(&sb, &txn)
-			err = Check(ops.Program, ep)
+			err := Check(ops.Program, ep)
 			if err != nil {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(sb.String())
@@ -786,8 +786,7 @@ len
 int 9
 <
 &&`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
@@ -3523,13 +3522,11 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					}
 					require.True(t, ok)
 					isNotPanic(t, err) // Never want a Go level panic.
+					if err != nil {
+						// Use wisely. This could probably return any of the concurrent runs' errors.
+						outer = err
+					}
 				})
-			}
-			require.True(t, ok)
-			isNotPanic(t, err) // Never want a Go level panic.
-			if err != nil {
-				// Use wisely. This could probably return any of the concurrent runs' errors.
-				outer = err
 			}
 		})
 	}
