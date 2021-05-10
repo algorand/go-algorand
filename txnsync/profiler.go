@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
+//msgp:ignore profElements
 type profElements int
 
 const (
