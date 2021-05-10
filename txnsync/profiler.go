@@ -35,6 +35,7 @@ const (
 	profElementOutgoingMsg
 	profElementNextOffset
 
+	// detached elements
 	profElementGetTxnsGroups
 	profElementAssembleMessage
 	profElementSendMessage
@@ -42,48 +43,49 @@ const (
 	profElementTxnsSelection
 
 	profElementLast
+	profFirstDetachedElement = profElementGetTxnsGroups
 )
-
-var profElementNames = []string{
-	"idle",
-	"transactionPoolChangedEvent",
-	"newRound",
-	"peerState",
-	"incomingMsg",
-	"outgoingMsg",
-	"nextOffset",
-	"getTxnGroups",
-	"assembleMessage",
-	"sendMessage",
-	"makeBloomFilter",
-	"selectPendingTransactions",
-}
 
 // The profiler struct provides profiling information regarding the main loop performance
 // characteristics. Using it provides statistics information about the recent duty cycle utilization,
 // that could be used when trying to throlle the accuracy and performance of the transaction sync.
 type profiler struct {
-	clock    timers.WallClock
+	// clock used as the source clock for measurements.
+	clock timers.WallClock
+	// elements contains the elements we want to measure.
 	elements []*element
-	log      logging.Logger
+	// log is used to report the outcome of the measuring.
+	log logging.Logger
 
-	profile        []int
-	profileSum     time.Duration
-	profileSpan    time.Duration
-	spanReached    bool
+	// profile contains all the elements indices, in order of arrival. It allows us to maintain a moving window.
+	profile []int
+	// profileSum is the total amount of time tracked by the profile array.
+	profileSum time.Duration
+	// profileSpan is the max span of the array ( or - the window ) that we would like to maintain.
+	profileSpan time.Duration
+	// spanReached flag is used to indicate whether we've already reached the window or not.
+	spanReached bool
+	// lastProfileLog is the last time we've logged to the telemetry.
 	lastProfileLog time.Duration
-	logInterval    time.Duration // what is the frequency at which we send an event to the telemetry. Zero to disable.
+	// logInterval defines what is the frequency at which we send an event to the telemetry. Zero to disable.
+	logInterval time.Duration
 }
 
 // element represent a single tracked element that would be profiled.
 type element struct {
-	name      string
-	id        int
+	// id is the index of the element in the profiler's elements array.
+	id int
+	// lastStart is the timestamp of the last time we called "start"
 	lastStart time.Duration
-	profiler  *profiler
-	times     []time.Duration
-	total     time.Duration
-	detached  bool
+	// profiler points to the parent profiler.
+	profiler *profiler
+	// times contains the times we've monitored for this element.
+	times []time.Duration
+	// total is the total accumulated time for this element ( i.e. sum(times) )
+	total time.Duration
+	// detached indicate whether this is a detached elements or not. Detached elements don't add to the total amount of time
+	// counted by the profiler, allowing them to overlap with other elements.
+	detached bool
 }
 
 func makeProfiler(span time.Duration, clock timers.WallClock, log logging.Logger, logInterval time.Duration) *profiler {
@@ -99,14 +101,13 @@ func makeProfiler(span time.Duration, clock timers.WallClock, log logging.Logger
 
 func (p *profiler) createElements() {
 	for element := 0; element < profElementLast; element++ {
-		p.createElement(profElementNames[element], element > profElementNextOffset)
+		p.createElement(element >= profFirstDetachedElement)
 	}
 }
 
-func (p *profiler) createElement(name string, detached bool) *element {
+func (p *profiler) createElement(detached bool) *element {
 	i := len(p.elements)
 	e := &element{
-		name:     name,
 		id:       i,
 		profiler: p,
 		detached: detached,

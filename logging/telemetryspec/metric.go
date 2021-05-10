@@ -83,36 +83,63 @@ func (m AssembleBlockMetrics) Identifier() Metric {
 	return assembleBlockMetricsIdentifier
 }
 
+// the identifier for the transaction sync profiling metrics.
 const transactionSyncProfilingMetricsIdentifier Metric = "SyncProfile"
 
 // TransactionSyncProfilingMetrics is the profiling metrics of the recent transaction sync activity
 type TransactionSyncProfilingMetrics struct {
-	TotalOps                     uint64
-	IdleOps                      uint64
-	TransactionPoolChangedOps    uint64
-	NewRoundOps                  uint64
-	PeerStateOps                 uint64
-	IncomingMsgOps               uint64
-	OutgoingMsgOps               uint64
-	NextOffsetOps                uint64
-	GetTxnGroupsOps              uint64
-	AssembleMessageOps           uint64
-	SendMessageOps               uint64
-	MakeBloomFilterOps           uint64
+	// total number of operations
+	TotalOps uint64
+	// number of idle operations
+	IdleOps uint64
+	// number of transaction pool changes operations
+	TransactionPoolChangedOps uint64
+	// number of new rounds operations
+	NewRoundOps uint64
+	// number of peer state changes operations
+	PeerStateOps uint64
+	// number of incoming messages operations
+	IncomingMsgOps uint64
+	// number of outgoing message operations
+	OutgoingMsgOps uint64
+	// number of next offsets message operations
+	NextOffsetOps uint64
+	// number of times transaction sync was retrieving the transaction groups from the transaction pool
+	GetTxnGroupsOps uint64
+	// number of times the transaction sync was assembling messages
+	AssembleMessageOps uint64
+	// number of time the transaction sync was sending messages
+	SendMessageOps uint64
+	// number of time the transaction sync was creating bloom filters
+	MakeBloomFilterOps uint64
+	// number of time the transaction sync was selecting pending transactions out of existing pool
 	SelectPendingTransactionsOps uint64
 
-	TotalDuration                    uint64
-	IdlePercent                      float64
-	TransactionPoolChangedPercent    float64
-	NewRoundPercent                  float64
-	PeerStatePercent                 float64
-	IncomingMsgPercent               float64
-	OutgoingMsgPercent               float64
-	NextOffsetPercent                float64
-	GetTxnGroupsPercent              float64
-	AssembleMessagePercent           float64
-	SendMessagePercent               float64
-	MakeBloomFilterPercent           float64
+	// total duration of this profiling session
+	TotalDuration uint64
+	// percent of time the transaction sync was idle
+	IdlePercent float64
+	// percent of time the transaction sync was processing transaction pool changes
+	TransactionPoolChangedPercent float64
+	// percent of time the transaction sync was processing new rounds
+	NewRoundPercent float64
+	// percent of time the transaction sync was processing peer state changes
+	PeerStatePercent float64
+	// percent of time the transaction sync was processing incoming messages
+	IncomingMsgPercent float64
+	// percent of time the transaction sync was processing outgoing messages
+	OutgoingMsgPercent float64
+	// percent of time the transaction sync was processing next offset messages
+	NextOffsetPercent float64
+	// percent of time the transaction sync was collecting next set of transaction groups from the transaction pool
+	GetTxnGroupsPercent float64
+	// percent of time the transaction sync was assembling messages
+	AssembleMessagePercent float64
+	// percent of time the transaction sync was sending messages
+	SendMessagePercent float64
+	// percent of time the transaction sync was creating bloom filter
+	MakeBloomFilterPercent float64
+	// percent of time the transaction sync was selecting transaction to be sent
 	SelectPendingTransactionsPercent float64
 }
 

@@ -55,6 +55,8 @@ type syncState struct {
 	// it's important to avoid recomputing it needlessly.
 	lastBloomFilter bloomFilter
 
+	// The profiler helps us monitor the transaction sync components execution time. When enabled, it would report these
+	// to the telemetry.
 	profiler *profiler
 }
 
