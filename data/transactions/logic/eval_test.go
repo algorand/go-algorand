@@ -51,6 +51,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 	return config.ConsensusParams{
 		LogicSigVersion:     version,
 		LogicSigMaxCost:     20000,
+		DynamicTealCost:     version >= backBranchEnabledVersion,
 		MaxAppProgramCost:   700,
 		MaxAppKeyLen:        64,
 		MaxAppBytesValueLen: 64,
