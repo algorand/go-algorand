@@ -119,7 +119,6 @@ type encodedKeyregTxnFields struct {
 	BitmaskVoteLast         bitmask        `codec:"votelstbm"`
 	VoteKeyDilution         []uint64       `codec:"votekd,allocbound=maxEncodedTransactionGroup"`
 	BitmaskVoteKeyDilution  bitmask        `codec:"votekdbm"`
-	Nonparticipation        []bool         `codec:"nonpart,allocbound=maxEncodedTransactionGroup"`
 	BitmaskNonparticipation bitmask        `codec:"nonpartbm"`
 }
 
@@ -173,7 +172,6 @@ type encodedAssetFreezeTxnFields struct {
 	FreezeAsset        []basics.AssetIndex `codec:"faid,allocbound=maxEncodedTransactionGroup"`
 	BitmaskFreezeAsset bitmask             `codec:"faidbm"`
 
-	AssetFrozen        []bool  `codec:"afrz,allocbound=maxEncodedTransactionGroup"`
 	BitmaskAssetFrozen bitmask `codec:"afrzbm"`
 }
 
@@ -183,11 +181,11 @@ type applicationArgs [][]byte
 //msgp:allocbound addresses transactions.EncodedMaxAccounts
 type addresses []basics.Address
 
-//msgp:allocbound appIndeces transactions.EncodedMaxForeignApps
-type appIndeces []basics.AppIndex
+//msgp:allocbound appIndices transactions.EncodedMaxForeignApps
+type appIndices []basics.AppIndex
 
-//msgp:allocbound assetIndeces transactions.EncodedMaxForeignAssets
-type assetIndeces []basics.AssetIndex
+//msgp:allocbound assetIndices transactions.EncodedMaxForeignAssets
+type assetIndices []basics.AssetIndex
 
 //msgp:allocbound program config.MaxAppProgramLen
 type program []byte
@@ -207,10 +205,10 @@ type encodedApplicationCallTxnFields struct {
 	Accounts        []addresses `codec:"apat,allocbound=maxEncodedTransactionGroup"`
 	BitmaskAccounts bitmask     `codec:"apatbm"`
 
-	ForeignApps        []appIndeces `codec:"apfa,allocbound=maxEncodedTransactionGroup"`
+	ForeignApps        []appIndices `codec:"apfa,allocbound=maxEncodedTransactionGroup"`
 	BitmaskForeignApps bitmask      `codec:"apfabm"`
 
-	ForeignAssets        []assetIndeces `codec:"apas,allocbound=maxEncodedTransactionGroup"`
+	ForeignAssets        []assetIndices `codec:"apas,allocbound=maxEncodedTransactionGroup"`
 	BitmaskForeignAssets bitmask        `codec:"apasbm"`
 
 	LocalStateSchema        []basics.StateSchema `codec:"apls,allocbound=maxEncodedTransactionGroup"`
@@ -462,7 +460,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 	stub := txGroupsEncodingStub{
 		TotalTransactionsCount: uint64(txnCount),
 		TransactionGroupCount:  uint64(len(inTxnGroups)),
-		TransactionGroupSizes:  make([]byte, 0, len(inTxnGroups)), // compress this later to use 2 per byte
+		TransactionGroupSizes:  make([]byte, 0, len(inTxnGroups)), // TODO compress this later to use 2 per byte
 	}
 
 	setupDeconstructSignedTransactions(&stub)
@@ -554,7 +552,6 @@ func setupDeconstructSignedTransactions(stub *txGroupsEncodingStub) {
 
 // deconstructs SignedTxn's into lists of fields and bitmasks
 func deconstructSignedTransactions(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
-
 	if !txn.Sig.MsgIsZero() {
 		stub.BitmaskSig.SetBit(i)
 		stub.Sig = append(stub.Sig, txn.Sig[:]...)
@@ -597,20 +594,28 @@ func setupDeconstructTransactions(stub *txGroupsEncodingStub) {
 }
 
 func deconstructTransactions(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
-
 	txTypeByte := TxTypeToByte(txn.Txn.Type)
 	if txTypeByte != 0 {
 		stub.BitmaskTxType.SetBit(i)
 		stub.TxType = append(stub.TxType, txTypeByte)
 	}
 	deconstructTxnHeader(stub, i, txn)
-	deconstructKeyregTxnFields(stub, i, txn)
-	deconstructPaymentTxnFields(stub, i, txn)
-	deconstructAssetConfigTxnFields(stub, i, txn)
-	deconstructAssetTransferTxnFields(stub, i, txn)
-	deconstructAssetFreezeTxnFields(stub, i, txn)
-	deconstructApplicationCallTxnFields(stub, i, txn)
-	deconstructCompactCertTxnFields(stub, i, txn)
+	switch txn.Txn.Type {
+	case protocol.PaymentTx:
+		deconstructPaymentTxnFields(stub, i, txn)
+	case protocol.KeyRegistrationTx:
+		deconstructKeyregTxnFields(stub, i, txn)
+	case protocol.AssetConfigTx:
+		deconstructAssetConfigTxnFields(stub, i, txn)
+	case protocol.AssetTransferTx:
+		deconstructAssetTransferTxnFields(stub, i, txn)
+	case protocol.AssetFreezeTx:
+		deconstructAssetFreezeTxnFields(stub, i, txn)
+	case protocol.ApplicationCallTx:
+		deconstructApplicationCallTxnFields(stub, i, txn)
+	case protocol.CompactCertTx:
+		deconstructCompactCertTxnFields(stub, i, txn)
+	}
 }
 
 func finishDeconstructTransactions(stub *txGroupsEncodingStub) {
@@ -663,7 +668,7 @@ func deconstructTxnHeader(stub *txGroupsEncodingStub, i int, txn transactions.Si
 		stub.BitmaskLastValid.SetBit(i)
 		stub.LastValid = append(stub.LastValid, txn.Txn.LastValid)
 	}
-	if txn.Txn.Note != nil && len(txn.Txn.Note) > 0 {
+	if txn.Txn.Note != nil {
 		stub.BitmaskNote.SetBit(i)
 		stub.Note = append(stub.Note, txn.Txn.Note)
 	}
@@ -712,31 +717,28 @@ func setupDeconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
 }
 
 func deconstructKeyregTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
-	if txn.Txn.Type == protocol.KeyRegistrationTx {
-		if !txn.Txn.VotePK.MsgIsZero() {
-			stub.BitmaskVotePK.SetBit(i)
-			stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
-		}
-		if !txn.Txn.SelectionPK.MsgIsZero() {
-			stub.BitmaskSelectionPK.SetBit(i)
-			stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK[:]...)
-		}
-		if !txn.Txn.VoteFirst.MsgIsZero() {
-			stub.BitmaskVoteFirst.SetBit(i)
-			stub.VoteFirst = append(stub.VoteFirst, txn.Txn.VoteFirst)
-		}
-		if !txn.Txn.VoteLast.MsgIsZero() {
-			stub.BitmaskVoteLast.SetBit(i)
-			stub.VoteLast = append(stub.VoteLast, txn.Txn.VoteLast)
-		}
-		if txn.Txn.VoteKeyDilution > 0 {
-			stub.BitmaskVoteKeyDilution.SetBit(i)
-			stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
-		}
-		if txn.Txn.Nonparticipation {
-			stub.BitmaskNonparticipation.SetBit(i)
-			stub.Nonparticipation = append(stub.Nonparticipation, txn.Txn.Nonparticipation) // can probably get rid of this
-		}
+	if !txn.Txn.VotePK.MsgIsZero() {
+		stub.BitmaskVotePK.SetBit(i)
+		stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
+	}
+	if !txn.Txn.SelectionPK.MsgIsZero() {
+		stub.BitmaskSelectionPK.SetBit(i)
+		stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK[:]...)
+	}
+	if !txn.Txn.VoteFirst.MsgIsZero() {
+		stub.BitmaskVoteFirst.SetBit(i)
+		stub.VoteFirst = append(stub.VoteFirst, txn.Txn.VoteFirst)
+	}
+	if !txn.Txn.VoteLast.MsgIsZero() {
+		stub.BitmaskVoteLast.SetBit(i)
+		stub.VoteLast = append(stub.VoteLast, txn.Txn.VoteLast)
+	}
+	if txn.Txn.VoteKeyDilution != 0 {
+		stub.BitmaskVoteKeyDilution.SetBit(i)
+		stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
+	}
+	if txn.Txn.Nonparticipation {
+		stub.BitmaskNonparticipation.SetBit(i)
 	}
 }
 
@@ -760,19 +762,17 @@ func setupDeconstructPaymentTxnFields(stub *txGroupsEncodingStub) {
 }
 
 func deconstructPaymentTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
-	if txn.Txn.Type == protocol.PaymentTx {
-		if !txn.Txn.Receiver.MsgIsZero() {
-			stub.BitmaskReceiver.SetBit(i)
-			stub.Receiver = append(stub.Receiver, txn.Txn.Receiver[:]...)
-		}
-		if !txn.Txn.Amount.MsgIsZero() {
-			stub.BitmaskAmount.SetBit(i)
-			stub.Amount = append(stub.Amount, txn.Txn.Amount)
-		}
-		if !txn.Txn.CloseRemainderTo.MsgIsZero() {
-			stub.BitmaskCloseRemainderTo.SetBit(i)
-			stub.CloseRemainderTo = append(stub.CloseRemainderTo, txn.Txn.CloseRemainderTo[:]...)
-		}
+	if !txn.Txn.Receiver.MsgIsZero() {
+		stub.BitmaskReceiver.SetBit(i)
+		stub.Receiver = append(stub.Receiver, txn.Txn.Receiver[:]...)
+	}
+	if !txn.Txn.Amount.MsgIsZero() {
+		stub.BitmaskAmount.SetBit(i)
+		stub.Amount = append(stub.Amount, txn.Txn.Amount)
+	}
+	if !txn.Txn.CloseRemainderTo.MsgIsZero() {
+		stub.BitmaskCloseRemainderTo.SetBit(i)
+		stub.CloseRemainderTo = append(stub.CloseRemainderTo, txn.Txn.CloseRemainderTo[:]...)
 	}
 }
 
@@ -789,15 +789,13 @@ func setupDeconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
 }
 
 func deconstructAssetConfigTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
-	if txn.Txn.Type == protocol.AssetConfigTx {
-		if !txn.Txn.ConfigAsset.MsgIsZero() {
-			stub.BitmaskConfigAsset.SetBit(i)
-			stub.ConfigAsset = append(stub.ConfigAsset, txn.Txn.ConfigAsset)
-		}
-		if !txn.Txn.AssetParams.MsgIsZero() {
-			stub.BitmaskAssetParams.SetBit(i)
-			stub.AssetParams = append(stub.AssetParams, txn.Txn.AssetParams)
-		}
+	if !txn.Txn.ConfigAsset.MsgIsZero() {
+		stub.BitmaskConfigAsset.SetBit(i)
+		stub.ConfigAsset = append(stub.ConfigAsset, txn.Txn.ConfigAsset)
+	}
+	if !txn.Txn.AssetParams.MsgIsZero() {
+		stub.BitmaskAssetParams.SetBit(i)
+		stub.AssetParams = append(stub.AssetParams, txn.Txn.AssetParams)
 	}
 }
 
@@ -816,27 +814,25 @@ func setupDeconstructAssetTransferTxnFields(stub *txGroupsEncodingStub) {
 }
 
 func deconstructAssetTransferTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
-	if txn.Txn.Type == protocol.AssetTransferTx {
-		if !txn.Txn.XferAsset.MsgIsZero() {
-			stub.BitmaskXferAsset.SetBit(i)
-			stub.XferAsset = append(stub.XferAsset, txn.Txn.XferAsset)
-		}
-		if txn.Txn.AssetAmount != 0 {
-			stub.BitmaskAssetAmount.SetBit(i)
-			stub.AssetAmount = append(stub.AssetAmount, txn.Txn.AssetAmount)
-		}
-		if !txn.Txn.AssetSender.MsgIsZero() {
-			stub.BitmaskAssetSender.SetBit(i)
-			stub.AssetSender = append(stub.AssetSender, txn.Txn.AssetSender[:]...)
-		}
-		if !txn.Txn.AssetReceiver.MsgIsZero() {
-			stub.BitmaskAssetReceiver.SetBit(i)
-			stub.AssetReceiver = append(stub.AssetReceiver, txn.Txn.AssetReceiver[:]...)
-		}
-		if !txn.Txn.AssetCloseTo.MsgIsZero() {
-			stub.BitmaskAssetCloseTo.SetBit(i)
-			stub.AssetCloseTo = append(stub.AssetCloseTo, txn.Txn.AssetCloseTo[:]...)
-		}
+	if !txn.Txn.XferAsset.MsgIsZero() {
+		stub.BitmaskXferAsset.SetBit(i)
+		stub.XferAsset = append(stub.XferAsset, txn.Txn.XferAsset)
+	}
+	if txn.Txn.AssetAmount != 0 {
+		stub.BitmaskAssetAmount.SetBit(i)
+		stub.AssetAmount = append(stub.AssetAmount, txn.Txn.AssetAmount)
+	}
+	if !txn.Txn.AssetSender.MsgIsZero() {
+		stub.BitmaskAssetSender.SetBit(i)
+		stub.AssetSender = append(stub.AssetSender, txn.Txn.AssetSender[:]...)
+	}
+	if !txn.Txn.AssetReceiver.MsgIsZero() {
+		stub.BitmaskAssetReceiver.SetBit(i)
+		stub.AssetReceiver = append(stub.AssetReceiver, txn.Txn.AssetReceiver[:]...)
+	}
+	if !txn.Txn.AssetCloseTo.MsgIsZero() {
+		stub.BitmaskAssetCloseTo.SetBit(i)
+		stub.AssetCloseTo = append(stub.AssetCloseTo, txn.Txn.AssetCloseTo[:]...)
 	}
 }
 
@@ -856,19 +852,16 @@ func setupDeconstructAssetFreezeTxnFields(stub *txGroupsEncodingStub) {
 }
 
 func deconstructAssetFreezeTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
-	if txn.Txn.Type == protocol.AssetFreezeTx {
-		if !txn.Txn.FreezeAccount.MsgIsZero() {
-			stub.BitmaskFreezeAccount.SetBit(i)
-			stub.FreezeAccount = append(stub.FreezeAccount, txn.Txn.FreezeAccount[:]...)
-		}
-		if txn.Txn.FreezeAsset != 0 {
-			stub.BitmaskFreezeAsset.SetBit(i)
-			stub.FreezeAsset = append(stub.FreezeAsset, txn.Txn.FreezeAsset)
-		}
-		if txn.Txn.AssetFrozen {
-			stub.BitmaskAssetFrozen.SetBit(i)
-			stub.AssetFrozen = append(stub.AssetFrozen, txn.Txn.AssetFrozen) // can probably get rid of this too
-		}
+	if !txn.Txn.FreezeAccount.MsgIsZero() {
+		stub.BitmaskFreezeAccount.SetBit(i)
+		stub.FreezeAccount = append(stub.FreezeAccount, txn.Txn.FreezeAccount[:]...)
+	}
+	if txn.Txn.FreezeAsset != 0 {
+		stub.BitmaskFreezeAsset.SetBit(i)
+		stub.FreezeAsset = append(stub.FreezeAsset, txn.Txn.FreezeAsset)
+	}
+	if txn.Txn.AssetFrozen {
+		stub.BitmaskAssetFrozen.SetBit(i)
 	}
 }
 
@@ -893,47 +886,45 @@ func setupDeconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 }
 
 func deconstructApplicationCallTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
-	if txn.Txn.Type == protocol.AssetFreezeTx {
-		if !txn.Txn.ApplicationID.MsgIsZero() {
-			stub.BitmaskApplicationID.SetBit(i)
-			stub.ApplicationID = append(stub.ApplicationID, txn.Txn.ApplicationID)
-		}
-		if txn.Txn.OnCompletion != 0 {
-			stub.BitmaskOnCompletion.SetBit(i)
-			stub.OnCompletion = append(stub.OnCompletion, txn.Txn.OnCompletion)
-		}
-		if txn.Txn.ApplicationArgs != nil {
-			stub.BitmaskApplicationArgs.SetBit(i)
-			stub.ApplicationArgs = append(stub.ApplicationArgs, txn.Txn.ApplicationArgs)
-		}
-		if txn.Txn.Accounts != nil {
-			stub.BitmaskAccounts.SetBit(i)
-			stub.Accounts = append(stub.Accounts, txn.Txn.Accounts)
-		}
-		if txn.Txn.ForeignApps != nil {
-			stub.BitmaskForeignApps.SetBit(i)
-			stub.ForeignApps = append(stub.ForeignApps, txn.Txn.ForeignApps)
-		}
-		if txn.Txn.ForeignAssets != nil {
-			stub.BitmaskForeignAssets.SetBit(i)
-			stub.ForeignAssets = append(stub.ForeignAssets, txn.Txn.ForeignAssets)
-		}
-		if !txn.Txn.LocalStateSchema.MsgIsZero() {
-			stub.BitmaskLocalStateSchema.SetBit(i)
-			stub.LocalStateSchema = append(stub.LocalStateSchema, txn.Txn.LocalStateSchema)
-		}
-		if !txn.Txn.GlobalStateSchema.MsgIsZero() {
-			stub.BitmaskGlobalStateSchema.SetBit(i)
-			stub.GlobalStateSchema = append(stub.GlobalStateSchema, txn.Txn.GlobalStateSchema)
-		}
-		if txn.Txn.ApprovalProgram != nil {
-			stub.BitmaskApprovalProgram.SetBit(i)
-			stub.ApprovalProgram = append(stub.ApprovalProgram, txn.Txn.ApprovalProgram)
-		}
-		if txn.Txn.ClearStateProgram != nil {
-			stub.BitmaskClearStateProgram.SetBit(i)
-			stub.ClearStateProgram = append(stub.ClearStateProgram, txn.Txn.ClearStateProgram)
-		}
+	if !txn.Txn.ApplicationID.MsgIsZero() {
+		stub.BitmaskApplicationID.SetBit(i)
+		stub.ApplicationID = append(stub.ApplicationID, txn.Txn.ApplicationID)
+	}
+	if txn.Txn.OnCompletion != 0 {
+		stub.BitmaskOnCompletion.SetBit(i)
+		stub.OnCompletion = append(stub.OnCompletion, txn.Txn.OnCompletion)
+	}
+	if txn.Txn.ApplicationArgs != nil {
+		stub.BitmaskApplicationArgs.SetBit(i)
+		stub.ApplicationArgs = append(stub.ApplicationArgs, txn.Txn.ApplicationArgs)
+	}
+	if txn.Txn.Accounts != nil {
+		stub.BitmaskAccounts.SetBit(i)
+		stub.Accounts = append(stub.Accounts, txn.Txn.Accounts)
+	}
+	if txn.Txn.ForeignApps != nil {
+		stub.BitmaskForeignApps.SetBit(i)
+		stub.ForeignApps = append(stub.ForeignApps, txn.Txn.ForeignApps)
+	}
+	if txn.Txn.ForeignAssets != nil {
+		stub.BitmaskForeignAssets.SetBit(i)
+		stub.ForeignAssets = append(stub.ForeignAssets, txn.Txn.ForeignAssets)
+	}
+	if !txn.Txn.LocalStateSchema.MsgIsZero() {
+		stub.BitmaskLocalStateSchema.SetBit(i)
+		stub.LocalStateSchema = append(stub.LocalStateSchema, txn.Txn.LocalStateSchema)
+	}
+	if !txn.Txn.GlobalStateSchema.MsgIsZero() {
+		stub.BitmaskGlobalStateSchema.SetBit(i)
+		stub.GlobalStateSchema = append(stub.GlobalStateSchema, txn.Txn.GlobalStateSchema)
+	}
+	if txn.Txn.ApprovalProgram != nil {
+		stub.BitmaskApprovalProgram.SetBit(i)
+		stub.ApprovalProgram = append(stub.ApprovalProgram, txn.Txn.ApprovalProgram)
+	}
+	if txn.Txn.ClearStateProgram != nil {
+		stub.BitmaskClearStateProgram.SetBit(i)
+		stub.ClearStateProgram = append(stub.ClearStateProgram, txn.Txn.ClearStateProgram)
 	}
 }
 
@@ -958,19 +949,17 @@ func setupDeconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
 }
 
 func deconstructCompactCertTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
-	if txn.Txn.Type == protocol.CompactCertTx {
-		if !txn.Txn.CertRound.MsgIsZero() {
-			stub.BitmaskCertRound.SetBit(i)
-			stub.CertRound = append(stub.CertRound, txn.Txn.CertRound)
-		}
-		if txn.Txn.CertType != 0 {
-			stub.BitmaskCertType.SetBit(i)
-			stub.CertType = append(stub.CertType, txn.Txn.CertType)
-		}
-		if !txn.Txn.Cert.MsgIsZero() {
-			stub.BitmaskCert.SetBit(i)
-			stub.Cert = append(stub.Cert, txn.Txn.Cert)
-		}
+	if !txn.Txn.CertRound.MsgIsZero() {
+		stub.BitmaskCertRound.SetBit(i)
+		stub.CertRound = append(stub.CertRound, txn.Txn.CertRound)
+	}
+	if txn.Txn.CertType != 0 {
+		stub.BitmaskCertType.SetBit(i)
+		stub.CertType = append(stub.CertType, txn.Txn.CertType)
+	}
+	if !txn.Txn.Cert.MsgIsZero() {
+		stub.BitmaskCert.SetBit(i)
+		stub.Cert = append(stub.Cert, txn.Txn.Cert)
 	}
 }
 
@@ -1159,12 +1148,10 @@ func reconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
 			index++
 		}
 	}
-	index = 0
 	stub.BitmaskNonparticipation.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
 		if exists := stub.BitmaskNonparticipation.EntryExists(i); exists {
-			stub.SignedTxns[i].Txn.Nonparticipation = stub.Nonparticipation[index]
-			index++
+			stub.SignedTxns[i].Txn.Nonparticipation = true
 		}
 	}
 }
@@ -1279,12 +1266,10 @@ func reconstructAssetFreezeTxnFields(stub *txGroupsEncodingStub) {
 			index++
 		}
 	}
-	index = 0
 	stub.BitmaskAssetFrozen.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
 		if exists := stub.BitmaskAssetFrozen.EntryExists(i); exists {
-			stub.SignedTxns[i].Txn.AssetFrozen = stub.AssetFrozen[index]
-			index++
+			stub.SignedTxns[i].Txn.AssetFrozen = true
 		}
 	}
 }

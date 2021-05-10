@@ -70,8 +70,8 @@ func BenchmarkUnmarshaladdresses(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalappIndeces(t *testing.T) {
-	v := appIndeces{}
+func TestMarshalUnmarshalappIndices(t *testing.T) {
+	v := appIndices{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -90,12 +90,12 @@ func TestMarshalUnmarshalappIndeces(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingappIndeces(t *testing.T) {
-	protocol.RunEncodingTest(t, &appIndeces{})
+func TestRandomizedEncodingappIndices(t *testing.T) {
+	protocol.RunEncodingTest(t, &appIndices{})
 }
 
-func BenchmarkMarshalMsgappIndeces(b *testing.B) {
-	v := appIndeces{}
+func BenchmarkMarshalMsgappIndices(b *testing.B) {
+	v := appIndices{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -103,8 +103,8 @@ func BenchmarkMarshalMsgappIndeces(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgappIndeces(b *testing.B) {
-	v := appIndeces{}
+func BenchmarkAppendMsgappIndices(b *testing.B) {
+	v := appIndices{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -115,8 +115,8 @@ func BenchmarkAppendMsgappIndeces(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalappIndeces(b *testing.B) {
-	v := appIndeces{}
+func BenchmarkUnmarshalappIndices(b *testing.B) {
+	v := appIndices{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -188,8 +188,8 @@ func BenchmarkUnmarshalapplicationArgs(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalassetIndeces(t *testing.T) {
-	v := assetIndeces{}
+func TestMarshalUnmarshalassetIndices(t *testing.T) {
+	v := assetIndices{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -208,12 +208,12 @@ func TestMarshalUnmarshalassetIndeces(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingassetIndeces(t *testing.T) {
-	protocol.RunEncodingTest(t, &assetIndeces{})
+func TestRandomizedEncodingassetIndices(t *testing.T) {
+	protocol.RunEncodingTest(t, &assetIndices{})
 }
 
-func BenchmarkMarshalMsgassetIndeces(b *testing.B) {
-	v := assetIndeces{}
+func BenchmarkMarshalMsgassetIndices(b *testing.B) {
+	v := assetIndices{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -221,8 +221,8 @@ func BenchmarkMarshalMsgassetIndeces(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgassetIndeces(b *testing.B) {
-	v := assetIndeces{}
+func BenchmarkAppendMsgassetIndices(b *testing.B) {
+	v := assetIndices{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -233,8 +233,8 @@ func BenchmarkAppendMsgassetIndeces(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalassetIndeces(b *testing.B) {
-	v := assetIndeces{}
+func BenchmarkUnmarshalassetIndices(b *testing.B) {
+	v := assetIndices{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

@@ -281,8 +281,8 @@ func BenchmarkTxnGroupDecodingOld(b *testing.B) {
 	}
 }
 
-// RunEncodingTest runs several iterations of encoding/decoding
-// consistency testing of object type specified by template.
+// TestTxnGroupEncodingReflection generates random
+// txns of each type using reflection
 func TestTxnGroupEncodingReflection(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		v0, err := protocol.RandomizeObject(&transactions.SignedTxn{})
