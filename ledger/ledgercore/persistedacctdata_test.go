@@ -1178,9 +1178,7 @@ func TestFindLoadedSiblings(t *testing.T) {
 	}
 }
 
-// generate groups from sizes. group N increments each asset id by N
-// i.e. Group[0] = [aidx, aidx+1, aidx+2,...]
-func genExtendedHoldingGroupsFromSizes(t testing.TB, sizes []int, aidx basics.AssetIndex) (e ExtendedAssetHolding) {
+func specFromSizes(t testing.TB, sizes []int, aidx basics.AssetIndex) []groupSpec {
 	spec := make([]groupSpec, 0, len(sizes))
 	for i, size := range sizes {
 		increment := i + 1
@@ -1189,8 +1187,24 @@ func genExtendedHoldingGroupsFromSizes(t testing.TB, sizes []int, aidx basics.As
 		spec = append(spec, s)
 		aidx = end + 1
 	}
+	return spec
+}
 
+// generate groups from sizes. group N increments each asset id by N
+// i.e. Group[0] = [aidx, aidx+1, aidx+2,...]
+func genExtendedHoldingGroupsFromSizes(t testing.TB, sizes []int, aidx basics.AssetIndex) (e ExtendedAssetHolding) {
+	spec := specFromSizes(t, sizes, aidx)
 	e = genExtendedHolding(t, spec)
+	for i := 0; i < len(e.Groups); i++ {
+		e.Groups[i].AssetGroupKey = int64(i + 1)
+	}
+
+	return
+}
+
+func genExtendedParamsGroupsFromSizes(t testing.TB, sizes []int, aidx basics.AssetIndex) (e ExtendedAssetParams) {
+	spec := specFromSizes(t, sizes, aidx)
+	e = genExtendedParams(t, spec)
 	for i := 0; i < len(e.Groups); i++ {
 		e.Groups[i].AssetGroupKey = int64(i + 1)
 	}
@@ -1210,13 +1224,25 @@ func getAllHoldings(e ExtendedAssetHolding) map[basics.AssetIndex]basics.AssetHo
 	return holdings
 }
 
+func getAllParams(e ExtendedAssetParams) map[basics.AssetIndex]basics.AssetParams {
+	params := make(map[basics.AssetIndex]basics.AssetParams, int(e.Count))
+	for _, g := range e.Groups {
+		aidx := g.MinAssetIndex
+		for ai, offset := range g.groupData.AssetOffsets {
+			aidx += offset
+			params[aidx] = g.GetParams(ai)
+		}
+	}
+	return params
+}
+
 func TestGroupMergeInternal(t *testing.T) {
-	estimate := func(sizes []int) (int, int, int) {
+	estimate := func(sizes []int, assetThreshold int) (int, int, int) {
 		sum := 0
 		for _, size := range sizes {
 			sum += size
 		}
-		groupsNeeded := (sum + MaxHoldingGroupSize - 1) / MaxHoldingGroupSize
+		groupsNeeded := (sum + assetThreshold - 1) / assetThreshold
 		groupsToDelete := len(sizes) - groupsNeeded
 		return groupsNeeded, groupsToDelete, sum
 	}
@@ -1249,32 +1275,47 @@ func TestGroupMergeInternal(t *testing.T) {
 	tests = append(tests, test{sizes})
 
 	for n, test := range tests {
-		t.Run(fmt.Sprintf("%d", n), func(t *testing.T) {
-			a := require.New(t)
-			sizes := test.sizes
-			groupsNeeded, groupsToDelete, totalAssets := estimate(sizes)
-			a.Equal(len(sizes), groupsNeeded+groupsToDelete)
-			e := genExtendedHoldingGroupsFromSizes(t, sizes, basics.AssetIndex(1))
-			oldCount := e.Count
+		for _, size := range []uint32{MaxHoldingGroupSize, MaxParamsGroupSize} {
+			t.Run(fmt.Sprintf("%d_%d", n, size), func(t *testing.T) {
+				a := require.New(t)
+				sizes := test.sizes
+				groupsNeeded, groupsToDelete, totalAssets := estimate(sizes, int(size))
+				a.Equal(len(sizes), groupsNeeded+groupsToDelete)
+				e := genExtendedHoldingGroupsFromSizes(t, sizes, basics.AssetIndex(1))
+				oldCount := e.Count
 
-			oldHoldings := getAllHoldings(e)
-			deleted := e.merge(0, len(sizes), groupsToDelete)
-			a.Equal(groupsToDelete, len(deleted))
-			a.Equal(groupsNeeded, len(e.Groups))
-			a.Equal(oldCount, e.Count)
-			for i := 0; i < groupsNeeded-1; i++ {
-				a.Equal(uint32(MaxHoldingGroupSize), e.Groups[i].Count)
-			}
-			a.Equal(uint32(totalAssets-(groupsNeeded-1)*MaxHoldingGroupSize), e.Groups[groupsNeeded-1].Count)
-			newHoldings := getAllHoldings(e)
-			a.Equal(oldHoldings, newHoldings)
+				oldHoldings := getAllHoldings(e)
+				deleted := mergeInternal(&e, 0, len(sizes), groupsToDelete, size)
+				a.Equal(groupsToDelete, len(deleted))
+				a.Equal(groupsNeeded, len(e.Groups))
+				a.Equal(oldCount, e.Count)
+				for i := 0; i < groupsNeeded-1; i++ {
+					a.Equal(uint32(size), e.Groups[i].Count)
+				}
+				a.Equal(uint32(totalAssets-(groupsNeeded-1)*int(size)), e.Groups[groupsNeeded-1].Count)
+				newHoldings := getAllHoldings(e)
+				a.Equal(oldHoldings, newHoldings)
 
-		})
+			})
+		}
 	}
 }
 
 func TestGroupMerge(t *testing.T) {
-	delgroup := func(e ExtendedAssetHolding, d []int) ExtendedAssetHolding {
+	hdelgroup := func(e ExtendedAssetHolding, d []int) ExtendedAssetHolding {
+		offset := 0
+		for _, gi := range d {
+			e.Count -= e.Groups[gi+offset].Count
+			if gi == len(e.Groups)-1 {
+				e.Groups = e.Groups[:len(e.Groups)-1]
+			} else {
+				e.Groups = append(e.Groups[:gi], e.Groups[gi+1:]...)
+			}
+		}
+		return e
+	}
+
+	pdelgroup := func(e ExtendedAssetParams, d []int) ExtendedAssetParams {
 		offset := 0
 		for _, gi := range d {
 			e.Count -= e.Groups[gi+offset].Count
@@ -1317,14 +1358,14 @@ func TestGroupMerge(t *testing.T) {
 	}
 
 	for n, test := range tests {
-		t.Run(fmt.Sprintf("%d", n), func(t *testing.T) {
+		t.Run(fmt.Sprintf("holding_%d", n), func(t *testing.T) {
 			a := require.New(t)
 			sizes := test.sizes
 			e := genExtendedHoldingGroupsFromSizes(t, sizes, basics.AssetIndex(1))
 			for _, gi := range test.unload {
 				e.Groups[gi].loaded = false
 			}
-			e = delgroup(e, test.del)
+			e = hdelgroup(e, test.del)
 			oldCount := e.Count
 			oldHoldings := getAllHoldings(e)
 
@@ -1334,6 +1375,35 @@ func TestGroupMerge(t *testing.T) {
 			a.Equal(oldCount, e.Count)
 			newHoldings := getAllHoldings(e)
 			a.Equal(oldHoldings, newHoldings)
+			var count uint32
+			for _, g := range e.Groups {
+				count += g.Count
+			}
+			a.Equal(count, e.Count)
+		})
+
+		t.Run(fmt.Sprintf("params_%d", n), func(t *testing.T) {
+			a := require.New(t)
+			sizes := test.sizes
+			e := genExtendedParamsGroupsFromSizes(t, sizes, basics.AssetIndex(1))
+			for _, gi := range test.unload {
+				e.Groups[gi].loaded = false
+			}
+			e = pdelgroup(e, test.del)
+			oldCount := e.Count
+			oldParams := getAllParams(e)
+
+			loaded, deleted := e.Merge()
+			a.Equal(test.r.l, loaded)
+			a.Equal(test.r.d, deleted)
+			a.Equal(oldCount, e.Count)
+			newParams := getAllParams(e)
+			a.Equal(oldParams, newParams)
+			var count uint32
+			for _, g := range e.Groups {
+				count += g.Count
+			}
+			a.Equal(count, e.Count)
 		})
 	}
 

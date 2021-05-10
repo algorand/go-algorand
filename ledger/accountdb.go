@@ -1609,10 +1609,10 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 				pad.ExtendedAssetParams.Insert(created, delta.new.AssetParams)
 			}
 
-			// loaded, deletedKeys := pad.ExtendedAssetParams.Merge()
+			loaded, deletedKeys := pad.ExtendedAssetParams.Merge()
 
 			// update DB
-			// err = assetsUpdateGroupDataDB(qaei, qaeu, qaed, &pad.ExtendedAssetParams, loaded, deletedKeys)
+			err = assetsUpdateGroupDataDB(qaei, qaeu, qaed, &pad.ExtendedAssetParams, loaded, deletedKeys)
 			pad.AccountData.Assets = nil
 		}
 	}
