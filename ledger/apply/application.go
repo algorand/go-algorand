@@ -275,22 +275,14 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 }
 
 func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams, maxCost int) error {
-	cost, err := logic.CheckStateful(ac.ApprovalProgram, *evalParams)
+	err := logic.CheckStateful(ac.ApprovalProgram, *evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
 	}
 
-	if cost > maxCost {
-		return fmt.Errorf("ApprovalProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
-	}
-
-	cost, err = logic.CheckStateful(ac.ClearStateProgram, *evalParams)
+	err = logic.CheckStateful(ac.ClearStateProgram, *evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
-	}
-
-	if cost > maxCost {
-		return fmt.Errorf("ClearStateProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
 	}
 
 	return nil

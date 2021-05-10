@@ -431,26 +431,31 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	return cx.stack[0].Uint != 0, nil
 }
 
-// CheckStateful should be faster than EvalStateful.
-// Returns 'cost' which is an estimate of relative execution time.
-func CheckStateful(program []byte, params EvalParams) (cost int, err error) {
+// CheckStateful should be faster than EvalStateful.  It can perform
+// static checks and reject programs that are invalid. Returns a cost
+// estimate of relative execution time. This cost is not relevent when
+// params.Proto.DynamicTealCost is true, and so 1 is returned so that
+// callers may continue to check for a high cost being invalid.
+func CheckStateful(program []byte, params EvalParams) error {
 	params.runModeFlags = runModeApplication
 	return check(program, params)
 }
 
-// Check should be faster than Eval.
-// Returns 'cost' which is an estimate of relative execution time.
-func Check(program []byte, params EvalParams) (cost int, err error) {
+// Check should be faster than Eval.  It can perform static checks and
+// reject programs that are invalid. Returns a cost estimate of
+// relative execution time. This cost is no relevent when
+// proto.DynamicTealCost is true, and so 1 is returned so that callers
+// may continue to check for a high cost being invalid.
+func Check(program []byte, params EvalParams) error {
 	params.runModeFlags = runModeSignature
 	return check(program, params)
 }
 
-func check(program []byte, params EvalParams) (cost int, err error) {
+func check(program []byte, params EvalParams) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
 			stlen := runtime.Stack(buf, false)
-			cost = 0
 			errstr := string(buf[:stlen])
 			if params.Trace != nil {
 				if sb, ok := params.Trace.(*strings.Builder); ok {
@@ -462,18 +467,17 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		}
 	}()
 	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
-		err = errLogicSigNotSupported
-		return
+		return errLogicSigNotSupported
 	}
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
-		return 0, errors.New("invalid version")
+		return errors.New("invalid version")
 	}
 	if version > EvalMaxVersion {
-		return 0, fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
+		return fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 	}
 	if version > params.Proto.LogicSigVersion {
-		return 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+		return fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 	}
 
 	var minVersion uint64
@@ -483,7 +487,7 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		minVersion = *params.MinTealVersion
 	}
 	if version < minVersion {
-		return 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
 	}
 
 	var cx evalContext
@@ -494,21 +498,30 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 	cx.branchTargets = make(map[int]bool)
 	cx.instructionStarts = make(map[int]bool)
 
+	maxCost := params.budget()
+	if params.Proto.DynamicTealCost {
+		maxCost = math.MaxInt32
+	}
+	staticCost := 0
 	for cx.pc < len(cx.program) {
 		prevpc := cx.pc
-		err := cx.checkStep()
+		stepCost, err := cx.checkStep()
 		if err != nil {
-			return cx.cost, fmt.Errorf("%3d %w", cx.pc, err)
+			return fmt.Errorf("pc=%3d %w", cx.pc, err)
+		}
+		staticCost += stepCost
+		if staticCost > maxCost {
+			return fmt.Errorf("pc=%3d static cost budget %d exceeded", cx.pc, maxCost)
 		}
 		if cx.pc <= prevpc {
 			// Recall, this is advancing through opcodes
 			// without evaluation. It always goes forward,
 			// even if we're in v4 and the jump would go
 			// back.
-			return cx.cost, fmt.Errorf("pc did not advance, stuck at %d", cx.pc)
+			return fmt.Errorf("pc did not advance, stuck at %d", cx.pc)
 		}
 	}
-	return cx.cost, cx.err
+	return nil
 }
 
 func opCompat(expected, got StackType) bool {
@@ -636,26 +649,25 @@ func (cx *evalContext) step() {
 	}
 }
 
-func (cx *evalContext) checkStep() error {
+func (cx *evalContext) checkStep() (int, error) {
 	cx.instructionStarts[cx.pc] = true
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
 	if spec.op == nil {
-		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
+		return 0, fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 	}
 	if (cx.runModeFlags & spec.Modes) == 0 {
-		return fmt.Errorf("%s not allowed in current mode", spec.Name)
+		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
 	deets := spec.Details
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
-		return fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
+		return 0, fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 	}
 	prevpc := cx.pc
-	cx.cost += deets.Cost
 	if deets.checkFunc != nil {
 		err := deets.checkFunc(cx)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		if cx.nextpc != 0 {
 			cx.pc = cx.nextpc
@@ -672,11 +684,11 @@ func (cx *evalContext) checkStep() error {
 	if cx.err == nil {
 		for pc := prevpc + 1; pc < cx.pc; pc++ {
 			if _, ok := cx.branchTargets[pc]; ok {
-				return fmt.Errorf("branch target %d is not an aligned instruction", pc)
+				return 0, fmt.Errorf("branch target %d is not an aligned instruction", pc)
 			}
 		}
 	}
-	return nil
+	return deets.Cost, nil
 }
 
 func opErr(cx *evalContext) {

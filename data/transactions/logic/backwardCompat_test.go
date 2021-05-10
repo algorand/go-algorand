@@ -267,9 +267,9 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, program, ops.Program)
 	// ensure the old program is the same as a new one except TEAL version byte
-	ops, err = AssembleStringWithVersion(sourceTEALv1, AssemblerMaxVersion)
+	opsV2, err := AssembleStringWithVersion(sourceTEALv1, 2)
 	require.NoError(t, err)
-	require.Equal(t, program[1:], ops.Program[1:])
+	require.Equal(t, program[1:], opsV2.Program[1:])
 
 	sig := c.Sign(Msg{
 		ProgramHash: crypto.HashObj(Program(program)),
@@ -285,14 +285,22 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	txn.Txn.RekeyTo = basics.Address{} // RekeyTo not allowed in TEAL v1
 
 	sb := strings.Builder{}
-	ep := defaultEvalParams(&sb, &txn)
+	ep := defaultEvalParamsWithVersion(&sb, &txn, 1)
 	ep.TxnGroup = txgroup
 
 	// ensure v1 program runs well on latest TEAL evaluator
 	require.Equal(t, uint8(1), program[0])
-	cost, err := Check(program, ep)
+
+	// Cost should stay exactly 2140
+	ep.Proto.LogicSigMaxCost = 2139
+	err = Check(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "static cost")
+
+	ep.Proto.LogicSigMaxCost = 2140
+	err = Check(program, ep)
 	require.NoError(t, err)
-	require.Equal(t, 2140, cost)
+
 	pass, err := Eval(program, ep)
 	if err != nil || !pass {
 		t.Log(hex.EncodeToString(program))
@@ -301,12 +309,19 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	cost2, err := Check(ops.Program, ep)
+	// Costs for v2 should be higher because of hash opcode cost changes
+	ep2 := defaultEvalParamsWithVersion(&sb, &txn, 2)
+	ep2.TxnGroup = txgroup
+	ep2.Proto.LogicSigMaxCost = 2307
+	err = Check(opsV2.Program, ep2)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "static cost")
+
+	ep2.Proto.LogicSigMaxCost = 2308
+	err = Check(opsV2.Program, ep2)
 	require.NoError(t, err)
 
-	// Costs for v2 should be higher because of hash opcode cost changes
-	require.Equal(t, 2308, cost2)
-	pass, err = Eval(ops.Program, ep)
+	pass, err = Eval(opsV2.Program, ep2)
 	if err != nil || !pass {
 		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
@@ -315,6 +330,8 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.True(t, pass)
 
 	// ensure v0 program runs well on latest TEAL evaluator
+	ep = defaultEvalParams(&sb, &txn)
+	ep.TxnGroup = txgroup
 	program[0] = 0
 	sig = c.Sign(Msg{
 		ProgramHash: crypto.HashObj(Program(program)),
@@ -322,12 +339,21 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	})
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
-	cost, err = Check(program, ep)
+
+	// Cost is now dynamic and exactly 1 less, because bnz skips "err". It's caught during Eval
+	ep.Proto.LogicSigMaxCost = 2138
+	err = Check(program, ep)
 	require.NoError(t, err)
-	require.Equal(t, 2140, cost)
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+
+	ep.Proto.LogicSigMaxCost = 2139
+	err = Check(program, ep)
+	require.NoError(t, err)
 	pass, err = Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
+
 }
 
 // ensure v2 fields error on pre TEAL v2 logicsig version
