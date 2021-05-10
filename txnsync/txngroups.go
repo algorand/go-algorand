@@ -47,7 +47,7 @@ type txGroupsEncodingStub struct {
 
 	encodedSignedTxns
 
-	TxnGroups []txnGroups `codec:"t,allocbound=maxEncodedTransactionGroup"`
+	TxnGroups []txnGroups `codec:"txng,allocbound=maxEncodedTransactionGroup"`
 }
 
 type encodedSignedTxns struct {
@@ -67,6 +67,7 @@ type encodedSignedTxns struct {
 
 type encodedTxns struct {
 	_struct       struct{} `codec:",omitempty,omitemptyarray"`
+
 	TxType        []byte   `codec:"type,allocbound=maxEncodedTransactionGroup"`
 	BitmaskTxType bitmask  `codec:"typebm"`
 
@@ -140,9 +141,48 @@ type encodedAssetConfigTxnFields struct {
 	ConfigAsset        []basics.AssetIndex `codec:"caid,allocbound=maxEncodedTransactionGroup"`
 	BitmaskConfigAsset bitmask             `codec:"caidbm"`
 
-	AssetParams        []basics.AssetParams `codec:"apar,allocbound=maxEncodedTransactionGroup"`
-	BitmaskAssetParams bitmask              `codec:"aparbm"`
+	//AssetParams        []basics.AssetParams `codec:"apar,allocbound=maxEncodedTransactionGroup"`
+	//BitmaskAssetParams bitmask              `codec:"aparbm"`
+
+	encodedAssetParams
 }
+
+type encodedAssetParams struct {
+	_struct       struct{} `codec:",omitempty,omitemptyarray"`
+
+	Total []uint64 `codec:"t,allocbound=maxEncodedTransactionGroup"`
+	BitmaskTotal bitmask              `codec:"tbm"`
+
+	Decimals []uint32 `codec:"dc,allocbound=maxEncodedTransactionGroup"`
+	BitmaskDecimals bitmask              `codec:"dcbm"`
+
+	BitmaskDefaultFrozen bitmask              `codec:"dfbm"`
+
+	UnitName []string `codec:"un,allocbound=maxEncodedTransactionGroup"`
+	BitmaskUnitName bitmask              `codec:"unbm"`
+
+	AssetName []string `codec:"an,allocbound=maxEncodedTransactionGroup"`
+	BitmaskAssetName bitmask              `codec:"anbm"`
+
+	URL []string `codec:"au,allocbound=maxEncodedTransactionGroup"`
+	BitmaskURL bitmask              `codec:"aubm"`
+
+	MetadataHash []byte `codec:"am,allocbound=maxAddressBytes"`
+	BitmaskMetadataHash bitmask              `codec:"ambm"`
+
+	Manager []byte `codec:"m,allocbound=maxAddressBytes"`
+	BitmaskManager bitmask              `codec:"mbm"`
+
+	Reserve []byte `codec:"r,allocbound=maxAddressBytes"`
+	BitmaskReserve bitmask              `codec:"rbm"`
+
+	Freeze []byte `codec:"f,allocbound=maxAddressBytes"`
+	BitmaskFreeze bitmask              `codec:"fbm"`
+
+	Clawback []byte `codec:"c,allocbound=maxAddressBytes"`
+	BitmaskClawback bitmask              `codec:"cbm"`
+}
+
 
 type encodedAssetTransferTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -423,6 +463,28 @@ func getSlice(b []byte, index int, size int) []byte {
 		return nil
 	}
 	return b[index*size : index*size+size]
+}
+
+func getHalfByte(b []byte, index int) byte {
+	if index*2 > len(b) {
+		return 0
+	}
+	if index % 2 == 0 {
+		return b[index/2] / 16
+	} else {
+		return b[index/2] % 16
+	}
+}
+
+func setHalfByte(b []byte, index int, value byte) {
+	if index*2 > len(b) {
+		return
+	}
+	if index % 2 == 0 {
+		b[index/2] = b[index/2] % 16 + value * 16
+	} else {
+		b[index/2] = b[index/2] / 16 * 16 + value
+	}
 }
 
 func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte {
@@ -785,7 +847,7 @@ func finishDeconstructPaymentTxnFields(stub *txGroupsEncodingStub) {
 func setupDeconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskConfigAsset = make(bitmask, bitmaskLen)
-	stub.BitmaskAssetParams = make(bitmask, bitmaskLen)
+	setupDeconstructAssetParams(stub)
 }
 
 func deconstructAssetConfigTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
@@ -793,15 +855,87 @@ func deconstructAssetConfigTxnFields(stub *txGroupsEncodingStub, i int, txn tran
 		stub.BitmaskConfigAsset.SetBit(i)
 		stub.ConfigAsset = append(stub.ConfigAsset, txn.Txn.ConfigAsset)
 	}
-	if !txn.Txn.AssetParams.MsgIsZero() {
-		stub.BitmaskAssetParams.SetBit(i)
-		stub.AssetParams = append(stub.AssetParams, txn.Txn.AssetParams)
-	}
+	deconstructAssetParams(stub, i, txn)
 }
 
 func finishDeconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
 	stub.BitmaskConfigAsset.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskAssetParams.trimBitmask(int(stub.TotalTransactionsCount))
+	finishDeconstructAssetParams(stub)
+}
+
+func setupDeconstructAssetParams(stub *txGroupsEncodingStub) {
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskTotal = make(bitmask, bitmaskLen)
+	stub.BitmaskDecimals = make(bitmask, bitmaskLen)
+	stub.BitmaskDefaultFrozen = make(bitmask, bitmaskLen)
+	stub.BitmaskUnitName = make(bitmask, bitmaskLen)
+	stub.BitmaskAssetName = make(bitmask, bitmaskLen)
+	stub.BitmaskURL = make(bitmask, bitmaskLen)
+	stub.BitmaskMetadataHash = make(bitmask, bitmaskLen)
+	stub.BitmaskManager = make(bitmask, bitmaskLen)
+	stub.BitmaskReserve = make(bitmask, bitmaskLen)
+	stub.BitmaskFreeze = make(bitmask, bitmaskLen)
+	stub.BitmaskClawback = make(bitmask, bitmaskLen)
+}
+
+func deconstructAssetParams(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
+	if txn.Txn.AssetParams.Total != 0 {
+		stub.BitmaskTotal.SetBit(i)
+		stub.Total = append(stub.Total, txn.Txn.AssetParams.Total)
+	}
+	if txn.Txn.AssetParams.Decimals != 0 {
+		stub.BitmaskDecimals.SetBit(i)
+		stub.Decimals = append(stub.Decimals, txn.Txn.AssetParams.Decimals)
+	}
+	if txn.Txn.AssetParams.DefaultFrozen {
+		stub.BitmaskDefaultFrozen.SetBit(i)
+	}
+	if txn.Txn.AssetParams.UnitName != "" {
+		stub.BitmaskUnitName.SetBit(i)
+		stub.UnitName = append(stub.UnitName, txn.Txn.AssetParams.UnitName)
+	}
+	if txn.Txn.AssetParams.AssetName != "" {
+		stub.BitmaskAssetName.SetBit(i)
+		stub.AssetName = append(stub.AssetName, txn.Txn.AssetParams.AssetName)
+	}
+	if txn.Txn.AssetParams.URL != "" {
+		stub.BitmaskURL.SetBit(i)
+		stub.URL = append(stub.URL, txn.Txn.AssetParams.URL)
+	}
+	if txn.Txn.AssetParams.MetadataHash != [32]byte{} {
+		stub.BitmaskMetadataHash.SetBit(i)
+		stub.MetadataHash = append(stub.MetadataHash, txn.Txn.AssetParams.MetadataHash[:]...)
+	}
+	if !txn.Txn.AssetParams.Manager.MsgIsZero() {
+		stub.BitmaskManager.SetBit(i)
+		stub.Manager = append(stub.Manager, txn.Txn.AssetParams.Manager[:]...)
+	}
+	if !txn.Txn.AssetParams.Reserve.MsgIsZero() {
+		stub.BitmaskReserve.SetBit(i)
+		stub.Reserve = append(stub.Reserve, txn.Txn.AssetParams.Reserve[:]...)
+	}
+	if !txn.Txn.AssetParams.Freeze.MsgIsZero() {
+		stub.BitmaskFreeze.SetBit(i)
+		stub.Freeze = append(stub.Freeze, txn.Txn.AssetParams.Freeze[:]...)
+	}
+	if !txn.Txn.AssetParams.Clawback.MsgIsZero() {
+		stub.BitmaskClawback.SetBit(i)
+		stub.Clawback = append(stub.Clawback, txn.Txn.AssetParams.Clawback[:]...)
+	}
+}
+
+func finishDeconstructAssetParams(stub *txGroupsEncodingStub) {
+	stub.BitmaskTotal.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskDecimals.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskDefaultFrozen.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskUnitName.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskAssetName.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskURL.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskMetadataHash.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskManager.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskReserve.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskFreeze.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskClawback.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func setupDeconstructAssetTransferTxnFields(stub *txGroupsEncodingStub) {
@@ -1194,11 +1328,96 @@ func reconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
 			index++
 		}
 	}
+	reconstructAssetParams(stub)
+}
+
+func reconstructAssetParams(stub *txGroupsEncodingStub) {
+	var index int
 	index = 0
-	stub.BitmaskAssetParams.expandBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskTotal.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists := stub.BitmaskAssetParams.EntryExists(i); exists {
-			stub.SignedTxns[i].Txn.AssetParams = stub.AssetParams[index]
+		if exists := stub.BitmaskTotal.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.AssetParams.Total = stub.Total[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskDecimals.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskDecimals.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.AssetParams.Decimals = stub.Decimals[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskDefaultFrozen.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskDefaultFrozen.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.AssetParams.DefaultFrozen = true
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskUnitName.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskUnitName.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.AssetParams.UnitName = stub.UnitName[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskAssetName.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskAssetName.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.AssetParams.AssetName = stub.AssetName[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskURL.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskURL.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.AssetParams.URL = stub.URL[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskMetadataHash.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskMetadataHash.EntryExists(i); exists {
+			copy(stub.SignedTxns[i].Txn.AssetParams.MetadataHash[:], getSlice(stub.MetadataHash, index, addressSize))
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskManager.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskManager.EntryExists(i); exists {
+			copy(stub.SignedTxns[i].Txn.AssetParams.Manager[:], getSlice(stub.Manager, index, addressSize))
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskReserve.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskReserve.EntryExists(i); exists {
+			copy(stub.SignedTxns[i].Txn.AssetParams.Reserve[:], getSlice(stub.Reserve, index, addressSize))
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskFreeze.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskFreeze.EntryExists(i); exists {
+			copy(stub.SignedTxns[i].Txn.AssetParams.Freeze[:], getSlice(stub.Freeze, index, addressSize))
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskClawback.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskClawback.EntryExists(i); exists {
+			copy(stub.SignedTxns[i].Txn.AssetParams.Clawback[:], getSlice(stub.Clawback, index, addressSize))
 			index++
 		}
 	}
