@@ -374,12 +374,12 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 		encodedGroupsBytes := encodeTransactionGroups(txnGroups)
 		out, err := decodeTransactionGroups(encodedGroupsBytes)
 		require.NoError(t, err)
-		if fmt.Sprintf("%v", out[0].Transactions[0].Txn.ApplicationCallTxnFields) != fmt.Sprintf("%v", txnGroups[0].Transactions[0].Txn.ApplicationCallTxnFields) {
-			fmt.Println(out[0].Transactions[0].Txn.ApplicationCallTxnFields)
-			fmt.Println()
-			fmt.Println(txnGroups[0].Transactions[0].Txn.ApplicationCallTxnFields)
-			fmt.Println()
-		}
-		//require.ElementsMatch(t, txnGroups, out)
+		//if fmt.Sprintf("%v", out[0].Transactions[0].Txn.ApplicationCallTxnFields) != fmt.Sprintf("%v", txnGroups[0].Transactions[0].Txn.ApplicationCallTxnFields) {
+		//	fmt.Println(out[0].Transactions[0].Txn.ApplicationCallTxnFields)
+		//	fmt.Println()
+		//	fmt.Println(txnGroups[0].Transactions[0].Txn.ApplicationCallTxnFields)
+		//	fmt.Println()
+		//}
+		require.ElementsMatch(t, txnGroups, out)
 	}
 }

@@ -258,12 +258,6 @@ type encodedApplicationCallTxnFields struct {
 	GlobalNumByteSlice []uint64 `codec:"gnbs,allocbound=maxEncodedTransactionGroup"`
 	BitmaskGlobalNumByteSlice bitmask              `codec:"gnbsbm"`
 
-	//LocalStateSchema        []basics.StateSchema `codec:"apls,allocbound=maxEncodedTransactionGroup"`
-	//BitmaskLocalStateSchema bitmask              `codec:"aplsbm"`
-	//
-	//GlobalStateSchema        []basics.StateSchema `codec:"apgs,allocbound=maxEncodedTransactionGroup"`
-	//BitmaskGlobalStateSchema bitmask              `codec:"apgsbm"`
-
 	ApprovalProgram        []program `codec:"apap,allocbound=maxEncodedTransactionGroup"`
 	BitmaskApprovalProgram bitmask   `codec:"apapbm"`
 
@@ -779,10 +773,15 @@ func finishDeconstructTxnHeader(stub *txGroupsEncodingStub) {
 func setupDeconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskVotePK = make(bitmask, bitmaskLen)
+	stub.VotePK = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 	stub.BitmaskSelectionPK = make(bitmask, bitmaskLen)
+	stub.SelectionPK = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 	stub.BitmaskVoteFirst = make(bitmask, bitmaskLen)
+	stub.VoteFirst = make([]basics.Round, 0, stub.TotalTransactionsCount)
 	stub.BitmaskVoteLast = make(bitmask, bitmaskLen)
+	stub.VoteLast = make([]basics.Round, 0, stub.TotalTransactionsCount)
 	stub.BitmaskVoteKeyDilution = make(bitmask, bitmaskLen)
+	stub.VoteKeyDilution = make([]uint64, 0, stub.TotalTransactionsCount)
 	stub.BitmaskNonparticipation = make(bitmask, bitmaskLen)
 }
 
@@ -874,16 +873,26 @@ func finishDeconstructAssetConfigTxnFields(stub *txGroupsEncodingStub) {
 func setupDeconstructAssetParams(stub *txGroupsEncodingStub) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskTotal = make(bitmask, bitmaskLen)
+	stub.Total = make([]uint64, 0, stub.TotalTransactionsCount)
 	stub.BitmaskDecimals = make(bitmask, bitmaskLen)
+	stub.Decimals = make([]uint32, 0, stub.TotalTransactionsCount)
 	stub.BitmaskDefaultFrozen = make(bitmask, bitmaskLen)
 	stub.BitmaskUnitName = make(bitmask, bitmaskLen)
+	stub.UnitName = make([]string, 0, stub.TotalTransactionsCount)
 	stub.BitmaskAssetName = make(bitmask, bitmaskLen)
+	stub.AssetName = make([]string, 0, stub.TotalTransactionsCount)
 	stub.BitmaskURL = make(bitmask, bitmaskLen)
+	stub.URL = make([]string, 0, stub.TotalTransactionsCount)
 	stub.BitmaskMetadataHash = make(bitmask, bitmaskLen)
+	stub.MetadataHash = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 	stub.BitmaskManager = make(bitmask, bitmaskLen)
+	stub.Manager = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 	stub.BitmaskReserve = make(bitmask, bitmaskLen)
+	stub.Reserve = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 	stub.BitmaskFreeze = make(bitmask, bitmaskLen)
+	stub.Freeze = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 	stub.BitmaskClawback = make(bitmask, bitmaskLen)
+	stub.Clawback = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 }
 
 func deconstructAssetParams(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
@@ -949,10 +958,15 @@ func finishDeconstructAssetParams(stub *txGroupsEncodingStub) {
 func setupDeconstructAssetTransferTxnFields(stub *txGroupsEncodingStub) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskXferAsset = make(bitmask, bitmaskLen)
+	stub.XferAsset = make([]basics.AssetIndex, 0, stub.TotalTransactionsCount)
 	stub.BitmaskAssetAmount = make(bitmask, bitmaskLen)
+	stub.AssetAmount = make([]uint64, 0, stub.TotalTransactionsCount)
 	stub.BitmaskAssetSender = make(bitmask, bitmaskLen)
+	stub.AssetSender = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 	stub.BitmaskAssetReceiver = make(bitmask, bitmaskLen)
+	stub.AssetReceiver = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 	stub.BitmaskAssetCloseTo = make(bitmask, bitmaskLen)
+	stub.AssetCloseTo = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 }
 
 func deconstructAssetTransferTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
@@ -989,7 +1003,9 @@ func finishDeconstructAssetTransferTxnFields(stub *txGroupsEncodingStub) {
 func setupDeconstructAssetFreezeTxnFields(stub *txGroupsEncodingStub) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskFreezeAccount = make(bitmask, bitmaskLen)
+	stub.FreezeAccount = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
 	stub.BitmaskFreezeAsset = make(bitmask, bitmaskLen)
+	stub.FreezeAsset = make([]basics.AssetIndex, 0, stub.TotalTransactionsCount)
 	stub.BitmaskAssetFrozen = make(bitmask, bitmaskLen)
 }
 
@@ -1016,17 +1032,29 @@ func finishDeconstructAssetFreezeTxnFields(stub *txGroupsEncodingStub) {
 func setupDeconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskApplicationID = make(bitmask, bitmaskLen)
+	stub.ApplicationID = make([]basics.AppIndex, 0, stub.TotalTransactionsCount)
 	stub.BitmaskOnCompletion = make(bitmask, bitmaskLen)
+	stub.OnCompletion = make([]byte, 0, stub.TotalTransactionsCount)
 	stub.BitmaskApplicationArgs = make(bitmask, bitmaskLen)
+	stub.ApplicationArgs = make([]applicationArgs, 0, stub.TotalTransactionsCount)
 	stub.BitmaskAccounts = make(bitmask, bitmaskLen)
+	stub.Accounts = make([]addresses, 0, stub.TotalTransactionsCount)
 	stub.BitmaskForeignApps = make(bitmask, bitmaskLen)
+	stub.ForeignApps = make([]appIndices, 0, stub.TotalTransactionsCount)
 	stub.BitmaskForeignAssets = make(bitmask, bitmaskLen)
+	stub.ForeignAssets = make([]assetIndices, 0, stub.TotalTransactionsCount)
 	stub.BitmaskLocalNumUint = make(bitmask, bitmaskLen)
+	stub.LocalNumUint = make([]uint64, 0, stub.TotalTransactionsCount)
 	stub.BitmaskLocalNumByteSlice = make(bitmask, bitmaskLen)
+	stub.LocalNumByteSlice = make([]uint64, 0, stub.TotalTransactionsCount)
 	stub.BitmaskGlobalNumUint = make(bitmask, bitmaskLen)
+	stub.GlobalNumUint = make([]uint64, 0, stub.TotalTransactionsCount)
 	stub.BitmaskGlobalNumByteSlice = make(bitmask, bitmaskLen)
+	stub.GlobalNumByteSlice = make([]uint64, 0, stub.TotalTransactionsCount)
 	stub.BitmaskApprovalProgram = make(bitmask, bitmaskLen)
+	stub.ApprovalProgram = make([]program, 0, stub.TotalTransactionsCount)
 	stub.BitmaskClearStateProgram = make(bitmask, bitmaskLen)
+	stub.ClearStateProgram = make([]program, 0, stub.TotalTransactionsCount)
 }
 
 func deconstructApplicationCallTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
@@ -1099,8 +1127,11 @@ func finishDeconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 func setupDeconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskCertRound = make(bitmask, bitmaskLen)
+	stub.CertRound = make([]basics.Round, 0, stub.TotalTransactionsCount)
 	stub.BitmaskCertType = make(bitmask, bitmaskLen)
+	stub.CertType = make([]protocol.CompactCertType, 0, stub.TotalTransactionsCount)
 	stub.BitmaskCert = make(bitmask, bitmaskLen)
+	stub.Cert = make([]compactcert.Cert, 0, stub.TotalTransactionsCount)
 }
 
 func deconstructCompactCertTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
