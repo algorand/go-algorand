@@ -698,8 +698,6 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 		})
 	}
 
-	// e := genExtendedHolding(t, spec1)
-
 	// check insertion
 	assets := []basics.AssetIndex{
 		1,                  // create a new group at the beginning (new 0)
@@ -874,7 +872,7 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 	}
 }
 
-func TestAssetHoldingDelete(t *testing.T) {
+func TestAssetDelete(t *testing.T) {
 	a := require.New(t)
 
 	spec := []groupSpec{
@@ -884,45 +882,69 @@ func TestAssetHoldingDelete(t *testing.T) {
 	}
 
 	e := genExtendedHolding(t, spec)
+	e2 := genExtendedParams(t, spec)
 	oldCount := e.Count
 	a.Equal(uint32(spec[0].count+spec[1].count+spec[2].count), e.Count)
+	a.Equal(e.Count, e2.Count)
 	a.Equal(uint32(spec[1].count), e.Groups[1].Count)
+	a.Equal(e.Groups[1].Count, e2.Groups[1].Count)
 	a.Equal(spec[1].start, e.Groups[1].MinAssetIndex)
+	a.Equal(e.Groups[1].MinAssetIndex, e2.Groups[1].MinAssetIndex)
 	a.Equal(uint64(0), e.Groups[1].DeltaMaxAssetIndex)
+	a.Equal(e.Groups[1].DeltaMaxAssetIndex, e2.Groups[1].DeltaMaxAssetIndex)
 	a.Equal(basics.AssetIndex(0), e.Groups[1].groupData.AssetOffsets[0])
+	a.Equal(e.Groups[1].groupData.AssetOffsets[0], e2.Groups[1].groupData.AssetOffsets[0])
 
-	oldAssets := make(map[basics.AssetIndex]basics.AssetHolding, spec[0].count)
+	oldAssetHoldings := make(map[basics.AssetIndex]basics.AssetHolding, spec[0].count)
 	aidx := e.Groups[0].MinAssetIndex
 	for i := 0; i < spec[0].count; i++ {
 		aidx += e.Groups[0].groupData.AssetOffsets[i]
-		oldAssets[aidx] = basics.AssetHolding{Amount: e.Groups[0].groupData.Amounts[i]}
+		oldAssetHoldings[aidx] = basics.AssetHolding{Amount: e.Groups[0].groupData.Amounts[i]}
 	}
 
-	checkAssetMap := func(delAsset basics.AssetIndex, g AssetsHoldingGroup) {
+	oldAssetParams := make(map[basics.AssetIndex]basics.AssetParams, spec[0].count)
+	aidx = e2.Groups[0].MinAssetIndex
+	for i := 0; i < spec[0].count; i++ {
+		aidx += e2.Groups[0].groupData.AssetOffsets[i]
+		oldAssetParams[aidx] = basics.AssetParams{Total: e2.Groups[0].groupData.Totals[i], AssetName: e2.Groups[0].groupData.AssetNames[i]}
+	}
+
+	checkAssetHoldingsMap := func(delAsset basics.AssetIndex, g AssetsHoldingGroup) {
 		newAssets := make(map[basics.AssetIndex]basics.AssetHolding, g.Count)
 		aidx := g.MinAssetIndex
 		for i := 0; i < int(g.Count); i++ {
 			aidx += g.groupData.AssetOffsets[i]
-			newAssets[aidx] = basics.AssetHolding{Amount: e.Groups[0].groupData.Amounts[i]}
+			newAssets[aidx] = basics.AssetHolding{Amount: g.groupData.Amounts[i]}
 			a.Equal(uint64(aidx), g.groupData.Amounts[i])
 		}
 		a.Equal(int(g.Count), len(newAssets))
-		a.Contains(oldAssets, delAsset)
+		a.Contains(oldAssetHoldings, delAsset)
 
-		oldAssetsCopy := make(map[basics.AssetIndex]basics.AssetHolding, len(oldAssets))
-		for k, v := range oldAssets {
-			oldAssetsCopy[k] = v
+		oldAssetHoldingsCopy := make(map[basics.AssetIndex]basics.AssetHolding, len(oldAssetHoldings))
+		for k, v := range oldAssetHoldings {
+			oldAssetHoldingsCopy[k] = v
 		}
-		delete(oldAssetsCopy, delAsset)
-		a.Equal(oldAssetsCopy, newAssets)
+		delete(oldAssetHoldingsCopy, delAsset)
+		a.Equal(oldAssetHoldingsCopy, newAssets)
 	}
 
-	assetByIndex := func(gi, ai int, e ExtendedAssetHolding) basics.AssetIndex {
-		aidx := e.Groups[gi].MinAssetIndex
-		for i := 0; i <= ai; i++ {
-			aidx += e.Groups[gi].groupData.AssetOffsets[i]
+	checkAssetParamsMap := func(delAsset basics.AssetIndex, g AssetsParamsGroup) {
+		newAssets := make(map[basics.AssetIndex]basics.AssetParams, g.Count)
+		aidx := g.MinAssetIndex
+		for i := 0; i < int(g.Count); i++ {
+			aidx += g.groupData.AssetOffsets[i]
+			newAssets[aidx] = basics.AssetParams{Total: g.groupData.Totals[i], AssetName: g.groupData.AssetNames[i]}
+			a.Equal(uint64(aidx), g.groupData.Totals[i])
 		}
-		return aidx
+		a.Equal(int(g.Count), len(newAssets))
+		a.Contains(oldAssetParams, delAsset)
+
+		oldAssetParamsCopy := make(map[basics.AssetIndex]basics.AssetParams, len(oldAssetParams))
+		for k, v := range oldAssetParams {
+			oldAssetParamsCopy[k] = v
+		}
+		delete(oldAssetParamsCopy, delAsset)
+		a.Equal(oldAssetParamsCopy, newAssets)
 	}
 
 	// delete a group with only one item
@@ -930,40 +952,52 @@ func TestAssetHoldingDelete(t *testing.T) {
 	a.Equal(oldCount-1, e.Count)
 	a.Equal(len(spec)-1, len(e.Groups))
 
+	e2.Delete([]basics.AssetIndex{spec[1].start})
+	a.Equal(oldCount-1, e2.Count)
+	a.Equal(len(spec)-1, len(e2.Groups))
+
 	gap := int(spec[0].end-spec[0].start) / spec[0].count
 
-	// delete first entry in a group
-	e = genExtendedHolding(t, spec)
-	aidx = assetByIndex(0, 0, e)
-	e.deleteByIndex(0, 0)
-	a.Equal(oldCount-1, e.Count)
-	a.Equal(len(spec), len(e.Groups))
-	a.Equal(spec[0].start+basics.AssetIndex(gap), e.Groups[0].MinAssetIndex)
-	a.Equal(uint64(spec[0].end-spec[0].start-basics.AssetIndex(gap)), e.Groups[0].DeltaMaxAssetIndex)
-	checkAssetMap(aidx, e.Groups[0])
+	tests := []struct {
+		gi       int
+		ai       int
+		minAsset basics.AssetIndex
+		maxDelta uint64
+	}{
+		// delete first entry in a group
+		{0, 0, spec[0].start + basics.AssetIndex(gap), uint64(spec[0].end - spec[0].start - basics.AssetIndex(gap))},
+		// delete last entry in a group
+		// assets are 10, 12, 14, ..., 700
+		// the second last is 2 * (spec[0].count-2) + 10
+		// so the delta = (spec[0].count-2)*gap + 10 -10
+		{0, spec[0].count - 1, spec[0].start, uint64((spec[0].count - 2) * gap)},
+		// delete some middle entry
+		{0, 1, spec[0].start, uint64(spec[0].end - spec[0].start)},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("holding_%d", i+1), func(t *testing.T) {
+			e := genExtendedHolding(t, spec)
+			aidx := e.Get(test.gi).AssetAt(test.ai)
+			e.deleteByIndex(test.gi, test.ai)
+			a.Equal(oldCount-1, e.Count)
+			a.Equal(len(spec), len(e.Groups))
+			a.Equal(test.minAsset, e.Groups[0].MinAssetIndex)
+			a.Equal(test.maxDelta, e.Groups[0].DeltaMaxAssetIndex)
+			checkAssetHoldingsMap(aidx, e.Groups[0])
+		})
 
-	// delete last entry in a group
-	e = genExtendedHolding(t, spec)
-	aidx = assetByIndex(0, spec[0].count-1, e)
-	e.deleteByIndex(0, spec[0].count-1)
-	a.Equal(oldCount-1, e.Count)
-	a.Equal(len(spec), len(e.Groups))
-	a.Equal(spec[0].start, e.Groups[0].MinAssetIndex)
-	// assets are 10, 12, 14, ..., 700
-	// the second last is 2 * (spec[0].count-2) + 10
-	// so the delta = (spec[0].count-2)*gap + 10 -10
-	a.Equal(uint64((spec[0].count-2)*gap), e.Groups[0].DeltaMaxAssetIndex)
-	checkAssetMap(aidx, e.Groups[0])
+		t.Run(fmt.Sprintf("params_%d", i+1), func(t *testing.T) {
+			e := genExtendedParams(t, spec)
+			aidx = e.Get(test.gi).AssetAt(test.ai)
+			e.deleteByIndex(test.gi, test.ai)
+			a.Equal(oldCount-1, e.Count)
+			a.Equal(len(spec), len(e.Groups))
+			a.Equal(test.minAsset, e.Groups[0].MinAssetIndex)
+			a.Equal(test.maxDelta, e.Groups[0].DeltaMaxAssetIndex)
+			checkAssetParamsMap(aidx, e.Groups[0])
 
-	// delete some middle entry
-	e = genExtendedHolding(t, spec)
-	aidx = assetByIndex(0, 1, e)
-	e.deleteByIndex(0, 1)
-	a.Equal(oldCount-1, e.Count)
-	a.Equal(len(spec), len(e.Groups))
-	a.Equal(spec[0].start, e.Groups[0].MinAssetIndex)
-	a.Equal(uint64(spec[0].end-spec[0].start), e.Groups[0].DeltaMaxAssetIndex)
-	checkAssetMap(aidx, e.Groups[0])
+		})
+	}
 }
 
 func TestAssetHoldingDeleteRepeat(t *testing.T) {

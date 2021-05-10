@@ -270,15 +270,55 @@ func (gd *AssetsHoldingGroupData) delete(ai int) {
 		gd.Amounts = gd.Amounts[:len(gd.Amounts)-1]
 		gd.Frozens = gd.Frozens[:len(gd.Frozens)-1]
 	} else {
+		length := len(gd.AssetOffsets)
 		gd.AssetOffsets[ai+1] += gd.AssetOffsets[ai]
 		copy(gd.AssetOffsets[ai:], gd.AssetOffsets[ai+1:])
-		gd.AssetOffsets = gd.AssetOffsets[:len(gd.AssetOffsets)-1]
+		gd.AssetOffsets = gd.AssetOffsets[:length-1]
 
+		// copy all and then slice to remove the last element
 		copy(gd.Amounts[ai:], gd.Amounts[ai+1:])
-		gd.Amounts = gd.Amounts[:len(gd.Amounts)-1]
 		copy(gd.Frozens[ai:], gd.Frozens[ai+1:])
-		gd.Frozens = gd.Frozens[:len(gd.Frozens)-1]
+
+		gd.slice(0, length-1)
 	}
+}
+
+func (gd *AssetsParamsGroupData) delete(ai int) {
+	length := len(gd.AssetOffsets)
+	if ai == 0 {
+		gd.AssetOffsets = gd.AssetOffsets[1:]
+		gd.AssetOffsets[0] = 0
+		gd.slice(1, length)
+	} else if ai == len(gd.AssetOffsets)-1 {
+		gd.AssetOffsets = gd.AssetOffsets[:len(gd.AssetOffsets)-1]
+		gd.Totals = gd.Totals[:len(gd.Totals)-1]
+		gd.slice(0, length-1)
+	} else {
+
+		gd.AssetOffsets[ai+1] += gd.AssetOffsets[ai]
+		copy(gd.AssetOffsets[ai:], gd.AssetOffsets[ai+1:])
+		gd.AssetOffsets = gd.AssetOffsets[:length-1]
+
+		// copy all and then slice to remove the last element
+		copy(gd.Totals[ai:], gd.Totals[ai+1:])
+		copy(gd.Decimals[ai:], gd.Decimals[ai+1:])
+		copy(gd.DefaultFrozens[ai:], gd.DefaultFrozens[ai+1:])
+		copy(gd.UnitNames[ai:], gd.UnitNames[ai+1:])
+		copy(gd.AssetNames[ai:], gd.AssetNames[ai+1:])
+		copy(gd.URLs[ai:], gd.URLs[ai+1:])
+		copy(gd.MetadataHash[ai:], gd.MetadataHash[ai+1:])
+		copy(gd.Managers[ai:], gd.Managers[ai+1:])
+		copy(gd.Reserves[ai:], gd.Reserves[ai+1:])
+		copy(gd.Freezes[ai:], gd.Freezes[ai+1:])
+		copy(gd.Clawbacks[ai:], gd.Clawbacks[ai+1:])
+
+		gd.slice(0, length-1)
+	}
+}
+
+func (gd *AssetsHoldingGroupData) slice(start, end int) {
+	gd.Amounts = gd.Amounts[start:end]
+	gd.Frozens = gd.Frozens[start:end]
 }
 
 func (gd *AssetsParamsGroupData) slice(start, end int) {
@@ -293,37 +333,6 @@ func (gd *AssetsParamsGroupData) slice(start, end int) {
 	gd.Reserves = gd.Reserves[start:end]
 	gd.Freezes = gd.Freezes[start:end]
 	gd.Clawbacks = gd.Clawbacks[start:end]
-}
-
-func (gd *AssetsParamsGroupData) delete(ai int) {
-	if ai == 0 {
-		gd.AssetOffsets = gd.AssetOffsets[1:]
-		gd.AssetOffsets[0] = 0
-		gd.slice(1, len(gd.AssetOffsets))
-	} else if ai == len(gd.AssetOffsets)-1 {
-		gd.AssetOffsets = gd.AssetOffsets[:len(gd.AssetOffsets)-1]
-		gd.Totals = gd.Totals[:len(gd.Totals)-1]
-		gd.slice(0, len(gd.AssetOffsets)-1)
-	} else {
-		gd.AssetOffsets[ai+1] += gd.AssetOffsets[ai]
-		copy(gd.AssetOffsets[ai:], gd.AssetOffsets[ai+1:])
-		gd.AssetOffsets = gd.AssetOffsets[:len(gd.AssetOffsets)-1]
-
-		// copy all and them slice all
-		copy(gd.Totals[ai:], gd.Totals[ai+1:])
-		copy(gd.Decimals[ai:], gd.Decimals[ai+1:])
-		copy(gd.DefaultFrozens[ai:], gd.DefaultFrozens[ai+1:])
-		copy(gd.UnitNames[ai:], gd.UnitNames[ai+1:])
-		copy(gd.AssetNames[ai:], gd.AssetNames[ai+1:])
-		copy(gd.URLs[ai:], gd.URLs[ai+1:])
-		copy(gd.MetadataHash[ai:], gd.MetadataHash[ai+1:])
-		copy(gd.Managers[ai:], gd.Managers[ai+1:])
-		copy(gd.Reserves[ai:], gd.Reserves[ai+1:])
-		copy(gd.Freezes[ai:], gd.Freezes[ai+1:])
-		copy(gd.Clawbacks[ai:], gd.Clawbacks[ai+1:])
-
-		gd.slice(0, len(gd.AssetOffsets)-1)
-	}
 }
 
 // GetHolding returns AssetHolding from group data by asset index ai
@@ -904,65 +913,6 @@ func (g *AssetsParamsGroup) groupFromPosition(pos uint32, length, capacity uint3
 	rightGroup.groupData.AssetOffsets[0] = 0
 	return rightGroup
 }
-
-// // splitInsert splits the group identified by gi
-// // and inserts a new asset into appropriate left or right part of the split.
-// func (e *ExtendedAssetHolding) splitInsert(gi int, aidx basics.AssetIndex, holding basics.AssetHolding) {
-// 	g := e.Groups[gi]
-// 	pos := g.Count / 2
-// 	asset := g.MinAssetIndex
-// 	for i := 0; i < int(pos); i++ {
-// 		asset += g.groupData.AssetOffsets[i]
-// 	}
-// 	rgCount := g.Count - g.Count/2
-// 	rgMinAssetIndex := asset + g.groupData.AssetOffsets[pos]
-// 	rgDeltaMaxIndex := g.MinAssetIndex + basics.AssetIndex(g.DeltaMaxAssetIndex) - rgMinAssetIndex
-// 	lgMinAssetIndex := g.MinAssetIndex
-// 	lgCount := g.Count - rgCount
-// 	lgDeltaMaxIndex := asset - g.MinAssetIndex
-
-// 	rgCap := rgCount
-// 	if aidx >= lgMinAssetIndex+lgDeltaMaxIndex {
-// 		// if new asset goes into right group, reserve space
-// 		rgCap++
-// 	}
-// 	rgd := AssetsHoldingGroupData{
-// 		Amounts:               make([]uint64, rgCount, rgCap),
-// 		Frozens:               make([]bool, rgCount, rgCap),
-// 		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: make([]basics.AssetIndex, rgCount, rgCap)},
-// 	}
-// 	copy(rgd.Amounts, g.groupData.Amounts[pos:])
-// 	copy(rgd.Frozens, g.groupData.Frozens[pos:])
-// 	copy(rgd.AssetOffsets, g.groupData.AssetOffsets[pos:])
-// 	rightGroup := AssetsHoldingGroup{
-// 		AssetGroupDesc: AssetGroupDesc{
-// 			Count:              rgCount,
-// 			MinAssetIndex:      rgMinAssetIndex,
-// 			DeltaMaxAssetIndex: uint64(rgDeltaMaxIndex),
-// 		},
-// 		groupData: rgd,
-// 		loaded:    true,
-// 	}
-// 	rightGroup.groupData.AssetOffsets[0] = 0
-
-// 	e.Groups[gi].Count = lgCount
-// 	e.Groups[gi].DeltaMaxAssetIndex = uint64(lgDeltaMaxIndex)
-// 	e.Groups[gi].groupData = AssetsHoldingGroupData{
-// 		Amounts:               g.groupData.Amounts[:pos],
-// 		Frozens:               g.groupData.Frozens[:pos],
-// 		AssetsCommonGroupData: AssetsCommonGroupData{AssetOffsets: g.groupData.AssetOffsets[:pos]},
-// 	}
-// 	if aidx < lgMinAssetIndex+lgDeltaMaxIndex {
-// 		e.Groups[gi].insert(aidx, holding)
-// 	} else {
-// 		rightGroup.insert(aidx, holding)
-// 	}
-
-// 	e.Count++
-// 	e.Groups = append(e.Groups, AssetsHoldingGroup{})
-// 	copy(e.Groups[gi+1:], e.Groups[gi:])
-// 	e.Groups[gi+1] = rightGroup
-// }
 
 func makeAssetGroup(aidx basics.AssetIndex, data interface{}, b groupBuilder) interface{} {
 	desc := AssetGroupDesc{
