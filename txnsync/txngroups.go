@@ -141,9 +141,6 @@ type encodedAssetConfigTxnFields struct {
 	ConfigAsset        []basics.AssetIndex `codec:"caid,allocbound=maxEncodedTransactionGroup"`
 	BitmaskConfigAsset bitmask             `codec:"caidbm"`
 
-	//AssetParams        []basics.AssetParams `codec:"apar,allocbound=maxEncodedTransactionGroup"`
-	//BitmaskAssetParams bitmask              `codec:"aparbm"`
-
 	encodedAssetParams
 }
 
@@ -236,7 +233,7 @@ type encodedApplicationCallTxnFields struct {
 	ApplicationID        []basics.AppIndex `codec:"apid,allocbound=maxEncodedTransactionGroup"`
 	BitmaskApplicationID bitmask           `codec:"apidbm"`
 
-	OnCompletion        []transactions.OnCompletion `codec:"apan,allocbound=maxEncodedTransactionGroup"`
+	OnCompletion        []byte `codec:"apan,allocbound=maxEncodedTransactionGroup"`
 	BitmaskOnCompletion bitmask                     `codec:"apanbm"`
 
 	ApplicationArgs        []applicationArgs `codec:"apaa,allocbound=maxEncodedTransactionGroup"`
@@ -251,11 +248,21 @@ type encodedApplicationCallTxnFields struct {
 	ForeignAssets        []assetIndices `codec:"apas,allocbound=maxEncodedTransactionGroup"`
 	BitmaskForeignAssets bitmask        `codec:"apasbm"`
 
-	LocalStateSchema        []basics.StateSchema `codec:"apls,allocbound=maxEncodedTransactionGroup"`
-	BitmaskLocalStateSchema bitmask              `codec:"aplsbm"`
+	LocalNumUint      []uint64 `codec:"lnui,allocbound=maxEncodedTransactionGroup"`
+	BitmaskLocalNumUint bitmask              `codec:"lnuibm"`
+	LocalNumByteSlice []uint64 `codec:"lnbs,allocbound=maxEncodedTransactionGroup"`
+	BitmaskLocalNumByteSlice bitmask              `codec:"lnbsbm"`
 
-	GlobalStateSchema        []basics.StateSchema `codec:"apgs,allocbound=maxEncodedTransactionGroup"`
-	BitmaskGlobalStateSchema bitmask              `codec:"apgsbm"`
+	GlobalNumUint      []uint64 `codec:"gnui,allocbound=maxEncodedTransactionGroup"`
+	BitmaskGlobalNumUint bitmask              `codec:"gnuibm"`
+	GlobalNumByteSlice []uint64 `codec:"gnbs,allocbound=maxEncodedTransactionGroup"`
+	BitmaskGlobalNumByteSlice bitmask              `codec:"gnbsbm"`
+
+	//LocalStateSchema        []basics.StateSchema `codec:"apls,allocbound=maxEncodedTransactionGroup"`
+	//BitmaskLocalStateSchema bitmask              `codec:"aplsbm"`
+	//
+	//GlobalStateSchema        []basics.StateSchema `codec:"apgs,allocbound=maxEncodedTransactionGroup"`
+	//BitmaskGlobalStateSchema bitmask              `codec:"apgsbm"`
 
 	ApprovalProgram        []program `codec:"apap,allocbound=maxEncodedTransactionGroup"`
 	BitmaskApprovalProgram bitmask   `codec:"apapbm"`
@@ -466,7 +473,7 @@ func getSlice(b []byte, index int, size int) []byte {
 }
 
 func getHalfByte(b []byte, index int) byte {
-	if index*2 > len(b) {
+	if index > len(b) * 2 {
 		return 0
 	}
 	if index % 2 == 0 {
@@ -476,15 +483,15 @@ func getHalfByte(b []byte, index int) byte {
 	}
 }
 
-func setHalfByte(b []byte, index int, value byte) {
-	if index*2 > len(b) {
-		return
+func squeezeByteArray(b []byte) []byte {
+	compressed := make([]byte, (len(b) + 1) / 2 )
+	for index := range compressed {
+		compressed[index] = b[index*2]*16
+		if index*2+1 < len(b) {
+			compressed[index] += b[index*2+1]
+		}
 	}
-	if index % 2 == 0 {
-		b[index/2] = b[index/2] % 16 + value * 16
-	} else {
-		b[index/2] = b[index/2] / 16 * 16 + value
-	}
+	return compressed
 }
 
 func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte {
@@ -682,6 +689,7 @@ func deconstructTransactions(stub *txGroupsEncodingStub, i int, txn transactions
 
 func finishDeconstructTransactions(stub *txGroupsEncodingStub) {
 	stub.BitmaskTxType.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.TxType = squeezeByteArray(stub.TxType)
 	finishDeconstructTxnHeader(stub)
 	finishDeconstructKeyregTxnFields(stub)
 	finishDeconstructPaymentTxnFields(stub)
@@ -1013,8 +1021,10 @@ func setupDeconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 	stub.BitmaskAccounts = make(bitmask, bitmaskLen)
 	stub.BitmaskForeignApps = make(bitmask, bitmaskLen)
 	stub.BitmaskForeignAssets = make(bitmask, bitmaskLen)
-	stub.BitmaskLocalStateSchema = make(bitmask, bitmaskLen)
-	stub.BitmaskGlobalStateSchema = make(bitmask, bitmaskLen)
+	stub.BitmaskLocalNumUint = make(bitmask, bitmaskLen)
+	stub.BitmaskLocalNumByteSlice = make(bitmask, bitmaskLen)
+	stub.BitmaskGlobalNumUint = make(bitmask, bitmaskLen)
+	stub.BitmaskGlobalNumByteSlice = make(bitmask, bitmaskLen)
 	stub.BitmaskApprovalProgram = make(bitmask, bitmaskLen)
 	stub.BitmaskClearStateProgram = make(bitmask, bitmaskLen)
 }
@@ -1026,7 +1036,7 @@ func deconstructApplicationCallTxnFields(stub *txGroupsEncodingStub, i int, txn 
 	}
 	if txn.Txn.OnCompletion != 0 {
 		stub.BitmaskOnCompletion.SetBit(i)
-		stub.OnCompletion = append(stub.OnCompletion, txn.Txn.OnCompletion)
+		stub.OnCompletion = append(stub.OnCompletion, byte(txn.Txn.OnCompletion))
 	}
 	if txn.Txn.ApplicationArgs != nil {
 		stub.BitmaskApplicationArgs.SetBit(i)
@@ -1045,12 +1055,20 @@ func deconstructApplicationCallTxnFields(stub *txGroupsEncodingStub, i int, txn 
 		stub.ForeignAssets = append(stub.ForeignAssets, txn.Txn.ForeignAssets)
 	}
 	if !txn.Txn.LocalStateSchema.MsgIsZero() {
-		stub.BitmaskLocalStateSchema.SetBit(i)
-		stub.LocalStateSchema = append(stub.LocalStateSchema, txn.Txn.LocalStateSchema)
+		stub.BitmaskLocalNumUint.SetBit(i)
+		stub.LocalNumUint = append(stub.LocalNumUint, txn.Txn.LocalStateSchema.NumUint)
+	}
+	if !txn.Txn.LocalStateSchema.MsgIsZero() {
+		stub.BitmaskLocalNumByteSlice.SetBit(i)
+		stub.LocalNumByteSlice = append(stub.LocalNumByteSlice, txn.Txn.LocalStateSchema.NumByteSlice)
 	}
 	if !txn.Txn.GlobalStateSchema.MsgIsZero() {
-		stub.BitmaskGlobalStateSchema.SetBit(i)
-		stub.GlobalStateSchema = append(stub.GlobalStateSchema, txn.Txn.GlobalStateSchema)
+		stub.BitmaskGlobalNumUint.SetBit(i)
+		stub.GlobalNumUint = append(stub.GlobalNumUint, txn.Txn.GlobalStateSchema.NumUint)
+	}
+	if !txn.Txn.GlobalStateSchema.MsgIsZero() {
+		stub.BitmaskGlobalNumByteSlice.SetBit(i)
+		stub.GlobalNumByteSlice = append(stub.GlobalNumByteSlice, txn.Txn.GlobalStateSchema.NumByteSlice)
 	}
 	if txn.Txn.ApprovalProgram != nil {
 		stub.BitmaskApprovalProgram.SetBit(i)
@@ -1063,14 +1081,17 @@ func deconstructApplicationCallTxnFields(stub *txGroupsEncodingStub, i int, txn 
 }
 
 func finishDeconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
+	stub.OnCompletion = squeezeByteArray(stub.OnCompletion)
 	stub.BitmaskApplicationID.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskOnCompletion.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskApplicationArgs.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskAccounts.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskForeignApps.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskForeignAssets.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskLocalStateSchema.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskGlobalStateSchema.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskLocalNumUint.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskLocalNumByteSlice.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskGlobalNumUint.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskGlobalNumByteSlice.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskApprovalProgram.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskClearStateProgram.trimBitmask(int(stub.TotalTransactionsCount))
 }
@@ -1147,7 +1168,7 @@ func reconstructTransactions(stub *txGroupsEncodingStub) {
 	stub.BitmaskTxType.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
 		if exists := stub.BitmaskTxType.EntryExists(i); exists {
-			stub.SignedTxns[i].Txn.Type = ByteToTxType(stub.TxType[index])
+			stub.SignedTxns[i].Txn.Type = ByteToTxType(getHalfByte(stub.TxType, index))
 			index++
 		} else {
 			stub.SignedTxns[i].Txn.Type = protocol.PaymentTx
@@ -1507,7 +1528,7 @@ func reconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 	stub.BitmaskOnCompletion.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
 		if exists := stub.BitmaskOnCompletion.EntryExists(i); exists {
-			stub.SignedTxns[i].Txn.OnCompletion = stub.OnCompletion[index]
+			stub.SignedTxns[i].Txn.OnCompletion = transactions.OnCompletion(getHalfByte(stub.OnCompletion, index))
 			index++
 		}
 	}
@@ -1516,6 +1537,14 @@ func reconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 	for i := range stub.SignedTxns {
 		if exists := stub.BitmaskApplicationArgs.EntryExists(i); exists {
 			stub.SignedTxns[i].Txn.ApplicationArgs = stub.ApplicationArgs[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskAccounts.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskAccounts.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.Accounts = stub.Accounts[index]
 			index++
 		}
 	}
@@ -1536,26 +1565,34 @@ func reconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) {
 		}
 	}
 	index = 0
-	stub.BitmaskApplicationArgs.expandBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskLocalNumUint.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists := stub.BitmaskApplicationArgs.EntryExists(i); exists {
-			stub.SignedTxns[i].Txn.ApplicationArgs = stub.ApplicationArgs[index]
+		if exists := stub.BitmaskLocalNumUint.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.LocalStateSchema.NumUint = stub.LocalNumUint[index]
 			index++
 		}
 	}
 	index = 0
-	stub.BitmaskLocalStateSchema.expandBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskLocalNumByteSlice.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists := stub.BitmaskLocalStateSchema.EntryExists(i); exists {
-			stub.SignedTxns[i].Txn.LocalStateSchema = stub.LocalStateSchema[index]
+		if exists := stub.BitmaskLocalNumByteSlice.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.LocalStateSchema.NumByteSlice = stub.LocalNumByteSlice[index]
 			index++
 		}
 	}
 	index = 0
-	stub.BitmaskGlobalStateSchema.expandBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskGlobalNumUint.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists := stub.BitmaskGlobalStateSchema.EntryExists(i); exists {
-			stub.SignedTxns[i].Txn.GlobalStateSchema = stub.GlobalStateSchema[index]
+		if exists := stub.BitmaskGlobalNumUint.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.GlobalStateSchema.NumUint = stub.GlobalNumUint[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskGlobalNumByteSlice.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskGlobalNumByteSlice.EntryExists(i); exists {
+			stub.SignedTxns[i].Txn.GlobalStateSchema.NumByteSlice = stub.GlobalNumByteSlice[index]
 			index++
 		}
 	}
