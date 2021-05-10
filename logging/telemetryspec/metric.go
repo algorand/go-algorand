@@ -83,6 +83,44 @@ func (m AssembleBlockMetrics) Identifier() Metric {
 	return assembleBlockMetricsIdentifier
 }
 
+const transactionSyncProfilingMetricsIdentifier Metric = "SyncProfile"
+
+// TransactionSyncProfilingMetrics is the profiling metrics of the recent transaction sync activity
+type TransactionSyncProfilingMetrics struct {
+	TotalOps                     uint64
+	IdleOps                      uint64
+	TransactionPoolChangedOps    uint64
+	NewRoundOps                  uint64
+	PeerStateOps                 uint64
+	IncomingMsgOps               uint64
+	OutgoingMsgOps               uint64
+	NextOffsetOps                uint64
+	GetTxnGroupsOps              uint64
+	AssembleMessageOps           uint64
+	SendMessageOps               uint64
+	MakeBloomFilterOps           uint64
+	SelectPendingTransactionsOps uint64
+
+	TotalDuration                    uint64
+	IdlePercent                      float64
+	TransactionPoolChangedPercent    float64
+	NewRoundPercent                  float64
+	PeerStatePercent                 float64
+	IncomingMsgPercent               float64
+	OutgoingMsgPercent               float64
+	NextOffsetPercent                float64
+	GetTxnGroupsPercent              float64
+	AssembleMessagePercent           float64
+	SendMessagePercent               float64
+	MakeBloomFilterPercent           float64
+	SelectPendingTransactionsPercent float64
+}
+
+// Identifier implements the required MetricDetails interface, retrieving the Identifier for this set of metrics.
+func (m TransactionSyncProfilingMetrics) Identifier() Metric {
+	return transactionSyncProfilingMetricsIdentifier
+}
+
 //-------------------------------------------------------
 // ProcessBlock
 
