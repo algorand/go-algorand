@@ -64,7 +64,9 @@ func TestHalfByte(t *testing.T) {
 	}
 	b = squeezeByteArray(b)
 	for i := 0; i < 10; i++ {
-		require.Equal(t, byte(i), getHalfByte(b, i))
+		val, err := getHalfByte(b, i)
+		require.NoError(t, err)
+		require.Equal(t, byte(i), val)
 	}
 }
 
@@ -374,10 +376,10 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 		encodedGroupsBytes := encodeTransactionGroups(txnGroups)
 		out, err := decodeTransactionGroups(encodedGroupsBytes)
 		require.NoError(t, err)
-		//if fmt.Sprintf("%v", out[0].Transactions[0].Txn.ApplicationCallTxnFields) != fmt.Sprintf("%v", txnGroups[0].Transactions[0].Txn.ApplicationCallTxnFields) {
-		//	fmt.Println(out[0].Transactions[0].Txn.ApplicationCallTxnFields)
+		//if fmt.Sprintf("%v", out[0].Transactions[0].Txn) != fmt.Sprintf("%v", txnGroups[0].Transactions[0].Txn) {
+		//	fmt.Println(out[0].Transactions[0].Txn.Receiver)
 		//	fmt.Println()
-		//	fmt.Println(txnGroups[0].Transactions[0].Txn.ApplicationCallTxnFields)
+		//	fmt.Println(txnGroups[0].Transactions[0].Txn.Receiver)
 		//	fmt.Println()
 		//}
 		require.ElementsMatch(t, txnGroups, out)

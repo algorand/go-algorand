@@ -50,7 +50,6 @@ const (
 
 // TxnTypes is an array containing all the defined transaction types
 var TxnTypes = []TxType{
-	UnknownTx,
 	PaymentTx,
 	KeyRegistrationTx,
 	AssetConfigTx,
@@ -58,4 +57,5 @@ var TxnTypes = []TxType{
 	AssetFreezeTx,
 	ApplicationCallTx,
 	CompactCertTx,
+	UnknownTx,
 }
