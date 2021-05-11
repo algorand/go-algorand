@@ -66,8 +66,6 @@ type profiler struct {
 	profileSum time.Duration
 	// profileSpan is the max span of the array ( or - the window ) that we would like to maintain.
 	profileSpan time.Duration
-	// spanReached flag is used to indicate whether we've already reached the window or not.
-	spanReached bool
 	// lastProfileLog is the last time we've logged to the telemetry.
 	lastProfileLog time.Duration
 	// logInterval defines what is the frequency at which we send an event to the telemetry. Zero to disable.
@@ -137,14 +135,19 @@ func (p *profiler) prune() {
 
 		p.profile = p.profile[1:]
 		e.times = e.times[1:]
-		p.spanReached = true
 	}
 }
 
 func (p *profiler) maybeLogProfile() {
-	if !p.spanReached || p.logInterval == 0 {
+	// do we have the log profile enabled ?
+	if p.logInterval == 0 {
 		return
 	}
+	// do we have enough samples ? ( i.e. at least 50% sample time )
+	if p.profileSum < p.profileSpan/2 {
+		return
+	}
+	// have we send metrics recently ?
 	curTime := p.clock.Since()
 	if curTime-p.lastProfileLog <= p.logInterval {
 		return
