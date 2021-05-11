@@ -75,11 +75,11 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	roundSettings := s.node.GetCurrentRoundSettings()
 	s.onNewRoundEvent(MakeNewRoundEvent(roundSettings.Round, roundSettings.FetchTransactions))
 
-	// create a profiler, and it's profiling elements.
+	// create a profiler, and its profiling elements.
 	s.profiler = makeProfiler(200*time.Millisecond, s.clock, s.log, 2000*time.Millisecond) // todo : make the time configurable.
 	profIdle := s.profiler.getElement(profElementIdle)
 	profTxChange := s.profiler.getElement(profElementTxChange)
-	profNewRounnd := s.profiler.getElement(profElementNewRounnd)
+	profNewRounnd := s.profiler.getElement(profElementNewRound)
 	profPeerState := s.profiler.getElement(profElementPeerState)
 	profIncomingMsg := s.profiler.getElement(profElementIncomingMsg)
 	profOutgoingMsg := s.profiler.getElement(profElementOutgoingMsg)

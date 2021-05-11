@@ -108,15 +108,15 @@ type TransactionSyncProfilingMetrics struct {
 	GetTxnGroupsOps uint64
 	// number of times the transaction sync was assembling messages
 	AssembleMessageOps uint64
-	// number of time the transaction sync was sending messages
+	// number of times the transaction sync was sending messages
 	SendMessageOps uint64
-	// number of time the transaction sync was creating bloom filters
+	// number of times the transaction sync was creating bloom filters
 	MakeBloomFilterOps uint64
-	// number of time the transaction sync was selecting pending transactions out of existing pool
+	// number of times the transaction sync was selecting pending transactions out of existing pool
 	SelectPendingTransactionsOps uint64
 
 	// total duration of this profiling session
-	TotalDuration uint64
+	TotalDuration time.Duration
 	// percent of time the transaction sync was idle
 	IdlePercent float64
 	// percent of time the transaction sync was processing transaction pool changes

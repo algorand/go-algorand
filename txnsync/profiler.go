@@ -30,7 +30,7 @@ type profElements int
 const (
 	profElementIdle = iota
 	profElementTxChange
-	profElementNewRounnd
+	profElementNewRound
 	profElementPeerState
 	profElementIncomingMsg
 	profElementOutgoingMsg
@@ -49,11 +49,13 @@ const (
 
 // The profiler struct provides profiling information regarding the main loop performance
 // characteristics. Using it provides statistics information about the recent duty cycle utilization,
-// that could be used when trying to throlle the accuracy and performance of the transaction sync.
+// that could be used when trying to throttle the accuracy and performance of the transaction sync.
 type profiler struct {
 	// clock used as the source clock for measurements.
 	clock timers.WallClock
-	// elements contains the elements we want to measure.
+	// elements contains the elements we want to measure. The user of this struct would not interact
+	// with this variable directly. Instead, he/she would use getElement to get the element for a specific
+	// profElements and use the start()/end() methods on that element.
 	elements []*element
 	// log is used to report the outcome of the measuring.
 	log logging.Logger
@@ -137,10 +139,9 @@ func (p *profiler) prune() {
 		e.times = e.times[1:]
 		p.spanReached = true
 	}
-	p.logProfile()
 }
 
-func (p *profiler) logProfile() {
+func (p *profiler) maybeLogProfile() {
 	if !p.spanReached || p.logInterval == 0 {
 		return
 	}
@@ -149,12 +150,15 @@ func (p *profiler) logProfile() {
 		return
 	}
 	p.lastProfileLog = curTime
+	p.logProfile()
+}
 
+func (p *profiler) logProfile() {
 	metrics := telemetryspec.TransactionSyncProfilingMetrics{
 		TotalOps:                     uint64(len(p.profile)),
 		IdleOps:                      uint64(len(p.elements[profElementIdle].times)),
 		TransactionPoolChangedOps:    uint64(len(p.elements[profElementTxChange].times)),
-		NewRoundOps:                  uint64(len(p.elements[profElementNewRounnd].times)),
+		NewRoundOps:                  uint64(len(p.elements[profElementNewRound].times)),
 		PeerStateOps:                 uint64(len(p.elements[profElementPeerState].times)),
 		IncomingMsgOps:               uint64(len(p.elements[profElementIncomingMsg].times)),
 		OutgoingMsgOps:               uint64(len(p.elements[profElementOutgoingMsg].times)),
@@ -165,10 +169,10 @@ func (p *profiler) logProfile() {
 		MakeBloomFilterOps:           uint64(len(p.elements[profElementMakeBloomFilter].times)),
 		SelectPendingTransactionsOps: uint64(len(p.elements[profElementTxnsSelection].times)),
 
-		TotalDuration:                    uint64(p.profileSum),
+		TotalDuration:                    time.Duration(p.profileSum),
 		IdlePercent:                      float64(p.elements[profElementIdle].total) * 100.0 / float64(p.profileSum),
 		TransactionPoolChangedPercent:    float64(p.elements[profElementTxChange].total) * 100.0 / float64(p.profileSum),
-		NewRoundPercent:                  float64(p.elements[profElementNewRounnd].total) * 100.0 / float64(p.profileSum),
+		NewRoundPercent:                  float64(p.elements[profElementNewRound].total) * 100.0 / float64(p.profileSum),
 		PeerStatePercent:                 float64(p.elements[profElementPeerState].total) * 100.0 / float64(p.profileSum),
 		IncomingMsgPercent:               float64(p.elements[profElementIncomingMsg].total) * 100.0 / float64(p.profileSum),
 		OutgoingMsgPercent:               float64(p.elements[profElementOutgoingMsg].total) * 100.0 / float64(p.profileSum),
@@ -201,5 +205,6 @@ func (e *element) end() {
 	if !e.detached {
 		e.profiler.profileSum += diff
 		e.profiler.prune()
+		e.profiler.maybeLogProfile()
 	}
 }
