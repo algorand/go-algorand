@@ -19,6 +19,7 @@ package txnsync
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
@@ -461,7 +462,7 @@ func getSlice(b []byte, index int, size int) ([]byte, error) {
 	return b[index*size : index*size+size], nil
 }
 
-func getHalfByte(b []byte, index int) (byte, error) {
+func getNibble(b []byte, index int) (byte, error) {
 	if index > len(b) * 2 {
 		return 0, errDataMissing
 	}
@@ -473,14 +474,13 @@ func getHalfByte(b []byte, index int) (byte, error) {
 }
 
 func squeezeByteArray(b []byte) []byte {
-	compressed := make([]byte, (len(b) + 1) / 2 )
-	for index := range compressed {
-		compressed[index] = b[index*2]*16
-		if index*2+1 < len(b) {
-			compressed[index] += b[index*2+1]
-		}
+	if len(b)%2 == 1 {
+		b = append(b, byte(0))
 	}
-	return compressed
+	for index := 0; index*2<len(b); index++ {
+		b[index] = b[index*2]*16 + b[index*2+1]
+	}
+	return b[0 : len(b)/2]
 }
 
 func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte {
@@ -542,8 +542,6 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 	}
 	finishDeconstructSignedTransactions(&stub)
 
-	//return []byte{}
-
 	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
 }
 
@@ -565,13 +563,13 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 	}
 
 	txnGroups = make([]transactions.SignedTxGroup, stub.TransactionGroupCount)
-	for index, i := 0, 0; index < int(stub.TotalTransactionsCount); i++ {
+	for txnCounter, txnGroupIndex := 0, 0; txnCounter < int(stub.TotalTransactionsCount); txnGroupIndex++ {
 		size := 1
-		if i < len(stub.TransactionGroupSizes) {
-			size = int(stub.TransactionGroupSizes[i]) + 1
+		if txnGroupIndex < len(stub.TransactionGroupSizes) {
+			size = int(stub.TransactionGroupSizes[txnGroupIndex]) + 1
 		}
-		txnGroups[i].Transactions = stub.SignedTxns[index : index+size]
-		index += size
+		txnGroups[txnGroupIndex].Transactions = stub.SignedTxns[txnCounter : txnCounter+size]
+		txnCounter += size
 	}
 
 	addGroupHashes(txnGroups, int(stub.TotalTransactionsCount), stub.BitmaskGroup)
@@ -581,9 +579,10 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 
 func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitmask) {
 	index := 0
+	txGroupHashes := make([]crypto.Digest, txnCount)
 	for _, txns := range txnGroups {
 		var txGroup transactions.TxGroup
-		txGroup.TxGroupHashes = make([]crypto.Digest, len(txns.Transactions))
+		txGroup.TxGroupHashes = txGroupHashes[index:index+len(txns.Transactions)]
 		for i, tx := range txns.Transactions {
 			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
 		}
@@ -1211,7 +1210,7 @@ func reconstructTransactions(stub *txGroupsEncodingStub) error {
 	stub.BitmaskTxType.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
 		if exists := stub.BitmaskTxType.EntryExists(i); exists {
-			b, err := getHalfByte(stub.TxType, index)
+			b, err := getNibble(stub.TxType, index)
 			if err != nil {
 				return err
 			}
@@ -1716,7 +1715,7 @@ func reconstructApplicationCallTxnFields(stub *txGroupsEncodingStub) error {
 	stub.BitmaskOnCompletion.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
 		if exists := stub.BitmaskOnCompletion.EntryExists(i); exists {
-			b, err := getHalfByte(stub.OnCompletion, index)
+			b, err := getNibble(stub.OnCompletion, index)
 			if err != nil {
 				return err
 			}

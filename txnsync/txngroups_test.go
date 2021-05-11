@@ -57,14 +57,14 @@ func TestBitmask(t *testing.T) {
 	}
 }
 
-func TestHalfByte(t *testing.T) {
+func TestNibble(t *testing.T) {
 	var b []byte
 	for i := 0; i < 10; i++ {
 		b = append(b, byte(i))
 	}
 	b = squeezeByteArray(b)
 	for i := 0; i < 10; i++ {
-		val, err := getHalfByte(b, i)
+		val, err := getNibble(b, i)
 		require.NoError(t, err)
 		require.Equal(t, byte(i), val)
 	}
@@ -371,7 +371,7 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 				Transactions: txns,
 			},
 		}
-		addGroupHashes(txnGroups, 6, []byte{1})
+		addGroupHashes(txnGroups, len(txns), []byte{1})
 
 		encodedGroupsBytes := encodeTransactionGroups(txnGroups)
 		out, err := decodeTransactionGroups(encodedGroupsBytes)
