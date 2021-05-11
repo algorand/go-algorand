@@ -340,14 +340,28 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
 
-	// Cost is now dynamic and exactly 1 less, because bnz skips "err". It's caught during Eval
-	ep.Proto.LogicSigMaxCost = 2138
+	// Cost remains the same, because v0 does not get dynamic treatment
+	ep.Proto.LogicSigMaxCost = 2139
+	err = Check(program, ep)
+	require.Error(t, err)
+
+	ep.Proto.LogicSigMaxCost = 2140
+	err = Check(program, ep)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// But in v4, cost is now dynamic and exactly 1 less than v2/v3,
+	// because bnz skips "err". It's caught during Eval
+	program[0] = 4
+	ep.Proto.LogicSigMaxCost = 2306
 	err = Check(program, ep)
 	require.NoError(t, err)
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 
-	ep.Proto.LogicSigMaxCost = 2139
+	ep.Proto.LogicSigMaxCost = 2307
 	err = Check(program, ep)
 	require.NoError(t, err)
 	pass, err = Eval(program, ep)

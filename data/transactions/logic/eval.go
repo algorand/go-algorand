@@ -434,8 +434,8 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 // CheckStateful should be faster than EvalStateful.  It can perform
 // static checks and reject programs that are invalid. Returns a cost
 // estimate of relative execution time. This cost is not relevent when
-// params.Proto.DynamicTealCost is true, and so 1 is returned so that
-// callers may continue to check for a high cost being invalid.
+// the program is v4 or higher, and so 1 is returned so that callers
+// may continue to check for a high cost being invalid.
 func CheckStateful(program []byte, params EvalParams) error {
 	params.runModeFlags = runModeApplication
 	return check(program, params)
@@ -443,8 +443,8 @@ func CheckStateful(program []byte, params EvalParams) error {
 
 // Check should be faster than Eval.  It can perform static checks and
 // reject programs that are invalid. Returns a cost estimate of
-// relative execution time. This cost is no relevent when
-// proto.DynamicTealCost is true, and so 1 is returned so that callers
+// relative execution time. This cost is not relevent when
+// the program is v4 or higher, and so 1 is returned so that callers
 // may continue to check for a high cost being invalid.
 func Check(program []byte, params EvalParams) error {
 	params.runModeFlags = runModeSignature
@@ -499,7 +499,7 @@ func check(program []byte, params EvalParams) (err error) {
 	cx.instructionStarts = make(map[int]bool)
 
 	maxCost := params.budget()
-	if params.Proto.DynamicTealCost {
+	if version >= backBranchEnabledVersion {
 		maxCost = math.MaxInt32
 	}
 	staticCost := 0
@@ -511,7 +511,7 @@ func check(program []byte, params EvalParams) (err error) {
 		}
 		staticCost += stepCost
 		if staticCost > maxCost {
-			return fmt.Errorf("pc=%3d static cost budget %d exceeded", cx.pc, maxCost)
+			return fmt.Errorf("pc=%3d static cost budget of %d exceeded", cx.pc, maxCost)
 		}
 		if cx.pc <= prevpc {
 			// Recall, this is advancing through opcodes
@@ -583,7 +583,7 @@ func (cx *evalContext) step() {
 	}
 	cx.cost += deets.Cost
 	if cx.cost > cx.budget() {
-		cx.err = fmt.Errorf("budget of %d exceeded at pc=%d, executing %s", cx.budget(), cx.pc, spec.Name)
+		cx.err = fmt.Errorf("pc=%3d dynamic cost budget of %d exceeded, executing %s", cx.pc, cx.budget(), spec.Name)
 		return
 	}
 	spec.op(cx)

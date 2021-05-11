@@ -212,9 +212,6 @@ type ConsensusParams struct {
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
 
-	// calculate TEAL costs at runtime
-	DynamicTealCost bool
-
 	// max decimal precision for assets
 	MaxAssetDecimals uint32
 
@@ -913,7 +910,8 @@ func initConsensusProtocols() {
 	// Enable transaction Merkle tree.
 	vFuture.PaysetCommit = PaysetCommitMerkle
 
-	vFuture.DynamicTealCost = true
+	// Enable TEAL 4
+	vFuture.LogicSigVersion = 4
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

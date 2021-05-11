@@ -51,7 +51,6 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 	return config.ConsensusParams{
 		LogicSigVersion:     version,
 		LogicSigMaxCost:     20000,
-		DynamicTealCost:     version >= backBranchEnabledVersion,
 		MaxAppProgramCost:   700,
 		MaxAppKeyLen:        64,
 		MaxAppBytesValueLen: 64,
@@ -2409,14 +2408,14 @@ func TestSlowLogic(t *testing.T) {
 	require.NoError(t, err)
 	_, err = Eval(ops.Program, ep4)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "exceeded at pc")
+	require.Contains(t, err.Error(), "dynamic cost")
 
 	ops = testProg(t, v2overspend, 4)
 	err = Check(ops.Program, ep4)
 	require.NoError(t, err)
 	_, err = Eval(ops.Program, ep4)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "exceeded at pc")
+	require.Contains(t, err.Error(), "dynamic cost")
 }
 
 func isNotPanic(t *testing.T, err error) {
