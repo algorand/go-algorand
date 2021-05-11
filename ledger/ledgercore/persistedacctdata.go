@@ -172,6 +172,8 @@ type AbstractAssetGroup interface {
 	Key() int64
 	SetKey(key int64)
 	Reset()
+	// Fetch loads group data using fetcher into a map provided assets argument
+	Fetch(fetcher func(int64) ([]byte, basics.Round, error), assets interface{}) (basics.Round, error)
 
 	delete(ai int)
 	slice(pos uint32, maxDelta uint64)
@@ -194,6 +196,12 @@ type AbstractAssetGroupList interface {
 	Assign(gi int, group interface{})
 	// ReleaseGroup removes group gi from the groups list
 	ReleaseGroup(gi int)
+
+	// FindGroup returns group index where asset aidx belongs to, or -1 otherwise
+	FindGroup(aidx basics.AssetIndex, startIdx int) int
+	// FindAsset returns group index and asset index if found and (-1, -1) otherwise.
+	// If a matching group found but the group is not loaded yet, it returns (groupIdx, -1)
+	FindAsset(aidx basics.AssetIndex, startIdx int) (int, int)
 
 	// dropGroup is similar to ReleaseGroup but does not modify GroupList
 	// assuming it was changed by a caller
@@ -383,6 +391,12 @@ func (g AssetsHoldingGroup) Loaded() bool {
 
 // Load sets a group data value in the group
 func (g *AssetsHoldingGroup) Load(gd AssetsHoldingGroupData) {
+	g.groupData = gd
+	g.loaded = true
+}
+
+// Load sets a group data value in the group
+func (g *AssetsParamsGroup) Load(gd AssetsParamsGroupData) {
 	g.groupData = gd
 	g.loaded = true
 }
@@ -737,6 +751,64 @@ func (g *AssetsHoldingGroup) Update(ai int, data interface{}) {
 // Update sets group data by asset index
 func (g *AssetsParamsGroup) Update(ai int, data interface{}) {
 	g.update(ai, data.(basics.AssetParams))
+}
+
+// Fetch loads group data using fetcher and returns all holdings
+func (g *AssetsHoldingGroup) Fetch(fetcher func(int64) ([]byte, basics.Round, error), assets interface{}) (basics.Round, error) {
+	var holdings map[basics.AssetIndex]basics.AssetHolding
+	if assets != nil {
+		holdings = assets.(map[basics.AssetIndex]basics.AssetHolding)
+	}
+
+	buf, rnd, err := fetcher(g.AssetGroupKey)
+	if err != nil {
+		return 0, err
+	}
+
+	var groupData AssetsHoldingGroupData
+	err = protocol.Decode(buf, &groupData)
+	if err != nil {
+		return 0, err
+	}
+
+	if holdings != nil {
+		aidx := g.MinAssetIndex
+		for i := 0; i < len(groupData.AssetOffsets); i++ {
+			aidx += groupData.AssetOffsets[i]
+			holdings[aidx] = groupData.GetHolding(i)
+		}
+	}
+	g.Load(groupData)
+	return rnd, nil
+}
+
+// Fetch loads group data into  using fetcher
+func (g *AssetsParamsGroup) Fetch(fetcher func(int64) ([]byte, basics.Round, error), assets interface{}) (basics.Round, error) {
+	var params map[basics.AssetIndex]basics.AssetParams
+	if assets != nil {
+		params = assets.(map[basics.AssetIndex]basics.AssetParams)
+	}
+
+	buf, rnd, err := fetcher(g.AssetGroupKey)
+	if err != nil {
+		return 0, err
+	}
+
+	var groupData AssetsParamsGroupData
+	err = protocol.Decode(buf, &groupData)
+	if err != nil {
+		return 0, err
+	}
+
+	if params != nil {
+		aidx := g.MinAssetIndex
+		for i := 0; i < len(groupData.AssetOffsets); i++ {
+			aidx += groupData.AssetOffsets[i]
+			params[aidx] = groupData.GetParams(i)
+		}
+	}
+	g.Load(groupData)
+	return rnd, nil
 }
 
 type assetDataGetter interface {

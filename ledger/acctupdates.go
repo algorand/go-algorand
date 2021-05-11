@@ -1859,9 +1859,9 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 				}
 
 				// remove deleted assets that might come from loadHoldings
-				mods := delta.GetHoldingDeltas(addr)
+				mods := delta.GetAssetDeltas(addr)
 				for aidx, action := range mods {
-					if action == ledgercore.ActionDelete {
+					if action == ledgercore.ActionHoldingDelete {
 						delete(assets, aidx)
 					}
 				}
@@ -1873,7 +1873,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
-				if full && macct.data.ExtendedAssetHolding.Count != 0 {
+				if full && (macct.data.ExtendedAssetHolding.Count != 0 || macct.data.ExtendedAssetParams.Count != 0) {
 					macct.data, err = loadFull(addr, &au.deltas[offset-1], &macct.data)
 				}
 				return macct.data, err
@@ -1887,7 +1887,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 				d, ok := au.deltas[offset].Get(addr)
 				if ok {
 					// load existing holdings and apply deltas
-					if full && d.ExtendedAssetHolding.Count != 0 {
+					if full && (macct.data.ExtendedAssetHolding.Count != 0 || macct.data.ExtendedAssetParams.Count != 0) {
 						d, err = loadFull(addr, &au.deltas[offset], &d)
 					}
 					return d, err
@@ -1902,6 +1902,15 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			au.baseAccounts.writePending(macct)
 			if full && macct.pad.ExtendedAssetHolding.Count != 0 {
 				macct.pad.Assets, macct.pad.ExtendedAssetHolding, err = au.accountsq.loadHoldings(macct.pad.ExtendedAssetHolding, macct.round)
+				var mismatchRoundErr *MismatchingDatabaseRoundError
+				if errors.As(err, &mismatchRoundErr) {
+					// go to waiting
+					// note, au.accountsMu is still held
+					goto retryLocked
+				}
+			}
+			if full && macct.pad.ExtendedAssetParams.Count != 0 {
+				macct.pad.AssetParams, macct.pad.ExtendedAssetParams, err = au.accountsq.loadParams(macct.pad.ExtendedAssetParams, macct.round)
 				var mismatchRoundErr *MismatchingDatabaseRoundError
 				if errors.As(err, &mismatchRoundErr) {
 					// go to waiting
@@ -1971,8 +1980,8 @@ func (au *accountUpdates) lookupHoldingWithoutRewards(rnd basics.Round, addr bas
 			if gi != -1 {
 				// if matching group found but the group is not loaded then load it
 				if ai == -1 {
-					var round basics.Round
-					_, pad.ExtendedAssetHolding.Groups[gi], round, err = loadHoldingGroup(loadStmt, pad.ExtendedAssetHolding.Groups[gi], nil)
+					fetcher := makeAssetFetcher(loadStmt)
+					round, err := pad.ExtendedAssetHolding.Groups[gi].Fetch(fetcher, nil)
 					if err != nil {
 						return err
 					}

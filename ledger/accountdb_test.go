@@ -1268,7 +1268,8 @@ func benchLoadHolding(b *testing.B, qs *accountsDbQueries, dbad dbAccountData, a
 	require.NotEqual(b, -1, gi)
 	require.Equal(b, -1, ai)
 	var err error
-	_, dbad.pad.ExtendedAssetHolding.Groups[gi], _, err = loadHoldingGroup(qs.loadAccountGroupDataStmt, dbad.pad.ExtendedAssetHolding.Groups[gi], nil)
+	fetcher := makeAssetFetcher(qs.loadAccountGroupDataStmt)
+	_, err = dbad.pad.ExtendedAssetHolding.Groups[gi].Fetch(fetcher, nil)
 	require.NoError(b, err)
 	_, ai = dbad.pad.ExtendedAssetHolding.FindAsset(aidx, gi)
 	require.NotEqual(b, -1, ai)
@@ -2125,7 +2126,10 @@ func TestAccountsNewCRUD(t *testing.T) {
 		a.NotEqual(-1, gi, aidx)
 		g := &old.pad.ExtendedAssetHolding.Groups[gi]
 		if !g.Loaded() {
-			groupData, _, err := loadHoldingGroupData(qs.loadAccountGroupDataStmt, g.AssetGroupKey)
+			buf, _, err := loadGroupData(qs.loadAccountGroupDataStmt, g.AssetGroupKey)
+			a.NoError(err)
+			var groupData ledgercore.AssetsHoldingGroupData
+			err = protocol.Decode(buf, &groupData)
 			a.NoError(err)
 			g.Load(groupData)
 			loaded[gi] = true
@@ -2222,7 +2226,10 @@ func TestAccountsNewCRUD(t *testing.T) {
 	for gi := range old.pad.ExtendedAssetHolding.Groups {
 		g := &old.pad.ExtendedAssetHolding.Groups[gi]
 		if !g.Loaded() {
-			groupData, _, err := loadHoldingGroupData(qs.loadAccountGroupDataStmt, g.AssetGroupKey)
+			buf, _, err := loadGroupData(qs.loadAccountGroupDataStmt, g.AssetGroupKey)
+			var groupData ledgercore.AssetsHoldingGroupData
+			err = protocol.Decode(buf, &groupData)
+			a.NoError(err)
 			a.NoError(err)
 			g.Load(groupData)
 		}
