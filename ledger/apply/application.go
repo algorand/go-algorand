@@ -274,7 +274,7 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	return nil
 }
 
-func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams, maxCost int) error {
+func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams) error {
 	err := logic.CheckStateful(ac.ApprovalProgram, *evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
@@ -336,8 +336,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// If this txn is going to set new programs (either for creation or
 	// update), check that the programs are valid and not too expensive
 	if ac.ApplicationID == 0 || ac.OnCompletion == transactions.UpdateApplicationOC {
-		maxCost := balances.ConsensusParams().MaxAppProgramCost
-		err = checkPrograms(&ac, evalParams, maxCost)
+		err = checkPrograms(&ac, evalParams)
 		if err != nil {
 			return err
 		}
