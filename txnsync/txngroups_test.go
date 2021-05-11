@@ -228,12 +228,25 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 	require.ElementsMatch(t, txnGroups, out)
 
 	count := make(map[protocol.TxType]int)
+	sigs := 0
+	msigs := 0
+	lsigs := 0
 	for _, txg := range txnGroups {
 		for _, txn := range txg.Transactions {
 			count[txn.Txn.Type]++
+			if !txn.Sig.MsgIsZero() {
+				sigs++
+			}
+			if !txn.Msig.MsgIsZero() {
+				msigs++
+			}
+			if !txn.Lsig.MsgIsZero() {
+				lsigs++
+			}
 		}
 	}
 	fmt.Println(count)
+	fmt.Println(sigs, msigs, lsigs)
 }
 
 func BenchmarkTxnGroupEncoding(b *testing.B) {

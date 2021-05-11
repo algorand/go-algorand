@@ -76,8 +76,8 @@ type encodedMsigs struct {
 	BitmaskVersion      bitmask                 `codec:"msigvbm"`
 	Threshold []uint8            `codec:"msigthr,allocbound=maxEncodedTransactionGroup"`
 	BitmaskThreshold      bitmask                 `codec:"msigthrbm"`
-	SubsigKeys   [][]crypto.PublicKey `codec:"subsigk,allocbound=maxEncodedTransactionGroup,allocbound=crypto.MaxMultisig"`
-	SubsigSigs [][]crypto.Signature `codec:"subsigs,allocbound=maxEncodedTransactionGroup,allocbound=crypto.MaxMultisig"`
+	// splitting subsigs further make the code much more complicated / does not give gains
+	Subsigs [][]crypto.MultisigSubsig `codec:"subsig,allocbound=maxEncodedTransactionGroup,allocbound=crypto.MaxMultisig"`
 	BitmaskSubsigs   bitmask                 `codec:"subsigsbm"`
 }
 
@@ -700,18 +700,10 @@ func deconstructMsigs(stub *txGroupsEncodingStub, i int, txn transactions.Signed
 	if txn.Msig.Subsigs != nil {
 		if stub.BitmaskSubsigs == nil {
 			stub.BitmaskSubsigs = make(bitmask, bitmaskLen)
-			stub.SubsigKeys = make([][]crypto.PublicKey, 0, int(stub.TotalTransactionsCount))
-			stub.SubsigSigs = make([][]crypto.Signature, 0, int(stub.TotalTransactionsCount))
+			stub.Subsigs = make([][]crypto.MultisigSubsig, 0, int(stub.TotalTransactionsCount))
 		}
 		stub.BitmaskSubsigs.SetBit(i)
-		keys := make([]crypto.PublicKey, len(txn.Msig.Subsigs))
-		sigs := make([]crypto.Signature, len(txn.Msig.Subsigs))
-		for i, subsig := range txn.Msig.Subsigs {
-			keys[i] = subsig.Key
-			sigs[i] = subsig.Sig
-		}
-		stub.SubsigKeys = append(stub.SubsigKeys, keys)
-		stub.SubsigSigs = append(stub.SubsigSigs, sigs)
+		stub.Subsigs = append(stub.Subsigs, txn.Msig.Subsigs)
 	}
 }
 
@@ -766,18 +758,10 @@ func deconstructLsigs(stub *txGroupsEncodingStub, i int, txn transactions.Signed
 	if txn.Lsig.Msig.Subsigs != nil {
 		if stub.BitmaskSubsigs == nil {
 			stub.BitmaskSubsigs = make(bitmask, bitmaskLen)
-			stub.SubsigKeys = make([][]crypto.PublicKey, 0, int(stub.TotalTransactionsCount))
-			stub.SubsigSigs = make([][]crypto.Signature, 0, int(stub.TotalTransactionsCount))
+			stub.Subsigs = make([][]crypto.MultisigSubsig, 0, int(stub.TotalTransactionsCount))
 		}
 		stub.BitmaskSubsigs.SetBit(i)
-		keys := make([]crypto.PublicKey, len(txn.Lsig.Msig.Subsigs))
-		sigs := make([]crypto.Signature, len(txn.Lsig.Msig.Subsigs))
-		for i, subsig := range txn.Lsig.Msig.Subsigs {
-			keys[i] = subsig.Key
-			sigs[i] = subsig.Sig
-		}
-		stub.SubsigKeys = append(stub.SubsigKeys, keys)
-		stub.SubsigSigs = append(stub.SubsigSigs, sigs)
+		stub.Subsigs = append(stub.Subsigs, txn.Lsig.Msig.Subsigs)
 	}
 }
 
@@ -1480,16 +1464,10 @@ func reconstructMsigs(stub *txGroupsEncodingStub) error {
 	stub.BitmaskSubsigs.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
 		if exists := stub.BitmaskSubsigs.EntryExists(i); exists {
-			if index >= len(stub.SubsigKeys) || index >= len(stub.SubsigSigs) {
+			if index >= len(stub.Subsigs) {
 				return errDataMissing
 			}
-			stub.SignedTxns[i].Msig.Subsigs = make([]crypto.MultisigSubsig, len(stub.SubsigKeys[index]))
-			for j := range stub.SubsigKeys[index] {
-				stub.SignedTxns[i].Msig.Subsigs[j] = crypto.MultisigSubsig{
-					Key: stub.SubsigKeys[index][j],
-					Sig: stub.SubsigSigs[index][j],
-				}
-			}
+			stub.SignedTxns[i].Msig.Subsigs = stub.Subsigs[index]
 			index++
 		}
 	}
