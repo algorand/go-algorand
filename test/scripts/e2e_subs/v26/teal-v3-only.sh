@@ -1,6 +1,6 @@
 #!/bin/bash
 
-date '+teal-v2-only start %Y%m%d_%H%M%S'
+date '+teal-v3-only start %Y%m%d_%H%M%S'
 
 set -e
 set -x
