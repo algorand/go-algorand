@@ -314,6 +314,16 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 			txn.Txn.ApplicationCallTxnFields = transactions.ApplicationCallTxnFields{}
 			txn.Txn.CompactCertTxnFields = transactions.CompactCertTxnFields{}
 			txn.Txn.Type = txType
+			txn.Lsig.Logic = []byte("logic")
+			if i % 3 != 0 {
+				txn.Sig = crypto.Signature{}
+			}
+			if i % 3 != 1 {
+				txn.Msig = crypto.MultisigSig{}
+			}
+			if i % 3 != 2 {
+				txn.Lsig = transactions.LogicSig{}
+			}
 			switch txType {
 			case protocol.UnknownTx:
 				continue
@@ -376,10 +386,10 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 		encodedGroupsBytes := encodeTransactionGroups(txnGroups)
 		out, err := decodeTransactionGroups(encodedGroupsBytes)
 		require.NoError(t, err)
-		//if fmt.Sprintf("%v", out[0].Transactions[0].Txn) != fmt.Sprintf("%v", txnGroups[0].Transactions[0].Txn) {
-		//	fmt.Println(out[0].Transactions[0].Txn.Receiver)
+		//if fmt.Sprintf("%v", out[0].Transactions[0]) != fmt.Sprintf("%v", txnGroups[0].Transactions[0]) {
+		//	fmt.Println(out[0].Transactions[0].Lsig)
 		//	fmt.Println()
-		//	fmt.Println(txnGroups[0].Transactions[0].Txn.Receiver)
+		//	fmt.Println(txnGroups[0].Transactions[0].Lsig)
 		//	fmt.Println()
 		//}
 		require.ElementsMatch(t, txnGroups, out)

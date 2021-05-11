@@ -379,8 +379,8 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
-			if zb0004 > maxMultisig {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxMultisig))
+			if zb0004 > MaxMultisig {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxMultisig))
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
@@ -442,8 +442,8 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
-				if zb0006 > maxMultisig {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(maxMultisig))
+				if zb0006 > MaxMultisig {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxMultisig))
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}

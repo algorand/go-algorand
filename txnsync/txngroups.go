@@ -59,27 +59,35 @@ type encodedSignedTxns struct {
 
 	Sig             []byte                  `codec:"sig,allocbound=maxSignatureBytes"`
 	BitmaskSig      bitmask                 `codec:"sigbm"`
-	Msig            []crypto.MultisigSig    `codec:"msig,allocbound=maxEncodedTransactionGroup"`
-	BitmaskMsig     bitmask                 `codec:"msigbm"`
-	Lsig            []transactions.LogicSig `codec:"lsig,allocbound=maxEncodedTransactionGroup"`
-	BitmaskLsig     bitmask                 `codec:"lsigbm"`
+
+	encodedMsigs
+	encodedLsigs
+
 	AuthAddr        []byte                  `codec:"sgnr,allocbound=maxAddressBytes"`
 	BitmaskAuthAddr bitmask                 `codec:"sgnrbm"`
 
 	encodedTxns
 }
 
-//type encodedMsigs struct {
-//	_struct struct{} `codec:",omitempty,omitemptyarray"`
-//
-//	Version   uint8            `codec:"v"`
-//	Threshold uint8            `codec:"thr"`
-//	Subsigs   []crypto.MultisigSubsig `codec:"subsig,allocbound=maxMultisig"`
-//}
-//
-//type encodedLsigs struct {
-//	_struct struct{} `codec:",omitempty,omitemptyarray"`
-//}
+type encodedMsigs struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Version   []uint8            `codec:"msigv,allocbound=maxEncodedTransactionGroup"`
+	BitmaskVersion      bitmask                 `codec:"msigvbm"`
+	Threshold []uint8            `codec:"msigthr,allocbound=maxEncodedTransactionGroup"`
+	BitmaskThreshold      bitmask                 `codec:"msigthrbm"`
+	SubsigKeys   [][]crypto.PublicKey `codec:"subsigk,allocbound=maxEncodedTransactionGroup,allocbound=crypto.MaxMultisig"`
+	SubsigSigs [][]crypto.Signature `codec:"subsigs,allocbound=maxEncodedTransactionGroup,allocbound=crypto.MaxMultisig"`
+	BitmaskSubsigs   bitmask                 `codec:"subsigsbm"`
+}
+
+type encodedLsigs struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	Logic   [][]byte             `codec:"lsigl,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxLogicSigMaxSize"`
+	BitmaskLogic      bitmask                 `codec:"lsiglbm"`
+	LogicArgs    [][][]byte `codec:"lsigarg,allocbound=maxEncodedTransactionGroup,allocbound=transactions.EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
+	BitmaskLogicArgs     bitmask                 `codec:"lsigargbm"`
+}
 
 type encodedTxns struct {
 	_struct       struct{} `codec:",omitempty,omitemptyarray"`
@@ -641,10 +649,8 @@ func setupDeconstructSignedTransactions(stub *txGroupsEncodingStub) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskAuthAddr = make(bitmask, bitmaskLen)
 	stub.AuthAddr = make([]byte, 0, int(stub.TotalTransactionsCount)*addressSize)
-	stub.BitmaskLsig = make(bitmask, bitmaskLen)
-	stub.Lsig = make([]transactions.LogicSig, 0, int(stub.TotalTransactionsCount))
-	stub.BitmaskMsig = make(bitmask, bitmaskLen)
-	stub.Msig = make([]crypto.MultisigSig, 0, int(stub.TotalTransactionsCount))
+	setupDeconstructMsigs(stub)
+	setupDeconstructLsigs(stub)
 	stub.BitmaskSig = make(bitmask, bitmaskLen)
 	stub.Sig = make([]byte, 0, int(stub.TotalTransactionsCount)*signatureSize)
 	setupDeconstructTransactions(stub)
@@ -656,14 +662,8 @@ func deconstructSignedTransactions(stub *txGroupsEncodingStub, i int, txn transa
 		stub.BitmaskSig.SetBit(i)
 		stub.Sig = append(stub.Sig, txn.Sig[:]...)
 	}
-	if !txn.Msig.MsgIsZero() {
-		stub.BitmaskMsig.SetBit(i)
-		stub.Msig = append(stub.Msig, txn.Msig)
-	}
-	if !txn.Lsig.MsgIsZero() {
-		stub.BitmaskLsig.SetBit(i)
-		stub.Lsig = append(stub.Lsig, txn.Lsig)
-	}
+	deconstructMsigs(stub, i, txn)
+	deconstructLsigs(stub, i, txn)
 	if !txn.AuthAddr.MsgIsZero() {
 		stub.BitmaskAuthAddr.SetBit(i)
 		stub.AuthAddr = append(stub.AuthAddr, txn.AuthAddr[:]...)
@@ -673,10 +673,96 @@ func deconstructSignedTransactions(stub *txGroupsEncodingStub, i int, txn transa
 
 func finishDeconstructSignedTransactions(stub *txGroupsEncodingStub) {
 	stub.BitmaskAuthAddr.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskLsig.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskMsig.trimBitmask(int(stub.TotalTransactionsCount))
+	finishDeconstructMsigs(stub)
+	finishDeconstructLsigs(stub)
 	stub.BitmaskSig.trimBitmask(int(stub.TotalTransactionsCount))
 	finishDeconstructTransactions(stub)
+}
+
+func setupDeconstructMsigs(stub *txGroupsEncodingStub) {
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskVersion = make(bitmask, bitmaskLen)
+	stub.Version = make([]uint8, 0, int(stub.TotalTransactionsCount))
+	stub.BitmaskThreshold = make(bitmask, bitmaskLen)
+	stub.Threshold = make([]uint8, 0, int(stub.TotalTransactionsCount))
+	stub.BitmaskSubsigs = make(bitmask, bitmaskLen)
+	stub.SubsigKeys = make([][]crypto.PublicKey, 0, int(stub.TotalTransactionsCount))
+	stub.SubsigSigs = make([][]crypto.Signature, 0, int(stub.TotalTransactionsCount))
+}
+
+func deconstructMsigs(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
+	if txn.Msig.Version != 0 {
+		stub.BitmaskVersion.SetBit(i)
+		stub.Version = append(stub.Version, txn.Msig.Version)
+	}
+	if txn.Msig.Threshold != 0 {
+		stub.BitmaskThreshold.SetBit(i)
+		stub.Threshold = append(stub.Threshold, txn.Msig.Threshold)
+	}
+	if txn.Msig.Subsigs != nil {
+		stub.BitmaskSubsigs.SetBit(i)
+		keys := make([]crypto.PublicKey, len(txn.Msig.Subsigs))
+		sigs := make([]crypto.Signature, len(txn.Msig.Subsigs))
+		for i, subsig := range txn.Msig.Subsigs {
+			keys[i] = subsig.Key
+			sigs[i] = subsig.Sig
+		}
+		stub.SubsigKeys = append(stub.SubsigKeys, keys)
+		stub.SubsigSigs = append(stub.SubsigSigs, sigs)
+	}
+}
+
+func finishDeconstructMsigs(stub *txGroupsEncodingStub) {
+	stub.BitmaskVersion.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskThreshold.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskSubsigs.trimBitmask(int(stub.TotalTransactionsCount))
+}
+
+func setupDeconstructLsigs(stub *txGroupsEncodingStub) {
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskLogic = make(bitmask, bitmaskLen)
+	stub.Logic = make([][]byte, 0, int(stub.TotalTransactionsCount))
+	stub.BitmaskLogicArgs = make(bitmask, bitmaskLen)
+	stub.LogicArgs = make([][][]byte, 0, int(stub.TotalTransactionsCount))
+}
+
+func deconstructLsigs(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
+	if txn.Lsig.Logic != nil {
+		stub.BitmaskLogic.SetBit(i)
+		stub.Logic = append(stub.Logic, txn.Lsig.Logic)
+	}
+	if txn.Lsig.Args != nil {
+		stub.BitmaskLogicArgs.SetBit(i)
+		stub.LogicArgs = append(stub.LogicArgs, txn.Lsig.Args)
+	}
+	if !txn.Lsig.Sig.MsgIsZero() {
+		stub.BitmaskSig.SetBit(i)
+		stub.Sig = append(stub.Sig, txn.Lsig.Sig[:]...)
+	}
+	if txn.Lsig.Msig.Version != 0 {
+		stub.BitmaskVersion.SetBit(i)
+		stub.Version = append(stub.Version, txn.Lsig.Msig.Version)
+	}
+	if txn.Lsig.Msig.Threshold != 0 {
+		stub.BitmaskThreshold.SetBit(i)
+		stub.Threshold = append(stub.Threshold, txn.Lsig.Msig.Threshold)
+	}
+	if txn.Lsig.Msig.Subsigs != nil {
+		stub.BitmaskSubsigs.SetBit(i)
+		keys := make([]crypto.PublicKey, len(txn.Lsig.Msig.Subsigs))
+		sigs := make([]crypto.Signature, len(txn.Lsig.Msig.Subsigs))
+		for i, subsig := range txn.Lsig.Msig.Subsigs {
+			keys[i] = subsig.Key
+			sigs[i] = subsig.Sig
+		}
+		stub.SubsigKeys = append(stub.SubsigKeys, keys)
+		stub.SubsigSigs = append(stub.SubsigSigs, sigs)
+	}
+}
+
+func finishDeconstructLsigs(stub *txGroupsEncodingStub) {
+	stub.BitmaskLogic.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskLogicArgs.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func setupDeconstructTransactions(stub *txGroupsEncodingStub) {
@@ -1170,6 +1256,24 @@ func setupDeconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
 	setupDeconstructCert(stub)
 }
 
+func deconstructCompactCertTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
+	if !txn.Txn.CertRound.MsgIsZero() {
+		stub.BitmaskCertRound.SetBit(i)
+		stub.CertRound = append(stub.CertRound, txn.Txn.CertRound)
+	}
+	if txn.Txn.CertType != 0 {
+		stub.BitmaskCertType.SetBit(i)
+		stub.CertType = append(stub.CertType, txn.Txn.CertType)
+	}
+	deconstructCert(stub, i, txn)
+}
+
+func finishDeconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
+	stub.BitmaskCertRound.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskCertType.trimBitmask(int(stub.TotalTransactionsCount))
+	finishDeconstructCert(stub)
+}
+
 func setupDeconstructCert(stub *txGroupsEncodingStub) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskSigCommit = make(bitmask, bitmaskLen)
@@ -1182,18 +1286,6 @@ func setupDeconstructCert(stub *txGroupsEncodingStub) {
 	stub.PartProofs = make([]certProofs, 0, stub.TotalTransactionsCount)
 	stub.BitmaskReveals = make(bitmask, bitmaskLen)
 	stub.Reveals = make([]revealMap, 0, stub.TotalTransactionsCount)
-}
-
-func deconstructCompactCertTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
-	if !txn.Txn.CertRound.MsgIsZero() {
-		stub.BitmaskCertRound.SetBit(i)
-		stub.CertRound = append(stub.CertRound, txn.Txn.CertRound)
-	}
-	if txn.Txn.CertType != 0 {
-		stub.BitmaskCertType.SetBit(i)
-		stub.CertType = append(stub.CertType, txn.Txn.CertType)
-	}
-	deconstructCert(stub, i, txn)
 }
 
 func deconstructCert(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
@@ -1219,13 +1311,6 @@ func deconstructCert(stub *txGroupsEncodingStub, i int, txn transactions.SignedT
 	}
 }
 
-func finishDeconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
-	stub.BitmaskCertRound.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskCertType.trimBitmask(int(stub.TotalTransactionsCount))
-	finishDeconstructCert(stub)
-}
-
-
 func finishDeconstructCert(stub *txGroupsEncodingStub) {
 	stub.BitmaskSigCommit.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskSignedWeight.trimBitmask(int(stub.TotalTransactionsCount))
@@ -1248,27 +1333,11 @@ func reconstructSignedTransactions(stub *txGroupsEncodingStub) error {
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskMsig.expandBitmask(int(stub.TotalTransactionsCount))
-	for i := range stub.SignedTxns {
-		if exists := stub.BitmaskMsig.EntryExists(i); exists {
-			if index >= len(stub.Msig) {
-				return errDataMissing
-			}
-			stub.SignedTxns[i].Msig = stub.Msig[index]
-			index++
-		}
+	if err := reconstructMsigs(stub); err != nil {
+		return fmt.Errorf("failed to msigs: %v", err)
 	}
-	index = 0
-	stub.BitmaskLsig.expandBitmask(int(stub.TotalTransactionsCount))
-	for i := range stub.SignedTxns {
-		if exists := stub.BitmaskLsig.EntryExists(i); exists {
-			if index >= len(stub.Lsig) {
-				return errDataMissing
-			}
-			stub.SignedTxns[i].Lsig = stub.Lsig[index]
-			index++
-		}
+	if err := reconstructLsigs(stub); err != nil {
+		return fmt.Errorf("failed to lsigs: %v", err)
 	}
 	index = 0
 	stub.BitmaskAuthAddr.expandBitmask(int(stub.TotalTransactionsCount))
@@ -1284,6 +1353,82 @@ func reconstructSignedTransactions(stub *txGroupsEncodingStub) error {
 	}
 
 	return reconstructTransactions(stub)
+}
+
+func reconstructMsigs(stub *txGroupsEncodingStub) error {
+	var index int
+	index = 0
+	stub.BitmaskVersion.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskVersion.EntryExists(i); exists {
+			if index >= len(stub.Version) {
+				return errDataMissing
+			}
+			stub.SignedTxns[i].Msig.Version = stub.Version[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskThreshold.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskThreshold.EntryExists(i); exists {
+			if index >= len(stub.Threshold) {
+				return errDataMissing
+			}
+			stub.SignedTxns[i].Msig.Threshold = stub.Threshold[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskSubsigs.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskSubsigs.EntryExists(i); exists {
+			if index >= len(stub.SubsigKeys) || index >= len(stub.SubsigSigs) {
+				return errDataMissing
+			}
+			stub.SignedTxns[i].Msig.Subsigs = make([]crypto.MultisigSubsig, len(stub.SubsigKeys[index]))
+			for j := range stub.SubsigKeys[index] {
+				stub.SignedTxns[i].Msig.Subsigs[j] = crypto.MultisigSubsig{
+					Key: stub.SubsigKeys[index][j],
+					Sig: stub.SubsigSigs[index][j],
+				}
+			}
+			index++
+		}
+	}
+	return nil
+}
+
+func reconstructLsigs(stub *txGroupsEncodingStub) error {
+	var index int
+	index = 0
+	stub.BitmaskLogic.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskLogic.EntryExists(i); exists {
+			if index >= len(stub.Logic) {
+				return errDataMissing
+			}
+			stub.SignedTxns[i].Lsig.Logic = stub.Logic[index]
+			// fetch sig/msig
+			stub.SignedTxns[i].Lsig.Sig = stub.SignedTxns[i].Sig
+			stub.SignedTxns[i].Sig = crypto.Signature{}
+			stub.SignedTxns[i].Lsig.Msig = stub.SignedTxns[i].Msig
+			stub.SignedTxns[i].Msig = crypto.MultisigSig{}
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskLogicArgs.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskLogicArgs.EntryExists(i); exists {
+			if index >= len(stub.LogicArgs) {
+				return errDataMissing
+			}
+			stub.SignedTxns[i].Lsig.Args = stub.LogicArgs[index]
+			index++
+		}
+	}
+	return nil
 }
 
 func reconstructTransactions(stub *txGroupsEncodingStub) error {
