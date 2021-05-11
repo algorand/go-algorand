@@ -147,7 +147,7 @@ func (p *profiler) maybeLogProfile() {
 	if p.profileSum < p.profileSpan/2 {
 		return
 	}
-	// have we send metrics recently ?
+	// have we sent metrics recently ?
 	curTime := p.clock.Since()
 	if curTime-p.lastProfileLog <= p.logInterval {
 		return
@@ -172,7 +172,7 @@ func (p *profiler) logProfile() {
 		MakeBloomFilterOps:           uint64(len(p.elements[profElementMakeBloomFilter].times)),
 		SelectPendingTransactionsOps: uint64(len(p.elements[profElementTxnsSelection].times)),
 
-		TotalDuration:                    time.Duration(p.profileSum),
+		TotalDuration:                    p.profileSum,
 		IdlePercent:                      float64(p.elements[profElementIdle].total) * 100.0 / float64(p.profileSum),
 		TransactionPoolChangedPercent:    float64(p.elements[profElementTxChange].total) * 100.0 / float64(p.profileSum),
 		NewRoundPercent:                  float64(p.elements[profElementNewRound].total) * 100.0 / float64(p.profileSum),
