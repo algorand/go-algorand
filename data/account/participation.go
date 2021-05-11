@@ -139,10 +139,10 @@ func (part PersistedParticipation) DeleteOldKeys(current basics.Round, proto con
 	errorCh := make(chan error, 1)
 	deleteOldKeys := func(encodedVotingSecrets []byte) {
 		errorCh <- part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
+			/*_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
 			if err != nil {
 				return fmt.Errorf("Participation.DeleteOldKeys: failed to update account: %v", err)
-			}
+			}*/
 			return nil
 		})
 		close(errorCh)
