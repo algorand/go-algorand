@@ -69,6 +69,18 @@ type encodedSignedTxns struct {
 	encodedTxns
 }
 
+//type encodedMsigs struct {
+//	_struct struct{} `codec:",omitempty,omitemptyarray"`
+//
+//	Version   uint8            `codec:"v"`
+//	Threshold uint8            `codec:"thr"`
+//	Subsigs   []crypto.MultisigSubsig `codec:"subsig,allocbound=maxMultisig"`
+//}
+//
+//type encodedLsigs struct {
+//	_struct struct{} `codec:",omitempty,omitemptyarray"`
+//}
+
 type encodedTxns struct {
 	_struct       struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -278,8 +290,36 @@ type encodedCompactCertTxnFields struct {
 	CertType        []protocol.CompactCertType `codec:"certtype,allocbound=maxEncodedTransactionGroup"`
 	BitmaskCertType bitmask                    `codec:"certtypebm"`
 
-	Cert        []compactcert.Cert `codec:"cert,allocbound=maxEncodedTransactionGroup"`
-	BitmaskCert bitmask            `codec:"certbm"`
+	//Cert        []compactcert.Cert `codec:"cert,allocbound=maxEncodedTransactionGroup"`
+	//BitmaskCert bitmask            `codec:"certbm"`
+	encodedCert
+}
+
+//msgp:allocbound certProofs compactcert.MaxProofDigests
+type certProofs []crypto.Digest
+
+//msgp:allocbound revealMap compactcert.MaxReveals
+type revealMap map[uint64]compactcert.Reveal
+
+type SortUint64 = compactcert.SortUint64
+
+type encodedCert struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	SigCommit    []byte  `codec:"certc,allocbound=maxAddressBytes"`
+	BitmaskSigCommit bitmask `codec:"certcbm"`
+
+	SignedWeight []uint64          `codec:"certw,allocbound=maxEncodedTransactionGroup"`
+	BitmaskSignedWeight bitmask `codec:"certwbm"`
+
+	SigProofs    []certProofs `codec:"certS,allocbound=maxEncodedTransactionGroup"`
+	BitmaskSigProofs bitmask `codec:"certSbm"`
+
+	PartProofs   []certProofs `codec:"certP,allocbound=maxEncodedTransactionGroup"`
+	BitmaskPartProofs bitmask `codec:"certPbm"`
+
+	Reveals []revealMap `codec:"certr,allocbound=maxEncodedTransactionGroup"`
+	BitmaskReveals bitmask `codec:"certrbm"`
 }
 
 const (
@@ -1127,8 +1167,21 @@ func setupDeconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
 	stub.CertRound = make([]basics.Round, 0, stub.TotalTransactionsCount)
 	stub.BitmaskCertType = make(bitmask, bitmaskLen)
 	stub.CertType = make([]protocol.CompactCertType, 0, stub.TotalTransactionsCount)
-	stub.BitmaskCert = make(bitmask, bitmaskLen)
-	stub.Cert = make([]compactcert.Cert, 0, stub.TotalTransactionsCount)
+	setupDeconstructCert(stub)
+}
+
+func setupDeconstructCert(stub *txGroupsEncodingStub) {
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskSigCommit = make(bitmask, bitmaskLen)
+	stub.SigCommit = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
+	stub.BitmaskSignedWeight = make(bitmask, bitmaskLen)
+	stub.SignedWeight = make([]uint64, 0, stub.TotalTransactionsCount)
+	stub.BitmaskSigProofs = make(bitmask, bitmaskLen)
+	stub.SigProofs = make([]certProofs, 0, stub.TotalTransactionsCount)
+	stub.BitmaskPartProofs = make(bitmask, bitmaskLen)
+	stub.PartProofs = make([]certProofs, 0, stub.TotalTransactionsCount)
+	stub.BitmaskReveals = make(bitmask, bitmaskLen)
+	stub.Reveals = make([]revealMap, 0, stub.TotalTransactionsCount)
 }
 
 func deconstructCompactCertTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
@@ -1140,16 +1193,45 @@ func deconstructCompactCertTxnFields(stub *txGroupsEncodingStub, i int, txn tran
 		stub.BitmaskCertType.SetBit(i)
 		stub.CertType = append(stub.CertType, txn.Txn.CertType)
 	}
-	if !txn.Txn.Cert.MsgIsZero() {
-		stub.BitmaskCert.SetBit(i)
-		stub.Cert = append(stub.Cert, txn.Txn.Cert)
+	deconstructCert(stub, i, txn)
+}
+
+func deconstructCert(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
+	if !txn.Txn.Cert.SigCommit.MsgIsZero() {
+		stub.BitmaskSigCommit.SetBit(i)
+		stub.SigCommit = append(stub.SigCommit, txn.Txn.Cert.SigCommit[:]...)
+	}
+	if txn.Txn.Cert.SignedWeight != 0 {
+		stub.BitmaskSignedWeight.SetBit(i)
+		stub.SignedWeight = append(stub.SignedWeight, txn.Txn.Cert.SignedWeight)
+	}
+	if txn.Txn.Cert.SigProofs != nil {
+		stub.BitmaskSigProofs.SetBit(i)
+		stub.SigProofs = append(stub.SigProofs, txn.Txn.Cert.SigProofs)
+	}
+	if txn.Txn.Cert.PartProofs != nil {
+		stub.BitmaskPartProofs.SetBit(i)
+		stub.PartProofs = append(stub.PartProofs, txn.Txn.Cert.PartProofs)
+	}
+	if txn.Txn.Cert.Reveals != nil {
+		stub.BitmaskReveals.SetBit(i)
+		stub.Reveals = append(stub.Reveals, txn.Txn.Cert.Reveals)
 	}
 }
 
 func finishDeconstructCompactCertTxnFields(stub *txGroupsEncodingStub) {
 	stub.BitmaskCertRound.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskCertType.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskCert.trimBitmask(int(stub.TotalTransactionsCount))
+	finishDeconstructCert(stub)
+}
+
+
+func finishDeconstructCert(stub *txGroupsEncodingStub) {
+	stub.BitmaskSigCommit.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskSignedWeight.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskSigProofs.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskPartProofs.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskReveals.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func reconstructSignedTransactions(stub *txGroupsEncodingStub) error {
@@ -1860,14 +1942,64 @@ func reconstructCompactCertTxnFields(stub *txGroupsEncodingStub) error {
 			index++
 		}
 	}
+	return reconstructCert(stub)
+}
+
+func reconstructCert(stub *txGroupsEncodingStub) error {
+	var index int
 	index = 0
-	stub.BitmaskCert.expandBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskSigCommit.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists := stub.BitmaskCert.EntryExists(i); exists {
-			if index >= len(stub.Cert) {
+		if exists := stub.BitmaskSigCommit.EntryExists(i); exists {
+			slice, err := getSlice(stub.SigCommit, index, addressSize)
+			if err != nil {
+				return err
+			}
+			copy(stub.SignedTxns[i].Txn.Cert.SigCommit[:], slice)
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskSignedWeight.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskSignedWeight.EntryExists(i); exists {
+			if index >= len(stub.SignedWeight) {
 				return errDataMissing
 			}
-			stub.SignedTxns[i].Txn.Cert = stub.Cert[index]
+			stub.SignedTxns[i].Txn.Cert.SignedWeight = stub.SignedWeight[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskSigProofs.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskSigProofs.EntryExists(i); exists {
+			if index >= len(stub.SigProofs) {
+				return errDataMissing
+			}
+			stub.SignedTxns[i].Txn.Cert.SigProofs = stub.SigProofs[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskPartProofs.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskPartProofs.EntryExists(i); exists {
+			if index >= len(stub.PartProofs) {
+				return errDataMissing
+			}
+			stub.SignedTxns[i].Txn.Cert.PartProofs = stub.PartProofs[index]
+			index++
+		}
+	}
+	index = 0
+	stub.BitmaskReveals.expandBitmask(int(stub.TotalTransactionsCount))
+	for i := range stub.SignedTxns {
+		if exists := stub.BitmaskReveals.EntryExists(i); exists {
+			if index >= len(stub.Reveals) {
+				return errDataMissing
+			}
+			stub.SignedTxns[i].Txn.Cert.Reveals = stub.Reveals[index]
 			index++
 		}
 	}
