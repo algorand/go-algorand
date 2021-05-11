@@ -136,9 +136,9 @@ var opcodeImmediateNotes = map[string]string{
 	"gtxna":             "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
 	"gtxnsa":            "{uint8 transaction field index} {uint8 transaction field array index}",
 	"global":            "{uint8 global field index}",
-	"bnz":               "{0..0x7fff forward branch offset, big endian}",
-	"bz":                "{0..0x7fff forward branch offset, big endian}",
-	"b":                 "{0..0x7fff forward branch offset, big endian}",
+	"bnz":               "{int16 branch offset, big endian. (negative offsets are illegal before v4)}",
+	"bz":                "{int16 branch offset, big endian. (negative offsets are illegal before v4)}",
+	"b":                 "{int16 branch offset, big endian. (negative offsets are illegal before v4)}",
 	"load":              "{uint8 position in scratch space to load from}",
 	"store":             "{uint8 position in scratch space to store to}",
 	"substring":         "{uint8 start position} {uint8 end position}",
@@ -155,7 +155,7 @@ func OpImmediateNote(opName string) string {
 // further documentation on the function of the opcode
 var opDocExtras = map[string]string{
 	"ed25519verify":     "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
-	"bnz":               "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.\n\nAt LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before LogicSigVersion 2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
+	"bnz":               "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are limited to forward branches only, 0-0x7fff until v4. v4 treats offset as a signed 16 bit integer allowing for backward branches and looping.\n\nAt LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before LogicSigVersion 2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
 	"bz":                "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
 	"b":                 "See `bnz` for details on how branches work. `b` always jumps to the offset.",
 	"intcblock":         "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script.",
