@@ -17,7 +17,7 @@ ASSET_NAME='Birlot : décollage vs. ࠶🦪'
 set +o pipefail
 # longer than 32-byte ASA URLs should fail
 ${gcmd} asset create \
-    --creator ${ACCOUNT} \
+    --creator "${ACCOUNT}" \
     --name "${ASSET_NAME}" \
     --unitname amisc \
     --total 1000000000000 \

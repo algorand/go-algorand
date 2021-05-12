@@ -21,7 +21,7 @@ ASSET_NAME='Birlot : décollage vs. ࠶🦪'
 # to ensure IPFS URLs longer than 32 characters are supported
 ASSET_URL="/ipfs/QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco/wiki/"
 
-${gcmd} asset create --creator ${ACCOUNT} --name "${ASSET_NAME}" --unitname amisc --total 1000000000000 --asseturl "${ASSET_URL}"
+${gcmd} asset create --creator "${ACCOUNT}" --name "${ASSET_NAME}" --unitname amisc --total 1000000000000 --asseturl "${ASSET_URL}"
 
 ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --unitname amisc|grep 'Asset ID'|awk '{ print $3 }')
 
