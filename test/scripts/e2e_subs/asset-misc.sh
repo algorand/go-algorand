@@ -19,7 +19,7 @@ ACCOUNTD=$(${gcmd} account new|awk '{ print $6 }')
 ASSET_NAME='Birlot : décollage vs. ࠶🦪'
 
 # to ensure IPFS URLs longer than 32 characters are supported
-ASSET_URL="/ipfs/QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco/wiki/"
+ASSET_URL="/ipfs/QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco/wiki/Verifiable_random_function.html"
 
 ${gcmd} asset create --creator "${ACCOUNT}" --name "${ASSET_NAME}" --unitname amisc --total 1000000000000 --asseturl "${ASSET_URL}"
 
