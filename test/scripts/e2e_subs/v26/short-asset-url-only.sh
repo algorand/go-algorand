@@ -21,7 +21,7 @@ ${gcmd} asset create \
     --name "${ASSET_NAME}" \
     --unitname amisc \
     --total 1000000000000 \
-    --asseturl "12345678901234567890123" \
+    --asseturl "123456789012345678901234567890123" 2>&1 \
     | grep "is too long (max 32 bytes)"
 set -o pipefail
 
