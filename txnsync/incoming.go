@@ -85,7 +85,7 @@ func (imq *incomingMessageQueue) enqueue(m incomingMessage) bool {
 	}
 }
 
-// clear removed the peer that is associated with the message ( if any ) from
+// clear removes the peer that is associated with the message ( if any ) from
 // the enqueuedPeers map, allowing future messages from this peer to be placed on the
 // incoming message queue.
 func (imq *incomingMessageQueue) clear(m incomingMessage) {
