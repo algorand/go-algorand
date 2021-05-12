@@ -47,8 +47,8 @@ type incomingMessageQueue struct {
 const maxPeersCount = 1024
 
 // makeIncomingMessageQueue creates an incomingMessageQueue object and initializes all the internal variables.
-func makeIncomingMessageQueue() *incomingMessageQueue {
-	return &incomingMessageQueue{
+func makeIncomingMessageQueue() incomingMessageQueue {
+	return incomingMessageQueue{
 		incomingMessages: make(chan incomingMessage, maxPeersCount),
 		enqueuedPeers:    make(map[*Peer]struct{}, maxPeersCount),
 	}

@@ -45,7 +45,7 @@ type syncState struct {
 	scheduler                  peerScheduler
 	interruptablePeers         []*Peer
 	interruptablePeersMap      map[*Peer]int // map a peer into the index of interruptablePeers
-	incomingMessagesQ          *incomingMessageQueue
+	incomingMessagesQ          incomingMessageQueue
 	outgoingMessagesCallbackCh chan *messageSentCallback
 	nextOffsetRollingCh        <-chan time.Time
 	requestsOffset             uint64
