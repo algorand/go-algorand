@@ -73,9 +73,9 @@ type encodedSignedTxns struct {
 type encodedMsigs struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Version          []uint8 `codec:"msigv,allocbound=maxEncodedTransactionGroup"`
+	Version          []byte  `codec:"msigv,allocbound=maxEncodedTransactionGroup"`
 	BitmaskVersion   bitmask `codec:"msigvbm"`
-	Threshold        []uint8 `codec:"msigthr,allocbound=maxEncodedTransactionGroup"`
+	Threshold        []byte  `codec:"msigthr,allocbound=maxEncodedTransactionGroup"`
 	BitmaskThreshold bitmask `codec:"msigthrbm"`
 	// splitting subsigs further make the code much more complicated / does not give gains
 	Subsigs        [][]crypto.MultisigSubsig `codec:"subsig,allocbound=maxEncodedTransactionGroup,allocbound=crypto.MaxMultisig"`
@@ -297,8 +297,6 @@ type encodedCompactCertTxnFields struct {
 	CertType        []protocol.CompactCertType `codec:"certtype,allocbound=maxEncodedTransactionGroup"`
 	BitmaskCertType bitmask                    `codec:"certtypebm"`
 
-	//Cert        []compactcert.Cert `codec:"cert,allocbound=maxEncodedTransactionGroup"`
-	//BitmaskCert bitmask            `codec:"certbm"`
 	encodedCert
 }
 
@@ -686,7 +684,7 @@ func deconstructMsigs(stub *txGroupsEncodingStub, i int, txn transactions.Signed
 	if txn.Msig.Version != 0 {
 		if stub.BitmaskVersion == nil {
 			stub.BitmaskVersion = make(bitmask, bitmaskLen)
-			stub.Version = make([]uint8, 0, int(stub.TotalTransactionsCount))
+			stub.Version = make([]byte, 0, int(stub.TotalTransactionsCount))
 		}
 		stub.BitmaskVersion.SetBit(i)
 		stub.Version = append(stub.Version, txn.Msig.Version)
@@ -694,7 +692,7 @@ func deconstructMsigs(stub *txGroupsEncodingStub, i int, txn transactions.Signed
 	if txn.Msig.Threshold != 0 {
 		if stub.BitmaskThreshold == nil {
 			stub.BitmaskThreshold = make(bitmask, bitmaskLen)
-			stub.Threshold = make([]uint8, 0, int(stub.TotalTransactionsCount))
+			stub.Threshold = make([]byte, 0, int(stub.TotalTransactionsCount))
 		}
 		stub.BitmaskThreshold.SetBit(i)
 		stub.Threshold = append(stub.Threshold, txn.Msig.Threshold)
@@ -744,7 +742,7 @@ func deconstructLsigs(stub *txGroupsEncodingStub, i int, txn transactions.Signed
 	if txn.Lsig.Msig.Version != 0 {
 		if stub.BitmaskVersion == nil {
 			stub.BitmaskVersion = make(bitmask, bitmaskLen)
-			stub.Version = make([]uint8, 0, int(stub.TotalTransactionsCount))
+			stub.Version = make([]byte, 0, int(stub.TotalTransactionsCount))
 		}
 		stub.BitmaskVersion.SetBit(i)
 		stub.Version = append(stub.Version, txn.Lsig.Msig.Version)
@@ -752,7 +750,7 @@ func deconstructLsigs(stub *txGroupsEncodingStub, i int, txn transactions.Signed
 	if txn.Lsig.Msig.Threshold != 0 {
 		if stub.BitmaskThreshold == nil {
 			stub.BitmaskThreshold = make(bitmask, bitmaskLen)
-			stub.Threshold = make([]uint8, 0, int(stub.TotalTransactionsCount))
+			stub.Threshold = make([]byte, 0, int(stub.TotalTransactionsCount))
 		}
 		stub.BitmaskThreshold.SetBit(i)
 		stub.Threshold = append(stub.Threshold, txn.Lsig.Msig.Threshold)
