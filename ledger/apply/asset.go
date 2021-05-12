@@ -74,7 +74,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		// Ensure index is never zero
 		newidx := basics.AssetIndex(txnCounter + 1)
 
-		record, err := balances.GetEx(header.Sender, basics.CreatableIndex(newidx), basics.AssetCreatable)
+		record, err := balances.GetEx(header.Sender, basics.CreatableIndex(newidx), basics.AssetCreatable, true, true)
 		if err != nil {
 			return err
 		}
@@ -123,7 +123,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		return fmt.Errorf("this transaction should be issued by the manager. It is issued by %v, manager key %v", header.Sender, params.Manager)
 	}
 
-	record, err := balances.GetEx(creator, basics.CreatableIndex(cc.ConfigAsset), basics.AssetCreatable)
+	record, err := balances.GetEx(creator, basics.CreatableIndex(cc.ConfigAsset), basics.AssetCreatable, true, true)
 	if err != nil {
 		return err
 	}
@@ -176,7 +176,9 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 		return nil
 	}
 
-	snd, err := balances.GetEx(addr, basics.CreatableIndex(asset), basics.AssetCreatable)
+	const fetchParams = false
+	const fetchHolding = true
+	snd, err := balances.GetEx(addr, basics.CreatableIndex(asset), basics.AssetCreatable, fetchParams, fetchHolding)
 	if err != nil {
 		return err
 	}
@@ -206,7 +208,9 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 		return nil
 	}
 
-	rcv, err := balances.GetEx(addr, basics.CreatableIndex(asset), basics.AssetCreatable)
+	const fetchParams = false
+	const fetchHolding = true
+	rcv, err := balances.GetEx(addr, basics.CreatableIndex(asset), basics.AssetCreatable, fetchParams, fetchHolding)
 	if err != nil {
 		return err
 	}
@@ -257,7 +261,9 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 	// Allocate a slot for asset (self-transfer of zero amount).
 	if ct.AssetAmount == 0 && ct.AssetReceiver == source && !clawback {
-		snd, err := balances.GetEx(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable)
+		const fetchParams = false
+		const fetchHolding = true
+		snd, err := balances.GetEx(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable, fetchParams, fetchHolding)
 		if err != nil {
 			return err
 		}
@@ -311,7 +317,9 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		// Fetch the sender balance record. We will use this to ensure
 		// that the sender is not the creator of the asset, and to
 		// figure out how much of the asset to move.
-		snd, err := balances.GetEx(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable)
+		var fetchParams = true
+		var fetchHolding = true
+		snd, err := balances.GetEx(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable, fetchParams, fetchHolding)
 		if err != nil {
 			return err
 		}
@@ -332,7 +340,9 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 
 		// Fetch the destination balance record to check if we are
 		// closing out to the creator
-		dst, err := balances.GetEx(ct.AssetCloseTo, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable)
+		fetchParams = true
+		fetchHolding = false
+		dst, err := balances.GetEx(ct.AssetCloseTo, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable, fetchParams, fetchHolding)
 		if err != nil {
 			return err
 		}
@@ -362,7 +372,9 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		}
 
 		// Delete the slot from the account.
-		snd, err = balances.GetEx(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable)
+		fetchParams = false
+		fetchHolding = true
+		snd, err = balances.GetEx(source, basics.CreatableIndex(ct.XferAsset), basics.AssetCreatable, fetchParams, fetchHolding)
 		if err != nil {
 			return err
 		}
@@ -398,7 +410,9 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 	}
 
 	// Get the account to be frozen/unfrozen.
-	record, err := balances.GetEx(cf.FreezeAccount, basics.CreatableIndex(cf.FreezeAsset), basics.AssetCreatable)
+	const fetchParams = false
+	const fetchHolding = true
+	record, err := balances.GetEx(cf.FreezeAccount, basics.CreatableIndex(cf.FreezeAsset), basics.AssetCreatable, fetchParams, fetchHolding)
 	if err != nil {
 		return err
 	}

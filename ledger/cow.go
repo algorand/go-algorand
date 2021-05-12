@@ -39,7 +39,7 @@ import (
 type roundCowParent interface {
 	// lookout with rewards
 	lookup(basics.Address) (ledgercore.PersistedAccountData, error)
-	lookupHolding(basics.Address, basics.CreatableIndex, basics.CreatableType) (ledgercore.PersistedAccountData, error)
+	lookupCreatableData(basics.Address, basics.CreatableIndex, basics.CreatableType, bool, bool) (ledgercore.PersistedAccountData, error)
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
@@ -170,31 +170,70 @@ func (cb *roundCowState) lookup(addr basics.Address) (pad ledgercore.PersistedAc
 }
 
 // lookupWithHolding is gets account data but also fetches asset holding or app local data for a specified creatable
-func (cb *roundCowState) lookupHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (data ledgercore.PersistedAccountData, err error) {
+func (cb *roundCowState) lookupCreatableData(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (data ledgercore.PersistedAccountData, err error) {
+	if !global && !local || ctype != basics.AssetCreatable && ctype != basics.AppCreatable {
+		panic(fmt.Sprintf("lookupCreatableData/GetEx misuse: %d, %v, %v", ctype, global, local))
+	}
+
 	pad, modified := cb.mods.Accts.Get(addr)
 	if modified {
-		exist := false
+		globalExist := false
+		localExist := false
 		if ctype == basics.AssetCreatable {
-			_, exist = pad.AccountData.Assets[basics.AssetIndex(cidx)]
+			if global {
+				_, globalExist = pad.AccountData.AssetParams[basics.AssetIndex(cidx)]
+			}
+			if local {
+				_, localExist = pad.AccountData.Assets[basics.AssetIndex(cidx)]
+			}
 		} else {
-			_, exist = pad.AccountData.AppLocalStates[basics.AppIndex(cidx)]
+			if global {
+				_, globalExist = pad.AccountData.AppParams[basics.AppIndex(cidx)]
+			}
+			if local {
+				_, localExist = pad.AccountData.AppLocalStates[basics.AppIndex(cidx)]
+			}
 		}
 
-		if exist {
+		onlyGlobal := global && globalExist && !local
+		onlyLocal := local && localExist && !global
+		bothGlobalLocal := global && globalExist && local && localExist
+		if onlyGlobal || onlyLocal || bothGlobalLocal {
 			return pad, nil
 		}
 	}
 
-	parentPad, err := cb.lookupParent.lookupHolding(addr, cidx, ctype)
+	parentPad, err := cb.lookupParent.lookupCreatableData(addr, cidx, ctype, global, local)
 	if !modified {
 		cb.getPadCache[addr] = parentPad
 		return parentPad, err
 	}
 
 	// data from cb.mods.Accts is newer than from lookupParent.lookupHolding, so add the asset if any
-	if holding, ok := parentPad.AccountData.Assets[basics.AssetIndex(cidx)]; ok {
-		pad.AccountData.Assets[basics.AssetIndex(cidx)] = holding
+	if ctype == basics.AssetCreatable {
+		if global {
+			if params, ok := parentPad.AccountData.AssetParams[basics.AssetIndex(cidx)]; ok {
+				pad.AccountData.AssetParams[basics.AssetIndex(cidx)] = params
+			}
+		}
+		if local {
+			if holding, ok := parentPad.AccountData.Assets[basics.AssetIndex(cidx)]; ok {
+				pad.AccountData.Assets[basics.AssetIndex(cidx)] = holding
+			}
+		}
+	} else {
+		if global {
+			if params, ok := parentPad.AccountData.AppParams[basics.AppIndex(cidx)]; ok {
+				pad.AccountData.AppParams[basics.AppIndex(cidx)] = params
+			}
+		}
+		if local {
+			if states, ok := parentPad.AccountData.AppLocalStates[basics.AppIndex(cidx)]; ok {
+				pad.AccountData.AppLocalStates[basics.AppIndex(cidx)] = states
+			}
+		}
 	}
+
 	cb.getPadCache[addr] = pad
 	return pad, nil
 }

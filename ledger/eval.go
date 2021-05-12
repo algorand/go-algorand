@@ -97,8 +97,8 @@ func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.PersistedAccountD
 	return pad, err
 }
 
-func (x *roundCowBase) lookupHolding(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (data ledgercore.PersistedAccountData, err error) {
-	return x.l.lookupHoldingWithoutRewards(x.rnd, addr, cidx, ctype)
+func (x *roundCowBase) lookupCreatableData(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (data ledgercore.PersistedAccountData, err error) {
+	return x.l.lookupCreatableDataWithoutRewards(x.rnd, addr, cidx, ctype, global, local)
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
@@ -242,8 +242,8 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 	return pad.AccountData, nil
 }
 
-func (cs *roundCowState) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
-	pad, err := cs.lookupHolding(addr, cidx, ctype)
+func (cs *roundCowState) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (basics.AccountData, error) {
+	pad, err := cs.lookupCreatableData(addr, cidx, ctype, global, local)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
@@ -379,7 +379,7 @@ type ledgerForCowBase interface {
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 
 	lookupWithoutRewards(basics.Round, basics.Address) (ledgercore.PersistedAccountData, basics.Round, error)
-	lookupHoldingWithoutRewards(basics.Round, basics.Address, basics.CreatableIndex, basics.CreatableType) (ledgercore.PersistedAccountData, error)
+	lookupCreatableDataWithoutRewards(basics.Round, basics.Address, basics.CreatableIndex, basics.CreatableType, bool, bool) (ledgercore.PersistedAccountData, error)
 	checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	getCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }

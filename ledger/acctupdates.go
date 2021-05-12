@@ -422,10 +422,10 @@ func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Add
 	return au.lookupWithoutRewards(rnd, addr, true /* take lock*/, nil)
 }
 
-// LookupHoldingWithoutRewards returns the account data for a given address at a given round
+// LookupCreatableDataWithoutRewards returns the account data for a given address at a given round
 // with looking for the specified holding/local state in extension table(s)
-func (au *accountUpdates) LookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
-	return au.lookupHoldingWithoutRewards(rnd, addr, cidx, ctype, true)
+func (au *accountUpdates) LookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (pad ledgercore.PersistedAccountData, err error) {
+	return au.lookupCreatableDataWithoutRewards(rnd, addr, cidx, ctype, global, local, true)
 }
 
 // ListAssets lists the assets by their asset index, limiting to the first maxResults
@@ -944,10 +944,10 @@ func (aul *accountUpdatesLedgerEvaluator) lookupWithoutRewards(rnd basics.Round,
 	return aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/, nil)
 }
 
-// lookupHoldingWithoutRewards returns the account data for a given address at a given round
+// lookupCreatableDataWithoutRewards returns the account data for a given address at a given round
 // with looking for the specified holding/local state in extension table(s)
-func (aul *accountUpdatesLedgerEvaluator) lookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (pad ledgercore.PersistedAccountData, err error) {
-	return aul.au.lookupHoldingWithoutRewards(rnd, addr, cidx, ctype, false)
+func (aul *accountUpdatesLedgerEvaluator) lookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (pad ledgercore.PersistedAccountData, err error) {
+	return aul.au.lookupCreatableDataWithoutRewards(rnd, addr, cidx, ctype, global, local, false)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
@@ -1964,40 +1964,77 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 	}
 }
 
+func lookupExtendedGroup(loadStmt *sql.Stmt, aidx basics.AssetIndex, agl ledgercore.AbstractAssetGroupList) (int, int, error) {
+	var err error
+	const notFound = -1
+	gi, ai := agl.FindAsset(aidx, 0)
+	if gi != notFound {
+		// if matching group found but the group is not loaded then load it
+		if ai == notFound {
+			fetcher := makeAssetFetcher(loadStmt)
+			err = agl.Get(gi).Fetch(fetcher, nil)
+			if err != nil {
+				return notFound, notFound, err
+			}
+			_, ai = agl.FindAsset(aidx, gi)
+		}
+	}
+	return gi, ai, err
+}
+
+func lookupAssetHolding(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgercore.PersistedAccountData) error {
+	gi, ai, err := lookupExtendedGroup(loadStmt, aidx, &pad.ExtendedAssetHolding)
+	if err != nil {
+		return err
+	}
+	if gi != -1 && ai != -1 {
+		if pad.AccountData.Assets == nil {
+			// pad.AccountData.Assets might not be nil because looks up into deltas cache
+			pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, 1)
+		}
+		pad.AccountData.Assets[aidx] = pad.ExtendedAssetHolding.Groups[gi].GetHolding(ai)
+	}
+	return nil
+}
+
+func lookupAssetParams(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgercore.PersistedAccountData) error {
+	gi, ai, err := lookupExtendedGroup(loadStmt, aidx, &pad.ExtendedAssetParams)
+	if err != nil {
+		return err
+	}
+	if gi != -1 && ai != -1 {
+		if pad.AccountData.Assets == nil {
+			// pad.AccountData.Assets might not be nil because looks up into deltas cache
+			pad.AccountData.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 1)
+		}
+		pad.AccountData.AssetParams[aidx] = pad.ExtendedAssetParams.Groups[gi].GetParams(ai)
+	}
+	return nil
+}
+
 // lookupWithHoldings returns the full account data for a given address at a given round.
 // The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (pad ledgercore.PersistedAccountData, err error) {
+func (au *accountUpdates) lookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global, local, synchronized bool) (pad ledgercore.PersistedAccountData, err error) {
 	var extLookup func(loadStmt *sql.Stmt, pad *ledgercore.PersistedAccountData) error
 	if ctype == basics.AssetCreatable {
 		extLookup = func(loadStmt *sql.Stmt, pad *ledgercore.PersistedAccountData) error {
-			// if not extended holdings then all the holdins in pad.AccountData.Assets
-			if pad.ExtendedAssetHolding.Count == 0 {
-				return nil
-			}
-
-			gi, ai := pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(cidx), 0)
-			if gi != -1 {
-				// if matching group found but the group is not loaded then load it
-				if ai == -1 {
-					fetcher := makeAssetFetcher(loadStmt)
-					round, err := pad.ExtendedAssetHolding.Groups[gi].Fetch(fetcher, nil)
-					if err != nil {
-						return err
-					}
+			// if not extended params then all the params in pad.AccountData.AssetParams
+			if global && pad.ExtendedAssetParams.Count != 0 {
+				err := lookupAssetParams(loadStmt, basics.AssetIndex(cidx), pad)
+				if err != nil {
+					return err
+				}
 					if round != rnd {
 						au.log.Errorf("accountUpdates.lookupHoldingWithoutRewards: database round %d mismatching in-memory round %d", round, rnd)
 						return &MismatchingDatabaseRoundError{databaseRound: round, memoryRound: rnd}
 					}
 
-					_, ai = pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(cidx), gi)
-				}
-				if ai != -1 {
-					if pad.AccountData.Assets == nil {
-						// pad.AccountData.Assets might not be nil because looks up into deltas cache
-						pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, 1)
-					}
-					pad.AccountData.Assets[basics.AssetIndex(cidx)] = pad.ExtendedAssetHolding.Groups[gi].GetHolding(ai)
+			}
+			if local && pad.ExtendedAssetHolding.Count == 0 {
+				err := lookupAssetHolding(loadStmt, basics.AssetIndex(cidx), pad)
+				if err != nil {
+					return err
 				}
 			}
 			return nil

@@ -40,7 +40,7 @@ func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards b
 	return balances.addrs[addr], nil
 }
 
-func (balances keyregTestBalances) GetEx(basics.Address, basics.CreatableIndex, basics.CreatableType) (basics.AccountData, error) {
+func (balances keyregTestBalances) GetEx(basics.Address, basics.CreatableIndex, basics.CreatableType, bool, bool) (basics.AccountData, error) {
 	return basics.AccountData{}, nil
 }
 
