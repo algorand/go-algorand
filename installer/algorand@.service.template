@@ -30,7 +30,7 @@ After=network.target
 AssertPathExists=%I
 
 [Service]
-ExecStart=/bin/bash -c "exec %I/../../algod -d %I"
+ExecStart=/bin/bash @@BINDIR@@/algod -d %I
 User=@@USER@@
 Group=@@GROUP@@
 Restart=always
