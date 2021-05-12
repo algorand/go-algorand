@@ -18,7 +18,7 @@ package txnsync
 
 import (
 	"testing"
-	
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -181,13 +181,13 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 			txn.Txn.CompactCertTxnFields = transactions.CompactCertTxnFields{}
 			txn.Txn.Type = txType
 			txn.Lsig.Logic = []byte("logic")
-			if i % 3 != 0 {
+			if i%3 != 0 {
 				txn.Sig = crypto.Signature{}
 			}
-			if i % 3 != 1 {
+			if i%3 != 1 {
 				txn.Msig = crypto.MultisigSig{}
 			}
-			if i % 3 != 2 {
+			if i%3 != 2 {
 				txn.Lsig = transactions.LogicSig{}
 			}
 			switch txType {

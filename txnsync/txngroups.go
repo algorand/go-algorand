@@ -58,14 +58,14 @@ type txGroupsEncodingStub struct {
 type encodedSignedTxns struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig             []byte                  `codec:"sig,allocbound=maxSignatureBytes"`
-	BitmaskSig      bitmask                 `codec:"sigbm"`
+	Sig        []byte  `codec:"sig,allocbound=maxSignatureBytes"`
+	BitmaskSig bitmask `codec:"sigbm"`
 
 	encodedMsigs
 	encodedLsigs
 
-	AuthAddr        []byte                  `codec:"sgnr,allocbound=maxAddressBytes"`
-	BitmaskAuthAddr bitmask                 `codec:"sgnrbm"`
+	AuthAddr        []byte  `codec:"sgnr,allocbound=maxAddressBytes"`
+	BitmaskAuthAddr bitmask `codec:"sgnrbm"`
 
 	encodedTxns
 }
@@ -73,29 +73,29 @@ type encodedSignedTxns struct {
 type encodedMsigs struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Version   []uint8            `codec:"msigv,allocbound=maxEncodedTransactionGroup"`
-	BitmaskVersion      bitmask                 `codec:"msigvbm"`
-	Threshold []uint8            `codec:"msigthr,allocbound=maxEncodedTransactionGroup"`
-	BitmaskThreshold      bitmask                 `codec:"msigthrbm"`
+	Version          []uint8 `codec:"msigv,allocbound=maxEncodedTransactionGroup"`
+	BitmaskVersion   bitmask `codec:"msigvbm"`
+	Threshold        []uint8 `codec:"msigthr,allocbound=maxEncodedTransactionGroup"`
+	BitmaskThreshold bitmask `codec:"msigthrbm"`
 	// splitting subsigs further make the code much more complicated / does not give gains
-	Subsigs [][]crypto.MultisigSubsig `codec:"subsig,allocbound=maxEncodedTransactionGroup,allocbound=crypto.MaxMultisig"`
-	BitmaskSubsigs   bitmask                 `codec:"subsigsbm"`
+	Subsigs        [][]crypto.MultisigSubsig `codec:"subsig,allocbound=maxEncodedTransactionGroup,allocbound=crypto.MaxMultisig"`
+	BitmaskSubsigs bitmask                   `codec:"subsigsbm"`
 }
 
 type encodedLsigs struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	Logic   [][]byte             `codec:"lsigl,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxLogicSigMaxSize"`
-	BitmaskLogic      bitmask                 `codec:"lsiglbm"`
-	LogicArgs    [][][]byte `codec:"lsigarg,allocbound=maxEncodedTransactionGroup,allocbound=transactions.EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
-	BitmaskLogicArgs     bitmask                 `codec:"lsigargbm"`
+	_struct          struct{}   `codec:",omitempty,omitemptyarray"`
+	Logic            [][]byte   `codec:"lsigl,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxLogicSigMaxSize"`
+	BitmaskLogic     bitmask    `codec:"lsiglbm"`
+	LogicArgs        [][][]byte `codec:"lsigarg,allocbound=maxEncodedTransactionGroup,allocbound=transactions.EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
+	BitmaskLogicArgs bitmask    `codec:"lsigargbm"`
 }
 
 type encodedTxns struct {
-	_struct       struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	TxType        []byte   `codec:"type,allocbound=maxEncodedTransactionGroup"`
-	BitmaskTxType bitmask  `codec:"typebm"`
-	TxTypeOffset  byte     `codec:"typeo"`
+	TxType        []byte  `codec:"type,allocbound=maxEncodedTransactionGroup"`
+	BitmaskTxType bitmask `codec:"typebm"`
+	TxTypeOffset  byte    `codec:"typeo"`
 
 	encodedTxnHeaders
 	encodedKeyregTxnFields
@@ -143,7 +143,7 @@ type encodedKeyregTxnFields struct {
 	VoteLast                []basics.Round `codec:"votelst,allocbound=maxEncodedTransactionGroup"`
 	BitmaskVoteLast         bitmask        `codec:"votelstbm"`
 	VoteKeyDilution         []uint64       `codec:"votekd,allocbound=maxEncodedTransactionGroup"`
-	BitmaskKeys  bitmask        `codec:"votekbm"`
+	BitmaskKeys             bitmask        `codec:"votekbm"`
 	BitmaskNonparticipation bitmask        `codec:"nonpartbm"`
 }
 
@@ -169,41 +169,40 @@ type encodedAssetConfigTxnFields struct {
 }
 
 type encodedAssetParams struct {
-	_struct       struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Total []uint64 `codec:"t,allocbound=maxEncodedTransactionGroup"`
-	BitmaskTotal bitmask              `codec:"tbm"`
+	Total        []uint64 `codec:"t,allocbound=maxEncodedTransactionGroup"`
+	BitmaskTotal bitmask  `codec:"tbm"`
 
-	Decimals []uint32 `codec:"dc,allocbound=maxEncodedTransactionGroup"`
-	BitmaskDecimals bitmask              `codec:"dcbm"`
+	Decimals        []uint32 `codec:"dc,allocbound=maxEncodedTransactionGroup"`
+	BitmaskDecimals bitmask  `codec:"dcbm"`
 
-	BitmaskDefaultFrozen bitmask              `codec:"dfbm"`
+	BitmaskDefaultFrozen bitmask `codec:"dfbm"`
 
-	UnitName []string `codec:"un,allocbound=maxEncodedTransactionGroup"`
-	BitmaskUnitName bitmask              `codec:"unbm"`
+	UnitName        []string `codec:"un,allocbound=maxEncodedTransactionGroup"`
+	BitmaskUnitName bitmask  `codec:"unbm"`
 
-	AssetName []string `codec:"an,allocbound=maxEncodedTransactionGroup"`
-	BitmaskAssetName bitmask              `codec:"anbm"`
+	AssetName        []string `codec:"an,allocbound=maxEncodedTransactionGroup"`
+	BitmaskAssetName bitmask  `codec:"anbm"`
 
-	URL []string `codec:"au,allocbound=maxEncodedTransactionGroup"`
-	BitmaskURL bitmask              `codec:"aubm"`
+	URL        []string `codec:"au,allocbound=maxEncodedTransactionGroup"`
+	BitmaskURL bitmask  `codec:"aubm"`
 
-	MetadataHash []byte `codec:"am,allocbound=maxAddressBytes"`
-	BitmaskMetadataHash bitmask              `codec:"ambm"`
+	MetadataHash        []byte  `codec:"am,allocbound=maxAddressBytes"`
+	BitmaskMetadataHash bitmask `codec:"ambm"`
 
-	Manager []byte `codec:"m,allocbound=maxAddressBytes"`
-	BitmaskManager bitmask              `codec:"mbm"`
+	Manager        []byte  `codec:"m,allocbound=maxAddressBytes"`
+	BitmaskManager bitmask `codec:"mbm"`
 
-	Reserve []byte `codec:"r,allocbound=maxAddressBytes"`
-	BitmaskReserve bitmask              `codec:"rbm"`
+	Reserve        []byte  `codec:"r,allocbound=maxAddressBytes"`
+	BitmaskReserve bitmask `codec:"rbm"`
 
-	Freeze []byte `codec:"f,allocbound=maxAddressBytes"`
-	BitmaskFreeze bitmask              `codec:"fbm"`
+	Freeze        []byte  `codec:"f,allocbound=maxAddressBytes"`
+	BitmaskFreeze bitmask `codec:"fbm"`
 
-	Clawback []byte `codec:"c,allocbound=maxAddressBytes"`
-	BitmaskClawback bitmask              `codec:"cbm"`
+	Clawback        []byte  `codec:"c,allocbound=maxAddressBytes"`
+	BitmaskClawback bitmask `codec:"cbm"`
 }
-
 
 type encodedAssetTransferTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -257,8 +256,8 @@ type encodedApplicationCallTxnFields struct {
 	ApplicationID        []basics.AppIndex `codec:"apid,allocbound=maxEncodedTransactionGroup"`
 	BitmaskApplicationID bitmask           `codec:"apidbm"`
 
-	OnCompletion        []byte `codec:"apan,allocbound=maxEncodedTransactionGroup"`
-	BitmaskOnCompletion bitmask                     `codec:"apanbm"`
+	OnCompletion        []byte  `codec:"apan,allocbound=maxEncodedTransactionGroup"`
+	BitmaskOnCompletion bitmask `codec:"apanbm"`
 
 	ApplicationArgs        []applicationArgs `codec:"apaa,allocbound=maxEncodedTransactionGroup"`
 	BitmaskApplicationArgs bitmask           `codec:"apaabm"`
@@ -272,15 +271,15 @@ type encodedApplicationCallTxnFields struct {
 	ForeignAssets        []assetIndices `codec:"apas,allocbound=maxEncodedTransactionGroup"`
 	BitmaskForeignAssets bitmask        `codec:"apasbm"`
 
-	LocalNumUint      []uint64 `codec:"lnui,allocbound=maxEncodedTransactionGroup"`
-	BitmaskLocalNumUint bitmask              `codec:"lnuibm"`
-	LocalNumByteSlice []uint64 `codec:"lnbs,allocbound=maxEncodedTransactionGroup"`
-	BitmaskLocalNumByteSlice bitmask              `codec:"lnbsbm"`
+	LocalNumUint             []uint64 `codec:"lnui,allocbound=maxEncodedTransactionGroup"`
+	BitmaskLocalNumUint      bitmask  `codec:"lnuibm"`
+	LocalNumByteSlice        []uint64 `codec:"lnbs,allocbound=maxEncodedTransactionGroup"`
+	BitmaskLocalNumByteSlice bitmask  `codec:"lnbsbm"`
 
-	GlobalNumUint      []uint64 `codec:"gnui,allocbound=maxEncodedTransactionGroup"`
-	BitmaskGlobalNumUint bitmask              `codec:"gnuibm"`
-	GlobalNumByteSlice []uint64 `codec:"gnbs,allocbound=maxEncodedTransactionGroup"`
-	BitmaskGlobalNumByteSlice bitmask              `codec:"gnbsbm"`
+	GlobalNumUint             []uint64 `codec:"gnui,allocbound=maxEncodedTransactionGroup"`
+	BitmaskGlobalNumUint      bitmask  `codec:"gnuibm"`
+	GlobalNumByteSlice        []uint64 `codec:"gnbs,allocbound=maxEncodedTransactionGroup"`
+	BitmaskGlobalNumByteSlice bitmask  `codec:"gnbsbm"`
 
 	ApprovalProgram        []program `codec:"apap,allocbound=maxEncodedTransactionGroup"`
 	BitmaskApprovalProgram bitmask   `codec:"apapbm"`
@@ -309,25 +308,27 @@ type certProofs []crypto.Digest
 //msgp:allocbound revealMap compactcert.MaxReveals
 type revealMap map[uint64]compactcert.Reveal
 
+// SortUint64 implements sorting by uint64 keys for
+// canonical encoding of maps in msgpack format.
 type SortUint64 = compactcert.SortUint64
 
 type encodedCert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	SigCommit    []byte  `codec:"certc,allocbound=maxAddressBytes"`
+	SigCommit        []byte  `codec:"certc,allocbound=maxAddressBytes"`
 	BitmaskSigCommit bitmask `codec:"certcbm"`
 
-	SignedWeight []uint64          `codec:"certw,allocbound=maxEncodedTransactionGroup"`
-	BitmaskSignedWeight bitmask `codec:"certwbm"`
+	SignedWeight        []uint64 `codec:"certw,allocbound=maxEncodedTransactionGroup"`
+	BitmaskSignedWeight bitmask  `codec:"certwbm"`
 
-	SigProofs    []certProofs `codec:"certS,allocbound=maxEncodedTransactionGroup"`
-	BitmaskSigProofs bitmask `codec:"certSbm"`
+	SigProofs        []certProofs `codec:"certS,allocbound=maxEncodedTransactionGroup"`
+	BitmaskSigProofs bitmask      `codec:"certSbm"`
 
-	PartProofs   []certProofs `codec:"certP,allocbound=maxEncodedTransactionGroup"`
-	BitmaskPartProofs bitmask `codec:"certPbm"`
+	PartProofs        []certProofs `codec:"certP,allocbound=maxEncodedTransactionGroup"`
+	BitmaskPartProofs bitmask      `codec:"certPbm"`
 
-	Reveals []revealMap `codec:"certr,allocbound=maxEncodedTransactionGroup"`
-	BitmaskReveals bitmask `codec:"certrbm"`
+	Reveals        []revealMap `codec:"certr,allocbound=maxEncodedTransactionGroup"`
+	BitmaskReveals bitmask     `codec:"certrbm"`
 }
 
 const (
@@ -516,21 +517,20 @@ func getSlice(b []byte, index int, size int) ([]byte, error) {
 }
 
 func getNibble(b []byte, index int) (byte, error) {
-	if index > len(b) * 2 {
+	if index > len(b)*2 {
 		return 0, errDataMissing
 	}
-	if index % 2 == 0 {
+	if index%2 == 0 {
 		return b[index/2] / 16, nil
-	} else {
-		return b[index/2] % 16, nil
 	}
+	return b[index/2] % 16, nil
 }
 
 func squeezeByteArray(b []byte) []byte {
 	if len(b)%2 == 1 {
 		b = append(b, byte(0))
 	}
-	for index := 0; index*2<len(b); index++ {
+	for index := 0; index*2 < len(b); index++ {
 		b[index] = b[index*2]*16 + b[index*2+1]
 	}
 	return b[0 : len(b)/2]
@@ -634,7 +634,7 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 	txGroupHashes := make([]crypto.Digest, txnCount)
 	for _, txns := range txnGroups {
 		var txGroup transactions.TxGroup
-		txGroup.TxGroupHashes = txGroupHashes[index:index+len(txns.Transactions)]
+		txGroup.TxGroupHashes = txGroupHashes[index : index+len(txns.Transactions)]
 		for i, tx := range txns.Transactions {
 			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
 		}
@@ -809,7 +809,7 @@ func finishDeconstructTransactions(stub *txGroupsEncodingStub) {
 		count[int(t)]++
 	}
 	for i := range protocol.TxnTypes {
-		if c, ok := count[i]; ok && c > stub.TotalTransactionsCount / 2 {
+		if c, ok := count[i]; ok && c > stub.TotalTransactionsCount/2 {
 			offset = byte(i)
 		}
 	}

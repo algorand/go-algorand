@@ -91,8 +91,10 @@ type Reveal struct {
 	Part    Participant   `codec:"p"`
 }
 
-// maxReveals is a bound on allocation and on numReveals to limit log computation
+// MaxReveals is a bound on allocation and on numReveals to limit log computation
 const MaxReveals = 1024
+
+// MaxProofDigests is a bound on allocation on number of proofs
 const MaxProofDigests = 20 * MaxReveals
 
 // Cert represents a compact certificate.

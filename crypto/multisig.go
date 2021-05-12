@@ -76,6 +76,8 @@ func (msig MultisigSig) Preimage() (version, threshold uint8, pks []PublicKey) {
 }
 
 const multiSigString = "MultisigAddr"
+
+// MaxMultisig is a bound on allocation and on the number of subsigs
 const MaxMultisig = 255
 
 // MultisigAddrGen identifes the exact group, version,
