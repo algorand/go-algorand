@@ -70,10 +70,15 @@ func (imq *incomingMessageQueue) enqueue(m incomingMessage) bool {
 		if _, has := imq.enqueuedPeers[m.peer]; has {
 			return true
 		}
-		imq.enqueuedPeers[m.peer] = struct{}{}
 	}
 	select {
 	case imq.incomingMessages <- m:
+		// if we successfully enqueued the message, set the enqueuedPeers so that we won't enqueue the same peer twice.
+		if m.peer != nil {
+			// at this time, the enqueuedPeersMu is still under lock ( due to the above defer ), so we can access
+			// the enqueuedPeers here.
+			imq.enqueuedPeers[m.peer] = struct{}{}
+		}
 		return true
 	default:
 		return false
