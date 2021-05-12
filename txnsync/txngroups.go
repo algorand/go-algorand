@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -94,6 +95,7 @@ type encodedTxns struct {
 
 	TxType        []byte   `codec:"type,allocbound=maxEncodedTransactionGroup"`
 	BitmaskTxType bitmask  `codec:"typebm"`
+	TxTypeOffset  byte     `codec:"typeo"`
 
 	encodedTxnHeaders
 	encodedKeyregTxnFields
@@ -135,15 +137,13 @@ type encodedTxnHeaders struct {
 type encodedKeyregTxnFields struct {
 	_struct                 struct{}       `codec:",omitempty,omitemptyarray"`
 	VotePK                  []byte         `codec:"votekey,allocbound=maxAddressBytes"`
-	BitmaskVotePK           bitmask        `codec:"votekeybm"`
 	SelectionPK             []byte         `codec:"selkey,allocbound=maxAddressBytes"`
-	BitmaskSelectionPK      bitmask        `codec:"selkeybm"`
 	VoteFirst               []basics.Round `codec:"votefst,allocbound=maxEncodedTransactionGroup"`
 	BitmaskVoteFirst        bitmask        `codec:"votefstbm"`
 	VoteLast                []basics.Round `codec:"votelst,allocbound=maxEncodedTransactionGroup"`
 	BitmaskVoteLast         bitmask        `codec:"votelstbm"`
 	VoteKeyDilution         []uint64       `codec:"votekd,allocbound=maxEncodedTransactionGroup"`
-	BitmaskVoteKeyDilution  bitmask        `codec:"votekdbm"`
+	BitmaskKeys  bitmask        `codec:"votekbm"`
 	BitmaskNonparticipation bitmask        `codec:"nonpartbm"`
 }
 
@@ -358,8 +358,10 @@ func TxTypeToByte(t protocol.TxType) byte {
 		return applicationCallTx
 	case protocol.CompactCertTx:
 		return compactCertTx
+	default:
+		logging.Base().Errorf("invalid txtype") // TODO: (nguo) perform proper error handling here instead
+		return unknownTx
 	}
-	return 0 // shouldn't reach this, but what to do?
 }
 
 // ByteToTxType converts a byte encoding to TxType
@@ -376,7 +378,7 @@ type bitmask []byte
 // assumed to be in mode 0, sets bit at index to 1
 func (b bitmask) SetBit(index int) {
 	byteIndex := index/8 + 1
-	b[byteIndex] |= 1 << (index % 8)
+	b[byteIndex] ^= 1 << (index % 8)
 }
 
 func (b bitmask) EntryExists(index int) bool {
@@ -801,6 +803,36 @@ func deconstructTransactions(stub *txGroupsEncodingStub, i int, txn transactions
 }
 
 func finishDeconstructTransactions(stub *txGroupsEncodingStub) {
+	offset := byte(0)
+	count := make(map[int]uint64)
+	for _, t := range stub.TxType {
+		count[int(t)]++
+	}
+	for i := range protocol.TxnTypes {
+		if c, ok := count[i]; ok && c > stub.TotalTransactionsCount / 2 {
+			offset = byte(i)
+		}
+	}
+	if offset != 0 {
+		newTxTypes := make([]byte, 0, stub.TotalTransactionsCount)
+		index := 0
+		for i := 0; i < int(stub.TotalTransactionsCount); i++ {
+			if exists := stub.BitmaskTxType.EntryExists(i); exists {
+				if stub.TxType[index] == offset {
+					stub.BitmaskTxType.SetBit(i)
+				} else {
+					newTxTypes = append(newTxTypes, stub.TxType[index])
+				}
+				index++
+			} else {
+				stub.BitmaskTxType.SetBit(i)
+				newTxTypes = append(newTxTypes, offset)
+			}
+		}
+		stub.TxType = newTxTypes
+		stub.TxTypeOffset = offset
+	}
+
 	stub.BitmaskTxType.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.TxType = squeezeByteArray(stub.TxType)
 	finishDeconstructTxnHeader(stub)
@@ -908,21 +940,17 @@ func finishDeconstructTxnHeader(stub *txGroupsEncodingStub) {
 
 func deconstructKeyregTxnFields(stub *txGroupsEncodingStub, i int, txn transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
-	if !txn.Txn.VotePK.MsgIsZero() {
-		if stub.BitmaskVotePK == nil {
-			stub.BitmaskVotePK = make(bitmask, bitmaskLen)
+	if !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero() || txn.Txn.VoteKeyDilution != 0 {
+		if stub.BitmaskKeys == nil {
+			stub.BitmaskKeys = make(bitmask, bitmaskLen)
 			stub.VotePK = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
-		}
-		stub.BitmaskVotePK.SetBit(i)
-		stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
-	}
-	if !txn.Txn.SelectionPK.MsgIsZero() {
-		if stub.BitmaskSelectionPK == nil {
-			stub.BitmaskSelectionPK = make(bitmask, bitmaskLen)
 			stub.SelectionPK = make([]byte, 0, stub.TotalTransactionsCount*addressSize)
+			stub.VoteKeyDilution = make([]uint64, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskSelectionPK.SetBit(i)
+		stub.BitmaskKeys.SetBit(i)
+		stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
 		stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK[:]...)
+		stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
 	}
 	if !txn.Txn.VoteFirst.MsgIsZero() {
 		if stub.BitmaskVoteFirst == nil {
@@ -940,14 +968,6 @@ func deconstructKeyregTxnFields(stub *txGroupsEncodingStub, i int, txn transacti
 		stub.BitmaskVoteLast.SetBit(i)
 		stub.VoteLast = append(stub.VoteLast, txn.Txn.VoteLast)
 	}
-	if txn.Txn.VoteKeyDilution != 0 {
-		if stub.BitmaskVoteKeyDilution == nil {
-			stub.BitmaskVoteKeyDilution = make(bitmask, bitmaskLen)
-			stub.VoteKeyDilution = make([]uint64, 0, stub.TotalTransactionsCount)
-		}
-		stub.BitmaskVoteKeyDilution.SetBit(i)
-		stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
-	}
 	if txn.Txn.Nonparticipation {
 		if stub.BitmaskNonparticipation == nil {
 			stub.BitmaskNonparticipation = make(bitmask, bitmaskLen)
@@ -957,11 +977,9 @@ func deconstructKeyregTxnFields(stub *txGroupsEncodingStub, i int, txn transacti
 }
 
 func finishDeconstructKeyregTxnFields(stub *txGroupsEncodingStub) {
-	stub.BitmaskVotePK.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskSelectionPK.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskKeys.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskVoteFirst.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskVoteLast.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskVoteKeyDilution.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskNonparticipation.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
@@ -1516,10 +1534,14 @@ func reconstructTransactions(stub *txGroupsEncodingStub) error {
 			if err != nil {
 				return err
 			}
-			stub.SignedTxns[i].Txn.Type = ByteToTxType(b)
+			if b == stub.TxTypeOffset {
+				stub.SignedTxns[i].Txn.Type = ByteToTxType(0)
+			} else {
+				stub.SignedTxns[i].Txn.Type = ByteToTxType(b)
+			}
 			index++
 		} else {
-			stub.SignedTxns[i].Txn.Type = protocol.PaymentTx
+			stub.SignedTxns[i].Txn.Type = ByteToTxType(stub.TxTypeOffset)
 		}
 	}
 
@@ -1654,26 +1676,23 @@ func reconstructTxnHeader(stub *txGroupsEncodingStub) error {
 func reconstructKeyregTxnFields(stub *txGroupsEncodingStub) error {
 	var index int
 	index = 0
-	stub.BitmaskVotePK.expandBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskKeys.expandBitmask(int(stub.TotalTransactionsCount))
 	for i := range stub.SignedTxns {
-		if exists := stub.BitmaskVotePK.EntryExists(i); exists {
+		if exists := stub.BitmaskKeys.EntryExists(i); exists {
 			slice, err := getSlice(stub.VotePK, index, addressSize)
 			if err != nil {
 				return err
 			}
 			copy(stub.SignedTxns[i].Txn.VotePK[:], slice)
-			index++
-		}
-	}
-	index = 0
-	stub.BitmaskSelectionPK.expandBitmask(int(stub.TotalTransactionsCount))
-	for i := range stub.SignedTxns {
-		if exists := stub.BitmaskSelectionPK.EntryExists(i); exists {
-			slice, err := getSlice(stub.SelectionPK, index, addressSize)
+			slice, err = getSlice(stub.SelectionPK, index, addressSize)
 			if err != nil {
 				return err
 			}
 			copy(stub.SignedTxns[i].Txn.SelectionPK[:], slice)
+			if index >= len(stub.VoteKeyDilution) {
+				return errDataMissing
+			}
+			stub.SignedTxns[i].Txn.VoteKeyDilution = stub.VoteKeyDilution[index]
 			index++
 		}
 	}
@@ -1696,17 +1715,6 @@ func reconstructKeyregTxnFields(stub *txGroupsEncodingStub) error {
 				return errDataMissing
 			}
 			stub.SignedTxns[i].Txn.VoteLast = stub.VoteLast[index]
-			index++
-		}
-	}
-	index = 0
-	stub.BitmaskVoteKeyDilution.expandBitmask(int(stub.TotalTransactionsCount))
-	for i := range stub.SignedTxns {
-		if exists := stub.BitmaskVoteKeyDilution.EntryExists(i); exists {
-			if index >= len(stub.VoteKeyDilution) {
-				return errDataMissing
-			}
-			stub.SignedTxns[i].Txn.VoteKeyDilution = stub.VoteKeyDilution[index]
 			index++
 		}
 	}

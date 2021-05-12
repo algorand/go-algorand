@@ -160,8 +160,6 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 	}
 	addGroupHashes(inTxnGroups, 6, []byte{1})
 	encodedGroupsBytes := encodeTransactionGroups(inTxnGroups)
-	fmt.Println(len(encodedGroupsBytes))
-	fmt.Println(string(encodedGroupsBytes))
 	out, err := decodeTransactionGroups(encodedGroupsBytes)
 	require.NoError(t, err)
 	require.ElementsMatch(t, inTxnGroups, out)
@@ -399,12 +397,12 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 		encodedGroupsBytes := encodeTransactionGroups(txnGroups)
 		out, err := decodeTransactionGroups(encodedGroupsBytes)
 		require.NoError(t, err)
-		//if fmt.Sprintf("%v", out[0].Transactions[0]) != fmt.Sprintf("%v", txnGroups[0].Transactions[0]) {
-		//	fmt.Println(out[0].Transactions[0].Lsig)
-		//	fmt.Println()
-		//	fmt.Println(txnGroups[0].Transactions[0].Lsig)
-		//	fmt.Println()
-		//}
+		if fmt.Sprintf("%v", out[0].Transactions[0]) != fmt.Sprintf("%v", txnGroups[0].Transactions[0]) {
+			fmt.Println(out[0].Transactions[0])
+			fmt.Println()
+			fmt.Println(txnGroups[0].Transactions[0])
+			fmt.Println()
+		}
 		require.ElementsMatch(t, txnGroups, out)
 	}
 }
