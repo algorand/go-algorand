@@ -50,6 +50,9 @@ const EvalMaxScratchSize = 255
 // MaxStringSize is the limit of byte strings created by `concat`
 const MaxStringSize = 4096
 
+// MaxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
+const MaxByteMathSize = 64
+
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
@@ -591,14 +594,19 @@ func (cx *evalContext) step() {
 	if cx.err == nil {
 		postheight := len(cx.stack)
 		if spec.Name != "return" && postheight-preheight != len(spec.Returns)-len(spec.Args) {
-			cx.err = fmt.Errorf("%s changed stack height imporperly %d != %d",
+			cx.err = fmt.Errorf("%s changed stack height improperly %d != %d",
 				spec.Name, postheight-preheight, len(spec.Returns)-len(spec.Args))
 			return
 		}
 		first = postheight - len(spec.Returns)
 		for i, argType := range spec.Returns {
-			if !opCompat(argType, cx.stack[first+i].argType()) {
+			stackType := cx.stack[first+i].argType()
+			if !opCompat(argType, stackType) {
 				cx.err = fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType.String())
+				return
+			}
+			if stackType == StackBytes && len(cx.stack[first+i].Bytes) > MaxStringSize {
+				cx.err = fmt.Errorf("%s produced a too big (%d) byte-array", spec.Name, len(cx.stack[first+i].Bytes))
 				return
 			}
 		}
@@ -1220,6 +1228,11 @@ func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.
 	last := len(cx.stack) - 1
 	prev := last - 1
 
+	if len(cx.stack[last].Bytes) > MaxByteMathSize || len(cx.stack[prev].Bytes) > MaxByteMathSize {
+		cx.err = errors.New("math attempted on large byte-array")
+		return
+	}
+
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
 	op(lhs, rhs) // op's receiver has already been bound to result
@@ -1262,6 +1275,11 @@ func opBytesLt(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
+	if len(cx.stack[last].Bytes) > MaxByteMathSize || len(cx.stack[prev].Bytes) > MaxByteMathSize {
+		cx.err = errors.New("math attempted on large byte-array")
+		return
+	}
+
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
 	cx.stack[prev].Bytes = nil
@@ -1291,6 +1309,11 @@ func opBytesGe(cx *evalContext) {
 func opBytesEq(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
+
+	if len(cx.stack[last].Bytes) > MaxByteMathSize || len(cx.stack[prev].Bytes) > MaxByteMathSize {
+		cx.err = errors.New("math attempted on large byte-array")
+		return
+	}
 
 	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
@@ -1337,6 +1360,11 @@ func opBytesBitXor(cx *evalContext) {
 
 func opBytesBitNot(cx *evalContext) {
 	last := len(cx.stack) - 1
+
+	if len(cx.stack[last].Bytes) > MaxByteMathSize {
+		cx.err = errors.New("math attempted on large byte-array")
+		return
+	}
 
 	val := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	cx.stack[last].Bytes = new(big.Int).Not(val).Bytes()
@@ -2147,10 +2175,6 @@ func opConcat(cx *evalContext) {
 	a := cx.stack[prev].Bytes
 	b := cx.stack[last].Bytes
 	newlen := len(a) + len(b)
-	if newlen > MaxStringSize {
-		cx.err = errors.New("concat resulted in string too long")
-		return
-	}
 	newvalue := make([]byte, newlen)
 	copy(newvalue, a)
 	copy(newvalue[len(a):], b)

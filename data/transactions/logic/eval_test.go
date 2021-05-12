@@ -1825,44 +1825,19 @@ int 0
 
 func TestConsOverflow(t *testing.T) {
 	t.Parallel()
-	testPanics(t, `byte 0xf000000000000000
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-len`, 2)
+	justfits := `byte 0xf000000000000000
+dup; concat				// 16
+dup; concat				// 32
+dup; concat				// 64
+dup; concat				// 128
+dup; concat				// 256
+dup; concat				// 512
+dup; concat				// 1024
+dup; concat				// 2048
+dup; concat				// 4096
+`
+	testAccepts(t, justfits+"len", 2)
+	testPanics(t, justfits+"byte 0x11; concat; len", 2)
 }
 
 func TestSubstringFlop(t *testing.T) {
@@ -3838,6 +3813,12 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0x01; byte 0x01; b+; byte 0x02; ==", 4)
 	testAccepts(t, "byte 0x01FF; byte 0x01; b+; byte 0x0200; ==", 4)
 
+	effs := strings.Repeat("ff", 64)
+	// 64 byte long inputs are accepted, even if they produce longer outputs
+	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 65; ==", effs), 4)
+	// 65 byte inputs are not ok.
+	testPanics(t, fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs), 4)
+
 	testAccepts(t, `byte 0x01; byte 0x01; b-; byte ""; ==`, 4)
 	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
 	// returns are smallest possible
@@ -3850,6 +3831,9 @@ func TestBytesMath(t *testing.T) {
 
 	testAccepts(t, "byte 0x10; byte 0x07; b%; byte 0x02; ==; return", 4)
 	testPanics(t, "byte 0x01; byte 0x00; b%; int 1; return", 4)
+
+	// Even 128 byte outputs are ok
+	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x%s; b*; len; int 128; ==", effs, effs), 4)
 }
 
 func TestBytesCompare(t *testing.T) {
