@@ -19,6 +19,8 @@ package txnsync
 import (
 	"errors"
 	"time"
+
+	"github.com/algorand/go-deadlock"
 )
 
 var errUnsupportedTransactionSyncMessageVersion = errors.New("unsupported transaction sync message version")
@@ -30,6 +32,47 @@ type incomingMessage struct {
 	sequenceNumber uint64
 	peer           *Peer
 	encodedSize    int
+}
+
+type incomingMessageQueue struct {
+	incomingMessages chan incomingMessage
+	enqueuedPeers    map[*Peer]struct{}
+	enqueuedPeersMu  deadlock.Mutex
+}
+
+const maxPeersCount = 1024
+
+func makeIncomingMessageQueue() *incomingMessageQueue {
+	return &incomingMessageQueue{
+		incomingMessages: make(chan incomingMessage, maxPeersCount),
+		enqueuedPeers:    make(map[*Peer]struct{}, maxPeersCount),
+	}
+}
+func (imq *incomingMessageQueue) getIncomingMessageChannel() <-chan incomingMessage {
+	return imq.incomingMessages
+}
+func (imq *incomingMessageQueue) enqueue(m incomingMessage) bool {
+	if m.peer != nil {
+		imq.enqueuedPeersMu.Lock()
+		defer imq.enqueuedPeersMu.Unlock()
+		if _, has := imq.enqueuedPeers[m.peer]; has {
+			return true
+		}
+		imq.enqueuedPeers[m.peer] = struct{}{}
+	}
+	select {
+	case imq.incomingMessages <- m:
+		return true
+	default:
+		return false
+	}
+}
+func (imq *incomingMessageQueue) clear(m incomingMessage) {
+	if m.peer != nil {
+		imq.enqueuedPeersMu.Lock()
+		defer imq.enqueuedPeersMu.Unlock()
+		delete(imq.enqueuedPeers, m.peer)
+	}
 }
 
 // incomingMessageHandler
@@ -49,13 +92,12 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	}
 	if peer == nil {
 		// if we don't have a peer, then we need to enqueue this task to be handled by the main loop since we want to ensure that
-		// all the peer objects are created syncroniously.
-		select {
-		case s.incomingMessagesCh <- incomingMessage{networkPeer: networkPeer, message: txMsg, sequenceNumber: sequenceNumber, encodedSize: len(message)}:
-		default:
+		// all the peer objects are created synchronously.
+		enqueued := s.incomingMessagesQ.enqueue(incomingMessage{networkPeer: networkPeer, message: txMsg, sequenceNumber: sequenceNumber, encodedSize: len(message)})
+		if !enqueued {
 			// if we can't enqueue that, return an error, which would disconnect the peer.
 			// ( we have to disconnect, since otherwise, we would have no way to syncronize the sequence number)
-			s.log.Infof("unable to enqueue incoming message from a peer without txsync allocated data; incomingMessagesCh is full. disconnecting from peer.")
+			s.log.Infof("unable to enqueue incoming message from a peer without txsync allocated data; incoming messages queue is full. disconnecting from peer.")
 			return errTransactionSyncIncomingMessageQueueFull
 		}
 		return nil
@@ -67,12 +109,11 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		return err
 	}
 
-	select {
-	case s.incomingMessagesCh <- incomingMessage{peer: peer}:
-	default:
+	enqueued := s.incomingMessagesQ.enqueue(incomingMessage{peer: peer})
+	if !enqueued {
 		// if we can't enqueue that, return an error, which would disconnect the peer.
 		//
-		s.log.Infof("unable to enqueue incoming message from a peer with txsync allocated data; incomingMessagesCh is full. disconnecting from peer.")
+		s.log.Infof("unable to enqueue incoming message from a peer with txsync allocated data; incoming messages queue is full. disconnecting from peer.")
 		return errTransactionSyncIncomingMessageQueueFull
 	}
 	return nil
@@ -101,6 +142,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 			return
 		}
 	}
+	s.incomingMessagesQ.clear(message)
 	messageProcessed := false
 	transacationPoolSize := 0
 	for {

@@ -45,7 +45,7 @@ type syncState struct {
 	scheduler                  peerScheduler
 	interruptablePeers         []*Peer
 	interruptablePeersMap      map[*Peer]int // map a peer into the index of interruptablePeers
-	incomingMessagesCh         chan incomingMessage
+	incomingMessagesQ          *incomingMessageQueue
 	outgoingMessagesCallbackCh chan *messageSentCallback
 	nextOffsetRollingCh        <-chan time.Time
 	requestsOffset             uint64
@@ -67,7 +67,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	s.node.NotifyMonitor()
 
 	s.clock = s.node.Clock()
-	s.incomingMessagesCh = make(chan incomingMessage, 1024)
+	s.incomingMessagesQ = makeIncomingMessageQueue()
 	s.outgoingMessagesCallbackCh = make(chan *messageSentCallback, 1024)
 	s.interruptablePeersMap = make(map[*Peer]int)
 	s.scheduler.node = s.node
@@ -113,7 +113,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
 			continue
-		case incomingMsg := <-s.incomingMessagesCh:
+		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
 			profIncomingMsg.end()
@@ -152,7 +152,7 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
 			profPeerState.end()
-		case incomingMsg := <-s.incomingMessagesCh:
+		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
 			profIdle.end()
 			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
