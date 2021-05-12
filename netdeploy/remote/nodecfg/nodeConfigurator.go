@@ -33,12 +33,14 @@ import (
 )
 
 type nodeConfigurator struct {
-	config           remote.HostConfig
-	dnsName          string
-	genesisFile      string
-	genesisData      bookkeeping.Genesis
-	relayEndpoints   []srvEntry
-	metricsEndpoints []srvEntry
+	config                  remote.HostConfig
+	dnsName                 string
+	genesisFile             string
+	genesisData             bookkeeping.Genesis
+	bootstrappedBlockFile   string
+	bootstrappedTrackerFile string
+	relayEndpoints          []srvEntry
+	metricsEndpoints        []srvEntry
 }
 
 type srvEntry struct {
@@ -63,6 +65,19 @@ func ApplyConfigurationToHost(cfg remote.HostConfig, rootConfigDir, rootNodeDir 
 // Copy node directories from configuration folder to the rootNodeDir
 // Then configure
 func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error) {
+
+	blockFile := filepath.Join(rootConfigDir, "genesisdata", "bootstrapped.block.sqlite")
+	blockFileExists := util.FileExists(blockFile)
+	if blockFileExists {
+		nc.bootstrappedBlockFile = blockFile
+	}
+
+	trackerFile := filepath.Join(rootConfigDir, "genesisdata", "bootstrapped.tracker.sqlite")
+	trackerFileExists := util.FileExists(trackerFile)
+	if trackerFileExists {
+		nc.bootstrappedTrackerFile = trackerFile
+	}
+
 	nc.genesisFile = filepath.Join(rootConfigDir, "genesisdata", config.GenesisJSONFile)
 	nc.genesisData, err = bookkeeping.LoadGenesisFromFile(nc.genesisFile)
 	nodeDirs, err := nc.prepareNodeDirs(nc.config.Nodes, rootConfigDir, rootNodeDir)
@@ -132,6 +147,23 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 		err = importWalletFiles(importKeysCmd, nodeDest)
 		if err != nil {
 			return
+		}
+
+		// Copy the bootstrapped files into current ledger folder
+		if nc.bootstrappedBlockFile != "" && nc.bootstrappedTrackerFile != "" {
+			fmt.Fprintf(os.Stdout, "... copying block database file to ledger folder ...\n")
+			dest := filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.block.sqlite", config.LedgerFilenamePrefix))
+			_, err = util.CopyFile(nc.bootstrappedBlockFile, dest)
+			if err != nil {
+				return nil, fmt.Errorf("failed to copy database file %s from %s to %s : %w", "bootstrapped.block.sqlite", filepath.Dir(nc.bootstrappedBlockFile), dest, err)
+			}
+			fmt.Fprintf(os.Stdout, "... copying tracker database file to ledger folder ...\n")
+			dest = filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.tracker.sqlite", config.LedgerFilenamePrefix))
+			_, err = util.CopyFile(nc.bootstrappedTrackerFile, dest)
+			if err != nil {
+				return nil, fmt.Errorf("failed to copy database file %s from %s to %s : %w", "bootstrapped.tracker.sqlite", filepath.Dir(nc.bootstrappedBlockFile), dest, err)
+			}
+
 		}
 
 		nodeDirs = append(nodeDirs, nodeDir{

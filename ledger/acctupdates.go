@@ -249,6 +249,15 @@ type accountUpdates struct {
 
 	// the synchronous mode that would be used while the accounts database is being rebuilt.
 	accountsRebuildSynchronousMode db.SynchronousMode
+
+	// logAccountUpdatesMetrics is a flag for enable/disable metrics logging
+	logAccountUpdatesMetrics bool
+
+	// logAccountUpdatesInterval sets a time interval for metrics logging
+	logAccountUpdatesInterval time.Duration
+
+	// lastMetricsLogTime is the time when the previous metrics logging occurred
+	lastMetricsLogTime time.Time
 }
 
 type deferredCommit struct {
@@ -324,6 +333,11 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
 	au.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
 	au.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
+
+	// log metrics
+	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
+	au.logAccountUpdatesInterval = cfg.AccountUpdatesStatsInterval
+
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -712,18 +726,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 
 	offset = uint64(newBase - au.dbRound)
 
-	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
-	// consensus version.
-	if au.versions[1] != au.versions[offset] {
-		// find the tip point.
-		tipPoint := sort.Search(int(offset), func(i int) bool {
-			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
-			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
-			return au.versions[1] != au.versions[1+i]
-		})
-		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
-		offset = uint64(tipPoint)
-	}
+	offset = au.consecutiveVersion(offset)
 
 	// check to see if this is a catchpoint round
 	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
@@ -757,6 +760,22 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		au.accountsWriting.Add(1)
 	}
 	return
+}
+
+func (au *accountUpdates) consecutiveVersion(offset uint64) uint64 {
+	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
+	// consensus version.
+	if au.versions[1] != au.versions[offset] {
+		// find the tip point.
+		tipPoint := sort.Search(int(offset), func(i int) bool {
+			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
+			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
+			return au.versions[1] != au.versions[1+i]
+		})
+		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
+		offset = uint64(tipPoint)
+	}
+	return offset
 }
 
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
@@ -1232,6 +1251,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
+			case 4:
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1485,6 +1510,63 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 3 to 4: %v", err)
 	}
 	return 4, nil
+}
+
+// upgradeDatabaseSchema4 does not change the schema but migrates data:
+// remove empty AccountData entries from accountbase table
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+
+	queryAddresses := au.catchpointInterval != 0
+	numDeleted, addresses, err := removeEmptyAccountData(tx, queryAddresses)
+	if err != nil {
+		return 0, err
+	}
+
+	if queryAddresses && len(addresses) > 0 {
+		mc, err := MakeMerkleCommitter(tx, false)
+		if err != nil {
+			// at this point record deleted and DB is pruned for account data
+			// if hash deletion fails just log it and do not abort startup
+			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle committer: %v", err)
+			goto done
+		}
+		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
+		if err != nil {
+			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle trie: %v", err)
+			goto done
+		}
+
+		var totalHashesDeleted int
+		for _, addr := range addresses {
+			hash := accountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
+			deleted, err := trie.Delete(hash)
+			if err != nil {
+				au.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, err)
+			} else {
+				if !deleted {
+					au.log.Warnf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(hash), addr)
+				} else {
+					totalHashesDeleted++
+				}
+			}
+		}
+
+		if _, err = trie.Commit(); err != nil {
+			au.log.Errorf("upgradeDatabaseSchema4: failed to commit changes to merkle trie: %v", err)
+		}
+
+		au.log.Infof("upgradeDatabaseSchema4: deleted %d hashes", totalHashesDeleted)
+	}
+
+done:
+	au.log.Infof("upgradeDatabaseSchema4: deleted %d rows", numDeleted)
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 5)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 4 to 5: %v", err)
+	}
+	return 5, nil
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
@@ -1966,6 +2048,17 @@ func (au *accountUpdates) commitSyncer(deferedCommits chan deferredCommit) {
 
 // commitRound write to the database a "chunk" of rounds, and update the dbRound accordingly.
 func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookback basics.Round) {
+	var stats telemetryspec.AccountsUpdateMetrics
+	var updateStats bool
+
+	if au.logAccountUpdatesMetrics {
+		now := time.Now()
+		if now.Sub(au.lastMetricsLogTime) >= au.logAccountUpdatesInterval {
+			updateStats = true
+			au.lastMetricsLogTime = now
+		}
+	}
+
 	defer au.accountsWriting.Done()
 	au.accountsMu.RLock()
 
@@ -1986,6 +2079,15 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// adjust the offset according to what happened meanwhile..
 	offset -= uint64(au.dbRound - dbRound)
+
+	// if this iteration need to flush out zero rounds, just return right away.
+	// this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
+	// flush, without the commitRound have a chance of committing these rounds.
+	if offset == 0 {
+		au.accountsMu.RUnlock()
+		return
+	}
+
 	dbRound = au.dbRound
 
 	newBase := basics.Round(offset) + dbRound
@@ -2002,6 +2104,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
+		au.accountsMu.RUnlock()
 		au.log.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 		return
 	}
@@ -2038,6 +2141,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	var updatedPersistedAccounts []persistedAccountData
+	if updateStats {
+		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano())
+	}
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -2060,9 +2166,17 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 
+		if updateStats {
+			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
+		}
+
 		err = compactDeltas.accountsLoadOld(tx)
 		if err != nil {
 			return err
+		}
+
+		if updateStats {
+			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - stats.OldAccountPreloadDuration
 		}
 
 		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
@@ -2070,9 +2184,19 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
+		if updateStats {
+			stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano())
+		}
+
 		err = au.accountsUpdateBalances(compactDeltas)
 		if err != nil {
 			return err
+		}
+
+		if updateStats {
+			now := time.Duration(time.Now().UnixNano())
+			stats.MerkleTrieUpdateDuration = now - stats.MerkleTrieUpdateDuration
+			stats.AccountsWritingDuration = now
 		}
 
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
@@ -2080,6 +2204,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
 		if err != nil {
 			return err
+		}
+
+		if updateStats {
+			stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano()) - stats.AccountsWritingDuration
 		}
 
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
@@ -2102,6 +2230,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		return
 	}
 
+	if updateStats {
+		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano()) - stats.DatabaseCommitDuration - stats.AccountsWritingDuration - stats.MerkleTrieUpdateDuration - stats.OldAccountPreloadDuration
+	}
+
 	if isCatchpointRound {
 		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
 		if err != nil {
@@ -2120,6 +2252,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 	updatingBalancesDuration := time.Now().Sub(beforeUpdatingBalancesTime)
 
+	if updateStats {
+		stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
+	}
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
@@ -2172,12 +2307,29 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.lastFlushTime = flushTime
 
 	au.accountsMu.Unlock()
+
+	if updateStats {
+		stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano()) - stats.MemoryUpdatesDuration
+	}
+
 	au.accountsReadCond.Broadcast()
 
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
 		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
+	}
+
+	// log telemetry event
+	if updateStats {
+		stats.StartRound = uint64(dbRound)
+		stats.RoundsCount = offset
+		stats.UpdatedAccountsCount = uint64(len(updatedPersistedAccounts))
+		stats.UpdatedCreatablesCount = uint64(len(compactCreatableDeltas))
+
+		var details struct {
+		}
+		au.log.Metrics(telemetryspec.Accounts, stats, details)
 	}
 
 }

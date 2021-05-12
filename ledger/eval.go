@@ -132,7 +132,7 @@ func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, glob
 
 // getKey gets the value for a particular key in some storage
 // associated with an application globally or locally
-func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error) {
 	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err != nil {
 		return basics.TealValue{}, false, err

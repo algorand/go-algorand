@@ -83,6 +83,71 @@ func (m AssembleBlockMetrics) Identifier() Metric {
 	return assembleBlockMetricsIdentifier
 }
 
+// the identifier for the transaction sync profiling metrics.
+const transactionSyncProfilingMetricsIdentifier Metric = "SyncProfile"
+
+// TransactionSyncProfilingMetrics is the profiling metrics of the recent transaction sync activity
+type TransactionSyncProfilingMetrics struct {
+	// total number of operations
+	TotalOps uint64
+	// number of idle operations
+	IdleOps uint64
+	// number of transaction pool changes operations
+	TransactionPoolChangedOps uint64
+	// number of new rounds operations
+	NewRoundOps uint64
+	// number of peer state changes operations
+	PeerStateOps uint64
+	// number of incoming messages operations
+	IncomingMsgOps uint64
+	// number of outgoing message operations
+	OutgoingMsgOps uint64
+	// number of next offsets message operations
+	NextOffsetOps uint64
+	// number of times transaction sync was retrieving the transaction groups from the transaction pool
+	GetTxnGroupsOps uint64
+	// number of times the transaction sync was assembling messages
+	AssembleMessageOps uint64
+	// number of times the transaction sync was sending messages
+	SendMessageOps uint64
+	// number of times the transaction sync was creating bloom filters
+	MakeBloomFilterOps uint64
+	// number of times the transaction sync was selecting pending transactions out of existing pool
+	SelectPendingTransactionsOps uint64
+
+	// total duration of this profiling session
+	TotalDuration time.Duration
+	// percent of time the transaction sync was idle
+	IdlePercent float64
+	// percent of time the transaction sync was processing transaction pool changes
+	TransactionPoolChangedPercent float64
+	// percent of time the transaction sync was processing new rounds
+	NewRoundPercent float64
+	// percent of time the transaction sync was processing peer state changes
+	PeerStatePercent float64
+	// percent of time the transaction sync was processing incoming messages
+	IncomingMsgPercent float64
+	// percent of time the transaction sync was processing outgoing messages
+	OutgoingMsgPercent float64
+	// percent of time the transaction sync was processing next offset messages
+	NextOffsetPercent float64
+	// percent of time the transaction sync was collecting next set of transaction groups from the transaction pool
+	GetTxnGroupsPercent float64
+	// percent of time the transaction sync was assembling messages
+	AssembleMessagePercent float64
+	// percent of time the transaction sync was sending messages
+	SendMessagePercent float64
+	// percent of time the transaction sync was creating bloom filter
+	MakeBloomFilterPercent float64
+	// percent of time the transaction sync was selecting transaction to be sent
+	SelectPendingTransactionsPercent float64
+}
+
+// Identifier implements the required MetricDetails interface, retrieving the Identifier for this set of metrics.
+func (m TransactionSyncProfilingMetrics) Identifier() Metric {
+	return transactionSyncProfilingMetricsIdentifier
+}
+
 //-------------------------------------------------------
 // ProcessBlock
 
@@ -138,6 +203,28 @@ type RoundTimingMetrics struct {
 // Identifier implements the required MetricDetails interface, retrieving the Identifier for this set of metrics.
 func (m RoundTimingMetrics) Identifier() Metric {
 	return roundTimingMetricsIdentifier
+}
+
+//-------------------------------------------------------
+// AccountsUpdate
+const accountsUpdateMetricsIdentifier Metric = "AccountsUpdate"
+
+// AccountsUpdateMetrics is the set of metrics captured when we process accountUpdates.commitRound
+type AccountsUpdateMetrics struct {
+	StartRound                uint64
+	RoundsCount               uint64
+	OldAccountPreloadDuration time.Duration
+	MerkleTrieUpdateDuration  time.Duration
+	AccountsWritingDuration   time.Duration
+	DatabaseCommitDuration    time.Duration
+	MemoryUpdatesDuration     time.Duration
+	UpdatedAccountsCount      uint64
+	UpdatedCreatablesCount    uint64
+}
+
+// Identifier implements the required MetricDetails interface, retrieving the Identifier for this set of metrics.
+func (m AccountsUpdateMetrics) Identifier() Metric {
+	return accountsUpdateMetricsIdentifier
 }
 
 type transactionProcessingTimeDistibution struct {
