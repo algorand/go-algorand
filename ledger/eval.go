@@ -859,17 +859,22 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 			continue
 		}
 
-		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
-		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
-			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
-				txid, addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
-		}
+		// Only do those checks if needed. It is useful to skip them if the user cannot provide
+		// account data that contains enough information to compute the correct minimum balance
+		// (the case with indexer).
+		if eval.validate || eval.generate {
+			dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
+			effectiveMinBalance := dataNew.MinBalance(&eval.proto)
+			if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
+				return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
+					txid, addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
+			}
 
-		// Check if we have exceeded the maximum minimum balance
-		if eval.proto.MaximumMinimumBalance != 0 {
-			if effectiveMinBalance.Raw > eval.proto.MaximumMinimumBalance {
-				return fmt.Errorf("transaction %v: account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", txid, addr, effectiveMinBalance.Raw, eval.proto.MaximumMinimumBalance)
+			// Check if we have exceeded the maximum minimum balance
+			if eval.proto.MaximumMinimumBalance != 0 {
+				if effectiveMinBalance.Raw > eval.proto.MaximumMinimumBalance {
+					return fmt.Errorf("transaction %v: account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", txid, addr, effectiveMinBalance.Raw, eval.proto.MaximumMinimumBalance)
+				}
 			}
 		}
 	}
