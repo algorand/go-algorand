@@ -17,12 +17,16 @@
 package apply
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
+
+var errKeyregGoingOnlineExpiredParticipationKey = errors.New("transaction tries to mark an account as online with last voting round in the past")
+var errKeyregGoingOnlineFirstVotingInFuture = errors.New("transaction tries to mark an account as online with first voting round beyond the next voting round")
 
 // Keyreg applies a KeyRegistration transaction using the Balances interface.
 func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, round basics.Round) error {
@@ -62,7 +66,10 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 
 		if balances.ConsensusParams().EnableKeyregCoherencyCheck {
 			if keyreg.VoteLast <= round {
-				return fmt.Errorf("transaction tries to mark an account as online with last voting round in the past")
+				return errKeyregGoingOnlineExpiredParticipationKey
+			}
+			if keyreg.VoteFirst > round+1 {
+				return errKeyregGoingOnlineFirstVotingInFuture
 			}
 		}
 		record.Status = basics.Online

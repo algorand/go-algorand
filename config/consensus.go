@@ -354,9 +354,11 @@ type ConsensusParams struct {
 
 	// EnableKeyregCoherencyCheck enable the following extra checks on key registration transactions:
 	// 1. checking that [VotePK/SelectionPK/VoteKeyDilution] are all set or all clear.
-	// 2. checking that the VoteFirst is less or equal to VoteLast
-	// 3. checking that in the case of going offline, both the VoteFirst and VoteLast are clear
+	// 2. checking that the VoteFirst is less or equal to VoteLast.
+	// 3. checking that in the case of going offline, both the VoteFirst and VoteLast are clear.
 	// 4. checking that in the case of going online the VoteLast is non-zero and greater then the current network round.
+	// 5. checking that in the case of going online the VoteFirst is less or equal to the LastValid+1.
+	// 6. checking that in the case of going online the VoteFirst is less or equal to the <voting round>+1.
 	EnableKeyregCoherencyCheck bool
 }
 

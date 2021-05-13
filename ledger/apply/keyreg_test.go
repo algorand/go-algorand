@@ -148,9 +148,21 @@ func TestKeyregApply(t *testing.T) {
 		require.NoError(t, err)
 
 		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1000))
-		require.Error(t, err)
+		require.Equal(t, errKeyregGoingOnlineExpiredParticipationKey, err)
 
 		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1001))
-		require.Error(t, err)
+		require.Equal(t, errKeyregGoingOnlineExpiredParticipationKey, err)
+
+		tx.KeyregTxnFields.VoteFirst = basics.Round(1100)
+		tx.KeyregTxnFields.VoteLast = basics.Round(1200)
+
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1098))
+		require.Equal(t, errKeyregGoingOnlineFirstVotingInFuture, err)
+
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1099))
+		require.NoError(t, err)
+
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
+		require.NoError(t, err)
 	}
 }
