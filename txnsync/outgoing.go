@@ -28,6 +28,7 @@ import (
 const messageTimeWindow = 20 * time.Millisecond
 
 var errTransactionSyncOutgoingMessageQueueFull = errors.New("transaction sync outgoing message queue is full")
+var errTransactionSyncOutgoingMessageSendFailed = errors.New("transaction sync failed to send message")
 
 type sentMessageMetadata struct {
 	encodedMessageSize  int
@@ -49,7 +50,8 @@ type messageSentCallback struct {
 // asyncMessageSent called via the network package to inform the txsync that a message was enqueued, and the associated sequence number.
 func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber uint64) error {
 	if !enqueued {
-		return nil
+		msc.state.log.Infof("unable to send message to peer. disconnecting from peer.")
+		return errTransactionSyncOutgoingMessageSendFailed
 	}
 	// record the timestamp here, before placing the entry on the queue
 	msc.messageData.sentTimestamp = msc.roundClock.Since()
