@@ -237,14 +237,21 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 	} else {
 		// update the GroupCounter on all the transaction groups we're going to add.
 		// this would ensure that each transaction group has a unique monotonic GroupCounter
+		encodingBuf := protocol.GetEncodingBuf()
 		for i, txGroup := range pool.rememberedTxGroups {
 			pool.pendingCounter++
 			txGroup.GroupCounter = pool.pendingCounter
+			txGroup.EncodedLength = 0
+			for _, txn := range txGroup.Transactions {
+				encodingBuf = encodingBuf[:0]
+				txGroup.EncodedLength += len(txn.MarshalMsg(encodingBuf))
+			}
 			pool.rememberedTxGroups[i] = txGroup
 			if txGroup.LocallyOriginated {
 				pool.pendingLastestLocal = txGroup.GroupCounter
 			}
 		}
+		protocol.PutEncodingBuf(encodingBuf)
 		pool.pendingTxGroups = append(pool.pendingTxGroups, pool.rememberedTxGroups...)
 
 		for txid, txn := range pool.rememberedTxids {

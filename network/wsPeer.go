@@ -666,7 +666,7 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	networkMessageQueueMicrosTotal.AddUint64(uint64(time.Now().Sub(msg.peerEnqueued).Nanoseconds()/1000), nil)
 
 	if msg.callback != nil {
-		// for performance reasons, we count messages only for messages that request a callback. we migth want to revisit this
+		// for performance reasons, we count messages only for messages that request a callback. we might want to revisit this
 		// in the future.
 		seq := wp.outgoingMessageCounters[tag]
 		msg.callback(true, seq)
