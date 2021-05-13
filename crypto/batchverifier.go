@@ -29,8 +29,6 @@ type BatchVerifier struct {
 }
 
 const minBatchVerifierAlloc = 16
-const minSignaturesForBatch = 3
-const batchSize = 64
 
 // MakeBatchVerifier create a BatchVerifier instance, and initialize it using the provided hint.
 func MakeBatchVerifier(hint int) *BatchVerifier {
@@ -119,7 +117,21 @@ func (b *BatchVerifier) EnqueueMultisig(addr Digest, message Hashable, sig Multi
 	}
 }
 
-// int ed25519_sign_open_batch(const unsigned char **m, size_t *mlen, const unsigned char **pk, const unsigned char **RS, size_t num, int *valid);
+func (b *BatchVerifier) GetNumberOfSignatures() int {
+	return len(b.messages)
+}
+
+func (b *BatchVerifier) expand() {
+	messages := make([][]byte, len(b.messages), len(b.messages)*2)
+	publicKeys := make([]byte, len(b.publicKeys), len(b.publicKeys)*2)
+	signatures := make([]byte, len(b.signatures), len(b.signatures)*2)
+	copy(messages, b.messages)
+	copy(publicKeys, b.publicKeys)
+	copy(signatures, b.signatures)
+	b.messages = messages
+	b.publicKeys = publicKeys
+	b.signatures = signatures
+}
 
 // Verify verifies that the enqueued signatures are good, returning false if a verification of any
 // of them fails.
@@ -127,6 +139,11 @@ func (b *BatchVerifier) Verify() bool {
 	if len(b.messages) == 0 {
 		return false
 	}
+
+	////// TODO: remove those methods after testing signatures
+	const minSignaturesForBatch = 3
+	const batchSize = 64
+
 	if len(b.messages)%batchSize <= 3 {
 
 		var pubKey PublicKey
@@ -145,8 +162,12 @@ func (b *BatchVerifier) Verify() bool {
 			logging.Base().Error("OMG!  really really not good!")
 		}
 	}
+	////// ******************
+	batchCheck := DoonaBatchVerification(b.messages, b.publicKeys, b.signatures, b.failed)
+
+	////// TODO: remove those methods after testing signatures
 	libsoduiomResults := make([]bool, len(b.messages))
-	// REMOVE AFTER TESTING
+
 	for i, _ := range b.messages {
 		var pubKey PublicKey
 		var sig Signature
@@ -156,7 +177,7 @@ func (b *BatchVerifier) Verify() bool {
 		libsoduiomResults[i] = SignatureVerifier(PublicKey(pubKey)).VerifyBytes(b.messages[i], sig)
 	}
 	libdonnaResults := make([]bool, len(b.messages))
-	// REMOVE AFTER TESTING
+
 	for i, _ := range b.messages {
 		var pubKey PublicKey
 		var sig DonnaSignature
@@ -165,8 +186,6 @@ func (b *BatchVerifier) Verify() bool {
 
 		libdonnaResults[i] = DonnaSignatureVerifier(DonnaPublicKey(pubKey)).VerifyBytes(b.messages[i], sig)
 	}
-
-	batchCheck := DoonaBatchVerification(b.messages, b.publicKeys, b.signatures, b.failed)
 
 	for i, isValid := range libsoduiomResults {
 		var pubKey PublicKey
@@ -189,6 +208,7 @@ func (b *BatchVerifier) Verify() bool {
 		logging.Base().Infof("VALIDATION FAILED! batch verification on this round")
 	}
 	//logging.Base().Infof("VALIDATION PASS! batch verification on this round")
+	////// ******************
 	return batchCheck
 }
 
@@ -211,16 +231,4 @@ func (b *BatchVerifier) VerifySlow() bool {
 	}
 
 	return true
-}
-
-func (b *BatchVerifier) expand() {
-	messages := make([][]byte, len(b.messages), len(b.messages)*2)
-	publicKeys := make([]byte, len(b.publicKeys), len(b.publicKeys)*2)
-	signatures := make([]byte, len(b.signatures), len(b.signatures)*2)
-	copy(messages, b.messages)
-	copy(publicKeys, b.publicKeys)
-	copy(signatures, b.signatures)
-	b.messages = messages
-	b.publicKeys = publicKeys
-	b.signatures = signatures
 }

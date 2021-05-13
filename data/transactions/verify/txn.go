@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -368,7 +369,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 							return grpErr
 						}
 					}
-
+					logging.Base().Infof("enqueued %v signatures on round: %v", batchVerifier.GetNumberOfSignatures(), blkHeader.Round)
 					// perform the batch verification of the transaction signatures.
 					if !batchVerifier.Verify() {
 						// we failed the verification.
