@@ -161,7 +161,7 @@ function test_proof {
 
     # check if the transaction was all alone in the round
     call_and_verify "Checking block" "/v2/blocks/${ROUND}" 200 'txns'
-    NUM_TRANSACTIONS=$(cat "${TEMPDIR}/curl_out.txt" | jq '.block."txns" | length')
+    NUM_TRANSACTIONS=$(cat "${TEMPDIR}/curl_out.txt" | jq '.block.txns | length')
   done
 
   call_and_verify "The proof should not be null." "/v2/blocks/${ROUND}/transactions/${TXID}/proof" 200 '"proof":""'
