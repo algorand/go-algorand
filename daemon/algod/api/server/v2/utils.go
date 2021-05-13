@@ -184,7 +184,7 @@ func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 
 	switch format {
 	case "json":
-		return protocol.JSONHandle, "application/json", nil
+		return protocol.JSONStrictHandle, "application/json", nil
 	case "msgpack":
 		fallthrough
 	case "msgp":
