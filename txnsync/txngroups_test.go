@@ -17,6 +17,9 @@
 package txnsync
 
 import (
+	"fmt"
+	"io"
+	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 func TestBitmask(t *testing.T) {
@@ -160,6 +164,144 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 	require.ElementsMatch(t, inTxnGroups, out)
 }
 
+func txnGroupsData() ([]transactions.SignedTxGroup, error) {
+	dat, err := ioutil.ReadFile("txns1.txt")
+	if err != nil {
+		return nil, err
+	}
+	dec := protocol.NewDecoderBytes(dat)
+	ntx := 0
+	blocksData := make([]rpcs.EncodedBlockCert, 1)
+	for {
+		if len(blocksData) == ntx {
+			n := make([]rpcs.EncodedBlockCert, len(blocksData)*2)
+			copy(n, blocksData)
+			blocksData = n
+		}
+
+		err := dec.Decode(&blocksData[ntx])
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		ntx++
+	}
+	blocksData = blocksData[:ntx]
+
+	var txnGroups []transactions.SignedTxGroup
+	for _, blockData := range blocksData {
+		block := blockData.Block
+		payset, err := block.DecodePaysetGroups()
+		if err != nil {
+			return nil, err
+		}
+		for _, txns := range payset {
+			var txnGroup transactions.SignedTxGroup
+			for _, txn := range txns {
+				txnGroup.Transactions = append(txnGroup.Transactions, txn.SignedTxn)
+			}
+			txnGroups = append(txnGroups, txnGroup)
+		}
+	}
+	return txnGroups, nil
+}
+
+func TestTxnGroupEncodingLarge(t *testing.T) {
+	txnGroups, err := txnGroupsData()
+	require.NoError(t, err)
+
+	encodedGroupsBytes := encodeTransactionGroups(txnGroups)
+	out, err := decodeTransactionGroups(encodedGroupsBytes)
+	require.NoError(t, err)
+	require.ElementsMatch(t, txnGroups, out)
+
+	encodedGroupsBytes = encodeTransactionGroupsOld(txnGroups)
+	out, err = decodeTransactionGroupsOld(encodedGroupsBytes)
+	require.NoError(t, err)
+	require.ElementsMatch(t, txnGroups, out)
+
+	count := make(map[protocol.TxType]int)
+	sigs := 0
+	msigs := 0
+	lsigs := 0
+	for _, txg := range txnGroups {
+		for _, txn := range txg.Transactions {
+			count[txn.Txn.Type]++
+			if !txn.Sig.MsgIsZero() {
+				sigs++
+			}
+			if !txn.Msig.MsgIsZero() {
+				msigs++
+			}
+			if !txn.Lsig.MsgIsZero() {
+				lsigs++
+			}
+		}
+	}
+	fmt.Println(count)
+	fmt.Println(sigs, msigs, lsigs)
+}
+
+func BenchmarkTxnGroupEncoding(b *testing.B) {
+	txnGroups, err := txnGroupsData()
+	require.NoError(b, err)
+	var encodedGroupsBytes []byte
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		encodedGroupsBytes = encodeTransactionGroups(txnGroups)
+		releaseEncodedTransactionGroups(encodedGroupsBytes)
+	}
+
+	fmt.Println("new data: ", len(encodedGroupsBytes))
+}
+
+func BenchmarkTxnGroupDecoding(b *testing.B) {
+	txnGroups, err := txnGroupsData()
+	require.NoError(b, err)
+
+	encodedGroupsBytes := encodeTransactionGroups(txnGroups)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = decodeTransactionGroups(encodedGroupsBytes)
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkTxnGroupEncodingOld(b *testing.B) {
+	txnGroups, err := txnGroupsData()
+	require.NoError(b, err)
+	var encodedGroupsBytes []byte
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		encodedGroupsBytes = encodeTransactionGroupsOld(txnGroups)
+		releaseEncodedTransactionGroups(encodedGroupsBytes)
+	}
+
+	fmt.Println("old data: ", len(encodedGroupsBytes))
+}
+
+func BenchmarkTxnGroupDecodingOld(b *testing.B) {
+	txnGroups, err := txnGroupsData()
+	require.NoError(b, err)
+
+	encodedGroupsBytes := encodeTransactionGroupsOld(txnGroups)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = decodeTransactionGroupsOld(encodedGroupsBytes)
+		require.NoError(b, err)
+	}
+}
+
 // TestTxnGroupEncodingReflection generates random
 // txns of each type using reflection
 func TestTxnGroupEncodingReflection(t *testing.T) {
@@ -252,6 +394,12 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 		encodedGroupsBytes := encodeTransactionGroups(txnGroups)
 		out, err := decodeTransactionGroups(encodedGroupsBytes)
 		require.NoError(t, err)
+		//if fmt.Sprintf("%v", out[0].Transactions[0]) != fmt.Sprintf("%v", txnGroups[0].Transactions[0]) {
+		//	fmt.Println(out[0].Transactions[0])
+		//	fmt.Println()
+		//	fmt.Println(txnGroups[0].Transactions[0])
+		//	fmt.Println()
+		//}
 		require.ElementsMatch(t, txnGroups, out)
 	}
 }
