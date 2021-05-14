@@ -393,8 +393,9 @@ function shutdown_node() {
         if [ -f "${BINDIR}/goal" ]; then
             for DD in "${DATADIRS[@]}"; do
                 if [ -f "${DD}/algod.pid" ] || [ -f "${DD}"/**/kmd.pid ] ; then
-                    echo "Stopping node with data directory ${DD} and waiting..."
+                    # Before shutting down the node, we have to shut down the systemctl, otherwise it will spin up a node with the old binary
                     run_systemd_action stop "${DD}"
+                    sleep 5
                     "${BINDIR}/goal" node stop -d "${DD}"
                     sleep 5
                 else
@@ -626,7 +627,7 @@ function apply_fixups() {
 # and that it's a valid directory.
 # Unless it's an install
 if [ ! -d "${BINDIR}" ]; then
-    if [ "${UPDATETYPE}" = "install" ]; then
+    if [ "${UPDATETYPE}" == "install" ]; then
         mkdir -p "${BINDIR}"
     else
         fail_and_exit "Missing or invalid binaries path specified '${BINDIR}'"
@@ -645,7 +646,7 @@ fi
 if [ ${RESUME_INSTALL} -eq 0 ] && ! $DRYRUN; then
     validate_channel_specified
 
-    if [ "${UPDATETYPE}" = "migrate" ]; then
+    if [ "${UPDATETYPE}" == "migrate" ]; then
         download_update_for_current_version
     else
         check_and_download_update
@@ -680,6 +681,7 @@ else
 fi
 
 # Shutdown node before backing up so data is consistent and files aren't locked / in-use.
+
 shutdown_node
 
 if ! $DRYRUN; then
@@ -721,5 +723,4 @@ if [ "${NOSTART}" != "" ]; then
 else
     startup_nodes
 fi
-
 exit 0
