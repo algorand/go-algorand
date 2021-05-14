@@ -214,12 +214,9 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		GroupIndex:     groupIndex,
 		MinTealVersion: &groupCtx.minTealVersion,
 	}
-	cost, err := logic.Check(lsig.Logic, ep)
+	err := logic.Check(lsig.Logic, ep)
 	if err != nil {
 		return err
-	}
-	if cost > int(groupCtx.consensusParams.LogicSigMaxCost) {
-		return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, groupCtx.consensusParams.LogicSigMaxCost)
 	}
 
 	hasMsig := false

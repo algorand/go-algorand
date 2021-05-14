@@ -51,6 +51,7 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 	return config.ConsensusParams{
 		LogicSigVersion:     version,
 		LogicSigMaxCost:     20000,
+		MaxAppProgramCost:   700,
 		MaxAppKeyLen:        64,
 		MaxAppBytesValueLen: 64,
 		// These must be identical to keep an old backward compat test working
@@ -128,7 +129,7 @@ func TestMinTealVersionParamEvalCheck(t *testing.T) {
 	// set the teal program version to 1
 	binary.PutUvarint(program, 1)
 
-	_, err := Check(program, params)
+	err := Check(program, params)
 	require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
 
 	// If the param is read correctly, the eval should fail
@@ -197,7 +198,7 @@ func TestWrongProtoVersion(t *testing.T) {
 			proto.LogicSigVersion = 0
 			ep := defaultEvalParams(&sb, &txn)
 			ep.Proto = &proto
-			_, err = Check(ops.Program, ep)
+			err = Check(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "LogicSig not supported")
 			pass, err := Eval(ops.Program, ep)
@@ -232,9 +233,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 			txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
-			cost, err := Check(ops.Program, ep)
+			err = Check(ops.Program, ep)
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			pass, err := Eval(ops.Program, ep)
 			require.True(t, pass)
 			require.NoError(t, err)
@@ -294,13 +294,12 @@ func TestTLHC(t *testing.T) {
 			sb := strings.Builder{}
 			block := bookkeeping.Block{}
 			ep := defaultEvalParams(&sb, &txn)
-			cost, err := Check(ops.Program, ep)
+			err = Check(ops.Program, ep)
 			if err != nil {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(sb.String())
 			}
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			pass, err := Eval(ops.Program, ep)
 			if pass {
 				t.Log(hex.EncodeToString(ops.Program))
@@ -536,34 +535,65 @@ int 1                   // ret 1
 `, 2)
 }
 
+func TestUint128(t *testing.T) {
+	x := uint128(0, 3)
+	require.Equal(t, x.String(), "3")
+	x = uint128(0, 0)
+	require.Equal(t, x.String(), "0")
+	x = uint128(1, 3)
+	require.Equal(t, x.String(), "18446744073709551619")
+	x = uint128(1, 5)
+	require.Equal(t, x.String(), "18446744073709551621")
+	x = uint128(^uint64(0), ^uint64(0)) // maximum uint128 = 2^64-1
+	require.Equal(t, x.String(), "340282366920938463463374607431768211455")
+}
+
+func TestDivw(t *testing.T) {
+	t.Parallel()
+	// 2:0 / 1:0 == 2r0 == 0:2,0:0
+	testAccepts(t, `int 2; int 0; int 1; int 0; divw;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 2; ==; assert;
+                        int 0; ==; assert; int 1`, 4)
+
+	// 2:0 / 0:1 == 2:0r0 == 2:0,0:0
+	testAccepts(t, `int 2; int 0; int 0; int 1; divw;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 2; ==; assert; int 1`, 4)
+
+	// 0:0 / 0:7 == 0r0
+	testAccepts(t, `int 0; int 0; int 0; int 7; divw;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 0; ==; assert; int 1`, 4)
+
+	// maxu64:maxu64 / maxu64:maxu64 == 1r0
+	testAccepts(t, `int 18446744073709551615; int 18446744073709551615; int 18446744073709551615; int 18446744073709551615;
+                        divw;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 1; ==; assert;
+                        int 0; ==; assert; int 1`, 4)
+
+	// 0:7777 / 1:0 == 0:0r7777 == 0:0,0:7777
+	testAccepts(t, `int 0; int 7777; int 1; int 0; divw;
+                        int 7777; ==; assert;
+                        int 0; ==; assert;
+                        int 0; ==; assert;
+                        int 0; ==; assert; int 1`, 4)
+
+	// 10:0 / 0:0 ==> panic
+	testPanics(t, `int 10; int 0; int 0; int 0; divw;
+	               pop; pop; pop; pop; int 1`, 4)
+}
+
 func TestDivZero(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 0x111111111
-int 0
-/
-pop
-int 1`, v)
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			cost, err := Check(ops.Program, defaultEvalParams(&sb, nil))
-			if err != nil {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, cost < 1000)
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			require.Error(t, err)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "int 0x11; int 0; /; pop; int 1", 1)
 }
 
 func TestModZero(t *testing.T) {
@@ -576,9 +606,8 @@ int 0
 pop
 int 1`, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -599,9 +628,8 @@ func TestErr(t *testing.T) {
 			ops, err := AssembleStringWithVersion(`err
 int 1`, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -629,9 +657,8 @@ int 2
 int 4
 ==`, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if !pass {
@@ -653,9 +680,8 @@ int 0
 pop`, v)
 			require.NoError(t, err)
 			sb := strings.Builder{}
-			cost, err := Check(ops.Program, defaultEvalParams(&sb, nil))
+			err = Check(ops.Program, defaultEvalParams(&sb, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb = strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if !pass {
@@ -676,9 +702,8 @@ func TestStackLeftover(t *testing.T) {
 int 1`, v)
 			require.NoError(t, err)
 			sb := strings.Builder{}
-			cost, err := Check(ops.Program, defaultEvalParams(&sb, nil))
+			err = Check(ops.Program, defaultEvalParams(&sb, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb = strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -699,9 +724,8 @@ func TestStackBytesLeftover(t *testing.T) {
 			ops, err := AssembleStringWithVersion(`byte 0x10101010`, v)
 			require.NoError(t, err)
 			sb := strings.Builder{}
-			cost, err := Check(ops.Program, defaultEvalParams(&sb, nil))
+			err = Check(ops.Program, defaultEvalParams(&sb, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb = strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -724,9 +748,8 @@ int 1
 pop
 pop`, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -747,9 +770,8 @@ func TestArgTooFar(t *testing.T) {
 			ops, err := AssembleStringWithVersion(`arg_1
 btoi`, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
@@ -772,9 +794,8 @@ func TestIntcTooFar(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops, err := AssembleStringWithVersion(`intc_1`, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
@@ -798,9 +819,8 @@ func TestBytecTooFar(t *testing.T) {
 			ops, err := AssembleStringWithVersion(`bytec_1
 btoi`, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
@@ -820,9 +840,8 @@ btoi`, v)
 func TestTxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x31, 0x7f}
-	cost, err := Check(program, defaultEvalParams(nil, nil))
+	err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(t, err) // TODO: Check should know the type stack was wrong
-	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
@@ -857,9 +876,8 @@ func TestTxnBadField(t *testing.T) {
 func TestGtxnBadIndex(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x1, 0x01}
-	cost, err := Check(program, defaultEvalParams(nil, nil))
+	err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(t, err) // TODO: Check should know the type stack was wrong
-	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
@@ -881,9 +899,8 @@ func TestGtxnBadIndex(t *testing.T) {
 func TestGtxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x0, 0x7f}
-	cost, err := Check(program, defaultEvalParams(nil, nil))
+	err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(t, err) // TODO: Check should know the type stack was wrong
-	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
@@ -922,8 +939,7 @@ func TestGtxnBadField(t *testing.T) {
 func TestGlobalBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x32, 0x7f}
-	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.True(t, cost < 1000)
+	err := Check(program, defaultEvalParams(nil, nil))
 	require.NoError(t, err) // Check does not validates opcode args
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
@@ -956,9 +972,8 @@ int 9
 <
 &&`, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{
@@ -1029,13 +1044,17 @@ addr ` + testAddr + `
 &&
 `
 
+const globalV4TestProgram = globalV3TestProgram + `
+// No new globals in v4
+`
+
 func TestGlobal(t *testing.T) {
 	t.Parallel()
 	type desc struct {
 		lastField GlobalField
 		program   string
 		eval      func([]byte, EvalParams) (bool, error)
-		check     func([]byte, EvalParams) (int, error)
+		check     func([]byte, EvalParams) error
 	}
 	tests := map[uint64]desc{
 		0: {GroupSize, globalV1TestProgram, Eval, Check},
@@ -1046,6 +1065,10 @@ func TestGlobal(t *testing.T) {
 		},
 		3: {
 			CreatorAddress, globalV3TestProgram,
+			EvalStateful, CheckStateful,
+		},
+		4: {
+			CreatorAddress, globalV4TestProgram,
 			EvalStateful, CheckStateful,
 		},
 	}
@@ -1066,9 +1089,8 @@ func TestGlobal(t *testing.T) {
 				}
 			}
 			ops := testProg(t, testProgram, v)
-			cost, err := check(ops.Program, defaultEvalParams(nil, nil))
+			err := check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txgroup := make([]transactions.SignedTxn, 1)
@@ -1078,11 +1100,12 @@ func TestGlobal(t *testing.T) {
 			block.BlockHeader.Round = 999999
 			block.BlockHeader.TimeStamp = 2069
 			proto := config.ConsensusParams{
-				MinTxnFee:       123,
-				MinBalance:      1000000,
-				MaxTxnLife:      999,
-				LogicSigVersion: LogicVersion,
-				LogicSigMaxCost: 20000,
+				MinTxnFee:         123,
+				MinBalance:        1000000,
+				MaxTxnLife:        999,
+				LogicSigVersion:   LogicVersion,
+				LogicSigMaxCost:   20000,
+				MaxAppProgramCost: 700,
 			}
 			ep := defaultEvalParams(&sb, &txn)
 			ep.TxnGroup = txgroup
@@ -1134,9 +1157,8 @@ int %s
 &&`, symbol, string(tt))
 					ops, err := AssembleStringWithVersion(text, v)
 					require.NoError(t, err)
-					cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+					err = Check(ops.Program, defaultEvalParams(nil, nil))
 					require.NoError(t, err)
-					require.True(t, cost < 1000)
 					var txn transactions.SignedTxn
 					txn.Txn.Type = tt
 					sb := strings.Builder{}
@@ -1540,9 +1562,8 @@ func TestTxn(t *testing.T) {
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, source, v)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			txn := makeSampleTxn()
 			txn.Txn.ApprovalProgram = ops.Program
 			txn.Txn.ClearStateProgram = clearOps.Program
@@ -1625,13 +1646,12 @@ return
 	ops, err := AssembleStringWithVersion(cachedTxnProg, 2)
 	require.NoError(t, err)
 	sb := strings.Builder{}
-	cost, err := Check(ops.Program, defaultEvalParams(&sb, nil))
+	err = Check(ops.Program, defaultEvalParams(&sb, nil))
 	if err != nil {
 		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	txn := makeSampleTxn()
 	txgroup := makeSampleTxnGroup(txn)
 	txn.Lsig.Logic = ops.Program
@@ -1767,13 +1787,12 @@ func testLogic(t *testing.T, program string, v uint64, ep EvalParams, problems .
 	sb := &strings.Builder{}
 	ep.Trace = sb
 	ep.Txn.Lsig.Logic = ops.Program
-	cost, err := Check(ops.Program, ep)
+	err := Check(ops.Program, ep)
 	if err != nil {
 		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 
 	pass, err := Eval(ops.Program, ep)
 	if len(problems) == 0 {
@@ -1980,9 +1999,8 @@ int 0x300
 int 0x310
 ==`, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if !pass {
@@ -2024,9 +2042,8 @@ len
 int 0
 ==
 &&`, 2)
-	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+	err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 	if !pass {
@@ -2077,9 +2094,8 @@ concat
 dup
 concat
 len`, 2)
-	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+	err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 	if pass {
@@ -2104,9 +2120,8 @@ int 4
 int 2
 substring3
 len`, 2)
-	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+	err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 	if pass {
@@ -2123,9 +2138,8 @@ int 4
 int 0xFFFFFFFFFFFFFFFE
 substring3
 len`, 2)
-	cost, err = Check(ops.Program, defaultEvalParams(nil, nil))
+	err = Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = Eval(ops.Program, defaultEvalParams(nil, nil))
 	require.False(t, pass)
 	require.Error(t, err)
@@ -2137,9 +2151,8 @@ func TestSubstringRange(t *testing.T) {
 	ops := testProg(t, `byte 0xf000000000000000
 substring 2 99
 len`, 2)
-	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+	err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 	if pass {
@@ -2170,9 +2183,8 @@ load 0
 load 1
 +
 &&`, v)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if !pass {
@@ -2201,9 +2213,8 @@ int 5
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, progText, v)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if !pass {
@@ -2282,9 +2293,8 @@ func TestCompares(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops, err := AssembleStringWithVersion(testCompareProgramText, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
 			if !pass {
@@ -2313,9 +2323,8 @@ byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops, err := AssembleStringWithVersion(progText, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
 			if !pass {
@@ -2348,9 +2357,8 @@ byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops, err := AssembleStringWithVersion(progText, v)
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if !pass {
@@ -2361,6 +2369,53 @@ byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 			require.True(t, pass)
 		})
 	}
+}
+
+func TestSlowLogic(t *testing.T) {
+	t.Parallel()
+	fragment := `byte 0x666E6F7264; keccak256
+                     byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567; ==;`
+
+	// Sanity check. Running a short sequence of these fragments passes in all versions.
+	source := fragment + strings.Repeat(fragment+"&&;", 5)
+	testAccepts(t, source, 1)
+
+	// in v1, each repeat costs 30
+	v1overspend := fragment + strings.Repeat(fragment+"&&;", 20000/30)
+	// in v2,v3 each repeat costs 134
+	v2overspend := fragment + strings.Repeat(fragment+"&&;", 20000/134)
+
+	// v1overspend fails (on v1)
+	ops := testProg(t, v1overspend, 1)
+	err := Check(ops.Program, defaultEvalParamsWithVersion(nil, nil, 1))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "static cost")
+	// v2overspend passes Check, even on v2 proto, because cost is "grandfathered"
+	ops = testProg(t, v2overspend, 1)
+	err = Check(ops.Program, defaultEvalParamsWithVersion(nil, nil, 2))
+	require.NoError(t, err)
+
+	// even the shorter, v2overspend, fails when compiled as v2 code
+	ops = testProg(t, v2overspend, 2)
+	err = Check(ops.Program, defaultEvalParamsWithVersion(nil, nil, 2))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "static cost")
+
+	// in v4 cost is still 134, but only matters in Eval, not Check, so both fail there
+	ep4 := defaultEvalParamsWithVersion(nil, nil, 4)
+	ops = testProg(t, v1overspend, 4)
+	err = Check(ops.Program, ep4)
+	require.NoError(t, err)
+	_, err = Eval(ops.Program, ep4)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "dynamic cost")
+
+	ops = testProg(t, v2overspend, 4)
+	err = Check(ops.Program, ep4)
+	require.NoError(t, err)
+	_, err = Eval(ops.Program, ep4)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "dynamic cost")
 }
 
 func isNotPanic(t *testing.T, err error) {
@@ -2379,9 +2434,8 @@ func TestStackUnderflow(t *testing.T) {
 			ops, err := AssembleStringWithVersion(`int 1`, v)
 			ops.Program = append(ops.Program, 0x08) // +
 			require.NoError(t, err)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -2401,9 +2455,8 @@ func TestWrongStackTypeRuntime(t *testing.T) {
 			ops, err := AssembleStringWithVersion(`int 1`, v)
 			require.NoError(t, err)
 			ops.Program = append(ops.Program, 0x01, 0x15) // sha256, len
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -2424,9 +2477,8 @@ func TestEqMismatch(t *testing.T) {
 int 1`, v)
 			require.NoError(t, err)
 			ops.Program = append(ops.Program, 0x12) // ==
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -2447,9 +2499,8 @@ func TestNeqMismatch(t *testing.T) {
 int 1`, v)
 			require.NoError(t, err)
 			ops.Program = append(ops.Program, 0x13) // !=
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -2470,9 +2521,8 @@ func TestWrongStackTypeRuntime2(t *testing.T) {
 int 1`, v)
 			require.NoError(t, err)
 			ops.Program = append(ops.Program, 0x08) // +
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, _ := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -2497,9 +2547,8 @@ func TestIllegalOp(t *testing.T) {
 					break
 				}
 			}
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -2524,9 +2573,8 @@ int 1
 			require.NoError(t, err)
 			// cut two last bytes - intc_1 and last byte of bnz
 			ops.Program = ops.Program[:len(ops.Program)-2]
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -2546,9 +2594,8 @@ intc 0
 intc 0
 bnz done
 done:`, 2)
-	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+	err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
 	require.NoError(t, err)
@@ -2564,10 +2611,9 @@ func TestShortBytecblock(t *testing.T) {
 			for i := 2; i < len(fullops.Program); i++ {
 				program := fullops.Program[:i]
 				t.Run(hex.EncodeToString(program), func(t *testing.T) {
-					cost, err := Check(program, defaultEvalParams(nil, nil))
+					err := Check(program, defaultEvalParams(nil, nil))
 					require.Error(t, err)
 					isNotPanic(t, err)
-					require.True(t, cost < 1000)
 					sb := strings.Builder{}
 					pass, err := Eval(program, defaultEvalParams(&sb, nil))
 					if pass {
@@ -2594,10 +2640,9 @@ func TestShortBytecblock2(t *testing.T) {
 		t.Run(src, func(t *testing.T) {
 			program, err := hex.DecodeString(src)
 			require.NoError(t, err)
-			cost, err := Check(program, defaultEvalParams(nil, nil))
+			err = Check(program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
 			isNotPanic(t, err)
-			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(program, defaultEvalParams(&sb, nil))
 			if pass {
@@ -2615,7 +2660,7 @@ const panicString = "out of memory, buffer overrun, stack overflow, divide by ze
 func opPanic(cx *evalContext) {
 	panic(panicString)
 }
-func checkPanic(cx *evalContext) int {
+func checkPanic(cx *evalContext) error {
 	panic(panicString)
 }
 
@@ -2641,7 +2686,7 @@ func TestPanic(t *testing.T) {
 			sb := strings.Builder{}
 			params := defaultEvalParams(&sb, nil)
 			params.Logger = log
-			_, err = Check(ops.Program, params)
+			err = Check(ops.Program, params)
 			require.Error(t, err)
 			if pe, ok := err.(PanicError); ok {
 				require.Equal(t, panicString, pe.PanicValue)
@@ -2677,7 +2722,7 @@ func TestProgramTooNew(t *testing.T) {
 	t.Parallel()
 	var program [12]byte
 	vlen := binary.PutUvarint(program[:], EvalMaxVersion+1)
-	_, err := Check(program[:vlen], defaultEvalParams(nil, nil))
+	err := Check(program[:vlen], defaultEvalParams(nil, nil))
 	require.Error(t, err)
 	isNotPanic(t, err)
 	pass, err := Eval(program[:vlen], defaultEvalParams(nil, nil))
@@ -2690,7 +2735,7 @@ func TestInvalidVersion(t *testing.T) {
 	t.Parallel()
 	program, err := hex.DecodeString("ffffffffffffffffffffffff")
 	require.NoError(t, err)
-	_, err = Check(program, defaultEvalParams(nil, nil))
+	err = Check(program, defaultEvalParams(nil, nil))
 	require.Error(t, err)
 	isNotPanic(t, err)
 	pass, err := Eval(program, defaultEvalParams(nil, nil))
@@ -2708,7 +2753,7 @@ func TestProgramProtoForbidden(t *testing.T) {
 	}
 	ep := EvalParams{}
 	ep.Proto = &proto
-	_, err := Check(program[:vlen], ep)
+	err := Check(program[:vlen], ep)
 	require.Error(t, err)
 	ep.Txn = &transactions.SignedTxn{}
 	pass, err := Eval(program[:vlen], ep)
@@ -2733,10 +2778,26 @@ int 1`, v)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
 			ops.Program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
-			_, err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
-			require.True(t, strings.Contains(err.Error(), "aligned"))
+			require.Contains(t, err.Error(), "aligned")
 			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
+			require.Error(t, err)
+			require.False(t, pass)
+			isNotPanic(t, err)
+
+			// back branches are checked differently, so test misaligned back branch
+			ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
+			ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
+			require.Error(t, err)
+			if v < backBranchEnabledVersion {
+				require.Contains(t, err.Error(), "negative branch")
+			} else {
+				require.Contains(t, err.Error(), "back branch")
+				require.Contains(t, err.Error(), "aligned")
+			}
+			pass, err = Eval(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
 			require.False(t, pass)
 			isNotPanic(t, err)
@@ -2760,7 +2821,7 @@ int 1`, v)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
 			ops.Program[7] = 200 // clobber the branch offset to be beyond the end of the program
-			_, err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
 			require.True(t, strings.Contains(err.Error(), "beyond end of program"))
 			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
@@ -2782,17 +2843,18 @@ done:
 int 1`, v)
 			require.NoError(t, err)
 			//t.Log(hex.EncodeToString(ops.Program))
+			// (br)anch byte, (hi)gh byte of offset,  (lo)w byte:     brhilo
 			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
-			ops.Program[6] = 0xff // clobber the branch offset
-			_, err = Check(ops.Program, defaultEvalParams(nil, nil))
+			ops.Program[6] = 0x70 // clobber hi byte of branch offset
+			err = Check(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "too large")
+			require.Contains(t, err.Error(), "beyond")
 			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "too large")
+			require.Contains(t, err.Error(), "beyond")
 			require.False(t, pass)
 			isNotPanic(t, err)
 		})
@@ -2812,14 +2874,14 @@ int 1
 			source := fmt.Sprintf(template, line)
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
-			ops.Program[7] = 0xff // clobber the branch offset
+			ops.Program[7] = 0xf0 // clobber the branch offset - highly negative
 			ops.Program[8] = 0xff // clobber the branch offset
-			_, err = Check(ops.Program, ep)
+			err = Check(ops.Program, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "too large")
+			require.Contains(t, err.Error(), "beyond")
 			pass, err := Eval(ops.Program, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "too large")
+			require.Contains(t, err.Error(), "beyond")
 			require.False(t, pass)
 		})
 	}
@@ -3104,9 +3166,8 @@ int 142791994204213819
 func benchmarkBasicProgram(b *testing.B, source string) {
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(b, err)
-	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
+	err = Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(b, err)
-	require.True(b, cost < 2000)
 	//b.Logf("%d bytes of program", len(ops.Program))
 	//b.Log(hex.EncodeToString(ops.Program))
 	b.ResetTimer()
@@ -3129,9 +3190,9 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 func benchmarkExpensiveProgram(b *testing.B, source string) {
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(b, err)
-	cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(b, err)
-	require.True(b, cost > 1000)
+	ep := defaultEvalParams(nil, nil)
+	err = Check(ops.Program, ep)
+	require.Error(b, err) // excessive cost
 	//b.Logf("%d bytes of program", len(ops.Program))
 	//b.Log(hex.EncodeToString(ops.Program))
 	b.ResetTimer()
@@ -3330,7 +3391,7 @@ func BenchmarkCheckx5(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, program := range programs {
-			_, err = Check(program.Program, defaultEvalParams(nil, nil))
+			err = Check(program.Program, defaultEvalParams(nil, nil))
 			if err != nil {
 				require.NoError(b, err)
 			}
@@ -3536,7 +3597,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 		ops, err := AssembleStringWithVersion(source, v)
 		require.NoError(t, err)
 
-		_, err = CheckStateful(ops.Program, ep)
+		err = CheckStateful(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
 
@@ -3548,7 +3609,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	ops, err := AssembleStringWithVersion(source, appsEnabledVersion)
 	require.NoError(t, err)
 
-	_, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 
 	_, err = EvalStateful(ops.Program, ep)
@@ -3608,7 +3669,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 				ops, err := AssembleStringWithVersion(source, v)
 				require.NoError(t, err)
 
-				_, err = CheckStateful(ops.Program, ep)
+				err = CheckStateful(ops.Program, ep)
 				require.Error(t, err)
 				require.Contains(t, err.Error(), expected)
 
@@ -3616,7 +3677,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), expected)
 
-				_, err = Check(ops.Program, ep)
+				err = Check(ops.Program, ep)
 				require.Error(t, err)
 				require.Contains(t, err.Error(), expected)
 
@@ -3630,13 +3691,13 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 				ops, err := AssembleStringWithVersion(source, v)
 				require.NoError(t, err)
 
-				_, err = CheckStateful(ops.Program, ep)
+				err = CheckStateful(ops.Program, ep)
 				require.NoError(t, err)
 
 				_, err = EvalStateful(ops.Program, ep)
 				require.NoError(t, err)
 
-				_, err = Check(ops.Program, ep)
+				err = Check(ops.Program, ep)
 				require.NoError(t, err)
 
 				_, err = Eval(ops.Program, ep)
@@ -3693,7 +3754,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			require.Contains(t, source, spec.Name)
 			ops := testProg(t, source, AssemblerMaxVersion)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalStateful
-			_, err := CheckStateful(ops.Program, ep)
+			err := CheckStateful(ops.Program, ep)
 			require.NoError(t, err, source)
 			_, err = EvalStateful(ops.Program, ep)
 			if spec.Name != "return" {
@@ -3704,10 +3765,10 @@ func TestAllowedOpcodesV2(t *testing.T) {
 
 			for v := byte(0); v <= 1; v++ {
 				ops.Program[0] = v
-				_, err = Check(ops.Program, ep)
+				err = Check(ops.Program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
-				_, err = CheckStateful(ops.Program, ep)
+				err = CheckStateful(ops.Program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
 				_, err = Eval(ops.Program, ep)
@@ -3756,7 +3817,7 @@ func TestAllowedOpcodesV3(t *testing.T) {
 			require.Contains(t, source, spec.Name)
 			ops := testProg(t, source, AssemblerMaxVersion)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalStateful
-			_, err := CheckStateful(ops.Program, ep)
+			err := CheckStateful(ops.Program, ep)
 			require.NoError(t, err, source)
 			_, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err, source)
@@ -3764,10 +3825,10 @@ func TestAllowedOpcodesV3(t *testing.T) {
 
 			for v := byte(0); v <= 1; v++ {
 				ops.Program[0] = v
-				_, err = Check(ops.Program, ep)
+				err = Check(ops.Program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
-				_, err = CheckStateful(ops.Program, ep)
+				err = CheckStateful(ops.Program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
 				_, err = Eval(ops.Program, ep)
@@ -3797,7 +3858,7 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 			ep := defaultEvalParams(&sb, &txn)
 			ep.TxnGroup = []transactions.SignedTxn{txn}
 			ep.Proto = &proto
-			_, err = Check(ops.Program, ep)
+			err = Check(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", rekeyingEnabledVersion))
 			pass, err := Eval(ops.Program, ep)
@@ -3825,24 +3886,36 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			if v < introduced {
-				testProg(t, obfuscate(program), v, expect{0, "...opcode was introduced..."})
+				testProg(t, obfuscate(program), v, expect{0, "...was introduced..."})
 				return
 			}
 			ops := testProg(t, program, v)
-			cost, err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			require.True(t, cost < 1000)
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
-			ok := tester(pass, err)
-			if !ok {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
+			// Programs created with a previous assembler
+			// should still operate properly with future
+			// EvalParams, so try all forward versions.
+			for lv := v; lv <= AssemblerMaxVersion; lv++ {
+				t.Run(fmt.Sprintf("lv=%d", lv), func(t *testing.T) {
+					sb := strings.Builder{}
+					err := Check(ops.Program, defaultEvalParamsWithVersion(&sb, nil, lv))
+					if err != nil {
+						t.Log(hex.EncodeToString(ops.Program))
+						t.Log(sb.String())
+					}
+					require.NoError(t, err)
+					var txn transactions.SignedTxn
+					txn.Lsig.Logic = ops.Program
+					sb = strings.Builder{}
+					pass, err := Eval(ops.Program, defaultEvalParamsWithVersion(&sb, &txn, lv))
+					ok := tester(pass, err)
+					if !ok {
+						t.Log(hex.EncodeToString(ops.Program))
+						t.Log(sb.String())
+						t.Log(err)
+					}
+					require.True(t, ok)
+					isNotPanic(t, err) // Never want a Go level panic.
+				})
 			}
-			require.True(t, ok)
-			isNotPanic(t, err) // Never want a Go level panic.
 		})
 	}
 }
@@ -3977,4 +4050,98 @@ func TestPush(t *testing.T) {
 	ops1 = testProg(t, "int 2; int 3; int 5; int 6; int 1", 3)
 	ops2 = testProg(t, "int 2; int 3; int 5; int 6; pushint 1", 3)
 	require.Less(t, len(ops2.Program), len(ops1.Program))
+}
+
+func TestLoop(t *testing.T) {
+	t.Parallel()
+	// Double until > 10. Should be 16
+	testAccepts(t, "int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
+
+	// Why does this label on line with instruction cause trouble?
+	testAccepts(t, "int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
+
+	// Infinite loop because multiply by one instead of two
+	testPanics(t, "int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", 4)
+}
+
+func TestSubroutine(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 1; callsub double; int 2; ==; return; double: dup; +; retsub;", 4)
+	testAccepts(t, `
+b main;
+fact:
+  dup
+  int 2
+  <
+  bz recur
+  retsub
+recur:
+  dup
+  int 1
+  -
+  callsub fact
+  *
+  retsub
+
+main:
+  int 5
+  callsub fact
+  int 120
+  ==
+`, 4)
+
+	// Mutually recursive odd/even.  Each is intentionally done in a slightly different way.
+	testAccepts(t, `
+b main
+odd:				// If 0, return false, else return !even
+  dup
+  bz retfalse
+  callsub even
+  !
+  retsub
+
+retfalse:
+  pop
+  int 0
+  retsub
+
+
+even:				// If 0, return true, else decrement and return even
+  dup
+  bz rettrue
+  int 1
+  -
+  callsub odd
+  retsub
+
+rettrue:
+  pop
+  int 1
+  retsub
+
+
+main:
+  int 1
+  callsub odd
+  assert
+
+  int 0
+  callsub even
+  assert
+
+  int 10
+  callsub even
+  assert
+
+  int 10
+  callsub odd
+  !
+  assert
+
+  int 1
+`, 4)
+
+	testPanics(t, "int 1; retsub", 4)
+
+	testPanics(t, "int 1; recur: callsub recur; int 1", 4)
 }

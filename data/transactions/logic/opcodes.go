@@ -21,7 +21,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 3
+const LogicVersion = 4
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -32,6 +32,10 @@ const rekeyingEnabledVersion = 2
 // functionality was enabled. We use this to disallow v0 and v1 TEAL programs
 // from being used with applications. Do not edit!
 const appsEnabledVersion = 2
+
+// backBranchEabledVersion is the version of TEAL where branches could
+// go back (and cost accounting was done during execution)
+const backBranchEnabledVersion = 4
 
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
@@ -151,6 +155,7 @@ var OpSpecs = []OpSpec{
 	{0x1c, "~", opBitNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opDefault},
 	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opDefault},
 	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opDefault},
+	{0x1f, "divw", opDivw, asmDefault, disDefault, twoInts.plus(twoInts), twoInts.plus(twoInts), 4, modeAny, opDefault},
 
 	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, varies(checkIntConstBlock, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, immediates("i")},
@@ -226,6 +231,16 @@ var OpSpecs = []OpSpec{
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, varies(checkPushBytes, "bytes", immBytes)},
 	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, varies(checkPushInt, "uint", immInt)},
+
+	// "Function oriented"
+	{0x88, "callsub", opCallSub, assembleBranch, disBranch, nil, nil, 4, modeAny, opBranch},
+	{0x89, "retsub", opRetSub, asmDefault, disDefault, nil, nil, 4, modeAny, opDefault},
+	// Leave a little room for indirect function calls, or similar
+
+	// More math
+	// shl, shr
+	// divw, modw convenience
+	// expmod
 }
 
 type sortByOpcode []OpSpec
