@@ -76,8 +76,10 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 
 Opcodes prefixed with `b` are intended to take and return byteslice
 values that are interpretted as big-endian unsigned integers.
-Returned values are as the shortest byteslice that can represent the
+Returned values are the shortest byteslice that can represent the
 returned value.  For example, the zero value is the empty byteslice.
+
+Input lengths are limited to 64, which represents a 512 bit unsigned integer.
 
 @@ Byteslice_Arithmetic.md @@
 
