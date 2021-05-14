@@ -27,7 +27,7 @@ import (
 // MaxHoldingGroupSize specifies maximum number of entries in AssetsHoldingGroup.groupData
 const MaxHoldingGroupSize = 256
 
-// MaxHoldingGroupSize specifies maximum number of entries in AssetsParamsGroup.groupData
+// MaxParamsGroupSize specifies maximum number of entries in AssetsParamsGroup.groupData
 // TODO
 const MaxParamsGroupSize = 256
 
@@ -85,17 +85,17 @@ type AssetsParamsGroupData struct {
 	AssetsCommonGroupData
 
 	// same number of elements as in AssetOffsets
-	Totals         []uint64         `codec:"t,allocbound=MaxHoldingGroupSize"`
-	Decimals       []uint32         `codec:"d,allocbound=MaxHoldingGroupSize"`
-	DefaultFrozens []bool           `codec:"f,allocbound=MaxHoldingGroupSize"`
-	UnitNames      []string         `codec:"u,allocbound=MaxHoldingGroupSize"`
-	AssetNames     []string         `codec:"n,allocbound=MaxHoldingGroupSize"`
-	URLs           []string         `codec:"l,allocbound=MaxHoldingGroupSize"`
-	MetadataHash   [][32]byte       `codec:"h,allocbound=MaxHoldingGroupSize"`
-	Managers       []basics.Address `codec:"m,allocbound=MaxHoldingGroupSize"`
-	Reserves       []basics.Address `codec:"r,allocbound=MaxHoldingGroupSize"`
-	Freezes        []basics.Address `codec:"z,allocbound=MaxHoldingGroupSize"`
-	Clawbacks      []basics.Address `codec:"c,allocbound=MaxHoldingGroupSize"`
+	Totals         []uint64         `codec:"t,allocbound=MaxParamsGroupSize"`
+	Decimals       []uint32         `codec:"d,allocbound=MaxParamsGroupSize"`
+	DefaultFrozens []bool           `codec:"f,allocbound=MaxParamsGroupSize"`
+	UnitNames      []string         `codec:"u,allocbound=MaxParamsGroupSize"`
+	AssetNames     []string         `codec:"n,allocbound=MaxParamsGroupSize"`
+	URLs           []string         `codec:"l,allocbound=MaxParamsGroupSize"`
+	MetadataHash   [][32]byte       `codec:"h,allocbound=MaxParamsGroupSize"`
+	Managers       []basics.Address `codec:"m,allocbound=MaxParamsGroupSize"`
+	Reserves       []basics.Address `codec:"r,allocbound=MaxParamsGroupSize"`
+	Freezes        []basics.Address `codec:"z,allocbound=MaxParamsGroupSize"`
+	Clawbacks      []basics.Address `codec:"c,allocbound=MaxParamsGroupSize"`
 }
 
 // AssetsHoldingGroupData is an actual asset holding data
@@ -372,11 +372,6 @@ func (g AssetsHoldingGroup) Encode() []byte {
 func (g AssetsParamsGroup) Encode() []byte {
 	// TODO: use GetEncodingBuf/PutEncodingBuf
 	return protocol.Encode(&g.groupData)
-}
-
-// TestGetGroupData returns group data. Used in tests only
-func (g AssetsHoldingGroup) TestGetGroupData() AssetsHoldingGroupData {
-	return g.groupData
 }
 
 // Update an asset holding by index
@@ -678,8 +673,12 @@ func (g *AssetsCommonGroupData) AssetDeltaValue(ai int) basics.AssetIndex {
 }
 
 // HasSpace returns true if this group has space to accommodate one more asset entry
-func (g *AssetGroupDesc) HasSpace() bool {
+func (g *AssetsHoldingGroup) HasSpace() bool {
 	return g.Count < MaxHoldingGroupSize
+}
+
+func (g *AssetsParamsGroup) HasSpace() bool {
+	return g.Count < MaxParamsGroupSize
 }
 
 // MinAsset returns min (base) AssetIndex value for this group
@@ -849,7 +848,7 @@ func update(updated []basics.AssetIndex, agl AbstractAssetGroupList, assets asse
 	for _, aidx := range updated {
 		gi, ai = findAsset(aidx, gi, agl)
 		if gi == -1 || ai == -1 {
-			return fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
+			return fmt.Errorf("failed to find asset group for updating %d: (%d, %d)", aidx, gi, ai)
 		}
 		agl.Get(gi).Update(ai, assets.get(aidx))
 	}
@@ -865,7 +864,7 @@ func deleteAssets(assets []basics.AssetIndex, agl AbstractAssetGroupList) (delet
 	for _, aidx := range assets {
 		gi, ai = findAsset(aidx, gi, agl)
 		if gi == -1 || ai == -1 {
-			err = fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
+			err = fmt.Errorf("failed to find asset group for deleting %d: (%d, %d)", aidx, gi, ai)
 			return
 		}
 		// group data is loaded in accountsLoadOld
@@ -1515,7 +1514,7 @@ func (e *ExtendedAssetHolding) ConvertToGroups(assets map[basics.AssetIndex]basi
 	}
 	b := assetHoldingGroupBuilder{}
 	flt := newAssetHoldingFlattener(assets)
-	convertToGroups(e, flt, &b)
+	convertToGroups(e, flt, &b, MaxHoldingGroupSize)
 }
 
 // ConvertToGroups converts map of basics.AssetHolding to asset params groups
@@ -1525,11 +1524,11 @@ func (e *ExtendedAssetParams) ConvertToGroups(assets map[basics.AssetIndex]basic
 	}
 	b := assetParamsGroupBuilder{}
 	flt := newAssetParamsFlattener(assets)
-	convertToGroups(e, flt, &b)
+	convertToGroups(e, flt, &b, MaxParamsGroupSize)
 }
 
 // convertToGroups converts data from Flattener into groups produced by GroupBuilder and assigns into AbstractAssetGroupList
-func convertToGroups(agl AbstractAssetGroupList, flt flattener, builder groupBuilder) {
+func convertToGroups(agl AbstractAssetGroupList, flt flattener, builder groupBuilder, maxGroupSize int) {
 	min := func(a, b int) int {
 		if a < b {
 			return a
@@ -1537,12 +1536,12 @@ func convertToGroups(agl AbstractAssetGroupList, flt flattener, builder groupBui
 		return b
 	}
 
-	numGroups := int(flt.Count()+MaxHoldingGroupSize-1) / MaxHoldingGroupSize
+	numGroups := int(int(flt.Count())+maxGroupSize-1) / maxGroupSize
 	agl.Reset(flt.Count(), numGroups)
 
 	for i := 0; i < numGroups; i++ {
-		start := i * MaxHoldingGroupSize
-		end := min((i+1)*MaxHoldingGroupSize, int(flt.Count()))
+		start := i * maxGroupSize
+		end := min((i+1)*maxGroupSize, int(flt.Count()))
 		size := end - start
 		builder.newGroup(size)
 
@@ -1693,15 +1692,6 @@ func merge(agl AbstractAssetGroupList, assetThreshold uint32) (loaded []int, del
 	return
 }
 
-// TestClearGroupData removes all the groups, used in tests only
-func (e *ExtendedAssetHolding) TestClearGroupData() {
-	for i := 0; i < len(e.Groups); i++ {
-		// ignored on serialization
-		e.Groups[i].groupData = AssetsHoldingGroupData{}
-		e.Groups[i].loaded = false
-	}
-}
-
 // Get returns AbstractAssetGroup interface by group index
 func (e *ExtendedAssetHolding) Get(gi int) AbstractAssetGroup {
 	return &(e.Groups[gi])
@@ -1752,4 +1742,23 @@ func (e *ExtendedAssetParams) Reset(count uint32, length int) {
 // Assign sets group at group index position
 func (e *ExtendedAssetParams) Assign(gi int, group interface{}) {
 	e.Groups[gi] = group.(AssetsParamsGroup)
+}
+
+// TestGetGroupData returns group data. Used in tests only
+func (g AssetsHoldingGroup) TestGetGroupData() AssetsHoldingGroupData {
+	return g.groupData
+}
+
+// TestGetGroupData returns group data. Used in tests only
+func (g AssetsParamsGroup) TestGetGroupData() AssetsParamsGroupData {
+	return g.groupData
+}
+
+// TestClearGroupData removes all the groups, used in tests only
+func (e *ExtendedAssetHolding) TestClearGroupData() {
+	for i := 0; i < len(e.Groups); i++ {
+		// ignored on serialization
+		e.Groups[i].groupData = AssetsHoldingGroupData{}
+		e.Groups[i].loaded = false
+	}
 }
