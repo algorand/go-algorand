@@ -7,6 +7,7 @@
 # python3 test/scripts/heapWatch.py -o /tmp/heaps --period 60s private_network_root/*
 
 import argparse
+import base64
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ import urllib.request
 
 # pip install py-algorand-sdk
 import algosdk
+from algosdk.encoding import msgpack
 import algosdk.v2client
 import algosdk.v2client.algod
 
@@ -64,15 +66,24 @@ def do_graceful_stop(signum, frame):
 signal.signal(signal.SIGTERM, do_graceful_stop)
 signal.signal(signal.SIGINT, do_graceful_stop)
 
+def jsonable(ob):
+    if isinstance(ob, bytes):
+        return base64.b64encode(ob).decode()
+    if isinstance(ob, list):
+        return [jsonable(x) for x in ob]
+    if isinstance(ob, dict):
+        return {jsonable(k):jsonable(v) for k,v in ob.items()}
+    return ob
 
 class algodDir:
-    def __init__(self, path):
+    def __init__(self, path, net=None, token=None, admin_token=None):
         self.path = path
         self.nick = os.path.basename(self.path)
-        net, token, admin_token = read_algod_dir(self.path)
         self.net = net
         self.token = token
         self.admin_token = admin_token
+        if net is None:
+            net, token, admin_token = read_algod_dir(self.path)
         self.headers = {}
         self._pid = None
         self._algod = None
@@ -127,13 +138,14 @@ class algodDir:
     def get_blockinfo(self, snapshot_name=None, outdir=None):
         algod = self.algod()
         status = algod.status()
-        bi = algod.block_info(status['last-round'])
+        bi = msgpack.loads(algod.block_info(status['last-round'], response_format='msgpack'), strict_map_key=False)
         if snapshot_name is None:
             snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
         outpath = os.path.join(outdir or '.', self.nick + '.' + snapshot_name + '.blockinfo.json')
         bi['block'].pop('txns', None)
+        bi['block'].pop('cert', None)
         with open(outpath, 'wt') as fout:
-            json.dump(bi, fout)
+            json.dump(jsonable(bi), fout)
         return bi
         #txncount = bi['block']['tc']
 
@@ -157,6 +169,17 @@ class watcher:
         self.args = args
         self.prevsnapshots = {}
         self.they = []
+        if not args.data_dirs and os.path.exists(args.tf_inventory):
+            import configparser
+            cp = configparser.ConfigParser(allow_no_value=True)
+            cp.read(args.tf_inventory)
+            for net in cp['role_relay'].keys():
+                net = net + ':8580'
+                try:
+                    ad = algodDir(net, net=net, token=args.token, admin_token=args.admin_token)
+                    self.they.append(ad)
+                except:
+                    logger.error('bad algod: %r', path, exc_info=True)
         for path in args.data_dirs:
             if not os.path.isdir(path):
                 continue
@@ -215,6 +238,9 @@ def main():
     ap.add_argument('--metrics', default=False, action='store_true', help='also capture /metrics counts')
     ap.add_argument('--blockinfo', default=False, action='store_true', help='also capture block header info')
     ap.add_argument('--period', default=None, help='seconds between automatically capturing')
+    ap.add_argument('--tf-inventory', default='terraform-inventory.host', help='terraform inventory file to use if no data_dirs specified')
+    ap.add_argument('--token', default='', help='default algod api token to use')
+    ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
