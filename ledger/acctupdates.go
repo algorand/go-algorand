@@ -2377,7 +2377,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				if creatable.Created {
 					action = ledgercore.ActionParamsCreate
 				}
-				deltas[i].SetAssetDelta(creatable.Creator, basics.AssetIndex(cidx), action)
+				deltas[i].SetEntityDelta(creatable.Creator, cidx, action)
 			}
 		}
 	}

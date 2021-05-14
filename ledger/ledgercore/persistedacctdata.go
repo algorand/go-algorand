@@ -1536,7 +1536,7 @@ func convertToGroups(agl AbstractAssetGroupList, flt flattener, builder groupBui
 		return b
 	}
 
-	numGroups := int(int(flt.Count())+maxGroupSize-1) / maxGroupSize
+	numGroups := (int(flt.Count()) + maxGroupSize - 1) / maxGroupSize
 	agl.Reset(flt.Count(), numGroups)
 
 	for i := 0; i < numGroups; i++ {

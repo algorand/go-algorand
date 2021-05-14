@@ -156,10 +156,11 @@ type compactAccountDeltas struct {
 }
 
 type accountDelta struct {
-	old     dbAccountData
-	new     ledgercore.PersistedAccountData
-	assets  map[basics.AssetIndex]ledgercore.AssetAction
-	ndeltas int
+	old                    dbAccountData
+	new                    ledgercore.PersistedAccountData
+	createdDeletedHoldings ledgercore.EntityDelta
+	createdDeletedParams   ledgercore.EntityDelta
+	ndeltas                int
 }
 
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
@@ -225,20 +226,25 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 	for _, roundDelta := range accountDeltas {
 		for i := 0; i < roundDelta.Len(); i++ {
 			addr, acctDelta := roundDelta.GetByIdx(i)
-			hmap := roundDelta.GetAssetDeltas(addr)
+			params := roundDelta.GetEntityParamsDeltas(addr)
+			holdings := roundDelta.GetEntityHoldingDeltas(addr)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
+				params := prev.createdDeletedParams.Update(params)
+				holdings := prev.createdDeletedHoldings.Update(holdings)
 				outAccountDeltas.update(idx, accountDelta{ // update instead of upsert economizes one map lookup
-					old:     prev.old,
-					new:     acctDelta,
-					assets:  hmap,
-					ndeltas: prev.ndeltas + 1,
+					old:                    prev.old,
+					new:                    acctDelta,
+					createdDeletedParams:   params,
+					createdDeletedHoldings: holdings,
+					ndeltas:                prev.ndeltas + 1,
 				})
 			} else {
 				// it's a new entry.
 				newEntry := accountDelta{
-					new:     acctDelta,
-					assets:  hmap,
-					ndeltas: 1,
+					new:                    acctDelta,
+					createdDeletedParams:   params,
+					createdDeletedHoldings: holdings,
+					ndeltas:                1,
 				}
 				if baseAccountData, has := baseAccounts.read(addr); has {
 					newEntry.old = baseAccountData
@@ -254,13 +260,13 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 }
 
 func loadCreatedDeletedGroups(agl ledgercore.AbstractAssetGroupList, delta accountDelta, create ledgercore.AssetAction, delete ledgercore.AssetAction, fetcher fetcher, adRound basics.Round) (err error) {
-	for aidx, action := range delta.assets {
+	for cidx, action := range entityDelta {
 		gi := -1
 		if action == create {
 			// use FindGroup to find a possible matching group for insertion
-			gi = agl.FindGroup(aidx, 0)
+			gi = agl.FindGroup(basics.AssetIndex(cidx), 0)
 		} else if action == delete {
-			gi, _ = agl.FindAsset(aidx, 0)
+			gi, _ = agl.FindAsset(basics.AssetIndex(cidx), 0)
 		}
 		if gi != -1 {
 			g := agl.Get(gi)
@@ -285,7 +291,7 @@ func loadOldHoldings(dbad dbAccountData, delta accountDelta, fetcher fetcher, ad
 	}
 
 	// load created and deleted asset holding groups
-	err := loadCreatedDeletedGroups(&dbad.pad.ExtendedAssetHolding, delta, ledgercore.ActionHoldingCreate, ledgercore.ActionHoldingDelete, fetcher, adRound)
+	err := loadCreatedDeletedGroups(&dbad.pad.ExtendedAssetHolding, delta.createdDeletedHoldings, ledgercore.ActionHoldingCreate, ledgercore.ActionHoldingDelete, fetcher, adRound)
 	if err != nil {
 		return dbAccountData{}, err
 	}
@@ -323,7 +329,7 @@ func loadOldParams(dbad dbAccountData, delta accountDelta, fetcher fetcher, adRo
 		dbad.pad.AccountData.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, len(delta.new.AssetParams))
 	}
 
-	err := loadCreatedDeletedGroups(&dbad.pad.ExtendedAssetParams, delta, ledgercore.ActionParamsCreate, ledgercore.ActionParamsDelete, fetcher, adRound)
+	err := loadCreatedDeletedGroups(&dbad.pad.ExtendedAssetParams, delta.createdDeletedParams, ledgercore.ActionParamsCreate, ledgercore.ActionParamsDelete, fetcher, adRound)
 	if err != nil {
 		return dbAccountData{}, err
 	}
@@ -1555,15 +1561,15 @@ func accountsNewDelete(qabd *sql.Stmt, qaed *sql.Stmt, addr basics.Address, dbad
 	return updatedAccounts, err
 }
 
-func filterCreatedDeleted(assets map[basics.AssetIndex]ledgercore.AssetAction, cr ledgercore.AssetAction, dl ledgercore.AssetAction) (created, deleted []basics.AssetIndex) {
+func filterCreatedDeleted(assets ledgercore.EntityDelta, cr ledgercore.EntityAction, dl ledgercore.EntityAction) (created, deleted []basics.AssetIndex) {
 	created = make([]basics.AssetIndex, 0, len(assets)/2)
 	deleted = make([]basics.AssetIndex, 0, len(assets)/2)
 
-	for aidx, action := range assets {
+	for cidx, action := range assets {
 		if action == cr {
-			created = append(created, aidx)
+			created = append(created, basics.AssetIndex(cidx))
 		} else if action == dl {
-			deleted = append(deleted, aidx)
+			deleted = append(deleted, basics.AssetIndex(cidx))
 		}
 	}
 	return
@@ -1597,7 +1603,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 		// AccountData assigned above
 		// Do not use delta.assets map of deleted/created since entire Assets is being replaced
 	} else if delta.old.pad.NumAssetHoldings() <= assetsThreshold && len(delta.new.Assets) > assetsThreshold {
-		_, deleted := filterCreatedDeleted(delta.assets, ledgercore.ActionHoldingCreate, ledgercore.ActionHoldingDelete)
+		_, deleted := filterCreatedDeleted(delta.createdDeletedHoldings, ledgercore.ActionHoldingCreate, ledgercore.ActionHoldingDelete)
 		assets := make(map[basics.AssetIndex]basics.AssetHolding, len(delta.old.pad.Assets)+len(delta.new.Assets)-len(deleted))
 		for aidx, holding := range delta.old.pad.Assets {
 			assets[aidx] = holding
@@ -1616,7 +1622,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 		err = modifyAssetGroup(qaei, &pad.ExtendedAssetHolding)
 	} else { // default case: delta.old.pad.NumAssetHoldings() > assetsThreshold
 
-		created, deleted := filterCreatedDeleted(delta.assets, ledgercore.ActionHoldingCreate, ledgercore.ActionHoldingDelete)
+		created, deleted := filterCreatedDeleted(delta.createdDeletedHoldings, ledgercore.ActionHoldingCreate, ledgercore.ActionHoldingDelete)
 		pad.ExtendedAssetHolding = delta.new.ExtendedAssetHolding
 		oldPad := delta.old.pad
 		oldPadRound := delta.old.round
@@ -1636,7 +1642,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 
 			updated := make([]basics.AssetIndex, 0, len(delta.new.Assets))
 			for aidx := range delta.new.Assets {
-				if _, ok := delta.assets[aidx]; !ok {
+				if _, ok := delta.createdDeletedHoldings[basics.CreatableIndex(aidx)]; !ok {
 					updated = append(updated, aidx)
 				}
 			}
@@ -1679,7 +1685,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 		// AccountData assigned above
 		// Do not use delta.assets map of deleted/created since entire AssetParams is being replaced
 	} else if delta.old.pad.NumAssetParams() <= assetsThreshold && len(delta.new.AssetParams) > assetsThreshold {
-		_, deleted := filterCreatedDeleted(delta.assets, ledgercore.ActionParamsCreate, ledgercore.ActionParamsDelete)
+		_, deleted := filterCreatedDeleted(delta.createdDeletedParams, ledgercore.ActionParamsCreate, ledgercore.ActionParamsDelete)
 		assets := make(map[basics.AssetIndex]basics.AssetParams, len(delta.old.pad.AssetParams)+len(delta.new.AssetParams)-len(deleted))
 		for aidx, params := range delta.old.pad.AssetParams {
 			assets[aidx] = params
@@ -1698,7 +1704,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 		err = modifyAssetGroup(qaei, &pad.ExtendedAssetParams)
 	} else { // default case: delta.old.pad.NumAssetHoldings() > assetsThreshold
 
-		created, deleted := filterCreatedDeleted(delta.assets, ledgercore.ActionParamsCreate, ledgercore.ActionParamsDelete)
+		created, deleted := filterCreatedDeleted(delta.createdDeletedParams, ledgercore.ActionParamsCreate, ledgercore.ActionParamsDelete)
 
 		pad.ExtendedAssetParams = delta.new.ExtendedAssetParams
 		oldPad := delta.old.pad
@@ -1719,7 +1725,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 
 			updated := make([]basics.AssetIndex, 0, len(delta.new.AssetParams))
 			for aidx := range delta.new.AssetParams {
-				if _, ok := delta.assets[aidx]; !ok {
+				if _, ok := delta.createdDeletedParams[basics.CreatableIndex(aidx)]; !ok {
 					updated = append(updated, aidx)
 				}
 			}

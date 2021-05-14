@@ -2100,8 +2100,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Totals")
 				return
 			}
-			if zb0018 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0018), uint64(MaxHoldingGroupSize))
+			if zb0018 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0018), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "Totals")
 				return
 			}
@@ -2129,8 +2129,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
-			if zb0020 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0020), uint64(MaxHoldingGroupSize))
+			if zb0020 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0020), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "Decimals")
 				return
 			}
@@ -2158,8 +2158,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "DefaultFrozens")
 				return
 			}
-			if zb0022 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0022), uint64(MaxHoldingGroupSize))
+			if zb0022 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0022), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "DefaultFrozens")
 				return
 			}
@@ -2187,8 +2187,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "UnitNames")
 				return
 			}
-			if zb0024 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0024), uint64(MaxHoldingGroupSize))
+			if zb0024 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0024), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "UnitNames")
 				return
 			}
@@ -2216,8 +2216,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AssetNames")
 				return
 			}
-			if zb0026 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0026), uint64(MaxHoldingGroupSize))
+			if zb0026 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0026), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "AssetNames")
 				return
 			}
@@ -2245,8 +2245,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "URLs")
 				return
 			}
-			if zb0028 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0028), uint64(MaxHoldingGroupSize))
+			if zb0028 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0028), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "URLs")
 				return
 			}
@@ -2274,8 +2274,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "MetadataHash")
 				return
 			}
-			if zb0030 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0030), uint64(MaxHoldingGroupSize))
+			if zb0030 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0030), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "MetadataHash")
 				return
 			}
@@ -2303,8 +2303,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Managers")
 				return
 			}
-			if zb0032 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0032), uint64(MaxHoldingGroupSize))
+			if zb0032 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0032), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "Managers")
 				return
 			}
@@ -2332,8 +2332,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Reserves")
 				return
 			}
-			if zb0034 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0034), uint64(MaxHoldingGroupSize))
+			if zb0034 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0034), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "Reserves")
 				return
 			}
@@ -2361,8 +2361,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Freezes")
 				return
 			}
-			if zb0036 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0036), uint64(MaxHoldingGroupSize))
+			if zb0036 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0036), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "Freezes")
 				return
 			}
@@ -2390,8 +2390,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Clawbacks")
 				return
 			}
-			if zb0038 > MaxHoldingGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0038), uint64(MaxHoldingGroupSize))
+			if zb0038 > MaxParamsGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0038), uint64(MaxParamsGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "Clawbacks")
 				return
 			}
@@ -2468,8 +2468,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Totals")
 					return
 				}
-				if zb0042 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0042), uint64(MaxHoldingGroupSize))
+				if zb0042 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0042), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "Totals")
 					return
 				}
@@ -2495,8 +2495,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
-				if zb0044 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0044), uint64(MaxHoldingGroupSize))
+				if zb0044 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0044), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "Decimals")
 					return
 				}
@@ -2522,8 +2522,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "DefaultFrozens")
 					return
 				}
-				if zb0046 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0046), uint64(MaxHoldingGroupSize))
+				if zb0046 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0046), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "DefaultFrozens")
 					return
 				}
@@ -2549,8 +2549,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "UnitNames")
 					return
 				}
-				if zb0048 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0048), uint64(MaxHoldingGroupSize))
+				if zb0048 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0048), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "UnitNames")
 					return
 				}
@@ -2576,8 +2576,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AssetNames")
 					return
 				}
-				if zb0050 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0050), uint64(MaxHoldingGroupSize))
+				if zb0050 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0050), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "AssetNames")
 					return
 				}
@@ -2603,8 +2603,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "URLs")
 					return
 				}
-				if zb0052 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0052), uint64(MaxHoldingGroupSize))
+				if zb0052 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0052), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "URLs")
 					return
 				}
@@ -2630,8 +2630,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "MetadataHash")
 					return
 				}
-				if zb0054 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0054), uint64(MaxHoldingGroupSize))
+				if zb0054 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0054), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "MetadataHash")
 					return
 				}
@@ -2657,8 +2657,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Managers")
 					return
 				}
-				if zb0056 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0056), uint64(MaxHoldingGroupSize))
+				if zb0056 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0056), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "Managers")
 					return
 				}
@@ -2684,8 +2684,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Reserves")
 					return
 				}
-				if zb0058 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0058), uint64(MaxHoldingGroupSize))
+				if zb0058 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0058), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "Reserves")
 					return
 				}
@@ -2711,8 +2711,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Freezes")
 					return
 				}
-				if zb0060 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0060), uint64(MaxHoldingGroupSize))
+				if zb0060 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0060), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "Freezes")
 					return
 				}
@@ -2738,8 +2738,8 @@ func (z *AssetsParamsGroupData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Clawbacks")
 					return
 				}
-				if zb0062 > MaxHoldingGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0062), uint64(MaxHoldingGroupSize))
+				if zb0062 > MaxParamsGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0062), uint64(MaxParamsGroupSize))
 					err = msgp.WrapError(err, "Clawbacks")
 					return
 				}

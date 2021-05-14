@@ -17,6 +17,8 @@
 package ledgercore
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -82,13 +84,13 @@ type StateDelta struct {
 	initialTransactionsCount int
 }
 
-// AssetAction is an enum of actions on holdings
-//msgp:ignore AssetAction
-type AssetAction uint64
+// EntityAction is an enum of actions on holdings
+//msgp:ignore EntityAction
+type EntityAction uint64
 
 const (
 	// ActionHoldingCreate is for asset holding creation
-	ActionHoldingCreate AssetAction = 1 + iota
+	ActionHoldingCreate EntityAction = 1 + iota
 	// ActionHoldingDelete is for asset holding creation
 	ActionHoldingDelete
 	// ActionParamsCreate is for asset holding creation
@@ -97,14 +99,25 @@ const (
 	ActionParamsDelete
 )
 
+// EntityDelta holds asset/app actions
+//msgp:ignore EntityDelta
+type EntityDelta map[basics.CreatableIndex]EntityAction
+
+// AccountEntityDelta holds asset/app actions per account
+//msgp:ignore AccountEntityDelta
+type AccountEntityDelta map[basics.Address]EntityDelta
+
 // AccountDeltas stores ordered accounts and allows fast lookup by address
+//msgp:ignore AccountDeltas
 type AccountDeltas struct {
 	// actual data
 	accts []PersistedBalanceRecord
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
-	// assetAlt keeps track of created and deleted assets and params per address
-	assetAlt map[basics.Address]map[basics.AssetIndex]AssetAction
+	// entityHoldings keeps track of created and deleted assets holdings and app local states per address
+	entityHoldings AccountEntityDelta
+	// entityParams keeps track of created and deleted asset and app params per address
+	entityParams AccountEntityDelta
 }
 
 // PersistedBalanceRecord is similar to BalanceRecord but contains PersistedAccountData
@@ -120,9 +133,10 @@ type PersistedBalanceRecord struct {
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
 	return StateDelta{
 		Accts: AccountDeltas{
-			accts:      make([]PersistedBalanceRecord, 0, hint*2),
-			acctsCache: make(map[basics.Address]int, hint*2),
-			assetAlt:   make(map[basics.Address]map[basics.AssetIndex]AssetAction),
+			accts:          make([]PersistedBalanceRecord, 0, hint*2),
+			acctsCache:     make(map[basics.Address]int, hint*2),
+			entityHoldings: make(AccountEntityDelta),
+			entityParams:   make(AccountEntityDelta),
 		},
 		Txids:    make(map[transactions.Txid]basics.Round, hint),
 		Txleases: make(map[Txlease]basics.Round, hint),
@@ -192,27 +206,61 @@ func (ad *AccountDeltas) upsert(pbr PersistedBalanceRecord) {
 	ad.acctsCache[addr] = last
 }
 
-// SetAssetDelta saves creation/deletion info about asset holding
+// SetEntityDelta saves creation/deletion info about asset/app params/holding
 // Creation is not really important since the holding is already in ad.accts,
 // but saving deleteion info is only the way to know if the asset gone
-func (ad *AccountDeltas) SetAssetDelta(addr basics.Address, aidx basics.AssetIndex, action AssetAction) {
-	hmap, ok := ad.assetAlt[addr]
+func (ad *AccountDeltas) SetEntityDelta(addr basics.Address, cidx basics.CreatableIndex, action EntityAction) {
+	var entityDelta EntityDelta
+	ok := false
+
+	if action == ActionHoldingCreate || action == ActionHoldingDelete {
+		entityDelta, ok = ad.entityHoldings[addr]
+	} else if action == ActionParamsCreate || action == ActionParamsDelete {
+		entityDelta, ok = ad.entityParams[addr]
+	} else {
+		panic(fmt.Sprintf("SetEntityDelta: unknown action %d", action))
+	}
+
 	if !ok {
 		// in most cases there will be only one asset modification per account
-		hmap = map[basics.AssetIndex]AssetAction{aidx: action}
+		entityDelta = EntityDelta{cidx: action}
 	} else {
-		hmap[aidx] = action
+		entityDelta[cidx] = action
 	}
 
-	if ad.assetAlt == nil {
-		ad.assetAlt = make(map[basics.Address]map[basics.AssetIndex]AssetAction)
+	if action == ActionHoldingCreate || action == ActionHoldingDelete {
+		if ad.entityHoldings == nil {
+			ad.entityHoldings = make(AccountEntityDelta)
+		}
+		ad.entityHoldings[addr] = entityDelta
+	} else if action == ActionParamsCreate || action == ActionParamsDelete {
+		if ad.entityParams == nil {
+			ad.entityParams = make(AccountEntityDelta)
+		}
+		ad.entityParams[addr] = entityDelta
 	}
-	ad.assetAlt[addr] = hmap
 }
 
-// GetAssetDeltas return map of created/deleted asset holdings
-func (ad AccountDeltas) GetAssetDeltas(addr basics.Address) map[basics.AssetIndex]AssetAction {
-	return ad.assetAlt[addr]
+// GetEntityParamsDeltas return map of created/deleted asset/app params
+func (ad AccountDeltas) GetEntityParamsDeltas(addr basics.Address) EntityDelta {
+	return ad.entityParams[addr]
+}
+
+// GetEntityHoldingDeltas return map of created/deleted assets/apps holding
+func (ad AccountDeltas) GetEntityHoldingDeltas(addr basics.Address) EntityDelta {
+	return ad.entityHoldings[addr]
+}
+
+// Update adds new data from other to old data in e and returns a new object
+func (e EntityDelta) Update(other EntityDelta) (result EntityDelta) {
+	result = make(EntityDelta, len(e)+len(other))
+	for cidx, action := range e {
+		result[cidx] = action
+	}
+	for cidx, action := range other {
+		result[cidx] = action
+	}
+	return
 }
 
 // OptimizeAllocatedMemory by reallocating maps to needed capacity

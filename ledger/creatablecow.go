@@ -50,7 +50,7 @@ func (cb *roundCowState) Allocate(addr basics.Address, cidx basics.CreatableInde
 	}
 
 	if ctype == basics.AssetCreatable {
-		cb.mods.Accts.SetAssetDelta(addr, basics.AssetIndex(cidx), ledgercore.ActionHoldingCreate)
+		cb.mods.Accts.SetEntityDelta(addr, cidx, ledgercore.ActionHoldingCreate)
 		return nil
 	}
 
@@ -85,7 +85,7 @@ func (cb *roundCowState) Deallocate(addr basics.Address, cidx basics.CreatableIn
 	}
 
 	if ctype == basics.AssetCreatable {
-		cb.mods.Accts.SetAssetDelta(addr, basics.AssetIndex(cidx), ledgercore.ActionHoldingDelete)
+		cb.mods.Accts.SetEntityDelta(addr, cidx, ledgercore.ActionHoldingDelete)
 		return nil
 	}
 
