@@ -768,6 +768,49 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	return nil
 }
 
+// Check the minimum balance requirement for the modified accounts in `cow`.
+func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
+	rewardlvl := cow.rewardsLevel()
+	for _, addr := range cow.modifiedAccounts() {
+		// Skip FeeSink, RewardsPool, and CompactCertSender MinBalance checks here.
+		// There's only a few accounts, so space isn't an issue, and we don't
+		// expect them to have low balances, but if they do, it may cause
+		// surprises.
+		if addr == eval.block.FeeSink || addr == eval.block.RewardsPool ||
+      addr == transactions.CompactCertSender {
+			continue
+		}
+
+		data, err := cow.lookup(addr)
+		if err != nil {
+			return err
+		}
+
+		// It's always OK to have the account move to an empty state,
+		// because the accounts DB can delete it.  Otherwise, we will
+		// enforce MinBalance.
+		if data.IsZero() {
+			continue
+		}
+
+    dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
+    effectiveMinBalance := dataNew.MinBalance(&eval.proto)
+    if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
+      return fmt.Errorf("account %v balance %d below min %d (%d assets)",
+        addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
+    }
+
+    // Check if we have exceeded the maximum minimum balance
+    if eval.proto.MaximumMinimumBalance != 0 {
+      if effectiveMinBalance.Raw > eval.proto.MaximumMinimumBalance {
+        return fmt.Errorf("account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", addr, effectiveMinBalance.Raw, eval.proto.MaximumMinimumBalance)
+      }
+    }
+	}
+
+  return nil
+}
+
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
@@ -837,47 +880,15 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 
 	// Check if any affected accounts dipped below MinBalance (unless they are
 	// completely zero, which means the account will be deleted.)
-	rewardlvl := cow.rewardsLevel()
-	for _, addr := range cow.modifiedAccounts() {
-		// Skip FeeSink, RewardsPool, and CompactCertSender MinBalance checks here.
-		// There's only a few accounts, so space isn't an issue, and we don't
-		// expect them to have low balances, but if they do, it may cause
-		// surprises.
-		if addr == spec.FeeSink || addr == spec.RewardsPool || addr == transactions.CompactCertSender {
-			continue
-		}
-
-		data, err := cow.lookup(addr)
-		if err != nil {
-			return err
-		}
-
-		// It's always OK to have the account move to an empty state,
-		// because the accounts DB can delete it.  Otherwise, we will
-		// enforce MinBalance.
-		if data.IsZero() {
-			continue
-		}
-
-		// Only do those checks if needed. It is useful to skip them if the user cannot provide
-		// account data that contains enough information to compute the correct minimum balance
-		// (the case with indexer).
-		if eval.validate || eval.generate {
-			dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-			effectiveMinBalance := dataNew.MinBalance(&eval.proto)
-			if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
-				return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
-					txid, addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
-			}
-
-			// Check if we have exceeded the maximum minimum balance
-			if eval.proto.MaximumMinimumBalance != 0 {
-				if effectiveMinBalance.Raw > eval.proto.MaximumMinimumBalance {
-					return fmt.Errorf("transaction %v: account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", txid, addr, effectiveMinBalance.Raw, eval.proto.MaximumMinimumBalance)
-				}
-			}
-		}
-	}
+  // Only do those checks if we are validating or generating. It is useful to skip them
+  // if we cannot provide account data that contains enough information to
+  // compute the correct minimum balance (the case with indexer which does not store it).
+  if eval.validate || eval.generate {
+    err := eval.checkMinBalance(cow)
+    if err != nil {
+      return fmt.Errorf("transaction: %v err: %w", txid, err)
+    }
+  }
 
 	// Remember this txn
 	cow.addTx(txn.Txn, txid)
