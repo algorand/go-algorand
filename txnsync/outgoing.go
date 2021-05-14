@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"errors"
 	"sort"
 	"time"
 
@@ -25,6 +26,9 @@ import (
 )
 
 const messageTimeWindow = 20 * time.Millisecond
+
+var errTransactionSyncOutgoingMessageQueueFull = errors.New("transaction sync outgoing message queue is full")
+var errTransactionSyncOutgoingMessageSendFailed = errors.New("transaction sync failed to send message")
 
 type sentMessageMetadata struct {
 	encodedMessageSize  int
@@ -44,9 +48,10 @@ type messageSentCallback struct {
 }
 
 // asyncMessageSent called via the network package to inform the txsync that a message was enqueued, and the associated sequence number.
-func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber uint64) {
+func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber uint64) error {
 	if !enqueued {
-		return
+		msc.state.log.Infof("unable to send message to peer. disconnecting from peer.")
+		return errTransactionSyncOutgoingMessageSendFailed
 	}
 	// record the timestamp here, before placing the entry on the queue
 	msc.messageData.sentTimestamp = msc.roundClock.Since()
@@ -54,8 +59,11 @@ func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber u
 
 	select {
 	case msc.state.outgoingMessagesCallbackCh <- msc:
+		return nil
 	default:
-		// if we can't place it on the channel, just let it drop and log it.
+		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
+		msc.state.log.Infof("unable to enqueue outgoing message confirmation; outgoingMessagesCallbackCh is full. disconnecting from peer.")
+		return errTransactionSyncOutgoingMessageQueueFull
 	}
 }
 
