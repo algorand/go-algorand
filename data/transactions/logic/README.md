@@ -390,4 +390,5 @@ Design and implementation limitations to be aware of with various versions of TE
 * TEAL cannot know exactly what round the current transaction will commit in (but it is somewhere in FirstValid through LastValid).
 * TEAL cannot know exactly what time its transaction is committed.
 * TEAL cannot loop prior to v4. In v3 and prior, the branch instructions `bnz` "branch if not zero", `bz` "branch if zero" and `b` "branch" can only branch forward so as to skip some code.
-* TEAL has no notion of subroutines (and therefore no recursion) prior to v4.
+* Until v4, TEAL had no notion of subroutines (and therefore no recursion). As of v4, use `callsub` and `retsub`.
+* TEAL cannot make indirect jumps. `b`, `bz`, `bnz`, and `callsub` jump to an immediately specified address, and `retsub` jumps to the address currently on the top of the call stack, which is manipulated only by previous calls to `callsub`.
