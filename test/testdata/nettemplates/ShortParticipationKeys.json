@@ -1,0 +1,55 @@
+{
+  "Genesis": {
+    "NetworkName": "shortpartkeys",
+    "ConsensusProtocol": "shortpartkeysprotocol",
+    "FirstPartKeyRound": 0,
+    "LastPartKeyRound": 36,
+    "PartKeyDilution": 8,
+    "Wallets": [
+      {
+        "Name": "Wallet1",
+        "Stake": 33,
+        "Online": true
+      },
+      {
+        "Name": "Wallet2",
+        "Stake": 33,
+        "Online": true
+      },
+      {
+        "Name": "Wallet3",
+        "Stake": 34,
+        "Online": true
+      }
+    ]
+  },
+  "Nodes": [
+    {
+      "Name": "Primary",
+      "IsRelay": true,
+      "Wallets": [
+      ]
+    },
+    {
+      "Name": "Node1",
+      "Wallets": [
+        { "Name": "Wallet1",
+          "ParticipationOnly": false }
+      ]
+    },
+    {
+      "Name": "Node2",
+      "Wallets": [
+        { "Name": "Wallet2",
+          "ParticipationOnly": false }
+      ]
+    },
+    {
+      "Name": "Node3",
+      "Wallets": [
+        { "Name": "Wallet3",
+          "ParticipationOnly": false }
+      ]
+    }
+  ]
+}
