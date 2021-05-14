@@ -99,7 +99,7 @@ func (ops *OpStream) createLabel(label string) {
 		ops.labels = make(map[string]int)
 	}
 	if _, ok := ops.labels[label]; ok {
-		ops.errorf("duplicate label %s", label)
+		ops.errorf("duplicate label %#v", label)
 	}
 	ops.labels[label] = ops.pending.Len()
 }
@@ -590,14 +590,14 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("txn unknown field: %v", args[0])
+		return ops.errorf("txn unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found array field %v in txn op", args[0])
+		return ops.errorf("found array field %#v in txn op", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("field %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
@@ -623,14 +623,14 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("txna unknown field: %v", args[0])
+		return ops.errorf("txna unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("txna unknown field: %v", args[0])
+		return ops.errorf("txna unknown field: %#v", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("txna %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("txna %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
@@ -661,14 +661,14 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
-		return ops.errorf("gtxn unknown field: %v", args[1])
+		return ops.errorf("gtxn unknown field: %#v", args[1])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found array field %v in gtxn op", args[1])
+		return ops.errorf("found array field %#v in gtxn op", args[1])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[1], fs.version)
+		return ops.errorf("field %#v available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 
 	ops.pending.WriteByte(spec.Opcode)
@@ -703,14 +703,14 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
-		return ops.errorf("gtxna unknown field: %v", args[1])
+		return ops.errorf("gtxna unknown field: %#v", args[1])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("gtxna unknown field: %v", args[1])
+		return ops.errorf("gtxna unknown field: %#v", args[1])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("gtxna %s available in version %d. Missed #pragma version?", args[1], fs.version)
+		return ops.errorf("gtxna %#v available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[2], 0, 64)
 	if err != nil {
@@ -738,14 +738,14 @@ func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("gtxns unknown field: %v", args[0])
+		return ops.errorf("gtxns unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found array field %v in gtxns op", args[0])
+		return ops.errorf("found array field %#v in gtxns op", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("field %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 
 	ops.pending.WriteByte(spec.Opcode)
@@ -760,14 +760,14 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("gtxnsa unknown field: %v", args[0])
+		return ops.errorf("gtxnsa unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("gtxnsa unknown field: %v", args[0])
+		return ops.errorf("gtxnsa unknown field: %#v", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("gtxnsa %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("gtxnsa %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
@@ -789,7 +789,7 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := globalFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("global unknown field: %v", args[0])
+		return ops.errorf("global unknown field: %#v", args[0])
 	}
 	if fs.version > ops.Version {
 		// no return here. we may as well continue to maintain typestack
@@ -810,7 +810,7 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	val, ok := assetHoldingFields[args[0]]
 	if !ok {
-		return ops.errorf("asset_holding_get unknown arg: %v", args[0])
+		return ops.errorf("asset_holding_get unknown arg: %#v", args[0])
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
@@ -824,7 +824,7 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	val, ok := assetParamsFields[args[0]]
 	if !ok {
-		return ops.errorf("asset_params_get unknown arg: %v", args[0])
+		return ops.errorf("asset_params_get unknown arg: %#v", args[0])
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
@@ -1033,11 +1033,22 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			ops.trace("%d: no fields\n", ops.sourceLine)
 			continue
 		}
-		// we're going to process opcodes, so fix the Version
+		// we're about to begin processing opcodes, so fix the Version
 		if ops.Version == assemblerNoVersion {
 			ops.Version = AssemblerDefaultVersion
 		}
 		opstring := fields[0]
+
+		if opstring[len(opstring)-1] == ':' {
+			ops.createLabel(opstring[:len(opstring)-1])
+			fields = fields[1:]
+			if len(fields) == 0 {
+				// There was a label, not need to ops.trace this
+				continue
+			}
+			opstring = fields[0]
+		}
+
 		spec, ok := OpsByName[ops.Version][opstring]
 		if !ok {
 			spec, ok = keywords[opstring]
@@ -1053,10 +1064,6 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			ops.trace("\n")
 			continue
 		}
-		if opstring[len(opstring)-1] == ':' {
-			ops.createLabel(opstring[:len(opstring)-1])
-			continue
-		}
 		// unknown opcode, let's report a good error if version problem
 		spec, ok = OpsByName[AssemblerMaxVersion][opstring]
 		if ok {
@@ -1070,7 +1077,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
 			if dest == ops.pending.Len() {
-				ops.errorf("label %v is too far away", label)
+				ops.errorf("label %#v is too far away", label)
 			}
 		}
 	}
@@ -1141,20 +1148,20 @@ func (ops *OpStream) resolveLabels() {
 		dest, ok := ops.labels[lr.label]
 		if !ok {
 			if !reported[lr.label] {
-				ops.errorf("reference to undefined label %v", lr.label)
+				ops.errorf("reference to undefined label %#v", lr.label)
 			}
 			reported[lr.label] = true
 			continue
 		}
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
 		naturalPc := lr.position + 3
-		if dest < naturalPc {
-			ops.errorf("label %v is before reference but only forward jumps are allowed", lr.label)
+		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
+			ops.errorf("label %#v is a back reference, back jump support was introduced in TEAL v4", lr.label)
 			continue
 		}
 		jump := dest - naturalPc
 		if jump > 0x7fff {
-			ops.errorf("label %v is too far away", lr.label)
+			ops.errorf("label %#v is too far away", lr.label)
 			continue
 		}
 		raw[lr.position+1] = uint8(jump >> 8)
@@ -1376,33 +1383,29 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 	return
 }
 
-func checkIntConstBlock(cx *evalContext) int {
+func checkIntConstBlock(cx *evalContext) error {
 	pos := cx.pc + 1
 	numInts, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
-		cx.err = fmt.Errorf("could not decode int const block size at pc=%d", pos)
-		return 1
+		return fmt.Errorf("could not decode int const block size at pc=%d", pos)
 	}
 	pos += bytesUsed
 	if numInts > uint64(len(cx.program)) {
-		cx.err = errTooManyIntc
-		return 0
+		return errTooManyIntc
 	}
 	//intc = make([]uint64, numInts)
 	for i := uint64(0); i < numInts; i++ {
 		if pos >= len(cx.program) {
-			cx.err = errShortIntcblock
-			return 0
+			return errShortIntcblock
 		}
 		_, bytesUsed = binary.Uvarint(cx.program[pos:])
 		if bytesUsed <= 0 {
-			cx.err = fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
-			return 1
+			return fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
 		}
 		pos += bytesUsed
 	}
 	cx.nextpc = pos
-	return 1
+	return nil
 }
 
 var errShortBytecblock = errors.New("bytecblock ran past end of program")
@@ -1448,44 +1451,38 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 	return
 }
 
-func checkByteConstBlock(cx *evalContext) int {
+func checkByteConstBlock(cx *evalContext) error {
 	pos := cx.pc + 1
 	numItems, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
-		cx.err = fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
-		return 1
+		return fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
 	}
 	pos += bytesUsed
 	if numItems > uint64(len(cx.program)) {
-		cx.err = errTooManyItems
-		return 0
+		return errTooManyItems
 	}
 	//bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
 		if pos >= len(cx.program) {
-			cx.err = errShortBytecblock
-			return 0
+			return errShortBytecblock
 		}
 		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
 		if bytesUsed <= 0 {
-			cx.err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
-			return 1
+			return fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
 		}
 		pos += bytesUsed
 		if pos >= len(cx.program) {
-			cx.err = errShortBytecblock
-			return 0
+			return errShortBytecblock
 		}
 		end := uint64(pos) + itemLen
 		if end > uint64(len(cx.program)) || end < uint64(pos) {
-			cx.err = errShortBytecblock
-			return 0
+			return errShortBytecblock
 		}
 		//bytec[i] = program[pos : pos+int(itemLen)]
 		pos += int(itemLen)
 	}
 	cx.nextpc = pos
-	return 1
+	return nil
 }
 
 func disIntcblock(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -1566,7 +1563,7 @@ func guessByteFormat(bytes []byte) string {
 		return fmt.Sprintf("addr %s", short.String())
 	}
 	if allPrintableASCII(bytes) {
-		return fmt.Sprintf("\"%s\"", string(bytes))
+		return fmt.Sprintf("%#v", string(bytes))
 	}
 	return "0x" + hex.EncodeToString(bytes)
 }
@@ -1612,9 +1609,9 @@ func disPushInt(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = pos + bytesUsed
 	return fmt.Sprintf("%s %d", spec.Name, val), nil
 }
-func checkPushInt(cx *evalContext) int {
+func checkPushInt(cx *evalContext) error {
 	opPushInt(cx)
-	return 1
+	return cx.err
 }
 
 func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -1632,9 +1629,9 @@ func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = int(end)
 	return fmt.Sprintf("%s 0x%s", spec.Name, hex.EncodeToString(bytes)), nil
 }
-func checkPushBytes(cx *evalContext) int {
+func checkPushBytes(cx *evalContext) error {
 	opPushBytes(cx)
-	return 1
+	return cx.err
 }
 
 // This is also used to disassemble gtxns
@@ -1723,9 +1720,12 @@ func disBranch(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = dis.pc + 3
 	offset := (uint(dis.program[dis.pc+1]) << 8) | uint(dis.program[dis.pc+2])
 	target := int(offset) + dis.pc + 3
+	if target > 0xffff {
+		target -= 0x10000
+	}
 	var label string
 	if dis.numericTargets {
-		label = fmt.Sprintf("+%d", offset+3) // +3 so it's easy to calculate destination from current
+		label = fmt.Sprintf("%d", target)
 	} else {
 		if known, ok := dis.pendingLabels[target]; ok {
 			label = known

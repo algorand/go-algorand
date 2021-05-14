@@ -52,6 +52,7 @@ var opDocByName = map[string]string{
 	"~":                 "bitwise invert value X",
 	"mulw":              "A times B out to 128-bit long result as low (top) and high uint64 values on the stack",
 	"addw":              "A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack",
+	"divw":              "Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top.",
 	"intcblock":         "prepare block of uint64 constants for use by intc",
 	"intc":              "push Ith constant from intcblock to stack",
 	"intc_0":            "push constant 0 from intcblock to stack",
@@ -111,6 +112,8 @@ var opDocByName = map[string]string{
 	"asset_holding_get": "read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}",
 	"asset_params_get":  "read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value}",
 	"assert":            "immediately fail unless value X is a non-zero number",
+	"callsub":           "branch unconditionally to TARGET, saving the next instruction on the call stack",
+	"retsub":            "pop the top instruction from the call stack and branch to it",
 }
 
 // OpDoc returns a description of the op
@@ -133,9 +136,9 @@ var opcodeImmediateNotes = map[string]string{
 	"gtxna":             "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
 	"gtxnsa":            "{uint8 transaction field index} {uint8 transaction field array index}",
 	"global":            "{uint8 global field index}",
-	"bnz":               "{0..0x7fff forward branch offset, big endian}",
-	"bz":                "{0..0x7fff forward branch offset, big endian}",
-	"b":                 "{0..0x7fff forward branch offset, big endian}",
+	"bnz":               "{int16 branch offset, big endian. (negative offsets are illegal before v4)}",
+	"bz":                "{int16 branch offset, big endian. (negative offsets are illegal before v4)}",
+	"b":                 "{int16 branch offset, big endian. (negative offsets are illegal before v4)}",
 	"load":              "{uint8 position in scratch space to load from}",
 	"store":             "{uint8 position in scratch space to store to}",
 	"substring":         "{uint8 start position} {uint8 end position}",
@@ -152,13 +155,16 @@ func OpImmediateNote(opName string) string {
 // further documentation on the function of the opcode
 var opDocExtras = map[string]string{
 	"ed25519verify":     "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
-	"bnz":               "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.\n\nAt LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before LogicSigVersion 2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
+	"bnz":               "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are limited to forward branches only, 0-0x7fff until v4. v4 treats offset as a signed 16 bit integer allowing for backward branches and looping.\n\nAt LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before LogicSigVersion 2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
 	"bz":                "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
 	"b":                 "See `bnz` for details on how branches work. `b` always jumps to the offset.",
+	"callsub":           "The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.`",
+	"retsub":            "The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.`",
 	"intcblock":         "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script.",
 	"bytecblock":        "`bytecblock` loads the following program bytes into an array of byte-array constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script.",
 	"*":                 "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.",
 	"+":                 "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.",
+	"/":                 "`divw` is available to divide the two-element values produced by `mulw` and `addw`.",
 	"txn":               "FirstValidTime causes the program to fail. The field is reserved for future use.",
 	"gtxn":              "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
 	"gtxns":             "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
@@ -194,9 +200,9 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"}},
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store"}},
-	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert"}},
+	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert", "callsub", "retsub"}},
 	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 

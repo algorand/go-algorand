@@ -910,6 +910,9 @@ func initConsensusProtocols() {
 	// Enable transaction Merkle tree.
 	vFuture.PaysetCommit = PaysetCommitMerkle
 
+	// Enable TEAL 4
+	vFuture.LogicSigVersion = 4
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
