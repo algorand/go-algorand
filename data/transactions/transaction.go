@@ -343,12 +343,12 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
 		}
 
-		if len(tx.ApprovalProgram) > proto.MaxAppProgramLen {
-			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxAppProgramLen)
+		if len(tx.ApprovalProgram) > ((1 + tx.ExtraProgramPages) * proto.MaxAppProgramLen) {
+			return fmt.Errorf("approval program too long. max len %d bytes", (1+tx.ExtraProgramPages)*proto.MaxAppProgramLen)
 		}
 
-		if len(tx.ClearStateProgram) > proto.MaxAppProgramLen {
-			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxAppProgramLen)
+		if len(tx.ClearStateProgram) > ((1 + tx.ExtraProgramPages) * proto.MaxAppProgramLen) {
+			return fmt.Errorf("clear state program too long. max len %d bytes", (1+tx.ExtraProgramPages)*proto.MaxAppProgramLen)
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
@@ -357,6 +357,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 		if tx.GlobalStateSchema.NumEntries() > proto.MaxGlobalSchemaEntries {
 			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
+		}
+
+		if tx.ExtraProgramPages > proto.MaxExtraAppProgramPages {
+			return fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages)
 		}
 
 	case protocol.CompactCertTx:

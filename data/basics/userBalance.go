@@ -203,6 +203,10 @@ type AccountData struct {
 	// we created local for applications we opted in to), so that we don't
 	// have to iterate over all of them to compute MinBalance.
 	TotalAppSchema StateSchema `codec:"tsch"`
+
+	// TotalExtraAppProgramPages stores the extra length in pages (MaxAppProgramLen per page)
+	// requested for app program by this account
+	TotalExtraAppPages int `codec:"teap"`
 }
 
 // AppLocalState stores the LocalState associated with an application. It also
@@ -439,6 +443,10 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 	// GlobalStateSchemas
 	schemaCost := u.TotalAppSchema.MinBalance(proto)
 	min = AddSaturate(min, schemaCost.Raw)
+
+	// MinBalance for each extra app program page
+	extraAppProgramLenCost := MulSaturate(proto.AppFlatParamsMinBalance, uint64(u.TotalExtraAppPages))
+	min = AddSaturate(min, extraAppProgramLenCost)
 
 	res.Raw = min
 	return res

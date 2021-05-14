@@ -114,6 +114,12 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	totalSchema = totalSchema.AddSchema(ac.GlobalStateSchema)
 	record.TotalAppSchema = totalSchema
 
+	// Update the cached TotalExtraAppPages for this account, used
+	// when computing MinBalance
+	totalExtraPages := record.TotalExtraAppPages
+	totalExtraPages = totalExtraPages + ac.ExtraProgramPages
+	record.TotalExtraAppPages = totalExtraPages
+
 	// Tell the cow what app we created
 	created := &basics.CreatableLocator{
 		Creator: creator,

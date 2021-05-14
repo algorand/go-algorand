@@ -143,6 +143,11 @@ type ApplicationCallTxnFields struct {
 	// read and write local and global state for this application.
 	ClearStateProgram []byte `codec:"apsu,allocbound=config.MaxAppProgramLen"`
 
+	// ExtraProgramPages specifies the additional app program len requested in pages.
+	// A page is MaxAppProgramLen bytes. This field enables execution of app programs
+	// larger than the default config, MaxAppProgramLen.
+	ExtraProgramPages int `codec:"apepp,allocbound=config.MaxExtraAppProgramPages"`
+
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
 }
@@ -178,6 +183,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 		return false
 	}
 	if ac.ClearStateProgram != nil {
+		return false
+	}
+	if ac.ExtraProgramPages != 0 {
 		return false
 	}
 	return true
