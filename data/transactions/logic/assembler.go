@@ -99,7 +99,7 @@ func (ops *OpStream) createLabel(label string) {
 		ops.labels = make(map[string]int)
 	}
 	if _, ok := ops.labels[label]; ok {
-		ops.errorf("duplicate label %s", label)
+		ops.errorf("duplicate label %#v", label)
 	}
 	ops.labels[label] = ops.pending.Len()
 }
@@ -590,14 +590,14 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("txn unknown field: %v", args[0])
+		return ops.errorf("txn unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found array field %v in txn op", args[0])
+		return ops.errorf("found array field %#v in txn op", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("field %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(fs.field))
@@ -623,14 +623,14 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("txna unknown field: %v", args[0])
+		return ops.errorf("txna unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("txna unknown field: %v", args[0])
+		return ops.errorf("txna unknown field: %#v", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("txna %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("txna %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
@@ -661,14 +661,14 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
-		return ops.errorf("gtxn unknown field: %v", args[1])
+		return ops.errorf("gtxn unknown field: %#v", args[1])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found array field %v in gtxn op", args[1])
+		return ops.errorf("found array field %#v in gtxn op", args[1])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[1], fs.version)
+		return ops.errorf("field %#v available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 
 	ops.pending.WriteByte(spec.Opcode)
@@ -703,14 +703,14 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
-		return ops.errorf("gtxna unknown field: %v", args[1])
+		return ops.errorf("gtxna unknown field: %#v", args[1])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("gtxna unknown field: %v", args[1])
+		return ops.errorf("gtxna unknown field: %#v", args[1])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("gtxna %s available in version %d. Missed #pragma version?", args[1], fs.version)
+		return ops.errorf("gtxna %#v available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[2], 0, 64)
 	if err != nil {
@@ -738,14 +738,14 @@ func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("gtxns unknown field: %v", args[0])
+		return ops.errorf("gtxns unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found array field %v in gtxns op", args[0])
+		return ops.errorf("found array field %#v in gtxns op", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("field %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 
 	ops.pending.WriteByte(spec.Opcode)
@@ -760,14 +760,14 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("gtxnsa unknown field: %v", args[0])
+		return ops.errorf("gtxnsa unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("gtxnsa unknown field: %v", args[0])
+		return ops.errorf("gtxnsa unknown field: %#v", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("gtxnsa %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("gtxnsa %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
@@ -789,7 +789,7 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := globalFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("global unknown field: %v", args[0])
+		return ops.errorf("global unknown field: %#v", args[0])
 	}
 	if fs.version > ops.Version {
 		// no return here. we may as well continue to maintain typestack
@@ -810,7 +810,7 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	val, ok := assetHoldingFields[args[0]]
 	if !ok {
-		return ops.errorf("asset_holding_get unknown arg: %v", args[0])
+		return ops.errorf("asset_holding_get unknown arg: %#v", args[0])
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
@@ -824,7 +824,7 @@ func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	val, ok := assetParamsFields[args[0]]
 	if !ok {
-		return ops.errorf("asset_params_get unknown arg: %v", args[0])
+		return ops.errorf("asset_params_get unknown arg: %#v", args[0])
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
@@ -1077,7 +1077,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
 			if dest == ops.pending.Len() {
-				ops.errorf("label %v is too far away", label)
+				ops.errorf("label %#v is too far away", label)
 			}
 		}
 	}
@@ -1148,7 +1148,7 @@ func (ops *OpStream) resolveLabels() {
 		dest, ok := ops.labels[lr.label]
 		if !ok {
 			if !reported[lr.label] {
-				ops.errorf("reference to undefined label %v", lr.label)
+				ops.errorf("reference to undefined label %#v", lr.label)
 			}
 			reported[lr.label] = true
 			continue
@@ -1156,12 +1156,12 @@ func (ops *OpStream) resolveLabels() {
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
 		naturalPc := lr.position + 3
 		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
-			ops.errorf("label %v is a back reference, back jump support was introduced in TEAL v4", lr.label)
+			ops.errorf("label %#v is a back reference, back jump support was introduced in TEAL v4", lr.label)
 			continue
 		}
 		jump := dest - naturalPc
 		if jump > 0x7fff {
-			ops.errorf("label %v is too far away", lr.label)
+			ops.errorf("label %#v is too far away", lr.label)
 			continue
 		}
 		raw[lr.position+1] = uint8(jump >> 8)
@@ -1563,7 +1563,7 @@ func guessByteFormat(bytes []byte) string {
 		return fmt.Sprintf("addr %s", short.String())
 	}
 	if allPrintableASCII(bytes) {
-		return fmt.Sprintf("\"%s\"", string(bytes))
+		return fmt.Sprintf("%#v", string(bytes))
 	}
 	return "0x" + hex.EncodeToString(bytes)
 }
@@ -1720,9 +1720,12 @@ func disBranch(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = dis.pc + 3
 	offset := (uint(dis.program[dis.pc+1]) << 8) | uint(dis.program[dis.pc+2])
 	target := int(offset) + dis.pc + 3
+	if target > 0xffff {
+		target -= 0x10000
+	}
 	var label string
 	if dis.numericTargets {
-		label = fmt.Sprintf("+%d", offset+3) // +3 so it's easy to calculate destination from current
+		label = fmt.Sprintf("%d", target)
 	} else {
 		if known, ok := dis.pendingLabels[target]; ok {
 			label = known

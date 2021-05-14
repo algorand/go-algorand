@@ -414,11 +414,11 @@ func testLine(t *testing.T, line string, ver uint64, expected string) {
 func TestAssembleTxna(t *testing.T) {
 	testLine(t, "txna Accounts 256", AssemblerMaxVersion, "txna array index beyond 255: 256")
 	testLine(t, "txna ApplicationArgs 256", AssemblerMaxVersion, "txna array index beyond 255: 256")
-	testLine(t, "txna Sender 256", AssemblerMaxVersion, "txna unknown field: Sender")
+	testLine(t, "txna Sender 256", AssemblerMaxVersion, "txna unknown field: \"Sender\"")
 	testLine(t, "gtxna 0 Accounts 256", AssemblerMaxVersion, "gtxna array index beyond 255: 256")
 	testLine(t, "gtxna 0 ApplicationArgs 256", AssemblerMaxVersion, "gtxna array index beyond 255: 256")
 	testLine(t, "gtxna 256 Accounts 0", AssemblerMaxVersion, "gtxna group index beyond 255: 256")
-	testLine(t, "gtxna 0 Sender 256", AssemblerMaxVersion, "gtxna unknown field: Sender")
+	testLine(t, "gtxna 0 Sender 256", AssemblerMaxVersion, "gtxna unknown field: \"Sender\"")
 	testLine(t, "txn Accounts 0", 1, "txn expects one argument")
 	testLine(t, "txn Accounts 0 1", 2, "txn expects one or two arguments")
 	testLine(t, "txna Accounts 0 1", AssemblerMaxVersion, "txna expects two arguments")
@@ -428,20 +428,20 @@ func TestAssembleTxna(t *testing.T) {
 	testLine(t, "gtxna 0 Accounts 1 2", AssemblerMaxVersion, "gtxna expects three arguments")
 	testLine(t, "gtxna a Accounts 0", AssemblerMaxVersion, "strconv.ParseUint...")
 	testLine(t, "gtxna 0 Accounts a", AssemblerMaxVersion, "strconv.ParseUint...")
-	testLine(t, "txn ABC", 2, "txn unknown field: ABC")
-	testLine(t, "gtxn 0 ABC", 2, "gtxn unknown field: ABC")
+	testLine(t, "txn ABC", 2, "txn unknown field: \"ABC\"")
+	testLine(t, "gtxn 0 ABC", 2, "gtxn unknown field: \"ABC\"")
 	testLine(t, "gtxn a ABC", 2, "strconv.ParseUint...")
-	testLine(t, "txn Accounts", AssemblerMaxVersion, "found array field Accounts in txn op")
-	testLine(t, "txn Accounts", 1, "found array field Accounts in txn op")
+	testLine(t, "txn Accounts", AssemblerMaxVersion, "found array field \"Accounts\" in txn op")
+	testLine(t, "txn Accounts", 1, "found array field \"Accounts\" in txn op")
 	testLine(t, "txn Accounts 0", AssemblerMaxVersion, "")
-	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "found array field Accounts in gtxn op")
-	testLine(t, "gtxn 0 Accounts", 1, "found array field Accounts in gtxn op")
+	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "found array field \"Accounts\" in gtxn op")
+	testLine(t, "gtxn 0 Accounts", 1, "found array field \"Accounts\" in gtxn op")
 	testLine(t, "gtxn 0 Accounts 1", AssemblerMaxVersion, "")
 }
 
 func TestAssembleGlobal(t *testing.T) {
 	testLine(t, "global", AssemblerMaxVersion, "global expects one argument")
-	testLine(t, "global a", AssemblerMaxVersion, "global unknown field: a")
+	testLine(t, "global a", AssemblerMaxVersion, "global unknown field: \"a\"")
 }
 
 func TestAssembleDefault(t *testing.T) {
@@ -779,7 +779,7 @@ bnz wat
 int 2`
 	for v := uint64(1); v < backBranchEnabledVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			testProg(t, source, v, expect{3, "label wat is a back reference..."})
+			testProg(t, source, v, expect{3, "label \"wat\" is a back reference..."})
 		})
 	}
 	for v := uint64(backBranchEnabledVersion); v <= AssemblerMaxVersion; v++ {
@@ -820,7 +820,7 @@ bnz nowhere
 int 2`
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			testProg(t, source, v, expect{2, "reference to undefined label nowhere"})
+			testProg(t, source, v, expect{2, "reference to undefined label \"nowhere\""})
 		})
 	}
 }
@@ -850,8 +850,8 @@ int 2`
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			testProg(t, source, v,
-				expect{2, "reference to undefined label nowhere"},
-				expect{4, "txn unknown field: XYZ"})
+				expect{2, "reference to undefined label \"nowhere\""},
+				expect{4, "txn unknown field: \"XYZ\""})
 		})
 	}
 }
@@ -1171,13 +1171,13 @@ func TestAssembleAsset(t *testing.T) {
 		testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
 			expect{3, "asset_holding_get expects one argument"})
 		testProg(t, "int 1; int 1; asset_holding_get ABC", v,
-			expect{3, "asset_holding_get unknown arg: ABC"})
+			expect{3, "asset_holding_get unknown arg: \"ABC\""})
 
 		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
 			expect{2, "asset_params_get arg 0 wanted type uint64..."})
 
 		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects one argument")
-		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown arg: ABC")
+		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown arg: \"ABC\"")
 	}
 }
 

@@ -20,7 +20,6 @@ ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 cat >${TEMPDIR}/true.teal<<EOF
 #pragma version 3
 int 1
-return
 EOF
 
 ${gcmd} clerk compile -o ${TEMPDIR}/true.lsig -s -a ${ACCOUNT} ${TEMPDIR}/true.teal
@@ -66,7 +65,6 @@ set -o pipefail
 cat >${TEMPDIR}/true4.teal<<EOF
 #pragma version 4
 int 1
-return
 EOF
 
 

@@ -432,20 +432,18 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 }
 
 // CheckStateful should be faster than EvalStateful.  It can perform
-// static checks and reject programs that are invalid. Returns a cost
-// estimate of relative execution time. This cost is not relevent when
-// the program is v4 or higher, and so 1 is returned so that callers
-// may continue to check for a high cost being invalid.
+// static checks and reject programs that are invalid. Prior to v4,
+// these static checks include a cost estimate that must be low enough
+// (controlled by params.Proto).
 func CheckStateful(program []byte, params EvalParams) error {
 	params.runModeFlags = runModeApplication
 	return check(program, params)
 }
 
 // Check should be faster than Eval.  It can perform static checks and
-// reject programs that are invalid. Returns a cost estimate of
-// relative execution time. This cost is not relevent when
-// the program is v4 or higher, and so 1 is returned so that callers
-// may continue to check for a high cost being invalid.
+// reject programs that are invalid. Prior to v4, these static checks
+// include a cost estimate that must be low enough (controlled by
+// params.Proto).
 func Check(program []byte, params EvalParams) error {
 	params.runModeFlags = runModeSignature
 	return check(program, params)

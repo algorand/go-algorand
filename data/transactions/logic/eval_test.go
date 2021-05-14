@@ -4089,6 +4089,58 @@ main:
   int 120
   ==
 `, 4)
+
+	// Mutually recursive odd/even.  Each is intentionally done in a slightly different way.
+	testAccepts(t, `
+b main
+odd:				// If 0, return false, else return !even
+  dup
+  bz retfalse
+  callsub even
+  !
+  retsub
+
+retfalse:
+  pop
+  int 0
+  retsub
+
+
+even:				// If 0, return true, else decrement and return even
+  dup
+  bz rettrue
+  int 1
+  -
+  callsub odd
+  retsub
+
+rettrue:
+  pop
+  int 1
+  retsub
+
+
+main:
+  int 1
+  callsub odd
+  assert
+
+  int 0
+  callsub even
+  assert
+
+  int 10
+  callsub even
+  assert
+
+  int 10
+  callsub odd
+  !
+  assert
+
+  int 1
+`, 4)
+
 	testPanics(t, "int 1; retsub", 4)
 
 	testPanics(t, "int 1; recur: callsub recur; int 1", 4)
