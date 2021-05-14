@@ -163,7 +163,7 @@ function test_proof {
     call_and_verify "Checking block" "/v2/blocks/${ROUND}" 200 'txns'
     #TODO: The check with jq can be re-enabled after fixing JSONStrictHandle.
     #NUM_TRANSACTIONS=$(cat "${TEMPDIR}/curl_out.txt" | jq '.block.txns | length')
-    NUM_TRANSACTIONS=$(cat "${TEMPDIR}/curl_out.txt" | grep type | wc -l)
+    NUM_TRANSACTIONS=$(cat "${TEMPDIR}/curl_out.txt" | grep type | wc -l | tr -d ' ')
   done
 
   call_and_verify "The proof should not be null." "/v2/blocks/${ROUND}/transactions/${TXID}/proof" 200 '"proof":""'
