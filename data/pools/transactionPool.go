@@ -768,7 +768,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			}
 
 			switch err.(type) {
-			case ledgercore.TransactionInLedgerError:
+			case *ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
 				stats.RemovedInvalidCount++
 			case transactions.TxnDeadError:
