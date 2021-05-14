@@ -3,7 +3,7 @@
 
 my_dir="$(dirname "$0")"
 #"$my_dir/rest.sh" "$@"
-source "$my_dir/rest.sh" "$@"
+source "$my_dir/../rest.sh" "$@"
 
 date "+$0 start %Y%m%d_%H%M%S"
 
