@@ -204,7 +204,11 @@ type AccountData struct {
 	// have to iterate over all of them to compute MinBalance.
 	TotalAppSchema StateSchema `codec:"tsch"`
 
-	// TotalExtraAppProgramPages stores the extra length in pages (MaxAppProgramLen per page)
+	// ExtraAppPages stores the extra program page count associated with any
+	// applications that this account has created.
+	ExtraAppPages map[AppIndex]int `codec:"eap"`
+
+	// TotalExtraAppProgramPages stores the extra length in pages (MaxAppProgramLen bytes per page)
 	// requested for app program by this account
 	TotalExtraAppPages int `codec:"teap"`
 }
@@ -228,6 +232,7 @@ type AppParams struct {
 	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAppProgramLen"`
 	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
+	ExtraProgramPages int
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the

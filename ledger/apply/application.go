@@ -116,9 +116,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 
 	// Update the cached TotalExtraAppPages for this account, used
 	// when computing MinBalance
-	totalExtraPages := record.TotalExtraAppPages
-	totalExtraPages = totalExtraPages + ac.ExtraProgramPages
-	record.TotalExtraAppPages = totalExtraPages
+	record.TotalExtraAppPages += ac.ExtraProgramPages
 
 	// Tell the cow what app we created
 	created := &basics.CreatableLocator{
