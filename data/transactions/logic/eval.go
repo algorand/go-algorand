@@ -1224,7 +1224,7 @@ func opExpw(cx *evalContext) {
 	cx.stack[last].Uint = lo
 }
 
-func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.Int) {
+func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.Int, pad bool) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
@@ -1240,18 +1240,30 @@ func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.
 		cx.err = errors.New("byte math would have negative result")
 		return
 	}
-	cx.stack[prev].Bytes = result.Bytes()
+	if pad {
+		maxlen := len(cx.stack[last].Bytes)
+		llen := len(cx.stack[prev].Bytes)
+		if llen > maxlen {
+			maxlen = llen
+		}
+		rbytes := result.Bytes()
+		pbytes := make([]byte, maxlen)
+		copy(pbytes[maxlen-len(rbytes):], rbytes)
+		cx.stack[prev].Bytes = pbytes
+	} else {
+		cx.stack[prev].Bytes = result.Bytes()
+	}
 	cx.stack = cx.stack[:last]
 }
 
 func opBytesPlus(cx *evalContext) {
 	result := new(big.Int)
-	opBytesBinOp(cx, result, result.Add)
+	opBytesBinOp(cx, result, result.Add, false)
 }
 
 func opBytesMinus(cx *evalContext) {
 	result := new(big.Int)
-	opBytesBinOp(cx, result, result.Sub)
+	opBytesBinOp(cx, result, result.Sub, false)
 }
 
 func opBytesDiv(cx *evalContext) {
@@ -1263,12 +1275,12 @@ func opBytesDiv(cx *evalContext) {
 		}
 		return result.Div(x, y)
 	}
-	opBytesBinOp(cx, result, checkDiv)
+	opBytesBinOp(cx, result, checkDiv, false)
 }
 
 func opBytesMul(cx *evalContext) {
 	result := new(big.Int)
-	opBytesBinOp(cx, result, result.Mul)
+	opBytesBinOp(cx, result, result.Mul, false)
 }
 
 func opBytesLt(cx *evalContext) {
@@ -1340,22 +1352,22 @@ func opBytesModulo(cx *evalContext) {
 		}
 		return result.Mod(x, y)
 	}
-	opBytesBinOp(cx, result, checkMod)
+	opBytesBinOp(cx, result, checkMod, false)
 }
 
 func opBytesBitOr(cx *evalContext) {
 	result := new(big.Int)
-	opBytesBinOp(cx, result, result.Or)
+	opBytesBinOp(cx, result, result.Or, true)
 }
 
 func opBytesBitAnd(cx *evalContext) {
 	result := new(big.Int)
-	opBytesBinOp(cx, result, result.And)
+	opBytesBinOp(cx, result, result.And, true)
 }
 
 func opBytesBitXor(cx *evalContext) {
 	result := new(big.Int)
-	opBytesBinOp(cx, result, result.Xor)
+	opBytesBinOp(cx, result, result.Xor, true)
 }
 
 func opBytesBitNot(cx *evalContext) {
@@ -1368,6 +1380,16 @@ func opBytesBitNot(cx *evalContext) {
 
 	val := new(big.Int).SetBytes(cx.stack[last].Bytes)
 	cx.stack[last].Bytes = new(big.Int).Not(val).Bytes()
+}
+
+func opBytesZero(cx *evalContext) {
+	last := len(cx.stack) - 1
+	length := cx.stack[last].Uint
+	if length > MaxStringSize {
+		cx.err = fmt.Errorf("bzero attempted to create a too large string")
+		return
+	}
+	cx.stack[last].Bytes = make([]byte, length)
 }
 
 func opIntConstBlock(cx *evalContext) {

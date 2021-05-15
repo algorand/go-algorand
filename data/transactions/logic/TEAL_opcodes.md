@@ -880,6 +880,8 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - pop the top instruction from the call stack and branch to it
 - LogicSigVersion >= 4
 
+The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.`
+
 ## shl
 
 - Opcode: 0x90
@@ -933,7 +935,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xa0
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A plus B, where A and B are byteslices interpreted as big-endian unsigned integers
+- A plus B, where A and B are byte-arrays interpreted as big-endian unsigned integers
 - LogicSigVersion >= 4
 
 ## b-
@@ -941,7 +943,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xa1
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A minus B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic on underflow.
+- A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow.
 - LogicSigVersion >= 4
 
 ## b/
@@ -949,7 +951,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xa2
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A divided by B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic if B is zero.
+- A divided by B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
 - LogicSigVersion >= 4
 
 ## b*
@@ -957,7 +959,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xa3
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A times B, where A and B are byteslices interpreted as big-endian unsigned integers.
+- A times B, where A and B are byte-arrays interpreted as big-endian unsigned integers.
 - LogicSigVersion >= 4
 
 ## b<
@@ -965,7 +967,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xa4
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: uint64
-- A is less than B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- A is less than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}
 - LogicSigVersion >= 4
 
 ## b>
@@ -973,7 +975,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xa5
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: uint64
-- A is greater than B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- A is greater than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}
 - LogicSigVersion >= 4
 
 ## b<=
@@ -981,7 +983,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xa6
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: uint64
-- A is less than or equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- A is less than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}
 - LogicSigVersion >= 4
 
 ## b>=
@@ -989,7 +991,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xa7
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: uint64
-- A is greater than or equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- A is greater than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}
 - LogicSigVersion >= 4
 
 ## b==
@@ -997,7 +999,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xa8
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: uint64
-- A is equals to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}
 - LogicSigVersion >= 4
 
 ## b!=
@@ -1005,7 +1007,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xa9
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: uint64
-- A is not equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1}
+- A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}
 - LogicSigVersion >= 4
 
 ## b%
@@ -1013,7 +1015,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xaa
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A modulo B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic if B is zero.
+- A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
 - LogicSigVersion >= 4
 
 ## b|
@@ -1021,7 +1023,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xab
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A bitwise-or B, where A and B are byteslices interpreted as big-endian unsigned integers.
+- A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths
 - LogicSigVersion >= 4
 
 ## b&
@@ -1029,7 +1031,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xac
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A bitwise-and B, where A and B are byteslices interpreted as big-endian unsigned integers.
+- A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths
 - LogicSigVersion >= 4
 
 ## b^
@@ -1037,7 +1039,13 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Opcode: 0xad
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A bitwise-xor B, where A and B are byteslices interpreted as big-endian unsigned integers.
+- A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths
 - LogicSigVersion >= 4
 
-The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.`
+## bzero
+
+- Opcode: 0xae
+- Pops: *... stack*, uint64
+- Pushes: []byte
+- push a byte-array of length A, containing all zero bytes
+- LogicSigVersion >= 4

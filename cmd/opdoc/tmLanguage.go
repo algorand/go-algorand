@@ -173,6 +173,7 @@ func buildSyntaxHighlight() *tmLanguage {
 			})
 		case "Arithmetic":
 		case "Byteslice Arithmetic":
+		case "Byteslice Logic":
 			escape := map[rune]bool{
 				'*': true,
 				'+': true,

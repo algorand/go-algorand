@@ -74,14 +74,26 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 
 @@ Arithmetic.md @@
 
-Opcodes prefixed with `b` are intended to take and return byteslice
-values that are interpretted as big-endian unsigned integers.
-Returned values are the shortest byteslice that can represent the
-returned value.  For example, the zero value is the empty byteslice.
+These opcodes take and return byte-array values that are interpreted
+as big-endian unsigned integers.  Returned values are the shortest
+byte-array that can represent the returned value.  For example, the
+zero value is the empty byte-array.
 
-Input lengths are limited to 64, which represents a 512 bit unsigned integer.
+Input lengths are limited to maximum length 64, which represents a 512
+bit unsigned integer.
 
 @@ Byteslice_Arithmetic.md @@
+
+These opcodes operate on the bits of byte-array values.  The shorter
+array is interpeted as though left padded with zeros until it is the
+same length as the other input.  The returned values are the same
+length as the longest input.  Therefore, unlike array arithmetic,
+these results may contain leading zero bytes.
+
+Input lengths are limited to maximum length 64.
+
+@@ Byteslice_Logic.md @@
+
 
 ### Loading Values
 

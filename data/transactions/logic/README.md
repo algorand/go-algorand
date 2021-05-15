@@ -27,7 +27,7 @@ A program can either authorize some delegated action on a normal private key sig
 * If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytes) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program.
 * If the SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address then this is a contract account wholly controlled by the program. No other signature is necessary or possible. The only way to execute a transaction against the contract account is for the program to approve it.
 
-The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, program costs was estimated as the static sum of all opcode costs in a program (ignoring conditionals that might skip some code).  Beginning with v4, a program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
+The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, program costs was estimated as the static sum of all opcode costs in a program (ignoring conditionals that might skip some code). Beginning with v4, a program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
 
 ## Execution modes
 
@@ -139,29 +139,47 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
 
-Opcodes prefixed with `b` are intended to take and return byteslice
-values that are interpretted as big-endian unsigned integers.
-Returned values are the shortest byteslice that can represent the
-returned value.  For example, the zero value is the empty byteslice.
+These opcodes take and return byte-array values that are interpretted
+as big-endian unsigned integers.  Returned values are the shortest
+byte-array that can represent the returned value.  For example, the
+zero value is the empty byte-array.
 
-Input lengths are limited to 64, which represents a 512 bit unsigned integer.
+Input lengths are limited to maximum length 64, which represents a 512
+bit unsigned integer.
 
 | Op | Description |
 | --- | --- |
-| `b+` | A plus B, where A and B are byteslices interpreted as big-endian unsigned integers |
-| `b-` | A minus B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic on underflow. |
-| `b/` | A divided by B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic if B is zero. |
-| `b*` | A times B, where A and B are byteslices interpreted as big-endian unsigned integers. |
-| `b<` | A is less than B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b>` | A is greater than B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b<=` | A is less than or equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b>=` | A is greater than or equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b==` | A is equals to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b!=` | A is not equal to B, where A and B are byteslices interpreted as big-endian unsigned integers => { 0 or 1} |
-| `b%` | A modulo B, where A and B are byteslices interpreted as big-endian unsigned integers. Panic if B is zero. |
-| `b\|` | A bitwise-or B, where A and B are byteslices interpreted as big-endian unsigned integers. |
-| `b&` | A bitwise-and B, where A and B are byteslices interpreted as big-endian unsigned integers. |
-| `b^` | A bitwise-xor B, where A and B are byteslices interpreted as big-endian unsigned integers. |
+| `b+` | A plus B, where A and B are byte-arrays interpreted as big-endian unsigned integers |
+| `b-` | A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow. |
+| `b/` | A divided by B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero. |
+| `b*` | A times B, where A and B are byte-arrays interpreted as big-endian unsigned integers. |
+| `b<` | A is less than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b>` | A is greater than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b<=` | A is less than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b>=` | A is greater than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b==` | A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b!=` | A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero. |
+| `b\|` | A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b&` | A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b^` | A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b~` | A with all bits inverted |
+
+These opcodes operate on the bits of byte-array values.  The shorter
+array is interpeted as though left padded with zeros until it is the
+same length as the other input.  The returned values are the same
+length as the longest input.  Therefore, unlike array arithmetic,
+these results may contain leading zero bytes.
+
+Input lengths are limited to maximum length 64.
+
+| Op | Description |
+| --- | --- |
+| `b\|` | A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b&` | A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b^` | A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b~` | A with all bits inverted |
+
 
 ### Loading Values
 
@@ -185,6 +203,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `bytec_2` | push constant 2 from bytecblock to stack |
 | `bytec_3` | push constant 3 from bytecblock to stack |
 | `pushbytes bytes` | push the following program bytes to the stack |
+| `bzero` | push a byte-array of length A, containing all zero bytes |
 | `arg n` | push Nth LogicSig argument to stack |
 | `arg_0` | push LogicSig argument 0 to stack |
 | `arg_1` | push LogicSig argument 1 to stack |

@@ -3865,17 +3865,17 @@ func TestBytesBits(t *testing.T) {
 	testAccepts(t, "byte 0x01; byte 0x10; b|; byte 0x11; ==", 4)
 	testAccepts(t, "byte 0x0201; byte 0x10f1; b|; byte 0x12f1; ==", 4)
 	// returned bytestrings are always smallest possible
-	testAccepts(t, "byte 0x0001; byte 0x00f1; b|; byte 0xf1; ==", 4)
+	testAccepts(t, "byte 0x0001; byte 0x00f1; b|; byte 0x00f1; ==", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x10; b&; byte 0x10; ==", 4)
-	testAccepts(t, "byte 0x01; byte 0x10; b&; byte base64(); ==", 4)
-	testAccepts(t, "byte 0x0201; byte 0x10f1; b&; byte 0x01; ==", 4)
-	testAccepts(t, "byte 0x0001; byte 0x00f1; b&; byte 0x01; ==", 4)
+	testAccepts(t, "byte 0x01; byte 0x10; b&; byte 0x00; ==", 4)
+	testAccepts(t, "byte 0x0201; byte 0x10f1; b&; byte 0x0001; ==", 4)
+	testAccepts(t, "byte 0x0001; byte 0x00f1; b&; byte 0x0001; ==", 4)
 
 	testAccepts(t, "byte 0x11; byte 0x10; b^; byte 0x01; ==", 4)
 	testAccepts(t, "byte 0x01; byte 0x10; b^; byte 0x11; ==", 4)
 	testAccepts(t, "byte 0x0201; byte 0x10f1; b^; byte 0x12f0; ==", 4)
-	testAccepts(t, "byte 0x0001; byte 0x00f1; b^; byte 0xf0; ==", 4)
+	testAccepts(t, "byte 0x0001; byte 0x00f1; b^; byte 0x00f0; ==", 4)
 
 }
 
