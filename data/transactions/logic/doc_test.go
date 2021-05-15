@@ -36,7 +36,7 @@ func TestOpDocs(t *testing.T) {
 	}
 	for op, seen := range opsSeen {
 		if !seen {
-			t.Errorf("error: doc for op %#v missing", op)
+			t.Errorf("error: doc for op %#v missing from opDocByName", op)
 		}
 	}
 }
