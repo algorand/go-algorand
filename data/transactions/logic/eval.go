@@ -1224,7 +1224,7 @@ func opExpw(cx *evalContext) {
 	cx.stack[last].Uint = lo
 }
 
-func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.Int, pad bool) {
+func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.Int) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 
@@ -1240,30 +1240,18 @@ func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.
 		cx.err = errors.New("byte math would have negative result")
 		return
 	}
-	if pad {
-		maxlen := len(cx.stack[last].Bytes)
-		llen := len(cx.stack[prev].Bytes)
-		if llen > maxlen {
-			maxlen = llen
-		}
-		rbytes := result.Bytes()
-		pbytes := make([]byte, maxlen)
-		copy(pbytes[maxlen-len(rbytes):], rbytes)
-		cx.stack[prev].Bytes = pbytes
-	} else {
-		cx.stack[prev].Bytes = result.Bytes()
-	}
+	cx.stack[prev].Bytes = result.Bytes()
 	cx.stack = cx.stack[:last]
 }
 
 func opBytesPlus(cx *evalContext) {
 	result := new(big.Int)
-	opBytesBinOp(cx, result, result.Add, false)
+	opBytesBinOp(cx, result, result.Add)
 }
 
 func opBytesMinus(cx *evalContext) {
 	result := new(big.Int)
-	opBytesBinOp(cx, result, result.Sub, false)
+	opBytesBinOp(cx, result, result.Sub)
 }
 
 func opBytesDiv(cx *evalContext) {
@@ -1275,12 +1263,12 @@ func opBytesDiv(cx *evalContext) {
 		}
 		return result.Div(x, y)
 	}
-	opBytesBinOp(cx, result, checkDiv, false)
+	opBytesBinOp(cx, result, checkDiv)
 }
 
 func opBytesMul(cx *evalContext) {
 	result := new(big.Int)
-	opBytesBinOp(cx, result, result.Mul, false)
+	opBytesBinOp(cx, result, result.Mul)
 }
 
 func opBytesLt(cx *evalContext) {
@@ -1352,34 +1340,67 @@ func opBytesModulo(cx *evalContext) {
 		}
 		return result.Mod(x, y)
 	}
-	opBytesBinOp(cx, result, checkMod, false)
+	opBytesBinOp(cx, result, checkMod)
+}
+
+func zpad(smaller []byte, size int) []byte {
+	padded := make([]byte, size)
+	extra := size - len(smaller)  // how much was added?
+	copy(padded[extra:], smaller) // slide original contents to the right
+	return padded
+}
+
+// Return two slices, representing the top two slices on the stack.
+// They can be returned in either order, but the first slice returned
+// must be newly allocated, and already in place at the top of stack
+// (the original top having been popped).
+func opBytesBinaryLogicPrep(cx *evalContext) ([]byte, []byte) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	llen := len(cx.stack[last].Bytes)
+	plen := len(cx.stack[prev].Bytes)
+
+	var fresh, other []byte
+	if llen > plen {
+		fresh, other = zpad(cx.stack[prev].Bytes, llen), cx.stack[last].Bytes
+	} else {
+		fresh, other = zpad(cx.stack[last].Bytes, plen), cx.stack[prev].Bytes
+	}
+	cx.stack[prev].Bytes = fresh
+	cx.stack = cx.stack[:last]
+	return fresh, other
 }
 
 func opBytesBitOr(cx *evalContext) {
-	result := new(big.Int)
-	opBytesBinOp(cx, result, result.Or, true)
+	a, b := opBytesBinaryLogicPrep(cx)
+	for i := range a {
+		a[i] = a[i] | b[i]
+	}
 }
 
 func opBytesBitAnd(cx *evalContext) {
-	result := new(big.Int)
-	opBytesBinOp(cx, result, result.And, true)
+	a, b := opBytesBinaryLogicPrep(cx)
+	for i := range a {
+		a[i] = a[i] & b[i]
+	}
 }
 
 func opBytesBitXor(cx *evalContext) {
-	result := new(big.Int)
-	opBytesBinOp(cx, result, result.Xor, true)
+	a, b := opBytesBinaryLogicPrep(cx)
+	for i := range a {
+		a[i] = a[i] ^ b[i]
+	}
 }
 
 func opBytesBitNot(cx *evalContext) {
 	last := len(cx.stack) - 1
 
-	if len(cx.stack[last].Bytes) > MaxByteMathSize {
-		cx.err = errors.New("math attempted on large byte-array")
-		return
+	fresh := make([]byte, len(cx.stack[last].Bytes))
+	for i, b := range cx.stack[last].Bytes {
+		fresh[i] = ^b
 	}
-
-	val := new(big.Int).SetBytes(cx.stack[last].Bytes)
-	cx.stack[last].Bytes = new(big.Int).Not(val).Bytes()
+	cx.stack[last].Bytes = fresh
 }
 
 func opBytesZero(cx *evalContext) {

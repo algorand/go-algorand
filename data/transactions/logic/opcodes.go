@@ -261,7 +261,7 @@ var OpSpecs = []OpSpec{
 	{0xac, "b&", opBytesBitAnd, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, opDefault},
 	{0xad, "b^", opBytesBitXor, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, opDefault},
 	{0xae, "b~", opBytesBitNot, asmDefault, disDefault, oneBytes, oneBytes, 4, modeAny, opDefault},
-	{0xae, "bzero", opBytesZero, asmDefault, disDefault, oneInt, oneBytes, 4, modeAny, opDefault},
+	{0xaf, "bzero", opBytesZero, asmDefault, disDefault, oneInt, oneBytes, 4, modeAny, opDefault},
 }
 
 type sortByOpcode []OpSpec
