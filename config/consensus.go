@@ -358,7 +358,7 @@ type ConsensusParams struct {
 	// 3. checking that in the case of going offline, both the VoteFirst and VoteLast are clear.
 	// 4. checking that in the case of going online the VoteLast is non-zero and greater then the current network round.
 	// 5. checking that in the case of going online the VoteFirst is less or equal to the LastValid+1.
-	// 6. checking that in the case of going online the VoteFirst is less or equal to the <voting round>+1.
+	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 }
 
