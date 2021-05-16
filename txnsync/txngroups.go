@@ -21,8 +21,17 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+//msgp:allocbound txnGroups maxEncodedTransactionGroupEntries
+type txnGroups []transactions.SignedTxn
+
+type txGroupsEncodingStubOld struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	TxnGroups []txnGroups `codec:"t,allocbound=maxEncodedTransactionGroup"`
+}
+
 func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte {
-	stub := txGroupsEncodingStub{
+	stub := txGroupsEncodingStubOld{
 		TxnGroups: make([]txnGroups, len(inTxnGroups)),
 	}
 	for i := range inTxnGroups {
@@ -47,7 +56,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 	for _, txGroup := range inTxnGroups {
 		if len(txGroup.Transactions) > 1 {
 			for _, txn := range txGroup.Transactions {
-				deconstructSignedTransactions(&stub, index, txn)
+				stub.deconstructSignedTransactions(index, txn)
 				index++
 			}
 			stub.TransactionGroupSizes = append(stub.TransactionGroupSizes, byte(len(txGroup.Transactions)-1))
@@ -56,12 +65,12 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 	for _, txGroup := range inTxnGroups {
 		if len(txGroup.Transactions) == 1 {
 			for _, txn := range txGroup.Transactions {
-				deconstructSignedTransactions(&stub, index, txn)
+				stub.deconstructSignedTransactions(index, txn)
 				index++
 			}
 		}
 	}
-	finishDeconstructSignedTransactions(&stub)
+	stub.finishDeconstructSignedTransactions()
 
 	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
 }
@@ -70,7 +79,7 @@ func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTx
 	if len(bytes) == 0 {
 		return nil, nil
 	}
-	var stub txGroupsEncodingStub
+	var stub txGroupsEncodingStubOld
 	_, err = stub.UnmarshalMsg(bytes)
 	if err != nil {
 		return nil, err
@@ -92,9 +101,9 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 		return nil, err
 	}
 
-	stub.SignedTxns = make([]transactions.SignedTxn, stub.TotalTransactionsCount)
+	stx := make([]transactions.SignedTxn, stub.TotalTransactionsCount)
 
-	err = reconstructSignedTransactions(&stub)
+	err = stub.reconstructSignedTransactions(stx)
 	if err != nil {
 		return nil, err
 	}
@@ -105,11 +114,19 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 		if txnGroupIndex < len(stub.TransactionGroupSizes) {
 			size = int(stub.TransactionGroupSizes[txnGroupIndex]) + 1
 		}
-		txnGroups[txnGroupIndex].Transactions = stub.SignedTxns[txnCounter : txnCounter+size]
+		txnGroups[txnGroupIndex].Transactions = stx[txnCounter : txnCounter+size]
 		txnCounter += size
 	}
 
 	addGroupHashes(txnGroups, int(stub.TotalTransactionsCount), stub.BitmaskGroup)
 
 	return txnGroups, nil
+}
+
+func releaseEncodedTransactionGroups(buffer []byte) {
+	if buffer == nil {
+		return
+	}
+
+	protocol.PutEncodingBuf(buffer[:0])
 }

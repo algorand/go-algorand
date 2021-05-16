@@ -1545,6 +1545,65 @@ func BenchmarkUnmarshaltxGroupsEncodingStub(b *testing.B) {
 	}
 }
 
+func TestMarshalUnmarshaltxGroupsEncodingStubOld(t *testing.T) {
+	v := txGroupsEncodingStubOld{}
+	bts := v.MarshalMsg(nil)
+	left, err := v.UnmarshalMsg(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
+	}
+
+	left, err = msgp.Skip(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) > 0 {
+		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
+	}
+}
+
+func TestRandomizedEncodingtxGroupsEncodingStubOld(t *testing.T) {
+	protocol.RunEncodingTest(t, &txGroupsEncodingStubOld{})
+}
+
+func BenchmarkMarshalMsgtxGroupsEncodingStubOld(b *testing.B) {
+	v := txGroupsEncodingStubOld{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.MarshalMsg(nil)
+	}
+}
+
+func BenchmarkAppendMsgtxGroupsEncodingStubOld(b *testing.B) {
+	v := txGroupsEncodingStubOld{}
+	bts := make([]byte, 0, v.Msgsize())
+	bts = v.MarshalMsg(bts[0:0])
+	b.SetBytes(int64(len(bts)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bts = v.MarshalMsg(bts[0:0])
+	}
+}
+
+func BenchmarkUnmarshaltxGroupsEncodingStubOld(b *testing.B) {
+	v := txGroupsEncodingStubOld{}
+	bts := v.MarshalMsg(nil)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(bts)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := v.UnmarshalMsg(bts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestMarshalUnmarshaltxnGroups(t *testing.T) {
 	v := txnGroups{}
 	bts := v.MarshalMsg(nil)

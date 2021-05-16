@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/rpcs"
 )
 
-func TestBitmask(t *testing.T) {
+func TestBitmaskType0And2(t *testing.T) {
 	b := make(bitmask, 12)
 	b.SetBit(0)
 	b.SetBit(2)
@@ -56,6 +56,44 @@ func TestBitmask(t *testing.T) {
 	}
 }
 
+func TestBitmaskType1(t *testing.T) {
+	b := make(bitmask, 12)
+	for i := 0; i < 80; i++ {
+		if i % 3 != 0 {
+			b.SetBit(i)
+		}
+	}
+	b.trimBitmask(80)
+	b.expandBitmask(80)
+	for i := 0; i < 80; i++ {
+		exists := b.EntryExists(i)
+		if i % 3 == 0 {
+			require.False(t, exists)
+		} else {
+			require.True(t, exists)
+		}
+	}
+}
+
+func TestBitmaskType3(t *testing.T) {
+	b := make(bitmask, 12)
+	for i := 0; i < 80; i++ {
+		if i != 0 && i != 2 && i != 69 {
+			b.SetBit(i)
+		}
+	}
+	b.trimBitmask(80)
+	b.expandBitmask(80)
+	for i := 0; i < 80; i++ {
+		exists := b.EntryExists(i)
+		if i == 0 || i == 2 || i == 69 {
+			require.False(t, exists)
+		} else {
+			require.True(t, exists)
+		}
+	}
+}
+
 func TestNibble(t *testing.T) {
 	var b []byte
 	for i := 0; i < 10; i++ {
@@ -71,6 +109,7 @@ func TestNibble(t *testing.T) {
 
 func TestTxnGroupEncodingSmall(t *testing.T) {
 	genesisHash := crypto.Hash([]byte("gh"))
+	genesisID := "gID"
 
 	inTxnGroups := []transactions.SignedTxGroup{
 		transactions.SignedTxGroup{
@@ -101,6 +140,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 							Sender:      basics.Address(crypto.Hash([]byte("1"))),
 							Fee:         basics.MicroAlgos{Raw: 100},
 							GenesisHash: genesisHash,
+							GenesisID: genesisID,
 						},
 						PaymentTxnFields: transactions.PaymentTxnFields{
 							Receiver: basics.Address(crypto.Hash([]byte("2"))),
@@ -115,6 +155,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 						Header: transactions.Header{
 							Sender:      basics.Address(crypto.Hash([]byte("1"))),
 							GenesisHash: genesisHash,
+							GenesisID: genesisID,
 						},
 					},
 					Sig: crypto.Signature{3},

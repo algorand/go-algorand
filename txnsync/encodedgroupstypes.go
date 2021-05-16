@@ -20,7 +20,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -31,9 +30,6 @@ const maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
 const maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
 const maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
 
-//msgp:allocbound txnGroups maxEncodedTransactionGroupEntries
-type txnGroups []transactions.SignedTxn
-
 type txGroupsEncodingStub struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -41,11 +37,7 @@ type txGroupsEncodingStub struct {
 	TransactionGroupCount  uint64 `codec:"tgc"`
 	TransactionGroupSizes  []byte `codec:"tgs,allocbound=maxEncodedTransactionGroup"`
 
-	SignedTxns []transactions.SignedTxn `codec:"st,allocbound=maxEncodedTransactionGroup"`
-
 	encodedSignedTxns
-
-	TxnGroups []txnGroups `codec:"txng,allocbound=maxEncodedTransactionGroup"`
 }
 
 type encodedSignedTxns struct {
