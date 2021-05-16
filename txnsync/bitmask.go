@@ -22,14 +22,20 @@ import "bytes"
 type bitmask []byte
 
 // assumed to be in mode 0, sets bit at index to 1
-func (b bitmask) SetBit(index int) {
+func (b *bitmask) SetBit(index int) {
 	byteIndex := index/8 + 1
-	b[byteIndex] ^= 1 << (index % 8)
+	(*b)[byteIndex] ^= 1 << (index % 8)
 }
 
-func (b bitmask) EntryExists(index int) bool {
+func (b *bitmask) EntryExists(index int, entries int) bool {
+	if len(*b) == 0 {
+		return false
+	}
+	if (*b)[0] != 0 {
+		b.expandBitmask(entries)
+	}
 	byteIndex := index/8 + 1
-	return byteIndex < len(b) && (b[byteIndex]&(1<<(index%8)) != 0)
+	return byteIndex < len(*b) && ((*b)[byteIndex]&(1<<(index%8)) != 0)
 }
 
 func (b *bitmask) trimBitmask(entries int) {

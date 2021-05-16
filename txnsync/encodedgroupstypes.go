@@ -17,10 +17,11 @@
 package txnsync
 
 import (
+	"errors"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -29,6 +30,8 @@ const maxEncodedTransactionGroupEntries = 30000
 const maxBitmaskSize = (maxEncodedTransactionGroupEntries+7)/8 + 1
 const maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signature{})
 const maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
+
+var errInvalidTxType = errors.New("invalid txtype")
 
 type txGroupsEncodingStub struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -326,25 +329,24 @@ const (
 )
 
 // TxTypeToByte converts a TxType to byte encoding
-func TxTypeToByte(t protocol.TxType) byte {
+func TxTypeToByte(t protocol.TxType) (byte, error) {
 	switch t {
 	case protocol.PaymentTx:
-		return paymentTx
+		return paymentTx, nil
 	case protocol.KeyRegistrationTx:
-		return keyRegistrationTx
+		return keyRegistrationTx, nil
 	case protocol.AssetConfigTx:
-		return assetConfigTx
+		return assetConfigTx, nil
 	case protocol.AssetTransferTx:
-		return assetTransferTx
+		return assetTransferTx, nil
 	case protocol.AssetFreezeTx:
-		return assetFreezeTx
+		return assetFreezeTx, nil
 	case protocol.ApplicationCallTx:
-		return applicationCallTx
+		return applicationCallTx, nil
 	case protocol.CompactCertTx:
-		return compactCertTx
+		return compactCertTx, nil
 	default:
-		logging.Base().Errorf("invalid txtype") // TODO: (nguo) perform proper error handling here instead
-		return unknownTx
+		return unknownTx, errInvalidTxType
 	}
 }
 

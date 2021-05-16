@@ -32,22 +32,22 @@ import (
 )
 
 func TestBitmaskType0And2(t *testing.T) {
+	entries := 80
 	b := make(bitmask, 12)
 	b.SetBit(0)
 	b.SetBit(2)
 	b.SetBit(69)
-	for i := 0; i < 80; i++ {
-		exists := b.EntryExists(i)
+	for i := 0; i < entries; i++ {
+		exists := b.EntryExists(i, entries)
 		if i == 0 || i == 2 || i == 69 {
 			require.True(t, exists)
 		} else {
 			require.False(t, exists)
 		}
 	}
-	b.trimBitmask(80)
-	b.expandBitmask(80)
-	for i := 0; i < 80; i++ {
-		exists := b.EntryExists(i)
+	b.trimBitmask(entries)
+	for i := 0; i < entries; i++ {
+		exists := b.EntryExists(i, entries)
 		if i == 0 || i == 2 || i == 69 {
 			require.True(t, exists)
 		} else {
@@ -57,16 +57,16 @@ func TestBitmaskType0And2(t *testing.T) {
 }
 
 func TestBitmaskType1(t *testing.T) {
+	entries := 80
 	b := make(bitmask, 12)
-	for i := 0; i < 80; i++ {
+	for i := 0; i < entries; i++ {
 		if i % 3 != 0 {
 			b.SetBit(i)
 		}
 	}
-	b.trimBitmask(80)
-	b.expandBitmask(80)
-	for i := 0; i < 80; i++ {
-		exists := b.EntryExists(i)
+	b.trimBitmask(entries)
+	for i := 0; i < entries; i++ {
+		exists := b.EntryExists(i, entries)
 		if i % 3 == 0 {
 			require.False(t, exists)
 		} else {
@@ -76,16 +76,16 @@ func TestBitmaskType1(t *testing.T) {
 }
 
 func TestBitmaskType3(t *testing.T) {
+	entries := 80
 	b := make(bitmask, 12)
-	for i := 0; i < 80; i++ {
+	for i := 0; i < entries; i++ {
 		if i != 0 && i != 2 && i != 69 {
 			b.SetBit(i)
 		}
 	}
-	b.trimBitmask(80)
-	b.expandBitmask(80)
-	for i := 0; i < 80; i++ {
-		exists := b.EntryExists(i)
+	b.trimBitmask(entries)
+	for i := 0; i < entries; i++ {
+		exists := b.EntryExists(i, entries)
 		if i == 0 || i == 2 || i == 69 {
 			require.False(t, exists)
 		} else {
@@ -199,7 +199,8 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 		},
 	}
 	addGroupHashes(inTxnGroups, 6, []byte{1})
-	encodedGroupsBytes := encodeTransactionGroups(inTxnGroups)
+	encodedGroupsBytes, err := encodeTransactionGroups(inTxnGroups)
+	require.NoError(t, err)
 	out, err := decodeTransactionGroups(encodedGroupsBytes)
 	require.NoError(t, err)
 	require.ElementsMatch(t, inTxnGroups, out)
@@ -253,7 +254,8 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 	txnGroups, err := txnGroupsData()
 	require.NoError(t, err)
 
-	encodedGroupsBytes := encodeTransactionGroups(txnGroups)
+	encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
+	require.NoError(t, err)
 	out, err := decodeTransactionGroups(encodedGroupsBytes)
 	require.NoError(t, err)
 	require.ElementsMatch(t, txnGroups, out)
@@ -293,7 +295,8 @@ func BenchmarkTxnGroupEncoding(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encodedGroupsBytes = encodeTransactionGroups(txnGroups)
+		encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
+		require.NoError(b, err)
 		releaseEncodedTransactionGroups(encodedGroupsBytes)
 	}
 
@@ -304,7 +307,8 @@ func BenchmarkTxnGroupDecoding(b *testing.B) {
 	txnGroups, err := txnGroupsData()
 	require.NoError(b, err)
 
-	encodedGroupsBytes := encodeTransactionGroups(txnGroups)
+	encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
+	require.NoError(b, err)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -432,7 +436,8 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 		}
 		addGroupHashes(txnGroups, len(txns), []byte{1})
 
-		encodedGroupsBytes := encodeTransactionGroups(txnGroups)
+		encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
+		require.NoError(t, err)
 		out, err := decodeTransactionGroups(encodedGroupsBytes)
 		require.NoError(t, err)
 		//if fmt.Sprintf("%v", out[0].Transactions[0]) != fmt.Sprintf("%v", txnGroups[0].Transactions[0]) {

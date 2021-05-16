@@ -82,7 +82,11 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	for _, peer := range peers {
 		msgCallback := &messageSentCallback{state: s, roundClock: s.clock}
 		profAssembleMessage.start()
-		msgCallback.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
+		var err error
+		msgCallback.messageData, err = s.assemblePeerMessage(peer, &pendingTransactions)
+		if err != nil {
+			s.log.Errorf("failed to send peer msg: %v", err)
+		}
 		profAssembleMessage.end()
 		encodedMessage := msgCallback.messageData.message.MarshalMsg([]byte{})
 		msgCallback.messageData.encodedMessageSize = len(encodedMessage)
@@ -117,7 +121,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	}
 }
 
-func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata) {
+func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata, err error) {
 	metaMessage = sentMessageMetadata{
 		peer: peer,
 		message: &transactionBlockMessage{
@@ -174,7 +178,10 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		profTxnsSelection.start()
 		txnGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
 		profTxnsSelection.end()
-		metaMessage.message.TransactionGroups.Bytes = encodeTransactionGroups(txnGroups)
+		metaMessage.message.TransactionGroups.Bytes, err = encodeTransactionGroups(txnGroups)
+		if err != nil {
+			return
+		}
 
 		// clear the last sent bloom filter on the end of a series of partial messages.
 		// this would ensure we generate a new bloom filter every beta, which is needed
@@ -192,8 +199,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 	if msgOps&messageConstNextMinDelay == messageConstNextMinDelay {
 		metaMessage.message.MsgSync.NextMsgMinDelay = uint64(s.lastBeta.Nanoseconds()) * 2
 	}
-
-	return metaMessage
+	return
 }
 
 func (s *syncState) evaluateOutgoingMessage(msg *messageSentCallback) {

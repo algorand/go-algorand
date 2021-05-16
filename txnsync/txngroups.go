@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"fmt"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -41,7 +42,7 @@ func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte
 	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
 }
 
-func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
+func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, error) {
 	txnCount := 0
 	for _, txGroup := range inTxnGroups {
 		txnCount += len(txGroup.Transactions)
@@ -49,30 +50,35 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
 	stub := txGroupsEncodingStub{
 		TotalTransactionsCount: uint64(txnCount),
 		TransactionGroupCount:  uint64(len(inTxnGroups)),
-		TransactionGroupSizes:  make([]byte, 0, len(inTxnGroups)), // TODO compress this later to use 2 per byte
+		TransactionGroupSizes:  make([]byte, 0, len(inTxnGroups)),
 	}
 
 	index := 0
 	for _, txGroup := range inTxnGroups {
 		if len(txGroup.Transactions) > 1 {
 			for _, txn := range txGroup.Transactions {
-				stub.deconstructSignedTransactions(index, txn)
+				if err := stub.deconstructSignedTransactions(index, txn); err != nil {
+					return nil, fmt.Errorf("failed to encodeTransactionGroups: %v", err)
+				}
 				index++
 			}
 			stub.TransactionGroupSizes = append(stub.TransactionGroupSizes, byte(len(txGroup.Transactions)-1))
 		}
 	}
+	stub.TransactionGroupSizes = squeezeByteArray(stub.TransactionGroupSizes)
 	for _, txGroup := range inTxnGroups {
 		if len(txGroup.Transactions) == 1 {
 			for _, txn := range txGroup.Transactions {
-				stub.deconstructSignedTransactions(index, txn)
+				if err := stub.deconstructSignedTransactions(index, txn); err != nil {
+					return nil, fmt.Errorf("failed to encodeTransactionGroups: %v", err)
+				}
 				index++
 			}
 		}
 	}
 	stub.finishDeconstructSignedTransactions()
 
-	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
+	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0]), nil
 }
 
 func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTxGroup, err error) {
@@ -111,8 +117,12 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 	txnGroups = make([]transactions.SignedTxGroup, stub.TransactionGroupCount)
 	for txnCounter, txnGroupIndex := 0, 0; txnCounter < int(stub.TotalTransactionsCount); txnGroupIndex++ {
 		size := 1
-		if txnGroupIndex < len(stub.TransactionGroupSizes) {
-			size = int(stub.TransactionGroupSizes[txnGroupIndex]) + 1
+		if txnGroupIndex < len(stub.TransactionGroupSizes)*2 {
+			nibble, err := getNibble(stub.TransactionGroupSizes, txnGroupIndex)
+			if err != nil {
+				return nil, err
+			}
+			size = int(nibble) + 1
 		}
 		txnGroups[txnGroupIndex].Transactions = stx[txnCounter : txnCounter+size]
 		txnCounter += size

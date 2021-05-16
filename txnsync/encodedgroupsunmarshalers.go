@@ -45,10 +45,9 @@ func getNibble(b []byte, index int) (byte, error) {
 
 func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskSig.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskSig.EntryExists(i); exists {
+		if exists := stub.BitmaskSig.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.Sig, index, len(crypto.Signature{}))
 			if err != nil {
 				return err
@@ -63,10 +62,9 @@ func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []tra
 	if err := stub.reconstructLsigs(signedTxns); err != nil {
 		return fmt.Errorf("failed to lsigs: %v", err)
 	}
-	index = 0
-	stub.BitmaskAuthAddr.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskAuthAddr.EntryExists(i); exists {
+		if exists := stub.BitmaskAuthAddr.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.AuthAddr, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -81,10 +79,9 @@ func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []tra
 
 func (stub *txGroupsEncodingStub) reconstructMsigs(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskVersion.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskVersion.EntryExists(i); exists {
+		if exists := stub.BitmaskVersion.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Version) {
 				return errDataMissing
 			}
@@ -92,10 +89,9 @@ func (stub *txGroupsEncodingStub) reconstructMsigs(signedTxns []transactions.Sig
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskThreshold.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskThreshold.EntryExists(i); exists {
+		if exists := stub.BitmaskThreshold.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Threshold) {
 				return errDataMissing
 			}
@@ -103,10 +99,9 @@ func (stub *txGroupsEncodingStub) reconstructMsigs(signedTxns []transactions.Sig
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskSubsigs.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskSubsigs.EntryExists(i); exists {
+		if exists := stub.BitmaskSubsigs.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Subsigs) {
 				return errDataMissing
 			}
@@ -119,10 +114,9 @@ func (stub *txGroupsEncodingStub) reconstructMsigs(signedTxns []transactions.Sig
 
 func (stub *txGroupsEncodingStub) reconstructLsigs(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskLogic.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskLogic.EntryExists(i); exists {
+		if exists := stub.BitmaskLogic.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Logic) {
 				return errDataMissing
 			}
@@ -135,10 +129,9 @@ func (stub *txGroupsEncodingStub) reconstructLsigs(signedTxns []transactions.Sig
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskLogicArgs.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskLogicArgs.EntryExists(i); exists {
+		if exists := stub.BitmaskLogicArgs.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.LogicArgs) {
 				return errDataMissing
 			}
@@ -151,10 +144,9 @@ func (stub *txGroupsEncodingStub) reconstructLsigs(signedTxns []transactions.Sig
 
 func (stub *txGroupsEncodingStub) reconstructTransactions(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskTxType.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskTxType.EntryExists(i); exists {
+		if exists := stub.BitmaskTxType.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			b, err := getNibble(stub.TxType, index)
 			if err != nil {
 				return err
@@ -199,10 +191,9 @@ func (stub *txGroupsEncodingStub) reconstructTransactions(signedTxns []transacti
 
 func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskSender.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskSender.EntryExists(i); exists {
+		if exists := stub.BitmaskSender.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.Sender, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -211,10 +202,9 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskFee.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskFee.EntryExists(i); exists {
+		if exists := stub.BitmaskFee.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Fee) {
 				return errDataMissing
 			}
@@ -222,10 +212,9 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskFirstValid.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskFirstValid.EntryExists(i); exists {
+		if exists := stub.BitmaskFirstValid.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.FirstValid) {
 				return errDataMissing
 			}
@@ -233,10 +222,9 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskLastValid.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskLastValid.EntryExists(i); exists {
+		if exists := stub.BitmaskLastValid.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.LastValid) {
 				return errDataMissing
 			}
@@ -244,10 +232,9 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskNote.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskNote.EntryExists(i); exists {
+		if exists := stub.BitmaskNote.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Note) {
 				return errDataMissing
 			}
@@ -255,26 +242,23 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskGenesisID.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskGenesisID.EntryExists(i); exists {
+		if exists := stub.BitmaskGenesisID.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			signedTxns[i].Txn.GenesisID = stub.GenesisID
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskGenesisHash.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskGenesisHash.EntryExists(i); exists {
+		if exists := stub.BitmaskGenesisHash.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			signedTxns[i].Txn.GenesisHash = stub.GenesisHash
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskLease.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskLease.EntryExists(i); exists {
+		if exists := stub.BitmaskLease.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.Lease, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -283,10 +267,9 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskRekeyTo.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskRekeyTo.EntryExists(i); exists {
+		if exists := stub.BitmaskRekeyTo.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.RekeyTo, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -300,10 +283,9 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 
 func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskKeys.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskKeys.EntryExists(i); exists {
+		if exists := stub.BitmaskKeys.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.VotePK, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -321,10 +303,9 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskVoteFirst.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskVoteFirst.EntryExists(i); exists {
+		if exists := stub.BitmaskVoteFirst.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.VoteFirst) {
 				return errDataMissing
 			}
@@ -332,10 +313,9 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskVoteLast.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskVoteLast.EntryExists(i); exists {
+		if exists := stub.BitmaskVoteLast.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.VoteLast) {
 				return errDataMissing
 			}
@@ -343,9 +323,9 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 			index++
 		}
 	}
-	stub.BitmaskNonparticipation.expandBitmask(int(stub.TotalTransactionsCount))
+	
 	for i := range signedTxns {
-		if exists := stub.BitmaskNonparticipation.EntryExists(i); exists {
+		if exists := stub.BitmaskNonparticipation.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			signedTxns[i].Txn.Nonparticipation = true
 		}
 	}
@@ -354,10 +334,9 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 
 func (stub *txGroupsEncodingStub) reconstructPaymentTxnFields(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskReceiver.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskReceiver.EntryExists(i); exists {
+		if exists := stub.BitmaskReceiver.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.Receiver, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -366,10 +345,9 @@ func (stub *txGroupsEncodingStub) reconstructPaymentTxnFields(signedTxns []trans
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskAmount.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskAmount.EntryExists(i); exists {
+		if exists := stub.BitmaskAmount.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Amount) {
 				return errDataMissing
 			}
@@ -377,10 +355,9 @@ func (stub *txGroupsEncodingStub) reconstructPaymentTxnFields(signedTxns []trans
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskCloseRemainderTo.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskCloseRemainderTo.EntryExists(i); exists {
+		if exists := stub.BitmaskCloseRemainderTo.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.CloseRemainderTo, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -394,10 +371,9 @@ func (stub *txGroupsEncodingStub) reconstructPaymentTxnFields(signedTxns []trans
 
 func (stub *txGroupsEncodingStub) reconstructAssetConfigTxnFields(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskConfigAsset.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskConfigAsset.EntryExists(i); exists {
+		if exists := stub.BitmaskConfigAsset.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.ConfigAsset) {
 				return errDataMissing
 			}
@@ -410,10 +386,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetConfigTxnFields(signedTxns []t
 
 func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskTotal.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskTotal.EntryExists(i); exists {
+		if exists := stub.BitmaskTotal.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Total) {
 				return errDataMissing
 			}
@@ -421,10 +396,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskDecimals.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskDecimals.EntryExists(i); exists {
+		if exists := stub.BitmaskDecimals.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Decimals) {
 				return errDataMissing
 			}
@@ -432,18 +406,16 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskDefaultFrozen.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskDefaultFrozen.EntryExists(i); exists {
+		if exists := stub.BitmaskDefaultFrozen.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			signedTxns[i].Txn.AssetParams.DefaultFrozen = true
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskUnitName.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskUnitName.EntryExists(i); exists {
+		if exists := stub.BitmaskUnitName.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.UnitName) {
 				return errDataMissing
 			}
@@ -451,10 +423,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskAssetName.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskAssetName.EntryExists(i); exists {
+		if exists := stub.BitmaskAssetName.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.AssetName) {
 				return errDataMissing
 			}
@@ -462,10 +433,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskURL.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskURL.EntryExists(i); exists {
+		if exists := stub.BitmaskURL.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.URL) {
 				return errDataMissing
 			}
@@ -473,10 +443,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskMetadataHash.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskMetadataHash.EntryExists(i); exists {
+		if exists := stub.BitmaskMetadataHash.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.MetadataHash, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -485,10 +454,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskManager.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskManager.EntryExists(i); exists {
+		if exists := stub.BitmaskManager.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.Manager, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -497,10 +465,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskReserve.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskReserve.EntryExists(i); exists {
+		if exists := stub.BitmaskReserve.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.Reserve, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -509,10 +476,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskFreeze.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskFreeze.EntryExists(i); exists {
+		if exists := stub.BitmaskFreeze.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.Freeze, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -521,10 +487,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskClawback.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskClawback.EntryExists(i); exists {
+		if exists := stub.BitmaskClawback.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.Clawback, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -538,10 +503,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 
 func (stub *txGroupsEncodingStub) reconstructAssetTransferTxnFields(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskXferAsset.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskXferAsset.EntryExists(i); exists {
+		if exists := stub.BitmaskXferAsset.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.XferAsset) {
 				return errDataMissing
 			}
@@ -549,10 +513,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetTransferTxnFields(signedTxns [
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskAssetAmount.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskAssetAmount.EntryExists(i); exists {
+		if exists := stub.BitmaskAssetAmount.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.AssetAmount) {
 				return errDataMissing
 			}
@@ -560,10 +523,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetTransferTxnFields(signedTxns [
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskAssetSender.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskAssetSender.EntryExists(i); exists {
+		if exists := stub.BitmaskAssetSender.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.AssetSender, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -572,10 +534,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetTransferTxnFields(signedTxns [
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskAssetReceiver.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskAssetReceiver.EntryExists(i); exists {
+		if exists := stub.BitmaskAssetReceiver.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.AssetReceiver, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -584,10 +545,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetTransferTxnFields(signedTxns [
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskAssetCloseTo.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskAssetCloseTo.EntryExists(i); exists {
+		if exists := stub.BitmaskAssetCloseTo.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.AssetCloseTo, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -601,10 +561,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetTransferTxnFields(signedTxns [
 
 func (stub *txGroupsEncodingStub) reconstructAssetFreezeTxnFields(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskFreezeAccount.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskFreezeAccount.EntryExists(i); exists {
+		if exists := stub.BitmaskFreezeAccount.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.FreezeAccount, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -613,10 +572,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetFreezeTxnFields(signedTxns []t
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskFreezeAsset.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskFreezeAsset.EntryExists(i); exists {
+		if exists := stub.BitmaskFreezeAsset.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.FreezeAsset) {
 				return errDataMissing
 			}
@@ -624,9 +582,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetFreezeTxnFields(signedTxns []t
 			index++
 		}
 	}
-	stub.BitmaskAssetFrozen.expandBitmask(int(stub.TotalTransactionsCount))
+	
 	for i := range signedTxns {
-		if exists := stub.BitmaskAssetFrozen.EntryExists(i); exists {
+		if exists := stub.BitmaskAssetFrozen.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			signedTxns[i].Txn.AssetFrozen = true
 		}
 	}
@@ -635,10 +593,9 @@ func (stub *txGroupsEncodingStub) reconstructAssetFreezeTxnFields(signedTxns []t
 
 func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskApplicationID.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskApplicationID.EntryExists(i); exists {
+		if exists := stub.BitmaskApplicationID.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.ApplicationID) {
 				return errDataMissing
 			}
@@ -646,10 +603,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskOnCompletion.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskOnCompletion.EntryExists(i); exists {
+		if exists := stub.BitmaskOnCompletion.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			b, err := getNibble(stub.OnCompletion, index)
 			if err != nil {
 				return err
@@ -658,10 +614,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskApplicationArgs.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskApplicationArgs.EntryExists(i); exists {
+		if exists := stub.BitmaskApplicationArgs.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.ApplicationArgs) {
 				return errDataMissing
 			}
@@ -669,10 +624,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskAccounts.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskAccounts.EntryExists(i); exists {
+		if exists := stub.BitmaskAccounts.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Accounts) {
 				return errDataMissing
 			}
@@ -680,10 +634,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskForeignApps.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskForeignApps.EntryExists(i); exists {
+		if exists := stub.BitmaskForeignApps.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.ForeignApps) {
 				return errDataMissing
 			}
@@ -691,10 +644,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskForeignAssets.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskForeignAssets.EntryExists(i); exists {
+		if exists := stub.BitmaskForeignAssets.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.ForeignAssets) {
 				return errDataMissing
 			}
@@ -702,10 +654,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskLocalNumUint.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskLocalNumUint.EntryExists(i); exists {
+		if exists := stub.BitmaskLocalNumUint.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.LocalNumUint) {
 				return errDataMissing
 			}
@@ -713,10 +664,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskLocalNumByteSlice.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskLocalNumByteSlice.EntryExists(i); exists {
+		if exists := stub.BitmaskLocalNumByteSlice.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.LocalNumByteSlice) {
 				return errDataMissing
 			}
@@ -724,10 +674,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskGlobalNumUint.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskGlobalNumUint.EntryExists(i); exists {
+		if exists := stub.BitmaskGlobalNumUint.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.GlobalNumUint) {
 				return errDataMissing
 			}
@@ -735,10 +684,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskGlobalNumByteSlice.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskGlobalNumByteSlice.EntryExists(i); exists {
+		if exists := stub.BitmaskGlobalNumByteSlice.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.GlobalNumByteSlice) {
 				return errDataMissing
 			}
@@ -746,10 +694,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskApprovalProgram.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskApprovalProgram.EntryExists(i); exists {
+		if exists := stub.BitmaskApprovalProgram.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.ApprovalProgram) {
 				return errDataMissing
 			}
@@ -757,10 +704,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskClearStateProgram.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskClearStateProgram.EntryExists(i); exists {
+		if exists := stub.BitmaskClearStateProgram.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.ClearStateProgram) {
 				return errDataMissing
 			}
@@ -773,10 +719,9 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 
 func (stub *txGroupsEncodingStub) reconstructCompactCertTxnFields(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskCertRound.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskCertRound.EntryExists(i); exists {
+		if exists := stub.BitmaskCertRound.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.CertRound) {
 				return errDataMissing
 			}
@@ -784,10 +729,9 @@ func (stub *txGroupsEncodingStub) reconstructCompactCertTxnFields(signedTxns []t
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskCertType.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskCertType.EntryExists(i); exists {
+		if exists := stub.BitmaskCertType.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.CertType) {
 				return errDataMissing
 			}
@@ -800,10 +744,9 @@ func (stub *txGroupsEncodingStub) reconstructCompactCertTxnFields(signedTxns []t
 
 func (stub *txGroupsEncodingStub) reconstructCert(signedTxns []transactions.SignedTxn) error {
 	var index int
-	index = 0
-	stub.BitmaskSigCommit.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskSigCommit.EntryExists(i); exists {
+		if exists := stub.BitmaskSigCommit.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			slice, err := getSlice(stub.SigCommit, index, crypto.DigestSize)
 			if err != nil {
 				return err
@@ -812,10 +755,9 @@ func (stub *txGroupsEncodingStub) reconstructCert(signedTxns []transactions.Sign
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskSignedWeight.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskSignedWeight.EntryExists(i); exists {
+		if exists := stub.BitmaskSignedWeight.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.SignedWeight) {
 				return errDataMissing
 			}
@@ -823,10 +765,9 @@ func (stub *txGroupsEncodingStub) reconstructCert(signedTxns []transactions.Sign
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskSigProofs.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskSigProofs.EntryExists(i); exists {
+		if exists := stub.BitmaskSigProofs.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.SigProofs) {
 				return errDataMissing
 			}
@@ -834,10 +775,9 @@ func (stub *txGroupsEncodingStub) reconstructCert(signedTxns []transactions.Sign
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskPartProofs.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskPartProofs.EntryExists(i); exists {
+		if exists := stub.BitmaskPartProofs.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.PartProofs) {
 				return errDataMissing
 			}
@@ -845,10 +785,9 @@ func (stub *txGroupsEncodingStub) reconstructCert(signedTxns []transactions.Sign
 			index++
 		}
 	}
-	index = 0
-	stub.BitmaskReveals.expandBitmask(int(stub.TotalTransactionsCount))
+	index = 0	
 	for i := range signedTxns {
-		if exists := stub.BitmaskReveals.EntryExists(i); exists {
+		if exists := stub.BitmaskReveals.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 			if index >= len(stub.Reveals) {
 				return errDataMissing
 			}

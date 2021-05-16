@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"fmt"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -43,9 +44,8 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
 		}
 		groupHash := crypto.HashObj(txGroup)
-		b.expandBitmask(txnCount)
 		for i := range txns.Transactions {
-			if exists := b.EntryExists(index); exists {
+			if exists := b.EntryExists(index, txnCount); exists {
 				txns.Transactions[i].Txn.Group = groupHash
 			}
 			index++
@@ -54,7 +54,7 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 }
 
 // deconstructs SignedTxn's into lists of fields and bitmasks
-func (stub *txGroupsEncodingStub) deconstructSignedTransactions(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructSignedTransactions(i int, txn transactions.SignedTxn) error {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Sig.MsgIsZero() {
 		if len(stub.BitmaskSig) == 0 {
@@ -74,7 +74,7 @@ func (stub *txGroupsEncodingStub) deconstructSignedTransactions(i int, txn trans
 		stub.BitmaskAuthAddr.SetBit(i)
 		stub.AuthAddr = append(stub.AuthAddr, txn.AuthAddr[:]...)
 	}
-	stub.deconstructTransactions(i, txn)
+	return stub.deconstructTransactions(i, txn)
 }
 
 func (stub *txGroupsEncodingStub) finishDeconstructSignedTransactions() {
@@ -176,9 +176,12 @@ func (stub *txGroupsEncodingStub) finishDeconstructLsigs() {
 	stub.BitmaskLogicArgs.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructTransactions(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructTransactions(i int, txn transactions.SignedTxn) error {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
-	txTypeByte := TxTypeToByte(txn.Txn.Type)
+	txTypeByte, err := TxTypeToByte(txn.Txn.Type)
+	if err != nil {
+		return fmt.Errorf("failed to deconstructTransactions: %v", err)
+	}
 	if txTypeByte != 0 {
 		if len(stub.BitmaskTxType) == 0 {
 			stub.BitmaskTxType = make(bitmask, bitmaskLen)
@@ -204,6 +207,7 @@ func (stub *txGroupsEncodingStub) deconstructTransactions(i int, txn transaction
 	case protocol.CompactCertTx:
 		stub.deconstructCompactCertTxnFields(i, txn)
 	}
+	return nil
 }
 
 func (stub *txGroupsEncodingStub) finishDeconstructTransactions() {
@@ -221,7 +225,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructTransactions() {
 		newTxTypes := make([]byte, 0, stub.TotalTransactionsCount)
 		index := 0
 		for i := 0; i < int(stub.TotalTransactionsCount); i++ {
-			if exists := stub.BitmaskTxType.EntryExists(i); exists {
+			if exists := stub.BitmaskTxType.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
 				if stub.TxType[index] == offset {
 					stub.BitmaskTxType.SetBit(i)
 				} else {
