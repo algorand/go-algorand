@@ -200,8 +200,6 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	//removedTxn := 0
 	grpIdx := startIndex
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
-
-		// filter out transactions that we already previously sent.
 		txID := pendingTransactions[grpIdx].FirstTransactionID
 
 		// check if the peer would be interested in these messages -
@@ -211,6 +209,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 			}
 		}
 
+		// filter out transactions that we already previously sent.
 		if p.recentSentTransactions.contained(txID) {
 			// we already sent that transaction. no need to send again.
 			continue
