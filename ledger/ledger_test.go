@@ -457,8 +457,11 @@ func TestLedgerSingleTx(t *testing.T) {
 	votePK[0] = 1
 	selPK[0] = 2
 	correctKeyregFields := transactions.KeyregTxnFields{
-		VotePK:      votePK,
-		SelectionPK: selPK,
+		VotePK:          votePK,
+		SelectionPK:     selPK,
+		VoteKeyDilution: proto.DefaultKeyDilution,
+		VoteFirst:       0,
+		VoteLast:        10000,
 	}
 
 	correctKeyreg := transactions.Transaction{
@@ -1125,8 +1128,11 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	votePK[0] = 1
 	selPK[0] = 2
 	correctKeyregFields := transactions.KeyregTxnFields{
-		VotePK:      votePK,
-		SelectionPK: selPK,
+		VotePK:          votePK,
+		SelectionPK:     selPK,
+		VoteKeyDilution: proto.DefaultKeyDilution,
+		VoteFirst:       0,
+		VoteLast:        10000,
 	}
 
 	correctKeyreg := transactions.Transaction{
