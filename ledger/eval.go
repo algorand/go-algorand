@@ -777,7 +777,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 		// expect them to have low balances, but if they do, it may cause
 		// surprises.
 		if addr == eval.block.FeeSink || addr == eval.block.RewardsPool ||
-      addr == transactions.CompactCertSender {
+			addr == transactions.CompactCertSender {
 			continue
 		}
 
@@ -793,22 +793,22 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 			continue
 		}
 
-    dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-    effectiveMinBalance := dataNew.MinBalance(&eval.proto)
-    if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
-      return fmt.Errorf("account %v balance %d below min %d (%d assets)",
-        addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
-    }
+		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
+		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
+		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
+			return fmt.Errorf("account %v balance %d below min %d (%d assets)",
+				addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
+		}
 
-    // Check if we have exceeded the maximum minimum balance
-    if eval.proto.MaximumMinimumBalance != 0 {
-      if effectiveMinBalance.Raw > eval.proto.MaximumMinimumBalance {
-        return fmt.Errorf("account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", addr, effectiveMinBalance.Raw, eval.proto.MaximumMinimumBalance)
-      }
-    }
+		// Check if we have exceeded the maximum minimum balance
+		if eval.proto.MaximumMinimumBalance != 0 {
+			if effectiveMinBalance.Raw > eval.proto.MaximumMinimumBalance {
+				return fmt.Errorf("account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", addr, effectiveMinBalance.Raw, eval.proto.MaximumMinimumBalance)
+			}
+		}
 	}
 
-  return nil
+	return nil
 }
 
 // transaction tentatively executes a new transaction as part of this block evaluation.
@@ -880,15 +880,15 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 
 	// Check if any affected accounts dipped below MinBalance (unless they are
 	// completely zero, which means the account will be deleted.)
-  // Only do those checks if we are validating or generating. It is useful to skip them
-  // if we cannot provide account data that contains enough information to
-  // compute the correct minimum balance (the case with indexer which does not store it).
-  if eval.validate || eval.generate {
-    err := eval.checkMinBalance(cow)
-    if err != nil {
-      return fmt.Errorf("transaction %v: %w", txid, err)
-    }
-  }
+	// Only do those checks if we are validating or generating. It is useful to skip them
+	// if we cannot provide account data that contains enough information to
+	// compute the correct minimum balance (the case with indexer which does not store it).
+	if eval.validate || eval.generate {
+		err := eval.checkMinBalance(cow)
+		if err != nil {
+			return fmt.Errorf("transaction %v: %w", txid, err)
+		}
+	}
 
 	// Remember this txn
 	cow.addTx(txn.Txn, txid)
