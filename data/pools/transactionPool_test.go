@@ -95,7 +95,7 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 	const inMem = true
 	genesisInitState := ledger.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
 	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
+	cfg.Archival = false
 	l, err := ledger.OpenLedger(logging.Base(), fn, true, genesisInitState, cfg)
 	require.NoError(t, err)
 	return l
@@ -837,13 +837,14 @@ func TestRemove(t *testing.T) {
 	signedTx := tx.Sign(secrets[0])
 	require.NoError(t, transactionPool.RememberOne(signedTx))
 	pendingTxGroups, _ := transactionPool.PendingTxGroups()
-	require.Equal(t, pendingTxGroups, []transactions.SignedTxGroup{
+	require.Equal(t, []transactions.SignedTxGroup{
 		{
 			Transactions:       []transactions.SignedTxn{signedTx},
 			GroupCounter:       1,
 			FirstTransactionID: signedTx.Txn.ID(),
+			EncodedLength:      len(signedTx.MarshalMsg([]byte{})),
 		},
-	})
+	}, pendingTxGroups)
 }
 
 func TestLogicSigOK(t *testing.T) {

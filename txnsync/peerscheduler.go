@@ -97,6 +97,21 @@ func (p *peerScheduler) nextPeers() (outPeers []*Peer) {
 		bucket := heap.Remove(p, 0).(peerBucket)
 		outPeers = append(outPeers, bucket.peer)
 	}
+
+	// in many cases, we'll have only a single peer; however, in case we have multiple
+	// ( which is more likely when we're "running late" ), we want to make sure to remove
+	// duplicate ones.
+	if len(outPeers) > 0 {
+		peersMap := make(map[*Peer]struct{}, len(outPeers))
+		for _, peer := range outPeers {
+			peersMap[peer] = struct{}{}
+		}
+		// reset the outPeers array.
+		outPeers = outPeers[:0]
+		for peer := range peersMap {
+			outPeers = append(outPeers, peer)
+		}
+	}
 	return
 }
 
