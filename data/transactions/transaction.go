@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -242,13 +243,13 @@ func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) b
 	return false
 }
 
-var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = fmt.Errorf("transaction first voting round need to be less than its last voting round")
-var errKeyregTxnNonCoherentVotingKeys = fmt.Errorf("the following transaction fields need to be clear/set together : votekey, selkey, votekd")
-var errKeyregTxnOfflineTransactionHasVotingRounds = fmt.Errorf("on going offline key registration transaction, the vote first and vote last fields should not be set")
-var errKeyregTxnUnsupportedSwitchToNonParticipating = fmt.Errorf("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
-var errKeyregTxnGoingOnlineWithNonParticipating = fmt.Errorf("transaction tries to register keys to go online, but nonparticipatory flag is set")
-var errKeyregTxnGoingOnlineWithZeroVoteLast = fmt.Errorf("transaction tries to register keys to go online, but vote last is set to zero")
-var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = fmt.Errorf("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
+var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")
+var errKeyregTxnNonCoherentVotingKeys = errors.New("the following transaction fields need to be clear/set together : votekey, selkey, votekd")
+var errKeyregTxnOfflineTransactionHasVotingRounds = errors.New("on going offline key registration transaction, the vote first and vote last fields should not be set")
+var errKeyregTxnUnsupportedSwitchToNonParticipating = errors.New("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
+var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries to register keys to go online, but nonparticipatory flag is set")
+var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
+var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
