@@ -243,10 +243,11 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		}
 	}
 
-	if grpIdx == len(pendingTransactions) {
-		grpIdx--
-	}
-	if grpIdx >= 0 {
+	// update the lastTransactionSelectionGroupCounter if needed -
+	// if we selectged any transaction to be sent, update the lastTransactionSelectionGroupCounter with the latest
+	// group counter. If the startIndex was *after* the last pending transaction, it means that we don't
+	// need to update the lastTransactionSelectionGroupCounter since it's already ahead of everything in the pending transactions.
+	if grpIdx >= 0 && startIndex < len(pendingTransactions) {
 		p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx].GroupCounter
 	}
 
