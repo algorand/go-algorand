@@ -2825,6 +2825,8 @@ func benchmarkExpensiveProgram(b *testing.B, source string) {
 	require.NoError(b, err)
 	ep := defaultEvalParams(nil, nil)
 	err = Check(ops.Program, ep)
+	require.NoError(b, err)
+	_, err = Eval(ops.Program, defaultEvalParams(nil, nil))
 	require.Error(b, err) // excessive cost
 	//b.Logf("%d bytes of program", len(ops.Program))
 	//b.Log(hex.EncodeToString(ops.Program))

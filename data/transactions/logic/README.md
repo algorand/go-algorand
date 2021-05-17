@@ -139,7 +139,7 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
 
-These opcodes take and return byte-array values that are interpretted
+These opcodes take and return byte-array values that are interpreted
 as big-endian unsigned integers.  Returned values are the shortest
 byte-array that can represent the returned value.  For example, the
 zero value is the empty byte-array.
