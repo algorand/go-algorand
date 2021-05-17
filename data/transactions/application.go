@@ -134,14 +134,14 @@ type ApplicationCallTxnFields struct {
 	// except for those where OnCompletion is equal to ClearStateOC. If
 	// this program fails, the transaction is rejected. This program may
 	// read and write local and global state for this application.
-	ApprovalProgram []byte `codec:"apap,allocbound=config.MaxTotalAppProgramLen"`
+	ApprovalProgram []byte `codec:"apap,allocbound=config.MaxAvailableAppProgramLen"`
 
 	// ClearStateProgram is the stateful TEAL bytecode that executes on
 	// ApplicationCall transactions associated with this application when
 	// OnCompletion is equal to ClearStateOC. This program will not cause
 	// the transaction to be rejected, even if it fails. This program may
 	// read and write local and global state for this application.
-	ClearStateProgram []byte `codec:"apsu,allocbound=config.MaxTotalAppProgramLen"`
+	ClearStateProgram []byte `codec:"apsu,allocbound=config.MaxAvailableAppProgramLen"`
 
 	// ExtraProgramPages specifies the additional app program len requested in pages.
 	// A page is MaxAppProgramLen bytes. This field enables execution of app programs

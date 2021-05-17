@@ -234,8 +234,9 @@ type ConsensusParams struct {
 	// extra length for application program in pages. A page is MaxAppProgramLen bytes
 	MaxExtraAppProgramPages int
 
-	// extra length for application program in pages. A page is MaxAppProgramLen bytes
-	MaxTotalAppProgramLen int
+	// maximum available length of application approval program or clear state
+	// program in bytes
+	MaxAvailableAppProgramLen int
 
 	// maximum number of accounts in the ApplicationCall Accounts field.
 	// this determines, in part, the maximum number of balance records
@@ -420,9 +421,9 @@ var MaxBytesKeyValueLen int
 // of the consensus protocols. used for decoding purposes.
 var MaxExtraAppProgramLen int
 
-// MaxTotalAppProgramLen is the maximum total extra app program length supported by any
-// of the consensus protocols. used for decoding purposes.
-var MaxTotalAppProgramLen int
+// MaxAvailableAppProgramLen is the largest supported app program size include the extra pages
+//supported supported by any of the consensus protocols. used for decoding purposes.
+var MaxAvailableAppProgramLen int
 
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
@@ -454,7 +455,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
 	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
 	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
-	checkSetMax(p.MaxTotalAppProgramLen, &MaxTotalAppProgramLen)
+	checkSetMax(p.MaxAvailableAppProgramLen, &MaxAvailableAppProgramLen)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -923,7 +924,7 @@ func initConsensusProtocols() {
 
 	// Enable support for larger app program size
 	vFuture.MaxExtraAppProgramPages = 3
-	vFuture.MaxTotalAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
+	vFuture.MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
 
 	// enable the InitialRewardsRateCalculation fix
 	vFuture.InitialRewardsRateCalculation = true

@@ -224,8 +224,8 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   []byte       `codec:"approv,allocbound=config.MaxTotalAppProgramLen"`
-	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxTotalAppProgramLen"`
+	ApprovalProgram   []byte       `codec:"approv,allocbound=config.MaxAvailableAppProgramLen"`
+	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAvailableAppProgramLen"`
 	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
 	ExtraProgramPages int
