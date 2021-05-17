@@ -18,11 +18,11 @@ package txnsync
 
 import (
 	"context"
-	"github.com/algorand/go-algorand/crypto"
 	"math"
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/util/timers"
 )

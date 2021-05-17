@@ -60,14 +60,14 @@ func TestBitmaskType1(t *testing.T) {
 	entries := 80
 	b := make(bitmask, 12)
 	for i := 0; i < entries; i++ {
-		if i % 3 != 0 {
+		if i%3 != 0 {
 			b.SetBit(i)
 		}
 	}
 	b.trimBitmask(entries)
 	for i := 0; i < entries; i++ {
 		exists := b.EntryExists(i, entries)
-		if i % 3 == 0 {
+		if i%3 == 0 {
 			require.False(t, exists)
 		} else {
 			require.True(t, exists)
@@ -140,7 +140,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 							Sender:      basics.Address(crypto.Hash([]byte("1"))),
 							Fee:         basics.MicroAlgos{Raw: 100},
 							GenesisHash: genesisHash,
-							GenesisID: genesisID,
+							GenesisID:   genesisID,
 						},
 						PaymentTxnFields: transactions.PaymentTxnFields{
 							Receiver: basics.Address(crypto.Hash([]byte("2"))),
@@ -155,7 +155,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 						Header: transactions.Header{
 							Sender:      basics.Address(crypto.Hash([]byte("1"))),
 							GenesisHash: genesisHash,
-							GenesisID: genesisID,
+							GenesisID:   genesisID,
 						},
 					},
 					Sig: crypto.Signature{3},

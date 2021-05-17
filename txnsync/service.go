@@ -18,9 +18,9 @@ package txnsync
 
 import (
 	"context"
-	"github.com/algorand/go-algorand/crypto"
 	"sync"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -37,10 +37,10 @@ type Service struct {
 func MakeTranscationSyncService(log logging.Logger, conn NodeConnector, isRelay bool, genesisID string, genesisHash crypto.Digest) *Service {
 	s := &Service{
 		state: syncState{
-			node:    conn,
-			log:     wrapLogger(log),
-			isRelay: isRelay,
-			genesisID: genesisID,
+			node:        conn,
+			log:         wrapLogger(log),
+			isRelay:     isRelay,
+			genesisID:   genesisID,
 			genesisHash: genesisHash,
 		},
 	}
