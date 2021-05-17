@@ -128,7 +128,7 @@ func TestEmulatedTrivialTransactionsExchange(t *testing.T) {
 		testScenario.initialAlloc[0].node = 1
 		emulateScenario(t, testScenario)
 	})
-	t.Run("OutgoingRelay_To_IncomingRelay", func(t *testing.T) {
+	t.Run("IncomingRelay_To_OutgoingRelay", func(t *testing.T) {
 		testScenario.netConfig.nodes[0].name = "incoming-relay"
 		testScenario.netConfig.nodes[0].isRelay = true
 		testScenario.netConfig.nodes[1].name = "outgoing-relay"
@@ -385,7 +385,7 @@ func TestEmulatedLargeSetTransactionsExchangeIntermixed(t *testing.T) {
 		emulateScenario(t, testScenario)
 	})
 
-	t.Run("OutgoingRelay_To_IncomingRelay", func(t *testing.T) {
+	t.Run("IncomingRelay_To_OutgoingRelay", func(t *testing.T) {
 		testScenario.netConfig.nodes[0].name = "incoming-relay"
 		testScenario.netConfig.nodes[0].isRelay = true
 		testScenario.netConfig.nodes[1].name = "outgoing-relay"

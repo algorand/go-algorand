@@ -316,12 +316,12 @@ func (n *emulatedNode) step() {
 			peer.deferredSentMessages = peer.deferredSentMessages[1:]
 			peer.mu.Unlock()
 			err := dm.callback(true, dm.seq)
-			n.unblock()
-			n.waitBlocked()
-			peer.mu.Lock()
 			if err != nil {
 				panic(err)
 			}
+			n.unblock()
+			n.waitBlocked()
+			peer.mu.Lock()
 		}
 
 		for i := len(peer.messageQ); i > 0; i-- {
