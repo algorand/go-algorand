@@ -160,10 +160,6 @@ bit unsigned integer.
 | `b==` | A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b!=` | A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
 | `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero. |
-| `b\|` | A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
-| `b&` | A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
-| `b^` | A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
-| `b~` | A with all bits inverted |
 
 These opcodes operate on the bits of byte-array values.  The shorter
 array is interpeted as though left padded with zeros until it is the

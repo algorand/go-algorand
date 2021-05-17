@@ -152,6 +152,7 @@ func buildSyntaxHighlight() *tmLanguage {
 			},
 		},
 	}
+	var allArithmetics []string
 	for grp, names := range logic.OpGroups {
 		switch grp {
 		case "Flow Control":
@@ -171,9 +172,10 @@ func buildSyntaxHighlight() *tmLanguage {
 				Name:  "keyword.other.unit.teal",
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(names, "|")),
 			})
-		case "Arithmetic":
-		case "Byteslice Arithmetic":
-		case "Byteslice Logic":
+		// For these three, accumulate into allArithmetics,
+		// and only add to keyword.Patterns later, when all
+		// have been collected.
+		case "Arithmetic", "Byteslice Arithmetic", "Byteslice Logic":
 			escape := map[rune]bool{
 				'*': true,
 				'+': true,
@@ -188,30 +190,24 @@ func buildSyntaxHighlight() *tmLanguage {
 				'<': true,
 				'>': true,
 			}
-			var allArithmetics []string
 			for _, op := range names {
-				if len(op) < 3 {
-					// all symbol-based opcodes are under 3 chars, and no trigraphs so far
-					escaped := make([]byte, 0, len(op)*2)
-					for _, ch := range op {
-						if _, ok := escape[ch]; ok {
-							escaped = append(escaped, '\\')
-						}
-						escaped = append(escaped, byte(ch))
+				escaped := make([]byte, 0, len(op)*2)
+				for _, ch := range op {
+					if _, ok := escape[ch]; ok {
+						escaped = append(escaped, '\\')
 					}
-					allArithmetics = append(allArithmetics, string(escaped))
-				} else {
-					allArithmetics = append(allArithmetics, op)
+					escaped = append(escaped, byte(ch))
 				}
+				allArithmetics = append(allArithmetics, string(escaped))
 			}
-			keywords.Patterns = append(keywords.Patterns, pattern{
-				Name:  "keyword.operator.teal",
-				Match: fmt.Sprintf("^(%s)\\b", strings.Join(allArithmetics, "|")),
-			})
 		default:
 			panic(fmt.Sprintf("Unknown ops group: %s", grp))
 		}
 	}
+	keywords.Patterns = append(keywords.Patterns, pattern{
+		Name:  "keyword.operator.teal",
+		Match: fmt.Sprintf("^(%s)\\b", strings.Join(allArithmetics, "|")),
+	})
 	tm.Repository["keywords"] = keywords
 
 	return &tm

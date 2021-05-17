@@ -1042,9 +1042,17 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths
 - LogicSigVersion >= 4
 
-## bzero
+## b~
 
 - Opcode: 0xae
+- Pops: *... stack*, []byte
+- Pushes: []byte
+- A with all bits inverted
+- LogicSigVersion >= 4
+
+## bzero
+
+- Opcode: 0xaf
 - Pops: *... stack*, uint64
 - Pushes: []byte
 - push a byte-array of length A, containing all zero bytes
