@@ -248,7 +248,13 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	// group counter. If the startIndex was *after* the last pending transaction, it means that we don't
 	// need to update the lastTransactionSelectionGroupCounter since it's already ahead of everything in the pending transactions.
 	if grpIdx >= 0 && startIndex < len(pendingTransactions) {
-		p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx].GroupCounter
+		if grpIdx == len(pendingTransactions) {
+			if grpIdx > 0 {
+				p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx-1].GroupCounter + 1
+			}
+		} else {
+			p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx].GroupCounter
+		}
 	}
 
 	if !hasMorePendingTransactions {
