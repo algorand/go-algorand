@@ -57,10 +57,10 @@ func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []tra
 		}
 	}
 	if err := stub.reconstructMsigs(signedTxns); err != nil {
-		return fmt.Errorf("failed to msigs: %v", err)
+		return fmt.Errorf("failed to msigs: %w", err)
 	}
 	if err := stub.reconstructLsigs(signedTxns); err != nil {
-		return fmt.Errorf("failed to lsigs: %v", err)
+		return fmt.Errorf("failed to lsigs: %w", err)
 	}
 	index = 0
 	for i := range signedTxns {
@@ -151,11 +151,7 @@ func (stub *txGroupsEncodingStub) reconstructTransactions(signedTxns []transacti
 			if err != nil {
 				return err
 			}
-			if b == stub.TxTypeOffset {
-				signedTxns[i].Txn.Type = ByteToTxType(0)
-			} else {
-				signedTxns[i].Txn.Type = ByteToTxType(b)
-			}
+			signedTxns[i].Txn.Type = ByteToTxType(b)
 			index++
 		} else {
 			signedTxns[i].Txn.Type = ByteToTxType(stub.TxTypeOffset)
@@ -163,28 +159,28 @@ func (stub *txGroupsEncodingStub) reconstructTransactions(signedTxns []transacti
 	}
 
 	if err := stub.reconstructTxnHeader(signedTxns, genesisID, genesisHash); err != nil {
-		return fmt.Errorf("failed to reconstructTxnHeader: %v", err)
+		return fmt.Errorf("failed to reconstructTxnHeader: %w", err)
 	}
 	if err := stub.reconstructKeyregTxnFields(signedTxns); err != nil {
-		return fmt.Errorf("failed to reconstructKeyregTxnFields: %v", err)
+		return fmt.Errorf("failed to reconstructKeyregTxnFields: %w", err)
 	}
 	if err := stub.reconstructPaymentTxnFields(signedTxns); err != nil {
-		return fmt.Errorf("failed to reconstructPaymentTxnFields: %v", err)
+		return fmt.Errorf("failed to reconstructPaymentTxnFields: %w", err)
 	}
 	if err := stub.reconstructAssetConfigTxnFields(signedTxns); err != nil {
-		return fmt.Errorf("failed to reconstructAssetConfigTxnFields: %v", err)
+		return fmt.Errorf("failed to reconstructAssetConfigTxnFields: %w", err)
 	}
 	if err := stub.reconstructAssetTransferTxnFields(signedTxns); err != nil {
-		return fmt.Errorf("failed to reconstructAssetTransferTxnFields: %v", err)
+		return fmt.Errorf("failed to reconstructAssetTransferTxnFields: %w", err)
 	}
 	if err := stub.reconstructAssetFreezeTxnFields(signedTxns); err != nil {
-		return fmt.Errorf("failed to reconstructAssetFreezeTxnFields: %v", err)
+		return fmt.Errorf("failed to reconstructAssetFreezeTxnFields: %w", err)
 	}
 	if err := stub.reconstructApplicationCallTxnFields(signedTxns); err != nil {
-		return fmt.Errorf("failed to reconstructApplicationCallTxnFields: %v", err)
+		return fmt.Errorf("failed to reconstructApplicationCallTxnFields: %w", err)
 	}
 	if err := stub.reconstructCompactCertTxnFields(signedTxns); err != nil {
-		return fmt.Errorf("failed to reconstructCompactCertTxnFields: %v", err)
+		return fmt.Errorf("failed to reconstructCompactCertTxnFields: %w", err)
 	}
 	return nil
 }

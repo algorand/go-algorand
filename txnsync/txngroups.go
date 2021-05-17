@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -60,19 +61,19 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, 
 		if len(txGroup.Transactions) > 1 {
 			for _, txn := range txGroup.Transactions {
 				if err := stub.deconstructSignedTransactions(index, txn); err != nil {
-					return nil, fmt.Errorf("failed to encodeTransactionGroups: %v", err)
+					return nil, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
 			}
 			stub.TransactionGroupSizes = append(stub.TransactionGroupSizes, byte(len(txGroup.Transactions)-1))
 		}
 	}
-	stub.TransactionGroupSizes = squeezeByteArray(stub.TransactionGroupSizes)
+	stub.TransactionGroupSizes = compactNibblesArray(stub.TransactionGroupSizes)
 	for _, txGroup := range inTxnGroups {
 		if len(txGroup.Transactions) == 1 {
 			for _, txn := range txGroup.Transactions {
 				if err := stub.deconstructSignedTransactions(index, txn); err != nil {
-					return nil, fmt.Errorf("failed to encodeTransactionGroups: %v", err)
+					return nil, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
 			}
@@ -107,6 +108,10 @@ func decodeTransactionGroups(bytes []byte, genesisID string, genesisHash crypto.
 	_, err = stub.UnmarshalMsg(bytes)
 	if err != nil {
 		return nil, err
+	}
+
+	if stub.TransactionGroupCount > maxEncodedTransactionGroup {
+		return nil, errors.New("invalid TransactionGroupCount")
 	}
 
 	stx := make([]transactions.SignedTxn, stub.TotalTransactionsCount)

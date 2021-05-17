@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func squeezeByteArray(b []byte) []byte {
+func compactNibblesArray(b []byte) []byte {
 	if len(b)%2 == 1 {
 		b = append(b, byte(0))
 	}
@@ -37,16 +37,16 @@ func squeezeByteArray(b []byte) []byte {
 
 func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitmask) {
 	index := 0
-	txGroupHashes := make([]crypto.Digest, txnCount)
+	txGroupHashes := make([]crypto.Digest, 16)
 	for _, txns := range txnGroups {
 		var txGroup transactions.TxGroup
-		txGroup.TxGroupHashes = txGroupHashes[index : index+len(txns.Transactions)]
+		txGroup.TxGroupHashes = txGroupHashes[: len(txns.Transactions)]
 		for i, tx := range txns.Transactions {
 			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
 		}
 		groupHash := crypto.HashObj(txGroup)
 		for i := range txns.Transactions {
-			if exists := b.EntryExists(index, txnCount); exists {
+			if exists := b.EntryExists(index, txnCount); exists || len(txns.Transactions) > 1 {
 				txns.Transactions[i].Txn.Group = groupHash
 			}
 			index++
@@ -181,16 +181,13 @@ func (stub *txGroupsEncodingStub) deconstructTransactions(i int, txn transaction
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	txTypeByte, err := TxTypeToByte(txn.Txn.Type)
 	if err != nil {
-		return fmt.Errorf("failed to deconstructTransactions: %v", err)
+		return fmt.Errorf("failed to deconstructTransactions: %w", err)
 	}
-	if txTypeByte != 0 {
-		if len(stub.BitmaskTxType) == 0 {
-			stub.BitmaskTxType = make(bitmask, bitmaskLen)
-			stub.TxType = make([]byte, 0, int(stub.TotalTransactionsCount))
-		}
-		stub.BitmaskTxType.SetBit(i)
-		stub.TxType = append(stub.TxType, txTypeByte)
+	if len(stub.BitmaskTxType) == 0 {
+		stub.BitmaskTxType = make(bitmask, bitmaskLen)
+		stub.TxType = make([]byte, 0, int(stub.TotalTransactionsCount))
 	}
+	stub.TxType = append(stub.TxType, txTypeByte)
 	stub.deconstructTxnHeader(i, txn)
 	switch txn.Txn.Type {
 	case protocol.PaymentTx:
@@ -212,38 +209,7 @@ func (stub *txGroupsEncodingStub) deconstructTransactions(i int, txn transaction
 }
 
 func (stub *txGroupsEncodingStub) finishDeconstructTransactions() {
-	offset := byte(0)
-	count := make(map[int]uint64)
-	for _, t := range stub.TxType {
-		count[int(t)]++
-	}
-	for i := range protocol.TxnTypes {
-		if c, ok := count[i]; ok && c > stub.TotalTransactionsCount/2 {
-			offset = byte(i)
-		}
-	}
-	if offset != 0 {
-		newTxTypes := make([]byte, 0, stub.TotalTransactionsCount)
-		index := 0
-		for i := 0; i < int(stub.TotalTransactionsCount); i++ {
-			if exists := stub.BitmaskTxType.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
-				if stub.TxType[index] == offset {
-					stub.BitmaskTxType.SetBit(i)
-				} else {
-					newTxTypes = append(newTxTypes, stub.TxType[index])
-				}
-				index++
-			} else {
-				stub.BitmaskTxType.SetBit(i)
-				newTxTypes = append(newTxTypes, offset)
-			}
-		}
-		stub.TxType = newTxTypes
-		stub.TxTypeOffset = offset
-	}
-
-	stub.BitmaskTxType.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.TxType = squeezeByteArray(stub.TxType)
+	stub.finishDeconstructTxType()
 	stub.finishDeconstructTxnHeader()
 	stub.finishDeconstructKeyregTxnFields()
 	stub.finishDeconstructPaymentTxnFields()
@@ -252,6 +218,32 @@ func (stub *txGroupsEncodingStub) finishDeconstructTransactions() {
 	stub.finishDeconstructAssetFreezeTxnFields()
 	stub.finishDeconstructApplicationCallTxnFields()
 	stub.finishDeconstructCompactCertTxnFields()
+}
+
+func (stub *txGroupsEncodingStub) finishDeconstructTxType() {
+	offset := byte(0)
+	count := make(map[int]int)
+	maxcount := 0
+	for _, t := range stub.TxType {
+		count[int(t)]++
+	}
+	for i := range protocol.TxnTypes {
+		if c, ok := count[i]; ok && c > maxcount {
+			offset = byte(i)
+			maxcount = c
+		}
+	}
+	newTxTypes := make([]byte, 0, stub.TotalTransactionsCount)
+	for i := 0; i < int(stub.TotalTransactionsCount); i++ {
+		if stub.TxType[i] != offset {
+			stub.BitmaskTxType.SetBit(i)
+			newTxTypes = append(newTxTypes, stub.TxType[i])
+		}
+	}
+	stub.TxType = newTxTypes
+	stub.TxTypeOffset = offset
+	stub.TxType = compactNibblesArray(stub.TxType)
+	stub.BitmaskTxType.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn transactions.SignedTxn) {
@@ -731,7 +723,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 }
 
 func (stub *txGroupsEncodingStub) finishDeconstructApplicationCallTxnFields() {
-	stub.OnCompletion = squeezeByteArray(stub.OnCompletion)
+	stub.OnCompletion = compactNibblesArray(stub.OnCompletion)
 	stub.BitmaskApplicationID.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskOnCompletion.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskApplicationArgs.trimBitmask(int(stub.TotalTransactionsCount))

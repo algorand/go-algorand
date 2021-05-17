@@ -72,6 +72,7 @@ type encodedMsigs struct {
 
 type encodedLsigs struct {
 	_struct          struct{}   `codec:",omitempty,omitemptyarray"`
+
 	Logic            [][]byte   `codec:"lsigl,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxLogicSigMaxSize"`
 	BitmaskLogic     bitmask    `codec:"lsiglbm"`
 	LogicArgs        [][][]byte `codec:"lsigarg,allocbound=maxEncodedTransactionGroup,allocbound=transactions.EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
@@ -106,7 +107,7 @@ type encodedTxnHeaders struct {
 	BitmaskFirstValid  bitmask             `codec:"fvbm"`
 	LastValid          []basics.Round      `codec:"lv,allocbound=maxEncodedTransactionGroup"`
 	BitmaskLastValid   bitmask             `codec:"lvbm"`
-	Note               [][]byte            `codec:"note,allocbound=maxEncodedTransactionGroup"` // TODO whats the correct allocbound?
+	Note               [][]byte            `codec:"note,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxTxnNoteBytes"`
 	BitmaskNote        bitmask             `codec:"notebm"`
 	BitmaskGenesisID   bitmask             `codec:"genbm"`
 	BitmaskGenesisHash bitmask             `codec:"ghbm"`
