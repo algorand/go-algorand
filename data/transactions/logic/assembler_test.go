@@ -1650,7 +1650,7 @@ func TestErrShortBytecblock(t *testing.T) {
 	_, _, err = parseIntcblock(ops.Program, 0)
 	require.Equal(t, err, errShortIntcblock)
 
-	var cx evalContext
+	var cx EvalContext
 	cx.program = ops.Program
 	err = checkIntConstBlock(&cx)
 	require.Equal(t, err, errShortIntcblock)

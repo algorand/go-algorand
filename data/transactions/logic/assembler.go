@@ -1383,7 +1383,7 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 	return
 }
 
-func checkIntConstBlock(cx *evalContext) error {
+func checkIntConstBlock(cx *EvalContext) error {
 	pos := cx.pc + 1
 	numInts, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
@@ -1451,7 +1451,7 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 	return
 }
 
-func checkByteConstBlock(cx *evalContext) error {
+func checkByteConstBlock(cx *EvalContext) error {
 	pos := cx.pc + 1
 	numItems, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
@@ -1609,7 +1609,7 @@ func disPushInt(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = pos + bytesUsed
 	return fmt.Sprintf("%s %d", spec.Name, val), nil
 }
-func checkPushInt(cx *evalContext) error {
+func checkPushInt(cx *EvalContext) error {
 	opPushInt(cx)
 	return cx.err
 }
@@ -1629,7 +1629,7 @@ func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
 	dis.nextpc = int(end)
 	return fmt.Sprintf("%s 0x%s", spec.Name, hex.EncodeToString(bytes)), nil
 }
-func checkPushBytes(cx *evalContext) error {
+func checkPushBytes(cx *EvalContext) error {
 	opPushBytes(cx)
 	return cx.err
 }

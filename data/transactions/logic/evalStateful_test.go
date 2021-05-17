@@ -2734,7 +2734,7 @@ func TestReturnTypes(t *testing.T) {
 				source := sb.String()
 				ops := testProg(t, source, AssemblerMaxVersion)
 
-				var cx evalContext
+				var cx EvalContext
 				cx.EvalParams = ep
 				cx.runModeFlags = m
 

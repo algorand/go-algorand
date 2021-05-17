@@ -2657,10 +2657,10 @@ func TestShortBytecblock2(t *testing.T) {
 
 const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
 
-func opPanic(cx *evalContext) {
+func opPanic(cx *EvalContext) {
 	panic(panicString)
 }
-func checkPanic(cx *evalContext) error {
+func checkPanic(cx *EvalContext) error {
 	panic(panicString)
 }
 
@@ -3464,7 +3464,7 @@ intc_0
 		opsByOpcode[LogicVersion][spec.Opcode] = origSpec
 	}()
 
-	spec.op = func(cx *evalContext) {
+	spec.op = func(cx *EvalContext) {
 		// overflow
 		cx.stack = make([]stackValue, 2000)
 	}
