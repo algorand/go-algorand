@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TIMEOUT=600
+# TIMEOUT=60
 
 my_dir="$(dirname "$0")"
 #"$my_dir/rest.sh" "$@"
