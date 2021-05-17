@@ -232,7 +232,6 @@ type AppParams struct {
 	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAppProgramLen"`
 	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
-	ExtraProgramPages int
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the
