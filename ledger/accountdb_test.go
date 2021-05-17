@@ -1670,6 +1670,7 @@ func BenchmarkReadingRandomBalancesDiskLarge(b *testing.B) {
 	}{
 		{1, true},
 		{512, true},
+		{1000, true},
 		{2000, false},
 		{5000, false},
 		{10000, false},
@@ -1678,6 +1679,82 @@ func BenchmarkReadingRandomBalancesDiskLarge(b *testing.B) {
 	for _, t := range tests {
 		b.Run(fmt.Sprintf("holdings=%d simple=%v", t.numHoldings, t.simple), func(b *testing.B) {
 			benchmarkReadingRandomBalances(b, false, t.numHoldings, 10, t.simple)
+		})
+	}
+}
+
+func benchmarkWritingRandomBalances(b *testing.B, inMemory bool, maxHoldingsPerAccount int, largeAccountsRatio int, simple bool) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	dbs, fn := dbOpenTest(b, inMemory)
+	setDbLogging(b, dbs)
+	defer cleanupTestDb(dbs, fn, inMemory)
+
+	accounts := benchmarkInitBalances(b, b.N, dbs, proto, maxHoldingsPerAccount, largeAccountsRatio)
+
+	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
+	require.NoError(b, err)
+
+	// read all the balances in the database, shuffled
+	addrs := make([]basics.Address, len(accounts))
+	pos := 0
+	for addr := range accounts {
+		addrs[pos] = addr
+		pos++
+	}
+	rand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
+
+	// only measure the actual insertion time
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var baseAccounts lruAccounts
+		baseAccounts.init(nil, 100, 80)
+		round := basics.Round(1)
+		for _, addr := range addrs {
+			tx, err := dbs.Wdb.Handle.Begin()
+			require.NoError(b, err)
+			aidx := basics.AssetIndex(crypto.RandUint64() % uint64((len(addrs) * 10)))
+			dbad, err := qs.lookup(addr)
+			require.NoError(b, err)
+			if dbad.pad.Assets == nil {
+				dbad.pad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+			}
+			dbad.pad.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx)}
+			updates := ledgercore.AccountDeltas{}
+			updates.Upsert(addr, dbad.pad)
+			if dbad.pad.ExtendedAssetHolding.Count > uint32(assetsThreshold) {
+				updates.SetEntityDelta(addr, basics.CreatableIndex(aidx), ledgercore.ActionHoldingCreate)
+			}
+
+			updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
+			err = updatesCnt.accountsLoadOld(tx)
+			require.NoError(b, err)
+			err = totalsNewRounds(tx, []ledgercore.AccountDeltas{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, proto)
+			require.NoError(b, err)
+			_, err = accountsNewRound(tx, updatesCnt, nil, proto, round)
+			require.NoError(b, err)
+			err = updateAccountsRound(tx, round, 0)
+			require.NoError(b, err)
+			tx.Rollback()
+		}
+	}
+}
+
+func BenchmarkWritingRandomBalancesDiskLarge(b *testing.B) {
+	var tests = []struct {
+		numHoldings int
+		simple      bool
+	}{
+		{1, true},
+		{512, true},
+		{1000, true},
+		{2000, false},
+		{5000, false},
+		{10000, false},
+		{100000, false},
+	}
+	for _, t := range tests {
+		b.Run(fmt.Sprintf("holdings=%d simple=%v", t.numHoldings, t.simple), func(b *testing.B) {
+			benchmarkWritingRandomBalances(b, false, t.numHoldings, 10, t.simple)
 		})
 	}
 }
