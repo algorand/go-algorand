@@ -105,6 +105,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 			LocalStateSchema:  ac.LocalStateSchema,
 			GlobalStateSchema: ac.GlobalStateSchema,
 		},
+		ExtraProgramPages: ac.ExtraProgramPages,
 	}
 
 	// Update the cached TotalStateSchema for this account, used
@@ -114,15 +115,10 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	totalSchema = totalSchema.AddSchema(ac.GlobalStateSchema)
 	record.TotalAppSchema = totalSchema
 
-	if ac.ExtraProgramPages > 0 {
-		// set extra program page count for app
-		record.ExtraAppPages[appIdx] = ac.ExtraProgramPages
-
-		// Update the cached TotalExtraAppPages for this account, used
-		// when computing MinBalance
-		totalExtraPages := record.TotalExtraAppPages
-		totalExtraPages += ac.ExtraProgramPages
-	}
+	// Update the cached TotalExtraAppPages for this account, used
+	// when computing MinBalance
+	totalExtraPages := record.TotalExtraAppPages
+	totalExtraPages += ac.ExtraProgramPages
 
 	// Tell the cow what app we created
 	created := &basics.CreatableLocator{
@@ -167,7 +163,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	// Delete app's extra program pages
 	totalExtraPages := record.TotalExtraAppPages
 	if totalExtraPages > 0 {
-		extraPages := record.ExtraAppPages[appIdx]
+		extraPages := record.AppParams[appIdx].ExtraProgramPages
 		totalExtraPages -= extraPages
 		record.TotalExtraAppPages = totalExtraPages
 	}
