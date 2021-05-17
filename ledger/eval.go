@@ -886,7 +886,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
   if eval.validate || eval.generate {
     err := eval.checkMinBalance(cow)
     if err != nil {
-      return fmt.Errorf("transaction: %v err: %w", txid, err)
+      return fmt.Errorf("transaction %v: %w", txid, err)
     }
   }
 
