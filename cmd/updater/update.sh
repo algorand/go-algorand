@@ -376,7 +376,7 @@ function run_systemd_action() {
             fi
         else
             if sudo -n systemctl "$action" "algorand@$(systemd-escape "$data_dir")"; then
-                echo "systemd system service: $action"
+                echo "sudo -n systemd system service: $action"
                 return 0
             fi
         fi
@@ -645,12 +645,10 @@ if [ ${RESUME_INSTALL} -eq 0 ] && ! $DRYRUN; then
     # Note that the SCRIPTPATH we're passing in should be our binaries directory, which is what we expect to be
     # passed as the last argument (if any)
     echo "Starting the new update script to complete the installation..."
-    echo "copy the update script"
-    cp /home/ubuntu//go-algorand/cmd/updater/update.sh "${UPDATESRCDIR}/bin/${FILENAME}"
     exec "${UPDATESRCDIR}/bin/${FILENAME}" ${INSTALLOPT} -r -c ${CHANNEL} ${DATADIRSPEC} ${NOSTART} ${BINDIRSPEC} ${HOSTEDSPEC} ${GENESIS_NETWORK_DIR_SPEC} ${UNKNOWNARGS[@]}
 
     # If we're still here, exec failed.
-    # fail_and_exit "Error executing the new update script - unable to continue"
+    fail_and_exit "Error executing the new update script - unable to continue"
 else
     # We're running the script from our expanded update, which is located in the last script's ${TEMPDIR}/a/bin
     # We need to define our TEMPDIR and UPDATESRCDIR to match those values; we do so by making them relative
@@ -701,4 +699,5 @@ if [ "${NOSTART}" != "" ]; then
 else
     startup_nodes
 fi
+
 exit 0
