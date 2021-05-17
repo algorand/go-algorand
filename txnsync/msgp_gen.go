@@ -10261,8 +10261,8 @@ func (z *encodedPaymentTxnFields) MsgIsZero() bool {
 func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0048Len := uint32(127)
-	var zb0048Mask [3]uint64 /* 141 bits */
+	zb0048Len := uint32(125)
+	var zb0048Mask [3]uint64 /* 139 bits */
 	if len((*z).encodedTxns.encodedAssetTransferTxnFields.AssetAmount) == 0 {
 		zb0048Len--
 		zb0048Mask[0] |= 0x4000
@@ -10527,249 +10527,241 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 		zb0048Len--
 		zb0048Mask[1] |= 0x8000
 	}
-	if (*z).encodedTxns.encodedTxnHeaders.GenesisID == "" {
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x10000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x20000
 	}
-	if (*z).encodedTxns.encodedTxnHeaders.GenesisHash.MsgIsZero() {
+	if len((*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x40000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0 {
+	if len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x80000
 	}
-	if len((*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0 {
+	if len((*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x100000
 	}
-	if len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0 {
+	if len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x200000
 	}
-	if len((*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskGroup) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x400000
 	}
-	if len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0 {
+	if len((*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x800000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskGroup) == 0 {
+	if len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x1000000
 	}
-	if len((*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice) == 0 {
+	if len((*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumUint) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x2000000
 	}
-	if len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0 {
+	if len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x4000000
 	}
-	if len((*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumUint) == 0 {
+	if len((*z).encodedLsigs.LogicArgs) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x8000000
 	}
-	if len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0 {
+	if len((*z).encodedLsigs.BitmaskLogicArgs) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x10000000
 	}
-	if len((*z).encodedLsigs.LogicArgs) == 0 {
+	if len((*z).encodedLsigs.Logic) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x20000000
 	}
-	if len((*z).encodedLsigs.BitmaskLogicArgs) == 0 {
+	if len((*z).encodedLsigs.BitmaskLogic) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x40000000
 	}
-	if len((*z).encodedLsigs.Logic) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.LastValid) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x80000000
 	}
-	if len((*z).encodedLsigs.BitmaskLogic) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x100000000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.LastValid) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.Lease) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x200000000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskLease) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x400000000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.Lease) == 0 {
+	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x800000000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskLease) == 0 {
+	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x1000000000
 	}
-	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0 {
+	if len((*z).encodedMsigs.Threshold) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x2000000000
 	}
-	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0 {
+	if len((*z).encodedMsigs.BitmaskThreshold) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x4000000000
 	}
-	if len((*z).encodedMsigs.Threshold) == 0 {
+	if len((*z).encodedMsigs.Version) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x8000000000
 	}
-	if len((*z).encodedMsigs.BitmaskThreshold) == 0 {
+	if len((*z).encodedMsigs.BitmaskVersion) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x10000000000
 	}
-	if len((*z).encodedMsigs.Version) == 0 {
+	if len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskNonparticipation) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x20000000000
 	}
-	if len((*z).encodedMsigs.BitmaskVersion) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.Note) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x40000000000
 	}
-	if len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskNonparticipation) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskNote) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x80000000000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.Note) == 0 {
+	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x100000000000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskNote) == 0 {
+	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x200000000000
 	}
-	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0 {
+	if len((*z).encodedTxns.encodedPaymentTxnFields.Receiver) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x400000000000
 	}
-	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0 {
+	if len((*z).encodedTxns.encodedPaymentTxnFields.BitmaskReceiver) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x800000000000
 	}
-	if len((*z).encodedTxns.encodedPaymentTxnFields.Receiver) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.RekeyTo) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x1000000000000
 	}
-	if len((*z).encodedTxns.encodedPaymentTxnFields.BitmaskReceiver) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x2000000000000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.RekeyTo) == 0 {
+	if len((*z).encodedTxns.encodedKeyregTxnFields.SelectionPK) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x4000000000000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0 {
+	if len((*z).AuthAddr) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x8000000000000
 	}
-	if len((*z).encodedTxns.encodedKeyregTxnFields.SelectionPK) == 0 {
+	if len((*z).BitmaskAuthAddr) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x10000000000000
 	}
-	if len((*z).AuthAddr) == 0 {
+	if len((*z).Sig) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x20000000000000
 	}
-	if len((*z).BitmaskAuthAddr) == 0 {
+	if len((*z).BitmaskSig) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x40000000000000
 	}
-	if len((*z).Sig) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.Sender) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x80000000000000
 	}
-	if len((*z).BitmaskSig) == 0 {
+	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskSender) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x100000000000000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.Sender) == 0 {
+	if len((*z).encodedMsigs.Subsigs) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x200000000000000
 	}
-	if len((*z).encodedTxns.encodedTxnHeaders.BitmaskSender) == 0 {
+	if len((*z).encodedMsigs.BitmaskSubsigs) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x400000000000000
 	}
-	if len((*z).encodedMsigs.Subsigs) == 0 {
+	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x800000000000000
 	}
-	if len((*z).encodedMsigs.BitmaskSubsigs) == 0 {
+	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x1000000000000000
 	}
-	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0 {
+	if len((*z).encodedTxns.TxType) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x2000000000000000
 	}
-	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0 {
+	if len((*z).encodedTxns.BitmaskTxType) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x4000000000000000
 	}
-	if len((*z).encodedTxns.TxType) == 0 {
+	if (*z).encodedTxns.TxTypeOffset == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x8000000000000000
 	}
-	if len((*z).encodedTxns.BitmaskTxType) == 0 {
+	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x1
 	}
-	if (*z).encodedTxns.TxTypeOffset == 0 {
+	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x2
 	}
-	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0 {
+	if len((*z).encodedTxns.encodedKeyregTxnFields.VoteFirst) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x4
 	}
-	if len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0 {
+	if len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskVoteFirst) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x8
 	}
-	if len((*z).encodedTxns.encodedKeyregTxnFields.VoteFirst) == 0 {
+	if len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskKeys) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x10
 	}
-	if len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskVoteFirst) == 0 {
+	if len((*z).encodedTxns.encodedKeyregTxnFields.VoteKeyDilution) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x20
 	}
-	if len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskKeys) == 0 {
+	if len((*z).encodedTxns.encodedKeyregTxnFields.VotePK) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x40
 	}
-	if len((*z).encodedTxns.encodedKeyregTxnFields.VoteKeyDilution) == 0 {
+	if len((*z).encodedTxns.encodedKeyregTxnFields.VoteLast) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x80
 	}
-	if len((*z).encodedTxns.encodedKeyregTxnFields.VotePK) == 0 {
+	if len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskVoteLast) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x100
 	}
-	if len((*z).encodedTxns.encodedKeyregTxnFields.VoteLast) == 0 {
+	if len((*z).encodedTxns.encodedAssetTransferTxnFields.XferAsset) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x200
 	}
-	if len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskVoteLast) == 0 {
-		zb0048Len--
-		zb0048Mask[2] |= 0x400
-	}
-	if len((*z).encodedTxns.encodedAssetTransferTxnFields.XferAsset) == 0 {
-		zb0048Len--
-		zb0048Mask[2] |= 0x800
-	}
 	if len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskXferAsset) == 0 {
 		zb0048Len--
-		zb0048Mask[2] |= 0x1000
+		zb0048Mask[2] |= 0x400
 	}
 	// variable map header, size zb0048Len
 	o = msgp.AppendMapHeader(o, zb0048Len)
@@ -11316,26 +11308,16 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid))
 		}
 		if (zb0048Mask[1] & 0x10000) == 0 { // if not empty
-			// string "gen"
-			o = append(o, 0xa3, 0x67, 0x65, 0x6e)
-			o = msgp.AppendString(o, (*z).encodedTxns.encodedTxnHeaders.GenesisID)
-		}
-		if (zb0048Mask[1] & 0x20000) == 0 { // if not empty
 			// string "genbm"
 			o = append(o, 0xa5, 0x67, 0x65, 0x6e, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID))
 		}
-		if (zb0048Mask[1] & 0x40000) == 0 { // if not empty
-			// string "gh"
-			o = append(o, 0xa2, 0x67, 0x68)
-			o = (*z).encodedTxns.encodedTxnHeaders.GenesisHash.MarshalMsg(o)
-		}
-		if (zb0048Mask[1] & 0x80000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x20000) == 0 { // if not empty
 			// string "ghbm"
 			o = append(o, 0xa4, 0x67, 0x68, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash))
 		}
-		if (zb0048Mask[1] & 0x100000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x40000) == 0 { // if not empty
 			// string "gnbs"
 			o = append(o, 0xa4, 0x67, 0x6e, 0x62, 0x73)
 			if (*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice == nil {
@@ -11347,12 +11329,12 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice[zb0035])
 			}
 		}
-		if (zb0048Mask[1] & 0x200000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x80000) == 0 { // if not empty
 			// string "gnbsbm"
 			o = append(o, 0xa6, 0x67, 0x6e, 0x62, 0x73, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice))
 		}
-		if (zb0048Mask[1] & 0x400000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x100000) == 0 { // if not empty
 			// string "gnui"
 			o = append(o, 0xa4, 0x67, 0x6e, 0x75, 0x69)
 			if (*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint == nil {
@@ -11364,17 +11346,17 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint[zb0034])
 			}
 		}
-		if (zb0048Mask[1] & 0x800000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x200000) == 0 { // if not empty
 			// string "gnuibm"
 			o = append(o, 0xa6, 0x67, 0x6e, 0x75, 0x69, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumUint))
 		}
-		if (zb0048Mask[1] & 0x1000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x400000) == 0 { // if not empty
 			// string "grpbm"
 			o = append(o, 0xa5, 0x67, 0x72, 0x70, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGroup))
 		}
-		if (zb0048Mask[1] & 0x2000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x800000) == 0 { // if not empty
 			// string "lnbs"
 			o = append(o, 0xa4, 0x6c, 0x6e, 0x62, 0x73)
 			if (*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice == nil {
@@ -11386,12 +11368,12 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice[zb0033])
 			}
 		}
-		if (zb0048Mask[1] & 0x4000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x1000000) == 0 { // if not empty
 			// string "lnbsbm"
 			o = append(o, 0xa6, 0x6c, 0x6e, 0x62, 0x73, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice))
 		}
-		if (zb0048Mask[1] & 0x8000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x2000000) == 0 { // if not empty
 			// string "lnui"
 			o = append(o, 0xa4, 0x6c, 0x6e, 0x75, 0x69)
 			if (*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumUint == nil {
@@ -11403,12 +11385,12 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumUint[zb0032])
 			}
 		}
-		if (zb0048Mask[1] & 0x10000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x4000000) == 0 { // if not empty
 			// string "lnuibm"
 			o = append(o, 0xa6, 0x6c, 0x6e, 0x75, 0x69, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumUint))
 		}
-		if (zb0048Mask[1] & 0x20000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x8000000) == 0 { // if not empty
 			// string "lsigarg"
 			o = append(o, 0xa7, 0x6c, 0x73, 0x69, 0x67, 0x61, 0x72, 0x67)
 			if (*z).encodedLsigs.LogicArgs == nil {
@@ -11427,12 +11409,12 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				}
 			}
 		}
-		if (zb0048Mask[1] & 0x40000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x10000000) == 0 { // if not empty
 			// string "lsigargbm"
 			o = append(o, 0xa9, 0x6c, 0x73, 0x69, 0x67, 0x61, 0x72, 0x67, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedLsigs.BitmaskLogicArgs))
 		}
-		if (zb0048Mask[1] & 0x80000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x20000000) == 0 { // if not empty
 			// string "lsigl"
 			o = append(o, 0xa5, 0x6c, 0x73, 0x69, 0x67, 0x6c)
 			if (*z).encodedLsigs.Logic == nil {
@@ -11444,12 +11426,12 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendBytes(o, (*z).encodedLsigs.Logic[zb0003])
 			}
 		}
-		if (zb0048Mask[1] & 0x100000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x40000000) == 0 { // if not empty
 			// string "lsiglbm"
 			o = append(o, 0xa7, 0x6c, 0x73, 0x69, 0x67, 0x6c, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedLsigs.BitmaskLogic))
 		}
-		if (zb0048Mask[1] & 0x200000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x80000000) == 0 { // if not empty
 			// string "lv"
 			o = append(o, 0xa2, 0x6c, 0x76)
 			if (*z).encodedTxns.encodedTxnHeaders.LastValid == nil {
@@ -11461,57 +11443,57 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedTxns.encodedTxnHeaders.LastValid[zb0008].MarshalMsg(o)
 			}
 		}
-		if (zb0048Mask[1] & 0x400000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x100000000) == 0 { // if not empty
 			// string "lvbm"
 			o = append(o, 0xa4, 0x6c, 0x76, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid))
 		}
-		if (zb0048Mask[1] & 0x800000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x200000000) == 0 { // if not empty
 			// string "lx"
 			o = append(o, 0xa2, 0x6c, 0x78)
 			o = msgp.AppendBytes(o, (*z).encodedTxns.encodedTxnHeaders.Lease)
 		}
-		if (zb0048Mask[1] & 0x1000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x400000000) == 0 { // if not empty
 			// string "lxbm"
 			o = append(o, 0xa4, 0x6c, 0x78, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLease))
 		}
-		if (zb0048Mask[1] & 0x2000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x800000000) == 0 { // if not empty
 			// string "m"
 			o = append(o, 0xa1, 0x6d)
 			o = msgp.AppendBytes(o, (*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Manager)
 		}
-		if (zb0048Mask[1] & 0x4000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x1000000000) == 0 { // if not empty
 			// string "mbm"
 			o = append(o, 0xa3, 0x6d, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager))
 		}
-		if (zb0048Mask[1] & 0x8000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x2000000000) == 0 { // if not empty
 			// string "msigthr"
 			o = append(o, 0xa7, 0x6d, 0x73, 0x69, 0x67, 0x74, 0x68, 0x72)
 			o = msgp.AppendBytes(o, (*z).encodedMsigs.Threshold)
 		}
-		if (zb0048Mask[1] & 0x10000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x4000000000) == 0 { // if not empty
 			// string "msigthrbm"
 			o = append(o, 0xa9, 0x6d, 0x73, 0x69, 0x67, 0x74, 0x68, 0x72, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedMsigs.BitmaskThreshold))
 		}
-		if (zb0048Mask[1] & 0x20000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x8000000000) == 0 { // if not empty
 			// string "msigv"
 			o = append(o, 0xa5, 0x6d, 0x73, 0x69, 0x67, 0x76)
 			o = msgp.AppendBytes(o, (*z).encodedMsigs.Version)
 		}
-		if (zb0048Mask[1] & 0x40000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x10000000000) == 0 { // if not empty
 			// string "msigvbm"
 			o = append(o, 0xa7, 0x6d, 0x73, 0x69, 0x67, 0x76, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedMsigs.BitmaskVersion))
 		}
-		if (zb0048Mask[1] & 0x80000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x20000000000) == 0 { // if not empty
 			// string "nonpartbm"
 			o = append(o, 0xa9, 0x6e, 0x6f, 0x6e, 0x70, 0x61, 0x72, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedKeyregTxnFields.BitmaskNonparticipation))
 		}
-		if (zb0048Mask[1] & 0x100000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x40000000000) == 0 { // if not empty
 			// string "note"
 			o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
 			if (*z).encodedTxns.encodedTxnHeaders.Note == nil {
@@ -11523,77 +11505,77 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendBytes(o, (*z).encodedTxns.encodedTxnHeaders.Note[zb0009])
 			}
 		}
-		if (zb0048Mask[1] & 0x200000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x80000000000) == 0 { // if not empty
 			// string "notebm"
 			o = append(o, 0xa6, 0x6e, 0x6f, 0x74, 0x65, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskNote))
 		}
-		if (zb0048Mask[1] & 0x400000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x100000000000) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = msgp.AppendBytes(o, (*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Reserve)
 		}
-		if (zb0048Mask[1] & 0x800000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x200000000000) == 0 { // if not empty
 			// string "rbm"
 			o = append(o, 0xa3, 0x72, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve))
 		}
-		if (zb0048Mask[1] & 0x1000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x400000000000) == 0 { // if not empty
 			// string "rcv"
 			o = append(o, 0xa3, 0x72, 0x63, 0x76)
 			o = msgp.AppendBytes(o, (*z).encodedTxns.encodedPaymentTxnFields.Receiver)
 		}
-		if (zb0048Mask[1] & 0x2000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x800000000000) == 0 { // if not empty
 			// string "rcvbm"
 			o = append(o, 0xa5, 0x72, 0x63, 0x76, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedPaymentTxnFields.BitmaskReceiver))
 		}
-		if (zb0048Mask[1] & 0x4000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x1000000000000) == 0 { // if not empty
 			// string "rekey"
 			o = append(o, 0xa5, 0x72, 0x65, 0x6b, 0x65, 0x79)
 			o = msgp.AppendBytes(o, (*z).encodedTxns.encodedTxnHeaders.RekeyTo)
 		}
-		if (zb0048Mask[1] & 0x8000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x2000000000000) == 0 { // if not empty
 			// string "rekeybm"
 			o = append(o, 0xa7, 0x72, 0x65, 0x6b, 0x65, 0x79, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo))
 		}
-		if (zb0048Mask[1] & 0x10000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x4000000000000) == 0 { // if not empty
 			// string "selkey"
 			o = append(o, 0xa6, 0x73, 0x65, 0x6c, 0x6b, 0x65, 0x79)
 			o = msgp.AppendBytes(o, (*z).encodedTxns.encodedKeyregTxnFields.SelectionPK)
 		}
-		if (zb0048Mask[1] & 0x20000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x8000000000000) == 0 { // if not empty
 			// string "sgnr"
 			o = append(o, 0xa4, 0x73, 0x67, 0x6e, 0x72)
 			o = msgp.AppendBytes(o, (*z).AuthAddr)
 		}
-		if (zb0048Mask[1] & 0x40000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x10000000000000) == 0 { // if not empty
 			// string "sgnrbm"
 			o = append(o, 0xa6, 0x73, 0x67, 0x6e, 0x72, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskAuthAddr))
 		}
-		if (zb0048Mask[1] & 0x80000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x20000000000000) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
 			o = msgp.AppendBytes(o, (*z).Sig)
 		}
-		if (zb0048Mask[1] & 0x100000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x40000000000000) == 0 { // if not empty
 			// string "sigbm"
 			o = append(o, 0xa5, 0x73, 0x69, 0x67, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskSig))
 		}
-		if (zb0048Mask[1] & 0x200000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x80000000000000) == 0 { // if not empty
 			// string "snd"
 			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
 			o = msgp.AppendBytes(o, (*z).encodedTxns.encodedTxnHeaders.Sender)
 		}
-		if (zb0048Mask[1] & 0x400000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x100000000000000) == 0 { // if not empty
 			// string "sndbm"
 			o = append(o, 0xa5, 0x73, 0x6e, 0x64, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedTxnHeaders.BitmaskSender))
 		}
-		if (zb0048Mask[1] & 0x800000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x200000000000000) == 0 { // if not empty
 			// string "subsig"
 			o = append(o, 0xa6, 0x73, 0x75, 0x62, 0x73, 0x69, 0x67)
 			if (*z).encodedMsigs.Subsigs == nil {
@@ -11612,12 +11594,12 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				}
 			}
 		}
-		if (zb0048Mask[1] & 0x1000000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x400000000000000) == 0 { // if not empty
 			// string "subsigsbm"
 			o = append(o, 0xa9, 0x73, 0x75, 0x62, 0x73, 0x69, 0x67, 0x73, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedMsigs.BitmaskSubsigs))
 		}
-		if (zb0048Mask[1] & 0x2000000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x800000000000000) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
 			if (*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total == nil {
@@ -11629,27 +11611,27 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total[zb0015])
 			}
 		}
-		if (zb0048Mask[1] & 0x4000000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x1000000000000000) == 0 { // if not empty
 			// string "tbm"
 			o = append(o, 0xa3, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal))
 		}
-		if (zb0048Mask[1] & 0x8000000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x2000000000000000) == 0 { // if not empty
 			// string "type"
 			o = append(o, 0xa4, 0x74, 0x79, 0x70, 0x65)
 			o = msgp.AppendBytes(o, (*z).encodedTxns.TxType)
 		}
-		if (zb0048Mask[2] & 0x1) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x4000000000000000) == 0 { // if not empty
 			// string "typebm"
 			o = append(o, 0xa6, 0x74, 0x79, 0x70, 0x65, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.BitmaskTxType))
 		}
-		if (zb0048Mask[2] & 0x2) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x8000000000000000) == 0 { // if not empty
 			// string "typeo"
 			o = append(o, 0xa5, 0x74, 0x79, 0x70, 0x65, 0x6f)
 			o = msgp.AppendByte(o, (*z).encodedTxns.TxTypeOffset)
 		}
-		if (zb0048Mask[2] & 0x4) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x1) == 0 { // if not empty
 			// string "un"
 			o = append(o, 0xa2, 0x75, 0x6e)
 			if (*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName == nil {
@@ -11661,12 +11643,12 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendString(o, (*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName[zb0017])
 			}
 		}
-		if (zb0048Mask[2] & 0x8) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x2) == 0 { // if not empty
 			// string "unbm"
 			o = append(o, 0xa4, 0x75, 0x6e, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName))
 		}
-		if (zb0048Mask[2] & 0x10) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x4) == 0 { // if not empty
 			// string "votefst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x66, 0x73, 0x74)
 			if (*z).encodedTxns.encodedKeyregTxnFields.VoteFirst == nil {
@@ -11678,17 +11660,17 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedTxns.encodedKeyregTxnFields.VoteFirst[zb0010].MarshalMsg(o)
 			}
 		}
-		if (zb0048Mask[2] & 0x20) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x8) == 0 { // if not empty
 			// string "votefstbm"
 			o = append(o, 0xa9, 0x76, 0x6f, 0x74, 0x65, 0x66, 0x73, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedKeyregTxnFields.BitmaskVoteFirst))
 		}
-		if (zb0048Mask[2] & 0x40) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x10) == 0 { // if not empty
 			// string "votekbm"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedKeyregTxnFields.BitmaskKeys))
 		}
-		if (zb0048Mask[2] & 0x80) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x20) == 0 { // if not empty
 			// string "votekd"
 			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x64)
 			if (*z).encodedTxns.encodedKeyregTxnFields.VoteKeyDilution == nil {
@@ -11700,12 +11682,12 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedTxns.encodedKeyregTxnFields.VoteKeyDilution[zb0012])
 			}
 		}
-		if (zb0048Mask[2] & 0x100) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x40) == 0 { // if not empty
 			// string "votekey"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x65, 0x79)
 			o = msgp.AppendBytes(o, (*z).encodedTxns.encodedKeyregTxnFields.VotePK)
 		}
-		if (zb0048Mask[2] & 0x200) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x80) == 0 { // if not empty
 			// string "votelst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6c, 0x73, 0x74)
 			if (*z).encodedTxns.encodedKeyregTxnFields.VoteLast == nil {
@@ -11717,12 +11699,12 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedTxns.encodedKeyregTxnFields.VoteLast[zb0011].MarshalMsg(o)
 			}
 		}
-		if (zb0048Mask[2] & 0x400) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x100) == 0 { // if not empty
 			// string "votelstbm"
 			o = append(o, 0xa9, 0x76, 0x6f, 0x74, 0x65, 0x6c, 0x73, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedKeyregTxnFields.BitmaskVoteLast))
 		}
-		if (zb0048Mask[2] & 0x800) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x200) == 0 { // if not empty
 			// string "xaid"
 			o = append(o, 0xa4, 0x78, 0x61, 0x69, 0x64)
 			if (*z).encodedTxns.encodedAssetTransferTxnFields.XferAsset == nil {
@@ -11734,7 +11716,7 @@ func (z *encodedSignedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedTxns.encodedAssetTransferTxnFields.XferAsset[zb0020].MarshalMsg(o)
 			}
 		}
-		if (zb0048Mask[2] & 0x1000) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x400) == 0 { // if not empty
 			// string "xaidbm"
 			o = append(o, 0xa6, 0x78, 0x61, 0x69, 0x64, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskXferAsset))
@@ -12430,14 +12412,6 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0048 > 0 {
 			zb0048--
-			(*z).encodedTxns.encodedTxnHeaders.GenesisID, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
-				return
-			}
-		}
-		if zb0048 > 0 {
-			zb0048--
 			{
 				var zb0102 []byte
 				var zb0103 int
@@ -12456,14 +12430,6 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				(*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0102)
-			}
-		}
-		if zb0048 > 0 {
-			zb0048--
-			bts, err = (*z).encodedTxns.encodedTxnHeaders.GenesisHash.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
-				return
 			}
 		}
 		if zb0048 > 0 {
@@ -15560,12 +15526,6 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					(*z).encodedTxns.encodedTxnHeaders.BitmaskNote = bitmask(zb0349)
 				}
-			case "gen":
-				(*z).encodedTxns.encodedTxnHeaders.GenesisID, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisID")
-					return
-				}
 			case "genbm":
 				{
 					var zb0351 []byte
@@ -15585,12 +15545,6 @@ func (z *encodedSignedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					(*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0351)
-				}
-			case "gh":
-				bts, err = (*z).encodedTxns.encodedTxnHeaders.GenesisHash.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisHash")
-					return
 				}
 			case "ghbm":
 				{
@@ -17910,7 +17864,7 @@ func (z *encodedSignedTxns) Msgsize() (s int) {
 	for zb0009 := range (*z).encodedTxns.encodedTxnHeaders.Note {
 		s += msgp.BytesPrefixSize + len((*z).encodedTxns.encodedTxnHeaders.Note[zb0009])
 	}
-	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskNote)) + 4 + msgp.StringPrefixSize + len((*z).encodedTxns.encodedTxnHeaders.GenesisID) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID)) + 3 + (*z).encodedTxns.encodedTxnHeaders.GenesisHash.Msgsize() + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGroup)) + 3 + msgp.BytesPrefixSize + len((*z).encodedTxns.encodedTxnHeaders.Lease) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLease)) + 6 + msgp.BytesPrefixSize + len((*z).encodedTxns.encodedTxnHeaders.RekeyTo) + 8 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo)) + 8 + msgp.BytesPrefixSize + len((*z).encodedTxns.encodedKeyregTxnFields.VotePK) + 7 + msgp.BytesPrefixSize + len((*z).encodedTxns.encodedKeyregTxnFields.SelectionPK) + 8 + msgp.ArrayHeaderSize
+	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskNote)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID)) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskGroup)) + 3 + msgp.BytesPrefixSize + len((*z).encodedTxns.encodedTxnHeaders.Lease) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskLease)) + 6 + msgp.BytesPrefixSize + len((*z).encodedTxns.encodedTxnHeaders.RekeyTo) + 8 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo)) + 8 + msgp.BytesPrefixSize + len((*z).encodedTxns.encodedKeyregTxnFields.VotePK) + 7 + msgp.BytesPrefixSize + len((*z).encodedTxns.encodedKeyregTxnFields.SelectionPK) + 8 + msgp.ArrayHeaderSize
 	for zb0010 := range (*z).encodedTxns.encodedKeyregTxnFields.VoteFirst {
 		s += (*z).encodedTxns.encodedKeyregTxnFields.VoteFirst[zb0010].Msgsize()
 	}
@@ -18025,15 +17979,15 @@ func (z *encodedSignedTxns) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *encodedSignedTxns) MsgIsZero() bool {
-	return (len((*z).Sig) == 0) && (len((*z).BitmaskSig) == 0) && (len((*z).encodedMsigs.Version) == 0) && (len((*z).encodedMsigs.BitmaskVersion) == 0) && (len((*z).encodedMsigs.Threshold) == 0) && (len((*z).encodedMsigs.BitmaskThreshold) == 0) && (len((*z).encodedMsigs.Subsigs) == 0) && (len((*z).encodedMsigs.BitmaskSubsigs) == 0) && (len((*z).encodedLsigs.Logic) == 0) && (len((*z).encodedLsigs.BitmaskLogic) == 0) && (len((*z).encodedLsigs.LogicArgs) == 0) && (len((*z).encodedLsigs.BitmaskLogicArgs) == 0) && (len((*z).AuthAddr) == 0) && (len((*z).BitmaskAuthAddr) == 0) && (len((*z).encodedTxns.TxType) == 0) && (len((*z).encodedTxns.BitmaskTxType) == 0) && ((*z).encodedTxns.TxTypeOffset == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Sender) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskSender) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Fee) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskFee) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.FirstValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.LastValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Note) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskNote) == 0) && ((*z).encodedTxns.encodedTxnHeaders.GenesisID == "") && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0) && ((*z).encodedTxns.encodedTxnHeaders.GenesisHash.MsgIsZero()) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskGroup) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Lease) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskLease) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.RekeyTo) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.VotePK) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.SelectionPK) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.VoteFirst) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskVoteFirst) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.VoteLast) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskVoteLast) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.VoteKeyDilution) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskKeys) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskNonparticipation) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.Receiver) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.BitmaskReceiver) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.Amount) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.BitmaskAmount) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.CloseRemainderTo) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.BitmaskCloseRemainderTo) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.ConfigAsset) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.BitmaskConfigAsset) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Decimals) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDecimals) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDefaultFrozen) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.AssetName) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskAssetName) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.URL) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskURL) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.MetadataHash) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskMetadataHash) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Freeze) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskFreeze) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Clawback) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskClawback) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.XferAsset) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskXferAsset) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.AssetAmount) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetAmount) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.AssetSender) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetSender) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.AssetReceiver) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetReceiver) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.AssetCloseTo) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetCloseTo) == 0) && (len((*z).encodedTxns.encodedAssetFreezeTxnFields.FreezeAccount) == 0) && (len((*z).encodedTxns.encodedAssetFreezeTxnFields.BitmaskFreezeAccount) == 0) && (len((*z).encodedTxns.encodedAssetFreezeTxnFields.FreezeAsset) == 0) && (len((*z).encodedTxns.encodedAssetFreezeTxnFields.BitmaskFreezeAsset) == 0) && (len((*z).encodedTxns.encodedAssetFreezeTxnFields.BitmaskAssetFrozen) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationID) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskApplicationID) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.OnCompletion) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskOnCompletion) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskApplicationArgs) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.Accounts) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskAccounts) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskForeignApps) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskForeignAssets) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumUint) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskApprovalProgram) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskClearStateProgram) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.CertRound) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.BitmaskCertRound) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.CertType) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.BitmaskCertType) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.SigCommit) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSigCommit) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.SignedWeight) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSignedWeight) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.SigProofs) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSigProofs) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.PartProofs) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskPartProofs) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.Reveals) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskReveals) == 0)
+	return (len((*z).Sig) == 0) && (len((*z).BitmaskSig) == 0) && (len((*z).encodedMsigs.Version) == 0) && (len((*z).encodedMsigs.BitmaskVersion) == 0) && (len((*z).encodedMsigs.Threshold) == 0) && (len((*z).encodedMsigs.BitmaskThreshold) == 0) && (len((*z).encodedMsigs.Subsigs) == 0) && (len((*z).encodedMsigs.BitmaskSubsigs) == 0) && (len((*z).encodedLsigs.Logic) == 0) && (len((*z).encodedLsigs.BitmaskLogic) == 0) && (len((*z).encodedLsigs.LogicArgs) == 0) && (len((*z).encodedLsigs.BitmaskLogicArgs) == 0) && (len((*z).AuthAddr) == 0) && (len((*z).BitmaskAuthAddr) == 0) && (len((*z).encodedTxns.TxType) == 0) && (len((*z).encodedTxns.BitmaskTxType) == 0) && ((*z).encodedTxns.TxTypeOffset == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Sender) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskSender) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Fee) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskFee) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.FirstValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskFirstValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.LastValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Note) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskNote) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskGroup) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.Lease) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskLease) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.RekeyTo) == 0) && (len((*z).encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.VotePK) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.SelectionPK) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.VoteFirst) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskVoteFirst) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.VoteLast) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskVoteLast) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.VoteKeyDilution) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskKeys) == 0) && (len((*z).encodedTxns.encodedKeyregTxnFields.BitmaskNonparticipation) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.Receiver) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.BitmaskReceiver) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.Amount) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.BitmaskAmount) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.CloseRemainderTo) == 0) && (len((*z).encodedTxns.encodedPaymentTxnFields.BitmaskCloseRemainderTo) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.ConfigAsset) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.BitmaskConfigAsset) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Decimals) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDecimals) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDefaultFrozen) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.AssetName) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskAssetName) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.URL) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskURL) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.MetadataHash) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskMetadataHash) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Freeze) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskFreeze) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Clawback) == 0) && (len((*z).encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskClawback) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.XferAsset) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskXferAsset) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.AssetAmount) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetAmount) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.AssetSender) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetSender) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.AssetReceiver) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetReceiver) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.AssetCloseTo) == 0) && (len((*z).encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetCloseTo) == 0) && (len((*z).encodedTxns.encodedAssetFreezeTxnFields.FreezeAccount) == 0) && (len((*z).encodedTxns.encodedAssetFreezeTxnFields.BitmaskFreezeAccount) == 0) && (len((*z).encodedTxns.encodedAssetFreezeTxnFields.FreezeAsset) == 0) && (len((*z).encodedTxns.encodedAssetFreezeTxnFields.BitmaskFreezeAsset) == 0) && (len((*z).encodedTxns.encodedAssetFreezeTxnFields.BitmaskAssetFrozen) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationID) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskApplicationID) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.OnCompletion) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskOnCompletion) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskApplicationArgs) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.Accounts) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskAccounts) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskForeignApps) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ForeignAssets) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskForeignAssets) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumUint) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskApprovalProgram) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram) == 0) && (len((*z).encodedTxns.encodedApplicationCallTxnFields.BitmaskClearStateProgram) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.CertRound) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.BitmaskCertRound) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.CertType) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.BitmaskCertType) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.SigCommit) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSigCommit) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.SignedWeight) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSignedWeight) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.SigProofs) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSigProofs) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.PartProofs) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskPartProofs) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.Reveals) == 0) && (len((*z).encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskReveals) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *encodedTxnHeaders) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0005Len := uint32(19)
-	var zb0005Mask uint32 /* 20 bits */
+	zb0005Len := uint32(17)
+	var zb0005Mask uint32 /* 18 bits */
 	if len((*z).Fee) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x2
@@ -18050,65 +18004,57 @@ func (z *encodedTxnHeaders) MarshalMsg(b []byte) (o []byte) {
 		zb0005Len--
 		zb0005Mask |= 0x10
 	}
-	if (*z).GenesisID == "" {
+	if len((*z).BitmaskGenesisID) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x20
 	}
-	if len((*z).BitmaskGenesisID) == 0 {
+	if len((*z).BitmaskGenesisHash) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x40
 	}
-	if (*z).GenesisHash.MsgIsZero() {
+	if len((*z).BitmaskGroup) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x80
 	}
-	if len((*z).BitmaskGenesisHash) == 0 {
+	if len((*z).LastValid) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x100
 	}
-	if len((*z).BitmaskGroup) == 0 {
+	if len((*z).BitmaskLastValid) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x200
 	}
-	if len((*z).LastValid) == 0 {
+	if len((*z).Lease) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x400
 	}
-	if len((*z).BitmaskLastValid) == 0 {
+	if len((*z).BitmaskLease) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x800
 	}
-	if len((*z).Lease) == 0 {
+	if len((*z).Note) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x1000
 	}
-	if len((*z).BitmaskLease) == 0 {
+	if len((*z).BitmaskNote) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x2000
 	}
-	if len((*z).Note) == 0 {
+	if len((*z).RekeyTo) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x4000
 	}
-	if len((*z).BitmaskNote) == 0 {
+	if len((*z).BitmaskRekeyTo) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x8000
 	}
-	if len((*z).RekeyTo) == 0 {
+	if len((*z).Sender) == 0 {
 		zb0005Len--
 		zb0005Mask |= 0x10000
 	}
-	if len((*z).BitmaskRekeyTo) == 0 {
-		zb0005Len--
-		zb0005Mask |= 0x20000
-	}
-	if len((*z).Sender) == 0 {
-		zb0005Len--
-		zb0005Mask |= 0x40000
-	}
 	if len((*z).BitmaskSender) == 0 {
 		zb0005Len--
-		zb0005Mask |= 0x80000
+		zb0005Mask |= 0x20000
 	}
 	// variable map header, size zb0005Len
 	o = msgp.AppendMapHeader(o, zb0005Len)
@@ -18148,31 +18094,21 @@ func (z *encodedTxnHeaders) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskFirstValid))
 		}
 		if (zb0005Mask & 0x20) == 0 { // if not empty
-			// string "gen"
-			o = append(o, 0xa3, 0x67, 0x65, 0x6e)
-			o = msgp.AppendString(o, (*z).GenesisID)
-		}
-		if (zb0005Mask & 0x40) == 0 { // if not empty
 			// string "genbm"
 			o = append(o, 0xa5, 0x67, 0x65, 0x6e, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskGenesisID))
 		}
-		if (zb0005Mask & 0x80) == 0 { // if not empty
-			// string "gh"
-			o = append(o, 0xa2, 0x67, 0x68)
-			o = (*z).GenesisHash.MarshalMsg(o)
-		}
-		if (zb0005Mask & 0x100) == 0 { // if not empty
+		if (zb0005Mask & 0x40) == 0 { // if not empty
 			// string "ghbm"
 			o = append(o, 0xa4, 0x67, 0x68, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskGenesisHash))
 		}
-		if (zb0005Mask & 0x200) == 0 { // if not empty
+		if (zb0005Mask & 0x80) == 0 { // if not empty
 			// string "grpbm"
 			o = append(o, 0xa5, 0x67, 0x72, 0x70, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskGroup))
 		}
-		if (zb0005Mask & 0x400) == 0 { // if not empty
+		if (zb0005Mask & 0x100) == 0 { // if not empty
 			// string "lv"
 			o = append(o, 0xa2, 0x6c, 0x76)
 			if (*z).LastValid == nil {
@@ -18184,22 +18120,22 @@ func (z *encodedTxnHeaders) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).LastValid[zb0003].MarshalMsg(o)
 			}
 		}
-		if (zb0005Mask & 0x800) == 0 { // if not empty
+		if (zb0005Mask & 0x200) == 0 { // if not empty
 			// string "lvbm"
 			o = append(o, 0xa4, 0x6c, 0x76, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskLastValid))
 		}
-		if (zb0005Mask & 0x1000) == 0 { // if not empty
+		if (zb0005Mask & 0x400) == 0 { // if not empty
 			// string "lx"
 			o = append(o, 0xa2, 0x6c, 0x78)
 			o = msgp.AppendBytes(o, (*z).Lease)
 		}
-		if (zb0005Mask & 0x2000) == 0 { // if not empty
+		if (zb0005Mask & 0x800) == 0 { // if not empty
 			// string "lxbm"
 			o = append(o, 0xa4, 0x6c, 0x78, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskLease))
 		}
-		if (zb0005Mask & 0x4000) == 0 { // if not empty
+		if (zb0005Mask & 0x1000) == 0 { // if not empty
 			// string "note"
 			o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
 			if (*z).Note == nil {
@@ -18211,27 +18147,27 @@ func (z *encodedTxnHeaders) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendBytes(o, (*z).Note[zb0004])
 			}
 		}
-		if (zb0005Mask & 0x8000) == 0 { // if not empty
+		if (zb0005Mask & 0x2000) == 0 { // if not empty
 			// string "notebm"
 			o = append(o, 0xa6, 0x6e, 0x6f, 0x74, 0x65, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskNote))
 		}
-		if (zb0005Mask & 0x10000) == 0 { // if not empty
+		if (zb0005Mask & 0x4000) == 0 { // if not empty
 			// string "rekey"
 			o = append(o, 0xa5, 0x72, 0x65, 0x6b, 0x65, 0x79)
 			o = msgp.AppendBytes(o, (*z).RekeyTo)
 		}
-		if (zb0005Mask & 0x20000) == 0 { // if not empty
+		if (zb0005Mask & 0x8000) == 0 { // if not empty
 			// string "rekeybm"
 			o = append(o, 0xa7, 0x72, 0x65, 0x6b, 0x65, 0x79, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskRekeyTo))
 		}
-		if (zb0005Mask & 0x40000) == 0 { // if not empty
+		if (zb0005Mask & 0x10000) == 0 { // if not empty
 			// string "snd"
 			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
 			o = msgp.AppendBytes(o, (*z).Sender)
 		}
-		if (zb0005Mask & 0x80000) == 0 { // if not empty
+		if (zb0005Mask & 0x20000) == 0 { // if not empty
 			// string "sndbm"
 			o = append(o, 0xa5, 0x73, 0x6e, 0x64, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskSender))
@@ -18504,14 +18440,6 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0005 > 0 {
 			zb0005--
-			(*z).GenesisID, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
-				return
-			}
-		}
-		if zb0005 > 0 {
-			zb0005--
 			{
 				var zb0026 []byte
 				var zb0027 int
@@ -18530,14 +18458,6 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				(*z).BitmaskGenesisID = bitmask(zb0026)
-			}
-		}
-		if zb0005 > 0 {
-			zb0005--
-			bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
-				return
 			}
 		}
 		if zb0005 > 0 {
@@ -18911,12 +18831,6 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					(*z).BitmaskNote = bitmask(zb0055)
 				}
-			case "gen":
-				(*z).GenesisID, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisID")
-					return
-				}
 			case "genbm":
 				{
 					var zb0057 []byte
@@ -18936,12 +18850,6 @@ func (z *encodedTxnHeaders) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					(*z).BitmaskGenesisID = bitmask(zb0057)
-				}
-			case "gh":
-				bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisHash")
-					return
 				}
 			case "ghbm":
 				{
@@ -19091,21 +18999,21 @@ func (z *encodedTxnHeaders) Msgsize() (s int) {
 	for zb0004 := range (*z).Note {
 		s += msgp.BytesPrefixSize + len((*z).Note[zb0004])
 	}
-	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskNote)) + 4 + msgp.StringPrefixSize + len((*z).GenesisID) + 6 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskGenesisID)) + 3 + (*z).GenesisHash.Msgsize() + 5 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskGenesisHash)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskGroup)) + 3 + msgp.BytesPrefixSize + len((*z).Lease) + 5 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskLease)) + 6 + msgp.BytesPrefixSize + len((*z).RekeyTo) + 8 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskRekeyTo))
+	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskNote)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskGenesisID)) + 5 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskGenesisHash)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskGroup)) + 3 + msgp.BytesPrefixSize + len((*z).Lease) + 5 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskLease)) + 6 + msgp.BytesPrefixSize + len((*z).RekeyTo) + 8 + msgp.BytesPrefixSize + len([]byte((*z).BitmaskRekeyTo))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *encodedTxnHeaders) MsgIsZero() bool {
-	return (len((*z).Sender) == 0) && (len((*z).BitmaskSender) == 0) && (len((*z).Fee) == 0) && (len((*z).BitmaskFee) == 0) && (len((*z).FirstValid) == 0) && (len((*z).BitmaskFirstValid) == 0) && (len((*z).LastValid) == 0) && (len((*z).BitmaskLastValid) == 0) && (len((*z).Note) == 0) && (len((*z).BitmaskNote) == 0) && ((*z).GenesisID == "") && (len((*z).BitmaskGenesisID) == 0) && ((*z).GenesisHash.MsgIsZero()) && (len((*z).BitmaskGenesisHash) == 0) && (len((*z).BitmaskGroup) == 0) && (len((*z).Lease) == 0) && (len((*z).BitmaskLease) == 0) && (len((*z).RekeyTo) == 0) && (len((*z).BitmaskRekeyTo) == 0)
+	return (len((*z).Sender) == 0) && (len((*z).BitmaskSender) == 0) && (len((*z).Fee) == 0) && (len((*z).BitmaskFee) == 0) && (len((*z).FirstValid) == 0) && (len((*z).BitmaskFirstValid) == 0) && (len((*z).LastValid) == 0) && (len((*z).BitmaskLastValid) == 0) && (len((*z).Note) == 0) && (len((*z).BitmaskNote) == 0) && (len((*z).BitmaskGenesisID) == 0) && (len((*z).BitmaskGenesisHash) == 0) && (len((*z).BitmaskGroup) == 0) && (len((*z).Lease) == 0) && (len((*z).BitmaskLease) == 0) && (len((*z).RekeyTo) == 0) && (len((*z).BitmaskRekeyTo) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0043Len := uint32(113)
-	var zb0043Mask [2]uint64 /* 124 bits */
+	zb0043Len := uint32(111)
+	var zb0043Mask [2]uint64 /* 122 bits */
 	if len((*z).encodedAssetTransferTxnFields.AssetAmount) == 0 {
 		zb0043Len--
 		zb0043Mask[0] |= 0x800
@@ -19370,193 +19278,185 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 		zb0043Len--
 		zb0043Mask[1] |= 0x1000
 	}
-	if (*z).encodedTxnHeaders.GenesisID == "" {
+	if len((*z).encodedTxnHeaders.BitmaskGenesisID) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x2000
 	}
-	if len((*z).encodedTxnHeaders.BitmaskGenesisID) == 0 {
+	if len((*z).encodedTxnHeaders.BitmaskGenesisHash) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x4000
 	}
-	if (*z).encodedTxnHeaders.GenesisHash.MsgIsZero() {
+	if len((*z).encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x8000
 	}
-	if len((*z).encodedTxnHeaders.BitmaskGenesisHash) == 0 {
+	if len((*z).encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x10000
 	}
-	if len((*z).encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0 {
+	if len((*z).encodedApplicationCallTxnFields.GlobalNumUint) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x20000
 	}
-	if len((*z).encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0 {
+	if len((*z).encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x40000
 	}
-	if len((*z).encodedApplicationCallTxnFields.GlobalNumUint) == 0 {
+	if len((*z).encodedTxnHeaders.BitmaskGroup) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x80000
 	}
-	if len((*z).encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0 {
+	if len((*z).encodedApplicationCallTxnFields.LocalNumByteSlice) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x100000
 	}
-	if len((*z).encodedTxnHeaders.BitmaskGroup) == 0 {
+	if len((*z).encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x200000
 	}
-	if len((*z).encodedApplicationCallTxnFields.LocalNumByteSlice) == 0 {
+	if len((*z).encodedApplicationCallTxnFields.LocalNumUint) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x400000
 	}
-	if len((*z).encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0 {
+	if len((*z).encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x800000
 	}
-	if len((*z).encodedApplicationCallTxnFields.LocalNumUint) == 0 {
+	if len((*z).encodedTxnHeaders.LastValid) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x1000000
 	}
-	if len((*z).encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0 {
+	if len((*z).encodedTxnHeaders.BitmaskLastValid) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x2000000
 	}
-	if len((*z).encodedTxnHeaders.LastValid) == 0 {
+	if len((*z).encodedTxnHeaders.Lease) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x4000000
 	}
-	if len((*z).encodedTxnHeaders.BitmaskLastValid) == 0 {
+	if len((*z).encodedTxnHeaders.BitmaskLease) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x8000000
 	}
-	if len((*z).encodedTxnHeaders.Lease) == 0 {
+	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x10000000
 	}
-	if len((*z).encodedTxnHeaders.BitmaskLease) == 0 {
+	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x20000000
 	}
-	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0 {
+	if len((*z).encodedKeyregTxnFields.BitmaskNonparticipation) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x40000000
 	}
-	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0 {
+	if len((*z).encodedTxnHeaders.Note) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x80000000
 	}
-	if len((*z).encodedKeyregTxnFields.BitmaskNonparticipation) == 0 {
+	if len((*z).encodedTxnHeaders.BitmaskNote) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x100000000
 	}
-	if len((*z).encodedTxnHeaders.Note) == 0 {
+	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x200000000
 	}
-	if len((*z).encodedTxnHeaders.BitmaskNote) == 0 {
+	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x400000000
 	}
-	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0 {
+	if len((*z).encodedPaymentTxnFields.Receiver) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x800000000
 	}
-	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0 {
+	if len((*z).encodedPaymentTxnFields.BitmaskReceiver) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x1000000000
 	}
-	if len((*z).encodedPaymentTxnFields.Receiver) == 0 {
+	if len((*z).encodedTxnHeaders.RekeyTo) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x2000000000
 	}
-	if len((*z).encodedPaymentTxnFields.BitmaskReceiver) == 0 {
+	if len((*z).encodedTxnHeaders.BitmaskRekeyTo) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x4000000000
 	}
-	if len((*z).encodedTxnHeaders.RekeyTo) == 0 {
+	if len((*z).encodedKeyregTxnFields.SelectionPK) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x8000000000
 	}
-	if len((*z).encodedTxnHeaders.BitmaskRekeyTo) == 0 {
+	if len((*z).encodedTxnHeaders.Sender) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x10000000000
 	}
-	if len((*z).encodedKeyregTxnFields.SelectionPK) == 0 {
+	if len((*z).encodedTxnHeaders.BitmaskSender) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x20000000000
 	}
-	if len((*z).encodedTxnHeaders.Sender) == 0 {
+	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x40000000000
 	}
-	if len((*z).encodedTxnHeaders.BitmaskSender) == 0 {
+	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x80000000000
 	}
-	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0 {
+	if len((*z).TxType) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x100000000000
 	}
-	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0 {
+	if len((*z).BitmaskTxType) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x200000000000
 	}
-	if len((*z).TxType) == 0 {
+	if (*z).TxTypeOffset == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x400000000000
 	}
-	if len((*z).BitmaskTxType) == 0 {
+	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x800000000000
 	}
-	if (*z).TxTypeOffset == 0 {
+	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x1000000000000
 	}
-	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0 {
+	if len((*z).encodedKeyregTxnFields.VoteFirst) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x2000000000000
 	}
-	if len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0 {
+	if len((*z).encodedKeyregTxnFields.BitmaskVoteFirst) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x4000000000000
 	}
-	if len((*z).encodedKeyregTxnFields.VoteFirst) == 0 {
+	if len((*z).encodedKeyregTxnFields.BitmaskKeys) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x8000000000000
 	}
-	if len((*z).encodedKeyregTxnFields.BitmaskVoteFirst) == 0 {
+	if len((*z).encodedKeyregTxnFields.VoteKeyDilution) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x10000000000000
 	}
-	if len((*z).encodedKeyregTxnFields.BitmaskKeys) == 0 {
+	if len((*z).encodedKeyregTxnFields.VotePK) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x20000000000000
 	}
-	if len((*z).encodedKeyregTxnFields.VoteKeyDilution) == 0 {
+	if len((*z).encodedKeyregTxnFields.VoteLast) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x40000000000000
 	}
-	if len((*z).encodedKeyregTxnFields.VotePK) == 0 {
+	if len((*z).encodedKeyregTxnFields.BitmaskVoteLast) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x80000000000000
 	}
-	if len((*z).encodedKeyregTxnFields.VoteLast) == 0 {
+	if len((*z).encodedAssetTransferTxnFields.XferAsset) == 0 {
 		zb0043Len--
 		zb0043Mask[1] |= 0x100000000000000
 	}
-	if len((*z).encodedKeyregTxnFields.BitmaskVoteLast) == 0 {
-		zb0043Len--
-		zb0043Mask[1] |= 0x200000000000000
-	}
-	if len((*z).encodedAssetTransferTxnFields.XferAsset) == 0 {
-		zb0043Len--
-		zb0043Mask[1] |= 0x400000000000000
-	}
 	if len((*z).encodedAssetTransferTxnFields.BitmaskXferAsset) == 0 {
 		zb0043Len--
-		zb0043Mask[1] |= 0x800000000000000
+		zb0043Mask[1] |= 0x200000000000000
 	}
 	// variable map header, size zb0043Len
 	o = msgp.AppendMapHeader(o, zb0043Len)
@@ -20103,26 +20003,16 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskFirstValid))
 		}
 		if (zb0043Mask[1] & 0x2000) == 0 { // if not empty
-			// string "gen"
-			o = append(o, 0xa3, 0x67, 0x65, 0x6e)
-			o = msgp.AppendString(o, (*z).encodedTxnHeaders.GenesisID)
-		}
-		if (zb0043Mask[1] & 0x4000) == 0 { // if not empty
 			// string "genbm"
 			o = append(o, 0xa5, 0x67, 0x65, 0x6e, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskGenesisID))
 		}
-		if (zb0043Mask[1] & 0x8000) == 0 { // if not empty
-			// string "gh"
-			o = append(o, 0xa2, 0x67, 0x68)
-			o = (*z).encodedTxnHeaders.GenesisHash.MarshalMsg(o)
-		}
-		if (zb0043Mask[1] & 0x10000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x4000) == 0 { // if not empty
 			// string "ghbm"
 			o = append(o, 0xa4, 0x67, 0x68, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskGenesisHash))
 		}
-		if (zb0043Mask[1] & 0x20000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x8000) == 0 { // if not empty
 			// string "gnbs"
 			o = append(o, 0xa4, 0x67, 0x6e, 0x62, 0x73)
 			if (*z).encodedApplicationCallTxnFields.GlobalNumByteSlice == nil {
@@ -20134,12 +20024,12 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedApplicationCallTxnFields.GlobalNumByteSlice[zb0030])
 			}
 		}
-		if (zb0043Mask[1] & 0x40000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x10000) == 0 { // if not empty
 			// string "gnbsbm"
 			o = append(o, 0xa6, 0x67, 0x6e, 0x62, 0x73, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice))
 		}
-		if (zb0043Mask[1] & 0x80000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x20000) == 0 { // if not empty
 			// string "gnui"
 			o = append(o, 0xa4, 0x67, 0x6e, 0x75, 0x69)
 			if (*z).encodedApplicationCallTxnFields.GlobalNumUint == nil {
@@ -20151,17 +20041,17 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedApplicationCallTxnFields.GlobalNumUint[zb0029])
 			}
 		}
-		if (zb0043Mask[1] & 0x100000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x40000) == 0 { // if not empty
 			// string "gnuibm"
 			o = append(o, 0xa6, 0x67, 0x6e, 0x75, 0x69, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedApplicationCallTxnFields.BitmaskGlobalNumUint))
 		}
-		if (zb0043Mask[1] & 0x200000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x80000) == 0 { // if not empty
 			// string "grpbm"
 			o = append(o, 0xa5, 0x67, 0x72, 0x70, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskGroup))
 		}
-		if (zb0043Mask[1] & 0x400000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x100000) == 0 { // if not empty
 			// string "lnbs"
 			o = append(o, 0xa4, 0x6c, 0x6e, 0x62, 0x73)
 			if (*z).encodedApplicationCallTxnFields.LocalNumByteSlice == nil {
@@ -20173,12 +20063,12 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedApplicationCallTxnFields.LocalNumByteSlice[zb0028])
 			}
 		}
-		if (zb0043Mask[1] & 0x800000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x200000) == 0 { // if not empty
 			// string "lnbsbm"
 			o = append(o, 0xa6, 0x6c, 0x6e, 0x62, 0x73, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice))
 		}
-		if (zb0043Mask[1] & 0x1000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x400000) == 0 { // if not empty
 			// string "lnui"
 			o = append(o, 0xa4, 0x6c, 0x6e, 0x75, 0x69)
 			if (*z).encodedApplicationCallTxnFields.LocalNumUint == nil {
@@ -20190,12 +20080,12 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedApplicationCallTxnFields.LocalNumUint[zb0027])
 			}
 		}
-		if (zb0043Mask[1] & 0x2000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x800000) == 0 { // if not empty
 			// string "lnuibm"
 			o = append(o, 0xa6, 0x6c, 0x6e, 0x75, 0x69, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedApplicationCallTxnFields.BitmaskLocalNumUint))
 		}
-		if (zb0043Mask[1] & 0x4000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x1000000) == 0 { // if not empty
 			// string "lv"
 			o = append(o, 0xa2, 0x6c, 0x76)
 			if (*z).encodedTxnHeaders.LastValid == nil {
@@ -20207,37 +20097,37 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedTxnHeaders.LastValid[zb0003].MarshalMsg(o)
 			}
 		}
-		if (zb0043Mask[1] & 0x8000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x2000000) == 0 { // if not empty
 			// string "lvbm"
 			o = append(o, 0xa4, 0x6c, 0x76, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskLastValid))
 		}
-		if (zb0043Mask[1] & 0x10000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x4000000) == 0 { // if not empty
 			// string "lx"
 			o = append(o, 0xa2, 0x6c, 0x78)
 			o = msgp.AppendBytes(o, (*z).encodedTxnHeaders.Lease)
 		}
-		if (zb0043Mask[1] & 0x20000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x8000000) == 0 { // if not empty
 			// string "lxbm"
 			o = append(o, 0xa4, 0x6c, 0x78, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskLease))
 		}
-		if (zb0043Mask[1] & 0x40000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x10000000) == 0 { // if not empty
 			// string "m"
 			o = append(o, 0xa1, 0x6d)
 			o = msgp.AppendBytes(o, (*z).encodedAssetConfigTxnFields.encodedAssetParams.Manager)
 		}
-		if (zb0043Mask[1] & 0x80000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x20000000) == 0 { // if not empty
 			// string "mbm"
 			o = append(o, 0xa3, 0x6d, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager))
 		}
-		if (zb0043Mask[1] & 0x100000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x40000000) == 0 { // if not empty
 			// string "nonpartbm"
 			o = append(o, 0xa9, 0x6e, 0x6f, 0x6e, 0x70, 0x61, 0x72, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedKeyregTxnFields.BitmaskNonparticipation))
 		}
-		if (zb0043Mask[1] & 0x200000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x80000000) == 0 { // if not empty
 			// string "note"
 			o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
 			if (*z).encodedTxnHeaders.Note == nil {
@@ -20249,57 +20139,57 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendBytes(o, (*z).encodedTxnHeaders.Note[zb0004])
 			}
 		}
-		if (zb0043Mask[1] & 0x400000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x100000000) == 0 { // if not empty
 			// string "notebm"
 			o = append(o, 0xa6, 0x6e, 0x6f, 0x74, 0x65, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskNote))
 		}
-		if (zb0043Mask[1] & 0x800000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x200000000) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = msgp.AppendBytes(o, (*z).encodedAssetConfigTxnFields.encodedAssetParams.Reserve)
 		}
-		if (zb0043Mask[1] & 0x1000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x400000000) == 0 { // if not empty
 			// string "rbm"
 			o = append(o, 0xa3, 0x72, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve))
 		}
-		if (zb0043Mask[1] & 0x2000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x800000000) == 0 { // if not empty
 			// string "rcv"
 			o = append(o, 0xa3, 0x72, 0x63, 0x76)
 			o = msgp.AppendBytes(o, (*z).encodedPaymentTxnFields.Receiver)
 		}
-		if (zb0043Mask[1] & 0x4000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x1000000000) == 0 { // if not empty
 			// string "rcvbm"
 			o = append(o, 0xa5, 0x72, 0x63, 0x76, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedPaymentTxnFields.BitmaskReceiver))
 		}
-		if (zb0043Mask[1] & 0x8000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x2000000000) == 0 { // if not empty
 			// string "rekey"
 			o = append(o, 0xa5, 0x72, 0x65, 0x6b, 0x65, 0x79)
 			o = msgp.AppendBytes(o, (*z).encodedTxnHeaders.RekeyTo)
 		}
-		if (zb0043Mask[1] & 0x10000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x4000000000) == 0 { // if not empty
 			// string "rekeybm"
 			o = append(o, 0xa7, 0x72, 0x65, 0x6b, 0x65, 0x79, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskRekeyTo))
 		}
-		if (zb0043Mask[1] & 0x20000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x8000000000) == 0 { // if not empty
 			// string "selkey"
 			o = append(o, 0xa6, 0x73, 0x65, 0x6c, 0x6b, 0x65, 0x79)
 			o = msgp.AppendBytes(o, (*z).encodedKeyregTxnFields.SelectionPK)
 		}
-		if (zb0043Mask[1] & 0x40000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x10000000000) == 0 { // if not empty
 			// string "snd"
 			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
 			o = msgp.AppendBytes(o, (*z).encodedTxnHeaders.Sender)
 		}
-		if (zb0043Mask[1] & 0x80000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x20000000000) == 0 { // if not empty
 			// string "sndbm"
 			o = append(o, 0xa5, 0x73, 0x6e, 0x64, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedTxnHeaders.BitmaskSender))
 		}
-		if (zb0043Mask[1] & 0x100000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x40000000000) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
 			if (*z).encodedAssetConfigTxnFields.encodedAssetParams.Total == nil {
@@ -20311,27 +20201,27 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedAssetConfigTxnFields.encodedAssetParams.Total[zb0010])
 			}
 		}
-		if (zb0043Mask[1] & 0x200000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x80000000000) == 0 { // if not empty
 			// string "tbm"
 			o = append(o, 0xa3, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal))
 		}
-		if (zb0043Mask[1] & 0x400000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x100000000000) == 0 { // if not empty
 			// string "type"
 			o = append(o, 0xa4, 0x74, 0x79, 0x70, 0x65)
 			o = msgp.AppendBytes(o, (*z).TxType)
 		}
-		if (zb0043Mask[1] & 0x800000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x200000000000) == 0 { // if not empty
 			// string "typebm"
 			o = append(o, 0xa6, 0x74, 0x79, 0x70, 0x65, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).BitmaskTxType))
 		}
-		if (zb0043Mask[1] & 0x1000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x400000000000) == 0 { // if not empty
 			// string "typeo"
 			o = append(o, 0xa5, 0x74, 0x79, 0x70, 0x65, 0x6f)
 			o = msgp.AppendByte(o, (*z).TxTypeOffset)
 		}
-		if (zb0043Mask[1] & 0x2000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x800000000000) == 0 { // if not empty
 			// string "un"
 			o = append(o, 0xa2, 0x75, 0x6e)
 			if (*z).encodedAssetConfigTxnFields.encodedAssetParams.UnitName == nil {
@@ -20343,12 +20233,12 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendString(o, (*z).encodedAssetConfigTxnFields.encodedAssetParams.UnitName[zb0012])
 			}
 		}
-		if (zb0043Mask[1] & 0x4000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x1000000000000) == 0 { // if not empty
 			// string "unbm"
 			o = append(o, 0xa4, 0x75, 0x6e, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName))
 		}
-		if (zb0043Mask[1] & 0x8000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x2000000000000) == 0 { // if not empty
 			// string "votefst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x66, 0x73, 0x74)
 			if (*z).encodedKeyregTxnFields.VoteFirst == nil {
@@ -20360,17 +20250,17 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedKeyregTxnFields.VoteFirst[zb0005].MarshalMsg(o)
 			}
 		}
-		if (zb0043Mask[1] & 0x10000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x4000000000000) == 0 { // if not empty
 			// string "votefstbm"
 			o = append(o, 0xa9, 0x76, 0x6f, 0x74, 0x65, 0x66, 0x73, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedKeyregTxnFields.BitmaskVoteFirst))
 		}
-		if (zb0043Mask[1] & 0x20000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x8000000000000) == 0 { // if not empty
 			// string "votekbm"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedKeyregTxnFields.BitmaskKeys))
 		}
-		if (zb0043Mask[1] & 0x40000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x10000000000000) == 0 { // if not empty
 			// string "votekd"
 			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x64)
 			if (*z).encodedKeyregTxnFields.VoteKeyDilution == nil {
@@ -20382,12 +20272,12 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedKeyregTxnFields.VoteKeyDilution[zb0007])
 			}
 		}
-		if (zb0043Mask[1] & 0x80000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x20000000000000) == 0 { // if not empty
 			// string "votekey"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x65, 0x79)
 			o = msgp.AppendBytes(o, (*z).encodedKeyregTxnFields.VotePK)
 		}
-		if (zb0043Mask[1] & 0x100000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x40000000000000) == 0 { // if not empty
 			// string "votelst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6c, 0x73, 0x74)
 			if (*z).encodedKeyregTxnFields.VoteLast == nil {
@@ -20399,12 +20289,12 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedKeyregTxnFields.VoteLast[zb0006].MarshalMsg(o)
 			}
 		}
-		if (zb0043Mask[1] & 0x200000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x80000000000000) == 0 { // if not empty
 			// string "votelstbm"
 			o = append(o, 0xa9, 0x76, 0x6f, 0x74, 0x65, 0x6c, 0x73, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedKeyregTxnFields.BitmaskVoteLast))
 		}
-		if (zb0043Mask[1] & 0x400000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x100000000000000) == 0 { // if not empty
 			// string "xaid"
 			o = append(o, 0xa4, 0x78, 0x61, 0x69, 0x64)
 			if (*z).encodedAssetTransferTxnFields.XferAsset == nil {
@@ -20416,7 +20306,7 @@ func (z *encodedTxns) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedAssetTransferTxnFields.XferAsset[zb0015].MarshalMsg(o)
 			}
 		}
-		if (zb0043Mask[1] & 0x800000000000000) == 0 { // if not empty
+		if (zb0043Mask[1] & 0x200000000000000) == 0 { // if not empty
 			// string "xaidbm"
 			o = append(o, 0xa6, 0x78, 0x61, 0x69, 0x64, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedAssetTransferTxnFields.BitmaskXferAsset))
@@ -20737,14 +20627,6 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0043 > 0 {
 			zb0043--
-			(*z).encodedTxnHeaders.GenesisID, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
-				return
-			}
-		}
-		if zb0043 > 0 {
-			zb0043--
 			{
 				var zb0067 []byte
 				var zb0068 int
@@ -20763,14 +20645,6 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				(*z).encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0067)
-			}
-		}
-		if zb0043 > 0 {
-			zb0043--
-			bts, err = (*z).encodedTxnHeaders.GenesisHash.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
-				return
 			}
 		}
 		if zb0043 > 0 {
@@ -23520,12 +23394,6 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					(*z).encodedTxnHeaders.BitmaskNote = bitmask(zb0284)
 				}
-			case "gen":
-				(*z).encodedTxnHeaders.GenesisID, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisID")
-					return
-				}
 			case "genbm":
 				{
 					var zb0286 []byte
@@ -23545,12 +23413,6 @@ func (z *encodedTxns) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					(*z).encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0286)
-				}
-			case "gh":
-				bts, err = (*z).encodedTxnHeaders.GenesisHash.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisHash")
-					return
 				}
 			case "ghbm":
 				{
@@ -25852,7 +25714,7 @@ func (z *encodedTxns) Msgsize() (s int) {
 	for zb0004 := range (*z).encodedTxnHeaders.Note {
 		s += msgp.BytesPrefixSize + len((*z).encodedTxnHeaders.Note[zb0004])
 	}
-	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskNote)) + 4 + msgp.StringPrefixSize + len((*z).encodedTxnHeaders.GenesisID) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskGenesisID)) + 3 + (*z).encodedTxnHeaders.GenesisHash.Msgsize() + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskGenesisHash)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskGroup)) + 3 + msgp.BytesPrefixSize + len((*z).encodedTxnHeaders.Lease) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskLease)) + 6 + msgp.BytesPrefixSize + len((*z).encodedTxnHeaders.RekeyTo) + 8 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskRekeyTo)) + 8 + msgp.BytesPrefixSize + len((*z).encodedKeyregTxnFields.VotePK) + 7 + msgp.BytesPrefixSize + len((*z).encodedKeyregTxnFields.SelectionPK) + 8 + msgp.ArrayHeaderSize
+	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskNote)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskGenesisID)) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskGenesisHash)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskGroup)) + 3 + msgp.BytesPrefixSize + len((*z).encodedTxnHeaders.Lease) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskLease)) + 6 + msgp.BytesPrefixSize + len((*z).encodedTxnHeaders.RekeyTo) + 8 + msgp.BytesPrefixSize + len([]byte((*z).encodedTxnHeaders.BitmaskRekeyTo)) + 8 + msgp.BytesPrefixSize + len((*z).encodedKeyregTxnFields.VotePK) + 7 + msgp.BytesPrefixSize + len((*z).encodedKeyregTxnFields.SelectionPK) + 8 + msgp.ArrayHeaderSize
 	for zb0005 := range (*z).encodedKeyregTxnFields.VoteFirst {
 		s += (*z).encodedKeyregTxnFields.VoteFirst[zb0005].Msgsize()
 	}
@@ -25967,7 +25829,7 @@ func (z *encodedTxns) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *encodedTxns) MsgIsZero() bool {
-	return (len((*z).TxType) == 0) && (len((*z).BitmaskTxType) == 0) && ((*z).TxTypeOffset == 0) && (len((*z).encodedTxnHeaders.Sender) == 0) && (len((*z).encodedTxnHeaders.BitmaskSender) == 0) && (len((*z).encodedTxnHeaders.Fee) == 0) && (len((*z).encodedTxnHeaders.BitmaskFee) == 0) && (len((*z).encodedTxnHeaders.FirstValid) == 0) && (len((*z).encodedTxnHeaders.BitmaskFirstValid) == 0) && (len((*z).encodedTxnHeaders.LastValid) == 0) && (len((*z).encodedTxnHeaders.BitmaskLastValid) == 0) && (len((*z).encodedTxnHeaders.Note) == 0) && (len((*z).encodedTxnHeaders.BitmaskNote) == 0) && ((*z).encodedTxnHeaders.GenesisID == "") && (len((*z).encodedTxnHeaders.BitmaskGenesisID) == 0) && ((*z).encodedTxnHeaders.GenesisHash.MsgIsZero()) && (len((*z).encodedTxnHeaders.BitmaskGenesisHash) == 0) && (len((*z).encodedTxnHeaders.BitmaskGroup) == 0) && (len((*z).encodedTxnHeaders.Lease) == 0) && (len((*z).encodedTxnHeaders.BitmaskLease) == 0) && (len((*z).encodedTxnHeaders.RekeyTo) == 0) && (len((*z).encodedTxnHeaders.BitmaskRekeyTo) == 0) && (len((*z).encodedKeyregTxnFields.VotePK) == 0) && (len((*z).encodedKeyregTxnFields.SelectionPK) == 0) && (len((*z).encodedKeyregTxnFields.VoteFirst) == 0) && (len((*z).encodedKeyregTxnFields.BitmaskVoteFirst) == 0) && (len((*z).encodedKeyregTxnFields.VoteLast) == 0) && (len((*z).encodedKeyregTxnFields.BitmaskVoteLast) == 0) && (len((*z).encodedKeyregTxnFields.VoteKeyDilution) == 0) && (len((*z).encodedKeyregTxnFields.BitmaskKeys) == 0) && (len((*z).encodedKeyregTxnFields.BitmaskNonparticipation) == 0) && (len((*z).encodedPaymentTxnFields.Receiver) == 0) && (len((*z).encodedPaymentTxnFields.BitmaskReceiver) == 0) && (len((*z).encodedPaymentTxnFields.Amount) == 0) && (len((*z).encodedPaymentTxnFields.BitmaskAmount) == 0) && (len((*z).encodedPaymentTxnFields.CloseRemainderTo) == 0) && (len((*z).encodedPaymentTxnFields.BitmaskCloseRemainderTo) == 0) && (len((*z).encodedAssetConfigTxnFields.ConfigAsset) == 0) && (len((*z).encodedAssetConfigTxnFields.BitmaskConfigAsset) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Decimals) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDecimals) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDefaultFrozen) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.AssetName) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskAssetName) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.URL) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskURL) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.MetadataHash) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskMetadataHash) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Freeze) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskFreeze) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Clawback) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskClawback) == 0) && (len((*z).encodedAssetTransferTxnFields.XferAsset) == 0) && (len((*z).encodedAssetTransferTxnFields.BitmaskXferAsset) == 0) && (len((*z).encodedAssetTransferTxnFields.AssetAmount) == 0) && (len((*z).encodedAssetTransferTxnFields.BitmaskAssetAmount) == 0) && (len((*z).encodedAssetTransferTxnFields.AssetSender) == 0) && (len((*z).encodedAssetTransferTxnFields.BitmaskAssetSender) == 0) && (len((*z).encodedAssetTransferTxnFields.AssetReceiver) == 0) && (len((*z).encodedAssetTransferTxnFields.BitmaskAssetReceiver) == 0) && (len((*z).encodedAssetTransferTxnFields.AssetCloseTo) == 0) && (len((*z).encodedAssetTransferTxnFields.BitmaskAssetCloseTo) == 0) && (len((*z).encodedAssetFreezeTxnFields.FreezeAccount) == 0) && (len((*z).encodedAssetFreezeTxnFields.BitmaskFreezeAccount) == 0) && (len((*z).encodedAssetFreezeTxnFields.FreezeAsset) == 0) && (len((*z).encodedAssetFreezeTxnFields.BitmaskFreezeAsset) == 0) && (len((*z).encodedAssetFreezeTxnFields.BitmaskAssetFrozen) == 0) && (len((*z).encodedApplicationCallTxnFields.ApplicationID) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskApplicationID) == 0) && (len((*z).encodedApplicationCallTxnFields.OnCompletion) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskOnCompletion) == 0) && (len((*z).encodedApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskApplicationArgs) == 0) && (len((*z).encodedApplicationCallTxnFields.Accounts) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskAccounts) == 0) && (len((*z).encodedApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskForeignApps) == 0) && (len((*z).encodedApplicationCallTxnFields.ForeignAssets) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskForeignAssets) == 0) && (len((*z).encodedApplicationCallTxnFields.LocalNumUint) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0) && (len((*z).encodedApplicationCallTxnFields.LocalNumByteSlice) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0) && (len((*z).encodedApplicationCallTxnFields.GlobalNumUint) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0) && (len((*z).encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0) && (len((*z).encodedApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskApprovalProgram) == 0) && (len((*z).encodedApplicationCallTxnFields.ClearStateProgram) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskClearStateProgram) == 0) && (len((*z).encodedCompactCertTxnFields.CertRound) == 0) && (len((*z).encodedCompactCertTxnFields.BitmaskCertRound) == 0) && (len((*z).encodedCompactCertTxnFields.CertType) == 0) && (len((*z).encodedCompactCertTxnFields.BitmaskCertType) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.SigCommit) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.BitmaskSigCommit) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.SignedWeight) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.BitmaskSignedWeight) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.SigProofs) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.BitmaskSigProofs) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.PartProofs) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.BitmaskPartProofs) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.Reveals) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.BitmaskReveals) == 0)
+	return (len((*z).TxType) == 0) && (len((*z).BitmaskTxType) == 0) && ((*z).TxTypeOffset == 0) && (len((*z).encodedTxnHeaders.Sender) == 0) && (len((*z).encodedTxnHeaders.BitmaskSender) == 0) && (len((*z).encodedTxnHeaders.Fee) == 0) && (len((*z).encodedTxnHeaders.BitmaskFee) == 0) && (len((*z).encodedTxnHeaders.FirstValid) == 0) && (len((*z).encodedTxnHeaders.BitmaskFirstValid) == 0) && (len((*z).encodedTxnHeaders.LastValid) == 0) && (len((*z).encodedTxnHeaders.BitmaskLastValid) == 0) && (len((*z).encodedTxnHeaders.Note) == 0) && (len((*z).encodedTxnHeaders.BitmaskNote) == 0) && (len((*z).encodedTxnHeaders.BitmaskGenesisID) == 0) && (len((*z).encodedTxnHeaders.BitmaskGenesisHash) == 0) && (len((*z).encodedTxnHeaders.BitmaskGroup) == 0) && (len((*z).encodedTxnHeaders.Lease) == 0) && (len((*z).encodedTxnHeaders.BitmaskLease) == 0) && (len((*z).encodedTxnHeaders.RekeyTo) == 0) && (len((*z).encodedTxnHeaders.BitmaskRekeyTo) == 0) && (len((*z).encodedKeyregTxnFields.VotePK) == 0) && (len((*z).encodedKeyregTxnFields.SelectionPK) == 0) && (len((*z).encodedKeyregTxnFields.VoteFirst) == 0) && (len((*z).encodedKeyregTxnFields.BitmaskVoteFirst) == 0) && (len((*z).encodedKeyregTxnFields.VoteLast) == 0) && (len((*z).encodedKeyregTxnFields.BitmaskVoteLast) == 0) && (len((*z).encodedKeyregTxnFields.VoteKeyDilution) == 0) && (len((*z).encodedKeyregTxnFields.BitmaskKeys) == 0) && (len((*z).encodedKeyregTxnFields.BitmaskNonparticipation) == 0) && (len((*z).encodedPaymentTxnFields.Receiver) == 0) && (len((*z).encodedPaymentTxnFields.BitmaskReceiver) == 0) && (len((*z).encodedPaymentTxnFields.Amount) == 0) && (len((*z).encodedPaymentTxnFields.BitmaskAmount) == 0) && (len((*z).encodedPaymentTxnFields.CloseRemainderTo) == 0) && (len((*z).encodedPaymentTxnFields.BitmaskCloseRemainderTo) == 0) && (len((*z).encodedAssetConfigTxnFields.ConfigAsset) == 0) && (len((*z).encodedAssetConfigTxnFields.BitmaskConfigAsset) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Decimals) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDecimals) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDefaultFrozen) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.AssetName) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskAssetName) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.URL) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskURL) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.MetadataHash) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskMetadataHash) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Freeze) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskFreeze) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.Clawback) == 0) && (len((*z).encodedAssetConfigTxnFields.encodedAssetParams.BitmaskClawback) == 0) && (len((*z).encodedAssetTransferTxnFields.XferAsset) == 0) && (len((*z).encodedAssetTransferTxnFields.BitmaskXferAsset) == 0) && (len((*z).encodedAssetTransferTxnFields.AssetAmount) == 0) && (len((*z).encodedAssetTransferTxnFields.BitmaskAssetAmount) == 0) && (len((*z).encodedAssetTransferTxnFields.AssetSender) == 0) && (len((*z).encodedAssetTransferTxnFields.BitmaskAssetSender) == 0) && (len((*z).encodedAssetTransferTxnFields.AssetReceiver) == 0) && (len((*z).encodedAssetTransferTxnFields.BitmaskAssetReceiver) == 0) && (len((*z).encodedAssetTransferTxnFields.AssetCloseTo) == 0) && (len((*z).encodedAssetTransferTxnFields.BitmaskAssetCloseTo) == 0) && (len((*z).encodedAssetFreezeTxnFields.FreezeAccount) == 0) && (len((*z).encodedAssetFreezeTxnFields.BitmaskFreezeAccount) == 0) && (len((*z).encodedAssetFreezeTxnFields.FreezeAsset) == 0) && (len((*z).encodedAssetFreezeTxnFields.BitmaskFreezeAsset) == 0) && (len((*z).encodedAssetFreezeTxnFields.BitmaskAssetFrozen) == 0) && (len((*z).encodedApplicationCallTxnFields.ApplicationID) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskApplicationID) == 0) && (len((*z).encodedApplicationCallTxnFields.OnCompletion) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskOnCompletion) == 0) && (len((*z).encodedApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskApplicationArgs) == 0) && (len((*z).encodedApplicationCallTxnFields.Accounts) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskAccounts) == 0) && (len((*z).encodedApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskForeignApps) == 0) && (len((*z).encodedApplicationCallTxnFields.ForeignAssets) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskForeignAssets) == 0) && (len((*z).encodedApplicationCallTxnFields.LocalNumUint) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0) && (len((*z).encodedApplicationCallTxnFields.LocalNumByteSlice) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0) && (len((*z).encodedApplicationCallTxnFields.GlobalNumUint) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0) && (len((*z).encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0) && (len((*z).encodedApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskApprovalProgram) == 0) && (len((*z).encodedApplicationCallTxnFields.ClearStateProgram) == 0) && (len((*z).encodedApplicationCallTxnFields.BitmaskClearStateProgram) == 0) && (len((*z).encodedCompactCertTxnFields.CertRound) == 0) && (len((*z).encodedCompactCertTxnFields.BitmaskCertRound) == 0) && (len((*z).encodedCompactCertTxnFields.CertType) == 0) && (len((*z).encodedCompactCertTxnFields.BitmaskCertType) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.SigCommit) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.BitmaskSigCommit) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.SignedWeight) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.BitmaskSignedWeight) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.SigProofs) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.BitmaskSigProofs) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.PartProofs) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.BitmaskPartProofs) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.Reveals) == 0) && (len((*z).encodedCompactCertTxnFields.encodedCert.BitmaskReveals) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -27125,8 +26987,8 @@ func (z *transactionBlockMessage) MsgIsZero() bool {
 func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0048Len := uint32(130)
-	var zb0048Mask [3]uint64 /* 145 bits */
+	zb0048Len := uint32(128)
+	var zb0048Mask [3]uint64 /* 143 bits */
 	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.AssetAmount) == 0 {
 		zb0048Len--
 		zb0048Mask[0] |= 0x8000
@@ -27391,261 +27253,253 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 		zb0048Len--
 		zb0048Mask[1] |= 0x10000
 	}
-	if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID == "" {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x20000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x40000
 	}
-	if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash.MsgIsZero() {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x80000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x100000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x200000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x400000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGroup) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x800000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x1000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGroup) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x2000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumUint) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x4000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x8000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumUint) == 0 {
+	if len((*z).encodedSignedTxns.encodedLsigs.LogicArgs) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x10000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0 {
+	if len((*z).encodedSignedTxns.encodedLsigs.BitmaskLogicArgs) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x20000000
 	}
-	if len((*z).encodedSignedTxns.encodedLsigs.LogicArgs) == 0 {
+	if len((*z).encodedSignedTxns.encodedLsigs.Logic) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x40000000
 	}
-	if len((*z).encodedSignedTxns.encodedLsigs.BitmaskLogicArgs) == 0 {
+	if len((*z).encodedSignedTxns.encodedLsigs.BitmaskLogic) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x80000000
 	}
-	if len((*z).encodedSignedTxns.encodedLsigs.Logic) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x100000000
 	}
-	if len((*z).encodedSignedTxns.encodedLsigs.BitmaskLogic) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x200000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x400000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x800000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x1000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x2000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0 {
+	if len((*z).encodedSignedTxns.encodedMsigs.Threshold) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x4000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0 {
+	if len((*z).encodedSignedTxns.encodedMsigs.BitmaskThreshold) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x8000000000
 	}
-	if len((*z).encodedSignedTxns.encodedMsigs.Threshold) == 0 {
+	if len((*z).encodedSignedTxns.encodedMsigs.Version) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x10000000000
 	}
-	if len((*z).encodedSignedTxns.encodedMsigs.BitmaskThreshold) == 0 {
+	if len((*z).encodedSignedTxns.encodedMsigs.BitmaskVersion) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x20000000000
 	}
-	if len((*z).encodedSignedTxns.encodedMsigs.Version) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskNonparticipation) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x40000000000
 	}
-	if len((*z).encodedSignedTxns.encodedMsigs.BitmaskVersion) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x80000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskNonparticipation) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x100000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x200000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x400000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.Receiver) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x800000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.BitmaskReceiver) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x1000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.Receiver) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x2000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.BitmaskReceiver) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x4000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.SelectionPK) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x8000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0 {
+	if len((*z).encodedSignedTxns.AuthAddr) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x10000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.SelectionPK) == 0 {
+	if len((*z).encodedSignedTxns.BitmaskAuthAddr) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x20000000000000
 	}
-	if len((*z).encodedSignedTxns.AuthAddr) == 0 {
+	if len((*z).encodedSignedTxns.Sig) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x40000000000000
 	}
-	if len((*z).encodedSignedTxns.BitmaskAuthAddr) == 0 {
+	if len((*z).encodedSignedTxns.BitmaskSig) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x80000000000000
 	}
-	if len((*z).encodedSignedTxns.Sig) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x100000000000000
 	}
-	if len((*z).encodedSignedTxns.BitmaskSig) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x200000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender) == 0 {
+	if len((*z).encodedSignedTxns.encodedMsigs.Subsigs) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x400000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender) == 0 {
+	if len((*z).encodedSignedTxns.encodedMsigs.BitmaskSubsigs) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x800000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedMsigs.Subsigs) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x1000000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedMsigs.BitmaskSubsigs) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x2000000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0 {
+	if (*z).TransactionGroupCount == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x4000000000000000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0 {
+	if len((*z).TransactionGroupSizes) == 0 {
 		zb0048Len--
 		zb0048Mask[1] |= 0x8000000000000000
 	}
-	if (*z).TransactionGroupCount == 0 {
+	if (*z).TotalTransactionsCount == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x1
 	}
-	if len((*z).TransactionGroupSizes) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.TxType) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x2
 	}
-	if (*z).TotalTransactionsCount == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.BitmaskTxType) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x4
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.TxType) == 0 {
+	if (*z).encodedSignedTxns.encodedTxns.TxTypeOffset == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x8
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.BitmaskTxType) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x10
 	}
-	if (*z).encodedSignedTxns.encodedTxns.TxTypeOffset == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x20
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteFirst) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x40
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskVoteFirst) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x80
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteFirst) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskKeys) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x100
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskVoteFirst) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteKeyDilution) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x200
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskKeys) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VotePK) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x400
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteKeyDilution) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteLast) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x800
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VotePK) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskVoteLast) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x1000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteLast) == 0 {
+	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.XferAsset) == 0 {
 		zb0048Len--
 		zb0048Mask[2] |= 0x2000
 	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskVoteLast) == 0 {
-		zb0048Len--
-		zb0048Mask[2] |= 0x4000
-	}
-	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.XferAsset) == 0 {
-		zb0048Len--
-		zb0048Mask[2] |= 0x8000
-	}
 	if len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskXferAsset) == 0 {
 		zb0048Len--
-		zb0048Mask[2] |= 0x10000
+		zb0048Mask[2] |= 0x4000
 	}
 	// variable map header, size zb0048Len
 	o = msgp.AppendMapHeader(o, zb0048Len)
@@ -28192,26 +28046,16 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid))
 		}
 		if (zb0048Mask[1] & 0x20000) == 0 { // if not empty
-			// string "gen"
-			o = append(o, 0xa3, 0x67, 0x65, 0x6e)
-			o = msgp.AppendString(o, (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID)
-		}
-		if (zb0048Mask[1] & 0x40000) == 0 { // if not empty
 			// string "genbm"
 			o = append(o, 0xa5, 0x67, 0x65, 0x6e, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID))
 		}
-		if (zb0048Mask[1] & 0x80000) == 0 { // if not empty
-			// string "gh"
-			o = append(o, 0xa2, 0x67, 0x68)
-			o = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash.MarshalMsg(o)
-		}
-		if (zb0048Mask[1] & 0x100000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x40000) == 0 { // if not empty
 			// string "ghbm"
 			o = append(o, 0xa4, 0x67, 0x68, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash))
 		}
-		if (zb0048Mask[1] & 0x200000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x80000) == 0 { // if not empty
 			// string "gnbs"
 			o = append(o, 0xa4, 0x67, 0x6e, 0x62, 0x73)
 			if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice == nil {
@@ -28223,12 +28067,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice[zb0035])
 			}
 		}
-		if (zb0048Mask[1] & 0x400000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x100000) == 0 { // if not empty
 			// string "gnbsbm"
 			o = append(o, 0xa6, 0x67, 0x6e, 0x62, 0x73, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice))
 		}
-		if (zb0048Mask[1] & 0x800000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x200000) == 0 { // if not empty
 			// string "gnui"
 			o = append(o, 0xa4, 0x67, 0x6e, 0x75, 0x69)
 			if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint == nil {
@@ -28240,17 +28084,17 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint[zb0034])
 			}
 		}
-		if (zb0048Mask[1] & 0x1000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x400000) == 0 { // if not empty
 			// string "gnuibm"
 			o = append(o, 0xa6, 0x67, 0x6e, 0x75, 0x69, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumUint))
 		}
-		if (zb0048Mask[1] & 0x2000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x800000) == 0 { // if not empty
 			// string "grpbm"
 			o = append(o, 0xa5, 0x67, 0x72, 0x70, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGroup))
 		}
-		if (zb0048Mask[1] & 0x4000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x1000000) == 0 { // if not empty
 			// string "lnbs"
 			o = append(o, 0xa4, 0x6c, 0x6e, 0x62, 0x73)
 			if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice == nil {
@@ -28262,12 +28106,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice[zb0033])
 			}
 		}
-		if (zb0048Mask[1] & 0x8000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x2000000) == 0 { // if not empty
 			// string "lnbsbm"
 			o = append(o, 0xa6, 0x6c, 0x6e, 0x62, 0x73, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice))
 		}
-		if (zb0048Mask[1] & 0x10000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x4000000) == 0 { // if not empty
 			// string "lnui"
 			o = append(o, 0xa4, 0x6c, 0x6e, 0x75, 0x69)
 			if (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumUint == nil {
@@ -28279,12 +28123,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumUint[zb0032])
 			}
 		}
-		if (zb0048Mask[1] & 0x20000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x8000000) == 0 { // if not empty
 			// string "lnuibm"
 			o = append(o, 0xa6, 0x6c, 0x6e, 0x75, 0x69, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumUint))
 		}
-		if (zb0048Mask[1] & 0x40000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x10000000) == 0 { // if not empty
 			// string "lsigarg"
 			o = append(o, 0xa7, 0x6c, 0x73, 0x69, 0x67, 0x61, 0x72, 0x67)
 			if (*z).encodedSignedTxns.encodedLsigs.LogicArgs == nil {
@@ -28303,12 +28147,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				}
 			}
 		}
-		if (zb0048Mask[1] & 0x80000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x20000000) == 0 { // if not empty
 			// string "lsigargbm"
 			o = append(o, 0xa9, 0x6c, 0x73, 0x69, 0x67, 0x61, 0x72, 0x67, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedLsigs.BitmaskLogicArgs))
 		}
-		if (zb0048Mask[1] & 0x100000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x40000000) == 0 { // if not empty
 			// string "lsigl"
 			o = append(o, 0xa5, 0x6c, 0x73, 0x69, 0x67, 0x6c)
 			if (*z).encodedSignedTxns.encodedLsigs.Logic == nil {
@@ -28320,12 +28164,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedLsigs.Logic[zb0003])
 			}
 		}
-		if (zb0048Mask[1] & 0x200000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x80000000) == 0 { // if not empty
 			// string "lsiglbm"
 			o = append(o, 0xa7, 0x6c, 0x73, 0x69, 0x67, 0x6c, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedLsigs.BitmaskLogic))
 		}
-		if (zb0048Mask[1] & 0x400000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x100000000) == 0 { // if not empty
 			// string "lv"
 			o = append(o, 0xa2, 0x6c, 0x76)
 			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid == nil {
@@ -28337,57 +28181,57 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid[zb0008].MarshalMsg(o)
 			}
 		}
-		if (zb0048Mask[1] & 0x800000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x200000000) == 0 { // if not empty
 			// string "lvbm"
 			o = append(o, 0xa4, 0x6c, 0x76, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid))
 		}
-		if (zb0048Mask[1] & 0x1000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x400000000) == 0 { // if not empty
 			// string "lx"
 			o = append(o, 0xa2, 0x6c, 0x78)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease)
 		}
-		if (zb0048Mask[1] & 0x2000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x800000000) == 0 { // if not empty
 			// string "lxbm"
 			o = append(o, 0xa4, 0x6c, 0x78, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease))
 		}
-		if (zb0048Mask[1] & 0x4000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x1000000000) == 0 { // if not empty
 			// string "m"
 			o = append(o, 0xa1, 0x6d)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Manager)
 		}
-		if (zb0048Mask[1] & 0x8000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x2000000000) == 0 { // if not empty
 			// string "mbm"
 			o = append(o, 0xa3, 0x6d, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager))
 		}
-		if (zb0048Mask[1] & 0x10000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x4000000000) == 0 { // if not empty
 			// string "msigthr"
 			o = append(o, 0xa7, 0x6d, 0x73, 0x69, 0x67, 0x74, 0x68, 0x72)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedMsigs.Threshold)
 		}
-		if (zb0048Mask[1] & 0x20000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x8000000000) == 0 { // if not empty
 			// string "msigthrbm"
 			o = append(o, 0xa9, 0x6d, 0x73, 0x69, 0x67, 0x74, 0x68, 0x72, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedMsigs.BitmaskThreshold))
 		}
-		if (zb0048Mask[1] & 0x40000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x10000000000) == 0 { // if not empty
 			// string "msigv"
 			o = append(o, 0xa5, 0x6d, 0x73, 0x69, 0x67, 0x76)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedMsigs.Version)
 		}
-		if (zb0048Mask[1] & 0x80000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x20000000000) == 0 { // if not empty
 			// string "msigvbm"
 			o = append(o, 0xa7, 0x6d, 0x73, 0x69, 0x67, 0x76, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedMsigs.BitmaskVersion))
 		}
-		if (zb0048Mask[1] & 0x100000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x40000000000) == 0 { // if not empty
 			// string "nonpartbm"
 			o = append(o, 0xa9, 0x6e, 0x6f, 0x6e, 0x70, 0x61, 0x72, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskNonparticipation))
 		}
-		if (zb0048Mask[1] & 0x200000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x80000000000) == 0 { // if not empty
 			// string "note"
 			o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
 			if (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note == nil {
@@ -28399,77 +28243,77 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note[zb0009])
 			}
 		}
-		if (zb0048Mask[1] & 0x400000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x100000000000) == 0 { // if not empty
 			// string "notebm"
 			o = append(o, 0xa6, 0x6e, 0x6f, 0x74, 0x65, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote))
 		}
-		if (zb0048Mask[1] & 0x800000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x200000000000) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Reserve)
 		}
-		if (zb0048Mask[1] & 0x1000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x400000000000) == 0 { // if not empty
 			// string "rbm"
 			o = append(o, 0xa3, 0x72, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve))
 		}
-		if (zb0048Mask[1] & 0x2000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x800000000000) == 0 { // if not empty
 			// string "rcv"
 			o = append(o, 0xa3, 0x72, 0x63, 0x76)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.Receiver)
 		}
-		if (zb0048Mask[1] & 0x4000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x1000000000000) == 0 { // if not empty
 			// string "rcvbm"
 			o = append(o, 0xa5, 0x72, 0x63, 0x76, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.BitmaskReceiver))
 		}
-		if (zb0048Mask[1] & 0x8000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x2000000000000) == 0 { // if not empty
 			// string "rekey"
 			o = append(o, 0xa5, 0x72, 0x65, 0x6b, 0x65, 0x79)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo)
 		}
-		if (zb0048Mask[1] & 0x10000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x4000000000000) == 0 { // if not empty
 			// string "rekeybm"
 			o = append(o, 0xa7, 0x72, 0x65, 0x6b, 0x65, 0x79, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo))
 		}
-		if (zb0048Mask[1] & 0x20000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x8000000000000) == 0 { // if not empty
 			// string "selkey"
 			o = append(o, 0xa6, 0x73, 0x65, 0x6c, 0x6b, 0x65, 0x79)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.SelectionPK)
 		}
-		if (zb0048Mask[1] & 0x40000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x10000000000000) == 0 { // if not empty
 			// string "sgnr"
 			o = append(o, 0xa4, 0x73, 0x67, 0x6e, 0x72)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.AuthAddr)
 		}
-		if (zb0048Mask[1] & 0x80000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x20000000000000) == 0 { // if not empty
 			// string "sgnrbm"
 			o = append(o, 0xa6, 0x73, 0x67, 0x6e, 0x72, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.BitmaskAuthAddr))
 		}
-		if (zb0048Mask[1] & 0x100000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x40000000000000) == 0 { // if not empty
 			// string "sig"
 			o = append(o, 0xa3, 0x73, 0x69, 0x67)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.Sig)
 		}
-		if (zb0048Mask[1] & 0x200000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x80000000000000) == 0 { // if not empty
 			// string "sigbm"
 			o = append(o, 0xa5, 0x73, 0x69, 0x67, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.BitmaskSig))
 		}
-		if (zb0048Mask[1] & 0x400000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x100000000000000) == 0 { // if not empty
 			// string "snd"
 			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender)
 		}
-		if (zb0048Mask[1] & 0x800000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x200000000000000) == 0 { // if not empty
 			// string "sndbm"
 			o = append(o, 0xa5, 0x73, 0x6e, 0x64, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender))
 		}
-		if (zb0048Mask[1] & 0x1000000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x400000000000000) == 0 { // if not empty
 			// string "subsig"
 			o = append(o, 0xa6, 0x73, 0x75, 0x62, 0x73, 0x69, 0x67)
 			if (*z).encodedSignedTxns.encodedMsigs.Subsigs == nil {
@@ -28488,12 +28332,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				}
 			}
 		}
-		if (zb0048Mask[1] & 0x2000000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x800000000000000) == 0 { // if not empty
 			// string "subsigsbm"
 			o = append(o, 0xa9, 0x73, 0x75, 0x62, 0x73, 0x69, 0x67, 0x73, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedMsigs.BitmaskSubsigs))
 		}
-		if (zb0048Mask[1] & 0x4000000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x1000000000000000) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
 			if (*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total == nil {
@@ -28505,42 +28349,42 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total[zb0015])
 			}
 		}
-		if (zb0048Mask[1] & 0x8000000000000000) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x2000000000000000) == 0 { // if not empty
 			// string "tbm"
 			o = append(o, 0xa3, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal))
 		}
-		if (zb0048Mask[2] & 0x1) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x4000000000000000) == 0 { // if not empty
 			// string "tgc"
 			o = append(o, 0xa3, 0x74, 0x67, 0x63)
 			o = msgp.AppendUint64(o, (*z).TransactionGroupCount)
 		}
-		if (zb0048Mask[2] & 0x2) == 0 { // if not empty
+		if (zb0048Mask[1] & 0x8000000000000000) == 0 { // if not empty
 			// string "tgs"
 			o = append(o, 0xa3, 0x74, 0x67, 0x73)
 			o = msgp.AppendBytes(o, (*z).TransactionGroupSizes)
 		}
-		if (zb0048Mask[2] & 0x4) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x1) == 0 { // if not empty
 			// string "ttc"
 			o = append(o, 0xa3, 0x74, 0x74, 0x63)
 			o = msgp.AppendUint64(o, (*z).TotalTransactionsCount)
 		}
-		if (zb0048Mask[2] & 0x8) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x2) == 0 { // if not empty
 			// string "type"
 			o = append(o, 0xa4, 0x74, 0x79, 0x70, 0x65)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.TxType)
 		}
-		if (zb0048Mask[2] & 0x10) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x4) == 0 { // if not empty
 			// string "typebm"
 			o = append(o, 0xa6, 0x74, 0x79, 0x70, 0x65, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.BitmaskTxType))
 		}
-		if (zb0048Mask[2] & 0x20) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x8) == 0 { // if not empty
 			// string "typeo"
 			o = append(o, 0xa5, 0x74, 0x79, 0x70, 0x65, 0x6f)
 			o = msgp.AppendByte(o, (*z).encodedSignedTxns.encodedTxns.TxTypeOffset)
 		}
-		if (zb0048Mask[2] & 0x40) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x10) == 0 { // if not empty
 			// string "un"
 			o = append(o, 0xa2, 0x75, 0x6e)
 			if (*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName == nil {
@@ -28552,12 +28396,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendString(o, (*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName[zb0017])
 			}
 		}
-		if (zb0048Mask[2] & 0x80) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x20) == 0 { // if not empty
 			// string "unbm"
 			o = append(o, 0xa4, 0x75, 0x6e, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName))
 		}
-		if (zb0048Mask[2] & 0x100) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x40) == 0 { // if not empty
 			// string "votefst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x66, 0x73, 0x74)
 			if (*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteFirst == nil {
@@ -28569,17 +28413,17 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteFirst[zb0010].MarshalMsg(o)
 			}
 		}
-		if (zb0048Mask[2] & 0x200) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x80) == 0 { // if not empty
 			// string "votefstbm"
 			o = append(o, 0xa9, 0x76, 0x6f, 0x74, 0x65, 0x66, 0x73, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskVoteFirst))
 		}
-		if (zb0048Mask[2] & 0x400) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x100) == 0 { // if not empty
 			// string "votekbm"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskKeys))
 		}
-		if (zb0048Mask[2] & 0x800) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x200) == 0 { // if not empty
 			// string "votekd"
 			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x64)
 			if (*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteKeyDilution == nil {
@@ -28591,12 +28435,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendUint64(o, (*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteKeyDilution[zb0012])
 			}
 		}
-		if (zb0048Mask[2] & 0x1000) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x400) == 0 { // if not empty
 			// string "votekey"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x65, 0x79)
 			o = msgp.AppendBytes(o, (*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VotePK)
 		}
-		if (zb0048Mask[2] & 0x2000) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x800) == 0 { // if not empty
 			// string "votelst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6c, 0x73, 0x74)
 			if (*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteLast == nil {
@@ -28608,12 +28452,12 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteLast[zb0011].MarshalMsg(o)
 			}
 		}
-		if (zb0048Mask[2] & 0x4000) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x1000) == 0 { // if not empty
 			// string "votelstbm"
 			o = append(o, 0xa9, 0x76, 0x6f, 0x74, 0x65, 0x6c, 0x73, 0x74, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskVoteLast))
 		}
-		if (zb0048Mask[2] & 0x8000) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x2000) == 0 { // if not empty
 			// string "xaid"
 			o = append(o, 0xa4, 0x78, 0x61, 0x69, 0x64)
 			if (*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.XferAsset == nil {
@@ -28625,7 +28469,7 @@ func (z *txGroupsEncodingStub) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.XferAsset[zb0020].MarshalMsg(o)
 			}
 		}
-		if (zb0048Mask[2] & 0x10000) == 0 { // if not empty
+		if (zb0048Mask[2] & 0x4000) == 0 { // if not empty
 			// string "xaidbm"
 			o = append(o, 0xa6, 0x78, 0x61, 0x69, 0x64, 0x62, 0x6d)
 			o = msgp.AppendBytes(o, []byte((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskXferAsset))
@@ -29355,14 +29199,6 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0048 > 0 {
 			zb0048--
-			(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
-				return
-			}
-		}
-		if zb0048 > 0 {
-			zb0048--
 			{
 				var zb0103 []byte
 				var zb0104 int
@@ -29381,14 +29217,6 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0103)
-			}
-		}
-		if zb0048 > 0 {
-			zb0048--
-			bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
-				return
 			}
 		}
 		if zb0048 > 0 {
@@ -32513,12 +32341,6 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote = bitmask(zb0351)
 				}
-			case "gen":
-				(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisID")
-					return
-				}
 			case "genbm":
 				{
 					var zb0353 []byte
@@ -32538,12 +32360,6 @@ func (z *txGroupsEncodingStub) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					(*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID = bitmask(zb0353)
-				}
-			case "gh":
-				bts, err = (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GenesisHash")
-					return
 				}
 			case "ghbm":
 				{
@@ -34863,7 +34679,7 @@ func (z *txGroupsEncodingStub) Msgsize() (s int) {
 	for zb0009 := range (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note {
 		s += msgp.BytesPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note[zb0009])
 	}
-	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote)) + 4 + msgp.StringPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID)) + 3 + (*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash.Msgsize() + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGroup)) + 3 + msgp.BytesPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease)) + 6 + msgp.BytesPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo) + 8 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo)) + 8 + msgp.BytesPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VotePK) + 7 + msgp.BytesPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.SelectionPK) + 8 + msgp.ArrayHeaderSize
+	s += 7 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID)) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash)) + 6 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGroup)) + 3 + msgp.BytesPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) + 5 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease)) + 6 + msgp.BytesPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo) + 8 + msgp.BytesPrefixSize + len([]byte((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo)) + 8 + msgp.BytesPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VotePK) + 7 + msgp.BytesPrefixSize + len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.SelectionPK) + 8 + msgp.ArrayHeaderSize
 	for zb0010 := range (*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteFirst {
 		s += (*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteFirst[zb0010].Msgsize()
 	}
@@ -34978,7 +34794,7 @@ func (z *txGroupsEncodingStub) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *txGroupsEncodingStub) MsgIsZero() bool {
-	return ((*z).TotalTransactionsCount == 0) && ((*z).TransactionGroupCount == 0) && (len((*z).TransactionGroupSizes) == 0) && (len((*z).encodedSignedTxns.Sig) == 0) && (len((*z).encodedSignedTxns.BitmaskSig) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.Version) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.BitmaskVersion) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.Threshold) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.BitmaskThreshold) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.Subsigs) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.BitmaskSubsigs) == 0) && (len((*z).encodedSignedTxns.encodedLsigs.Logic) == 0) && (len((*z).encodedSignedTxns.encodedLsigs.BitmaskLogic) == 0) && (len((*z).encodedSignedTxns.encodedLsigs.LogicArgs) == 0) && (len((*z).encodedSignedTxns.encodedLsigs.BitmaskLogicArgs) == 0) && (len((*z).encodedSignedTxns.AuthAddr) == 0) && (len((*z).encodedSignedTxns.BitmaskAuthAddr) == 0) && (len((*z).encodedSignedTxns.encodedTxns.TxType) == 0) && (len((*z).encodedSignedTxns.encodedTxns.BitmaskTxType) == 0) && ((*z).encodedSignedTxns.encodedTxns.TxTypeOffset == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFee) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote) == 0) && ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisID == "") && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0) && ((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.GenesisHash.MsgIsZero()) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGroup) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VotePK) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.SelectionPK) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteFirst) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskVoteFirst) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteLast) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskVoteLast) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteKeyDilution) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskKeys) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskNonparticipation) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.Receiver) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.BitmaskReceiver) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.Amount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.BitmaskAmount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.CloseRemainderTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.BitmaskCloseRemainderTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.ConfigAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.BitmaskConfigAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Decimals) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDecimals) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDefaultFrozen) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.AssetName) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskAssetName) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.URL) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskURL) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.MetadataHash) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskMetadataHash) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Freeze) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskFreeze) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Clawback) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskClawback) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.XferAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskXferAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.AssetAmount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetAmount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.AssetSender) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetSender) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.AssetReceiver) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetReceiver) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.AssetCloseTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetCloseTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetFreezeTxnFields.FreezeAccount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetFreezeTxnFields.BitmaskFreezeAccount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetFreezeTxnFields.FreezeAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetFreezeTxnFields.BitmaskFreezeAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetFreezeTxnFields.BitmaskAssetFrozen) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationID) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskApplicationID) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.OnCompletion) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskOnCompletion) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskApplicationArgs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskAccounts) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskForeignApps) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskForeignAssets) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumUint) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskApprovalProgram) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskClearStateProgram) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.CertRound) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.BitmaskCertRound) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.CertType) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.BitmaskCertType) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.SigCommit) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSigCommit) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.SignedWeight) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSignedWeight) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.SigProofs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSigProofs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.PartProofs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskPartProofs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.Reveals) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskReveals) == 0)
+	return ((*z).TotalTransactionsCount == 0) && ((*z).TransactionGroupCount == 0) && (len((*z).TransactionGroupSizes) == 0) && (len((*z).encodedSignedTxns.Sig) == 0) && (len((*z).encodedSignedTxns.BitmaskSig) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.Version) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.BitmaskVersion) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.Threshold) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.BitmaskThreshold) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.Subsigs) == 0) && (len((*z).encodedSignedTxns.encodedMsigs.BitmaskSubsigs) == 0) && (len((*z).encodedSignedTxns.encodedLsigs.Logic) == 0) && (len((*z).encodedSignedTxns.encodedLsigs.BitmaskLogic) == 0) && (len((*z).encodedSignedTxns.encodedLsigs.LogicArgs) == 0) && (len((*z).encodedSignedTxns.encodedLsigs.BitmaskLogicArgs) == 0) && (len((*z).encodedSignedTxns.AuthAddr) == 0) && (len((*z).encodedSignedTxns.BitmaskAuthAddr) == 0) && (len((*z).encodedSignedTxns.encodedTxns.TxType) == 0) && (len((*z).encodedSignedTxns.encodedTxns.BitmaskTxType) == 0) && ((*z).encodedSignedTxns.encodedTxns.TxTypeOffset == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Sender) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskSender) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Fee) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFee) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.FirstValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskFirstValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.LastValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLastValid) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Note) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskNote) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisID) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGenesisHash) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskGroup) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.Lease) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskLease) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.RekeyTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedTxnHeaders.BitmaskRekeyTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VotePK) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.SelectionPK) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteFirst) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskVoteFirst) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteLast) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskVoteLast) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.VoteKeyDilution) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskKeys) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedKeyregTxnFields.BitmaskNonparticipation) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.Receiver) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.BitmaskReceiver) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.Amount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.BitmaskAmount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.CloseRemainderTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedPaymentTxnFields.BitmaskCloseRemainderTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.ConfigAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.BitmaskConfigAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Total) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskTotal) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Decimals) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDecimals) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskDefaultFrozen) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.UnitName) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskUnitName) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.AssetName) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskAssetName) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.URL) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskURL) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.MetadataHash) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskMetadataHash) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Manager) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskManager) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Reserve) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskReserve) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Freeze) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskFreeze) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.Clawback) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetConfigTxnFields.encodedAssetParams.BitmaskClawback) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.XferAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskXferAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.AssetAmount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetAmount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.AssetSender) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetSender) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.AssetReceiver) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetReceiver) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.AssetCloseTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetTransferTxnFields.BitmaskAssetCloseTo) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetFreezeTxnFields.FreezeAccount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetFreezeTxnFields.BitmaskFreezeAccount) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetFreezeTxnFields.FreezeAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetFreezeTxnFields.BitmaskFreezeAsset) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedAssetFreezeTxnFields.BitmaskAssetFrozen) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationID) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskApplicationID) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.OnCompletion) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskOnCompletion) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskApplicationArgs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.Accounts) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskAccounts) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskForeignApps) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ForeignAssets) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskForeignAssets) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumUint) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumUint) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.LocalNumByteSlice) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskLocalNumByteSlice) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumUint) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumUint) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.GlobalNumByteSlice) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskGlobalNumByteSlice) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskApprovalProgram) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.ClearStateProgram) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedApplicationCallTxnFields.BitmaskClearStateProgram) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.CertRound) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.BitmaskCertRound) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.CertType) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.BitmaskCertType) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.SigCommit) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSigCommit) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.SignedWeight) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSignedWeight) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.SigProofs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskSigProofs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.PartProofs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskPartProofs) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.Reveals) == 0) && (len((*z).encodedSignedTxns.encodedTxns.encodedCompactCertTxnFields.encodedCert.BitmaskReveals) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

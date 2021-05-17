@@ -108,9 +108,7 @@ type encodedTxnHeaders struct {
 	BitmaskLastValid   bitmask             `codec:"lvbm"`
 	Note               [][]byte            `codec:"note,allocbound=maxEncodedTransactionGroup"` // TODO whats the correct allocbound?
 	BitmaskNote        bitmask             `codec:"notebm"`
-	GenesisID          string              `codec:"gen"`
 	BitmaskGenesisID   bitmask             `codec:"genbm"`
-	GenesisHash        crypto.Digest       `codec:"gh"`
 	BitmaskGenesisHash bitmask             `codec:"ghbm"`
 
 	BitmaskGroup bitmask `codec:"grpbm"`

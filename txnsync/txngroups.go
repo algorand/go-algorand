@@ -18,6 +18,8 @@ package txnsync
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/crypto"
+
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -97,7 +99,7 @@ func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTx
 	return txnGroups, nil
 }
 
-func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGroup, err error) {
+func decodeTransactionGroups(bytes []byte, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {
 	if len(bytes) == 0 {
 		return nil, nil
 	}
@@ -109,7 +111,7 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 
 	stx := make([]transactions.SignedTxn, stub.TotalTransactionsCount)
 
-	err = stub.reconstructSignedTransactions(stx)
+	err = stub.reconstructSignedTransactions(stx, genesisID, genesisHash)
 	if err != nil {
 		return nil, err
 	}

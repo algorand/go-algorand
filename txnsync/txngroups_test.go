@@ -201,15 +201,15 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 	addGroupHashes(inTxnGroups, 6, []byte{1})
 	encodedGroupsBytes, err := encodeTransactionGroups(inTxnGroups)
 	require.NoError(t, err)
-	out, err := decodeTransactionGroups(encodedGroupsBytes)
+	out, err := decodeTransactionGroups(encodedGroupsBytes, genesisID, genesisHash)
 	require.NoError(t, err)
 	require.ElementsMatch(t, inTxnGroups, out)
 }
 
-func txnGroupsData() ([]transactions.SignedTxGroup, error) {
+func txnGroupsData() (txnGroups []transactions.SignedTxGroup, genesisID string, genesisHash crypto.Digest, err error) {
 	dat, err := ioutil.ReadFile("txns1.txt")
 	if err != nil {
-		return nil, err
+		return
 	}
 	dec := protocol.NewDecoderBytes(dat)
 	ntx := 0
@@ -221,23 +221,25 @@ func txnGroupsData() ([]transactions.SignedTxGroup, error) {
 			blocksData = n
 		}
 
-		err := dec.Decode(&blocksData[ntx])
+		err = dec.Decode(&blocksData[ntx])
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return
 		}
 		ntx++
 	}
 	blocksData = blocksData[:ntx]
 
-	var txnGroups []transactions.SignedTxGroup
 	for _, blockData := range blocksData {
 		block := blockData.Block
-		payset, err := block.DecodePaysetGroups()
+		genesisID = block.GenesisID()
+		genesisHash = block.GenesisHash()
+		var payset [][]transactions.SignedTxnWithAD
+		payset, err = block.DecodePaysetGroups()
 		if err != nil {
-			return nil, err
+			return
 		}
 		for _, txns := range payset {
 			var txnGroup transactions.SignedTxGroup
@@ -247,16 +249,16 @@ func txnGroupsData() ([]transactions.SignedTxGroup, error) {
 			txnGroups = append(txnGroups, txnGroup)
 		}
 	}
-	return txnGroups, nil
+	return
 }
 
 func TestTxnGroupEncodingLarge(t *testing.T) {
-	txnGroups, err := txnGroupsData()
+	txnGroups, genesisID, genesisHash, err := txnGroupsData()
 	require.NoError(t, err)
 
 	encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
 	require.NoError(t, err)
-	out, err := decodeTransactionGroups(encodedGroupsBytes)
+	out, err := decodeTransactionGroups(encodedGroupsBytes, genesisID, genesisHash)
 	require.NoError(t, err)
 	require.ElementsMatch(t, txnGroups, out)
 
@@ -288,7 +290,7 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 }
 
 func BenchmarkTxnGroupEncoding(b *testing.B) {
-	txnGroups, err := txnGroupsData()
+	txnGroups, _, _, err := txnGroupsData()
 	require.NoError(b, err)
 	var encodedGroupsBytes []byte
 
@@ -304,7 +306,7 @@ func BenchmarkTxnGroupEncoding(b *testing.B) {
 }
 
 func BenchmarkTxnGroupDecoding(b *testing.B) {
-	txnGroups, err := txnGroupsData()
+	txnGroups, genesisID, genesisHash, err := txnGroupsData()
 	require.NoError(b, err)
 
 	encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
@@ -313,13 +315,13 @@ func BenchmarkTxnGroupDecoding(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = decodeTransactionGroups(encodedGroupsBytes)
+		_, err = decodeTransactionGroups(encodedGroupsBytes, genesisID, genesisHash)
 		require.NoError(b, err)
 	}
 }
 
 func BenchmarkTxnGroupEncodingOld(b *testing.B) {
-	txnGroups, err := txnGroupsData()
+	txnGroups, _, _, err := txnGroupsData()
 	require.NoError(b, err)
 	var encodedGroupsBytes []byte
 
@@ -334,7 +336,7 @@ func BenchmarkTxnGroupEncodingOld(b *testing.B) {
 }
 
 func BenchmarkTxnGroupDecodingOld(b *testing.B) {
-	txnGroups, err := txnGroupsData()
+	txnGroups, _, _, err := txnGroupsData()
 	require.NoError(b, err)
 
 	encodedGroupsBytes := encodeTransactionGroupsOld(txnGroups)
@@ -438,7 +440,7 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 
 		encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
 		require.NoError(t, err)
-		out, err := decodeTransactionGroups(encodedGroupsBytes)
+		out, err := decodeTransactionGroups(encodedGroupsBytes, stx.Txn.GenesisID, stx.Txn.GenesisHash)
 		require.NoError(t, err)
 		//if fmt.Sprintf("%v", out[0].Transactions[0]) != fmt.Sprintf("%v", txnGroups[0].Transactions[0]) {
 		//	fmt.Println(out[0].Transactions[0])

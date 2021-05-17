@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -300,14 +301,12 @@ func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn transactions.S
 			stub.BitmaskGenesisID = make(bitmask, bitmaskLen)
 		}
 		stub.BitmaskGenesisID.SetBit(i)
-		stub.GenesisID = txn.Txn.GenesisID
 	}
 	if !txn.Txn.GenesisHash.MsgIsZero() {
 		if len(stub.BitmaskGenesisHash) == 0 {
 			stub.BitmaskGenesisHash = make(bitmask, bitmaskLen)
 		}
 		stub.BitmaskGenesisHash.SetBit(i)
-		stub.GenesisHash = txn.Txn.GenesisHash
 	}
 	if !txn.Txn.Group.MsgIsZero() {
 		if len(stub.BitmaskGroup) == 0 {

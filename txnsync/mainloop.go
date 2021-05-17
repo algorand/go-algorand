@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"context"
+	"github.com/algorand/go-algorand/crypto"
 	"math"
 	"sync"
 	"time"
@@ -38,6 +39,9 @@ type syncState struct {
 	node    NodeConnector
 	isRelay bool
 	clock   timers.WallClock
+
+	genesisID   string
+	genesisHash crypto.Digest
 
 	lastBeta                   time.Duration
 	round                      basics.Round

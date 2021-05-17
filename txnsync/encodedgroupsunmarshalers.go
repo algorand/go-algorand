@@ -43,7 +43,7 @@ func getNibble(b []byte, index int) (byte, error) {
 	return b[index/2] % 16, nil
 }
 
-func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn) error {
+func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) error {
 	var index int
 	index = 0	
 	for i := range signedTxns {
@@ -74,7 +74,7 @@ func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []tra
 		}
 	}
 
-	return stub.reconstructTransactions(signedTxns)
+	return stub.reconstructTransactions(signedTxns, genesisID, genesisHash)
 }
 
 func (stub *txGroupsEncodingStub) reconstructMsigs(signedTxns []transactions.SignedTxn) error {
@@ -142,7 +142,7 @@ func (stub *txGroupsEncodingStub) reconstructLsigs(signedTxns []transactions.Sig
 	return nil
 }
 
-func (stub *txGroupsEncodingStub) reconstructTransactions(signedTxns []transactions.SignedTxn) error {
+func (stub *txGroupsEncodingStub) reconstructTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) error {
 	var index int
 	index = 0	
 	for i := range signedTxns {
@@ -162,7 +162,7 @@ func (stub *txGroupsEncodingStub) reconstructTransactions(signedTxns []transacti
 		}
 	}
 
-	if err := stub.reconstructTxnHeader(signedTxns); err != nil {
+	if err := stub.reconstructTxnHeader(signedTxns, genesisID, genesisHash); err != nil {
 		return fmt.Errorf("failed to reconstructTxnHeader: %v", err)
 	}
 	if err := stub.reconstructKeyregTxnFields(signedTxns); err != nil {
@@ -189,7 +189,7 @@ func (stub *txGroupsEncodingStub) reconstructTransactions(signedTxns []transacti
 	return nil
 }
 
-func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions.SignedTxn) error {
+func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) error {
 	var index int
 	index = 0	
 	for i := range signedTxns {
@@ -245,14 +245,14 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 	index = 0	
 	for i := range signedTxns {
 		if exists := stub.BitmaskGenesisID.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
-			signedTxns[i].Txn.GenesisID = stub.GenesisID
+			signedTxns[i].Txn.GenesisID = genesisID
 			index++
 		}
 	}
 	index = 0	
 	for i := range signedTxns {
 		if exists := stub.BitmaskGenesisHash.EntryExists(i, int(stub.TotalTransactionsCount)); exists {
-			signedTxns[i].Txn.GenesisHash = stub.GenesisHash
+			signedTxns[i].Txn.GenesisHash = genesisHash
 			index++
 		}
 	}
