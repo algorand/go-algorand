@@ -148,7 +148,7 @@ $(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib
 		PATH=$(GOPATH1)/bin:$$PATH \
 		go generate ./...
 
-$(ALGOD_API_SWAGGER_INJECT): $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
+$(ALGOD_API_SWAGGER_INJECT): deps $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
 	./daemon/algod/api/server/lib/bundle_swagger_json.sh
 
 # Regenerate kmd swagger spec files
@@ -175,7 +175,7 @@ $(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/lib
 		touch $@; \
 	fi
 
-$(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
+$(KMD_API_SWAGGER_INJECT): deps $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 	./daemon/kmd/lib/kmdapi/bundle_swagger_json.sh
 
 # generated files we should make sure we clean
@@ -185,7 +185,7 @@ GENERATED_FILES := \
 	$(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated \
 	$(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 
-rebuild_swagger:
+rebuild_swagger: deps
 	rm -f $(GENERATED_FILES)
 	# we need to invoke the make here since we want to ensure that the deletion and re-creating are sequential
 	make $(KMD_API_SWAGGER_INJECT) $(ALGOD_API_SWAGGER_INJECT)
@@ -198,7 +198,7 @@ build: buildsrc gen
 # get around a bug in go build where it will fail
 # to cache binaries from time to time on empty NFS
 # dirs
-buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN deps
+buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
 	mkdir -p tmp/go-cache && \
 	touch tmp/go-cache/file.txt && \
 	GOCACHE=$(SRCPATH)/tmp/go-cache go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
