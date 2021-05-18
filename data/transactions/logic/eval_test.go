@@ -3805,12 +3805,12 @@ func TestExpw(t *testing.T) {
 
 func TestLog2(t *testing.T) {
 	t.Parallel()
-	testAccepts(t, "int 0; log2; int 0; ==", 4)
-	testAccepts(t, "int 1; log2; int 1; ==", 4)
-	testAccepts(t, "int 2; log2; int 2; ==", 4)
-	testAccepts(t, "int 4; log2; int 3; ==", 4)
-	testAccepts(t, "int 5; log2; int 3; ==", 4)
-	testAccepts(t, "int 8; log2; int 4; ==", 4)
+	testPanics(t, "int 0; log2; int 1; return", 4)
+	testAccepts(t, "int 1; log2; int 0; ==", 4)
+	testAccepts(t, "int 2; log2; int 1; ==", 4)
+	testAccepts(t, "int 4; log2; int 2; ==", 4)
+	testAccepts(t, "int 5; log2; int 2; ==", 4)
+	testAccepts(t, "int 8; log2; int 3; ==", 4)
 }
 
 func TestBytesMath(t *testing.T) {

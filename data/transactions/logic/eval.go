@@ -1128,8 +1128,12 @@ func opLog2(cx *evalContext) {
 	*/
 
 	last := len(cx.stack) - 1
-
-	cx.stack[last].Uint = uint64(bits.Len64(cx.stack[last].Uint))
+	idx := bits.Len64(cx.stack[last].Uint)
+	if idx == 0 {
+		cx.err = errors.New("log2(0) is undefined")
+		return
+	}
+	cx.stack[last].Uint = uint64(idx-1)
 }
 
 func opExpImpl(base uint64, exp uint64) (uint64, error) {
