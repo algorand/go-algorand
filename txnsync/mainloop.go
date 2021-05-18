@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/util/bloom"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -62,6 +63,8 @@ type syncState struct {
 	// The profiler helps us monitor the transaction sync components execution time. When enabled, it would report these
 	// to the telemetry.
 	profiler *profiler
+
+	xorBuilder bloom.XorBuilder
 }
 
 func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {

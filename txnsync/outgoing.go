@@ -165,7 +165,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		profMakeBloomFilter := s.profiler.getElement(profElementMakeBloomFilter)
 		profMakeBloomFilter.start()
 		// generate a bloom filter that matches the requests params.
-		metaMessage.filter = makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, uint32(s.node.Random(0xffffffff)), lastBloomFilter)
+		metaMessage.filter = s.makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, uint32(s.node.Random(0xffffffff)), lastBloomFilter)
 		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
 			metaMessage.message.TxnBloomFilter = metaMessage.filter.encode()
 			bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()

@@ -49,7 +49,7 @@ func TestOptimal(t *testing.T) {
 	numFP := []int{100, 25, 5}
 
 	if testing.Short() {
-		numElementsCases = []int{2000, 200000}
+		numElementsCases = []int{2000, 20000}
 		fpRateCases = []float64{0.001, 0.00001}
 		numFP = []int{100, 25}
 	}
@@ -92,6 +92,7 @@ func closeEnough(a, b, maxerr float64) (bool, float64) {
 }
 
 // based on "github.com/willf/bloom"
+// Changes here might need to be replicated to xor_test.go estimateFalsePositiveRateXor()
 func (f *Filter) estimateFalsePositiveRate(numAdded uint32, numFP int) float64 {
 	x := make([]byte, 4)
 	for i := uint32(0); i < numAdded; i++ {
@@ -169,18 +170,21 @@ func TestMarshalJSON(t *testing.T) {
 	}
 }
 
-func BenchmarkCreateLargeFilter(b *testing.B) {
+const largeFilterElements = 150000
+
+// BenchmarkCreateLargeBloomFilter should have the same structure as xor_test.go BenchmarkCreateLargeXorFilter
+func BenchmarkCreateLargeBloomFilter(b *testing.B) {
 	// dialing mu=25000; 3 servers; so each mailbox is 75000 real and 75000 noise
 	// for a total of 150000 elements in the dialing bloom filter
-	numElements := 150000
 	for i := 0; i < b.N; i++ {
-		numBits, numHashes := Optimal(numElements, 1e-10)
+		numBits, numHashes := Optimal(largeFilterElements, 1e-10)
 		f := New(numBits, numHashes, 1234)
 		x := make([]byte, 4)
-		for i := uint32(0); i < uint32(numElements); i++ {
+		for i := uint32(0); i < uint32(largeFilterElements); i++ {
 			binary.BigEndian.PutUint32(x, i)
 			f.Set(x)
 		}
+		f.MarshalBinary()
 	}
 }
 
@@ -330,24 +334,26 @@ func BenchmarkBloomFilterSet(b *testing.B) {
 	}
 }
 
+const filterTestElements = 1000000
+
+// See also BenchmarkXorFilterTest
 func BenchmarkBloomFilterTest(b *testing.B) {
-	bfElements := 1000000
-	sizeBits, numHashes := Optimal(bfElements, 0.01)
+	sizeBits, numHashes := Optimal(filterTestElements, 0.01)
 	prefix := uint32(0)
 	bf := New(sizeBits, numHashes, prefix)
-	dataset := make([][]byte, bfElements)
-	for n := 0; n < bfElements; n++ {
+	dataset := make([][]byte, filterTestElements)
+	for n := 0; n < filterTestElements; n++ {
 		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
 		dataset[n] = hash[:]
 	}
 	// set half of them.
-	for n := 0; n < bfElements/2; n++ {
+	for n := 0; n < filterTestElements/2; n++ {
 		bf.Set(dataset[n])
 	}
 
 	b.ResetTimer()
 	for x := 0; x < b.N; x++ {
-		bf.Test(dataset[x%bfElements])
+		bf.Test(dataset[x%filterTestElements])
 	}
 }
 
