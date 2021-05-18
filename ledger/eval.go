@@ -667,8 +667,7 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 // prepareEvalParams creates a logic.EvalParams for each ApplicationCall
 // transaction in the group
 func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) (res []*logic.EvalParams) {
-	var txnGroupNoAD []transactions.SignedTxn
-	var contextGroup []*logic.EvalContext
+	var groupNoAD []transactions.SignedTxn
 	var minTealVersion uint64
 	res = make([]*logic.EvalParams, len(txgroup))
 	for i, txn := range txgroup {
@@ -677,35 +676,22 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			continue
 		}
 
-		// Initialize context group pointers and transaction group without ApplyData lazily
-		if txnGroupNoAD == nil {
-			txnGroupNoAD = make([]transactions.SignedTxn, len(txgroup))
+		// Initialize group without ApplyData lazily
+		if groupNoAD == nil {
+			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
 			for j := range txgroup {
-				txnGroupNoAD[j] = txgroup[j].SignedTxn
+				groupNoAD[j] = txgroup[j].SignedTxn
 			}
-
-			contextGroup = make([]*logic.EvalContext, len(txgroup))
-			for j, txn := range txgroup {
-				// Only allocate space for ApplicationCall transactions
-				if txn.SignedTxn.Txn.Type == protocol.ApplicationCallTx {
-					contextGroup[j] = new(logic.EvalContext)
-				}
-			}
-
-			minTealVersion = logic.ComputeMinTealVersion(txnGroupNoAD)
+			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
 		}
 
 		res[i] = &logic.EvalParams{
-			Txn:            &txnGroupNoAD[i],
-			Cx:             contextGroup[i],
+			Txn:            &groupNoAD[i],
 			Proto:          &eval.proto,
-			TxnGroup:       txnGroupNoAD,
-			CxGroup:        contextGroup,
+			TxnGroup:       groupNoAD,
 			GroupIndex:     i,
 			MinTealVersion: &minTealVersion,
 		}
-
-		contextGroup[i].EvalParams = *res[i]
 	}
 	return
 }

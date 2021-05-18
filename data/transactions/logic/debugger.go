@@ -86,7 +86,7 @@ func GetProgramID(program []byte) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func makeDebugState(cx *EvalContext) DebugState {
+func makeDebugState(cx *evalContext) DebugState {
 	disasm, dsInfo, err := disassembleInstrumented(cx.program)
 	if err != nil {
 		// Report disassembly error as program text
@@ -194,7 +194,7 @@ func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
 	}
 }
 
-func (cx *EvalContext) refreshDebugState() *DebugState {
+func (cx *evalContext) refreshDebugState() *DebugState {
 	ds := &cx.debugState
 
 	// Update pc, line, error, stack, and scratch space
