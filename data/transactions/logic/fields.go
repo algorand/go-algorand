@@ -143,6 +143,9 @@ const (
 	// LocalNumByteSlice uint64
 	LocalNumByteSlice
 
+	// Scratch [256]stackValue
+	Scratch
+
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -228,6 +231,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{GlobalNumByteSlice, StackUint64, 3},
 	{LocalNumUint, StackUint64, 3},
 	{LocalNumByteSlice, StackUint64, 3},
+	{Scratch, StackBytes, 4},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
@@ -240,6 +244,7 @@ var TxnaFieldTypes = []StackType{
 	txnaFieldSpecByField[Accounts].ftype,
 	txnaFieldSpecByField[Assets].ftype,
 	txnaFieldSpecByField[Applications].ftype,
+	txnaFieldSpecByField[Scratch].ftype,
 }
 
 var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
@@ -247,6 +252,7 @@ var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
 	Accounts:        {Accounts, StackBytes, 2},
 	Assets:          {Assets, StackUint64, 3},
 	Applications:    {Applications, StackUint64, 3},
+	Scratch:         {Scratch, StackBytes, 4},
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order

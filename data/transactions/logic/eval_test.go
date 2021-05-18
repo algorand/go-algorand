@@ -87,6 +87,7 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 	ep := EvalParams{}
 	ep.Proto = &proto
 	ep.Txn = pt
+	ep.Cx = new(EvalContext)
 	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
 		ep.Trace = sb
 	}
@@ -1803,6 +1804,82 @@ func testLogic(t *testing.T, program string, v uint64, ep EvalParams, problems .
 		for _, problem := range problems {
 			require.Contains(t, err.Error(), problem)
 		}
+	}
+}
+
+func TestGtxnaScratch(t *testing.T) {
+	t.Parallel()
+
+	case1 := []string{
+		`int 314
+store 0
+int 1`,
+		`gtxna 0 Scratch 0
+int 314
+==
+`,
+	}
+	case2 := []string{
+		`byte "txn 1"
+store 0
+int 1`,
+		`byte "txn 2"
+store 1
+int 1`,
+		`gtxna 0 Scratch 0
+byte "txn 1"
+==
+gtxna 1 Scratch 1
+byte "txn 2"
+==
+&&
+`,
+	}
+	cases := [][]string{
+		case1, case2,
+	}
+
+	for i, testCase := range cases {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			// Assemble ops
+			opsList := make([]*OpStream, len(testCase))
+			for j, source := range testCase {
+				ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+				require.NoError(t, err)
+				opsList[j] = ops
+			}
+
+			// Initialize txgroup and cxgroup
+			txgroup := make([]transactions.SignedTxn, len(testCase))
+			for j := range txgroup {
+				txgroup[j] = transactions.SignedTxn{}
+			}
+			cxgroup := make([]*EvalContext, len(testCase))
+			for j := range cxgroup {
+				cxgroup[j] = new(EvalContext)
+			}
+
+			// Construct EvalParams
+			proto := defaultEvalProtoWithVersion(LogicVersion)
+			epList := make([]EvalParams, len(testCase))
+			for j := range testCase {
+				epList[j] = EvalParams{
+					Proto:    &proto,
+					Txn:      &txgroup[j],
+					Cx:       cxgroup[j],
+					TxnGroup: txgroup,
+					CxGroup:  cxgroup,
+				}
+				cxgroup[j].EvalParams = epList[j]
+			}
+
+			// Evaluate app calls
+			for j, ops := range opsList {
+				pass, err := Eval(ops.Program, epList[j])
+				require.NoError(t, err)
+				require.True(t, pass)
+			}
+		})
 	}
 }
 
