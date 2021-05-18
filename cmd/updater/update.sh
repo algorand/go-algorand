@@ -601,8 +601,6 @@ function apply_fixups() {
     done
 }
 
-
-
 #--------------------------------------------
 # Main Update Driver
 
