@@ -18,11 +18,11 @@ package txnsync
 
 import (
 	"errors"
-	"github.com/algorand/go-algorand/data/transactions"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -86,7 +86,7 @@ type encodedLsigs struct {
 
 	Logic            [][]byte   `codec:"lsigl,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxLogicSigMaxSize"`
 	BitmaskLogic     bitmask    `codec:"lsiglbm"`
-	LogicArgs        [][][]byte `codec:"lsigarg,allocbound=maxEncodedTransactionGroup,allocbound=transactions.EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
+	LogicArgs        [][][]byte `codec:"lsigarg,allocbound=maxEncodedTransactionGroup,allocbound=mainnettransactions.EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
 	BitmaskLogicArgs bitmask    `codec:"lsigargbm"`
 }
 
@@ -233,16 +233,16 @@ type encodedAssetFreezeTxnFields struct {
 	BitmaskAssetFrozen bitmask `codec:"afrzbm"`
 }
 
-//msgp:allocbound applicationArgs transactions.EncodedMaxApplicationArgs
+//msgp:allocbound applicationArgs mainnettransactions.EncodedMaxApplicationArgs
 type applicationArgs [][]byte
 
-//msgp:allocbound addresses transactions.EncodedMaxAccounts
+//msgp:allocbound addresses mainnettransactions.EncodedMaxAccounts
 type addresses []basics.Address
 
-//msgp:allocbound appIndices transactions.EncodedMaxForeignApps
+//msgp:allocbound appIndices mainnettransactions.EncodedMaxForeignApps
 type appIndices []basics.AppIndex
 
-//msgp:allocbound assetIndices transactions.EncodedMaxForeignAssets
+//msgp:allocbound assetIndices mainnettransactions.EncodedMaxForeignAssets
 type assetIndices []basics.AssetIndex
 
 //msgp:allocbound program config.MaxAppProgramLen

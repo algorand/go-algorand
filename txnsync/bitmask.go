@@ -168,21 +168,30 @@ func (b *bitmask) Iterate(entries int, callback func(i int) error) error {
 	}
 	switch option {
 	case 0:
-		for i := 0; i < entries; i++ {
-			byteIndex := i/8 + 1
-			if byteIndex < len(*b) && ((*b)[byteIndex]&(1<<(i%8)) != 0) {
-				if err := callback(i); err != nil {
-					return err
+		for i, v := range (*b)[1:] {
+			for j := 0; j < 8 && v > 0; j++ {
+				if v & 1 != 0 {
+					if err := callback(8*i+j); err != nil {
+						return err
+					}
 				}
+				v>>=1
 			}
 		}
 	case 1:
-		for i := 0; i < entries; i++ {
-			byteIndex := i/8 + 1
-			if byteIndex >= len(*b) || ((*b)[byteIndex]&(1<<(i%8)) == 0) {
-				if err := callback(i); err != nil {
-					return err
+		for i, v := range (*b)[1:] {
+			for j := 0; j < 8 && v > 0; j++ {
+				if v & 1 == 0 {
+					if err := callback(8*i+j); err != nil {
+						return err
+					}
 				}
+				v>>=1
+			}
+		}
+		for index := (len(*b)-1)*8; index < entries; index ++ {
+			if err := callback(index); err != nil {
+				return err
 			}
 		}
 	case 2:

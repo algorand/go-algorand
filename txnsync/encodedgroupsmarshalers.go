@@ -189,20 +189,20 @@ func (stub *txGroupsEncodingStub) deconstructTransactions(i int, txn transaction
 	}
 	stub.TxType = append(stub.TxType, txTypeByte)
 	stub.deconstructTxnHeader(i, txn)
-	switch txn.Txn.Type {
-	case protocol.PaymentTx:
+	switch txTypeByte {
+	case paymentTx:
 		stub.deconstructPaymentTxnFields(i, txn)
-	case protocol.KeyRegistrationTx:
+	case keyRegistrationTx:
 		stub.deconstructKeyregTxnFields(i, txn)
-	case protocol.AssetConfigTx:
+	case assetConfigTx:
 		stub.deconstructAssetConfigTxnFields(i, txn)
-	case protocol.AssetTransferTx:
+	case assetTransferTx:
 		stub.deconstructAssetTransferTxnFields(i, txn)
-	case protocol.AssetFreezeTx:
+	case assetFreezeTx:
 		stub.deconstructAssetFreezeTxnFields(i, txn)
-	case protocol.ApplicationCallTx:
+	case applicationCallTx:
 		stub.deconstructApplicationCallTxnFields(i, txn)
-	case protocol.CompactCertTx:
+	case compactCertTx:
 		stub.deconstructCompactCertTxnFields(i, txn)
 	}
 	return nil
