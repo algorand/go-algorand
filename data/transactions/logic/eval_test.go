@@ -646,12 +646,15 @@ func TestArgTooFar(t *testing.T) {
 
 func TestIntcTooFar(t *testing.T) {
 	t.Parallel()
+	// Want to be super clear that intc_1 fails, whether an intcblock exists (but small) or not
 	testPanics(t, "intc_1", 1)
+	testPanics(t, "int 1; intc_1; pop", 1)
 }
 
 func TestBytecTooFar(t *testing.T) {
 	t.Parallel()
-	testPanics(t, "bytec_1", 1)
+	testPanics(t, "bytec_1; btoi", 1)
+	testPanics(t, "byte 0x23; bytec_1; btoi", 1)
 }
 
 func TestTxnBadField(t *testing.T) {
