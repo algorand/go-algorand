@@ -159,21 +159,23 @@ func (b *bitmask) expandBitmask(entries int) {
 	}
 }
 
-func (b *bitmask) Iterate(entries int, callback func(i int) error) error {
+func (b *bitmask) Iterate(entries int, callback func(int, int) error) error {
 	option := 0
 	if len(*b) > 0 {
 		option = int((*b)[0])
 	} else { // nothing to iterate
 		return nil
 	}
+	index := 0
 	switch option {
 	case 0:
 		for i, v := range (*b)[1:] {
 			for j := 0; j < 8 && v > 0; j++ {
 				if v & 1 != 0 {
-					if err := callback(8*i+j); err != nil {
+					if err := callback(8*i+j, index); err != nil {
 						return err
 					}
+					index++
 				}
 				v>>=1
 			}
@@ -182,17 +184,19 @@ func (b *bitmask) Iterate(entries int, callback func(i int) error) error {
 		for i, v := range (*b)[1:] {
 			for j := 0; j < 8 && v < 255; j++ {
 				if v & 1 == 0 {
-					if err := callback(8*i+j); err != nil {
+					if err := callback(8*i+j, index); err != nil {
 						return err
 					}
+					index++
 				}
 				v>>=1
 			}
 		}
-		for index := (len(*b)-1)*8; index < entries; index ++ {
-			if err := callback(index); err != nil {
+		for i := (len(*b)-1)*8; i < entries; i ++ {
+			if err := callback(i, index); err != nil {
 				return err
 			}
+			index++
 		}
 	case 2:
 		sum := 0
@@ -201,27 +205,29 @@ func (b *bitmask) Iterate(entries int, callback func(i int) error) error {
 			if sum >= entries {
 				return errors.New("invalid bitmask: index not found")
 			}
-			if err := callback(sum); err != nil {
+			if err := callback(sum, i); err != nil {
 				return err
 			}
 		}
 	case 3:
 		sum := 0
-		index := 0
+		j := 0
 		for i := 0; i*2+2 < len(*b); i++ {
 			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
-			for index < sum && index < entries {
-				if err := callback(index); err != nil {
+			for j < sum && j < entries {
+				if err := callback(j, index); err != nil {
 					return err
 				}
+				j++
 				index++
 			}
-			index++
+			j++
 		}
-		for index < entries {
-			if err := callback(index); err != nil {
+		for j < entries {
+			if err := callback(j, index); err != nil {
 				return err
 			}
+			j++
 			index++
 		}
 	default:

@@ -38,7 +38,7 @@ func TestBitmaskType0And2(t *testing.T) {
 	b.SetBit(2)
 	b.SetBit(69)
 	iterated := make([]bool, entries)
-	b.Iterate(entries, func(i int) error {
+	b.Iterate(entries, func(i int, index int) error {
 		iterated[i] = true
 		return nil
 	})
@@ -54,7 +54,7 @@ func TestBitmaskType0And2(t *testing.T) {
 	}
 	b.trimBitmask(entries)
 	iterated = make([]bool, entries)
-	b.Iterate(entries, func(i int) error {
+	b.Iterate(entries, func(i int, index int) error {
 		iterated[i] = true
 		return nil
 	})
@@ -80,7 +80,7 @@ func TestBitmaskType1(t *testing.T) {
 	}
 	b.trimBitmask(entries)
 	iterated := make([]bool, entries)
-	b.Iterate(entries, func(i int) error {
+	b.Iterate(entries, func(i int, index int) error {
 		iterated[i] = true
 		return nil
 	})
@@ -106,7 +106,7 @@ func TestBitmaskType3(t *testing.T) {
 	}
 	b.trimBitmask(entries)
 	iterated := make([]bool, entries)
-	b.Iterate(entries, func(i int) error {
+	b.Iterate(entries, func(i int, index int) error {
 		iterated[i] = true
 		return nil
 	})
