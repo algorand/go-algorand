@@ -305,6 +305,7 @@ var txnFieldDocs = map[string]string{
 	"GlobalNumByteSlice":       "Number of global state byteslices in ApplicationCall",
 	"LocalNumUint":             "Number of local state integers in ApplicationCall",
 	"LocalNumByteSlice":        "Number of local state byteslices in ApplicationCall",
+	"Scratch":                  "Scratch space of previous app call transaction",
 	"ApprovalProgram":          "Approval program",
 	"ClearStateProgram":        "Clear state program",
 	"RekeyTo":                  "32 byte Sender's new AuthAddr",
