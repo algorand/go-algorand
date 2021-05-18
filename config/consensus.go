@@ -351,6 +351,15 @@ type ConsensusParams struct {
 
 	// NoEmptyLocalDeltas updates how ApplyDelta.EvalDelta.LocalDeltas are stored
 	NoEmptyLocalDeltas bool
+
+	// EnableKeyregCoherencyCheck enable the following extra checks on key registration transactions:
+	// 1. checking that [VotePK/SelectionPK/VoteKeyDilution] are all set or all clear.
+	// 2. checking that the VoteFirst is less or equal to VoteLast.
+	// 3. checking that in the case of going offline, both the VoteFirst and VoteLast are clear.
+	// 4. checking that in the case of going online the VoteLast is non-zero and greater then the current network round.
+	// 5. checking that in the case of going online the VoteFirst is less or equal to the LastValid+1.
+	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
+	EnableKeyregCoherencyCheck bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -904,6 +913,8 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
+
+	vFuture.EnableKeyregCoherencyCheck = true
 
 	// enable the InitialRewardsRateCalculation fix
 	vFuture.InitialRewardsRateCalculation = true
