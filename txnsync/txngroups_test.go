@@ -264,7 +264,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 }
 
 func txnGroupsData() (txnGroups []transactions.SignedTxGroup, genesisID string, genesisHash crypto.Digest, err error) {
-	dat, err := ioutil.ReadFile("txns1.txt")
+	dat, err := ioutil.ReadFile("../test/testdata/mainnettransactions")
 	if err != nil {
 		return
 	}
