@@ -381,7 +381,7 @@ function run_systemd_action() {
                 return 0
             fi
         fi
-        
+
     # If the service is user-level then run systemctl --user
     elif check_service user "$data_dir"; then
         if systemctl --user "$action" "algorand@$(systemd-escape "${data_dir}")"; then
@@ -663,7 +663,7 @@ else
     determine_current_version
 fi
 
-# Any fail_and_exit beyond this point, will run a restart
+# Any fail_and_exit beyond this point will run a restart
 RESTART_NODE=1
 
 if ! $DRYRUN; then
