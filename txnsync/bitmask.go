@@ -16,7 +16,10 @@
 
 package txnsync
 
-import "bytes"
+import (
+	"bytes"
+	"errors"
+)
 
 //msgp:allocbound bitmask maxBitmaskSize
 type bitmask []byte
@@ -156,6 +159,68 @@ func (b *bitmask) expandBitmask(entries int) {
 	}
 }
 
-func bytesNeededBitmask(elements int) int {
-	return (elements+7)/8 + 1
+func (b *bitmask) Iterate(entries int, callback func(i int) error) error {
+	option := 0
+	if len(*b) > 0 {
+		option = int((*b)[0])
+	} else { // nothing to iterate
+		return nil
+	}
+	switch option {
+	case 0:
+		for i := 0; i < entries; i++ {
+			byteIndex := i/8 + 1
+			if byteIndex < len(*b) && ((*b)[byteIndex]&(1<<(i%8)) != 0) {
+				if err := callback(i); err != nil {
+					return err
+				}
+			}
+		}
+	case 1:
+		for i := 0; i < entries; i++ {
+			byteIndex := i/8 + 1
+			if byteIndex >= len(*b) || ((*b)[byteIndex]&(1<<(i%8)) == 0) {
+				if err := callback(i); err != nil {
+					return err
+				}
+			}
+		}
+	case 2:
+		sum := 0
+		for i := 0; i*2+2 < len(*b); i++ {
+			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
+			if sum >= entries {
+				return errors.New("invalid bitmask: index not found")
+			}
+			if err := callback(sum); err != nil {
+				return err
+			}
+		}
+	case 3:
+		sum := 0
+		index := 0
+		for i := 0; i*2+2 < len(*b); i++ {
+			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
+			for index < sum && index < entries {
+				if err := callback(index); err != nil {
+					return err
+				}
+				index++
+			}
+			index++
+		}
+		for index < entries {
+			if err := callback(index); err != nil {
+				return err
+			}
+			index++
+		}
+	default:
+		return errors.New("invalid bitmask type")
+	}
+	return nil
+}
+
+func bytesNeededBitmask(entries int) int {
+	return (entries+7)/8 + 1
 }

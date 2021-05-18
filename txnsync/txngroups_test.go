@@ -37,21 +37,35 @@ func TestBitmaskType0And2(t *testing.T) {
 	b.SetBit(0)
 	b.SetBit(2)
 	b.SetBit(69)
+	iterated := make([]bool, entries)
+	b.Iterate(entries, func(i int) error {
+		iterated[i] = true
+		return nil
+	})
 	for i := 0; i < entries; i++ {
 		exists := b.EntryExists(i, entries)
 		if i == 0 || i == 2 || i == 69 {
 			require.True(t, exists)
+			require.True(t, iterated[i], i)
 		} else {
 			require.False(t, exists)
+			require.False(t, iterated[i], i)
 		}
 	}
 	b.trimBitmask(entries)
+	iterated = make([]bool, entries)
+	b.Iterate(entries, func(i int) error {
+		iterated[i] = true
+		return nil
+	})
 	for i := 0; i < entries; i++ {
 		exists := b.EntryExists(i, entries)
 		if i == 0 || i == 2 || i == 69 {
 			require.True(t, exists)
+			require.True(t, iterated[i], i)
 		} else {
 			require.False(t, exists)
+			require.False(t, iterated[i], i)
 		}
 	}
 }
@@ -65,12 +79,19 @@ func TestBitmaskType1(t *testing.T) {
 		}
 	}
 	b.trimBitmask(entries)
+	iterated := make([]bool, entries)
+	b.Iterate(entries, func(i int) error {
+		iterated[i] = true
+		return nil
+	})
 	for i := 0; i < entries; i++ {
 		exists := b.EntryExists(i, entries)
 		if i%3 == 0 {
 			require.False(t, exists)
+			require.False(t, iterated[i], i)
 		} else {
 			require.True(t, exists)
+			require.True(t, iterated[i], i)
 		}
 	}
 }
@@ -84,12 +105,19 @@ func TestBitmaskType3(t *testing.T) {
 		}
 	}
 	b.trimBitmask(entries)
+	iterated := make([]bool, entries)
+	b.Iterate(entries, func(i int) error {
+		iterated[i] = true
+		return nil
+	})
 	for i := 0; i < entries; i++ {
 		exists := b.EntryExists(i, entries)
 		if i == 0 || i == 2 || i == 69 {
 			require.False(t, exists)
+			require.False(t, iterated[i], i)
 		} else {
 			require.True(t, exists)
+			require.True(t, iterated[i], i)
 		}
 	}
 }

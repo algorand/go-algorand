@@ -40,7 +40,7 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 	txGroupHashes := make([]crypto.Digest, 16)
 	for _, txns := range txnGroups {
 		var txGroup transactions.TxGroup
-		txGroup.TxGroupHashes = txGroupHashes[: len(txns.Transactions)]
+		txGroup.TxGroupHashes = txGroupHashes[:len(txns.Transactions)]
 		for i, tx := range txns.Transactions {
 			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
 		}

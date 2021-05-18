@@ -82,7 +82,7 @@ type encodedMsigs struct {
 }
 
 type encodedLsigs struct {
-	_struct          struct{}   `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Logic            [][]byte   `codec:"lsigl,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxLogicSigMaxSize"`
 	BitmaskLogic     bitmask    `codec:"lsiglbm"`
