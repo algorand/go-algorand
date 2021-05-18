@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+short-asset-url-only start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -25,4 +27,4 @@ ${gcmd} asset create \
     | grep "is too long (max 32 bytes)"
 set -o pipefail
 
-date '+short-asset-url-only finish %Y%m%d_%H%M%S'
+date "+${scriptname} finish %Y%m%d_%H%M%S"
