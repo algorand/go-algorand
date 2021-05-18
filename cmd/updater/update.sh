@@ -367,22 +367,23 @@ function run_systemd_action() {
     local data_dir=$2
     local process_owner
 
+    # If the service is system-level, check if it's root or sudo
     if check_service system "$data_dir"; then
         process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
-        if $IS_ROOT || grep sudo <(groups "$process_owner" &> /dev/null); then
+        if $IS_ROOT; then
             if systemctl "$action" "algorand@$(systemd-escape "$data_dir")"; then
                 echo "systemd system service: $action"
                 return 0
             fi
-        else
+        elif grep sudo <(groups "$process_owner" &> /dev/null); then
             if sudo -n systemctl "$action" "algorand@$(systemd-escape "$data_dir")"; then
                 echo "sudo -n systemd system service: $action"
                 return 0
             fi
         fi
-    fi
-
-    if check_service user "$data_dir"; then
+        
+    # If the service is user-level then run systemctl --user
+    elif check_service user "$data_dir"; then
         if systemctl --user "$action" "algorand@$(systemd-escape "${data_dir}")"; then
             echo "systemd user service: $action"
             return 0
@@ -600,6 +601,8 @@ function apply_fixups() {
     done
 }
 
+
+
 #--------------------------------------------
 # Main Update Driver
 
@@ -659,6 +662,9 @@ else
 
     determine_current_version
 fi
+
+# Any fail_and_exit beyond this point, will run a restart
+RESTART_NODE=1
 
 if ! $DRYRUN; then
     if [ ${SKIP_UPDATE} -eq 0 ]; then
