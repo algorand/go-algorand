@@ -33,6 +33,17 @@ func getSlice(b []byte, index int, size int) ([]byte, error) {
 	return b[index*size : index*size+size], nil
 }
 
+// the nextSlice definition - copy the next slice and slide the src window.
+func nextSlice(src *[]byte, dst []byte, size int) error {
+	if len(*src) < size {
+		return errDataMissing
+	}
+	copy(dst[:], (*src)[: size])
+	// slice the src window so next call would get the next entry.
+	*src = (*src)[size:]
+	return nil
+}
+
 func getNibble(b []byte, index int) (byte, error) {
 	if index > len(b)*2 {
 		return 0, errDataMissing
@@ -43,15 +54,29 @@ func getNibble(b []byte, index int) (byte, error) {
 	return b[index/2] % 16, nil
 }
 
-func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) (err error) {
-	err = stub.BitmaskSig.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.Sig, index, len(crypto.Signature{}))
-		if err != nil {
-			return err
+func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitmask) {
+	index := 0
+	txGroupHashes := make([]crypto.Digest, 16)
+	for _, txns := range txnGroups {
+		var txGroup transactions.TxGroup
+		txGroup.TxGroupHashes = txGroupHashes[:len(txns.Transactions)]
+		for i, tx := range txns.Transactions {
+			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
 		}
-		copy(signedTxns[i].Sig[:], slice)
-		return nil
-	})
+		groupHash := crypto.HashObj(txGroup)
+		for i := range txns.Transactions {
+			if exists := b.EntryExists(index, txnCount); exists || len(txns.Transactions) > 1 {
+				txns.Transactions[i].Txn.Group = groupHash
+			}
+			index++
+		}
+	}
+}
+
+func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) (err error) {
+	err = stub.BitmaskSig.Iterate(int(stub.TotalTransactionsCount), len(stub.Sig)/len(crypto.Signature{}), func(i int, index int) error {
+		return nextSlice(&stub.Sig, signedTxns[i].Sig[:], len(crypto.Signature{}))
+    })
 	if err != nil {
 		return err
 	}
@@ -62,14 +87,9 @@ func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []tra
 	if err := stub.reconstructLsigs(signedTxns); err != nil {
 		return fmt.Errorf("failed to lsigs: %w", err)
 	}
-	err = stub.BitmaskAuthAddr.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.AuthAddr, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].AuthAddr[:], slice)
-		return nil
-	})
+	err = stub.BitmaskAuthAddr.Iterate(int(stub.TotalTransactionsCount), len(stub.AuthAddr), func(i int, index int) error {
+		return nextSlice(&stub.AuthAddr, signedTxns[i].AuthAddr[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
@@ -78,30 +98,21 @@ func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []tra
 }
 
 func (stub *txGroupsEncodingStub) reconstructMsigs(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskVersion.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Version) {
-			return errDataMissing
-		}
+	err = stub.BitmaskVersion.Iterate(int(stub.TotalTransactionsCount), len(stub.Version), func(i int, index int) error {
 		signedTxns[i].Msig.Version = stub.Version[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskThreshold.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Threshold) {
-			return errDataMissing
-		}
+	err = stub.BitmaskThreshold.Iterate(int(stub.TotalTransactionsCount), len(stub.Threshold), func(i int, index int) error {
 		signedTxns[i].Msig.Threshold = stub.Threshold[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskSubsigs.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Subsigs) {
-			return errDataMissing
-		}
+	err = stub.BitmaskSubsigs.Iterate(int(stub.TotalTransactionsCount), len(stub.Subsigs), func(i int, index int) error {
 		signedTxns[i].Msig.Subsigs = stub.Subsigs[index]
 		return nil
 	})
@@ -112,10 +123,7 @@ func (stub *txGroupsEncodingStub) reconstructMsigs(signedTxns []transactions.Sig
 }
 
 func (stub *txGroupsEncodingStub) reconstructLsigs(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskLogic.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Logic) {
-			return errDataMissing
-		}
+	err = stub.BitmaskLogic.Iterate(int(stub.TotalTransactionsCount), len(stub.Logic), func(i int, index int) error {
 		signedTxns[i].Lsig.Logic = stub.Logic[index]
 		// fetch sig/msig
 		signedTxns[i].Lsig.Sig = signedTxns[i].Sig
@@ -127,10 +135,7 @@ func (stub *txGroupsEncodingStub) reconstructLsigs(signedTxns []transactions.Sig
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskLogicArgs.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.LogicArgs) {
-			return errDataMissing
-		}
+	err = stub.BitmaskLogicArgs.Iterate(int(stub.TotalTransactionsCount), len(stub.LogicArgs), func(i int, index int) error {
 		signedTxns[i].Lsig.Args = stub.LogicArgs[index]
 		return nil
 	})
@@ -141,7 +146,7 @@ func (stub *txGroupsEncodingStub) reconstructLsigs(signedTxns []transactions.Sig
 }
 
 func (stub *txGroupsEncodingStub) reconstructTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) (err error) {
-	err = stub.BitmaskTxType.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
+	err = stub.BitmaskTxType.Iterate(int(stub.TotalTransactionsCount), len(stub.TxType)*2, func(i int, index int) error {
 		b, err := getNibble(stub.TxType, index)
 		if err != nil {
 			return err
@@ -186,58 +191,41 @@ func (stub *txGroupsEncodingStub) reconstructTransactions(signedTxns []transacti
 }
 
 func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) (err error) {
-	err = stub.BitmaskSender.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.Sender, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.Sender[:], slice)
-		return nil
-	})
+	err = stub.BitmaskSender.Iterate(int(stub.TotalTransactionsCount), len(stub.Sender)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.Sender, signedTxns[i].Txn.Sender[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskFee.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Fee) {
-			return errDataMissing
-		}
+	err = stub.BitmaskFee.Iterate(int(stub.TotalTransactionsCount), len(stub.Fee), func(i int, index int) error {
 		signedTxns[i].Txn.Fee = stub.Fee[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskFirstValid.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.FirstValid) {
-			return errDataMissing
-		}
+	err = stub.BitmaskFirstValid.Iterate(int(stub.TotalTransactionsCount), len(stub.FirstValid), func(i int, index int) error {
 		signedTxns[i].Txn.FirstValid = stub.FirstValid[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskLastValid.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.LastValid) {
-			return errDataMissing
-		}
+	err = stub.BitmaskLastValid.Iterate(int(stub.TotalTransactionsCount), len(stub.LastValid), func(i int, index int) error {
 		signedTxns[i].Txn.LastValid = stub.LastValid[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskNote.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Note) {
-			return errDataMissing
-		}
+	err = stub.BitmaskNote.Iterate(int(stub.TotalTransactionsCount), len(stub.Note), func(i int, index int) error {
 		signedTxns[i].Txn.Note = stub.Note[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskGenesisID.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
+	err = stub.BitmaskGenesisID.Iterate(int(stub.TotalTransactionsCount), int(stub.TotalTransactionsCount), func(i int, index int) error {
 		signedTxns[i].Txn.GenesisID = genesisID
 		return nil
 	})
@@ -247,25 +235,15 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 	for i := range signedTxns {
 		signedTxns[i].Txn.GenesisHash = genesisHash
 	}
-	err = stub.BitmaskLease.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.Lease, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.Lease[:], slice)
-		return nil
-	})
+	err = stub.BitmaskLease.Iterate(int(stub.TotalTransactionsCount), len(stub.Lease)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.Lease, signedTxns[i].Txn.Lease[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskRekeyTo.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.RekeyTo, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.RekeyTo[:], slice)
-		return nil
-	})
+	err = stub.BitmaskRekeyTo.Iterate(int(stub.TotalTransactionsCount), len(stub.RekeyTo)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.RekeyTo, signedTxns[i].Txn.RekeyTo[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
@@ -273,27 +251,22 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 }
 
 func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskKeys.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.VotePK, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.VotePK[:], slice)
-		slice, err = getSlice(stub.SelectionPK, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.SelectionPK[:], slice)
-		if index >= len(stub.VoteKeyDilution) {
-			return errDataMissing
-		}
+	// should all have same number of elements
+	if len(stub.VotePK)/crypto.DigestSize != len(stub.VoteKeyDilution) || len(stub.SelectionPK)/crypto.DigestSize != len(stub.VoteKeyDilution) {
+		return errDataMissing
+	}
+	err = stub.BitmaskKeys.Iterate(int(stub.TotalTransactionsCount), len(stub.VoteKeyDilution), func(i int, index int) error {
 		signedTxns[i].Txn.VoteKeyDilution = stub.VoteKeyDilution[index]
-		return nil
+		err := nextSlice(&stub.VotePK, signedTxns[i].Txn.VotePK[:], crypto.DigestSize)
+		if err != nil {
+			return err
+		}
+		return nextSlice(&stub.SelectionPK, signedTxns[i].Txn.SelectionPK[:], crypto.DigestSize)
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskVoteFirst.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
+	err = stub.BitmaskVoteFirst.Iterate(int(stub.TotalTransactionsCount), len(stub.VoteFirst), func(i int, index int) error {
 		if index >= len(stub.VoteFirst) {
 			return errDataMissing
 		}
@@ -303,7 +276,7 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskVoteLast.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
+	err = stub.BitmaskVoteLast.Iterate(int(stub.TotalTransactionsCount), len(stub.VoteLast), func(i int, index int) error {
 		if index >= len(stub.VoteLast) {
 			return errDataMissing
 		}
@@ -314,7 +287,7 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 		return err
 	}
 
-	err = stub.BitmaskNonparticipation.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
+	err = stub.BitmaskNonparticipation.Iterate(int(stub.TotalTransactionsCount), int(stub.TotalTransactionsCount), func(i int, index int) error {
 		signedTxns[i].Txn.Nonparticipation = true
 		return nil
 	})
@@ -325,35 +298,22 @@ func (stub *txGroupsEncodingStub) reconstructKeyregTxnFields(signedTxns []transa
 }
 
 func (stub *txGroupsEncodingStub) reconstructPaymentTxnFields(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskReceiver.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.Receiver, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.Receiver[:], slice)
-		return nil
-	})
+	err = stub.BitmaskReceiver.Iterate(int(stub.TotalTransactionsCount), len(stub.Receiver)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.Receiver, signedTxns[i].Txn.Receiver[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskAmount.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Amount) {
-			return errDataMissing
-		}
+	err = stub.BitmaskAmount.Iterate(int(stub.TotalTransactionsCount), len(stub.Amount), func(i int, index int) error {
 		signedTxns[i].Txn.Amount = stub.Amount[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskCloseRemainderTo.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.CloseRemainderTo, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.CloseRemainderTo[:], slice)
-		return nil
-	})
+	err = stub.BitmaskCloseRemainderTo.Iterate(int(stub.TotalTransactionsCount), len(stub.CloseRemainderTo)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.CloseRemainderTo, signedTxns[i].Txn.CloseRemainderTo[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
@@ -361,10 +321,7 @@ func (stub *txGroupsEncodingStub) reconstructPaymentTxnFields(signedTxns []trans
 }
 
 func (stub *txGroupsEncodingStub) reconstructAssetConfigTxnFields(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskConfigAsset.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.ConfigAsset) {
-			return errDataMissing
-		}
+	err = stub.BitmaskConfigAsset.Iterate(int(stub.TotalTransactionsCount), len(stub.ConfigAsset), func(i int, index int) error {
 		signedTxns[i].Txn.ConfigAsset = stub.ConfigAsset[index]
 		return nil
 	})
@@ -375,115 +332,75 @@ func (stub *txGroupsEncodingStub) reconstructAssetConfigTxnFields(signedTxns []t
 }
 
 func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskTotal.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Total) {
-			return errDataMissing
-		}
+	err = stub.BitmaskTotal.Iterate(int(stub.TotalTransactionsCount), len(stub.Total), func(i int, index int) error {
 		signedTxns[i].Txn.AssetParams.Total = stub.Total[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskDecimals.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Decimals) {
-			return errDataMissing
-		}
+	err = stub.BitmaskDecimals.Iterate(int(stub.TotalTransactionsCount), len(stub.Decimals), func(i int, index int) error {
 		signedTxns[i].Txn.AssetParams.Decimals = stub.Decimals[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskDefaultFrozen.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
+	err = stub.BitmaskDefaultFrozen.Iterate(int(stub.TotalTransactionsCount), int(stub.TotalTransactionsCount), func(i int, index int) error {
 		signedTxns[i].Txn.AssetParams.DefaultFrozen = true
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskUnitName.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.UnitName) {
-			return errDataMissing
-		}
+	err = stub.BitmaskUnitName.Iterate(int(stub.TotalTransactionsCount), len(stub.UnitName), func(i int, index int) error {
 		signedTxns[i].Txn.AssetParams.UnitName = stub.UnitName[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskAssetName.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.AssetName) {
-			return errDataMissing
-		}
+	err = stub.BitmaskAssetName.Iterate(int(stub.TotalTransactionsCount), len(stub.AssetName), func(i int, index int) error {
 		signedTxns[i].Txn.AssetParams.AssetName = stub.AssetName[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskURL.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.URL) {
-			return errDataMissing
-		}
+	err = stub.BitmaskURL.Iterate(int(stub.TotalTransactionsCount), len(stub.URL), func(i int, index int) error {
 		signedTxns[i].Txn.AssetParams.URL = stub.URL[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskMetadataHash.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.MetadataHash, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.AssetParams.MetadataHash[:], slice)
-		return nil
-	})
+	err = stub.BitmaskMetadataHash.Iterate(int(stub.TotalTransactionsCount), len(stub.MetadataHash)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.MetadataHash, signedTxns[i].Txn.AssetParams.MetadataHash[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskManager.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.Manager, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.AssetParams.Manager[:], slice)
-		return nil
-	})
+	err = stub.BitmaskManager.Iterate(int(stub.TotalTransactionsCount), len(stub.Manager)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.Manager, signedTxns[i].Txn.AssetParams.Manager[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskReserve.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.Reserve, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.AssetParams.Reserve[:], slice)
-		return nil
-	})
+	err = stub.BitmaskReserve.Iterate(int(stub.TotalTransactionsCount), len(stub.Reserve)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.Reserve, signedTxns[i].Txn.AssetParams.Reserve[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskFreeze.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.Freeze, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.AssetParams.Freeze[:], slice)
-		return nil
-	})
+	err = stub.BitmaskFreeze.Iterate(int(stub.TotalTransactionsCount), len(stub.Freeze)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.Freeze, signedTxns[i].Txn.AssetParams.Freeze[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskClawback.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.Clawback, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.AssetParams.Clawback[:], slice)
-		return nil
-	})
+	err = stub.BitmaskClawback.Iterate(int(stub.TotalTransactionsCount), len(stub.Clawback)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.Clawback, signedTxns[i].Txn.AssetParams.Clawback[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
@@ -491,56 +408,35 @@ func (stub *txGroupsEncodingStub) reconstructAssetParams(signedTxns []transactio
 }
 
 func (stub *txGroupsEncodingStub) reconstructAssetTransferTxnFields(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskXferAsset.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.XferAsset) {
-			return errDataMissing
-		}
+	err = stub.BitmaskXferAsset.Iterate(int(stub.TotalTransactionsCount), len(stub.XferAsset), func(i int, index int) error {
 		signedTxns[i].Txn.XferAsset = stub.XferAsset[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskAssetAmount.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.AssetAmount) {
-			return errDataMissing
-		}
+	err = stub.BitmaskAssetAmount.Iterate(int(stub.TotalTransactionsCount), len(stub.AssetAmount), func(i int, index int) error {
 		signedTxns[i].Txn.AssetAmount = stub.AssetAmount[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskAssetSender.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.AssetSender, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.AssetSender[:], slice)
-		return nil
-	})
+	err = stub.BitmaskAssetSender.Iterate(int(stub.TotalTransactionsCount), len(stub.AssetSender)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.AssetSender, signedTxns[i].Txn.AssetSender[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskAssetReceiver.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.AssetReceiver, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.AssetReceiver[:], slice)
-		return nil
-	})
+	err = stub.BitmaskAssetReceiver.Iterate(int(stub.TotalTransactionsCount), len(stub.AssetReceiver)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.AssetReceiver, signedTxns[i].Txn.AssetReceiver[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskAssetCloseTo.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.AssetCloseTo, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.AssetCloseTo[:], slice)
-		return nil
-	})
+	err = stub.BitmaskAssetCloseTo.Iterate(int(stub.TotalTransactionsCount), len(stub.AssetCloseTo)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.AssetCloseTo, signedTxns[i].Txn.AssetCloseTo[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
@@ -548,21 +444,13 @@ func (stub *txGroupsEncodingStub) reconstructAssetTransferTxnFields(signedTxns [
 }
 
 func (stub *txGroupsEncodingStub) reconstructAssetFreezeTxnFields(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskFreezeAccount.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.FreezeAccount, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.FreezeAccount[:], slice)
-		return nil
-	})
+	err = stub.BitmaskFreezeAccount.Iterate(int(stub.TotalTransactionsCount), len(stub.FreezeAccount)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.FreezeAccount, signedTxns[i].Txn.FreezeAccount[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskFreezeAsset.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.FreezeAsset) {
-			return errDataMissing
-		}
+	err = stub.BitmaskFreezeAsset.Iterate(int(stub.TotalTransactionsCount), len(stub.FreezeAsset), func(i int, index int) error {
 		signedTxns[i].Txn.FreezeAsset = stub.FreezeAsset[index]
 		return nil
 	})
@@ -570,7 +458,7 @@ func (stub *txGroupsEncodingStub) reconstructAssetFreezeTxnFields(signedTxns []t
 		return err
 	}
 
-	err = stub.BitmaskAssetFrozen.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
+	err = stub.BitmaskAssetFrozen.Iterate(int(stub.TotalTransactionsCount), int(stub.TotalTransactionsCount), func(i int, index int) error {
 		signedTxns[i].Txn.AssetFrozen = true
 		return nil
 	})
@@ -581,17 +469,14 @@ func (stub *txGroupsEncodingStub) reconstructAssetFreezeTxnFields(signedTxns []t
 }
 
 func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskApplicationID.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.ApplicationID) {
-			return errDataMissing
-		}
+	err = stub.BitmaskApplicationID.Iterate(int(stub.TotalTransactionsCount), len(stub.ApplicationID), func(i int, index int) error {
 		signedTxns[i].Txn.ApplicationID = stub.ApplicationID[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskOnCompletion.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
+	err = stub.BitmaskOnCompletion.Iterate(int(stub.TotalTransactionsCount), len(stub.OnCompletion)*2, func(i int, index int) error {
 		b, err := getNibble(stub.OnCompletion, index)
 		if err != nil {
 			return err
@@ -602,100 +487,70 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskApplicationArgs.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.ApplicationArgs) {
-			return errDataMissing
-		}
+	err = stub.BitmaskApplicationArgs.Iterate(int(stub.TotalTransactionsCount), len(stub.ApplicationArgs), func(i int, index int) error {
 		signedTxns[i].Txn.ApplicationArgs = stub.ApplicationArgs[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskAccounts.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Accounts) {
-			return errDataMissing
-		}
+	err = stub.BitmaskAccounts.Iterate(int(stub.TotalTransactionsCount), len(stub.Accounts), func(i int, index int) error {
 		signedTxns[i].Txn.Accounts = stub.Accounts[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskForeignApps.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.ForeignApps) {
-			return errDataMissing
-		}
+	err = stub.BitmaskForeignApps.Iterate(int(stub.TotalTransactionsCount), len(stub.ForeignApps), func(i int, index int) error {
 		signedTxns[i].Txn.ForeignApps = stub.ForeignApps[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskForeignAssets.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.ForeignAssets) {
-			return errDataMissing
-		}
+	err = stub.BitmaskForeignAssets.Iterate(int(stub.TotalTransactionsCount), len(stub.ForeignAssets), func(i int, index int) error {
 		signedTxns[i].Txn.ForeignAssets = stub.ForeignAssets[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskLocalNumUint.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.LocalNumUint) {
-			return errDataMissing
-		}
+	err = stub.BitmaskLocalNumUint.Iterate(int(stub.TotalTransactionsCount), len(stub.LocalNumUint), func(i int, index int) error {
 		signedTxns[i].Txn.LocalStateSchema.NumUint = stub.LocalNumUint[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskLocalNumByteSlice.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.LocalNumByteSlice) {
-			return errDataMissing
-		}
+	err = stub.BitmaskLocalNumByteSlice.Iterate(int(stub.TotalTransactionsCount), len(stub.LocalNumByteSlice), func(i int, index int) error {
 		signedTxns[i].Txn.LocalStateSchema.NumByteSlice = stub.LocalNumByteSlice[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskGlobalNumUint.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.GlobalNumUint) {
-			return errDataMissing
-		}
+	err = stub.BitmaskGlobalNumUint.Iterate(int(stub.TotalTransactionsCount), len(stub.GlobalNumUint), func(i int, index int) error {
 		signedTxns[i].Txn.GlobalStateSchema.NumUint = stub.GlobalNumUint[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskGlobalNumByteSlice.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.GlobalNumByteSlice) {
-			return errDataMissing
-		}
+	err = stub.BitmaskGlobalNumByteSlice.Iterate(int(stub.TotalTransactionsCount), len(stub.GlobalNumByteSlice), func(i int, index int) error {
 		signedTxns[i].Txn.GlobalStateSchema.NumByteSlice = stub.GlobalNumByteSlice[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskApprovalProgram.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.ApprovalProgram) {
-			return errDataMissing
-		}
+	err = stub.BitmaskApprovalProgram.Iterate(int(stub.TotalTransactionsCount), len(stub.ApprovalProgram), func(i int, index int) error {
 		signedTxns[i].Txn.ApprovalProgram = stub.ApprovalProgram[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskClearStateProgram.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.ClearStateProgram) {
-			return errDataMissing
-		}
+	err = stub.BitmaskClearStateProgram.Iterate(int(stub.TotalTransactionsCount), len(stub.ClearStateProgram), func(i int, index int) error {
 		signedTxns[i].Txn.ClearStateProgram = stub.ClearStateProgram[index]
 		return nil
 	})
@@ -706,20 +561,14 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 }
 
 func (stub *txGroupsEncodingStub) reconstructCompactCertTxnFields(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskCertRound.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.CertRound) {
-			return errDataMissing
-		}
+	err = stub.BitmaskCertRound.Iterate(int(stub.TotalTransactionsCount), len(stub.CertRound), func(i int, index int) error {
 		signedTxns[i].Txn.CertRound = stub.CertRound[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskCertType.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.CertType) {
-			return errDataMissing
-		}
+	err = stub.BitmaskCertType.Iterate(int(stub.TotalTransactionsCount), len(stub.CertType), func(i int, index int) error {
 		signedTxns[i].Txn.CertType = stub.CertType[index]
 		return nil
 	})
@@ -730,51 +579,34 @@ func (stub *txGroupsEncodingStub) reconstructCompactCertTxnFields(signedTxns []t
 }
 
 func (stub *txGroupsEncodingStub) reconstructCert(signedTxns []transactions.SignedTxn) (err error) {
-	err = stub.BitmaskSigCommit.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		slice, err := getSlice(stub.SigCommit, index, crypto.DigestSize)
-		if err != nil {
-			return err
-		}
-		copy(signedTxns[i].Txn.Cert.SigCommit[:], slice)
-		return nil
-	})
+	err = stub.BitmaskSigCommit.Iterate(int(stub.TotalTransactionsCount), len(stub.SigCommit)/crypto.DigestSize, func(i int, index int) error {
+		return nextSlice(&stub.SigCommit, signedTxns[i].Txn.Cert.SigCommit[:], crypto.DigestSize)
+    })
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskSignedWeight.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.SignedWeight) {
-			return errDataMissing
-		}
+	err = stub.BitmaskSignedWeight.Iterate(int(stub.TotalTransactionsCount), len(stub.SignedWeight), func(i int, index int) error {
 		signedTxns[i].Txn.Cert.SignedWeight = stub.SignedWeight[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskSigProofs.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.SigProofs) {
-			return errDataMissing
-		}
+	err = stub.BitmaskSigProofs.Iterate(int(stub.TotalTransactionsCount), len(stub.SigProofs), func(i int, index int) error {
 		signedTxns[i].Txn.Cert.SigProofs = stub.SigProofs[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskPartProofs.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.PartProofs) {
-			return errDataMissing
-		}
+	err = stub.BitmaskPartProofs.Iterate(int(stub.TotalTransactionsCount), len(stub.PartProofs), func(i int, index int) error {
 		signedTxns[i].Txn.Cert.PartProofs = stub.PartProofs[index]
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = stub.BitmaskReveals.Iterate(int(stub.TotalTransactionsCount), func(i int, index int) error {
-		if index >= len(stub.Reveals) {
-			return errDataMissing
-		}
+	err = stub.BitmaskReveals.Iterate(int(stub.TotalTransactionsCount), len(stub.Reveals), func(i int, index int) error {
 		signedTxns[i].Txn.Cert.Reveals = stub.Reveals[index]
 		return nil
 	})

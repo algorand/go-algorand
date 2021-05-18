@@ -165,8 +165,8 @@ func (e *emulator) initNodes() {
 			makeNodeLogger(e.log, e.nodes[i]),
 			e.nodes[i],
 			e.scenario.netConfig.nodes[i].isRelay,
-			"gID",
-			crypto.Hash([]byte("gh")),
+			"",
+			crypto.Digest{},
 		)
 		e.syncers = append(e.syncers, syncer)
 	}

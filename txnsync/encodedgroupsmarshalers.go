@@ -35,25 +35,6 @@ func compactNibblesArray(b []byte) []byte {
 	return b[0 : len(b)/2]
 }
 
-func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitmask) {
-	index := 0
-	txGroupHashes := make([]crypto.Digest, 16)
-	for _, txns := range txnGroups {
-		var txGroup transactions.TxGroup
-		txGroup.TxGroupHashes = txGroupHashes[:len(txns.Transactions)]
-		for i, tx := range txns.Transactions {
-			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
-		}
-		groupHash := crypto.HashObj(txGroup)
-		for i := range txns.Transactions {
-			if exists := b.EntryExists(index, txnCount); exists || len(txns.Transactions) > 1 {
-				txns.Transactions[i].Txn.Group = groupHash
-			}
-			index++
-		}
-	}
-}
-
 // deconstructs SignedTxn's into lists of fields and bitmasks
 func (stub *txGroupsEncodingStub) deconstructSignedTransactions(i int, txn transactions.SignedTxn) error {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))

@@ -159,7 +159,7 @@ func (b *bitmask) expandBitmask(entries int) {
 	}
 }
 
-func (b *bitmask) Iterate(entries int, callback func(int, int) error) error {
+func (b *bitmask) Iterate(entries int, maxIndex int, callback func(int, int) error) error {
 	option := 0
 	if len(*b) > 0 {
 		option = int((*b)[0])
@@ -172,6 +172,9 @@ func (b *bitmask) Iterate(entries int, callback func(int, int) error) error {
 		for i, v := range (*b)[1:] {
 			for j := 0; j < 8 && v > 0; j++ {
 				if v & 1 != 0 {
+					if index >= maxIndex {
+						return errDataMissing
+					}
 					if err := callback(8*i+j, index); err != nil {
 						return err
 					}
@@ -184,6 +187,9 @@ func (b *bitmask) Iterate(entries int, callback func(int, int) error) error {
 		for i, v := range (*b)[1:] {
 			for j := 0; j < 8 && v < 255; j++ {
 				if v & 1 == 0 {
+					if index >= maxIndex {
+						return errDataMissing
+					}
 					if err := callback(8*i+j, index); err != nil {
 						return err
 					}
@@ -193,6 +199,9 @@ func (b *bitmask) Iterate(entries int, callback func(int, int) error) error {
 			}
 		}
 		for i := (len(*b)-1)*8; i < entries; i ++ {
+			if index >= maxIndex {
+				return errDataMissing
+			}
 			if err := callback(i, index); err != nil {
 				return err
 			}
@@ -200,12 +209,15 @@ func (b *bitmask) Iterate(entries int, callback func(int, int) error) error {
 		}
 	case 2:
 		sum := 0
-		for i := 0; i*2+2 < len(*b); i++ {
-			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
+		for index:= 0; index*2+2 < len(*b); index++ {
+			sum += int((*b)[index*2+1])*256 + int((*b)[index*2+2])
 			if sum >= entries {
 				return errors.New("invalid bitmask: index not found")
 			}
-			if err := callback(sum, i); err != nil {
+			if index >= maxIndex {
+				return errDataMissing
+			}
+			if err := callback(sum, index); err != nil {
 				return err
 			}
 		}
@@ -215,6 +227,9 @@ func (b *bitmask) Iterate(entries int, callback func(int, int) error) error {
 		for i := 0; i*2+2 < len(*b); i++ {
 			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
 			for j < sum && j < entries {
+				if index >= maxIndex {
+					return errDataMissing
+				}
 				if err := callback(j, index); err != nil {
 					return err
 				}
@@ -224,6 +239,9 @@ func (b *bitmask) Iterate(entries int, callback func(int, int) error) error {
 			j++
 		}
 		for j < entries {
+			if index >= maxIndex {
+				return errDataMissing
+			}
 			if err := callback(j, index); err != nil {
 				return err
 			}
