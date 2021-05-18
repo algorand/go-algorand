@@ -25,26 +25,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//msgp:allocbound txnGroups maxEncodedTransactionGroupEntries
-type txnGroups []transactions.SignedTxn
-
-type txGroupsEncodingStubOld struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	TxnGroups []txnGroups `codec:"t,allocbound=maxEncodedTransactionGroup"`
-}
-
-func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte {
-	stub := txGroupsEncodingStubOld{
-		TxnGroups: make([]txnGroups, len(inTxnGroups)),
-	}
-	for i := range inTxnGroups {
-		stub.TxnGroups[i] = inTxnGroups[i].Transactions
-	}
-
-	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
-}
-
 func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, error) {
 	txnCount := 0
 	for _, txGroup := range inTxnGroups {
@@ -82,22 +62,6 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, 
 	stub.finishDeconstructSignedTransactions()
 
 	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0]), nil
-}
-
-func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTxGroup, err error) {
-	if len(bytes) == 0 {
-		return nil, nil
-	}
-	var stub txGroupsEncodingStubOld
-	_, err = stub.UnmarshalMsg(bytes)
-	if err != nil {
-		return nil, err
-	}
-	txnGroups = make([]transactions.SignedTxGroup, len(stub.TxnGroups))
-	for i := range stub.TxnGroups {
-		txnGroups[i].Transactions = stub.TxnGroups[i]
-	}
-	return txnGroups, nil
 }
 
 func decodeTransactionGroups(bytes []byte, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {

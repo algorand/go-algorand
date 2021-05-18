@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"errors"
+	"github.com/algorand/go-algorand/data/transactions"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
@@ -32,6 +33,16 @@ const maxSignatureBytes = maxEncodedTransactionGroupEntries * len(crypto.Signatu
 const maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
 
 var errInvalidTxType = errors.New("invalid txtype")
+
+//msgp:allocbound txnGroups maxEncodedTransactionGroupEntries
+type txnGroups []transactions.SignedTxn
+
+// old data structure for encoding (only used for testing)
+type txGroupsEncodingStubOld struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	TxnGroups []txnGroups `codec:"t,allocbound=maxEncodedTransactionGroup"`
+}
 
 type txGroupsEncodingStub struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`

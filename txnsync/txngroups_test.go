@@ -107,6 +107,35 @@ func TestNibble(t *testing.T) {
 	}
 }
 
+// old encoding method
+func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte {
+	stub := txGroupsEncodingStubOld{
+		TxnGroups: make([]txnGroups, len(inTxnGroups)),
+	}
+	for i := range inTxnGroups {
+		stub.TxnGroups[i] = inTxnGroups[i].Transactions
+	}
+
+	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
+}
+
+// old decoding method
+func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTxGroup, err error) {
+	if len(bytes) == 0 {
+		return nil, nil
+	}
+	var stub txGroupsEncodingStubOld
+	_, err = stub.UnmarshalMsg(bytes)
+	if err != nil {
+		return nil, err
+	}
+	txnGroups = make([]transactions.SignedTxGroup, len(stub.TxnGroups))
+	for i := range stub.TxnGroups {
+		txnGroups[i].Transactions = stub.TxnGroups[i]
+	}
+	return txnGroups, nil
+}
+
 func TestTxnGroupEncodingSmall(t *testing.T) {
 	genesisHash := crypto.Hash([]byte("gh"))
 	genesisID := "gID"
