@@ -305,11 +305,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
-		// Schemas may only be set during application creation
+		// Schemas and ExtraProgramPages may only be set during application creation
 		if tx.ApplicationID != 0 {
 			if tx.LocalStateSchema != (basics.StateSchema{}) ||
 				tx.GlobalStateSchema != (basics.StateSchema{}) {
 				return fmt.Errorf("local and global state schemas are immutable")
+			}
+			if tx.ExtraProgramPages != 0 {
+				return fmt.Errorf("ExtraProgramPages field is immutable")
 			}
 		}
 
@@ -343,6 +346,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
 		}
 
+		if tx.ExtraProgramPages > proto.MaxExtraAppProgramPages {
+			return fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages)
+		}
+
 		if len(tx.ApprovalProgram) > ((1 + tx.ExtraProgramPages) * proto.MaxAppProgramLen) {
 			return fmt.Errorf("approval program too long. max len %d bytes", (1+tx.ExtraProgramPages)*proto.MaxAppProgramLen)
 		}
@@ -357,10 +364,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 		if tx.GlobalStateSchema.NumEntries() > proto.MaxGlobalSchemaEntries {
 			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
-		}
-
-		if tx.ExtraProgramPages > proto.MaxExtraAppProgramPages {
-			return fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages)
 		}
 
 	case protocol.CompactCertTx:

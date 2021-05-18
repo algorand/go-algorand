@@ -455,7 +455,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
 	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
 	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
-	checkSetMax(p.MaxAvailableAppProgramLen, &MaxAvailableAppProgramLen)
+	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -924,7 +924,6 @@ func initConsensusProtocols() {
 
 	// Enable support for larger app program size
 	vFuture.MaxExtraAppProgramPages = 3
-	vFuture.MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
 
 	// enable the InitialRewardsRateCalculation fix
 	vFuture.InitialRewardsRateCalculation = true

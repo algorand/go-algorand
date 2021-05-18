@@ -167,11 +167,12 @@ func (l *testLedger) MinBalance(addr basics.Address, proto *config.ConsensusPara
 	assetCost := basics.MulSaturate(proto.MinBalance, uint64(len(br.holdings)))
 	min = basics.AddSaturate(min, assetCost)
 
-	// Base MinBalance + GlobalStateSchema.MinBalance for each created application
+	// Base MinBalance + GlobalStateSchema.MinBalance + ExtraProgramPages MinBalance for each created application
 	for _, params := range l.applications {
 		if params.Creator == addr {
 			min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
 			min = basics.AddSaturate(min, params.GlobalStateSchema.MinBalance(proto).Raw)
+			min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
 		}
 	}
 
