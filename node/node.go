@@ -56,8 +56,6 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
-const participationKeyCheckSecs = 60
-
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
 	LastRound                          basics.Round
@@ -254,14 +252,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		Ledger:         agreementLedger,
 		BlockFactory:   node,
 		BlockValidator: blockValidator,
-		KeyManager:     node.accountManager,
+		KeyManager:     node,
 		RandomSource:   node,
 		BacklogPool:    node.highPriorityCryptoVerificationPool,
 	}
 	node.agreementService = agreement.MakeService(agreementParameters)
 
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
-	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates)
+	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 	node.txnSyncConnector = makeTranscationSyncNodeConnector(node)
 	node.txnSyncService = txnsync.MakeTranscationSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "")
@@ -348,8 +346,10 @@ func (node *AlgorandFullNode) Start() {
 	// Set up a context we can use to cancel goroutines on Stop()
 	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
 
-	// start accepting connections
-	node.net.Start()
+	if !node.config.DisableNetworking {
+		// start accepting connections
+		node.net.Start()
+	}
 	node.config.NetAddress, _ = node.net.Address()
 
 	if node.catchpointCatchupService != nil {
@@ -425,7 +425,9 @@ func (node *AlgorandFullNode) Stop() {
 	}()
 
 	node.net.ClearHandlers()
-	node.net.Stop()
+	if !node.config.DisableNetworking {
+		node.net.Stop()
+	}
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
@@ -716,7 +718,7 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 // Reload participation keys from disk periodically
 func (node *AlgorandFullNode) checkForParticipationKeys() {
 	defer node.monitoringRoutinesWaitGroup.Done()
-	ticker := time.NewTicker(participationKeyCheckSecs * time.Second)
+	ticker := time.NewTicker(node.config.ParticipationKeysRefreshInterval)
 	for {
 		select {
 		case <-ticker.C:
@@ -750,6 +752,13 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 		// Fetch a handle to this database
 		handle, err := node.getExistingPartHandle(filename)
 		if err != nil {
+			if db.IsErrBusy(err) {
+				// this is a special case:
+				// we might get "database is locked" when we attempt to access a database that is conurrently updates it's participation keys.
+				// that database is clearly already on the account manager, and doesn't need to be processed through this logic, and therefore
+				// we can safely ignore that fail case.
+				continue
+			}
 			return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load db %v: %v", filename, err)
 		}
 
@@ -1074,4 +1083,55 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 		return nil, err
 	}
 	return validatedBlock{vb: lvb}, nil
+}
+
+// VotingKeys implements the key maanger's VotingKeys method, and provides additional validation with the ledger.
+// that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
+func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.Participation {
+	keys := node.accountManager.Keys(votingRound)
+
+	participations := make([]account.Participation, 0, len(keys))
+	accountsData := make(map[basics.Address]basics.AccountData, len(keys))
+	matchingAccountsKeys := make(map[basics.Address]bool)
+	mismatchingAccountsKeys := make(map[basics.Address]int)
+	const bitMismatchingVotingKey = 1
+	const bitMismatchingSelectionKey = 2
+	for _, part := range keys {
+		acctData, hasAccountData := accountsData[part.Parent]
+		if !hasAccountData {
+			var err error
+			acctData, _, err = node.ledger.LookupWithoutRewards(keysRound, part.Parent)
+			if err != nil {
+				node.log.Warnf("node.VotingKeys: Account %v not participating: cannot locate account for round %d : %v", part.Address(), keysRound, err)
+				continue
+			}
+			accountsData[part.Parent] = acctData
+		}
+
+		if acctData.VoteID != part.Voting.OneTimeSignatureVerifier {
+			mismatchingAccountsKeys[part.Address()] = mismatchingAccountsKeys[part.Address()] | bitMismatchingVotingKey
+			continue
+		}
+		if acctData.SelectionID != part.VRF.PK {
+			mismatchingAccountsKeys[part.Address()] = mismatchingAccountsKeys[part.Address()] | bitMismatchingSelectionKey
+			continue
+		}
+		participations = append(participations, part)
+		matchingAccountsKeys[part.Address()] = true
+	}
+	// write the warnings per account only if we couldn't find a single valid key for that account.
+	for mismatchingAddr, warningFlags := range mismatchingAccountsKeys {
+		if matchingAccountsKeys[mismatchingAddr] {
+			continue
+		}
+		if warningFlags&bitMismatchingVotingKey == bitMismatchingVotingKey {
+			node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d", mismatchingAddr, votingRound, keysRound)
+			continue
+		}
+		if warningFlags&bitMismatchingSelectionKey == bitMismatchingSelectionKey {
+			node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain selection key differ from participation selection key for round %d", mismatchingAddr, votingRound, keysRound)
+			continue
+		}
+	}
+	return participations
 }

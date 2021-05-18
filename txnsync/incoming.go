@@ -19,6 +19,8 @@ package txnsync
 import (
 	"errors"
 	"time"
+
+	"github.com/algorand/go-deadlock"
 )
 
 var errUnsupportedTransactionSyncMessageVersion = errors.New("unsupported transaction sync message version")
@@ -30,6 +32,68 @@ type incomingMessage struct {
 	sequenceNumber uint64
 	peer           *Peer
 	encodedSize    int
+}
+
+// incomingMessageQueue manages the global incoming message queue across all the incoming peers.
+type incomingMessageQueue struct {
+	incomingMessages chan incomingMessage
+	enqueuedPeers    map[*Peer]struct{}
+	enqueuedPeersMu  deadlock.Mutex
+}
+
+// maxPeersCount defines the maximum number of supported peers that can have their messages waiting
+// in the incoming message queue at the same time. This number can be lower then the actual number of
+// connected peers, as it's used only for pending messages.
+const maxPeersCount = 1024
+
+// makeIncomingMessageQueue creates an incomingMessageQueue object and initializes all the internal variables.
+func makeIncomingMessageQueue() incomingMessageQueue {
+	return incomingMessageQueue{
+		incomingMessages: make(chan incomingMessage, maxPeersCount),
+		enqueuedPeers:    make(map[*Peer]struct{}, maxPeersCount),
+	}
+}
+
+// getIncomingMessageChannel returns the incoming messages channel, which would contain entries once
+// we have one ( or more ) pending incoming messages.
+func (imq *incomingMessageQueue) getIncomingMessageChannel() <-chan incomingMessage {
+	return imq.incomingMessages
+}
+
+// enqueue places the given message on the queue, if and only if it's associated peer doesn't
+// appear on the imcoming message queue already. In the case there is no peer, the message
+// would be placed on the queue as is.
+func (imq *incomingMessageQueue) enqueue(m incomingMessage) bool {
+	if m.peer != nil {
+		imq.enqueuedPeersMu.Lock()
+		defer imq.enqueuedPeersMu.Unlock()
+		if _, has := imq.enqueuedPeers[m.peer]; has {
+			return true
+		}
+	}
+	select {
+	case imq.incomingMessages <- m:
+		// if we successfully enqueued the message, set the enqueuedPeers so that we won't enqueue the same peer twice.
+		if m.peer != nil {
+			// at this time, the enqueuedPeersMu is still under lock ( due to the above defer ), so we can access
+			// the enqueuedPeers here.
+			imq.enqueuedPeers[m.peer] = struct{}{}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+// clear removes the peer that is associated with the message ( if any ) from
+// the enqueuedPeers map, allowing future messages from this peer to be placed on the
+// incoming message queue.
+func (imq *incomingMessageQueue) clear(m incomingMessage) {
+	if m.peer != nil {
+		imq.enqueuedPeersMu.Lock()
+		defer imq.enqueuedPeersMu.Unlock()
+		delete(imq.enqueuedPeers, m.peer)
+	}
 }
 
 // incomingMessageHandler
@@ -49,17 +113,17 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	}
 	if peer == nil {
 		// if we don't have a peer, then we need to enqueue this task to be handled by the main loop since we want to ensure that
-		// all the peer objects are created syncroniously.
-		select {
-		case s.incomingMessagesCh <- incomingMessage{networkPeer: networkPeer, message: txMsg, sequenceNumber: sequenceNumber, encodedSize: len(message)}:
-		default:
+		// all the peer objects are created synchronously.
+		enqueued := s.incomingMessagesQ.enqueue(incomingMessage{networkPeer: networkPeer, message: txMsg, sequenceNumber: sequenceNumber, encodedSize: len(message)})
+		if !enqueued {
 			// if we can't enqueue that, return an error, which would disconnect the peer.
 			// ( we have to disconnect, since otherwise, we would have no way to syncronize the sequence number)
-			s.log.Infof("unable to enqueue incoming message from a peer without txsync allocated data; incomingMessagesCh is full. disconnecting from peer.")
+			s.log.Infof("unable to enqueue incoming message from a peer without txsync allocated data; incoming messages queue is full. disconnecting from peer.")
 			return errTransactionSyncIncomingMessageQueueFull
 		}
 		return nil
 	}
+	// place the incoming message on the *peer* heap, allowing us to dequeue it in the correct sequence order.
 	err = peer.incomingMessages.enqueue(txMsg, sequenceNumber, len(message))
 	if err != nil {
 		// if the incoming message queue for this peer is full, disconnect from this peer.
@@ -67,12 +131,11 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		return err
 	}
 
-	select {
-	case s.incomingMessagesCh <- incomingMessage{peer: peer}:
-	default:
+	// (maybe) place the peer message on the main queue. This would get skipped if the peer is already on the queue.
+	enqueued := s.incomingMessagesQ.enqueue(incomingMessage{peer: peer})
+	if !enqueued {
 		// if we can't enqueue that, return an error, which would disconnect the peer.
-		//
-		s.log.Infof("unable to enqueue incoming message from a peer with txsync allocated data; incomingMessagesCh is full. disconnecting from peer.")
+		s.log.Infof("unable to enqueue incoming message from a peer with txsync allocated data; incoming messages queue is full. disconnecting from peer.")
 		return errTransactionSyncIncomingMessageQueueFull
 	}
 	return nil
@@ -101,6 +164,9 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 			return
 		}
 	}
+	// clear the peer that is associated with this incoming message from the message queue, allowing future
+	// messages from the peer to be placed on the message queue.
+	s.incomingMessagesQ.clear(message)
 	messageProcessed := false
 	transacationPoolSize := 0
 	for {

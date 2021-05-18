@@ -328,8 +328,7 @@ func (n *emulatedNode) step() {
 			peer.mu.Unlock()
 			err := dm.callback(true, dm.seq)
 			if err != nil {
-				// todo - diconnect from peer.
-
+				panic(err)
 			}
 			n.unblock()
 			n.waitBlocked()

@@ -45,7 +45,7 @@ type syncState struct {
 	scheduler                  peerScheduler
 	interruptablePeers         []*Peer
 	interruptablePeersMap      map[*Peer]int // map a peer into the index of interruptablePeers
-	incomingMessagesCh         chan incomingMessage
+	incomingMessagesQ          incomingMessageQueue
 	outgoingMessagesCallbackCh chan *messageSentCallback
 	nextOffsetRollingCh        <-chan time.Time
 	requestsOffset             uint64
@@ -55,6 +55,10 @@ type syncState struct {
 	// and compute it only once. Since this bloom filter could contain many hashes ( especially on relays )
 	// it's important to avoid recomputing it needlessly.
 	lastBloomFilter bloomFilter
+
+	// The profiler helps us monitor the transaction sync components execution time. When enabled, it would report these
+	// to the telemetry.
+	profiler *profiler
 }
 
 func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
@@ -65,13 +69,23 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 
 	s.clock = s.node.Clock()
 	s.throttler = makeThrottler(s.clock, 50, time.Millisecond/10, 10*time.Millisecond)
-	s.incomingMessagesCh = make(chan incomingMessage, 1024)
+	s.incomingMessagesQ = makeIncomingMessageQueue()
 	s.outgoingMessagesCallbackCh = make(chan *messageSentCallback, 1024)
 	s.interruptablePeersMap = make(map[*Peer]int)
 	s.scheduler.node = s.node
 	s.lastBeta = beta(0)
 	roundSettings := s.node.GetCurrentRoundSettings()
 	s.onNewRoundEvent(MakeNewRoundEvent(roundSettings.Round, roundSettings.FetchTransactions))
+
+	// create a profiler, and its profiling elements.
+	s.profiler = makeProfiler(200*time.Millisecond, s.clock, s.log, 2000*time.Millisecond) // todo : make the time configurable.
+	profIdle := s.profiler.getElement(profElementIdle)
+	profTxChange := s.profiler.getElement(profElementTxChange)
+	profNewRounnd := s.profiler.getElement(profElementNewRound)
+	profPeerState := s.profiler.getElement(profElementPeerState)
+	profIncomingMsg := s.profiler.getElement(profElementIncomingMsg)
+	profOutgoingMsg := s.profiler.getElement(profElementOutgoingMsg)
+	profNextOffset := s.profiler.getElement(profElementNextOffset)
 
 	externalEvents := s.node.Events()
 	var nextPeerStateCh <-chan time.Time
@@ -88,54 +102,86 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 		case ent := <-externalEvents:
 			switch ent.eventType {
 			case transactionPoolChangedEvent:
+				profTxChange.start()
 				s.onTransactionPoolChangedEvent(ent)
+				profTxChange.end()
 			case newRoundEvent:
+				profNewRounnd.start()
 				s.onNewRoundEvent(ent)
+				profNewRounnd.end()
 			}
 			continue
 		case <-nextPeerStateCh:
+			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
+			profPeerState.end()
 			continue
-		case incomingMsg := <-s.incomingMessagesCh:
+		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
+			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
+			profIncomingMsg.end()
 			continue
 		case msgSent := <-s.outgoingMessagesCallbackCh:
+			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)
+			profOutgoingMsg.end()
 			continue
 		case <-s.nextOffsetRollingCh:
+			profNextOffset.start()
 			s.rollOffsets()
+			profNextOffset.end()
 			continue
 		case <-serviceCtx.Done():
 			return
 		default:
 		}
 
+		profIdle.start()
 		s.throttler.workEnds()
 		select {
 		case ent := <-externalEvents:
 			s.throttler.workStarts()
+			profIdle.end()
 			switch ent.eventType {
 			case transactionPoolChangedEvent:
+				profTxChange.start()
 				s.onTransactionPoolChangedEvent(ent)
+				profTxChange.end()
 			case newRoundEvent:
+				profNewRounnd.start()
 				s.onNewRoundEvent(ent)
+				profNewRounnd.end()
 			}
 		case <-nextPeerStateCh:
 			s.throttler.workStarts()
+			profIdle.end()
+			profPeerState.start()
 			s.evaluatePeerStateChanges(nextPeerStateTime)
-		case incomingMsg := <-s.incomingMessagesCh:
+			profPeerState.end()
+		case incomingMsg := <-s.incomingMessagesQ.getIncomingMessageChannel():
 			s.throttler.workStarts()
+			profIdle.end()
+			profIncomingMsg.start()
 			s.evaluateIncomingMessage(incomingMsg)
+			profIncomingMsg.end()
 		case msgSent := <-s.outgoingMessagesCallbackCh:
 			s.throttler.workStarts()
+			profIdle.end()
+			profOutgoingMsg.start()
 			s.evaluateOutgoingMessage(msgSent)
+			profOutgoingMsg.end()
 		case <-s.nextOffsetRollingCh:
 			s.throttler.workStarts()
+			profIdle.end()
+			profNextOffset.start()
 			s.rollOffsets()
+			profNextOffset.end()
 		case <-serviceCtx.Done():
+			profIdle.end()
 			return
 		case <-s.node.NotifyMonitor():
 			s.throttler.workStarts()
+			profIdle.end()
 		}
 	}
 }

@@ -23,7 +23,6 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/protocol"
 )
 
 //msgp:ignore peerState
@@ -190,6 +189,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	if p.recentSentTransactionsRound != round {
 		p.recentSentTransactions.reset()
 		p.recentSentTransactionsRound = round
+		p.lastTransactionSelectionGroupCounter = 0
 	}
 
 	windowLengthBytes := int(uint64(sendWindow) * p.dataExchangeRate / uint64(time.Second))
@@ -204,27 +204,27 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 
 	startIndex := sort.Search(len(pendingTransactions), func(i int) bool {
 		return pendingTransactions[i].GroupCounter >= p.lastTransactionSelectionGroupCounter
-	}) % len(pendingTransactions)
+	})
 
 	windowSizedReached := false
 	hasMorePendingTransactions := false
 
 	//removedTxn := 0
-	for scanIdx := range pendingTransactions {
-		grpIdx := (scanIdx + startIndex) % len(pendingTransactions)
-
-		// filter out transactions that we already previously sent.
+	grpIdx := startIndex
+	for ; grpIdx < len(pendingTransactions); grpIdx++ {
 		txID := pendingTransactions[grpIdx].FirstTransactionID
-		if p.recentSentTransactions.contained(txID) {
-			// we already sent that transaction. no need to send again.
-			continue
-		}
 
 		// check if the peer would be interested in these messages -
 		if p.requestedTransactionsModulator > 1 {
 			if txidToUint64(txID)%uint64(p.requestedTransactionsModulator) != uint64(p.requestedTransactionsOffset) {
 				continue
 			}
+		}
+
+		// filter out transactions that we already previously sent.
+		if p.recentSentTransactions.contained(txID) {
+			// we already sent that transaction. no need to send again.
+			continue
 		}
 
 		// check if the peer alrady received these messages from a different source other than us.
@@ -240,8 +240,6 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 			continue
 		}
 
-		p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx].GroupCounter
-
 		if windowSizedReached {
 			hasMorePendingTransactions = true
 			break
@@ -249,14 +247,25 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		selectedTxns = append(selectedTxns, pendingTransactions[grpIdx])
 		selectedTxnIDs = append(selectedTxnIDs, txID)
 
-		// calculate the total size of the transaction group.
-		for txidx := range pendingTransactions[grpIdx].Transactions {
-			encodingBuf := protocol.GetEncodingBuf()
-			accumulatedSize += len(pendingTransactions[grpIdx].Transactions[txidx].MarshalMsg(encodingBuf))
-			protocol.PutEncodingBuf(encodingBuf)
-		}
+		// add the size of the transaction group
+		accumulatedSize += pendingTransactions[grpIdx].EncodedLength
+
 		if accumulatedSize > windowLengthBytes {
 			windowSizedReached = true
+		}
+	}
+
+	// update the lastTransactionSelectionGroupCounter if needed -
+	// if we selected any transaction to be sent, update the lastTransactionSelectionGroupCounter with the latest
+	// group counter. If the startIndex was *after* the last pending transaction, it means that we don't
+	// need to update the lastTransactionSelectionGroupCounter since it's already ahead of everything in the pending transactions.
+	if grpIdx >= 0 && startIndex < len(pendingTransactions) {
+		if grpIdx == len(pendingTransactions) {
+			if grpIdx > 0 {
+				p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx-1].GroupCounter + 1
+			}
+		} else {
+			p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx].GroupCounter
 		}
 	}
 
@@ -334,6 +343,8 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter bloomFi
 		if bloomFltr.filter.encodingParams == incomingFilter.encodingParams {
 			// replace.
 			p.recentIncomingBloomFilters[idx] = bf
+			// reset the counter, since we might need to re-evaluate some of the transaction group with the new bloom filter.
+			p.lastTransactionSelectionGroupCounter = 0
 			return
 		}
 	}
@@ -345,7 +356,14 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter bloomFi
 }
 
 func (p *Peer) updateRequestParams(modulator, offset byte) {
+	if p.requestedTransactionsModulator == modulator && p.requestedTransactionsOffset == offset {
+		return
+	}
 	p.requestedTransactionsModulator, p.requestedTransactionsOffset = modulator, offset
+
+	// if we've changed the request params for this peer, we need to reset the lastTransactionSelectionGroupCounter since we might have
+	// skipped entries that need to be re-evaluated.
+	p.lastTransactionSelectionGroupCounter = 0
 }
 
 // update the recentSentTransactions with the incoming transaction groups. This would prevent us from sending the received transactions back to the
@@ -362,7 +380,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 	p.lastConfirmedMessageSeqReceived = timings.RefTxnBlockMsgSeq
 	// if we received a message that references our privious message, see if they occured on the same round
 	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound {
-		// if so, we migth be able to calculate the bandwidth.
+		// if so, we might be able to calculate the bandwidth.
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
 		if timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) {
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)

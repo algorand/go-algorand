@@ -26,6 +26,7 @@ import (
 )
 
 var errTransactionSyncOutgoingMessageQueueFull = errors.New("transaction sync outgoing message queue is full")
+var errTransactionSyncOutgoingMessageSendFailed = errors.New("transaction sync failed to send message")
 
 type sentMessageMetadata struct {
 	encodedMessageSize  int
@@ -47,7 +48,8 @@ type messageSentCallback struct {
 // asyncMessageSent called via the network package to inform the txsync that a message was enqueued, and the associated sequence number.
 func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber uint64) error {
 	if !enqueued {
-		return nil
+		msc.state.log.Infof("unable to send message to peer. disconnecting from peer.")
+		return errTransactionSyncOutgoingMessageSendFailed
 	}
 	// record the timestamp here, before placing the entry on the queue
 	msc.messageData.sentTimestamp = msc.roundClock.Since()
@@ -55,12 +57,12 @@ func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber u
 
 	select {
 	case msc.state.outgoingMessagesCallbackCh <- msc:
+		return nil
 	default:
 		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
 		msc.state.log.Infof("unable to enqueue outgoing message confirmation; outgoingMessagesCallbackCh is full. disconnecting from peer.")
 		return errTransactionSyncOutgoingMessageQueueFull
 	}
-	return nil
 }
 
 // pendingTransactionGroupsSnapshot is used to represent a snapshot of a pending transcation groups along with the latestLocallyOriginatedGroupCounter value.
@@ -77,22 +79,22 @@ func (s *syncState) sendMessageLoop(deadline timers.DeadlineMonitor, peers []*Pe
 		return
 	}
 	var pendingTransactions pendingTransactionGroupsSnapshot
+	profGetTxnsGroups := s.profiler.getElement(profElementGetTxnsGroups)
+	profAssembleMessage := s.profiler.getElement(profElementAssembleMessage)
+	profSendMessage := s.profiler.getElement(profElementSendMessage)
+	profGetTxnsGroups.start()
 	pendingTransactions.pendingTransactionsGroups, pendingTransactions.latestLocallyOriginatedGroupCounter = s.node.GetPendingTransactionGroups()
-	seenPeers := make(map[*Peer]bool)
+	profGetTxnsGroups.end()
 	for _, peer := range peers {
-		if seenPeers[peer] {
-			continue
-		}
-		seenPeers[peer] = true
 		msgCallback := &messageSentCallback{state: s, roundClock: s.clock}
+		profAssembleMessage.start()
 		msgCallback.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
+		profAssembleMessage.end()
 		encodedMessage := msgCallback.messageData.message.MarshalMsg([]byte{})
 		msgCallback.messageData.encodedMessageSize = len(encodedMessage)
-		// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
-		releaseEncodedTransactionGroups(msgCallback.messageData.message.TransactionGroups.Bytes)
-		msgCallback.messageData.message.TransactionGroups.Bytes = nil
-
+		profSendMessage.start()
 		s.node.SendPeerMessage(peer.networkPeer, encodedMessage, msgCallback.asyncMessageSent)
+		profSendMessage.end()
 		// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
 		releaseEncodedTransactionGroups(msgCallback.messageData.message.TransactionGroups.Bytes)
 		msgCallback.messageData.message.TransactionGroups.Bytes = nil
@@ -158,12 +160,15 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 			// for peers, we want to make sure we don't regenerate the same bloom filter as before.
 			lastBloomFilter = &peer.lastSentBloomFilter
 		}
+		profMakeBloomFilter := s.profiler.getElement(profElementMakeBloomFilter)
+		profMakeBloomFilter.start()
 		// generate a bloom filter that matches the requests params.
 		metaMessage.filter = makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, uint32(s.node.Random(0xffffffff)), lastBloomFilter)
 		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
 			metaMessage.message.TxnBloomFilter = metaMessage.filter.encode()
 			bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()
 		}
+		profMakeBloomFilter.end()
 		s.lastBloomFilter = metaMessage.filter
 	}
 
@@ -177,7 +182,10 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 			}
 		}
 		var txnGroups []transactions.SignedTxGroup
+		profTxnsSelection := s.profiler.getElement(profElementTxnsSelection)
+		profTxnsSelection.start()
 		txnGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
+		profTxnsSelection.end()
 		metaMessage.message.TransactionGroups.Bytes = encodeTransactionGroups(txnGroups)
 
 		// clear the last sent bloom filter on the end of a series of partial messages.

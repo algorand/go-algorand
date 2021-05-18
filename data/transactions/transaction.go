@@ -607,6 +607,9 @@ type SignedTxGroup struct {
 	// FirstTransactionID is the transaction ID of the first transaction in this transaction group.
 	// TODO - make this more secure by making this the hash of the first signed transaction.
 	FirstTransactionID Txid
+	// EncodedLength is the length, in bytes, of the messagepack encoding of all the transaction
+	// within this transaction group.
+	EncodedLength int
 }
 
 // InvalidSignedTxGroupCounter is used to represent an invalid GroupCounter value. It's being used to indicate

@@ -258,7 +258,7 @@ func (l *testLedger) DelGlobal(key string) error {
 	return nil
 }
 
-func (l *testLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
+func (l *testLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
 	if appIdx == 0 {
 		appIdx = l.appID
 	}
@@ -285,7 +285,7 @@ func (l *testLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key s
 	return val, ok, nil
 }
 
-func (l *testLedger) SetLocal(addr basics.Address, key string, value basics.TealValue) error {
+func (l *testLedger) SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error {
 	appIdx := l.appID
 
 	br, ok := l.balances[addr]
@@ -313,7 +313,7 @@ func (l *testLedger) SetLocal(addr basics.Address, key string, value basics.Teal
 	return nil
 }
 
-func (l *testLedger) DelLocal(addr basics.Address, key string) error {
+func (l *testLedger) DelLocal(addr basics.Address, key string, accountIdx uint64) error {
 	appIdx := l.appID
 
 	br, ok := l.balances[addr]

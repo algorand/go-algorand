@@ -96,8 +96,13 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	}
 }
 
-func (s *testWorkerStubs) Keys() []account.Participation {
-	return s.keys
+func (s *testWorkerStubs) Keys(rnd basics.Round) (out []account.Participation) {
+	for _, part := range s.keys {
+		if part.OverlapsInterval(rnd, rnd) {
+			out = append(out, part)
+		}
+	}
+	return
 }
 
 func (s *testWorkerStubs) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -203,7 +208,8 @@ func newPartKey(t testing.TB, parent basics.Address) account.Participation {
 
 	part, err := account.FillDBWithParticipationKeys(partDB, parent, 0, 1024*1024, config.Consensus[protocol.ConsensusFuture].DefaultKeyDilution)
 	require.NoError(t, err)
-	return part
+	part.Close()
+	return part.Participation
 }
 
 func TestWorkerAllSigs(t *testing.T) {
