@@ -398,7 +398,7 @@ function backup_binaries() {
     BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
     [ -f "${BINDIR}/node_exporter" ] && BACKUPFILES="${BACKUPFILES} node_exporter"
-    tar -zcf "${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz" -C "${BINDIR}" "${BACKUPFILES}" >/dev/null 2>&1
+    tar -zcf "${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz" -C "${BINDIR}" ${BACKUPFILES} >/dev/null 2>&1
 }
 
 function backup_data() {
@@ -408,7 +408,7 @@ function backup_data() {
     echo "Backing up current data files from ${CURDATADIR}..."
     mkdir -p "${BACKUPDIR}"
     BACKUPFILES="genesis.json wallet-genesis.id"
-    tar --no-recursion --exclude='*.log' --exclude='*.log.archive' --exclude='*.tar.gz' -zcf "${BACKUPDIR}/data-v${CURRENTVER}.tar.gz" -C "${CURDATADIR}" "${BACKUPFILES}" >/dev/null 2>&1
+    tar --no-recursion --exclude='*.log' --exclude='*.log.archive' --exclude='*.tar.gz' -zcf "${BACKUPDIR}/data-v${CURRENTVER}.tar.gz" -C "${CURDATADIR}" ${BACKUPFILES} >/dev/null 2>&1
 }
 
 function backup_current_version() {
