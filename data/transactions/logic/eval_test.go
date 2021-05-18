@@ -1810,23 +1810,32 @@ func testLogic(t *testing.T, program string, v uint64, ep EvalParams, problems .
 func TestGtxnaScratch(t *testing.T) {
 	t.Parallel()
 
-	case1 := []string{
-		`int 314
+	type scratchTestCase struct {
+		tealSources []string
+		errContains string
+	}
+
+	simpleCase := scratchTestCase{
+		tealSources: []string{
+			`int 2
 store 0
 int 1`,
-		`gtxna 0 Scratch 0
-int 314
+			`gtxna 0 Scratch 0
+int 2
 ==
 `,
+		},
 	}
-	case2 := []string{
-		`byte "txn 1"
+
+	multipleTxnCase := scratchTestCase{
+		tealSources: []string{
+			`byte "txn 1"
 store 0
 int 1`,
-		`byte "txn 2"
+			`byte "txn 2"
 store 1
 int 1`,
-		`gtxna 0 Scratch 0
+			`gtxna 0 Scratch 0
 byte "txn 1"
 ==
 gtxna 1 Scratch 1
@@ -1834,51 +1843,93 @@ byte "txn 2"
 ==
 &&
 `,
+		},
 	}
-	cases := [][]string{
-		case1, case2,
+
+	selfCase := scratchTestCase{
+		tealSources: []string{
+			`gtxna 0 Scratch 0
+int 2
+store 0
+int 1
+`,
+		},
+		errContains: "can't use Scratch txn field on self, use load instead",
+	}
+
+	laterTxnSlotCase := scratchTestCase{
+		tealSources: []string{
+			`gtxna 1 Scratch 0
+int 2
+==
+`,
+			`int 2
+store 0
+int 1`,
+		},
+		errContains: "can't get future Scratch from txn with index 1",
+	}
+
+	cases := []scratchTestCase{
+		simpleCase, multipleTxnCase, selfCase, laterTxnSlotCase,
 	}
 
 	for i, testCase := range cases {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			sources := testCase.tealSources
 			// Assemble ops
-			opsList := make([]*OpStream, len(testCase))
-			for j, source := range testCase {
+			opsList := make([]*OpStream, len(sources))
+			for j, source := range sources {
 				ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 				require.NoError(t, err)
 				opsList[j] = ops
 			}
 
 			// Initialize txgroup and cxgroup
-			txgroup := make([]transactions.SignedTxn, len(testCase))
+			txgroup := make([]transactions.SignedTxn, len(sources))
 			for j := range txgroup {
 				txgroup[j] = transactions.SignedTxn{}
 			}
-			cxgroup := make([]*EvalContext, len(testCase))
+			cxgroup := make([]*EvalContext, len(sources))
 			for j := range cxgroup {
 				cxgroup[j] = new(EvalContext)
 			}
 
 			// Construct EvalParams
 			proto := defaultEvalProtoWithVersion(LogicVersion)
-			epList := make([]EvalParams, len(testCase))
-			for j := range testCase {
+			epList := make([]EvalParams, len(sources))
+			for j := range sources {
 				epList[j] = EvalParams{
-					Proto:    &proto,
-					Txn:      &txgroup[j],
-					Cx:       cxgroup[j],
-					TxnGroup: txgroup,
-					CxGroup:  cxgroup,
+					Proto:      &proto,
+					Txn:        &txgroup[j],
+					Cx:         cxgroup[j],
+					TxnGroup:   txgroup,
+					CxGroup:    cxgroup,
+					GroupIndex: j,
 				}
 				cxgroup[j].EvalParams = epList[j]
 			}
 
 			// Evaluate app calls
+			shouldErr := testCase.errContains != ""
+			didPass := true
 			for j, ops := range opsList {
 				pass, err := Eval(ops.Program, epList[j])
-				require.NoError(t, err)
-				require.True(t, pass)
+
+				// Confirm it errors or that the error message is the expected one
+				if !shouldErr {
+					require.NoError(t, err)
+				} else if shouldErr && err != nil {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.errContains)
+				}
+
+				if !pass {
+					didPass = false
+				}
 			}
+
+			require.Equal(t, !shouldErr, didPass)
 		})
 	}
 }
