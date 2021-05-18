@@ -1546,6 +1546,13 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		sv.Bytes = txn.FreezeAccount[:]
 	case FreezeAssetFrozen:
 		sv.Uint = boolToUint(txn.AssetFrozen)
+	case Scratch:
+		val := cx.CxGroup[groupIndex].scratch[arrayFieldIdx]
+		if val.Bytes != nil {
+			sv.Bytes = val.Bytes
+		} else {
+			sv.Uint = val.Uint
+		}
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
@@ -1553,7 +1560,7 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 
 	txnField := TxnField(field)
 	txnFieldType := TxnFieldTypes[txnField]
-	if txnFieldType != sv.argType() {
+	if txnFieldType != sv.argType() && txnFieldType != StackAny {
 		err = fmt.Errorf("%s expected field type is %s but got %s", txnField.String(), txnFieldType.String(), sv.argType().String())
 	}
 	return
