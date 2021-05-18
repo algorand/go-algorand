@@ -144,7 +144,6 @@ func (tsnc *transcationSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 			tsnc.node.net.Disconnect(unicastPeer)
 		}
 	}
-
 }
 
 // TODO : add description.

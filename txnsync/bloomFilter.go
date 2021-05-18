@@ -113,7 +113,6 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 		for _, group := range txnGroups {
 			result.filter.Set(group.FirstTransactionID[:])
 		}
-
 	default:
 		// we want subset.
 		result.containedTxnsRange.firstCounter = math.MaxUint64
@@ -129,6 +128,7 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 			}
 			result.containedTxnsRange.lastCounter = group.GroupCounter
 		}
+
 		result.containedTxnsRange.transactionsCount = uint64(len(filtedTransactionsIDs))
 
 		if hintPrevBloomFilter != nil {
