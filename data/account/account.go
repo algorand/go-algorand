@@ -181,12 +181,3 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 	acc.Store = store
 	return acc, nil
 }
-
-// A ParticipationInterval defines an interval for which a participation account is valid.
-type ParticipationInterval struct {
-	basics.Address
-
-	// FirstValid and LastValid are inclusive.
-	FirstValid basics.Round
-	LastValid  basics.Round
-}

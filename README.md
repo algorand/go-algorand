@@ -22,8 +22,10 @@ the [official Go documentation website](https://golang.org/doc/).
 ### Linux / OSX ###
 
 We currently strive to support Debian based distributions with Ubuntu 18.04
-being our official release target. Our core engineering team uses Linux and OSX,
-so both environments are well supported for development.
+being our official release target.
+Building on Arch Linux works as well.
+Our core engineering team uses Linux and OSX, so both environments are well
+supported for development.
 
 OSX only: [Homebrew (brew)](https://brew.sh) must be installed before
 continuing. [Here](https://docs.brew.sh/Installation) are the installation

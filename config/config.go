@@ -63,7 +63,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -401,7 +401,23 @@ type Local struct {
 	// 3  : speed up catchup by skipping necessary validations
 	// 12 : perform all validation methods (normal and additional). These extra tests helps to verify the integrity of the compiled executable against
 	//      previously used executabled, and would not provide any additional security guarantees.
-	CatchupBlockValidateMode int `version[17]:"0"`
+	CatchupBlockValidateMode int `version[16]:"0"`
+
+	// Generate AccountUpdates telemetry event
+	EnableAccountUpdatesStats bool `version[16]:"false"`
+
+	// Time interval in nanoseconds for generating accountUpdates telemetry event
+	AccountUpdatesStatsInterval time.Duration `version[16]:"5000000000"`
+
+	// ParticipationKeysRefreshInterval is the duration between two consecutive checks to see if new participation
+	// keys have been placed on the genesis directory.
+	ParticipationKeysRefreshInterval time.Duration `version[16]:"60000000000"`
+
+	// DisableNetworking disables all the incoming and outgoing communication a node would perform. This is useful
+	// when we have a single-node private network, where there is no other nodes that need to be communicated with.
+	// features like catchpoint catchup would be rendered completly non-operational, and many of the node inner
+	// working would be completly dis-functional.
+	DisableNetworking bool `version[16]:"false"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

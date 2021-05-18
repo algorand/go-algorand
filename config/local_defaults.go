@@ -20,7 +20,8 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                 17,
+	Version:                                 16,
+	AccountUpdatesStatsInterval:             5000000000,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
 	Archival:                                false,
@@ -44,7 +45,9 @@ var defaultLocal = Local{
 	DNSSecurityFlags:                        1,
 	DeadlockDetection:                       0,
 	DisableLocalhostConnectionRateLimit:     true,
+	DisableNetworking:                       false,
 	DisableOutgoingConnectionThrottling:     false,
+	EnableAccountUpdatesStats:               false,
 	EnableAgreementReporting:                false,
 	EnableAgreementTimeMetrics:              false,
 	EnableAssembleStats:                     false,
@@ -85,6 +88,7 @@ var defaultLocal = Local{
 	OptimizeAccountsDatabaseOnStartup:       false,
 	OutgoingMessageFilterBucketCount:        3,
 	OutgoingMessageFilterBucketSize:         128,
+	ParticipationKeysRefreshInterval:        60000000000,
 	PeerConnectionsUpdateInterval:           3600,
 	PeerPingPeriodSeconds:                   0,
 	PriorityPeers:                           map[string]bool{},

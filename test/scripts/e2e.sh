@@ -103,6 +103,9 @@ python3 -m venv "${TEMPDIR}/ve"
 for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
     "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
 done
+for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
+done
 deactivate
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
