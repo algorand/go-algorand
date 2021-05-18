@@ -180,7 +180,7 @@ func (b *bitmask) Iterate(entries int, callback func(i int) error) error {
 		}
 	case 1:
 		for i, v := range (*b)[1:] {
-			for j := 0; j < 8 && v > 0; j++ {
+			for j := 0; j < 8 && v < 255; j++ {
 				if v & 1 == 0 {
 					if err := callback(8*i+j); err != nil {
 						return err

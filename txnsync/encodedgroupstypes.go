@@ -86,7 +86,7 @@ type encodedLsigs struct {
 
 	Logic            [][]byte   `codec:"lsigl,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxLogicSigMaxSize"`
 	BitmaskLogic     bitmask    `codec:"lsiglbm"`
-	LogicArgs        [][][]byte `codec:"lsigarg,allocbound=maxEncodedTransactionGroup,allocbound=mainnettransactions.EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
+	LogicArgs        [][][]byte `codec:"lsigarg,allocbound=maxEncodedTransactionGroup,allocbound=transactions.EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
 	BitmaskLogicArgs bitmask    `codec:"lsigargbm"`
 }
 
@@ -121,7 +121,6 @@ type encodedTxnHeaders struct {
 	Note               [][]byte            `codec:"note,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxTxnNoteBytes"`
 	BitmaskNote        bitmask             `codec:"notebm"`
 	BitmaskGenesisID   bitmask             `codec:"genbm"`
-	BitmaskGenesisHash bitmask             `codec:"ghbm"`
 
 	BitmaskGroup bitmask `codec:"grpbm"`
 
@@ -233,16 +232,16 @@ type encodedAssetFreezeTxnFields struct {
 	BitmaskAssetFrozen bitmask `codec:"afrzbm"`
 }
 
-//msgp:allocbound applicationArgs mainnettransactions.EncodedMaxApplicationArgs
+//msgp:allocbound applicationArgs transactions.EncodedMaxApplicationArgs
 type applicationArgs [][]byte
 
-//msgp:allocbound addresses mainnettransactions.EncodedMaxAccounts
+//msgp:allocbound addresses transactions.EncodedMaxAccounts
 type addresses []basics.Address
 
-//msgp:allocbound appIndices mainnettransactions.EncodedMaxForeignApps
+//msgp:allocbound appIndices transactions.EncodedMaxForeignApps
 type appIndices []basics.AppIndex
 
-//msgp:allocbound assetIndices mainnettransactions.EncodedMaxForeignAssets
+//msgp:allocbound assetIndices transactions.EncodedMaxForeignAssets
 type assetIndices []basics.AssetIndex
 
 //msgp:allocbound program config.MaxAppProgramLen

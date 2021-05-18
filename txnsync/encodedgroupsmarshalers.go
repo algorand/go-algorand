@@ -222,13 +222,13 @@ func (stub *txGroupsEncodingStub) finishDeconstructTransactions() {
 
 func (stub *txGroupsEncodingStub) finishDeconstructTxType() {
 	offset := byte(0)
-	count := make(map[int]int)
+	count := make([]int, len(protocol.TxnTypes))
 	maxcount := 0
 	for _, t := range stub.TxType {
 		count[int(t)]++
 	}
-	for i := range protocol.TxnTypes {
-		if c, ok := count[i]; ok && c > maxcount {
+	for i, c := range count {
+		if c > maxcount {
 			offset = byte(i)
 			maxcount = c
 		}
@@ -294,18 +294,6 @@ func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn transactions.S
 		}
 		stub.BitmaskGenesisID.SetBit(i)
 	}
-	if !txn.Txn.GenesisHash.MsgIsZero() {
-		if len(stub.BitmaskGenesisHash) == 0 {
-			stub.BitmaskGenesisHash = make(bitmask, bitmaskLen)
-		}
-		stub.BitmaskGenesisHash.SetBit(i)
-	}
-	if !txn.Txn.Group.MsgIsZero() {
-		if len(stub.BitmaskGroup) == 0 {
-			stub.BitmaskGroup = make(bitmask, bitmaskLen)
-		}
-		stub.BitmaskGroup.SetBit(i)
-	}
 	if txn.Txn.Lease != ([32]byte{}) {
 		if len(stub.BitmaskLease) == 0 {
 			stub.BitmaskLease = make(bitmask, bitmaskLen)
@@ -331,7 +319,6 @@ func (stub *txGroupsEncodingStub) finishDeconstructTxnHeader() {
 	stub.BitmaskLastValid.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskNote.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskGenesisID.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskGenesisHash.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskGroup.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskLease.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskRekeyTo.trimBitmask(int(stub.TotalTransactionsCount))

@@ -277,14 +277,8 @@ func (stub *txGroupsEncodingStub) reconstructTxnHeader(signedTxns []transactions
 	if err != nil {
 		return err
 	}
-	index = 0
-	err = stub.BitmaskGenesisHash.Iterate(int(stub.TotalTransactionsCount), func(i int) error {
+	for i := range signedTxns {
 		signedTxns[i].Txn.GenesisHash = genesisHash
-		index++
-		return nil
-	})
-	if err != nil {
-		return err
 	}
 	index = 0
 	err = stub.BitmaskLease.Iterate(int(stub.TotalTransactionsCount), func(i int) error {
