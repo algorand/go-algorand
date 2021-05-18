@@ -10,6 +10,35 @@
 
 set -e
 
+GOPATH=$(go env GOPATH)
+export GOPATH
+export GO111MODULE=on
+
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+OS=$("${SCRIPTPATH}"/../ostype.sh)
+ARCH=$("${SCRIPTPATH}"/../archtype.sh)
+
+echo "Building libsodium-fork..."
+make crypto/libs/${OS}/${ARCH}/lib/libsodium.a
+
+
+if [ "${BUILD_TYPE}" = "integration" ]; then
+    echo "Skipping vet/gofmt/golint/license_check on integration test"
+    exit 0
+fi
+
+if [ "${OS}-${ARCH}" = "linux-arm" ]; then
+    echo "Skipping running 'go vet'/gofmt/golint for arm builds"
+    exit 0
+fi
+
+if [ "${OS}-${ARCH}" = "windows-amd64" ]; then
+     echo "Skipping running 'go vet'/gofmt/golint for windows builds"
+     exit 0
+fi
+
+"${SCRIPTPATH}"/../configure_dev-deps.sh
+
 function runGoFmt() {
     gofiles="$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v ^vendor/)" || true
     [ -z "$gofiles" ] && return 0
@@ -38,32 +67,6 @@ function runGoLint() {
 
     return 1
 }
-
-GOPATH=$(go env GOPATH)
-export GOPATH
-export GO111MODULE=on
-
-SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-OS=$("${SCRIPTPATH}"/../ostype.sh)
-ARCH=$("${SCRIPTPATH}"/../archtype.sh)
-
-echo "Building libsodium-fork..."
-make crypto/libs/${OS}/${ARCH}/lib/libsodium.a
-
-if [ "${BUILD_TYPE}" = "integration" ]; then
-    echo "Skipping vet/gofmt/golint/license_check on integration test"
-    exit 0
-fi
-
-if [ "${OS}-${ARCH}" = "linux-arm" ]; then
-    echo "Skipping running 'go vet'/gofmt/golint for arm builds"
-    exit 0
-fi
-
-if [ "${OS}-${ARCH}" = "windows-amd64" ]; then
-     echo "Skipping running 'go vet'/gofmt/golint for windows builds"
-     exit 0
-fi
 
 echo "Running go vet..."
 go vet $(GO111MODULE=off go list ./... | grep -v /test/e2e-go/)
