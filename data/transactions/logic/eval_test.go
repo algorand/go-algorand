@@ -1873,6 +1873,7 @@ int 1`,
 	cases := []scratchTestCase{
 		simpleCase, multipleTxnCase, selfCase, laterTxnSlotCase,
 	}
+	proto := defaultEvalProtoWithVersion(LogicVersion)
 
 	for i, testCase := range cases {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
@@ -1888,7 +1889,11 @@ int 1`,
 			// Initialize txgroup and cxgroup
 			txgroup := make([]transactions.SignedTxn, len(sources))
 			for j := range txgroup {
-				txgroup[j] = transactions.SignedTxn{}
+				txgroup[j] = transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.ApplicationCallTx,
+					},
+				}
 			}
 			cxgroup := make([]*EvalContext, len(sources))
 			for j := range cxgroup {
@@ -1896,7 +1901,6 @@ int 1`,
 			}
 
 			// Construct EvalParams
-			proto := defaultEvalProtoWithVersion(LogicVersion)
 			epList := make([]EvalParams, len(sources))
 			for j := range sources {
 				epList[j] = EvalParams{
@@ -1932,6 +1936,47 @@ int 1`,
 			require.Equal(t, !shouldErr, didPass)
 		})
 	}
+
+	// Test failure on non-app call
+	t.Run("should fail on non-app call", func(t *testing.T) {
+		source := "gtxna 0 Scratch 0"
+
+		// Assemble ops
+		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+		require.NoError(t, err)
+
+		// Initialize txgroup and cxgroup
+		txgroup := make([]transactions.SignedTxn, 2)
+		txgroup[0] = transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.PaymentTx,
+			},
+		}
+		txgroup[1] = transactions.SignedTxn{}
+		cxgroup := make([]*EvalContext, 2)
+		for j := range cxgroup {
+			cxgroup[j] = new(EvalContext)
+		}
+
+		// Construct EvalParams
+		epList := make([]EvalParams, 2)
+		for j := range epList {
+			epList[j] = EvalParams{
+				Proto:      &proto,
+				Txn:        &txgroup[j],
+				Cx:         cxgroup[j],
+				TxnGroup:   txgroup,
+				CxGroup:    cxgroup,
+				GroupIndex: j,
+			}
+			cxgroup[j].EvalParams = epList[j]
+		}
+
+		// Evaluate app call
+		_, err = Eval(ops.Program, epList[1])
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "can't use Scratch txn field on non-app call txn with index 0")
+	})
 }
 
 func TestTxna(t *testing.T) {

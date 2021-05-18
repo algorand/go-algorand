@@ -1547,7 +1547,10 @@ func (cx *EvalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case FreezeAssetFrozen:
 		sv.Uint = boolToUint(txn.AssetFrozen)
 	case Scratch:
-		if arrayFieldIdx >= 256 {
+		if txn.Type != protocol.ApplicationCallTx {
+			err = fmt.Errorf("can't use Scratch txn field on non-app call txn with index %d", groupIndex)
+			return
+		} else if arrayFieldIdx >= 256 {
 			err = fmt.Errorf("invalid Scratch index %d", arrayFieldIdx)
 			return
 		} else if groupIndex == cx.GroupIndex {
