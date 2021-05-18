@@ -27,7 +27,7 @@ type bitmask []byte
 // assumed to be in mode 0, sets bit at index to 1
 func (b *bitmask) SetBit(index int) {
 	byteIndex := index/8 + 1
-	(*b)[byteIndex] ^= 1 << (index % 8)
+	(*b)[byteIndex] |= 1 << (index % 8)
 }
 
 func (b *bitmask) EntryExists(index int, entries int) bool {
