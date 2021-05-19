@@ -1,4 +1,4 @@
-module github.com/algorand/go-algorand
+module github.com/algorand/go-algorand/scripts/buildtools
 
 go 1.14
 

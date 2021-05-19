@@ -4,7 +4,8 @@
 set -exo pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-
+pushd .
+cd ${SCRIPTPATH}
 (cd ../..; ${SCRIPTPATH}/../check_golang_version.sh dev)
 
 function get_go_version {
@@ -40,3 +41,4 @@ install_go_module golang.org/x/tools golang.org/x/tools/cmd/stringer
 install_go_module github.com/go-swagger/go-swagger github.com/go-swagger/go-swagger/cmd/swagger
 install_go_module github.com/algorand/msgp
 
+popd
