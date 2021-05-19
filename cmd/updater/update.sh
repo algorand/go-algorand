@@ -552,7 +552,7 @@ function startup_node() {
     fi
 
     if ! run_systemd_action restart "${CURDATADIR}"; then
-        echo "No systemd services, starting node with goal."
+        echo "No systemd services, restarting node with goal."
         ${BINDIR}/goal node restart -d "${CURDATADIR}" ${HOSTEDFLAG}
     fi
 }
