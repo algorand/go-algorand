@@ -414,7 +414,7 @@ function backup_data() {
 
 function backup_current_version() {
     backup_binaries
-    for DD in "${DATADIRS[@]}"; do
+    for DD in ${DATADIRS[@]}; do
         backup_data "${DD}"
     done
 }
@@ -593,7 +593,7 @@ function apply_fixups() {
     # Delete obsolete algorand binary - renamed to 'goal'
     rm "${BINDIR}/algorand" >/dev/null 2>&1
 
-    for DD in "${DATADIRS[@]}"; do
+    for DD in ${DATADIRS[@]}; do
         clean_legacy_logs "${DD}"
 
         # Purge obsolete cadaver files (now agreement.cdv[.archive])
@@ -677,7 +677,7 @@ if ! $DRYRUN; then
         fail_and_exit "Error installing new files"
     fi
 
-    for DD in "${DATADIRS[@]}"; do
+    for DD in ${DATADIRS[@]}; do
         if ! install_new_data "${DD}"; then
             fail_and_exit "Error installing data files into ${DD}"
         fi
@@ -685,7 +685,7 @@ if ! $DRYRUN; then
 
     copy_genesis_files
 
-    for DD in "${DATADIRS[@]}"; do
+    for DD in ${DATADIRS[@]}; do
         if ! check_for_new_ledger "${DD}"; then
             fail_and_exit "Error updating ledger in ${DD}"
         fi
