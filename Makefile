@@ -228,10 +228,8 @@ fulltest: build-race
 		gotestsum --format testname -- $(GOTAGS) -race $$PACKAGE_DIRECTORY -timeout 2500s; \
 	done
 
-shorttest: build-race $(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
-
-$(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
-	@gotestsum --format testname -- $(GOTAGS) -short -timeout 2500s -race $(subst short_test_target_,,$@)
+shorttest: build-race
+	gotestsum --format testname -- $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 2500s
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
