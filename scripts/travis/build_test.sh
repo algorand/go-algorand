@@ -16,15 +16,6 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine
     "${SCRIPTPATH}/build.sh" --make_debug
-    echo Checking Enlistment...
-    if [[ -n $(git status --porcelain) ]]; then
-        echo Enlistment is dirty - did you forget to run make?
-        git status -s
-        git diff
-        exit 1
-    else
-        echo Enlistment is clean
-    fi
     "${SCRIPTPATH}/travis_wait.sh" 90 "${SCRIPTPATH}/test.sh"
 else
     # we're running on an ephermal build machine

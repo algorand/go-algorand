@@ -69,6 +69,9 @@ echo "Running check_license..."
 echo "Rebuild swagger.json files"
 make rebuild_swagger
 
+echo "Regenerate config files"
+go generate ./config
+
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
    echo Enlistment is dirty - did you forget to run make?
