@@ -221,17 +221,17 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s | logfilter
+	gotestsum --format testname -- $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
 
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
-		go test $(GOTAGS) -timeout 2500s -race $$PACKAGE_DIRECTORY | logfilter; \
+		gotestsum --format testname -- $(GOTAGS) -race $$PACKAGE_DIRECTORY -timeout 2500s \
 	done
 
 shorttest: build-race $(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
 
 $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
-	@go test $(GOTAGS) -short -timeout 2500s -race $(subst short_test_target_,,$@) | logfilter
+	@gotestsum --format testname -- $(GOTAGS) -short -timeout 2500s -race $(subst short_test_target_,,$@)
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
