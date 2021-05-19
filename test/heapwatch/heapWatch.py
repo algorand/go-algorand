@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -169,17 +170,21 @@ class watcher:
         self.args = args
         self.prevsnapshots = {}
         self.they = []
+        os.makedirs(self.args.out, exist_ok=True)
         if not args.data_dirs and os.path.exists(args.tf_inventory):
             import configparser
             cp = configparser.ConfigParser(allow_no_value=True)
             cp.read(args.tf_inventory)
-            for net in cp['role_relay'].keys():
-                net = net + ':8580'
-                try:
-                    ad = algodDir(net, net=net, token=args.token, admin_token=args.admin_token)
-                    self.they.append(ad)
-                except:
-                    logger.error('bad algod: %r', path, exc_info=True)
+            shutil.copy2(args.tf_inventory, self.args.out)
+            for role in args.tf_roles.split(','):
+                role_name = 'role_' + role
+                for net in cp[role_name].keys():
+                    net = net + ':8580'
+                    try:
+                        ad = algodDir(net, net=net, token=args.token, admin_token=args.admin_token)
+                        self.they.append(ad)
+                    except:
+                        logger.error('bad algod: %r', path, exc_info=True)
         for path in args.data_dirs:
             if not os.path.isdir(path):
                 continue
@@ -241,6 +246,7 @@ def main():
     ap.add_argument('--tf-inventory', default='terraform-inventory.host', help='terraform inventory file to use if no data_dirs specified')
     ap.add_argument('--token', default='', help='default algod api token to use')
     ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
+    ap.add_argument('--tf-roles', default='relay', help='comma separated list of terraform roles to follow')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
