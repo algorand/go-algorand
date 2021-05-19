@@ -41,7 +41,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, 
 	for _, txGroup := range inTxnGroups {
 		if len(txGroup.Transactions) > 1 {
 			for _, txn := range txGroup.Transactions {
-				if err := stub.deconstructSignedTransactions(index, txn); err != nil {
+				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
 					return nil, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
@@ -59,7 +59,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, 
 					}
 					stub.BitmaskGroup.SetBit(index)
 				}
-				if err := stub.deconstructSignedTransactions(index, txn); err != nil {
+				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
 					return nil, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++

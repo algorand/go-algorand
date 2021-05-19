@@ -36,7 +36,7 @@ func compactNibblesArray(b []byte) []byte {
 }
 
 // deconstructs SignedTxn's into lists of fields and bitmasks
-func (stub *txGroupsEncodingStub) deconstructSignedTransactions(i int, txn transactions.SignedTxn) error {
+func (stub *txGroupsEncodingStub) deconstructSignedTransactions(i int, txn *transactions.SignedTxn) error {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Sig.MsgIsZero() {
 		if len(stub.BitmaskSig) == 0 {
@@ -67,7 +67,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructSignedTransactions() {
 	stub.finishDeconstructTransactions()
 }
 
-func (stub *txGroupsEncodingStub) deconstructMsigs(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructMsigs(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if txn.Msig.Version != 0 {
 		if len(stub.BitmaskVersion) == 0 {
@@ -101,7 +101,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructMsigs() {
 	stub.BitmaskSubsigs.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructLsigs(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructLsigs(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if txn.Lsig.Logic != nil {
 		if len(stub.BitmaskLogic) == 0 {
@@ -158,7 +158,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructLsigs() {
 	stub.BitmaskLogicArgs.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructTransactions(i int, txn transactions.SignedTxn) error {
+func (stub *txGroupsEncodingStub) deconstructTransactions(i int, txn *transactions.SignedTxn) error {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	txTypeByte, err := TxTypeToByte(txn.Txn.Type)
 	if err != nil {
@@ -227,7 +227,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructTxType() {
 	stub.BitmaskTxType.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Txn.Sender.MsgIsZero() {
 		if len(stub.BitmaskSender) == 0 {
@@ -305,7 +305,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructTxnHeader() {
 	stub.BitmaskRekeyTo.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Txn.VotePK.MsgIsZero() || !txn.Txn.SelectionPK.MsgIsZero() || txn.Txn.VoteKeyDilution != 0 {
 		if len(stub.BitmaskKeys) == 0 {
@@ -350,7 +350,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructKeyregTxnFields() {
 	stub.BitmaskNonparticipation.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructPaymentTxnFields(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructPaymentTxnFields(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Txn.Receiver.MsgIsZero() {
 		if len(stub.BitmaskReceiver) == 0 {
@@ -384,7 +384,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructPaymentTxnFields() {
 	stub.BitmaskCloseRemainderTo.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructAssetConfigTxnFields(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructAssetConfigTxnFields(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Txn.ConfigAsset.MsgIsZero() {
 		if len(stub.BitmaskConfigAsset) == 0 {
@@ -402,7 +402,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructAssetConfigTxnFields() {
 	stub.finishDeconstructAssetParams()
 }
 
-func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if txn.Txn.AssetParams.Total != 0 {
 		if len(stub.BitmaskTotal) == 0 {
@@ -506,7 +506,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructAssetParams() {
 	stub.BitmaskClawback.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructAssetTransferTxnFields(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructAssetTransferTxnFields(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Txn.XferAsset.MsgIsZero() {
 		if len(stub.BitmaskXferAsset) == 0 {
@@ -558,7 +558,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructAssetTransferTxnFields() {
 	stub.BitmaskAssetCloseTo.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructAssetFreezeTxnFields(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructAssetFreezeTxnFields(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Txn.FreezeAccount.MsgIsZero() {
 		if len(stub.BitmaskFreezeAccount) == 0 {
@@ -590,7 +590,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructAssetFreezeTxnFields() {
 	stub.BitmaskAssetFrozen.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Txn.ApplicationID.MsgIsZero() {
 		if len(stub.BitmaskApplicationID) == 0 {
@@ -706,7 +706,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructApplicationCallTxnFields() {
 	stub.BitmaskClearStateProgram.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
-func (stub *txGroupsEncodingStub) deconstructCompactCertTxnFields(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructCompactCertTxnFields(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Txn.CertRound.MsgIsZero() {
 		if len(stub.BitmaskCertRound) == 0 {
@@ -733,7 +733,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructCompactCertTxnFields() {
 	stub.finishDeconstructCert()
 }
 
-func (stub *txGroupsEncodingStub) deconstructCert(i int, txn transactions.SignedTxn) {
+func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.SignedTxn) {
 	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
 	if !txn.Txn.Cert.SigCommit.MsgIsZero() {
 		if len(stub.BitmaskSigCommit) == 0 {
