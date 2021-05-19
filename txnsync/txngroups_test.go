@@ -17,6 +17,9 @@
 package txnsync
 
 import (
+	"context"
+	"database/sql"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,10 +29,18 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/util/db"
 )
+
+var blockDBFilename = flag.String("db", "", "Location of block db")
+var startRound = flag.Int("start", 0, "Starting round")
+var endRound = flag.Int("end", 10, "Ending round")
+
 
 func TestBitmaskType0And2(t *testing.T) {
 	entries := 80
@@ -507,6 +518,50 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 		//	fmt.Println(txnGroups[0].Transactions[0])
 		//	fmt.Println()
 		//}
+		require.ElementsMatch(t, txnGroups, out)
+	}
+}
+
+// pass in flag -db to specify db, start round, end round
+func TestTxnGroupEncodingArchival(t *testing.T) {
+	if *blockDBFilename == "" {
+		t.Skip("no archival node db was provided")
+	}
+	blockDBs, err := db.OpenPair(*blockDBFilename, false)
+	require.NoError(t, err)
+	for r := basics.Round(*startRound); r < basics.Round(*endRound); r++ {
+		var block bookkeeping.Block
+		err = blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			var buf []byte
+			err = tx.QueryRow("SELECT blkdata FROM blocks WHERE rnd=?", r).Scan(&buf)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					err = ledgercore.ErrNoEntry{Round: r}
+				}
+				return err
+			}
+			return protocol.Decode(buf, &block)
+		})
+		require.NoError(t, err)
+
+		var txnGroups []transactions.SignedTxGroup
+		genesisID := block.GenesisID()
+		genesisHash := block.GenesisHash()
+		var payset [][]transactions.SignedTxnWithAD
+		payset, err := block.DecodePaysetGroups()
+		require.NoError(t, err)
+		for _, txns := range payset {
+			var txnGroup transactions.SignedTxGroup
+			for _, txn := range txns {
+				txnGroup.Transactions = append(txnGroup.Transactions, txn.SignedTxn)
+			}
+			txnGroups = append(txnGroups, txnGroup)
+		}
+
+		encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
+		require.NoError(t, err)
+		out, err := decodeTransactionGroups(encodedGroupsBytes, genesisID, genesisHash)
+		require.NoError(t, err)
 		require.ElementsMatch(t, txnGroups, out)
 	}
 }
