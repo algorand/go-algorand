@@ -72,6 +72,9 @@ make rebuild_swagger
 echo "Regenerate config files"
 go generate ./config
 
+echo "Running fixcheck"
+$(GOPATH)/bin/algofix -error */
+
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
    echo Enlistment is dirty - did you forget to run make?

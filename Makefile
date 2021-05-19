@@ -81,9 +81,6 @@ fmt:
 fix: build
 	$(GOPATH1)/bin/algofix */
 
-fixcheck: build
-	$(GOPATH1)/bin/algofix -error */
-
 lint: deps
 	$(GOPATH1)/bin/golint ./...
 
