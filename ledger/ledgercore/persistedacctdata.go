@@ -76,7 +76,7 @@ type AssetsCommonGroupData struct {
 	// assetId1 = AssetOffsets[0] + MinAssetIndex and assetIdx1 == MinAssetIndex
 	// assetId2 = AssetOffsets[1] + assetIdx1
 	// assetId3 = AssetOffsets[2] + assetIdx2
-	AssetOffsets []basics.AssetIndex `codec:"ao,allocbound=MaxHoldingGroupSize"`
+	AssetOffsets []basics.AssetIndex `codec:"ao,omitemptyarray,allocbound=MaxHoldingGroupSize"`
 }
 
 // AssetsParamsGroupData is an actual asset param data
@@ -84,17 +84,17 @@ type AssetsParamsGroupData struct {
 	AssetsCommonGroupData
 
 	// same number of elements as in AssetOffsets
-	Totals         []uint64         `codec:"t,allocbound=MaxParamsGroupSize"`
-	Decimals       []uint32         `codec:"d,allocbound=MaxParamsGroupSize"`
-	DefaultFrozens []bool           `codec:"f,allocbound=MaxParamsGroupSize"`
-	UnitNames      []string         `codec:"u,allocbound=MaxParamsGroupSize"`
-	AssetNames     []string         `codec:"n,allocbound=MaxParamsGroupSize"`
-	URLs           []string         `codec:"l,allocbound=MaxParamsGroupSize"`
-	MetadataHash   [][32]byte       `codec:"h,allocbound=MaxParamsGroupSize"`
-	Managers       []basics.Address `codec:"m,allocbound=MaxParamsGroupSize"`
-	Reserves       []basics.Address `codec:"r,allocbound=MaxParamsGroupSize"`
-	Freezes        []basics.Address `codec:"z,allocbound=MaxParamsGroupSize"`
-	Clawbacks      []basics.Address `codec:"c,allocbound=MaxParamsGroupSize"`
+	Totals         []uint64         `codec:"t,omitemptyarray,allocbound=MaxParamsGroupSize"`
+	Decimals       []uint32         `codec:"d,omitemptyarray,allocbound=MaxParamsGroupSize"`
+	DefaultFrozens []bool           `codec:"f,omitemptyarray,allocbound=MaxParamsGroupSize"`
+	UnitNames      []string         `codec:"u,omitemptyarray,allocbound=MaxParamsGroupSize"`
+	AssetNames     []string         `codec:"n,omitemptyarray,allocbound=MaxParamsGroupSize"`
+	URLs           []string         `codec:"l,omitemptyarray,allocbound=MaxParamsGroupSize"`
+	MetadataHash   [][32]byte       `codec:"h,omitemptyarray,allocbound=MaxParamsGroupSize"`
+	Managers       []basics.Address `codec:"m,omitemptyarray,allocbound=MaxParamsGroupSize"`
+	Reserves       []basics.Address `codec:"r,omitemptyarray,allocbound=MaxParamsGroupSize"`
+	Freezes        []basics.Address `codec:"z,omitemptyarray,allocbound=MaxParamsGroupSize"`
+	Clawbacks      []basics.Address `codec:"c,omitemptyarray,allocbound=MaxParamsGroupSize"`
 }
 
 // AssetsHoldingGroupData is an actual asset holding data
@@ -102,8 +102,8 @@ type AssetsHoldingGroupData struct {
 	AssetsCommonGroupData
 
 	// same number of elements as in AssetOffsets
-	Amounts []uint64 `codec:"a,allocbound=MaxHoldingGroupSize"`
-	Frozens []bool   `codec:"f,allocbound=MaxHoldingGroupSize"`
+	Amounts []uint64 `codec:"a,omitemptyarray,allocbound=MaxHoldingGroupSize"`
+	Frozens []bool   `codec:"f,omitemptyarray,allocbound=MaxHoldingGroupSize"`
 }
 
 const maxEncodedGroupsSize = 4096
@@ -113,7 +113,7 @@ type ExtendedAssetHolding struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Count  uint32               `codec:"c"`
-	Groups []AssetsHoldingGroup `codec:"gs,allocbound=maxEncodedGroupsSize"` // 1M asset holdings
+	Groups []AssetsHoldingGroup `codec:"gs,omitemptyarray,allocbound=maxEncodedGroupsSize"` // 1M holdings
 }
 
 // ExtendedAssetParams is AccountData's extension for storing asset params
@@ -121,7 +121,7 @@ type ExtendedAssetParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Count  uint32              `codec:"c"`
-	Groups []AssetsParamsGroup `codec:"gs,allocbound=4096"` // 1M asset params
+	Groups []AssetsParamsGroup `codec:"gs,omitemptyarray,allocbound=maxEncodedGroupsSize"` // TODO, 1M params
 }
 
 // PersistedAccountData represents actual data stored in DB
@@ -129,8 +129,8 @@ type PersistedAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	basics.AccountData
-	ExtendedAssetHolding ExtendedAssetHolding `codec:"eah"`
-	ExtendedAssetParams  ExtendedAssetParams  `codec:"eap"`
+	ExtendedAssetHolding ExtendedAssetHolding `codec:"eah,omitempty"`
+	ExtendedAssetParams  ExtendedAssetParams  `codec:"eap,omitempty"`
 }
 
 // SortAssetIndex is a copy from data/basics/sort.go

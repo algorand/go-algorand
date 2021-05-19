@@ -1228,14 +1228,19 @@ func TestFindLoadedSiblings(t *testing.T) {
 		rt := getRandTest(seed)
 		tests = append(tests, rt)
 	}
+	for seed := int64(1); seed < 1000; seed++ {
+		rt := getRandTest(seed)
+		tests = append(tests, rt)
+	}
 	rt := getRandTest(time.Now().Unix())
 	tests = append(tests, rt)
 
+	printSeed := false
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			e := genExtendedHoldingGroups(test.i)
 			l, c := findLoadedSiblings(&e)
-			if test.seed != 0 {
+			if test.seed != 0 && printSeed {
 				fmt.Printf("seed = %d\n", test.seed)
 			}
 			require.Equal(t, test.r.loaded, l)
@@ -1316,43 +1321,46 @@ func TestGroupMergeInternal(t *testing.T) {
 	type test struct {
 		sizes   []int
 		maxSize int
+		seed  int64
 	}
 
 	tests := []test{
-		{[]int{1, 2}, MaxHoldingGroupSize},
-		{[]int{1, 2, 3}, MaxHoldingGroupSize},
-		{[]int{1, 255, 3}, MaxHoldingGroupSize},
-		{[]int{1, 253, 1}, MaxHoldingGroupSize},
-		{[]int{256, 2, 3}, MaxHoldingGroupSize},
-		{[]int{256, 1, 256}, MaxHoldingGroupSize},
-		{[]int{254, 1, 1}, MaxHoldingGroupSize},
-		{[]int{256, 255, 1}, MaxHoldingGroupSize},
-		{[]int{256, 256, 1}, MaxHoldingGroupSize},
-		{[]int{256, 256, 256}, MaxHoldingGroupSize},
-		{[]int{128, 179, 128, 142, 128, 164, 128, 156, 147}, MaxHoldingGroupSize},
-		{[]int{128, 168, 242, 128, 144, 255, 232}, MaxHoldingGroupSize},
-		{[]int{1, 2}, MaxParamsGroupSize},
-		{[]int{1, 2, 3}, MaxParamsGroupSize},
-		{[]int{1, 13, 3}, MaxParamsGroupSize},
-		{[]int{1, 12, 1}, MaxParamsGroupSize},
-		{[]int{14, 2, 3}, MaxParamsGroupSize},
-		{[]int{14, 1, 14}, MaxParamsGroupSize},
-		{[]int{12, 1, 1}, MaxParamsGroupSize},
+		{[]int{1, 2}, MaxHoldingGroupSize, 0},
+		{[]int{1, 2, 3}, MaxHoldingGroupSize, 0},
+		{[]int{1, 255, 3}, MaxHoldingGroupSize, 0},
+		{[]int{1, 253, 1}, MaxHoldingGroupSize, 0},
+		{[]int{256, 2, 3}, MaxHoldingGroupSize, 0},
+		{[]int{256, 1, 256}, MaxHoldingGroupSize, 0},
+		{[]int{254, 1, 1}, MaxHoldingGroupSize, 0},
+		{[]int{256, 255, 1}, MaxHoldingGroupSize, 0},
+		{[]int{256, 256, 1}, MaxHoldingGroupSize, 0},
+		{[]int{256, 256, 256}, MaxHoldingGroupSize, 0},
+		{[]int{128, 179, 128, 142, 128, 164, 128, 156, 147}, MaxHoldingGroupSize, 0},
+		{[]int{128, 168, 242, 128, 144, 255, 232}, MaxHoldingGroupSize, 0},
+		{[]int{1, 2}, MaxParamsGroupSize, 0},
+		{[]int{1, 2, 3}, MaxParamsGroupSize, 0},
+		{[]int{1, 13, 3}, MaxParamsGroupSize, 0},
+		{[]int{1, 12, 1}, MaxParamsGroupSize, 0},
+		{[]int{14, 2, 3}, MaxParamsGroupSize, 0},
+		{[]int{14, 1, 14}, MaxParamsGroupSize, 0},
+		{[]int{12, 1, 1}, MaxParamsGroupSize, 0},
 	}
 
-	addRandomTest := func(maxSize int) {
-		// random test
-		n := rand.Intn(100)
+	// random tests
+	addRandomTest := func(maxSize int, seed int64) {
+		rand.Seed(seed)
+		n := rand.Intn(1000)
 		sizes := make([]int, n, n)
 		for i := 0; i < n; i++ {
 			sizes[i] = rand.Intn(maxSize-1) + 1 // no zeroes please
 		}
-		tests = append(tests, test{sizes, maxSize})
+		tests = append(tests, test{sizes, maxSize, seed})
 	}
 
 	addRandomTest(MaxHoldingGroupSize)
 	addRandomTest(MaxParamsGroupSize)
 
+	printSeed := false
 	for n, test := range tests {
 		size := uint32(test.maxSize)
 		t.Run(fmt.Sprintf("%d_%d", n, size), func(t *testing.T) {
@@ -1362,6 +1370,9 @@ func TestGroupMergeInternal(t *testing.T) {
 			a.Equal(len(sizes), groupsNeeded+groupsToDelete)
 			e := genExtendedHoldingGroupsFromSizes(t, sizes, basics.AssetIndex(1))
 			oldCount := e.Count
+				if test.seed != 0 && printSeed {
+					fmt.Printf("seed = %d\n", test.seed)
+				}
 
 			oldHoldings := getAllHoldings(e)
 			deleted := mergeInternal(&e, 0, len(sizes), groupsToDelete, size)
@@ -1371,7 +1382,9 @@ func TestGroupMergeInternal(t *testing.T) {
 			for i := 0; i < groupsNeeded-1; i++ {
 				a.Equal(uint32(size), e.Groups[i].Count)
 			}
-			a.Equal(uint32(totalAssets-(groupsNeeded-1)*int(size)), e.Groups[groupsNeeded-1].Count)
+			if groupsNeeded > 0 {
+				a.Equal(uint32(totalAssets-(groupsNeeded-1)*int(size)), e.Groups[groupsNeeded-1].Count)
+			}
 			newHoldings := getAllHoldings(e)
 			a.Equal(oldHoldings, newHoldings)
 
