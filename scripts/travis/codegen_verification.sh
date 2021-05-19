@@ -73,7 +73,8 @@ echo "Regenerate config files"
 go generate ./config
 
 echo "Running fixcheck"
-$(GOPATH)/bin/algofix -error */
+GOPATH=$(go env GOPATH)
+"$GOPATH"/bin/algofix -error */
 
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
@@ -84,3 +85,6 @@ if [[ -n $(git status --porcelain) ]]; then
 else
    echo Enlistment is clean
 fi
+
+# test binary compatibility
+"${SCRIPTPATH}/../../test/platform/test_linux_amd64_compatibility.sh"
