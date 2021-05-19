@@ -820,7 +820,7 @@ func TestMinBalance(t *testing.T) {
 	// and global count b/c newApp opts the creator in)
 	minb := 2*1002 + 10*1003 + 4*1004 + 6*1005
 	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
-	//	request extra program pages, min balance increase
+	// request extra program pages, min balance increase
 	app := ledger.applications[77]
 	app.ExtraProgramPages = 2
 	ledger.applications[77] = app

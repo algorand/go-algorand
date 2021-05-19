@@ -120,10 +120,110 @@ func TestGoNonparticipatingWellFormed(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAppCallCreateWellFormed(t *testing.T) {
+	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
+	specialAddr := SpecialAddresses{FeeSink: feeSink}
+	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	futureProto := config.Consensus[protocol.ConsensusFuture]
+	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+	usecases := []struct {
+		tx            Transaction
+		spec          SpecialAddresses
+		proto         config.ConsensusParams
+		expectedError error
+	}{
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 0,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+				},
+			},
+			spec:  specialAddr,
+			proto: curProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 0,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 0,
+				},
+			},
+			spec:  specialAddr,
+			proto: curProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 0,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 3,
+				},
+			},
+			spec:  specialAddr,
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 0,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 0,
+				},
+			},
+			spec:  specialAddr,
+			proto: futureProto,
+		},
+	}
+	for _, usecase := range usecases {
+		err := usecase.tx.WellFormed(usecase.spec, usecase.proto)
+		require.NoError(t, err)
+	}
+}
+
 func TestWellFormedErrors(t *testing.T) {
 	feeSink := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 	specialAddr := SpecialAddresses{FeeSink: feeSink}
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	futureProto := config.Consensus[protocol.ConsensusFuture]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 	usecases := []struct {
@@ -157,6 +257,69 @@ func TestWellFormedErrors(t *testing.T) {
 			spec:          specialAddr,
 			proto:         curProto,
 			expectedError: fmt.Errorf("transaction invalid range (%d--%d)", 105, 100),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 0,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 1,
+				},
+			},
+			spec:          specialAddr,
+			proto:         curProto,
+			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", curProto.MaxExtraAppProgramPages),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 1,
+				},
+			},
+			spec:          specialAddr,
+			proto:         futureProto,
+			expectedError: fmt.Errorf("ExtraProgramPages field is immutable"),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 0,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 4,
+				},
+			},
+			spec:          specialAddr,
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", futureProto.MaxExtraAppProgramPages),
 		},
 	}
 	for _, usecase := range usecases {
