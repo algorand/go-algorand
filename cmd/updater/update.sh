@@ -375,7 +375,7 @@ function run_systemd_action() {
                 echo "systemd system service: $action"
                 return 0
             fi
-        elif grep sudo <(groups "$process_owner" &> /dev/null); then
+        elif grep sudo <(groups "$process_owner") &> /dev/null; then
             if sudo -n systemctl "$action" "algorand@$(systemd-escape "$data_dir")"; then
                 echo "sudo -n systemd system service: $action"
                 return 0
