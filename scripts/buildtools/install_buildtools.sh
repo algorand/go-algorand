@@ -28,7 +28,7 @@ function install_go_module {
     if [ -z "$VERSION" ]; then
         OUTPUT=$(GO111MODULE=off go get -u "${MODULE}" 2>&1)
     else
-        OUTPUT=$(cd && GO111MODULE=on go get "${MODULE}@${VERSION}" 2>&1)
+        OUTPUT=$(GO111MODULE=on go get "${MODULE}@${VERSION}" 2>&1)
     fi
     if [ $? != 0 ]; then
         echo "error: executing \"go get ${MODULE}\" failed : ${OUTPUT}"
