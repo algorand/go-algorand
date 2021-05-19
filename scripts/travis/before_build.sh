@@ -37,7 +37,7 @@ if [ "${OS}-${ARCH}" = "windows-amd64" ]; then
      exit 0
 fi
 
-"${SCRIPTPATH}"/../configure_dev-deps.sh
+"${SCRIPTPATH}"/../buildtools/install_buildtools.sh
 
 function runGoFmt() {
     gofiles="$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v ^vendor/)" || true

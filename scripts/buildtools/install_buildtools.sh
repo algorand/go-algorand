@@ -3,11 +3,13 @@
 
 set -exo pipefail
 
-./scripts/check_golang_version.sh dev
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+
+(cd ../..; ${SCRIPTPATH}/../check_golang_version.sh dev)
 
 function get_go_version {
     cd "$(dirname "$0")"
-    VERSION=$( grep "$1" 2>/dev/null < ../go.mod | awk -F " " '{print $2}')
+    VERSION=$( grep "$1" 2>/dev/null < ./go.mod | awk -F " " '{print $2}')
     echo "$VERSION"
     return
 }
@@ -33,8 +35,8 @@ function install_go_module {
     fi
 }
 
-install_go_module golang.org/x/lint/golint
-install_go_module golang.org/x/tools/cmd/stringer
+install_go_module golang.org/x/lint golang.org/x/lint/golint
+install_go_module golang.org/x/tools golang.org/x/tools/cmd/stringer
 install_go_module github.com/go-swagger/go-swagger github.com/go-swagger/go-swagger/cmd/swagger
 install_go_module github.com/algorand/msgp
 

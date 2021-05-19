@@ -18,7 +18,6 @@ require (
 	github.com/gen2brain/beeep v0.0.0-20180718162406-4e430518395f
 	github.com/getkin/kin-openapi v0.22.0
 	github.com/go-chi/chi v4.1.2+incompatible // indirect
-	github.com/go-swagger/go-swagger v0.25.0
 	github.com/godbus/dbus v0.0.0-20181101234600-2ff6f7ffd60f // indirect
 	github.com/gofrs/flock v0.7.0
 	github.com/google/go-querystring v1.0.0
@@ -48,7 +47,6 @@ require (
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
 	golang.org/x/sys v0.0.0-20200905004654-be1d3432aa8f
 	golang.org/x/text v0.3.3 // indirect
-	golang.org/x/tools v0.0.0-20200904185747-39188db58858 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
