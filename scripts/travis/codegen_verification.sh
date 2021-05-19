@@ -18,6 +18,9 @@ touch gen/generate.go
 
 "${SCRIPTPATH}/build.sh"
 
+# Get the go build version.
+GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+
 eval "$(~/gimme "${GOLANG_VERSION}")"
 
 "${SCRIPTPATH}"/../buildtools/install_buildtools.sh

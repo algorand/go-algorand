@@ -78,8 +78,6 @@ if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
     # would be very costly there.
     if [ "${BUILD_TYPE}" = "integration" ]; then
         echo "Skipping msgp regeneration on integration test"
-    else
-        make msgp
     fi
     make build build-race
 else
