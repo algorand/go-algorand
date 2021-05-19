@@ -13,7 +13,12 @@ ALGORAND_DEADLOCK=enable
 export ALGORAND_DEADLOCK
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
+# Force re-evaluation of genesis files to see if source files changed w/o running make
+touch gen/generate.go
+
 "${SCRIPTPATH}/build.sh"
+
+eval "$(~/gimme "${GOLANG_VERSION}")"
 
 "${SCRIPTPATH}"/../buildtools/install_buildtools.sh
 
