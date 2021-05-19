@@ -30,6 +30,7 @@ require (
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/karalabe/hid v0.0.0-20181128192157-d815e0c1a2e2
 	github.com/labstack/echo/v4 v4.1.17
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matryer/moq v0.1.3 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/miekg/dns v1.1.27
@@ -42,6 +43,7 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.3
+	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
