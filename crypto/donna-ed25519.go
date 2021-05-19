@@ -26,7 +26,9 @@ package crypto
 //	sizeofPtr = sizeof(void*),
 // };
 import "C"
-import "unsafe"
+import (
+	"unsafe"
+)
 
 type DonnaSeed ed25519DonnaSeed
 
@@ -44,7 +46,13 @@ const ed25519DonnaSignatureLenBytes = 64
 
 //export ed25519_randombytes_unsafe
 func ed25519_randombytes_unsafe(p unsafe.Pointer, len C.size_t) {
-	RandBytes(C.GoBytes(p, C.int(len)))
+	randLen := int(len)
+	rand := make([]byte, randLen)
+	RandBytes(rand)
+	for i := 0; i < randLen; i++ {
+		*(*byte)(unsafe.Pointer(uintptr(p) + uintptr(i*C.sizeof_uchar))) = rand[i]
+	}
+
 }
 
 func ed25519DonnaGenerateKey() (public ed25519DonnaPublicKey, secret ed25519DonnaPrivateKey) {
