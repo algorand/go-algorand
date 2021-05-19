@@ -225,7 +225,7 @@ test: build
 
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
-		gotestsum --format testname -- $(GOTAGS) -race $$PACKAGE_DIRECTORY -timeout 2500s \
+		gotestsum --format testname -- $(GOTAGS) -race $$PACKAGE_DIRECTORY -timeout 2500s; \
 	done
 
 shorttest: build-race $(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
