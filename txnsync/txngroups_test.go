@@ -264,7 +264,7 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 }
 
 func txnGroupsData() (txnGroups []transactions.SignedTxGroup, genesisID string, genesisHash crypto.Digest, err error) {
-	dat, err := ioutil.ReadFile("../test/testdata/mainnettransactions")
+	dat, err := ioutil.ReadFile("../test/testdata/mainnetblocks")
 	if err != nil {
 		return
 	}
@@ -427,14 +427,16 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 			txn.Txn.CompactCertTxnFields = transactions.CompactCertTxnFields{}
 			txn.Txn.Type = txType
 			txn.Lsig.Logic = []byte("logic")
-			if i%3 != 0 {
-				txn.Sig = crypto.Signature{}
-			}
-			if i%3 != 1 {
+			switch i%3 {
+			case 0: // only have normal sig
 				txn.Msig = crypto.MultisigSig{}
-			}
-			if i%3 != 2 {
 				txn.Lsig = transactions.LogicSig{}
+			case 1: // only have multi sig
+				txn.Sig = crypto.Signature{}
+				txn.Lsig = transactions.LogicSig{}
+			case 2: // only have logic sig
+				txn.Msig = crypto.MultisigSig{}
+				txn.Sig = crypto.Signature{}
 			}
 			switch txType {
 			case protocol.UnknownTx:

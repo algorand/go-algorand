@@ -58,6 +58,10 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 	index := 0
 	txGroupHashes := make([]crypto.Digest, 16)
 	for _, txns := range txnGroups {
+		if len(txns.Transactions) == 1 && !b.EntryExists(index, txnCount) {
+			index++
+			continue
+		}
 		var txGroup transactions.TxGroup
 		txGroup.TxGroupHashes = txGroupHashes[:len(txns.Transactions)]
 		for i, tx := range txns.Transactions {
@@ -65,9 +69,7 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 		}
 		groupHash := crypto.HashObj(txGroup)
 		for i := range txns.Transactions {
-			if exists := b.EntryExists(index, txnCount); exists || len(txns.Transactions) > 1 {
-				txns.Transactions[i].Txn.Group = groupHash
-			}
+			txns.Transactions[i].Txn.Group = groupHash
 			index++
 		}
 	}
