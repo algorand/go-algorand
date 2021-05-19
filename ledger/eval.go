@@ -723,6 +723,13 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
+		// Append the last txn's side effects to the existing list of past side effects
+		if gi != 0 {
+			accumulatedSideEffects := evalParams[gi-1].PastSideEffects
+			lastSideEffects := *evalParams[gi-1].SideEffects
+			evalParams[gi].PastSideEffects = append(accumulatedSideEffects, lastSideEffects)
+		}
+
 		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err

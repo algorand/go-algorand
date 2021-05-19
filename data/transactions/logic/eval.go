@@ -71,6 +71,17 @@ func (sv *stackValue) typeName() string {
 	return "uint64"
 }
 
+func (sv *stackValue) clone() stackValue {
+	if sv.Bytes != nil {
+		// clone stack value if Bytes
+		bytesClone := make([]byte, len(sv.Bytes))
+		copy(bytesClone, sv.Bytes)
+		return stackValue{Bytes: bytesClone}
+	}
+	// otherwise no cloning is needed if Uint
+	return stackValue{Uint: sv.Uint}
+}
+
 func (sv *stackValue) String() string {
 	if sv.Bytes != nil {
 		return hex.EncodeToString(sv.Bytes)
@@ -144,6 +155,22 @@ type LedgerForLogic interface {
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
 }
 
+// EvalSideEffects contains data returned from evaluation
+type EvalSideEffects struct {
+	scratchSpace scratchSpace
+}
+
+// GetScratchValue loads and clones a stackValue
+// The value is cloned so the original bytes are protected from changes
+func (se *EvalSideEffects) GetScratchValue(stackPos uint8) stackValue {
+	return se.scratchSpace[stackPos].clone()
+}
+
+// SetScratchSpace stores the scratch space
+func (se *EvalSideEffects) SetScratchSpace(scratch scratchSpace) {
+	se.scratchSpace = scratch
+}
+
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	// the transaction being evaluated
@@ -157,6 +184,10 @@ type EvalParams struct {
 
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
+
+	SideEffects *EvalSideEffects
+
+	PastSideEffects []EvalSideEffects
 
 	Logger logging.Logger
 
@@ -221,6 +252,8 @@ func (ep EvalParams) log() logging.Logger {
 	return logging.Base()
 }
 
+type scratchSpace = [256]stackValue
+
 type evalContext struct {
 	EvalParams
 
@@ -233,7 +266,7 @@ type evalContext struct {
 	intc      []uint64
 	bytec     [][]byte
 	version   uint64
-	scratch   [256]stackValue
+	scratch   scratchSpace
 
 	cost int // cost incurred so far
 
@@ -428,6 +461,10 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	if cx.stack[0].Bytes != nil {
 		return false, errors.New("stack finished with bytes not int")
 	}
+
+	// set side effects
+	cx.SideEffects.SetScratchSpace(cx.scratch)
+
 	return cx.stack[0].Uint != 0, nil
 }
 
