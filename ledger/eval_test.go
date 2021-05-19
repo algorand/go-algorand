@@ -418,24 +418,6 @@ func TestPrepareEvalParams(t *testing.T) {
 			}
 		})
 	}
-
-	// Test evalContext pointers were set up correctly
-	appCallsGroup := cases[6].group
-	epList := eval.prepareEvalParams(appCallsGroup)
-
-	for i := range appCallsGroup {
-		for j := range epList {
-			require.Equal(t, epList[j].Cx, epList[i].CxGroup[j])
-		}
-	}
-
-	// And confirm that mutating an evalContext mutates that one in the group
-	original := epList[0].Cx
-	pointer := epList[1].CxGroup[0]
-	newVal := 1
-	require.NotEqual(t, newVal, original.GroupIndex)
-	original.GroupIndex = newVal
-	require.Equal(t, newVal, pointer.GroupIndex)
 }
 
 func testLedgerCleanup(l *Ledger, dbName string, inMem bool) {

@@ -1594,7 +1594,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 			err = fmt.Errorf("can't get future Scratch from txn with index %d", groupIndex)
 			return
 		}
-		val := cx.CxGroup[groupIndex].scratch[arrayFieldIdx]
+		val := cx.PastSideEffects[groupIndex].GetScratchValue(uint8(arrayFieldIdx))
 		if val.Bytes != nil {
 			sv.Bytes = val.Bytes
 		} else {

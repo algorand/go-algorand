@@ -87,7 +87,6 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 	ep := EvalParams{}
 	ep.Proto = &proto
 	ep.Txn = pt
-	ep.Cx = new(EvalContext)
 	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
 		ep.Trace = sb
 	}
@@ -1895,10 +1894,6 @@ int 1`,
 					},
 				}
 			}
-			cxgroup := make([]*EvalContext, len(sources))
-			for j := range cxgroup {
-				cxgroup[j] = new(EvalContext)
-			}
 
 			// Construct EvalParams
 			epList := make([]EvalParams, len(sources))
@@ -1906,12 +1901,9 @@ int 1`,
 				epList[j] = EvalParams{
 					Proto:      &proto,
 					Txn:        &txgroup[j],
-					Cx:         cxgroup[j],
 					TxnGroup:   txgroup,
-					CxGroup:    cxgroup,
 					GroupIndex: j,
 				}
-				cxgroup[j].EvalParams = epList[j]
 			}
 
 			// Evaluate app calls
@@ -1953,10 +1945,6 @@ int 1`,
 			},
 		}
 		txgroup[1] = transactions.SignedTxn{}
-		cxgroup := make([]*EvalContext, 2)
-		for j := range cxgroup {
-			cxgroup[j] = new(EvalContext)
-		}
 
 		// Construct EvalParams
 		epList := make([]EvalParams, 2)
@@ -1964,12 +1952,9 @@ int 1`,
 			epList[j] = EvalParams{
 				Proto:      &proto,
 				Txn:        &txgroup[j],
-				Cx:         cxgroup[j],
 				TxnGroup:   txgroup,
-				CxGroup:    cxgroup,
 				GroupIndex: j,
 			}
-			cxgroup[j].EvalParams = epList[j]
 		}
 
 		// Evaluate app call
