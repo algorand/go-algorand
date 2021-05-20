@@ -713,7 +713,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 
 			globSchema := basics.StateSchema{NumByteSlice: proto.MaxGlobalSchemaEntries}
 			locSchema := basics.StateSchema{NumByteSlice: proto.MaxLocalSchemaEntries}
-			tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil)
+			tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, 0)
 			if err != nil {
 				fmt.Printf("Cannot create app txn\n")
 				panic(err)
