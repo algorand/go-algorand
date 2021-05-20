@@ -24,24 +24,15 @@ import (
 // SimpleKeyManager provides a simple implementation of a KeyManager.
 type SimpleKeyManager []account.Participation
 
-// Keys implements KeyManager.Keys.
-func (m SimpleKeyManager) Keys() []account.Participation {
+// VotingKeys implements KeyManager.VotingKeys.
+func (m SimpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
 	var km []account.Participation
 	for _, acc := range m {
-		km = append(km, acc)
-	}
-	return km
-}
-
-// HasLiveKeys returns true if we have any Participation
-// keys valid for the specified round range (inclusive)
-func (m SimpleKeyManager) HasLiveKeys(from, to basics.Round) bool {
-	for _, acc := range m {
-		if acc.OverlapsInterval(from, to) {
-			return true
+		if acc.OverlapsInterval(votingRound, votingRound) {
+			km = append(km, acc)
 		}
 	}
-	return false
+	return km
 }
 
 // DeleteOldKeys implements KeyManager.DeleteOldKeys.

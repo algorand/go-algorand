@@ -135,6 +135,7 @@ var roundNumber uint64
 var timestamp int64
 var runMode runModeValue = runModeValue{makeCobraStringValue("auto", []string{"signature", "application"})}
 var port int
+var iface string
 var noFirstRun bool
 var noBrowserCheck bool
 var noSourceMap bool
@@ -146,6 +147,7 @@ var listenForDrReq bool
 func init() {
 	rootCmd.PersistentFlags().VarP(&frontend, "frontend", "f", "Frontend to use: "+frontend.AllowedString())
 	rootCmd.PersistentFlags().IntVar(&port, "remote-debugging-port", 9392, "Port to listen on")
+	rootCmd.PersistentFlags().StringVar(&iface, "listen", "127.0.0.1", "Network interface to listen on")
 	rootCmd.PersistentFlags().BoolVar(&noFirstRun, "no-first-run", false, "")
 	rootCmd.PersistentFlags().MarkHidden("no-first-run")
 	rootCmd.PersistentFlags().BoolVar(&noBrowserCheck, "no-default-browser-check", false, "")
@@ -153,7 +155,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&noSourceMap, "no-source-map", false, "Do not generate source maps")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 
-	debugCmd.Flags().StringVarP(&proto, "proto", "p", "", "Consensus protocol version for TEAL")
+	debugCmd.Flags().StringVarP(&proto, "proto", "p", "", "Consensus protocol version for TEAL evaluation")
 	debugCmd.Flags().StringVarP(&txnFile, "txn", "t", "", "Transaction(s) to evaluate TEAL on in form of json or msgpack file")
 	debugCmd.Flags().IntVarP(&groupIndex, "group-index", "g", 0, "Transaction index in a txn group")
 	debugCmd.Flags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")
@@ -172,7 +174,7 @@ func init() {
 }
 
 func debugRemote() {
-	ds := makeDebugServer(port, &frontend, nil)
+	ds := makeDebugServer(iface, port, &frontend, nil)
 	err := ds.startRemote()
 	if err != nil {
 		log.Fatalln(err.Error())
@@ -277,7 +279,7 @@ func debugLocal(args []string) {
 		ListenForDrReq:   listenForDrReq,
 	}
 
-	ds := makeDebugServer(port, &frontend, &dp)
+	ds := makeDebugServer(iface, port, &frontend, &dp)
 
 	err = ds.startDebug()
 	if err != nil {

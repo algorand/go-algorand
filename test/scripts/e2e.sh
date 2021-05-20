@@ -45,6 +45,20 @@ TEST_RUN_ID=$(${SCRIPT_PATH}/testrunid.py)
 export TEMPDIR=${SRCROOT}/tmp/out/e2e/${TEST_RUN_ID}
 echo "Test output can be found in ${TEMPDIR}"
 
+
+# ARM64 has an unoptimized scrypt() which can cause tests to timeout.
+# Run kmd with scrypt() configured to run less secure and fast to go through the motions for test.
+# thus, on those platforms we launch kmd with unsafe_scrypt = true to speed up the tests.
+RUN_KMD_WITH_UNSAFE_SCRYPT=""
+PLATFORM_ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
+
+echo "ARCHTYPE:    ${PLATFORM_ARCHTYPE}"
+if [[ "${PLATFORM_ARCHTYPE}" = arm* ]]; then
+    RUN_KMD_WITH_UNSAFE_SCRYPT="--unsafe_scrypt"
+fi
+
+echo "RUN_KMD_WITH_UNSAFE_SCRYPT = ${RUN_KMD_WITH_UNSAFE_SCRYPT}"
+
 export BINDIR=${TEMPDIR}/bin
 export DATADIR=${TEMPDIR}/data
 
@@ -85,9 +99,12 @@ python3 -m venv "${TEMPDIR}/ve"
 . "${TEMPDIR}/ve/bin/activate"
 "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
 "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
-"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py "$SRCROOT"/test/scripts/e2e_subs/*.sh
+"${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
 for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
-    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py --version "$(basename "$vdir")" "$vdir"/*.sh
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+done
+for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
 done
 deactivate
 

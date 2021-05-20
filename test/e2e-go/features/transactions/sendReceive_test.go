@@ -49,7 +49,7 @@ func TestAccountsCanSendMoney(t *testing.T) {
 
 func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends int) {
 	t.Parallel()
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, templatePath)

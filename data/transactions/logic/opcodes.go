@@ -21,7 +21,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 3
+const LogicVersion = 4
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -32,6 +32,10 @@ const rekeyingEnabledVersion = 2
 // functionality was enabled. We use this to disallow v0 and v1 TEAL programs
 // from being used with applications. Do not edit!
 const appsEnabledVersion = 2
+
+// backBranchEabledVersion is the version of TEAL where branches could
+// go back (and cost accounting was done during execution)
+const backBranchEnabledVersion = 4
 
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
@@ -51,7 +55,7 @@ func costly(cost int) opDetails {
 
 func immediates(name string, rest ...string) opDetails {
 	num := 1 + len(rest)
-	immediates := make([]immediate, num, len(rest)+1)
+	immediates := make([]immediate, num)
 	immediates[0] = immediate{name, immByte}
 	for i, n := range rest {
 		immediates[i+1] = immediate{n, immByte}
@@ -111,7 +115,8 @@ var anyIntInt = StackTypes{StackAny, StackUint64, StackUint64}
 //
 // Any changes should be reflected in README_in.md which serves as the language spec.
 //
-// WARNING: special case op assembly by argOps functions must do their own type stack maintenance via ops.tpop() ops.tpush()/ops.tpusha()
+// Note: assembly can specialize an Any return type if known at
+// assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{
 	{0x00, "err", opErr, asmDefault, disDefault, nil, nil, 1, modeAny, opDefault},
 	{0x01, "sha256", opSHA256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, costly(7)},
@@ -150,19 +155,20 @@ var OpSpecs = []OpSpec{
 	{0x1c, "~", opBitNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opDefault},
 	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opDefault},
 	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opDefault},
+	{0x1f, "divw", opDivw, asmDefault, disDefault, twoInts.plus(twoInts), twoInts.plus(twoInts), 4, modeAny, opDefault},
 
 	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, varies(checkIntConstBlock, "uint ...", immInts)},
-	{0x21, "intc", opIntConstLoad, assembleIntC, disDefault, nil, oneInt, 1, modeAny, immediates("i")},
-	{0x22, "intc_0", opIntConst0, asmDefault, disDefault, nil, oneInt, 1, modeAny, opDefault},
-	{0x23, "intc_1", opIntConst1, asmDefault, disDefault, nil, oneInt, 1, modeAny, opDefault},
-	{0x24, "intc_2", opIntConst2, asmDefault, disDefault, nil, oneInt, 1, modeAny, opDefault},
-	{0x25, "intc_3", opIntConst3, asmDefault, disDefault, nil, oneInt, 1, modeAny, opDefault},
+	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, immediates("i")},
+	{0x22, "intc_0", opIntConst0, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
+	{0x23, "intc_1", opIntConst1, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
+	{0x24, "intc_2", opIntConst2, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
+	{0x25, "intc_3", opIntConst3, asmDefault, disIntc, nil, oneInt, 1, modeAny, opDefault},
 	{0x26, "bytecblock", opByteConstBlock, assembleByteCBlock, disBytecblock, nil, nil, 1, modeAny, varies(checkByteConstBlock, "bytes ...", immBytess)},
-	{0x27, "bytec", opByteConstLoad, assembleByteC, disDefault, nil, oneBytes, 1, modeAny, immediates("i")},
-	{0x28, "bytec_0", opByteConst0, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opDefault},
-	{0x29, "bytec_1", opByteConst1, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opDefault},
-	{0x2a, "bytec_2", opByteConst2, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opDefault},
-	{0x2b, "bytec_3", opByteConst3, asmDefault, disDefault, nil, oneBytes, 1, modeAny, opDefault},
+	{0x27, "bytec", opByteConstLoad, assembleByteC, disBytec, nil, oneBytes, 1, modeAny, immediates("i")},
+	{0x28, "bytec_0", opByteConst0, asmDefault, disBytec, nil, oneBytes, 1, modeAny, opDefault},
+	{0x29, "bytec_1", opByteConst1, asmDefault, disBytec, nil, oneBytes, 1, modeAny, opDefault},
+	{0x2a, "bytec_2", opByteConst2, asmDefault, disBytec, nil, oneBytes, 1, modeAny, opDefault},
+	{0x2b, "bytec_3", opByteConst3, asmDefault, disBytec, nil, oneBytes, 1, modeAny, opDefault},
 	{0x2c, "arg", opArg, assembleArg, disDefault, nil, oneBytes, 1, runModeSignature, immediates("n")},
 	{0x2d, "arg_0", opArg0, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opDefault},
 	{0x2e, "arg_1", opArg1, asmDefault, disDefault, nil, oneBytes, 1, runModeSignature, opDefault},
@@ -225,6 +231,16 @@ var OpSpecs = []OpSpec{
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, varies(checkPushBytes, "bytes", immBytes)},
 	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, varies(checkPushInt, "uint", immInt)},
+
+	// "Function oriented"
+	{0x88, "callsub", opCallSub, assembleBranch, disBranch, nil, nil, 4, modeAny, opBranch},
+	{0x89, "retsub", opRetSub, asmDefault, disDefault, nil, nil, 4, modeAny, opDefault},
+	// Leave a little room for indirect function calls, or similar
+
+	// More math
+	// shl, shr
+	// divw, modw convenience
+	// expmod
 }
 
 type sortByOpcode []OpSpec

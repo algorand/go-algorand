@@ -84,7 +84,7 @@ func MakeFuzzer(config FuzzerConfig) *Fuzzer {
 		crashAccessors:   make([]db.Accessor, config.NodesCount),
 		accounts:         make([]account.Participation, config.NodesCount),
 		balances:         make(map[basics.Address]basics.AccountData),
-		accountAccessors: make([]db.Accessor, config.NodesCount*2),
+		accountAccessors: make([]db.Accessor, config.NodesCount),
 		ledgers:          make([]*testLedger, config.NodesCount),
 		agreementParams:  make([]agreement.Parameters, config.NodesCount),
 		tickGranularity:  time.Millisecond * 300,
@@ -196,7 +196,7 @@ func (n *Fuzzer) initAccountsAndBalances(rootSeed []byte, onlineNodes []bool) er
 		if err != nil {
 			return err
 		}
-		n.accountAccessors[i*2+0] = rootAccess
+		n.accountAccessors[i] = rootAccess
 
 		seed = sha256.Sum256(seed[:])
 		root, err := account.ImportRoot(rootAccess, seed)
@@ -205,27 +205,12 @@ func (n *Fuzzer) initAccountsAndBalances(rootSeed []byte, onlineNodes []bool) er
 		}
 		rootAddress := root.Address()
 
-		partAccess, err := db.MakeAccessor(n.networkName+"part"+strconv.Itoa(i+off), false, true)
-
-		if err != nil {
-			return err
-		}
-
-		n.accountAccessors[i*2+1] = partAccess
-
 		n.accounts[i] = account.Participation{
 			Parent:     rootAddress,
 			VRF:        generatePseudoRandomVRF(i),
 			Voting:     readOnlyParticipationVotes[i],
 			FirstValid: firstValid,
 			LastValid:  lastValid,
-			Store:      partAccess,
-		}
-
-		err = n.accounts[i].Persist()
-
-		if err != nil {
-			panic(err)
 		}
 
 		acctData := basics.AccountData{

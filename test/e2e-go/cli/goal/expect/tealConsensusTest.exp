@@ -1,0 +1,107 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+# put a TEAL program into f, with at least size and cost.
+proc teal {f v size cost {prefix ""}} {
+    set CHAN [open $f w]
+    puts $CHAN "#pragma version $v\n"
+    puts $CHAN $prefix
+    for {set i 5} {$i < $size} {incr i 2} {
+        puts $CHAN "int 1\npop\n"
+    }
+
+    if {$cost > [expr $size * 2]} {
+        puts $CHAN "byte 0x1234\n"
+        for {set i [expr $size * 2]} {$i < $cost} {incr i 130} {
+            puts $CHAN "keccak256\n"
+        }
+        puts $CHAN "pop\n"
+    }
+    puts $CHAN "int 1\n"
+    close $CHAN
+}
+
+if { [catch {
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
+
+
+    # Test various program length limits during compile
+
+    teal "$TEST_ROOT_DIR/small-sig.teal" 2 100 1
+    spawn goal clerk compile "$TEST_ROOT_DIR/small-sig.teal"
+    expect {
+        -re {[A-Z2-9]{58}} { set SMALL_SIG $expect_out(0,string) }
+        "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
+    }
+
+    teal "$TEST_ROOT_DIR/big-sig.teal" 2 1001 1
+    spawn goal clerk compile "$TEST_ROOT_DIR/big-sig.teal"
+    expect {
+        -re {[A-Z2-9]{58}} { ::AlgorandGoal::Abort "hash" }
+        -re {.*logicsig program size too large} { puts "bigsigcheck: pass" }
+        "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
+    }
+
+    teal "$TEST_ROOT_DIR/barely-fits-app.teal" 2 1001 1 "int 0\nbalance\npop\n"
+    spawn goal clerk compile "$TEST_ROOT_DIR/barely-fits-app.teal"
+    expect {
+        -re {[A-Z2-9]{58}} { puts "hash $expect_out(0,string)" }
+        "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
+    }
+
+    teal "$TEST_ROOT_DIR/big-app.teal" 2 1025 1 "int 0\nbalance\npop\n"
+    spawn goal clerk compile "$TEST_ROOT_DIR/big-app.teal"
+    expect {
+        -re {[A-Z2-9]{58}} { ::AlgorandGoal::Abort "hash" }
+        -re {.*app program size too large} { puts "bigappcheck: pass" }
+        "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
+    }
+
+    # Test cost limits during dryrun
+    exec goal clerk send -F "$TEST_ROOT_DIR/small-sig.teal" -t GXBNLU4AXQABPLHXJDMTG2YXSDT4EWUZACT7KTPFXDQW52XPTIUS5OZ5HQ -a 100 -d $TEST_PRIMARY_NODE_DIR -o $TEST_ROOT_DIR/small-sig.tx
+    spawn goal clerk dryrun -t $TEST_ROOT_DIR/small-sig.tx
+    expect {
+        " - pass -" { puts "small-sig dryrun pass" }
+        "REJECT" { ::AlgorandGoal::Abort $expect_out(buffer) }
+        "static cost budget" { ::AlgorandGoal::Abort $expect_out(buffer) }
+    }
+
+    teal "$TEST_ROOT_DIR/slow-sig.teal" 2 1 20001
+    exec goal clerk compile "$TEST_ROOT_DIR/slow-sig.teal"
+    exec goal clerk send -F "$TEST_ROOT_DIR/slow-sig.teal" -t GXBNLU4AXQABPLHXJDMTG2YXSDT4EWUZACT7KTPFXDQW52XPTIUS5OZ5HQ -a 100 -d $TEST_PRIMARY_NODE_DIR -o $TEST_ROOT_DIR/slow-sig.tx
+    spawn goal clerk dryrun -P future -t $TEST_ROOT_DIR/slow-sig.tx  # Should succeed Check, fail Eval
+    expect {
+        "dynamic cost budget" { puts "slow-sig dryrun pass" }
+        " - pass -" { ::AlgorandGoal::Abort $expect_out(buffer) }
+        "REJECT" { ::AlgorandGoal::Abort $expect_out(buffer) }
+    }
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
+
+    puts "TEAL Consensus Test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in tealConsensusTest: $EXCEPTION"
+}

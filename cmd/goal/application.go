@@ -416,14 +416,9 @@ var createAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				txn, err := waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
-				}
-				// Check if we know about the transaction yet
-				txn, err := client.PendingTransactionInformation(txid)
-				if err != nil {
-					reportErrorf("%v", err)
 				}
 				if txn.TransactionResults != nil && txn.TransactionResults.CreatedAppIndex != 0 {
 					reportInfof("Created app with app index %d", txn.TransactionResults.CreatedAppIndex)
@@ -499,14 +494,9 @@ var updateAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				_, err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
-				}
-				// Check if we know about the transaction yet
-				_, err := client.PendingTransactionInformation(txid)
-				if err != nil {
-					reportErrorf("%v", err)
 				}
 			}
 		} else {
@@ -577,14 +567,9 @@ var optInAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				_, err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
-				}
-				// Check if we know about the transaction yet
-				_, err := client.PendingTransactionInformation(txid)
-				if err != nil {
-					reportErrorf("%v", err)
 				}
 			}
 		} else {
@@ -655,14 +640,9 @@ var closeOutAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				_, err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
-				}
-				// Check if we know about the transaction yet
-				_, err := client.PendingTransactionInformation(txid)
-				if err != nil {
-					reportErrorf("%v", err)
 				}
 			}
 		} else {
@@ -733,14 +713,9 @@ var clearAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				_, err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
-				}
-				// Check if we know about the transaction yet
-				_, err := client.PendingTransactionInformation(txid)
-				if err != nil {
-					reportErrorf("%v", err)
 				}
 			}
 		} else {
@@ -811,14 +786,9 @@ var callAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				_, err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
-				}
-				// Check if we know about the transaction yet
-				_, err := client.PendingTransactionInformation(txid)
-				if err != nil {
-					reportErrorf("%v", err)
 				}
 			}
 		} else {
@@ -889,14 +859,9 @@ var deleteAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				_, err = waitForCommit(client, txid, lv)
 				if err != nil {
 					reportErrorf(err.Error())
-				}
-				// Check if we know about the transaction yet
-				_, err := client.PendingTransactionInformation(txid)
-				if err != nil {
-					reportErrorf("%v", err)
 				}
 			}
 		} else {
