@@ -1584,6 +1584,9 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		if txn.Type != protocol.ApplicationCallTx {
 			err = fmt.Errorf("can't use Scratch txn field on non-app call txn with index %d", groupIndex)
 			return
+		} else if cx.Txn.Lsig.Logic != nil {
+			err = fmt.Errorf("can't use Scratch txn field from within a LogicSig")
+			return
 		} else if arrayFieldIdx >= 256 {
 			err = fmt.Errorf("invalid Scratch index %d", arrayFieldIdx)
 			return

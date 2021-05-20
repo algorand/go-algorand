@@ -1936,39 +1936,66 @@ int 1`,
 		})
 	}
 
-	// Test failure on non-app call
-	t.Run("should fail on non-app call", func(t *testing.T) {
-		source := "gtxna 0 Scratch 0"
+	type failureCase struct {
+		firstTxn    transactions.SignedTxn
+		secondTxn   transactions.SignedTxn
+		errContains string
+	}
 
-		// Assemble ops
-		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-		require.NoError(t, err)
-
-		// Initialize txgroup and cxgroup
-		txgroup := make([]transactions.SignedTxn, 2)
-		txgroup[0] = transactions.SignedTxn{
+	nonAppCall := failureCase{
+		firstTxn: transactions.SignedTxn{
 			Txn: transactions.Transaction{
 				Type: protocol.PaymentTx,
 			},
-		}
-		txgroup[1] = transactions.SignedTxn{}
+		},
+		errContains: "can't use Scratch txn field on non-app call txn with index 0",
+	}
 
-		// Construct EvalParams
-		epList := make([]EvalParams, 2)
-		for j := range epList {
-			epList[j] = EvalParams{
-				Proto:      &proto,
-				Txn:        &txgroup[j],
-				TxnGroup:   txgroup,
-				GroupIndex: j,
+	logicSigCall := failureCase{
+		firstTxn: transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+			},
+		},
+		secondTxn: transactions.SignedTxn{
+			Lsig: transactions.LogicSig{
+				Logic: []byte{1},
+			},
+		},
+		errContains: "can't use Scratch txn field from within a LogicSig",
+	}
+
+	failCases := []failureCase{nonAppCall, logicSigCall}
+	for j, failCase := range failCases {
+		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
+			source := "gtxna 0 Scratch 0"
+
+			// Assemble ops
+			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+			require.NoError(t, err)
+
+			// Initialize txgroup and cxgroup
+			txgroup := make([]transactions.SignedTxn, 2)
+			txgroup[0] = failCase.firstTxn
+			txgroup[1] = failCase.secondTxn
+
+			// Construct EvalParams
+			epList := make([]EvalParams, 2)
+			for j := range epList {
+				epList[j] = EvalParams{
+					Proto:      &proto,
+					Txn:        &txgroup[j],
+					TxnGroup:   txgroup,
+					GroupIndex: j,
+				}
 			}
-		}
 
-		// Evaluate app call
-		_, err = Eval(ops.Program, epList[1])
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "can't use Scratch txn field on non-app call txn with index 0")
-	})
+			// Evaluate app call
+			_, err = Eval(ops.Program, epList[1])
+			require.Error(t, err)
+			require.Contains(t, err.Error(), failCase.errContains)
+		})
+	}
 }
 
 func TestTxna(t *testing.T) {
