@@ -8,9 +8,11 @@
 
 import argparse
 import base64
+import fnmatch
 import json
 import logging
 import os
+import re
 import signal
 import shutil
 import subprocess
@@ -170,6 +172,7 @@ class watcher:
         self.args = args
         self.prevsnapshots = {}
         self.they = []
+        self.netseen = set()
         os.makedirs(self.args.out, exist_ok=True)
         if not args.data_dirs and os.path.exists(args.tf_inventory):
             import configparser
@@ -179,12 +182,14 @@ class watcher:
             for role in args.tf_roles.split(','):
                 role_name = 'role_' + role
                 for net in cp[role_name].keys():
-                    net = net + ':8580'
-                    try:
-                        ad = algodDir(net, net=net, token=args.token, admin_token=args.admin_token)
-                        self.they.append(ad)
-                    except:
-                        logger.error('bad algod: %r', path, exc_info=True)
+                    self._addnet(net)
+            for nre in args.tf_name_re:
+                namere = re.compile(nre)
+                for k,v in cp.items():
+                    if not namere.match(k):
+                        continue
+                    for net in v.keys():
+                        self._addnet(net)
         for path in args.data_dirs:
             if not os.path.isdir(path):
                 continue
@@ -197,6 +202,18 @@ class watcher:
             else:
                 logger.debug('not a datadir: %r', path)
         logger.debug('data dirs: %r', self.they)
+
+    def _addnet(self, net):
+        if net in self.netseen:
+            return
+        self.netseen.add(net)
+        net = net + ':8580'
+        try:
+            ad = algodDir(net, net=net, token=self.args.token, admin_token=self.args.admin_token)
+            self.they.append(ad)
+        except:
+            logger.error('bad algod: %r', net, exc_info=True)
+
 
     def do_snap(self, now):
         snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime(now))
@@ -247,6 +264,7 @@ def main():
     ap.add_argument('--token', default='', help='default algod api token to use')
     ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
     ap.add_argument('--tf-roles', default='relay', help='comma separated list of terraform roles to follow')
+    ap.add_argument('--tf-name-re', nargs='*', help='regexp to match terraform node names, may be repeated')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
@@ -255,6 +273,14 @@ def main():
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    for nre in args.tf_name_re:
+        try:
+            # do re.compile just to check
+            re.compile(nre)
+        except Exception as e:
+            sys.stderr.write('bad --tf-name-re %r: %s', nre, e)
+            return 1
 
     app = watcher(args)
 
