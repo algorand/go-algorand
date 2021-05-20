@@ -103,6 +103,10 @@ type ConsensusParams struct {
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
 
+	// EnableFeePooling specifies that the sum of the fees in a
+	// group must exceed one MinTxnFee, rather check on each Txn.
+	EnableFeePooling bool
+
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -926,6 +930,8 @@ func initConsensusProtocols() {
 
 	// Increase asset URL length to allow for IPFS URLs
 	vFuture.MaxAssetURLBytes = 96
+
+	vFuture.EnableFeePooling = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

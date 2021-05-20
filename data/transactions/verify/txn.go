@@ -108,10 +108,6 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 		return err
 	}
 
-	if s.Txn.Src().IsZero() {
-		return errors.New("empty address")
-	}
-
 	return stxnVerifyCore(s, txnIdx, groupCtx)
 }
 
@@ -121,13 +117,26 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	if err != nil {
 		return nil, err
 	}
+
+	requiredFees := uint64(0)
+	feeSum := uint64(0)
 	for i, stxn := range stxs {
 		err = Txn(&stxn, i, groupCtx)
 		if err != nil {
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 			return
 		}
+		if stxn.Txn.Type != protocol.CompactCertTx {
+			requiredFees++
+		}
+		feeSum += stxn.Txn.Fee.Raw
 	}
+	if feeSum < groupCtx.consensusParams.MinTxnFee*requiredFees {
+		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",
+			feeSum, requiredFees, groupCtx.consensusParams.MinTxnFee)
+		return
+	}
+
 	if cache != nil {
 		cache.Add(stxs, groupCtx)
 	}
