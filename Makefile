@@ -189,7 +189,7 @@ rebuild_swagger: deps
 
 # develop
 
-build: buildsrc gen
+build: buildsrc
 
 # We're making an empty file in the go-cache dir to
 # get around a bug in go build where it will fail
@@ -212,7 +212,7 @@ SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 build-race: build
 	@mkdir -p $(GOPATH1)/bin-race
 	GOBIN=$(GOPATH1)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./...
-	GOBIN=$(GOPATH1)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES_RACE)
+	cp $(GOPATH1)/bin/kmd $(GOPATH1)/bin-race
 
 NONGO_BIN_FILES=$(GOPATH1)/bin/find-nodes.sh $(GOPATH1)/bin/update.sh $(GOPATH1)/bin/COPYING $(GOPATH1)/bin/ddconfig.sh
 

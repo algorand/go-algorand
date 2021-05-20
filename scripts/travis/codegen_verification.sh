@@ -25,6 +25,8 @@ eval "$(~/gimme "${GOLANG_VERSION}")"
 
 "${SCRIPTPATH}"/../buildtools/install_buildtools.sh
 
+make gen
+
 function runGoFmt() {
     gofiles="$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v ^vendor/)" || true
     [ -z "$gofiles" ] && return 0
