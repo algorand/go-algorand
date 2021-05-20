@@ -1180,7 +1180,7 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpdates compactAccountDeltas, accountTotals []ledgercore.AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpdates compactAccountDeltas, accountTotals []ledgercore.AccountTotals, proto config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -1201,13 +1201,13 @@ func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpda
 			addr, data := updates[i].GetByIdx(j)
 
 			if oldAccountData, has := accounts[addr]; has {
-				totals.DelAccount(protos[i], oldAccountData, &ot)
+				totals.DelAccount(proto, oldAccountData, &ot)
 			} else {
 				err = fmt.Errorf("missing old account data")
 				return
 			}
 
-			totals.AddAccount(protos[i], data, &ot)
+			totals.AddAccount(proto, data, &ot)
 			accounts[addr] = data
 		}
 	}
@@ -1357,15 +1357,19 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	return
 }
 
-type merkleCommitter struct {
+// MerkleCommitter todo
+//msgp:ignore MerkleCommitter
+type MerkleCommitter struct {
 	tx         *sql.Tx
 	deleteStmt *sql.Stmt
 	insertStmt *sql.Stmt
 	selectStmt *sql.Stmt
 }
 
-func makeMerkleCommitter(tx *sql.Tx, staging bool) (mc *merkleCommitter, err error) {
-	mc = &merkleCommitter{tx: tx}
+// MakeMerkleCommitter creates a MerkleCommitter object that implements the merkletrie.Committer interface allowing storing and loading
+// merkletrie pages from a sqlite database.
+func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *MerkleCommitter, err error) {
+	mc = &MerkleCommitter{tx: tx}
 	accountHashesTable := "accounthashes"
 	if staging {
 		accountHashesTable = "catchpointaccounthashes"
@@ -1385,8 +1389,8 @@ func makeMerkleCommitter(tx *sql.Tx, staging bool) (mc *merkleCommitter, err err
 	return mc, nil
 }
 
-// StorePage is the merkletrie.Committer interface implementation, stores a single page in a sqllite database table.
-func (mc *merkleCommitter) StorePage(page uint64, content []byte) error {
+// StorePage is the merkletrie.Committer interface implementation, stores a single page in a sqlite database table.
+func (mc *MerkleCommitter) StorePage(page uint64, content []byte) error {
 	if len(content) == 0 {
 		_, err := mc.deleteStmt.Exec(page)
 		return err
@@ -1395,8 +1399,8 @@ func (mc *merkleCommitter) StorePage(page uint64, content []byte) error {
 	return err
 }
 
-// LoadPage is the merkletrie.Committer interface implementation, load a single page from a sqllite database table.
-func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
+// LoadPage is the merkletrie.Committer interface implementation, load a single page from a sqlite database table.
+func (mc *MerkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	err = mc.selectStmt.QueryRow(page).Scan(&content)
 	if err == sql.ErrNoRows {
 		content = nil

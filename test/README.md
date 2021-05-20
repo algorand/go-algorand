@@ -29,7 +29,7 @@ Must run from the root project directory, `./test/scripts/e2e.sh`
 
 ## scripts/e2e_client_runner.py and scripts/e2e_subs/
 
-These tests are shell scripts which all run in series against a single private network.
+These tests are shell scripts which all run in parallel against a single private network.
 
 Each script is provided with a wallet which contains a large supply of algos to use during the test.
 ```
@@ -48,5 +48,7 @@ optional arguments:
 
 To run a specific test:
 ```
-~$ ./e2e_client_runner.py full/path/to/test_script.sh
+~$ ./e2e_client_runner.py /full/path/to/e2e_subs/test_script.sh
 ```
+
+Tests in the `e2e_subs/serial` directory are executed serially instead of in parallel. This should only be used when absolutely necessary.

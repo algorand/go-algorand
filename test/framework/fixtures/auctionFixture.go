@@ -30,7 +30,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -164,9 +163,9 @@ func (f *AuctionFixture) GetAuctionConsoleRestClient() auctionClient.ConsoleRest
 }
 
 // Setup is called to initialize the test fixture for the test(s), uses default ports for auction bank and console
-func (f *AuctionFixture) Setup(t *testing.T, templateFile string) (err error) {
+func (f *AuctionFixture) Setup(t TestingTB, templateFile string) (err error) {
 
-	f.t = t
+	f.t = SynchronizedTest(t)
 
 	f.bidderSecretKeyCache = make(map[string]crypto.PrivateKey)
 

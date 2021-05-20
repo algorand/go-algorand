@@ -19,6 +19,9 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"os"
+	"runtime/pprof"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -63,7 +66,7 @@ func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Tr
 	}
 }
 
-func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
+func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoPerAccount int) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
 	params := config.Consensus[proto]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
@@ -84,7 +87,7 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 	for i := range genaddrs {
 		initKeys[genaddrs[i]] = gensecrets[i]
 		// Give each account quite a bit more balance than MinFee or MinBalance
-		initAccounts[genaddrs[i]] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + 100) * 100000)})
+		initAccounts[genaddrs[i]] = basics.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + baseAlgoPerAccount) * 100000)})
 	}
 	initKeys[poolAddr] = poolSecret
 	initAccounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})
@@ -221,8 +224,27 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	return l.appendUnvalidated(blk)
 }
 
+func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.AccountData, stxns []transactions.SignedTxn, ad transactions.ApplyData) error {
+	blk := makeNewEmptyBlock(t, l, t.Name(), accounts)
+	proto := config.Consensus[blk.CurrentProtocol]
+	for _, stx := range stxns {
+		txib, err := blk.EncodeSignedTxn(stx, ad)
+		if err != nil {
+			return fmt.Errorf("could not sign txn: %s", err.Error())
+		}
+		if proto.TxnCounter {
+			blk.TxnCounter = blk.TxnCounter + 1
+		}
+		blk.Payset = append(blk.Payset, txib)
+	}
+	var err error
+	blk.TxnRoot, err = blk.PaysetCommit()
+	require.NoError(t, err)
+	return l.AddBlock(blk, agreement.Certificate{})
+}
+
 func TestLedgerBasic(t *testing.T) {
-	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -235,7 +257,7 @@ func TestLedgerBasic(t *testing.T) {
 func TestLedgerBlockHeaders(t *testing.T) {
 	a := require.New(t)
 
-	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -379,7 +401,7 @@ func TestLedgerSingleTx(t *testing.T) {
 	// V15 is the earliest protocol version in active use.
 	// The genesis for betanet and testnet is at V15
 	// The genesis for mainnet is at V17
-	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV15)
+	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV15, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -435,8 +457,11 @@ func TestLedgerSingleTx(t *testing.T) {
 	votePK[0] = 1
 	selPK[0] = 2
 	correctKeyregFields := transactions.KeyregTxnFields{
-		VotePK:      votePK,
-		SelectionPK: selPK,
+		VotePK:          votePK,
+		SelectionPK:     selPK,
+		VoteKeyDilution: proto.DefaultKeyDilution,
+		VoteFirst:       0,
+		VoteLast:        10000,
 	}
 
 	correctKeyreg := transactions.Transaction{
@@ -577,7 +602,7 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	a := require.New(t)
 
 	protoName := protocol.ConsensusV24
-	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
+	genesisInitState, initSecrets := testGenerateInitState(t, protoName, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -746,7 +771,7 @@ func TestLedgerAppCrossRoundWrites(t *testing.T) {
 	a := require.New(t)
 
 	protoName := protocol.ConsensusV24
-	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
+	genesisInitState, initSecrets := testGenerateInitState(t, protoName, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -882,7 +907,7 @@ func TestLedgerAppMultiTxnWrites(t *testing.T) {
 	a := require.New(t)
 
 	protoName := protocol.ConsensusV24
-	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
+	genesisInitState, initSecrets := testGenerateInitState(t, protoName, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -1047,7 +1072,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	genesisInitState, initSecrets := testGenerateInitState(t, version)
+	genesisInitState, initSecrets := testGenerateInitState(t, version, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -1103,8 +1128,11 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	votePK[0] = 1
 	selPK[0] = 2
 	correctKeyregFields := transactions.KeyregTxnFields{
-		VotePK:      votePK,
-		SelectionPK: selPK,
+		VotePK:          votePK,
+		SelectionPK:     selPK,
+		VoteKeyDilution: proto.DefaultKeyDilution,
+		VoteFirst:       0,
+		VoteLast:        10000,
 	}
 
 	correctKeyreg := transactions.Transaction{
@@ -1302,7 +1330,7 @@ func TestLedgerRegressionFaultyLeaseFirstValidCheckFuture(t *testing.T) {
 func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, version protocol.ConsensusVersion) {
 	a := require.New(t)
 
-	genesisInitState, initSecrets := testGenerateInitState(t, version)
+	genesisInitState, initSecrets := testGenerateInitState(t, version, 100)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -1409,8 +1437,8 @@ func TestLedgerReload(t *testing.T) {
 			require.NoError(t, err)
 
 			// if we reloaded it before it got committed, we need to roll back the round counter.
-			if l.LatestCommitted() != blk.BlockHeader.Round {
-				blk.BlockHeader.Round = l.LatestCommitted()
+			if latestCommitted, _ := l.LatestCommitted(); latestCommitted != blk.BlockHeader.Round {
+				blk.BlockHeader.Round = latestCommitted
 			}
 		}
 		if i%13 == 0 {
@@ -1423,7 +1451,7 @@ func TestLedgerReload(t *testing.T) {
 func TestGetLastCatchpointLabel(t *testing.T) {
 
 	//initLedger
-	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -1501,7 +1529,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	numElementsPerSegement := 10 // This is multiplied by 10. see randomCreatables
 
 	//initLedger
-	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
@@ -1553,4 +1581,127 @@ func TestListAssetsAndApplications(t *testing.T) {
 		}
 	}
 	require.Equal(t, appCount, len(results))
+}
+
+func TestLedgerMemoryLeak(t *testing.T) {
+	t.Skip() // for manual runs only
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 10000000000)
+	const inMem = false
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	maxBlocks := 10000
+	nftPerAcct := make(map[basics.Address]int)
+	lastBlock, err := l.Block(l.Latest())
+	proto := config.Consensus[lastBlock.CurrentProtocol]
+	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts)+maxBlocks)
+	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys)+maxBlocks)
+	// regular addresses: all init accounts minus pools
+	addresses := make([]basics.Address, len(genesisInitState.Accounts)-2, len(genesisInitState.Accounts)+maxBlocks)
+	i := 0
+	for addr := range genesisInitState.Accounts {
+		if addr != testPoolAddr && addr != testSinkAddr {
+			addresses[i] = addr
+			i++
+		}
+		accounts[addr] = genesisInitState.Accounts[addr]
+		keys[addr] = initKeys[addr]
+	}
+
+	curAddressIdx := 0
+	// run for maxBlocks rounds
+	// generate 1000 txn per block
+	for i := 0; i < maxBlocks; i++ {
+		stxns := make([]transactions.SignedTxn, 1000)
+		for j := 0; j < 1000; j++ {
+			txHeader := transactions.Header{
+				Sender:      addresses[curAddressIdx],
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+				FirstValid:  l.Latest() + 1,
+				LastValid:   l.Latest() + 10,
+				GenesisID:   t.Name(),
+				GenesisHash: crypto.Hash([]byte(t.Name())),
+			}
+
+			assetCreateFields := transactions.AssetConfigTxnFields{
+				AssetParams: basics.AssetParams{
+					Total:     10000000,
+					UnitName:  fmt.Sprintf("unit_%d_%d", i, j),
+					AssetName: fmt.Sprintf("asset_%d_%d", i, j),
+				},
+			}
+
+			tx := transactions.Transaction{
+				Type:                 protocol.AssetConfigTx,
+				Header:               txHeader,
+				AssetConfigTxnFields: assetCreateFields,
+			}
+			stxns[j] = sign(initKeys, tx)
+			nftPerAcct[addresses[curAddressIdx]]++
+
+			if nftPerAcct[addresses[curAddressIdx]] >= 990 {
+				// switch to another account
+				if curAddressIdx == len(addresses)-1 {
+					// create new account
+					var seed crypto.Seed
+					seed[1] = byte(curAddressIdx % 256)
+					seed[2] = byte((curAddressIdx >> 8) % 256)
+					seed[3] = byte((curAddressIdx >> 16) % 256)
+					seed[4] = byte((curAddressIdx >> 24) % 256)
+					x := crypto.GenerateSignatureSecrets(seed)
+					addr := basics.Address(x.SignatureVerifier)
+					sender := addresses[rand.Intn(len(genesisInitState.Accounts)-2)] // one of init accounts
+					correctTxHeader := transactions.Header{
+						Sender:      sender,
+						Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+						FirstValid:  l.Latest() + 1,
+						LastValid:   l.Latest() + 10,
+						GenesisID:   t.Name(),
+						GenesisHash: genesisInitState.GenesisHash,
+					}
+
+					correctPayFields := transactions.PaymentTxnFields{
+						Receiver: addr,
+						Amount:   basics.MicroAlgos{Raw: 1000 * 1000000},
+					}
+
+					correctPay := transactions.Transaction{
+						Type:             protocol.PaymentTx,
+						Header:           correctTxHeader,
+						PaymentTxnFields: correctPayFields,
+					}
+
+					err = l.appendUnvalidatedTx(t, accounts, keys, correctPay, transactions.ApplyData{})
+					require.NoError(t, err)
+					ad, err := l.Lookup(l.Latest(), addr)
+					require.NoError(t, err)
+
+					addresses = append(addresses, addr)
+					keys[addr] = x
+					accounts[addr] = ad
+				}
+				curAddressIdx++
+			}
+		}
+		err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
+		require.NoError(t, err)
+		if i%100 == 0 {
+			l.WaitForCommit(l.Latest())
+			fmt.Printf("block: %d\n", l.Latest())
+		}
+		if i%1000 == 0 && i > 0 {
+			memprofile := fmt.Sprintf("%s-memprof-%d", t.Name(), i)
+			f, err := os.Create(memprofile)
+			require.NoError(t, err)
+			err = pprof.WriteHeapProfile(f)
+			require.NoError(t, err)
+			f.Close()
+			fmt.Printf("Profile %s created\n", memprofile)
+		}
+	}
 }

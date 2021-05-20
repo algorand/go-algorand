@@ -229,7 +229,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, part *account.Participat
 	parsedLastValid := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedFrstValid, parsedLastValid, leaseBytes, cparams)
+	goOnlineTransaction := part.GenerateRegistrationTransaction(parsedFee, parsedFrstValid, parsedLastValid, leaseBytes)
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
 		copy(genHash[:], params.GenesisHash)

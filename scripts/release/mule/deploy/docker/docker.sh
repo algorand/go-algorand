@@ -38,7 +38,8 @@ then
    ./build_releases.sh --tagname "$VERSION"
 elif [ "$NETWORK" = betanet ]
 then
-   ./build_releases.sh --network betanet
+  ./build_releases.sh --network betanet
+  ./build_releases.sh --network betanet --tagname "$VERSION"
 fi
 
 popd

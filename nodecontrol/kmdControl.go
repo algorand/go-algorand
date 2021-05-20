@@ -121,9 +121,15 @@ func (kc *KMDController) StopKMD() (alreadyStopped bool, err error) {
 	kmdPID, err := kc.GetKMDPID()
 	if err == nil {
 		// Kill kmd by PID
-		err = killPID(int(kmdPID))
-		if err != nil {
-			return
+		killed, killErr := killPID(int(kmdPID))
+		if killErr != nil {
+			return false, killErr
+		}
+		// if we ended up killing the process, make sure to delete the pid file to avoid
+		// potential downstream issues.
+		if killed {
+			// delete the pid file.
+			os.Remove(kc.kmdPIDPath)
 		}
 	} else {
 		err = nil
@@ -200,8 +206,7 @@ func (kc *KMDController) StartKMD(args KMDStartArgs) (alreadyRunning bool, err e
 			logging.Base().Errorf("%s: kmd data dir exists but is not a directory", kc.kmdDataDir)
 			return false, errors.New("bad kmd data dir")
 		}
-		if (dataDirStat.Mode() & 0077) != 0 {
-			logging.Base().Errorf("%s: kmd data dir exists but is too permissive (%o), change to (%o)", kc.kmdDataDir, dataDirStat.Mode()&0777, DefaultKMDDataDirPerms)
+		if !kc.isDirectorySafe(dataDirStat) {
 			return false, errors.New("kmd data dir not secure")
 		}
 	} else {

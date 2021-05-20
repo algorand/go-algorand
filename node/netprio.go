@@ -78,12 +78,7 @@ func (node *AlgorandFullNode) MakePrioResponse(challenge string) []byte {
 	// Use the participation key for 2 rounds in the future, so that
 	// it's unlikely to be deleted from underneath of us.
 	voteRound := latest + 2
-	for _, part := range node.accountManager.Keys() {
-		firstValid, lastValid := part.ValidInterval()
-		if voteRound < firstValid || voteRound > lastValid {
-			continue
-		}
-
+	for _, part := range node.accountManager.Keys(voteRound) {
 		parent := part.Address()
 		data, err := node.ledger.Lookup(latest, parent)
 		if err != nil {

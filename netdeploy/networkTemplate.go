@@ -50,17 +50,13 @@ func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName, bi
 	genesisData := t.Genesis
 	genesisData.NetworkName = networkName
 	mergedConsensus := config.Consensus.Merge(t.Consensus)
-	return gen.GenerateGenesisFiles(genesisData, mergedConsensus, targetFolder, true)
+	return gen.GenerateGenesisFiles(genesisData, mergedConsensus, targetFolder, os.Stdout)
 }
 
 // Create data folders for all NodeConfigs, configuring relays appropriately and
 // returning the full path to the 'prime' relay and node folders (the first one created) and the genesis data used in this network.
-func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir string, importKeys bool) (relayDirs []string, nodeDirs map[string]string, genData gen.GenesisData, err error) {
+func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir string, importKeys bool) (relayDirs []string, nodeDirs map[string]string, err error) {
 	genesisFile := filepath.Join(targetFolder, genesisFileName)
-	genData, err = gen.LoadGenesisData(genesisFile)
-	if err != nil {
-		return
-	}
 
 	nodeDirs = make(map[string]string)
 	getGenesisVerCmd := filepath.Join(binDir, "algod")
@@ -70,6 +66,8 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 		return
 	}
 	genesisVer = strings.TrimSpace(genesisVer)
+
+	relaysCount := countRelayNodes(t.Nodes)
 
 	for _, cfg := range t.Nodes {
 		nodeDir := filepath.Join(targetFolder, cfg.Name)
@@ -138,7 +136,7 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 
 		// Create any necessary config.json file for this node
 		nodeCfg := filepath.Join(nodeDir, config.ConfigFilename)
-		err = createConfigFile(cfg, nodeCfg, len(t.Nodes)-1) // minus 1 to avoid counting self
+		err = createConfigFile(cfg, nodeCfg, len(t.Nodes)-1, relaysCount) // minus 1 to avoid counting self
 		if err != nil {
 			return
 		}
@@ -200,11 +198,7 @@ func (t NetworkTemplate) Validate() error {
 	// No wallet can be assigned to more than one node
 	// At least one relay is required
 	wallets := make(map[string]bool)
-	relayCount := 0
 	for _, cfg := range t.Nodes {
-		if cfg.IsRelay {
-			relayCount++
-		}
 		for _, wallet := range cfg.Wallets {
 			upperWallet := strings.ToUpper(wallet.Name)
 			if _, found := wallets[upperWallet]; found {
@@ -213,20 +207,33 @@ func (t NetworkTemplate) Validate() error {
 			wallets[upperWallet] = true
 		}
 	}
-	if relayCount == 0 {
-		return fmt.Errorf("invalid template: at least one relay is required")
-	}
 
+	if len(t.Nodes) > 1 && countRelayNodes(t.Nodes) == 0 {
+		return fmt.Errorf("invalid template: at least one relay is required when more than a single node presents")
+	}
 	return nil
 }
 
-func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int) error {
+// countRelayNodes counts the total number of relays
+func countRelayNodes(nodeCfgs []remote.NodeConfigGoal) (relayCount int) {
+	for _, cfg := range nodeCfgs {
+		if cfg.IsRelay {
+			relayCount++
+		}
+	}
+	return
+}
+
+func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int, relaysCount int) error {
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = numNodes
 	// Override default :8080 REST endpoint, and disable SRV lookup
 	cfg.EndpointAddress = "127.0.0.1:0"
 	cfg.DNSBootstrapID = ""
 	cfg.EnableProfiler = true
+	if relaysCount == 0 {
+		cfg.DisableNetworking = true
+	}
 
 	if node.IsRelay {
 		// Have relays listen on any localhost port

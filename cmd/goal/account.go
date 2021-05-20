@@ -760,7 +760,7 @@ var changeOnlineCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			part = &partkey
+			part = &partkey.Participation
 			if accountAddress == "" {
 				accountAddress = part.Parent.String()
 			}
@@ -810,7 +810,8 @@ func changeAccountOnlineStatus(acct string, part *algodAcct.Participation, goOnl
 		return nil
 	}
 
-	return waitForCommit(client, txid)
+	_, err = waitForCommit(client, txid, lastTxRound)
+	return err
 }
 
 var addParticipationKeyCmd = &cobra.Command{
@@ -925,7 +926,6 @@ func generateAndRegisterPartKey(address string, currentRound, lastValidRound uin
 	txFile := ""
 	err = changeAccountOnlineStatus(address, &part, goOnline, txFile, wallet, currentRound, lastValidRound, fee, leaseBytes, dataDir, client)
 	if err != nil {
-		part.Close()
 		os.Remove(keyPath)
 		fmt.Fprintf(os.Stderr, "  Error registering keys - deleting newly-generated key file: %s\n", keyPath)
 	}
@@ -1324,7 +1324,7 @@ var markNonparticipatingCmd = &cobra.Command{
 			return
 		}
 
-		err = waitForCommit(client, txid)
+		_, err = waitForCommit(client, txid, lastTxRound)
 		if err != nil {
 			reportErrorf("error waiting for transaction to be committed: %v", err)
 		}

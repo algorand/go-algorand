@@ -552,7 +552,7 @@ func TestAccountDBRound(t *testing.T) {
 		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
 		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []ledgercore.AccountDeltas{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, []config.ConsensusParams{proto})
+		err = totalsNewRounds(tx, []ledgercore.AccountDeltas{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, proto)
 		require.NoError(t, err)
 		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
@@ -1052,7 +1052,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 
 func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder bool) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion)
+	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion, 100)
 	const inMem = false
 	log := logging.TestingLog(b)
 	cfg := config.GetDefaultLocal()

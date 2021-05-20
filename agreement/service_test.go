@@ -106,23 +106,14 @@ func (c *testingClock) fire(d time.Duration) {
 
 type simpleKeyManager []account.Participation
 
-func (m simpleKeyManager) Keys() []account.Participation {
+func (m simpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
 	var km []account.Participation
 	for _, acc := range m {
-		km = append(km, acc)
-	}
-	return km
-}
-
-// HasLiveKeys returns true if we have any Participation
-// keys valid for the specified round range (inclusive)
-func (m simpleKeyManager) HasLiveKeys(from, to basics.Round) bool {
-	for _, acc := range m {
-		if acc.OverlapsInterval(from, to) {
-			return true
+		if acc.OverlapsInterval(votingRound, votingRound) {
+			km = append(km, acc)
 		}
 	}
-	return false
+	return km
 }
 
 func (m simpleKeyManager) DeleteOldKeys(basics.Round) {
@@ -678,21 +669,12 @@ func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) 
 
 		// save partkeys to db
 		{
-			partAccess, err := db.MakeAccessor(t.Name()+"part"+strconv.Itoa(i+off), false, true)
-			if err != nil {
-				panic(err)
-			}
 			accounts[i] = account.Participation{
 				Parent:     rootAddress,
 				VRF:        generatePseudoRandomVRF(i),
 				Voting:     v,
 				FirstValid: firstValid,
 				LastValid:  lastValid,
-				Store:      partAccess,
-			}
-			err = accounts[i].Persist()
-			if err != nil {
-				panic(err)
 			}
 		}
 

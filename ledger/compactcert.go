@@ -33,7 +33,9 @@ import (
 // votersHdr specifies the block that contains the Merkle commitment of
 // the voters for this compact cert (and thus the compact cert is for
 // votersHdr.Round() + CompactCertRounds).
-func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round) uint64 {
+//
+// logger must not be nil; use at least logging.Base()
+func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid basics.Round, logger logging.Logger) uint64 {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
 	certRound := votersHdr.Round + basics.Round(proto.CompactCertRounds)
 	total := votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal
@@ -71,7 +73,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	provenWeight, overflowed := basics.Muldiv(total.ToUint64(), uint64(proto.CompactCertWeightThreshold), 1<<32)
 	if overflowed || provenWeight > total.ToUint64() {
 		// Shouldn't happen, but a safe fallback is to accept a larger cert.
-		logging.Base().Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight",
+		logger.Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight",
 			total, proto.CompactCertRounds, certRound, firstValid)
 		return 0
 	}
@@ -83,7 +85,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	scaledWeight, overflowed := basics.Muldiv(total.ToUint64()-provenWeight, proto.CompactCertRounds/2-uint64(offset), proto.CompactCertRounds/2)
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger cert.
-		logging.Base().Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow scaledWeight",
+		logger.Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow scaledWeight",
 			total, proto.CompactCertRounds, certRound, firstValid)
 		return 0
 	}
@@ -91,7 +93,7 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	w, overflowed := basics.OAdd(provenWeight, scaledWeight)
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger cert.
-		logging.Base().Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight (%d) + scaledWeight (%d)",
+		logger.Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight (%d) + scaledWeight (%d)",
 			total, proto.CompactCertRounds, certRound, firstValid, provenWeight, scaledWeight)
 		return 0
 	}
@@ -161,7 +163,7 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 			nextCertRnd, certHdr.Round, votersRound)
 	}
 
-	acceptableWeight := AcceptableCompactCertWeight(votersHdr, atRound)
+	acceptableWeight := AcceptableCompactCertWeight(votersHdr, atRound, logging.Base())
 	if cert.SignedWeight < acceptableWeight {
 		return fmt.Errorf("insufficient weight at %d: %d < %d",
 			atRound, cert.SignedWeight, acceptableWeight)

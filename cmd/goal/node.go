@@ -182,14 +182,14 @@ var startCmd = &cobra.Command{
 			}
 
 			algodAlreadyRunning, err := nc.StartAlgod(nodeArgs)
-			if algodAlreadyRunning {
-				reportInfoln(infoNodeAlreadyStarted)
-			}
-
 			if err != nil {
 				reportErrorf(errorNodeFailedToStart, err)
 			} else {
-				reportInfoln(infoNodeStart)
+				if algodAlreadyRunning {
+					reportInfoln(infoNodeAlreadyStarted)
+				} else {
+					reportInfoln(infoNodeStart)
+				}
 			}
 		})
 	},
@@ -304,14 +304,15 @@ var restartCmd = &cobra.Command{
 			}
 
 			algodAlreadyRunning, err := nc.StartAlgod(nodeArgs)
-			if algodAlreadyRunning {
-				reportInfoln(infoNodeAlreadyStarted)
-			}
-
 			if err != nil {
 				reportErrorf(errorNodeFailedToStart, err)
 			} else {
-				reportInfoln(infoNodeStart)
+				if algodAlreadyRunning {
+					// This can never happen. In case it does, report about it.
+					reportInfoln(infoNodeDidNotRestart)
+				} else {
+					reportInfoln(infoNodeStart)
+				}
 			}
 		})
 	},

@@ -400,7 +400,7 @@ return`
 	program := ops.Program
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)
@@ -621,7 +621,7 @@ return`
 	program := ops.Program
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)
@@ -866,7 +866,7 @@ return`
 	program := ops.Program
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)
@@ -1013,7 +1013,7 @@ return`
 	program := ops.Program
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)
@@ -1200,7 +1200,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 
 	// explicitly trigger compatibility mode
 	proto := config.Consensus[protocol.ConsensusV24]
-	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusV24)
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusV24, 100)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)

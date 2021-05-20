@@ -19,8 +19,14 @@
 package util
 
 import (
+	"os"
 	"syscall"
 )
+
+// FindProcess looks for a running process by its pid
+func FindProcess(pid int) (*os.Process, error) {
+	return os.FindProcess(pid)
+}
 
 // KillProcess kills a running OS process
 func KillProcess(pid int, sig syscall.Signal) error {

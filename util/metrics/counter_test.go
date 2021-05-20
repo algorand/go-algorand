@@ -53,7 +53,7 @@ func TestMetricCounter(t *testing.T) {
 		// wait half-a cycle
 		time.Sleep(test.sampleRate / 2)
 	}
-	// wait two reporting cycles to ensure we recieved all the messages.
+	// wait two reporting cycles to ensure we received all the messages.
 	time.Sleep(test.sampleRate * 2)
 
 	metricService.Shutdown()
@@ -98,7 +98,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 		time.Sleep(test.sampleRate / 2)
 	}
 	counter.AddUint64(2, nil)
-	// wait two reporting cycles to ensure we recieved all the messages.
+	// wait two reporting cycles to ensure we received all the messages.
 	time.Sleep(test.sampleRate * 2)
 
 	metricService.Shutdown()
@@ -145,7 +145,7 @@ func TestMetricCounterMixed(t *testing.T) {
 		time.Sleep(test.sampleRate / 2)
 	}
 	counter.AddUint64(2, nil)
-	// wait two reporting cycles to ensure we recieved all the messages.
+	// wait two reporting cycles to ensure we received all the messages.
 	time.Sleep(test.sampleRate * 2)
 
 	metricService.Shutdown()

@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -151,18 +152,18 @@ var clerkCmd = &cobra.Command{
 	},
 }
 
-func waitForCommit(client libgoal.Client, txid string) error {
+func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound uint64) (txn v1.Transaction, err error) {
 	// Get current round information
 	stat, err := client.Status()
 	if err != nil {
-		return fmt.Errorf(errorRequestFail, err)
+		return v1.Transaction{}, fmt.Errorf(errorRequestFail, err)
 	}
 
 	for {
 		// Check if we know about the transaction yet
-		txn, err := client.PendingTransactionInformation(txid)
+		txn, err = client.PendingTransactionInformation(txid)
 		if err != nil {
-			return fmt.Errorf(errorRequestFail, err)
+			return v1.Transaction{}, fmt.Errorf(errorRequestFail, err)
 		}
 
 		if txn.ConfirmedRound > 0 {
@@ -171,17 +172,25 @@ func waitForCommit(client libgoal.Client, txid string) error {
 		}
 
 		if txn.PoolError != "" {
-			return fmt.Errorf(txPoolError, txid, txn.PoolError)
+			return v1.Transaction{}, fmt.Errorf(txPoolError, txid, txn.PoolError)
+		}
+
+		// check if we've already committed to the block number equals to the transaction's last valid round.
+		// if this is the case, the transaction would not be included in the blockchain, and we can exit right
+		// here.
+		if transactionLastValidRound > 0 && stat.LastRound >= transactionLastValidRound {
+			return v1.Transaction{}, fmt.Errorf(errorTransactionExpired, txid)
 		}
 
 		reportInfof(infoTxPending, txid, stat.LastRound)
-		stat, err = client.WaitForRound(stat.LastRound + 1)
+		// WaitForRound waits until round "stat.LastRound+1" is committed
+		stat, err = client.WaitForRound(stat.LastRound)
 		if err != nil {
-			return fmt.Errorf(errorRequestFail, err)
+			return v1.Transaction{}, fmt.Errorf(errorRequestFail, err)
 		}
 	}
 
-	return nil
+	return
 }
 
 func createSignedTransaction(client libgoal.Client, signTx bool, dataDir string, walletName string, tx transactions.Transaction) (stxn transactions.SignedTxn, err error) {
@@ -460,7 +469,7 @@ var sendCmd = &cobra.Command{
 			reportInfof(infoTxIssued, amount, fromAddressResolved, toAddressResolved, txid, fee)
 
 			if !noWaitAfterSend {
-				err = waitForCommit(client, txid)
+				_, err = waitForCommit(client, txid, lastValid)
 				if err != nil {
 					reportErrorf(err.Error())
 				}
@@ -913,6 +922,17 @@ func assembleFile(fname string) (program []byte) {
 		ops.ReportProblems(fname)
 		reportErrorf("%s: %s", fname, err)
 	}
+	_, params := getProto(protoVersion)
+	if ops.HasStatefulOps {
+		if len(ops.Program) > params.MaxAppProgramLen {
+			reportErrorf(tealAppSize, fname, len(ops.Program), params.MaxAppProgramLen)
+		}
+	} else {
+		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
+			reportErrorf(tealLogicSigSize, fname, len(ops.Program), params.LogicSigMaxSize)
+		}
+	}
+
 	return ops.Program
 }
 
@@ -1056,8 +1076,11 @@ var dryrunCmd = &cobra.Command{
 			if txn.Lsig.Blank() {
 				continue
 			}
+			if uint64(txn.Lsig.Len()) > params.LogicSigMaxSize {
+				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
+			}
 			ep := logic.EvalParams{Txn: &txn, Proto: &params, GroupIndex: i, TxnGroup: txgroup}
-			cost, err := logic.Check(txn.Lsig.Logic, ep)
+			err := logic.Check(txn.Lsig.Logic, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
 			}
@@ -1071,7 +1094,7 @@ var dryrunCmd = &cobra.Command{
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?
-			fmt.Fprintf(os.Stdout, "tx[%d] cost=%d trace:\n%s\n", i, cost, sb.String())
+			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, sb.String())
 			if pass {
 				fmt.Fprintf(os.Stdout, " - pass -\n")
 			} else {

@@ -18,8 +18,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA256 hash of value X, yields [32]byte
 - **Cost**:
    - 7 (LogicSigVersion = 1)
-   - 35 (LogicSigVersion = 2)
-   - 35 (LogicSigVersion = 3)
+   - 35 (2 <= LogicSigVersion <= 4)
 
 ## keccak256
 
@@ -29,8 +28,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Keccak256 hash of value X, yields [32]byte
 - **Cost**:
    - 26 (LogicSigVersion = 1)
-   - 130 (LogicSigVersion = 2)
-   - 130 (LogicSigVersion = 3)
+   - 130 (2 <= LogicSigVersion <= 4)
 
 ## sha512_256
 
@@ -40,8 +38,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA512_256 hash of value X, yields [32]byte
 - **Cost**:
    - 9 (LogicSigVersion = 1)
-   - 45 (LogicSigVersion = 2)
-   - 45 (LogicSigVersion = 3)
+   - 45 (2 <= LogicSigVersion <= 4)
 
 ## ed25519verify
 
@@ -76,6 +73,8 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
 - A divided by B. Panic if B == 0.
+
+`divw` is available to divide the two-element values produced by `mulw` and `addw`.
 
 ## *
 
@@ -221,6 +220,14 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pushes: *... stack*, uint64, uint64
 - A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack
 - LogicSigVersion >= 2
+
+## divw
+
+- Opcode: 0x1f
+- Pops: *... stack*, {uint64 A}, {uint64 B}, {uint64 C}, {uint64 D}
+- Pushes: *... stack*, uint64, uint64, uint64, uint64
+- Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top.
+- LogicSigVersion >= 4
 
 ## intcblock uint ...
 
@@ -516,18 +523,18 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## bnz target
 
-- Opcode: 0x40 {0..0x7fff forward branch offset, big endian}
+- Opcode: 0x40 {int16 branch offset, big endian. (negative offsets are illegal before v4)}
 - Pops: *... stack*, uint64
 - Pushes: _None_
 - branch to TARGET if value X is not zero
 
-The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.
+The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are limited to forward branches only, 0-0x7fff until v4. v4 treats offset as a signed 16 bit integer allowing for backward branches and looping.
 
 At LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before LogicSigVersion 2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)
 
 ## bz target
 
-- Opcode: 0x41 {0..0x7fff forward branch offset, big endian}
+- Opcode: 0x41 {int16 branch offset, big endian. (negative offsets are illegal before v4)}
 - Pops: *... stack*, uint64
 - Pushes: _None_
 - branch to TARGET if value X is zero
@@ -537,7 +544,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
 ## b target
 
-- Opcode: 0x42 {0..0x7fff forward branch offset, big endian}
+- Opcode: 0x42 {int16 branch offset, big endian. (negative offsets are illegal before v4)}
 - Pops: _None_
 - Pushes: _None_
 - branch unconditionally to TARGET
@@ -843,6 +850,8 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - push the following program bytes to the stack
 - LogicSigVersion >= 3
 
+pushbytes args are not added to the bytecblock during assembly processes
+
 ## pushint uint
 
 - Opcode: 0x81 {varuint int}
@@ -850,3 +859,25 @@ params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 other
 - Pushes: uint64
 - push immediate UINT to the stack as an integer
 - LogicSigVersion >= 3
+
+pushint args are not added to the intcblock during assembly processes
+
+## callsub target
+
+- Opcode: 0x88
+- Pops: _None_
+- Pushes: _None_
+- branch unconditionally to TARGET, saving the next instruction on the call stack
+- LogicSigVersion >= 4
+
+The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.`
+
+## retsub
+
+- Opcode: 0x89
+- Pops: _None_
+- Pushes: _None_
+- pop the top instruction from the call stack and branch to it
+- LogicSigVersion >= 4
+
+The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.`
