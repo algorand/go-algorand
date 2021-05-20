@@ -1880,8 +1880,7 @@ int 1`,
 			// Assemble ops
 			opsList := make([]*OpStream, len(sources))
 			for j, source := range sources {
-				ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-				require.NoError(t, err)
+				ops := testProg(t, source, AssemblerMaxVersion)
 				opsList[j] = ops
 			}
 
@@ -1969,10 +1968,7 @@ int 1`,
 	for j, failCase := range failCases {
 		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
 			source := "gtxna 0 Scratch 0"
-
-			// Assemble ops
-			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-			require.NoError(t, err)
+			ops := testProg(t, source, AssemblerMaxVersion)
 
 			// Initialize txgroup and cxgroup
 			txgroup := make([]transactions.SignedTxn, 2)
@@ -1991,7 +1987,7 @@ int 1`,
 			}
 
 			// Evaluate app call
-			_, err = Eval(ops.Program, epList[1])
+			_, err := Eval(ops.Program, epList[1])
 			require.Error(t, err)
 			require.Contains(t, err.Error(), failCase.errContains)
 		})
