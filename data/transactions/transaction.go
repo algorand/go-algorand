@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -242,6 +243,14 @@ func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) b
 	return false
 }
 
+var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")
+var errKeyregTxnNonCoherentVotingKeys = errors.New("the following transaction fields need to be clear/set together : votekey, selkey, votekd")
+var errKeyregTxnOfflineTransactionHasVotingRounds = errors.New("on going offline key registration transaction, the vote first and vote last fields should not be set")
+var errKeyregTxnUnsupportedSwitchToNonParticipating = errors.New("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
+var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries to register keys to go online, but nonparticipatory flag is set")
+var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
+var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
+
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
 	switch tx.Type {
@@ -253,18 +262,48 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 
 	case protocol.KeyRegistrationTx:
+		if proto.EnableKeyregCoherencyCheck {
+			// ensure that the VoteLast is greater or equal to the VoteFirst
+			if tx.KeyregTxnFields.VoteFirst > tx.KeyregTxnFields.VoteLast {
+				return errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound
+			}
+
+			// The trio of [VotePK, SelectionPK, VoteKeyDilution] needs to be all zeros or all non-zero for the transaction to be valid.
+			if !((tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} && tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{} && tx.KeyregTxnFields.VoteKeyDilution == 0) ||
+				(tx.KeyregTxnFields.VotePK != crypto.OneTimeSignatureVerifier{} && tx.KeyregTxnFields.SelectionPK != crypto.VRFVerifier{} && tx.KeyregTxnFields.VoteKeyDilution != 0)) {
+				return errKeyregTxnNonCoherentVotingKeys
+			}
+
+			// if it's a going offline transaction
+			if tx.KeyregTxnFields.VoteKeyDilution == 0 {
+				// check that we don't have any VoteFirst/VoteLast fields.
+				if tx.KeyregTxnFields.VoteFirst != 0 || tx.KeyregTxnFields.VoteLast != 0 {
+					return errKeyregTxnOfflineTransactionHasVotingRounds
+				}
+			} else {
+				// going online
+				if tx.KeyregTxnFields.VoteLast == 0 {
+					return errKeyregTxnGoingOnlineWithZeroVoteLast
+				}
+				if tx.KeyregTxnFields.VoteFirst > tx.LastValid+1 {
+					return errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid
+				}
+			}
+		}
+
 		// check that, if this tx is marking an account nonparticipating,
 		// it supplies no key (as though it were trying to go offline)
 		if tx.KeyregTxnFields.Nonparticipation {
 			if !proto.SupportBecomeNonParticipatingTransactions {
 				// if the transaction has the Nonparticipation flag high, but the protocol does not support
 				// that type of transaction, it is invalid.
-				return fmt.Errorf("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
+				return errKeyregTxnUnsupportedSwitchToNonParticipating
 			}
 			suppliesNullKeys := tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} || tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{}
 			if !suppliesNullKeys {
-				return fmt.Errorf("transaction tries to register keys to go online, but nonparticipatory flag is set")
+				return errKeyregTxnGoingOnlineWithNonParticipating
 			}
+
 		}
 
 	case protocol.AssetConfigTx:

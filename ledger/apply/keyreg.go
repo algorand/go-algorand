@@ -17,6 +17,7 @@
 package apply
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -24,8 +25,11 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
+var errKeyregGoingOnlineExpiredParticipationKey = errors.New("transaction tries to mark an account as online with last voting round in the past")
+var errKeyregGoingOnlineFirstVotingInFuture = errors.New("transaction tries to mark an account as online with first voting round beyond the next voting round")
+
 // Keyreg applies a KeyRegistration transaction using the Balances interface.
-func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData) error {
+func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, round basics.Round) error {
 	if header.Sender == spec.FeeSink {
 		return fmt.Errorf("cannot register participation key for fee sink's address %v ", header.Sender)
 	}
@@ -59,6 +63,15 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteLastValid = 0
 		record.VoteKeyDilution = 0
 	} else {
+
+		if balances.ConsensusParams().EnableKeyregCoherencyCheck {
+			if keyreg.VoteLast <= round {
+				return errKeyregGoingOnlineExpiredParticipationKey
+			}
+			if keyreg.VoteFirst > round+1 {
+				return errKeyregGoingOnlineFirstVotingInFuture
+			}
+		}
 		record.Status = basics.Online
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast

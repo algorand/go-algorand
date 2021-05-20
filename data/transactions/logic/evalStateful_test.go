@@ -543,13 +543,13 @@ pop
 	type desc struct {
 		source string
 		eval   func([]byte, EvalParams) (bool, error)
-		check  func([]byte, EvalParams) (int, error)
+		check  func([]byte, EvalParams) error
 	}
 	tests := map[runMode]desc{
 		runModeSignature: {
 			source: opcodesRunModeAny + opcodesRunModeSignature,
 			eval:   func(program []byte, ep EvalParams) (bool, error) { return Eval(program, ep) },
-			check:  func(program []byte, ep EvalParams) (int, error) { return Check(program, ep) },
+			check:  func(program []byte, ep EvalParams) error { return Check(program, ep) },
 		},
 		runModeApplication: {
 			source: opcodesRunModeAny + opcodesRunModeApplication,
@@ -557,7 +557,7 @@ pop
 				pass, err := EvalStateful(program, ep)
 				return pass, err
 			},
-			check: func(program []byte, ep EvalParams) (int, error) { return CheckStateful(program, ep) },
+			check: func(program []byte, ep EvalParams) error { return CheckStateful(program, ep) },
 		},
 	}
 
@@ -601,7 +601,7 @@ pop
 			ep.TxnGroup = txgroup
 			ep.Ledger = ledger
 			ep.Txn.Txn.ApplicationID = 100
-			_, err := test.check(ops.Program, ep)
+			err := test.check(ops.Program, ep)
 			require.NoError(t, err)
 			_, err = test.eval(ops.Program, ep)
 			if err != nil {
@@ -619,7 +619,7 @@ pop
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
 			ep := defaultEvalParams(nil, nil)
-			_, err = test.check(ops.Program, ep)
+			err = test.check(ops.Program, ep)
 			require.NoError(t, err)
 			_, err = test.eval(ops.Program, ep)
 			require.Error(t, err)
@@ -641,7 +641,7 @@ pop
 		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 		require.NoError(t, err)
 		ep := defaultEvalParams(nil, nil)
-		_, err = CheckStateful(ops.Program, ep)
+		err = CheckStateful(ops.Program, ep)
 		require.Error(t, err)
 		_, err = EvalStateful(ops.Program, ep)
 		require.Error(t, err)
@@ -667,7 +667,7 @@ pop
 	for _, source := range statefulOpcodeCalls {
 		ops := testProg(t, source, AssemblerMaxVersion)
 		ep := defaultEvalParams(nil, nil)
-		_, err := Check(ops.Program, ep)
+		err := Check(ops.Program, ep)
 		require.Error(t, err)
 		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
@@ -714,9 +714,8 @@ int 177
 ==`
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -744,9 +743,8 @@ int 13
 			txn.Txn.Sender: 13,
 		},
 	)
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -756,9 +754,8 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 	ops := testProg(t, program, AssemblerMaxVersion)
 	sb := &strings.Builder{}
 	ep.Trace = sb
-	cost, err := CheckStateful(ops.Program, ep)
+	err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 
 	// we only use this to test stateful apps.  While, I suppose
 	// it's *legal* to have an app with no stateful ops, this
@@ -1032,9 +1029,8 @@ byte 0x414c474f
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	cost, err := CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
@@ -1061,9 +1057,8 @@ byte 0x414c474f
 
 	ledger.applications[100].GlobalState[string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1249,9 +1244,8 @@ func TestAssets(t *testing.T) {
 		txn := makeSampleTxn()
 		ep := defaultEvalParams(nil, nil)
 		ep.Txn = &txn
-		cost, err := CheckStateful(ops.Program, ep)
+		err = CheckStateful(ops.Program, ep)
 		require.NoError(t, err)
-		require.True(t, cost < 1000)
 		_, err = EvalStateful(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "ledger not available")
@@ -1270,9 +1264,8 @@ func TestAssets(t *testing.T) {
 
 	ops, err := AssembleStringWithVersion(assetsTestProgram, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(ops.Program, defaultEvalParams(nil, nil))
+	err = CheckStateful(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 
 	txn := makeSampleTxn()
 	sb := strings.Builder{}
@@ -1298,9 +1291,8 @@ func TestAssets(t *testing.T) {
 
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Ledger = ledger
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err := EvalStateful(ops.Program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(ops.Program))
@@ -1326,9 +1318,8 @@ int 1
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	ledger.setHolding(txn.Txn.Sender, 55, 123, false)
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1426,9 +1417,8 @@ int 1
 	require.NoError(t, err)
 	params.URL = ""
 	ledger.newAsset(txn.Txn.Sender, 55, params)
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot compare ([]byte == uint64)")
@@ -1494,9 +1484,8 @@ int 100
 			ep := defaultEvalParams(nil, nil)
 			ep.Txn = &txn
 			ep.Txn.Txn.ApplicationID = 100
-			cost, err := CheckStateful(ops.Program, ep)
+			err = CheckStateful(ops.Program, ep)
 			require.NoError(t, err)
-			require.True(t, cost < 1000)
 			_, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "ledger not available")
@@ -1593,9 +1582,8 @@ int 0x77
 `
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1637,9 +1625,8 @@ int 0x77
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1800,9 +1787,8 @@ int 1
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1981,9 +1967,8 @@ int 0x77
 
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -2098,9 +2083,8 @@ byte 0x414c474f
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	ep.Trace = &sb
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(ops.Program))
@@ -2379,9 +2363,8 @@ int 1
 
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err := EvalStateful(ops.Program, ep)
 	if !pass {
 		t.Log(hex.EncodeToString(ops.Program))
@@ -2416,9 +2399,8 @@ app_local_get_ex
 
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -2453,9 +2435,8 @@ app_local_put
 `
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -2486,9 +2467,8 @@ int 1
 `
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -2522,9 +2502,8 @@ int 1
 `
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -2558,9 +2537,8 @@ int 1
 `
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	require.True(t, cost < 1000)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -2800,7 +2778,7 @@ int 1
 	require.NoError(t, err)
 
 	ep := defaultEvalParams(nil, nil)
-	_, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
@@ -2829,7 +2807,7 @@ int 1
 	require.NoError(t, err)
 
 	ep := defaultEvalParams(nil, nil)
-	_, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
@@ -2859,7 +2837,7 @@ int 42
 	require.NoError(t, err)
 
 	ep := defaultEvalParams(nil, nil)
-	_, err = CheckStateful(ops.Program, ep)
+	err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)

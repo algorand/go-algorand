@@ -352,32 +352,36 @@ func TestAppCallCheckPrograms(t *testing.T) {
 
 	var ac transactions.ApplicationCallTxnFields
 	var ep logic.EvalParams
-	proto := config.Consensus[protocol.ConsensusFuture]
+	// This check is for static costs. v26 is last with static cost checking
+	proto := config.Consensus[protocol.ConsensusV26]
 	ep.Proto = &proto
 
-	err := checkPrograms(&ac, &ep, 1)
+	proto.MaxAppProgramCost = 1
+	err := checkPrograms(&ac, &ep)
 	a.Error(err)
 	a.Contains(err.Error(), "check failed on ApprovalProgram")
 
 	program := []byte{2, 0x20, 1, 1, 0x22} // version, intcb, int 1
 	ac.ApprovalProgram = program
-	err = checkPrograms(&ac, &ep, 1)
-	a.Error(err)
-	a.Contains(err.Error(), "ApprovalProgram too resource intensive")
+	ac.ClearStateProgram = program
 
-	err = checkPrograms(&ac, &ep, 10)
+	err = checkPrograms(&ac, &ep)
+	a.Error(err)
+	a.Contains(err.Error(), "check failed on ApprovalProgram")
+
+	proto.MaxAppProgramCost = 10
+	err = checkPrograms(&ac, &ep)
+	a.NoError(err)
+
+	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
+	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
+	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
+	err = checkPrograms(&ac, &ep)
 	a.Error(err)
 	a.Contains(err.Error(), "check failed on ClearStateProgram")
 
-	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
-	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
-	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
-	err = checkPrograms(&ac, &ep, 10)
-	a.Error(err)
-	a.Contains(err.Error(), "ClearStateProgram too resource intensive")
-
 	ac.ClearStateProgram = program
-	err = checkPrograms(&ac, &ep, 10)
+	err = checkPrograms(&ac, &ep)
 	a.NoError(err)
 }
 
