@@ -2799,18 +2799,14 @@ int 142791994204213819
 +
 `
 
-func benchmarkBasicProgram(b *testing.B, source string) {
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(b, err)
-	err = Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(b, err)
-	//b.Logf("%d bytes of program", len(ops.Program))
-	//b.Log(hex.EncodeToString(ops.Program))
+func evalLoop(b *testing.B, runs int, program []byte) {
 	b.ResetTimer()
-	sb := strings.Builder{} // Trace: &sb
-	for i := 0; i < b.N; i++ {
-		pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
+	for i := 0; i < runs; i++ {
+		pass, err := Eval(program, benchmarkEvalParams(nil, nil))
 		if !pass {
+			// rerun to trace it.  tracing messes up timing too much
+			sb := strings.Builder{}
+			pass, err = Eval(program, benchmarkEvalParams(&sb, nil))
 			b.Log(sb.String())
 		}
 		// require is super slow but makes useful error messages, wrap it in a check that makes the benchmark run a bunch faster
@@ -2823,32 +2819,160 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 	}
 }
 
+func benchmarkBasicProgram(b *testing.B, source string) {
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(b, err)
+	err = Check(ops.Program, defaultEvalParams(nil, nil))
+	require.NoError(b, err)
+	evalLoop(b, b.N, ops.Program)
+}
+
 func benchmarkExpensiveProgram(b *testing.B, source string) {
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(b, err)
-	ep := defaultEvalParams(nil, nil)
-	err = Check(ops.Program, ep)
+	err = Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(b, err)
 	_, err = Eval(ops.Program, defaultEvalParams(nil, nil))
 	require.Error(b, err) // excessive cost
-	//b.Logf("%d bytes of program", len(ops.Program))
-	//b.Log(hex.EncodeToString(ops.Program))
-	b.ResetTimer()
-	sb := strings.Builder{} // Trace: &sb
-	for i := 0; i < b.N; i++ {
-		pass, err := Eval(ops.Program, benchmarkEvalParams(&sb, nil))
-		if !pass {
-			b.Log(sb.String())
-		}
-		// require is super slow but makes useful error messages, wrap it in a check that makes the benchmark run a bunch faster
-		if err != nil {
-			require.NoError(b, err)
-		}
-		if !pass {
-			require.True(b, pass)
-		}
+	evalLoop(b, b.N, ops.Program)
+}
+
+// Rather than run b.N times, build a program that runs the operation
+// 2000 times, and does so for b.N / 2000 tuns.  This lets us amortize
+// away the creation and teardown of the evaluation system.  We report
+// the "waste/op" as the number of extra instructions that are run
+// during the "operation".  They are presumed to be fast (15/ns), so
+// the idea is that you can subtract that out from the reported speed
+func benchmarkOperation(b *testing.B, prefix string, operation string, suffix string) {
+	runs := 1 + b.N / 2000
+	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
+	source := prefix + ";" + strings.Repeat(operation+";", 2000) + ";" + suffix
+	source = strings.ReplaceAll(source, ";", "\n")
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	err = Check(ops.Program, defaultEvalParams(nil, nil))
+	require.NoError(b, err)
+	evalLoop(b, runs, ops.Program)
+	b.ReportMetric(float64(inst)*15.0, "waste/op")
+}
+
+func BenchmarkUintMath(b *testing.B) {
+	benches := [][]string{
+		{"pop1", "", "int 1234576; pop", "int 1"},
+		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
+		{"add", "", "int 1234576; int 6712; +; pop", "int 1"},
+		{"sub", "", "int 1234576; int 2; -; pop", "int 1"},
+		{"mul", "", "int 212; int 323; *; pop", "int 1"},
+		{"div", "", "int 736247364; int 892; /; pop", "int 1"},
+		{"divmodw", "", "int 736247364; int 892; int 126712; int 71672; divmodw; pop; pop; pop; pop", "int 1"},
+		{"sqrt", "", "int 736247364; sqrt; pop", "int 1"},
+		{"exp", "", "int 734; int 5; exp; pop", "int 1"},
+		{"expw", "", "int 734; int 10; expw; pop; pop", "int 1"},
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3]);
+		})
 	}
 }
+
+func BenchmarkUintCmp(b *testing.B) {
+	ops := []string{"==", "!=", "<", "<=", ">", ">="}
+	for _, op := range ops {
+		b.Run(op, func(b *testing.B) {
+			benchmarkOperation(b, "", "int 7263; int 273834; "+op+"; pop", "int 1");
+		})
+	}
+}
+func BenchmarkBigLogic(b *testing.B) {
+	benches := [][]string{
+		{"b&", "byte 0x01234576", "byte 0x01ffffffffffffff; b&", "pop; int 1"},
+		{"b|", "byte 0x0ffff1234576", "byte 0x1202; b|", "pop; int 1"},
+		{"b^", "byte 0x01234576",  "byte 0x0223627389; b^", "pop; int 1"},
+		{"b~", "byte 0x0123457673624736", "b~", "pop; int 1"},
+
+		{"b&big",
+			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
+			"byte 0x01ffffffffffffff01ffffffffffffff01234576012345760123457601234576; b&",
+			"pop; int 1"},
+		{"b|big",
+			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
+			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b|",
+			"pop; int 1"},
+		{"b^big", "",	// u256*u256
+			`byte 0x123457601234576012345760123457601234576012345760123457601234576a
+			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b^; pop`,
+			"int 1"},
+		{"b~big", "byte 0xa123457601234576012345760123457601234576012345760123457601234576",
+			"b~",
+			"pop; int 1"},
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3]);
+		})
+	}
+}
+
+func BenchmarkBigMath(b *testing.B) {
+	benches := [][]string{
+		{"bpop", "", "byte 0x01ffffffffffffff; pop", "int 1"},
+
+		{"b+", "byte 0x01234576", "byte 0x01ffffffffffffff; b+", "pop; int 1"},
+		{"b-", "byte 0x0ffff1234576", "byte 0x1202; b-", "pop; int 1"},
+		{"b*", "", "byte 0x01234576; byte 0x0223627389; b*; pop", "int 1"},
+		{"b/", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
+		{"b%", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
+
+		{"b+big",	// u256 + u256
+			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
+			"byte 0x01ffffffffffffff01ffffffffffffff01234576012345760123457601234576; b+",
+			"pop; int 1"},
+		{"b-big",	// second is a bit small, so we can subtract it over and over
+			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
+			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b-",
+			"pop; int 1"},
+		{"b*big", "",	// u256*u256
+			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
+			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b*; pop`,
+			"int 1"},
+		{"b/big", "",	// u256 / u128 (half sized divisor seems pessimal)
+			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
+			 byte 0x34576012345760123457601234576312; b/; pop`,
+			"int 1"},
+		{"b%big", "",	// u256 / u128 (half sized divisor seems pessimal)
+			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
+			 byte 0x34576012345760123457601234576312; b/; pop`,
+			"int 1"},
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3]);
+		})
+	}
+}
+
+func BenchmarkHash(b *testing.B) {
+	hashes := []string{"sha256", "keccak256", "sha512_256"}
+	for _, hash := range hashes {
+		b.Run(hash+"-small", func(b *testing.B) { // hash 32 bytes
+			benchmarkOperation(b, "byte 0x1234567890", hash,
+				"pop; int 1");
+		})
+	}
+	for _, hash := range hashes {
+		b.Run(hash+"-med", func(b *testing.B) { // hash 128 bytes
+			benchmarkOperation(b, "byte 0x1234567890",
+				hash+"; dup; concat; dup; concat", "pop; int 1");
+		})
+	}
+	for _, hash := range hashes {
+		b.Run(hash+"-big", func(b *testing.B) { // hash 512 bytes
+			benchmarkOperation(b, "byte 0x1234567890",
+				hash+"; dup; concat; dup; concat; dup; concat; dup; concat", "pop; int 1");
+		})
+	}
+}
+
 
 func BenchmarkAddx64(b *testing.B) {
 	progs := [][]string{
@@ -2874,39 +2998,6 @@ func BenchmarkSha256Raw(b *testing.B) {
 		t := sha256.Sum256(a)
 		a = t[:]
 	}
-}
-
-func BenchmarkSha256x900(b *testing.B) {
-	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
-	sb := strings.Builder{}
-	sb.WriteString(firstline)
-	for i := 0; i < 900; i++ {
-		sb.WriteString("sha256\n")
-	}
-	sb.WriteString("len\nint 0\n>\n")
-	benchmarkExpensiveProgram(b, sb.String())
-}
-
-func BenchmarkKeccak256x900(b *testing.B) {
-	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
-	sb := strings.Builder{}
-	sb.WriteString(firstline)
-	for i := 0; i < 900; i++ {
-		sb.WriteString("keccak256\n")
-	}
-	sb.WriteString("len\nint 0\n>\n")
-	benchmarkExpensiveProgram(b, sb.String())
-}
-
-func BenchmarkSha512_256x900(b *testing.B) {
-	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
-	sb := strings.Builder{}
-	sb.WriteString(firstline)
-	for i := 0; i < 900; i++ {
-		sb.WriteString("sha512_256\n")
-	}
-	sb.WriteString("len\nint 0\n>\n")
-	benchmarkExpensiveProgram(b, sb.String())
 }
 
 func TestEd25519verify(t *testing.T) {
@@ -2963,6 +3054,7 @@ ed25519verify`, pkStr), v)
 		})
 	}
 }
+
 
 func BenchmarkEd25519Verifyx1(b *testing.B) {
 	//benchmark setup
