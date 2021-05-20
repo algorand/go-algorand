@@ -81,7 +81,7 @@ if ! ${NO_BUILD} ; then
     export PATH=${BINDIR}:${PATH}
 fi
 
-cp gen/devnet/genesis.json ${DATADIR}
+#cp gen/devnet/genesis.json ${DATADIR}
 # check our install
 algod -v
 goal -v

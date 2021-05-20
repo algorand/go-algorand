@@ -253,6 +253,7 @@ clean:
 	rm -rf crypto/lib
 	rm -rf crypto/libs
 	rm -rf crypto/copies
+	rm -rf ./gen/devnet ./gen/mainnetnet ./gen/testnet
 
 # clean without crypto
 cleango:
