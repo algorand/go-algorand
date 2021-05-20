@@ -690,10 +690,20 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			Proto:          &eval.proto,
 			TxnGroup:       groupNoAD,
 			GroupIndex:     i,
+			SideEffects:    &logic.EvalSideEffects{},
 			MinTealVersion: &minTealVersion,
 		}
 	}
 	return
+}
+
+// appendSideEffects appends the last txn's side effects to the list of past side effects
+func (eval *BlockEvaluator) accumulatePastSideEffects(gi int, evalParams []*logic.EvalParams) {
+	if gi != 0 {
+		accumulatedSideEffects := evalParams[gi-1].PastSideEffects
+		lastSideEffects := *evalParams[gi-1].SideEffects
+		evalParams[gi].PastSideEffects = append(accumulatedSideEffects, lastSideEffects)
+	}
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
@@ -723,13 +733,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		// Append the last txn's side effects to the existing list of past side effects
-		if gi != 0 {
-			accumulatedSideEffects := evalParams[gi-1].PastSideEffects
-			lastSideEffects := *evalParams[gi-1].SideEffects
-			evalParams[gi].PastSideEffects = append(accumulatedSideEffects, lastSideEffects)
-		}
-
+		eval.accumulatePastSideEffects(gi, evalParams)
 		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err

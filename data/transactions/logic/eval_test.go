@@ -1899,10 +1899,11 @@ int 1`,
 			epList := make([]EvalParams, len(sources))
 			for j := range sources {
 				epList[j] = EvalParams{
-					Proto:      &proto,
-					Txn:        &txgroup[j],
-					TxnGroup:   txgroup,
-					GroupIndex: j,
+					Proto:       &proto,
+					Txn:         &txgroup[j],
+					TxnGroup:    txgroup,
+					GroupIndex:  j,
+					SideEffects: &EvalSideEffects{},
 				}
 			}
 
@@ -1910,6 +1911,12 @@ int 1`,
 			shouldErr := testCase.errContains != ""
 			didPass := true
 			for j, ops := range opsList {
+				if j != 0 {
+					accumulatedSideEffects := epList[j-1].PastSideEffects
+					lastSideEffects := *epList[j-1].SideEffects
+					epList[j].PastSideEffects = append(accumulatedSideEffects, lastSideEffects)
+				}
+
 				pass, err := Eval(ops.Program, epList[j])
 
 				// Confirm it errors or that the error message is the expected one
@@ -3624,7 +3631,7 @@ intc_0
 
 	spec.op = func(cx *evalContext) {
 		// overflow
-		cx.stack = make([]stackValue, 2000)
+		cx.stack = make([]StackValue, 2000)
 	}
 	opsByOpcode[LogicVersion][spec.Opcode] = spec
 	_, err = Eval(ops.Program, ep)
@@ -3731,7 +3738,7 @@ byte 0x // empty byte constant
 func TestArgType(t *testing.T) {
 	t.Parallel()
 
-	var sv stackValue
+	var sv StackValue
 	require.Equal(t, StackUint64, sv.argType())
 	sv.Bytes = []byte("")
 	require.Equal(t, StackBytes, sv.argType())
