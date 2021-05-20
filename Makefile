@@ -203,8 +203,6 @@ buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_e
 check-go-version:
 	./scripts/check_golang_version.sh build
 
-SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
-
 ## Build binaries with the race detector enabled in them.
 ## This allows us to run e2e tests with race detection.
 ## We overwrite bin-race/kmd with a non -race version due to
