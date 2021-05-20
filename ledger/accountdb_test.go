@@ -137,7 +137,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				tv := basics.TealValue{
 					Type: basics.TealBytesType,
 				}
-				bytes := make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen))
+				bytes := make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen-len(appName)))
 				crypto.RandBytes(bytes[:])
 				tv.Bytes = string(bytes)
 				ap.KeyValue[appName] = tv

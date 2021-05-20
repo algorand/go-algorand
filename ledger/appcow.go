@@ -331,8 +331,8 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 	}
 
 	// Enforce maximum value length
-	if value.Type == basics.TealBytesType && len(value.Bytes) > cb.proto.MaxAppBytesValueLen {
-		return fmt.Errorf("value too long for key 0x%x: length was %d, maximum is %d", key, len(value.Bytes), cb.proto.MaxAppBytesValueLen)
+	if value.Type == basics.TealBytesType && (len(value.Bytes) > cb.proto.MaxAppBytesValueLen || len(key)+len(value.Bytes) > cb.proto.MaxAppSumKeyValueLens) {
+		return fmt.Errorf("value too long for key 0x%x: length was %d", key, len(value.Bytes))
 	}
 
 	// Check that account has allocated storage

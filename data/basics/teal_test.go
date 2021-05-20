@@ -61,11 +61,11 @@ func TestStateDeltaValid(t *testing.T) {
 	delete(sd, tooLongKey)
 
 	longKey := tooLongKey[1:]
-	tooLongValue := strings.Repeat("b", protoF.MaxAppBytesValueLen+1)
+	tooLongValue := strings.Repeat("b", protoF.MaxAppSumKeyValueLens-len(longKey)+1)
 	sd[longKey] = ValueDelta{Action: SetBytesAction, Bytes: tooLongValue}
 	err = sd.Valid(&protoF)
 	a.Error(err)
-	a.Contains(err.Error(), "cannot set value for key")
+	a.Contains(err.Error(), "value too long for key")
 
 	sd[longKey] = ValueDelta{Action: SetBytesAction, Bytes: tooLongValue[1:]}
 	sd["intval"] = ValueDelta{Action: DeltaAction(10), Uint: 0}

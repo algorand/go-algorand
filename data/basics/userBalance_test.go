@@ -154,15 +154,15 @@ func TestEncodedAccountDataSize(t *testing.T) {
 	maxProg := []byte(makeString(currentConsensusParams.MaxAppProgramLen))
 	maxGlobalState := make(TealKeyValue, currentConsensusParams.MaxGlobalSchemaEntries)
 	maxLocalState := make(TealKeyValue, currentConsensusParams.MaxLocalSchemaEntries)
-	maxValue := TealValue{
-		Type:  TealBytesType,
-		Bytes: makeString(currentConsensusParams.MaxAppBytesValueLen),
-	}
 
 	for globalKey := uint64(0); globalKey < currentConsensusParams.MaxGlobalSchemaEntries; globalKey++ {
 		prefix := fmt.Sprintf("%d|", globalKey)
 		padding := makeString(currentConsensusParams.MaxAppKeyLen - len(prefix))
 		maxKey := prefix + padding
+		maxValue := TealValue{
+			Type:  TealBytesType,
+			Bytes: makeString(currentConsensusParams.MaxAppSumKeyValueLens - len(maxKey)),
+		}
 		maxGlobalState[maxKey] = maxValue
 	}
 
@@ -170,6 +170,10 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		prefix := fmt.Sprintf("%d|", localKey)
 		padding := makeString(currentConsensusParams.MaxAppKeyLen - len(prefix))
 		maxKey := prefix + padding
+		maxValue := TealValue{
+			Type:  TealBytesType,
+			Bytes: makeString(currentConsensusParams.MaxAppSumKeyValueLens - len(maxKey)),
+		}
 		maxLocalState[maxKey] = maxValue
 	}
 
