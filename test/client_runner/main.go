@@ -298,8 +298,12 @@ func runSingleTest(test string, outChannel chan *testCompleteData, walletName st
 	}()
 
 	timeout := readTestTimeout(test)
-	currentWorkingDir, _ := os.Getwd()
-	cmd := exec.Command(filepath.Join(currentWorkingDir, test), walletName)
+	absTestFilename := test
+	if !filepath.IsAbs(absTestFilename) {
+		currentWorkingDir, _ := os.Getwd()
+		absTestFilename = filepath.Join(currentWorkingDir, test)
+	}
+	cmd := exec.Command(absTestFilename, walletName)
 	cmd.Env = append(os.Environ(), "TEMPDIR="+tempDir)
 	bufferedOutput := &stringOutputWriter{}
 	cmd.Stdout = bufferedOutput
