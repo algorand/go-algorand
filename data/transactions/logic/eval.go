@@ -162,8 +162,8 @@ type EvalSideEffects struct {
 
 // GetScratchValue loads and clones a stackValue
 // The value is cloned so the original bytes are protected from changes
-func (se *EvalSideEffects) GetScratchValue(stackPos uint8) stackValue {
-	return se.scratchSpace[stackPos].clone()
+func (se *EvalSideEffects) GetScratchValue(scratchPos uint8) stackValue {
+	return se.scratchSpace[scratchPos].clone()
 }
 
 // SetScratchSpace stores the scratch space
