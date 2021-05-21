@@ -53,7 +53,7 @@ var opDocByName = map[string]string{
 	"shl":               "A times 2^B, modulo 2^64",
 	"shr":               "A divided by 2^B",
 	"sqrt":              "The largest integer X such that X^2 <= A",
-	"log2":              "The largest integer X such that 2^X <= A",
+	"bitlen":            "The index of the highest bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer",
 	"exp":               "A raised to the Bth power. Panic if A == B == 0 and on overflow",
 	"expw":              "A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1",
 	"mulw":              "A times B out to 128-bit long result as low (top) and high uint64 values on the stack",
@@ -188,6 +188,7 @@ var opDocExtras = map[string]string{
 	"*":                 "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.",
 	"+":                 "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.",
 	"/":                 "`divmodw` is available to divide the two-element values produced by `mulw` and `addw`.",
+	"bitlen":            "bitlen interprets arrays as big-endian integers, unlike setbit/getbit",
 	"txn":               "FirstValidTime causes the program to fail. The field is reserved for future use.",
 	"gtxn":              "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
 	"gtxns":             "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
@@ -216,7 +217,7 @@ func OpDocExtra(opName string) string {
 
 // OpGroups is groupings of ops for documentation purposes.
 var OpGroups = map[string][]string{
-	"Arithmetic":           {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "log2", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"},
+	"Arithmetic":           {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"},
 	"Byteslice Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
 	"Byteslice Logic":      {"b|", "b&", "b^", "b~"},
 	"Loading Values":       {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store"},

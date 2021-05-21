@@ -267,7 +267,7 @@ int 2
 exp
 int 2
 expw
-log2
+bitlen
 b+
 b-
 b/

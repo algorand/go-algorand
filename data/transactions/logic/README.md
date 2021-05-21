@@ -114,7 +114,7 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `shl` | A times 2^B, modulo 2^64 |
 | `shr` | A divided by 2^B |
 | `sqrt` | The largest integer X such that X^2 <= A |
-| `log2` | The largest integer X such that 2^X <= A |
+| `bitlen` | The index of the highest bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer |
 | `exp` | A raised to the Bth power. Panic if A == B == 0 and on overflow |
 | `==` | A is equal to B => {0 or 1} |
 | `!=` | A is not equal to B => {0 or 1} |

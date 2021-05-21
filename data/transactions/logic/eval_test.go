@@ -3895,14 +3895,25 @@ func TestExpw(t *testing.T) {
 	testAccepts(t, "int 97; int 15; expw; int 10271255586529954209; ==; assert; int 34328615749; ==;", 4)
 }
 
-func TestLog2(t *testing.T) {
+func TestBitLen(t *testing.T) {
 	t.Parallel()
-	testPanics(t, "int 0; log2; int 1; return", 4)
-	testAccepts(t, "int 1; log2; int 0; ==", 4)
-	testAccepts(t, "int 2; log2; int 1; ==", 4)
-	testAccepts(t, "int 4; log2; int 2; ==", 4)
-	testAccepts(t, "int 5; log2; int 2; ==", 4)
-	testAccepts(t, "int 8; log2; int 3; ==", 4)
+	testAccepts(t, "int 0; bitlen; int 0; ==", 4)
+	testAccepts(t, "int 1; bitlen; int 1; ==", 4)
+	testAccepts(t, "int 2; bitlen; int 2; ==", 4)
+	testAccepts(t, "int 4; bitlen; int 3; ==", 4)
+	testAccepts(t, "int 5; bitlen; int 3; ==", 4)
+	testAccepts(t, "int 8; bitlen; int 4; ==", 4)
+
+	testAccepts(t, "byte 0x; bitlen; int 0; ==", 4)
+	testAccepts(t, "byte 0x00; bitlen; int 0; ==", 4)
+	testAccepts(t, "byte 0x01; bitlen; int 1; ==", 4)
+	testAccepts(t, "byte 0x02; bitlen; int 2; ==", 4)
+	testAccepts(t, "byte 0x03; bitlen; int 2; ==", 4)
+	testAccepts(t, "byte 0x04; bitlen; int 3; ==", 4)
+	testAccepts(t, "byte 0xf0; bitlen; int 8; ==", 4)
+	testAccepts(t, "byte 0x0100; bitlen; int 9; ==", 4)
+	testAccepts(t, "byte 0x010001000100010001000100010001000100; bitlen; int 137; ==", 4)
+
 }
 
 func TestBytesMath(t *testing.T) {

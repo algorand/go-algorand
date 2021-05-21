@@ -227,6 +227,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {uint64 C}, {uint64 D}
 - Pushes: *... stack*, uint64, uint64, uint64, uint64
 - Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top.
+- **Cost**: 20
 - LogicSigVersion >= 4
 
 ## intcblock uint ...
@@ -904,15 +905,18 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, uint64
 - Pushes: uint64
 - The largest integer X such that X^2 <= A
+- **Cost**: 4
 - LogicSigVersion >= 4
 
-## log2
+## bitlen
 
 - Opcode: 0x93
-- Pops: *... stack*, uint64
+- Pops: *... stack*, any
 - Pushes: uint64
-- The largest integer X such that 2^X <= A
+- The index of the highest bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer
 - LogicSigVersion >= 4
+
+bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 
 ## exp
 
@@ -928,6 +932,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: *... stack*, uint64, uint64
 - A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1
+- **Cost**: 10
 - LogicSigVersion >= 4
 
 ## b+
@@ -936,6 +941,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
 - A plus B, where A and B are byte-arrays interpreted as big-endian unsigned integers
+- **Cost**: 10
 - LogicSigVersion >= 4
 
 ## b-
@@ -944,6 +950,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
 - A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow.
+- **Cost**: 10
 - LogicSigVersion >= 4
 
 ## b/
@@ -952,6 +959,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
 - A divided by B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
+- **Cost**: 20
 - LogicSigVersion >= 4
 
 ## b*
@@ -960,6 +968,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
 - A times B, where A and B are byte-arrays interpreted as big-endian unsigned integers.
+- **Cost**: 20
 - LogicSigVersion >= 4
 
 ## b<
@@ -1016,6 +1025,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
 - A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
+- **Cost**: 20
 - LogicSigVersion >= 4
 
 ## b|
@@ -1024,6 +1034,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
 - A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths
+- **Cost**: 6
 - LogicSigVersion >= 4
 
 ## b&
@@ -1032,6 +1043,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
 - A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths
+- **Cost**: 6
 - LogicSigVersion >= 4
 
 ## b^
@@ -1040,6 +1052,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
 - A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths
+- **Cost**: 6
 - LogicSigVersion >= 4
 
 ## b~
@@ -1048,6 +1061,7 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - Pops: *... stack*, []byte
 - Pushes: []byte
 - A with all bits inverted
+- **Cost**: 4
 - LogicSigVersion >= 4
 
 ## bzero

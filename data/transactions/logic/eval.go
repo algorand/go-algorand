@@ -1121,19 +1121,23 @@ func opSqrt(cx *evalContext) {
 	cx.stack[last].Uint = root >> 1
 }
 
-func opLog2(cx *evalContext) {
-	/* All log bases are pretty much equally powerful.  By giving
-	   log2() the implementation is drop dead simple - the index
-	   of the leftmost bit.  And that may be directly useful as well.
-	*/
-
+func opBitLen(cx *evalContext) {
 	last := len(cx.stack) - 1
-	idx := bits.Len64(cx.stack[last].Uint)
-	if idx == 0 {
-		cx.err = errors.New("log2(0) is undefined")
+	if cx.stack[last].argType() == StackUint64 {
+		cx.stack[last].Uint = uint64(bits.Len64(cx.stack[last].Uint))
 		return
 	}
-	cx.stack[last].Uint = uint64(idx - 1)
+	length := len(cx.stack[last].Bytes)
+	idx := 0
+	for i, b := range cx.stack[last].Bytes {
+		if b != 0 {
+			idx = bits.Len8(b) + (8 * (length - i - 1))
+			break
+		}
+
+	}
+	cx.stack[last].Bytes = nil
+	cx.stack[last].Uint = uint64(idx)
 }
 
 func opExpImpl(base uint64, exp uint64) (uint64, error) {
