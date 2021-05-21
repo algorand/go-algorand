@@ -90,8 +90,6 @@ same length as the other input.  The returned values are the same
 length as the longest input.  Therefore, unlike array arithmetic,
 these results may contain leading zero bytes.
 
-Input lengths are limited to maximum length 64.
-
 @@ Byteslice_Logic.md @@
 
 

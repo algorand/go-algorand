@@ -167,8 +167,6 @@ same length as the other input.  The returned values are the same
 length as the longest input.  Therefore, unlike array arithmetic,
 these results may contain leading zero bytes.
 
-Input lengths are limited to maximum length 64.
-
 | Op | Description |
 | --- | --- |
 | `b\|` | A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
