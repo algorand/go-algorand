@@ -327,7 +327,7 @@ func runSingleTest(test string, outChannel chan *testCompleteData, walletName st
 		taskCompletionData.testOutput = fmt.Sprintf("failed to run test %s - %v\n%s\n", test, err, bufferedOutput.Get())
 		return
 	case <-time.After(timeout):
-		taskCompletionData.testOutput = fmt.Sprintf("timed out executing test %s\n", test)
+		taskCompletionData.testOutput = bufferedOutput.Get()
 		return
 	}
 	taskCompletionData.successfull = true
