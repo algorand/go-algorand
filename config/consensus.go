@@ -909,7 +909,7 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// Let the bytes value take more space. Key+Value is still limited to 128
-	vFuture.MaxAppBytesValueLen = 127
+	vFuture.MaxAppBytesValueLen = 128
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
