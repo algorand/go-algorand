@@ -388,7 +388,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	data := make([][]byte, 100)
 	for i := range data {
 		tags[i] = protocol.TxnTag
-		data[i] = []byte(string(i))
+		data[i] = []byte(string(rune(i)))
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
