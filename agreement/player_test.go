@@ -2100,6 +2100,72 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay staged payload over pinned payload on resynch")
 }
 
+func TestPlayerPropagatesProposalVote(t *testing.T) {
+	const r = round(209)
+	_, pM, helper := setupP(t, r, 0, soft)
+	_, pV := helper.MakeRandomProposalPayload(t, r)
+
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	relayVoteEvent := ev(networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vVote.u()})
+	require.Truef(t, pM.getTrace().Contains(relayVoteEvent), "Player should relay proposal vote")
+}
+
+func TestPlayerPropagatesSoftVote(t *testing.T) {
+	const r = round(209)
+	_, pM, helper := setupP(t, r, 0, soft)
+	_, pV := helper.MakeRandomProposalPayload(t, r)
+
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, soft, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	relayVoteEvent := ev(networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vVote.u()})
+	require.Truef(t, pM.getTrace().Contains(relayVoteEvent), "Player should relay soft vote")
+}
+
+func TestPlayerPropagatesCertVote(t *testing.T) {
+	const r = round(209)
+	_, pM, helper := setupP(t, r, 0, cert)
+	_, pV := helper.MakeRandomProposalPayload(t, r)
+
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, cert, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	relayVoteEvent := ev(networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vVote.u()})
+	require.Truef(t, pM.getTrace().Contains(relayVoteEvent), "Player should relay cert vote")
+}
+
 // Malformed Messages
 // check both proposals, proposal payloads, and votes, bundles
 func TestPlayerDisconectsFromMalformedProposalVote(t *testing.T) {
