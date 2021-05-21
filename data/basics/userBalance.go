@@ -206,7 +206,7 @@ type AccountData struct {
 
 	// TotalExtraAppPages stores the extra length in pages (MaxAppProgramLen bytes per page)
 	// requested for app program by this account
-	TotalExtraAppPages int `codec:"teap"`
+	TotalExtraAppPages uint64 `codec:"teap"`
 }
 
 // AppLocalState stores the LocalState associated with an application. It also
@@ -228,7 +228,7 @@ type AppParams struct {
 	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAvailableAppProgramLen"`
 	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
-	ExtraProgramPages int `codec:"epp"`
+	ExtraProgramPages int32 `codec:"epp"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the
