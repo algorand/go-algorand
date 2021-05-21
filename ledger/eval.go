@@ -668,6 +668,7 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 // transaction in the group
 func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) (res []*logic.EvalParams) {
 	var groupNoAD []transactions.SignedTxn
+	var pastSideEffects []*logic.EvalSideEffects
 	var minTealVersion uint64
 	res = make([]*logic.EvalParams, len(txgroup))
 	for i, txn := range txgroup {
@@ -676,34 +677,27 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			continue
 		}
 
-		// Initialize group without ApplyData lazily
+		// Initialize side effects and group without ApplyData lazily
 		if groupNoAD == nil {
 			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
+			pastSideEffects = make([]*logic.EvalSideEffects, len(txgroup))
 			for j := range txgroup {
 				groupNoAD[j] = txgroup[j].SignedTxn
+				pastSideEffects[j] = new(logic.EvalSideEffects)
 			}
 			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
 		}
 
 		res[i] = &logic.EvalParams{
-			Txn:            &groupNoAD[i],
-			Proto:          &eval.proto,
-			TxnGroup:       groupNoAD,
-			GroupIndex:     i,
-			SideEffects:    &logic.EvalSideEffects{},
-			MinTealVersion: &minTealVersion,
+			Txn:             &groupNoAD[i],
+			Proto:           &eval.proto,
+			TxnGroup:        groupNoAD,
+			GroupIndex:      i,
+			PastSideEffects: pastSideEffects,
+			MinTealVersion:  &minTealVersion,
 		}
 	}
 	return
-}
-
-// appendSideEffects appends the last txn's side effects to the list of past side effects
-func (eval *BlockEvaluator) accumulatePastSideEffects(gi int, evalParams []*logic.EvalParams) {
-	if gi != 0 {
-		accumulatedSideEffects := evalParams[gi-1].PastSideEffects
-		lastSideEffects := *evalParams[gi-1].SideEffects
-		evalParams[gi].PastSideEffects = append(accumulatedSideEffects, lastSideEffects)
-	}
 }
 
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
@@ -733,7 +727,6 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		eval.accumulatePastSideEffects(gi, evalParams)
 		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err

@@ -185,9 +185,7 @@ type EvalParams struct {
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
 
-	SideEffects *EvalSideEffects
-
-	PastSideEffects []EvalSideEffects
+	PastSideEffects []*EvalSideEffects
 
 	Logger logging.Logger
 
@@ -463,7 +461,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	}
 
 	// set side effects
-	cx.SideEffects.SetScratchSpace(cx.scratch)
+	cx.PastSideEffects[cx.GroupIndex].SetScratchSpace(cx.scratch)
 
 	return cx.stack[0].Uint != 0, nil
 }

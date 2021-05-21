@@ -408,7 +408,7 @@ func TestPrepareEvalParams(t *testing.T) {
 			for j, present := range testCase.expected {
 				if present {
 					require.NotNil(t, res[j])
-					require.NotNil(t, res[j].SideEffects)
+					require.NotNil(t, res[j].PastSideEffects)
 					require.Equal(t, res[j].GroupIndex, j)
 					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
 					require.Equal(t, *res[j].Proto, eval.proto)
@@ -419,31 +419,6 @@ func TestPrepareEvalParams(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestAccumulatePastSideEffects(t *testing.T) {
-	eval := BlockEvaluator{}
-
-	evalParams := make([]*logic.EvalParams, 2)
-	for i := range evalParams {
-		evalParams[i] = &logic.EvalParams{
-			SideEffects: &logic.EvalSideEffects{},
-		}
-	}
-
-	var scratchSpace [256]logic.StackValue
-	scratchSpace[0] = logic.StackValue{Uint: 1}
-
-	eval.accumulatePastSideEffects(0, evalParams)
-	evalParams[0].SideEffects.SetScratchSpace(scratchSpace)
-	require.Empty(t, evalParams[1].PastSideEffects)
-	eval.accumulatePastSideEffects(1, evalParams)
-	require.NotEmpty(t, evalParams[1].PastSideEffects)
-	require.Equal(
-		t,
-		uint64(1),
-		evalParams[1].PastSideEffects[0].GetScratchValue(0).Uint,
-	)
 }
 
 func testLedgerCleanup(l *Ledger, dbName string, inMem bool) {

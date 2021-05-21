@@ -1895,14 +1895,18 @@ int 1`,
 			}
 
 			// Construct EvalParams
+			pastSideEffects := make([]*EvalSideEffects, len(sources))
+			for j := range pastSideEffects {
+				pastSideEffects[j] = new(EvalSideEffects)
+			}
 			epList := make([]EvalParams, len(sources))
 			for j := range sources {
 				epList[j] = EvalParams{
-					Proto:       &proto,
-					Txn:         &txgroup[j],
-					TxnGroup:    txgroup,
-					GroupIndex:  j,
-					SideEffects: &EvalSideEffects{},
+					Proto:           &proto,
+					Txn:             &txgroup[j],
+					TxnGroup:        txgroup,
+					GroupIndex:      j,
+					PastSideEffects: pastSideEffects,
 				}
 			}
 
@@ -1910,12 +1914,6 @@ int 1`,
 			shouldErr := testCase.errContains != ""
 			didPass := true
 			for j, ops := range opsList {
-				if j != 0 {
-					accumulatedSideEffects := epList[j-1].PastSideEffects
-					lastSideEffects := *epList[j-1].SideEffects
-					epList[j].PastSideEffects = append(accumulatedSideEffects, lastSideEffects)
-				}
-
 				pass, err := Eval(ops.Program, epList[j])
 
 				// Confirm it errors or that the error message is the expected one
