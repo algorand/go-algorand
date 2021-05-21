@@ -1641,10 +1641,8 @@ func opTxna(cx *evalContext) {
 		cx.err = fmt.Errorf("txna unsupported field %d", field)
 		return
 	}
-	var sv stackValue
-	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -1703,10 +1701,8 @@ func opGtxna(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
 		return
 	}
-	var sv stackValue
-	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
@@ -1767,10 +1763,8 @@ func opGtxnsa(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxnsa unsupported field %d", field)
 		return
 	}
-	var sv stackValue
-	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
