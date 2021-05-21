@@ -116,8 +116,8 @@ func run(cmd *cobra.Command, args []string) int {
 		createKMDConfigWithUnsafeScrypt(os.Getenv("ALGORAND_DATA"))
 		createKMDConfigWithUnsafeScrypt(os.Getenv("ALGORAND_DATA2"))
 	}
-
-	err = execute(60*time.Second, "goal", "network", "create", "-r", netdir, "-n", "tbd", "-t", filepath.Join(currentWorkingDirectory, fmt.Sprintf("../testdata/nettemplates/TwoNodes50Each%s.json", argVersion)))
+	capitalizedVersion := strings.ToUpper(argVersion[:1]) + argVersion[1:]
+	err = execute(60*time.Second, "goal", "network", "create", "-r", netdir, "-n", "tbd", "-t", filepath.Join(currentWorkingDirectory, fmt.Sprintf("../testdata/nettemplates/TwoNodes50Each%s.json", capitalizedVersion)))
 	if err != nil {
 		fmt.Printf("unable to create network - %v\n", err)
 		return 1
