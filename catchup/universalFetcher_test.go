@@ -18,6 +18,7 @@ package catchup
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -25,8 +26,11 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 )
 
@@ -126,4 +130,137 @@ func TestUGetBlockUnsupported(t *testing.T) {
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
+}
+
+// TestprocessBlockBytesErrors checks the error handling in processBlockBytes
+func TestProcessBlockBytesErrors(t *testing.T) {
+
+	blk := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			Round: basics.Round(22),
+		},
+	}
+
+	blkData := protocol.Encode(&blk)
+	bc := protocol.EncodeReflect(rpcs.PreEncodedBlockCert{
+		Block: blkData,
+	})
+
+	// Check for cert error
+	_, _, err := processBlockBytes(bc, 22, "test")
+	require.Equal(t, err.Error(), "processBlockBytes(22): got wrong cert from peer test: wanted 22, got 0")
+
+	// Check for round error
+	_, _, err = processBlockBytes(bc, 20, "test")
+	require.Equal(t, err.Error(), "processBlockBytes(20): got wrong block from peer test: wanted 20, got 22")
+
+	// Check for undecodable
+	bc[11] = 0
+	_, _, err = processBlockBytes(bc, 22, "test")
+	require.Equal(t, err.Error(), "processBlockBytes(22): cannot decode block from peer test: Unknown field: rn\x00 at Block")
+}
+
+// TestRequestBlockBytesErrors checks the error handling in requestBlockBytes
+func TestRequestBlockBytesErrors(t *testing.T) {
+
+	cfg := config.GetDefaultLocal()
+
+	ledger, next, _, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+
+	blockServiceConfig := config.GetDefaultLocal()
+	blockServiceConfig.EnableBlockService = true
+
+	net := &httpTestPeerSource{}
+
+	up := makeTestUnicastPeer(net, t)
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
+	ls.Start()
+
+	fetcher := makeUniversalBlockFetcher(logging.TestingLog(t), net, cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
+	require.Equal(t, err.Error(), "wsFetcherClient(test).requestBlock(1): Request failed, context canceled")
+
+	ctx = context.Background()
+
+	responseOverride := network.Response{Topics: network.Topics{network.MakeTopic(rpcs.BlockDataKey, make([]byte, 0))}}
+	up = makeTestUnicastPeerWithResponseOverride(net, t, &responseOverride)
+
+	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
+	require.Equal(t, err.Error(), "wsFetcherClient(test): request failed: cert data not found")
+
+	responseOverride = network.Response{Topics: network.Topics{network.MakeTopic(rpcs.CertDataKey, make([]byte, 0))}}
+	up = makeTestUnicastPeerWithResponseOverride(net, t, &responseOverride)
+
+	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
+	require.Equal(t, err.Error(), "wsFetcherClient(test): request failed: block data not found")
+
+}
+
+type TestHTTPHandler struct {
+	exceedLimit bool
+	status      int
+	content     []string
+}
+
+func (thh *TestHTTPHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	for _, c := range thh.content {
+		response.Header().Add("Content-Type", c)
+	}
+	response.WriteHeader(thh.status)
+	bytes := make([]byte, 1)
+	if thh.exceedLimit {
+		bytes = make([]byte, 5242881)
+	}
+	response.Write(bytes)
+	return
+}
+
+// TestGetBlockBytesHTTPErrors tests the errors reported from getblockBytes for http peer
+func TestGetBlockBytesHTTPErrors(t *testing.T) {
+
+	cfg := config.GetDefaultLocal()
+	net := &httpTestPeerSource{}
+
+	ls := &TestHTTPHandler{}
+	//rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+
+	net.addPeer(rootURL)
+	fetcher := makeUniversalBlockFetcher(logging.TestingLog(t), net, cfg)
+
+	ls.status = http.StatusBadRequest
+	_, _, _, err := fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
+	require.Regexp(t,
+		"getBlockBytes error response status code 400 when requesting .* Response body",
+		err.Error())
+
+	ls.exceedLimit = true
+	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
+	require.Regexp(t,
+		"getBlockBytes error response status code 400 when requesting .* read limit exceeded",
+		err.Error())
+
+	ls.status = http.StatusOK
+	ls.content = append(ls.content, "undefined")
+	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
+	require.Regexp(t,
+		"http block fetcher invalid content type 'undefined'",
+		err.Error())
+
+	ls.status = http.StatusOK
+	ls.content = append(ls.content, "undefined2")
+	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
+	require.Equal(t, "http block fetcher invalid content type count 2", err.Error())
 }

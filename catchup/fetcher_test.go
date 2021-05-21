@@ -232,6 +232,7 @@ type testUnicastPeer struct {
 	version          string
 	responseChannels map[uint64]chan *network.Response
 	t                *testing.T
+	responseOverride *network.Response 
 }
 
 func (p *testUnicastPeer) GetAddress() string {
@@ -254,6 +255,10 @@ func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics 
 	require.NotNil(p.t, dispather)
 	dispather.Handle(network.IncomingMessage{Tag: tag, Data: topics.MarshallTopics(), Sender: p, Net: p.gn})
 
+	if p.responseOverride != nil {
+		return p.responseOverride, nil
+	}
+	
 	// wait for the channel.
 	select {
 	case resp = <-responseChannel:
@@ -297,10 +302,14 @@ func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.
 }
 
 func makeTestUnicastPeer(gn network.GossipNode, t *testing.T) network.UnicastPeer {
+	return makeTestUnicastPeerWithResponseOverride(gn, t, nil)
+}
+func makeTestUnicastPeerWithResponseOverride(gn network.GossipNode, t *testing.T, responseOverride *network.Response) network.UnicastPeer {
 	wsp := testUnicastPeer{}
 	wsp.gn = gn
 	wsp.t = t
 	wsp.version = network.ProtocolVersion
 	wsp.responseChannels = make(map[uint64]chan *network.Response)
+	wsp.responseOverride = responseOverride
 	return &wsp
 }

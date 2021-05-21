@@ -94,17 +94,17 @@ func processBlockBytes(fetchedBuf []byte, r basics.Round, debugStr string) (blk 
 	var decodedEntry rpcs.EncodedBlockCert
 	err = protocol.Decode(fetchedBuf, &decodedEntry)
 	if err != nil {
-		err = fmt.Errorf("fetchBlock(%d): cannot decode block from peer %v: %v", r, debugStr, err)
+		err = fmt.Errorf("processBlockBytes(%d): cannot decode block from peer %v: %v", r, debugStr, err)
 		return
 	}
 
 	if decodedEntry.Block.Round() != r {
-		err = fmt.Errorf("fetchBlock(%d): got wrong block from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Block.Round())
+		err = fmt.Errorf("processBlockBytes(%d): got wrong block from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Block.Round())
 		return
 	}
 
 	if decodedEntry.Certificate.Round != r {
-		err = fmt.Errorf("fetchBlock(%d): got wrong cert from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Certificate.Round)
+		err = fmt.Errorf("processBlockBytes(%d): got wrong cert from peer %v: wanted %v, got %v", r, debugStr, r, decodedEntry.Certificate.Round)
 		return
 	}
 	return &decodedEntry.Block, &decodedEntry.Certificate, nil
@@ -137,7 +137,7 @@ func (w *wsFetcherClient) getBlockBytes(ctx context.Context, r basics.Round) ([]
 	if err != nil {
 		return nil, err
 	}
-	if len(blockBytes) == 0 {
+	if len(blockBytes) == 0 { // This case may never happen
 		return nil, fmt.Errorf("wsFetcherClient(%d): empty response", r)
 	}
 	return blockBytes, nil
