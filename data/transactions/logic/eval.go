@@ -49,47 +49,47 @@ const EvalMaxScratchSize = 255
 // MaxStringSize is the limit of byte strings created by `concat`
 const MaxStringSize = 4096
 
-// StackValue is the type for the operand stack.
-// Each StackValue is either a valid []byte value or a uint64 value.
-// If (.Bytes != nil) the StackValue is a []byte value, otherwise uint64 value.
-type StackValue struct {
+// stackValue is the type for the operand stack.
+// Each stackValue is either a valid []byte value or a uint64 value.
+// If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
+type stackValue struct {
 	Uint  uint64
 	Bytes []byte
 }
 
-func (sv *StackValue) argType() StackType {
+func (sv *stackValue) argType() StackType {
 	if sv.Bytes != nil {
 		return StackBytes
 	}
 	return StackUint64
 }
 
-func (sv *StackValue) typeName() string {
+func (sv *stackValue) typeName() string {
 	if sv.Bytes != nil {
 		return "[]byte"
 	}
 	return "uint64"
 }
 
-func (sv *StackValue) clone() StackValue {
+func (sv *stackValue) clone() stackValue {
 	if sv.Bytes != nil {
 		// clone stack value if Bytes
 		bytesClone := make([]byte, len(sv.Bytes))
 		copy(bytesClone, sv.Bytes)
-		return StackValue{Bytes: bytesClone}
+		return stackValue{Bytes: bytesClone}
 	}
 	// otherwise no cloning is needed if Uint
-	return StackValue{Uint: sv.Uint}
+	return stackValue{Uint: sv.Uint}
 }
 
-func (sv *StackValue) String() string {
+func (sv *stackValue) String() string {
 	if sv.Bytes != nil {
 		return hex.EncodeToString(sv.Bytes)
 	}
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
-func stackValueFromTealValue(tv *basics.TealValue) (sv StackValue, err error) {
+func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 	switch tv.Type {
 	case basics.TealBytesType:
 		sv.Bytes = []byte(tv.Bytes)
@@ -124,7 +124,7 @@ func ComputeMinTealVersion(group []transactions.SignedTxn) uint64 {
 	return minVersion
 }
 
-func (sv *StackValue) toTealValue() (tv basics.TealValue) {
+func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 	if sv.argType() == StackBytes {
 		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
 	}
@@ -162,7 +162,7 @@ type EvalSideEffects struct {
 
 // GetScratchValue loads and clones a stackValue
 // The value is cloned so the original bytes are protected from changes
-func (se *EvalSideEffects) GetScratchValue(stackPos uint8) StackValue {
+func (se *EvalSideEffects) GetScratchValue(stackPos uint8) stackValue {
 	return se.scratchSpace[stackPos].clone()
 }
 
@@ -250,12 +250,12 @@ func (ep EvalParams) log() logging.Logger {
 	return logging.Base()
 }
 
-type scratchSpace = [256]StackValue
+type scratchSpace = [256]stackValue
 
 type evalContext struct {
 	EvalParams
 
-	stack     []StackValue
+	stack     []stackValue
 	callstack []int
 	program   []byte // txn.Lsig.Logic ?
 	pc        int
@@ -421,7 +421,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 
 	cx.version = version
 	cx.pc = vlen
-	cx.stack = make([]StackValue, 0, 10)
+	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
 
 	if cx.Debugger != nil {
@@ -1129,7 +1129,7 @@ func opIntConstN(cx *evalContext, n uint) {
 		cx.err = fmt.Errorf("intc [%d] beyond %d constants", n, len(cx.intc))
 		return
 	}
-	cx.stack = append(cx.stack, StackValue{Uint: cx.intc[n]})
+	cx.stack = append(cx.stack, stackValue{Uint: cx.intc[n]})
 }
 func opIntConstLoad(cx *evalContext) {
 	n := uint(cx.program[cx.pc+1])
@@ -1154,7 +1154,7 @@ func opPushInt(cx *evalContext) {
 		cx.err = fmt.Errorf("could not decode int at pc=%d", cx.pc+1)
 		return
 	}
-	sv := StackValue{Uint: val}
+	sv := stackValue{Uint: val}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 1 + bytesUsed
 }
@@ -1168,7 +1168,7 @@ func opByteConstN(cx *evalContext, n uint) {
 		cx.err = fmt.Errorf("bytec [%d] beyond %d constants", n, len(cx.bytec))
 		return
 	}
-	cx.stack = append(cx.stack, StackValue{Bytes: cx.bytec[n]})
+	cx.stack = append(cx.stack, stackValue{Bytes: cx.bytec[n]})
 }
 func opByteConstLoad(cx *evalContext) {
 	n := uint(cx.program[cx.pc+1])
@@ -1200,7 +1200,7 @@ func opPushBytes(cx *evalContext) {
 		cx.err = fmt.Errorf("pushbytes too long at pc=%d", pos)
 		return
 	}
-	sv := StackValue{Bytes: cx.program[pos:end]}
+	sv := stackValue{Bytes: cx.program[pos:end]}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = int(end)
 }
@@ -1211,7 +1211,7 @@ func opArgN(cx *evalContext, n uint64) {
 		return
 	}
 	val := nilToEmpty(cx.Txn.Lsig.Args[n])
-	cx.stack = append(cx.stack, StackValue{Bytes: val})
+	cx.stack = append(cx.stack, stackValue{Bytes: val})
 }
 
 func opArg(cx *evalContext) {
@@ -1352,7 +1352,7 @@ func opDig(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv StackValue, err error) {
+func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
 	switch AssetHoldingField(field) {
 	case AssetBalance:
 		sv.Uint = holding.Amount
@@ -1371,7 +1371,7 @@ func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, fie
 	return
 }
 
-func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field uint64) (sv StackValue, err error) {
+func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field uint64) (sv stackValue, err error) {
 	switch AssetParamsField(field) {
 	case AssetTotal:
 		sv.Uint = params.Total
@@ -1431,7 +1431,7 @@ func (cx *evalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	return txid
 }
 
-func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex int) (sv StackValue, err error) {
+func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
 	err = nil
 	switch field {
 	case Sender:
@@ -1641,7 +1641,7 @@ func opTxna(cx *evalContext) {
 		cx.err = fmt.Errorf("txna unsupported field %d", field)
 		return
 	}
-	var sv StackValue
+	var sv stackValue
 	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
 	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
@@ -1670,7 +1670,7 @@ func opGtxn(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	var sv StackValue
+	var sv stackValue
 	var err error
 	if TxnField(field) == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
@@ -1703,7 +1703,7 @@ func opGtxna(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
 		return
 	}
-	var sv StackValue
+	var sv stackValue
 	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
 	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
@@ -1733,7 +1733,7 @@ func opGtxns(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	var sv StackValue
+	var sv stackValue
 	var err error
 	if TxnField(field) == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
@@ -1767,7 +1767,7 @@ func opGtxnsa(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxnsa unsupported field %d", field)
 		return
 	}
-	var sv StackValue
+	var sv stackValue
 	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
 	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
@@ -1817,7 +1817,7 @@ func (cx *evalContext) getCreatorAddress() ([]byte, error) {
 
 var zeroAddress basics.Address
 
-func (cx *evalContext) globalFieldToStack(field GlobalField) (sv StackValue, err error) {
+func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err error) {
 	switch field {
 	case MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
@@ -2278,7 +2278,7 @@ func opAppGetLocalStateEx(cx *evalContext) {
 		return
 	}
 
-	var isOk StackValue
+	var isOk stackValue
 	if ok {
 		isOk.Uint = 1
 	}
@@ -2288,7 +2288,7 @@ func opAppGetLocalStateEx(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAppGetLocalStateImpl(cx *evalContext, appID uint64, key []byte, accountIdx uint64) (result StackValue, ok bool, err error) {
+func opAppGetLocalStateImpl(cx *evalContext, appID uint64, key []byte, accountIdx uint64) (result stackValue, ok bool, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
@@ -2306,7 +2306,7 @@ func opAppGetLocalStateImpl(cx *evalContext, appID uint64, key []byte, accountId
 	return
 }
 
-func opAppGetGlobalStateImpl(cx *evalContext, appIndex uint64, key []byte) (result StackValue, ok bool, err error) {
+func opAppGetGlobalStateImpl(cx *evalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
@@ -2351,7 +2351,7 @@ func opAppGetGlobalStateEx(cx *evalContext) {
 		return
 	}
 
-	var isOk StackValue
+	var isOk stackValue
 	if ok {
 		isOk.Uint = 1
 	}
@@ -2463,7 +2463,7 @@ func opAssetHoldingGet(cx *evalContext) {
 	}
 
 	var exist uint64 = 0
-	var value StackValue
+	var value stackValue
 	if holding, err := cx.Ledger.AssetHolding(addr, basics.AssetIndex(assetID)); err == nil {
 		// the holding exist, read the value
 		exist = 1
@@ -2496,7 +2496,7 @@ func opAssetParamsGet(cx *evalContext) {
 	assetID := cx.Txn.Txn.ForeignAssets[foreignAssetsIndex]
 
 	var exist uint64 = 0
-	var value StackValue
+	var value stackValue
 	if params, err := cx.Ledger.AssetParams(basics.AssetIndex(assetID)); err == nil {
 		// params exist, read the value
 		exist = 1
@@ -2508,5 +2508,5 @@ func opAssetParamsGet(cx *evalContext) {
 	}
 
 	cx.stack[last] = value
-	cx.stack = append(cx.stack, StackValue{Uint: exist})
+	cx.stack = append(cx.stack, stackValue{Uint: exist})
 }

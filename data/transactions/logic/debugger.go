@@ -107,7 +107,7 @@ func makeDebugState(cx *evalContext) DebugState {
 	for fieldIdx := range GlobalFieldNames {
 		sv, err := cx.globalFieldToStack(GlobalField(fieldIdx))
 		if err != nil {
-			sv = StackValue{Bytes: []byte(err.Error())}
+			sv = stackValue{Bytes: []byte(err.Error())}
 		}
 		globals[fieldIdx] = stackValueToTealValue(&sv)
 	}
@@ -117,7 +117,7 @@ func makeDebugState(cx *evalContext) DebugState {
 	if (cx.runModeFlags & runModeApplication) != 0 {
 		ds.EvalDelta, err = cx.Ledger.GetDelta(&cx.Txn.Txn)
 		if err != nil {
-			sv := StackValue{Bytes: []byte(err.Error())}
+			sv := stackValue{Bytes: []byte(err.Error())}
 			tv := stackValueToTealValue(&sv)
 			vd := tv.ToValueDelta()
 			ds.EvalDelta.GlobalDelta = basics.StateDelta{"error": vd}
@@ -176,7 +176,7 @@ func (d *DebugState) PCToLine(pc int) int {
 	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
 }
 
-func stackValueToTealValue(sv *StackValue) basics.TealValue {
+func stackValueToTealValue(sv *stackValue) basics.TealValue {
 	tv := sv.toTealValue()
 	return basics.TealValue{
 		Type:  tv.Type,
@@ -221,7 +221,7 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 		var err error
 		ds.EvalDelta, err = cx.Ledger.GetDelta(&cx.Txn.Txn)
 		if err != nil {
-			sv := StackValue{Bytes: []byte(err.Error())}
+			sv := stackValue{Bytes: []byte(err.Error())}
 			tv := stackValueToTealValue(&sv)
 			vd := tv.ToValueDelta()
 			ds.EvalDelta.GlobalDelta = basics.StateDelta{"error": vd}

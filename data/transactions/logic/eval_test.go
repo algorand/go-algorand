@@ -3656,7 +3656,7 @@ intc_0
 
 	spec.op = func(cx *evalContext) {
 		// overflow
-		cx.stack = make([]StackValue, 2000)
+		cx.stack = make([]stackValue, 2000)
 	}
 	opsByOpcode[LogicVersion][spec.Opcode] = spec
 	_, err = Eval(ops.Program, ep)
@@ -3763,7 +3763,7 @@ byte 0x // empty byte constant
 func TestArgType(t *testing.T) {
 	t.Parallel()
 
-	var sv StackValue
+	var sv stackValue
 	require.Equal(t, StackUint64, sv.argType())
 	sv.Bytes = []byte("")
 	require.Equal(t, StackBytes, sv.argType())
