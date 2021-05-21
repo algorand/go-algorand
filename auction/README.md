@@ -7,7 +7,7 @@ Each step will first be explained in prose, followed by the console commands. Wh
 ## Set up `algod`
 Create a data directory (here, called `xx`). Copy the genesis block, `genesis.json`, to the data directory. Start an algorand node using that data directory.
 - `mkdir xx`
-- `cp gen/devnet/genesis.json xx`
+- `cp installer/genesis/devnet/genesis.json xx`
 - `algod -d xx`
 
 ## Set up `auctionbank`
