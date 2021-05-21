@@ -26,7 +26,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -93,9 +92,6 @@ func execute(timeout time.Duration, params ...string) error {
 }
 
 func run(cmd *cobra.Command, args []string) int {
-	for _, testFileName := range args {
-		fmt.Printf("starting: %s\n", testFileName)
-	}
 	tempDir, err := ioutil.TempDir(os.TempDir(), "client_runner_temp")
 	if err != nil {
 		fmt.Printf("unable to generate temporary directroy\n")
@@ -144,17 +140,12 @@ func run(cmd *cobra.Command, args []string) int {
 		return 1
 	}
 
-	testsWaitChannel := make(chan struct{})
-	var testsWaitGroup sync.WaitGroup
-	testsWaitGroup.Add(len(args))
-	go func() {
-		testsWaitGroup.Wait()
-		close(testsWaitChannel)
-	}()
+	runningTests := len(args)
 	testsCompleteCh := startAllTests(args)
 	if testsCompleteCh == nil {
 		return 1
 	}
+	testFailed := 0
 outer:
 	for {
 		select {
@@ -163,11 +154,13 @@ outer:
 				fmt.Printf("test %s completed in %v\n", testComplete.testFileName, testComplete.executionTime)
 			} else {
 				fmt.Printf("test %s failed after %v:\n%s\n", testComplete.testFileName, testComplete.executionTime, testComplete.testOutput)
+				testFailed++
 			}
-			testsWaitGroup.Done()
-		case <-testsWaitChannel:
-			// we're done!
-			break outer
+			runningTests--
+			if runningTests == 0 {
+				// we're done!
+				break outer
+			}
 		case <-time.After(time.Duration(argTimeout) * time.Second):
 			fmt.Printf("tests timed out after %d seconds.\n", argTimeout)
 			break outer
@@ -177,6 +170,9 @@ outer:
 	err = execute(60*time.Second, "goal", "network", "stop", "-r", netdir)
 	if err != nil {
 		fmt.Printf("unable to stop network - %v\n", err)
+		return 1
+	}
+	if testFailed > 0 {
 		return 1
 	}
 	return 0
@@ -191,69 +187,68 @@ type testCompleteData struct {
 
 func startAllTests(tests []string) chan *testCompleteData {
 	outChannel := make(chan *testCompleteData, len(tests))
-	wallets, cacheDirs, err := prepareWallets(len(tests))
+	fmt.Printf("Initialing wallets...\n")
+	wallets, err := prepareWallets(len(tests))
 	if err != nil {
-		// todo.
 		fmt.Printf("unable to initialize client runner : %v\n", err)
 		return nil
 	}
 	for i, test := range tests {
-		go runSingleTest(test, outChannel, wallets[i], cacheDirs[i])
+		fmt.Printf("starting: %s\n", test)
+		go runSingleTest(test, outChannel, wallets[i])
 	}
 	return outChannel
 }
 
-func prepareWallets(walletCount int) (wallets []string, cacheDirs []string, err error) {
+func prepareWallets(walletCount int) (wallets []string, err error) {
 	pendingTxn := make([]transactions.Transaction, 0)
+	// Make a cache dir for wallet handle tokens
+	cacheDir, err := ioutil.TempDir(os.Getenv("ALGORAND_DATA"), "client_runner")
+	if err != nil {
+		return nil, fmt.Errorf("cannot make temp dir: %v", err)
+	}
+	// Get libgoal Client
+	client, err := libgoal.MakeClient(os.Getenv("ALGORAND_DATA"), cacheDir, libgoal.FullClient)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create client: %v", err)
+	}
+
+	// get default wallet.
+	defaultWalletHandle, err := client.GetUnencryptedWalletHandle()
+	if err != nil {
+		return nil, fmt.Errorf("unable to get default wallet: %v", err)
+
+	}
+
+	defaultWalletAddresses, err := client.ListAddresses(defaultWalletHandle)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get default wallet addresses: %v", err)
+	}
+
+	suggestedParams, err := client.SuggestedParams()
+	if err != nil {
+		return nil, fmt.Errorf("unable to get suggested params: %v", err)
+	}
+
 	for i := 0; i < walletCount; i++ {
-		// Make a cache dir for wallet handle tokens
-		cacheDir, err := ioutil.TempDir(os.TempDir(), "client_runner")
-		if err != nil {
-			return nil, nil, fmt.Errorf("cannot make temp dir: %v", err)
-		}
-		cacheDirs = append(cacheDirs, cacheDir)
-
-		// Get libgoal Client
-		client, err := libgoal.MakeClient(os.Getenv("ALGORAND_DATA"), cacheDirs[i], libgoal.FullClient)
-		if err != nil {
-			return nil, nil, fmt.Errorf("unable to create client: %v", err)
-		}
-
-		// get default wallet.
-		defaultWalletHandle, err := client.GetUnencryptedWalletHandle()
-		if err != nil {
-			return nil, nil, fmt.Errorf("unable to get default wallet: %v", err)
-
-		}
-		defaultWalletAddresses, err := client.ListAddresses(defaultWalletHandle)
-		if err != nil {
-			return nil, nil, fmt.Errorf("unable to get default wallet addresses: %v", err)
-		}
-
 		testWalletName := fmt.Sprintf("wallet%d", crypto.RandUint64())
 		wallets = append(wallets, testWalletName)
 		kmdTestWallet, err := client.CreateWallet([]byte(testWalletName), nil, crypto.MasterDerivationKey{})
 		if err != nil {
-			return nil, nil, fmt.Errorf("unable to create test wallet: %v", err)
+			return nil, fmt.Errorf("unable to create test wallet: %v", err)
 		}
 		testWallet, err := client.GetWalletHandleToken(kmdTestWallet, nil)
 		if err != nil {
-			return nil, nil, fmt.Errorf("unable to init test wallet: %v", err)
+			return nil, fmt.Errorf("unable to init test wallet: %v", err)
 		}
-
 		testWalletAddress, err := client.GenerateAddress(testWallet)
 		if err != nil {
-			return nil, nil, fmt.Errorf("unable to generate test wallet address for wallet %s: %v", testWalletName, err)
-		}
-
-		suggestedParams, err := client.SuggestedParams()
-		if err != nil {
-			return nil, nil, fmt.Errorf("unable to get suggested params: %v", err)
+			return nil, fmt.Errorf("unable to generate test wallet address for wallet %s: %v", testWalletName, err)
 		}
 
 		txn, err := client.SendPaymentFromUnencryptedWallet(defaultWalletAddresses[0], testWalletAddress, suggestedParams.MinTxnFee, 1000000000000, nil)
 		if err != nil {
-			return nil, nil, fmt.Errorf("unable to broadcase transaction: %v", err)
+			return nil, fmt.Errorf("unable to broadcase transaction: %v", err)
 		}
 		pendingTxn = append(pendingTxn, txn)
 
@@ -263,7 +258,7 @@ func prepareWallets(walletCount int) (wallets []string, cacheDirs []string, err 
 			for _, txn := range pendingTxn {
 				_, err = waitForCommit(client, txn.ID().String(), statusResponse.LastRound+maxInitRound)
 				if err != nil {
-					return nil, nil, fmt.Errorf("unable to see transaction on chain within timeout: %v", err)
+					return nil, fmt.Errorf("unable to see transaction on chain within timeout: %v", err)
 				}
 			}
 		}
@@ -279,7 +274,7 @@ func createKMDConfigWithUnsafeScrypt(dir string) {
 	ioutil.WriteFile(filepath.Join(dir, "kmd_config.json"), bytes, 0600)
 }
 
-func runSingleTest(test string, outChannel chan *testCompleteData, walletName, cacheDir string) {
+func runSingleTest(test string, outChannel chan *testCompleteData, walletName string) {
 	start := time.Now()
 	taskCompletionData := &testCompleteData{
 		testFileName: test,
@@ -295,17 +290,21 @@ func runSingleTest(test string, outChannel chan *testCompleteData, walletName, c
 		taskCompletionData.testOutput = fmt.Sprintf("unable to create temp directory: %v\n", err)
 		return
 	}
+	removeTempDirectory := true
 	defer func() {
-		os.RemoveAll(tempDir)
+		if removeTempDirectory {
+			os.RemoveAll(tempDir)
+		}
 	}()
 
 	timeout := readTestTimeout(test)
-
-	cmd := exec.Command(test, walletName)
+	currentWorkingDir, _ := os.Getwd()
+	cmd := exec.Command(filepath.Join(currentWorkingDir, test), walletName)
 	cmd.Env = append(os.Environ(), "TEMPDIR="+tempDir)
 	bufferedOutput := &stringOutputWriter{}
 	cmd.Stdout = bufferedOutput
 	cmd.Stderr = bufferedOutput
+	cmd.Dir = "../.." // The repo's root.
 	err = cmd.Start()
 	if err != nil {
 		taskCompletionData.testOutput = fmt.Sprintf("failed to start test - %v\n%s\n", err, bufferedOutput.Get())
@@ -320,6 +319,7 @@ func runSingleTest(test string, outChannel chan *testCompleteData, walletName, c
 		if err == nil {
 			break
 		}
+		removeTempDirectory = false
 		taskCompletionData.testOutput = fmt.Sprintf("failed to run test %s - %v\n%s\n", test, err, bufferedOutput.Get())
 		return
 	case <-time.After(timeout):
