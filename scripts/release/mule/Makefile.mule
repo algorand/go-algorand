@@ -36,7 +36,7 @@ ci-build: buildsrc gen ci-setup
 	CHANNEL=$(CHANNEL) PKG_ROOT=$(PKG_DIR) NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
 	scripts/build_packages.sh $(OS_TYPE)/$(ARCH) && \
 	mkdir -p $(PKG_DIR)/data && \
-	cp gen/devnet/genesis.json $(PKG_DIR)/data
+	cp installer/genesis/devnet/genesis.json $(PKG_DIR)/data
 
 # Builds targets from the sub-directories of ./scripts/release/mule/, such as `mule-package`, `mule-sign`, `mule-test`.
 # https://scene-si.org/2019/12/04/make-dynamic-makefile-targets/

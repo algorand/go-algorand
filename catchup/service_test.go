@@ -421,6 +421,8 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 }
 
 func TestOnSwitchToUnSupportedProtocol(t *testing.T) {
+	t.Skip("This test is flacky and need to be fixed.")
+
 	// Test the interruption in the initial loop
 	// This cannot happen in practice, but is used to test the code.
 	{
