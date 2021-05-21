@@ -952,6 +952,7 @@ txn GlobalNumByteSlice
 txn LocalNumUint
 txn LocalNumByteSlice
 gtxn 12 Fee
+txn AppProgramExtraPages
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
 		if !strings.Contains(text, globalField) {

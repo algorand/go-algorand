@@ -1543,6 +1543,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		sv.Bytes = txn.FreezeAccount[:]
 	case FreezeAssetFrozen:
 		sv.Uint = boolToUint(txn.AssetFrozen)
+	case AppProgramExtraPages:
+		sv.Uint = uint64(txn.ExtraProgramPages)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return

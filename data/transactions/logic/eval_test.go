@@ -1461,6 +1461,17 @@ assert
 int 1
 `
 
+const testTxnProgramTextV4 = testTxnProgramTextV3 + `
+assert
+txn AppProgramExtraPages
+int 2
+==
+assert
+
+
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1543,7 +1554,7 @@ func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
 func TestTxn(t *testing.T) {
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV3, txnField) {
+		if !strings.Contains(testTxnProgramTextV4, txnField) {
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
@@ -1554,6 +1565,7 @@ func TestTxn(t *testing.T) {
 		1: testTxnProgramTextV1,
 		2: testTxnProgramTextV2,
 		3: testTxnProgramTextV3,
+		4: testTxnProgramTextV4,
 	}
 
 	clearOps, err := AssembleStringWithVersion("int 1", 1)
@@ -1568,6 +1580,7 @@ func TestTxn(t *testing.T) {
 			txn.Txn.ApprovalProgram = ops.Program
 			txn.Txn.ClearStateProgram = clearOps.Program
 			txn.Lsig.Logic = ops.Program
+			txn.Txn.ExtraProgramPages = 2
 			// RekeyTo not allowed in TEAL v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
