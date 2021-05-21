@@ -1582,7 +1582,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		if txn.Type != protocol.ApplicationCallTx {
 			err = fmt.Errorf("can't use Scratch txn field on non-app call txn with index %d", groupIndex)
 			return
-		} else if cx.Txn.Lsig.Logic != nil {
+		} else if cx.runModeFlags == runModeSignature {
 			err = fmt.Errorf("can't use Scratch txn field from within a LogicSig")
 			return
 		} else if arrayFieldIdx >= 256 {
@@ -1595,12 +1595,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 			err = fmt.Errorf("can't get future Scratch from txn with index %d", groupIndex)
 			return
 		}
-		val := cx.PastSideEffects[groupIndex].GetScratchValue(uint8(arrayFieldIdx))
-		if val.Bytes != nil {
-			sv.Bytes = val.Bytes
-		} else {
-			sv.Uint = val.Uint
-		}
+		sv = cx.PastSideEffects[groupIndex].GetScratchValue(uint8(arrayFieldIdx))
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
@@ -1626,9 +1621,7 @@ func opTxn(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	var sv StackValue
-	var err error
-	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return

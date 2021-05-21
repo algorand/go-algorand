@@ -1914,7 +1914,7 @@ int 1`,
 			shouldErr := testCase.errContains != ""
 			didPass := true
 			for j, ops := range opsList {
-				pass, err := Eval(ops.Program, epList[j])
+				pass, err := EvalStateful(ops.Program, epList[j])
 
 				// Confirm it errors or that the error message is the expected one
 				if !shouldErr {
@@ -1935,7 +1935,7 @@ int 1`,
 
 	type failureCase struct {
 		firstTxn    transactions.SignedTxn
-		secondTxn   transactions.SignedTxn
+		runMode     runMode
 		errContains string
 	}
 
@@ -1945,6 +1945,7 @@ int 1`,
 				Type: protocol.PaymentTx,
 			},
 		},
+		runMode:     runModeApplication,
 		errContains: "can't use Scratch txn field on non-app call txn with index 0",
 	}
 
@@ -1954,11 +1955,7 @@ int 1`,
 				Type: protocol.ApplicationCallTx,
 			},
 		},
-		secondTxn: transactions.SignedTxn{
-			Lsig: transactions.LogicSig{
-				Logic: []byte{1},
-			},
-		},
+		runMode:     runModeSignature,
 		errContains: "can't use Scratch txn field from within a LogicSig",
 	}
 
@@ -1971,7 +1968,7 @@ int 1`,
 			// Initialize txgroup and cxgroup
 			txgroup := make([]transactions.SignedTxn, 2)
 			txgroup[0] = failCase.firstTxn
-			txgroup[1] = failCase.secondTxn
+			txgroup[1] = transactions.SignedTxn{}
 
 			// Construct EvalParams
 			epList := make([]EvalParams, 2)
@@ -1985,7 +1982,14 @@ int 1`,
 			}
 
 			// Evaluate app call
-			_, err := Eval(ops.Program, epList[1])
+			var err error
+			switch failCase.runMode {
+			case runModeApplication:
+				_, err = EvalStateful(ops.Program, epList[1])
+			default:
+				_, err = Eval(ops.Program, epList[1])
+			}
+
 			require.Error(t, err)
 			require.Contains(t, err.Error(), failCase.errContains)
 		})
