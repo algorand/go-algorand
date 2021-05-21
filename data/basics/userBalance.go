@@ -206,7 +206,7 @@ type AccountData struct {
 
 	// TotalExtraAppPages stores the extra length in pages (MaxAppProgramLen bytes per page)
 	// requested for app program by this account
-	TotalExtraAppPages uint64 `codec:"teap"`
+	TotalExtraAppPages int32 `codec:"teap"`
 }
 
 // AppLocalState stores the LocalState associated with an application. It also

@@ -406,7 +406,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 		if (zb0009Mask & 0x800) == 0 { // if not empty
 			// string "teap"
 			o = append(o, 0xa4, 0x74, 0x65, 0x61, 0x70)
-			o = msgp.AppendUint64(o, (*z).TotalExtraAppPages)
+			o = msgp.AppendInt32(o, (*z).TotalExtraAppPages)
 		}
 		if (zb0009Mask & 0x1000) == 0 { // if not empty
 			// string "tsch"
@@ -851,7 +851,7 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0009 > 0 {
 			zb0009--
-			(*z).TotalExtraAppPages, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).TotalExtraAppPages, bts, err = msgp.ReadInt32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TotalExtraAppPages")
 				return
@@ -1223,7 +1223,7 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "teap":
-				(*z).TotalExtraAppPages, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).TotalExtraAppPages, bts, err = msgp.ReadInt32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TotalExtraAppPages")
 					return
@@ -1280,7 +1280,7 @@ func (z *AccountData) Msgsize() (s int) {
 			s += 0 + zb0007.Msgsize() + zb0008.Msgsize()
 		}
 	}
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Int32Size
 	return
 }
 
@@ -3090,7 +3090,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 		if (zb0009Mask & 0x2000) == 0 { // if not empty
 			// string "teap"
 			o = append(o, 0xa4, 0x74, 0x65, 0x61, 0x70)
-			o = msgp.AppendUint64(o, (*z).AccountData.TotalExtraAppPages)
+			o = msgp.AppendInt32(o, (*z).AccountData.TotalExtraAppPages)
 		}
 		if (zb0009Mask & 0x4000) == 0 { // if not empty
 			// string "tsch"
@@ -3543,7 +3543,7 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0009 > 0 {
 			zb0009--
-			(*z).AccountData.TotalExtraAppPages, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).AccountData.TotalExtraAppPages, bts, err = msgp.ReadInt32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TotalExtraAppPages")
 				return
@@ -3921,7 +3921,7 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "teap":
-				(*z).AccountData.TotalExtraAppPages, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).AccountData.TotalExtraAppPages, bts, err = msgp.ReadInt32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TotalExtraAppPages")
 					return
@@ -3978,7 +3978,7 @@ func (z *BalanceRecord) Msgsize() (s int) {
 			s += 0 + zb0007.Msgsize() + zb0008.Msgsize()
 		}
 	}
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Int32Size
 	return
 }
 
