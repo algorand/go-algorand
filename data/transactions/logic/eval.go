@@ -1365,7 +1365,7 @@ func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, fie
 
 	assetHoldingField := AssetHoldingField(field)
 	assetHoldingFieldType := AssetHoldingFieldTypes[assetHoldingField]
-	if assetHoldingFieldType != sv.argType() {
+	if !typecheck(assetHoldingFieldType, sv.argType()) {
 		err = fmt.Errorf("%s expected field type is %s but got %s", assetHoldingField.String(), assetHoldingFieldType.String(), sv.argType().String())
 	}
 	return
@@ -1402,7 +1402,7 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 
 	assetParamsField := AssetParamsField(field)
 	assetParamsFieldType := AssetParamsFieldTypes[assetParamsField]
-	if assetParamsFieldType != sv.argType() {
+	if !typecheck(assetParamsFieldType, sv.argType()) {
 		err = fmt.Errorf("%s expected field type is %s but got %s", assetParamsField.String(), assetParamsFieldType.String(), sv.argType().String())
 	}
 	return
@@ -1603,7 +1603,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 
 	txnField := TxnField(field)
 	txnFieldType := TxnFieldTypes[txnField]
-	if txnFieldType != sv.argType() && txnFieldType != StackAny {
+	if !typecheck(txnFieldType, sv.argType()) {
 		err = fmt.Errorf("%s expected field type is %s but got %s", txnField.String(), txnFieldType.String(), sv.argType().String())
 	}
 	return
@@ -1865,7 +1865,7 @@ func opGlobal(cx *evalContext) {
 	}
 
 	globalFieldType := GlobalFieldTypes[globalField]
-	if globalFieldType != sv.argType() {
+	if !typecheck(globalFieldType, sv.argType()) {
 		cx.err = fmt.Errorf("%s expected field type is %s but got %s", globalField.String(), globalFieldType.String(), sv.argType().String())
 		return
 	}
