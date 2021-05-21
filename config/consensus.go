@@ -944,6 +944,9 @@ func initConsensusProtocols() {
 	// Enable TEAL 4
 	vFuture.LogicSigVersion = 4
 
+	// Increase asset URL length to allow for IPFS URLs
+	vFuture.MaxAssetURLBytes = 96
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
