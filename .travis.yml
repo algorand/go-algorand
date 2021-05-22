@@ -33,6 +33,11 @@ jobs:
 
     - stage: build_pr
       os: linux
+      name: Ubuntu AMD64 CodeGen Verification
+      script:
+        - scripts/travis/codegen_verification.sh
+    - # same stage, parallel job
+      os: linux
       name: Ubuntu AMD64 Build
       script:
         - travis_retry scripts/travis/build_test.sh

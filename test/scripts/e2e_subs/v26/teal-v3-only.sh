@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+teal-v3-only start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -96,4 +98,4 @@ set -o pipefail
 
 
 
-date '+teal-v3-only OK %Y%m%d_%H%M%S'
+date "+${scriptname} finish %Y%m%d_%H%M%S"
