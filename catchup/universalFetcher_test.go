@@ -216,7 +216,7 @@ func (thh *TestHTTPHandler) ServeHTTP(response http.ResponseWriter, request *htt
 	response.WriteHeader(thh.status)
 	bytes := make([]byte, 1)
 	if thh.exceedLimit {
-		bytes = make([]byte, 5242881)
+		bytes = make([]byte, fetcherMaxBlockBytes+1)
 	}
 	response.Write(bytes)
 	return
@@ -229,7 +229,6 @@ func TestGetBlockBytesHTTPErrors(t *testing.T) {
 	net := &httpTestPeerSource{}
 
 	ls := &TestHTTPHandler{}
-	//rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
 	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
