@@ -236,9 +236,9 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 		bodyBytes, err := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
 		hf.log.Warnf("HTTPFetcher.getBlockBytes: response status code %d from '%s'. Response body '%s' ", response.StatusCode, blockURL, string(bodyBytes))
 		if err == nil {
-			err = makeHttpResponseError(response.StatusCode, blockURL, fmt.Sprintf("Response body '%s'", string(bodyBytes)))
+			err = makeHTTPResponseError(response.StatusCode, blockURL, fmt.Sprintf("Response body '%s'", string(bodyBytes)))
 		} else {
-			err = makeHttpResponseError(response.StatusCode, blockURL, err.Error())
+			err = makeHTTPResponseError(response.StatusCode, blockURL, err.Error())
 		}
 		return nil, err
 	}
@@ -341,18 +341,18 @@ func (wrfe wsFetcherRequestFailedError) Error() string {
 
 type httpResponseError struct {
 	responseStatus int
-	blockUrl       string
+	blockURL       string
 	cause          string
 }
 
-func makeHttpResponseError(responseStatus int, blockUrl string, cause string) httpResponseError {
+func makeHTTPResponseError(responseStatus int, blockURL string, cause string) httpResponseError {
 	return httpResponseError{
 		responseStatus: responseStatus,
-		blockUrl:       blockUrl,
+		blockURL:       blockURL,
 		cause:          cause}
 }
 func (hre httpResponseError) Error() string {
-	return fmt.Sprintf("HTTPFetcher.getBlockBytes: error response status code %d when requesting '%s': %s", hre.responseStatus, hre.blockUrl, hre.cause)
+	return fmt.Sprintf("HTTPFetcher.getBlockBytes: error response status code %d when requesting '%s': %s", hre.responseStatus, hre.blockURL, hre.cause)
 }
 
 type httpResponseContentTypeError struct {
@@ -363,7 +363,6 @@ type httpResponseContentTypeError struct {
 func (cte httpResponseContentTypeError) Error() string {
 	if cte.contentTypeCount == 1 {
 		return fmt.Sprintf("HTTPFetcher.getBlockBytes: invalid content type: %s", cte.contentType)
-	} else {
-		return fmt.Sprintf("HTTPFetcher.getBlockBytes: invalid content type count: %d", cte.contentTypeCount)
 	}
+	return fmt.Sprintf("HTTPFetcher.getBlockBytes: invalid content type count: %d", cte.contentTypeCount)
 }
