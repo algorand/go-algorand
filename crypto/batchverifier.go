@@ -59,64 +59,6 @@ func (b *BatchVerifier) enqueueRaw(sigVerifier SignatureVerifier, message []byte
 	b.signatures = append(b.signatures, sig[:]...)
 }
 
-// EnqueueMultisig enqueues a verification of a Multisig
-func (b *BatchVerifier) EnqueueMultisig(addr Digest, message Hashable, sig MultisigSig) {
-
-	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
-	// then terminate (the upper layer should now verify the unisig)
-	if (len(sig.Subsigs) == 0 || sig.Subsigs[0] == MultisigSubsig{}) {
-		b.failed = true
-		return
-	}
-
-	// check the address is correct
-	addrnew, err := MultisigAddrGenWithSubsigs(sig.Version, sig.Threshold, sig.Subsigs)
-	if err != nil || addr != addrnew {
-		b.failed = true
-		return
-	}
-
-	// check that we don't have too many multisig subsigs
-	if len(sig.Subsigs) > maxMultisig {
-		b.failed = true
-		return
-	}
-
-	// check that we don't have too few multisig subsigs
-	if len(sig.Subsigs) < int(sig.Threshold) {
-		b.failed = true
-		return
-	}
-
-	// checks the number of non-blank signatures is no less than threshold
-	var counter uint8
-	for _, subsigi := range sig.Subsigs {
-		if (subsigi.Sig != Signature{}) {
-			counter++
-		}
-	}
-	if counter < sig.Threshold {
-		b.failed = true
-		return
-	}
-
-	// enqueue individual signature verifies
-	var verifiedCount int
-	for _, subsigi := range sig.Subsigs {
-		if (subsigi.Sig != Signature{}) {
-			b.Enqueue(subsigi.Key, message, subsigi.Sig)
-			verifiedCount++
-		}
-	}
-
-	// sanity check. if we get here then every non-blank subsig should have
-	// been enqueued successfully, and we should have had enough of them
-	if verifiedCount < int(sig.Threshold) {
-		b.failed = true
-		return
-	}
-}
-
 func (b *BatchVerifier) GetNumberOfSignatures() int {
 	return len(b.messages)
 }
@@ -133,10 +75,14 @@ func (b *BatchVerifier) expand() {
 	b.signatures = signatures
 }
 
+func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
+	return len(b.messages)
+}
+
 // Verify verifies that the enqueued signatures are good, returning false if a verification of any
 // of them fails.
 func (b *BatchVerifier) Verify() bool {
-	if len(b.messages) == 0 {
+	if b.GetNumberOfEnqueuedSignatures() == 0 {
 		return false
 	}
 
@@ -144,7 +90,7 @@ func (b *BatchVerifier) Verify() bool {
 	const minSignaturesForBatch = 3
 	const batchSize = 64
 
-	if len(b.messages)%batchSize <= 3 {
+	if b.GetNumberOfEnqueuedSignatures()%batchSize <= 3 {
 
 		var pubKey PublicKey
 		var sig Signature
@@ -158,7 +104,7 @@ func (b *BatchVerifier) Verify() bool {
 			b.enqueueRaw(pubKey, message, sig)
 		}
 
-		if len(b.messages)%batchSize <= 3 {
+		if b.GetNumberOfEnqueuedSignatures()%batchSize <= 3 {
 			logging.Base().Error("OMG!  really really not good!")
 		}
 	}
@@ -166,7 +112,7 @@ func (b *BatchVerifier) Verify() bool {
 	batchCheck := DoonaBatchVerification(b.messages, b.publicKeys, b.signatures, b.failed)
 
 	////// TODO: remove those methods after testing signatures
-	libsoduiomResults := make([]bool, len(b.messages))
+	libsoduiomResults := make([]bool, b.GetNumberOfEnqueuedSignatures())
 
 	for i, _ := range b.messages {
 		var pubKey PublicKey
@@ -176,7 +122,7 @@ func (b *BatchVerifier) Verify() bool {
 
 		libsoduiomResults[i] = SignatureVerifier(PublicKey(pubKey)).VerifyBytes(b.messages[i], sig)
 	}
-	libdonnaResults := make([]bool, len(b.messages))
+	libdonnaResults := make([]bool, b.GetNumberOfEnqueuedSignatures())
 
 	for i, _ := range b.messages {
 		var pubKey PublicKey
@@ -222,7 +168,7 @@ func (b *BatchVerifier) VerifySlow() bool {
 	// iterate and verify each of the signatures.
 	var sigVerifier DonnaSignatureVerifier
 	var sig DonnaSignature
-	for i := 0; i < len(b.messages); i++ {
+	for i := 0; i < b.GetNumberOfEnqueuedSignatures(); i++ {
 		copy(sigVerifier[:], b.publicKeys[i*ed25519DonnaPublicKeyLenBytes:])
 		copy(sig[:], b.signatures[i*ed25519DonnaSignatureLenBytes:])
 		if !sigVerifier.VerifyBytes(b.messages[i][:], sig) {
