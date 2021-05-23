@@ -18,6 +18,7 @@ package catchup
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -148,16 +149,22 @@ func TestProcessBlockBytesErrors(t *testing.T) {
 
 	// Check for cert error
 	_, _, err := processBlockBytes(bc, 22, "test")
-	require.Equal(t, err.Error(), "processBlockBytes(22): got wrong cert from peer test: wanted 22, got 0")
+	var wcfpe wrongCertFromPeerError
+	require.True(t, errors.As(err, &wcfpe))
+	err.Error()
 
 	// Check for round error
 	_, _, err = processBlockBytes(bc, 20, "test")
-	require.Equal(t, err.Error(), "processBlockBytes(20): got wrong block from peer test: wanted 20, got 22")
+	var wbfpe wrongBlockFromPeerError
+	require.True(t, errors.As(err, &wbfpe))
+	err.Error()
 
 	// Check for undecodable
 	bc[11] = 0
 	_, _, err = processBlockBytes(bc, 22, "test")
-	require.Equal(t, err.Error(), "processBlockBytes(22): cannot decode block from peer test: Unknown field: rn\x00 at Block")
+	var cdbe cannotDecodeBlockError
+	require.True(t, errors.As(err, &cdbe))
+	err.Error()
 }
 
 // TestRequestBlockBytesErrors checks the error handling in requestBlockBytes
@@ -185,7 +192,10 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
-	require.Equal(t, err.Error(), "wsFetcherClient(test).requestBlock(1): Request failed, context canceled")
+	var wrfe wsFetcherRequestFailedError
+	require.True(t, errors.As(err, &wrfe))
+	require.Equal(t, "context canceled", err.(wsFetcherRequestFailedError).cause)
+	err.Error()
 
 	ctx = context.Background()
 
@@ -193,14 +203,17 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	up = makeTestUnicastPeerWithResponseOverride(net, t, &responseOverride)
 
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
-	require.Equal(t, err.Error(), "wsFetcherClient(test): request failed: cert data not found")
+	require.True(t, errors.As(err, &wrfe))
+	require.Equal(t, "Cert data not found", err.(wsFetcherRequestFailedError).cause)
+	err.Error()
 
 	responseOverride = network.Response{Topics: network.Topics{network.MakeTopic(rpcs.CertDataKey, make([]byte, 0))}}
 	up = makeTestUnicastPeerWithResponseOverride(net, t, &responseOverride)
 
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
-	require.Equal(t, err.Error(), "wsFetcherClient(test): request failed: block data not found")
-
+	require.True(t, errors.As(err, &wrfe))
+	require.Equal(t, "Block data not found", err.(wsFetcherRequestFailedError).cause)	
+	err.Error()
 }
 
 type TestHTTPHandler struct {
@@ -241,25 +254,28 @@ func TestGetBlockBytesHTTPErrors(t *testing.T) {
 
 	ls.status = http.StatusBadRequest
 	_, _, _, err := fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
-	require.Regexp(t,
-		"getBlockBytes error response status code 400 when requesting .* Response body",
-		err.Error())
+	var hre httpResponseError
+	require.True(t, errors.As(err, &hre))
+	require.Equal(t, "Response body '\x00'", err.(httpResponseError).cause)
+	err.Error()
 
 	ls.exceedLimit = true
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
-	require.Regexp(t,
-		"getBlockBytes error response status code 400 when requesting .* read limit exceeded",
-		err.Error())
+	require.True(t, errors.As(err, &hre))
+	require.Equal(t, "read limit exceeded", err.(httpResponseError).cause)
+	err.Error()
 
 	ls.status = http.StatusOK
 	ls.content = append(ls.content, "undefined")
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
-	require.Regexp(t,
-		"http block fetcher invalid content type 'undefined'",
-		err.Error())
+	var cte httpResponseContentTypeError
+	require.True(t, errors.As(err, &cte))
+	require.Equal(t, "undefined", err.(httpResponseContentTypeError).contentType)
+	err.Error()
 
 	ls.status = http.StatusOK
 	ls.content = append(ls.content, "undefined2")
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
-	require.Equal(t, "http block fetcher invalid content type count 2", err.Error())
+	require.True(t, errors.As(err, &cte))
+	require.Equal(t, 2, err.(httpResponseContentTypeError).contentTypeCount)
 }
