@@ -196,9 +196,7 @@
 
         
 
-        One or more non-printable characters were omitted from the subsequent line:
-
-        [32mpowder sing write danger match cabin order oblige shrug slide tragic select true rule gym celery wool vendor salon goat summer rule dove able collect[0m
+        powder sing write danger match cabin order oblige shrug slide tragic select true rule gym celery wool vendor salon goat summer rule dove able collect
 
         WALLET_2_PASSPHRASE: powder sing write danger match cabin order oblige shrug slide tragic select true rule gym celery wool vendor salon goat summer rule dove able collect
         spawn goal wallet list -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
