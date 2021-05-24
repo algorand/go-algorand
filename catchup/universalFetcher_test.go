@@ -149,20 +149,20 @@ func TestProcessBlockBytesErrors(t *testing.T) {
 
 	// Check for cert error
 	_, _, err := processBlockBytes(bc, 22, "test")
-	var wcfpe wrongCertFromPeerError
+	var wcfpe errWrongCertFromPeer
 	require.True(t, errors.As(err, &wcfpe))
 	err.Error()
 
 	// Check for round error
 	_, _, err = processBlockBytes(bc, 20, "test")
-	var wbfpe wrongBlockFromPeerError
+	var wbfpe errWrongBlockFromPeer
 	require.True(t, errors.As(err, &wbfpe))
 	err.Error()
 
 	// Check for undecodable
 	bc[11] = 0
 	_, _, err = processBlockBytes(bc, 22, "test")
-	var cdbe cannotDecodeBlockError
+	var cdbe errCannotDecodeBlock
 	require.True(t, errors.As(err, &cdbe))
 	err.Error()
 }
@@ -192,9 +192,9 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
-	var wrfe wsFetcherRequestFailedError
+	var wrfe errWsFetcherRequestFailed
 	require.True(t, errors.As(err, &wrfe))
-	require.Equal(t, "context canceled", err.(wsFetcherRequestFailedError).cause)
+	require.Equal(t, "context canceled", err.(errWsFetcherRequestFailed).cause)
 	err.Error()
 
 	ctx = context.Background()
@@ -204,7 +204,7 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
 	require.True(t, errors.As(err, &wrfe))
-	require.Equal(t, "Cert data not found", err.(wsFetcherRequestFailedError).cause)
+	require.Equal(t, "Cert data not found", err.(errWsFetcherRequestFailed).cause)
 	err.Error()
 
 	responseOverride = network.Response{Topics: network.Topics{network.MakeTopic(rpcs.CertDataKey, make([]byte, 0))}}
@@ -212,7 +212,7 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
 	require.True(t, errors.As(err, &wrfe))
-	require.Equal(t, "Block data not found", err.(wsFetcherRequestFailedError).cause)	
+	require.Equal(t, "Block data not found", err.(errWsFetcherRequestFailed).cause)	
 	err.Error()
 }
 
@@ -254,28 +254,28 @@ func TestGetBlockBytesHTTPErrors(t *testing.T) {
 
 	ls.status = http.StatusBadRequest
 	_, _, _, err := fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
-	var hre httpResponseError
+	var hre errHttpResponse
 	require.True(t, errors.As(err, &hre))
-	require.Equal(t, "Response body '\x00'", err.(httpResponseError).cause)
+	require.Equal(t, "Response body '\x00'", err.(errHttpResponse).cause)
 	err.Error()
 
 	ls.exceedLimit = true
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
 	require.True(t, errors.As(err, &hre))
-	require.Equal(t, "read limit exceeded", err.(httpResponseError).cause)
+	require.Equal(t, "read limit exceeded", err.(errHttpResponse).cause)
 	err.Error()
 
 	ls.status = http.StatusOK
 	ls.content = append(ls.content, "undefined")
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
-	var cte httpResponseContentTypeError
+	var cte errHttpResponseContentType
 	require.True(t, errors.As(err, &cte))
-	require.Equal(t, "undefined", err.(httpResponseContentTypeError).contentType)
+	require.Equal(t, "undefined", err.(errHttpResponseContentType).contentType)
 	err.Error()
 
 	ls.status = http.StatusOK
 	ls.content = append(ls.content, "undefined2")
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
 	require.True(t, errors.As(err, &cte))
-	require.Equal(t, 2, err.(httpResponseContentTypeError).contentTypeCount)
+	require.Equal(t, 2, err.(errHttpResponseContentType).contentTypeCount)
 }
