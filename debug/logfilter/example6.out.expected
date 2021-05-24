@@ -98,8 +98,8 @@ ok  	github.com/algorand/go-algorand/test/e2e-go/cli/goal	26.354s
         Your backup phrase is printed below.
         Keep this information safe -- never share it with anyone!
         
-        One or more non-printable characters were omitted from the subsequent line:
-        [32mattract shy usage prison umbrella december sail finish struggle spring walk wisdom bread globe eyebrow admit typical tag december poet labor cable radar absent secret[0mWALLET_1_PASSPHRASE: attract shy usage prison umbrella december sail finish struggle spring walk wisdom bread globe eyebrow admit typical tag december poet labor cable radar absent secret
+        attract shy usage prison umbrella december sail finish struggle spring walk wisdom bread globe eyebrow admit typical tag december poet labor cable radar absent secret
+        WALLET_1_PASSPHRASE: attract shy usage prison umbrella december sail finish struggle spring walk wisdom bread globe eyebrow admit typical tag december poet labor cable radar absent secret
         spawn goal wallet list -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/104122-1617229030279/tealAndStatefulTealTest/algod/root/Primary/
         ##################################################
         Wallet:	Wallet_1_1617230151

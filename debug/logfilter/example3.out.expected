@@ -75,8 +75,7 @@
         Your backup phrase is printed below.
         Keep this information safe -- never share it with anyone!
         
-        One or more non-printable characters were omitted from the subsequent line:
-        [32mtest faculty trash brick need involve stand run jelly genius clap business zero ticket head grief rib fox ladder soap injury thrive balance able tissue[0m
+        test faculty trash brick need involve stand run jelly genius clap business zero ticket head grief rib fox ladder soap injury thrive balance able tissue
         WALLET_1_PASSPHRASE: test faculty trash brick need involve stand run jelly genius clap business zero ticket head grief rib fox ladder soap injury thrive balance able tissue
         spawn goal wallet list -d /home/travis/gopath/src/github.com/algorand/go-algorand/tmp/out/e2e/103916-1617037129265/tealAndStatefulTealTest/algod/root/Primary/
         ##################################################
