@@ -221,7 +221,7 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	gotestsum --format testname -- $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
+	gotestsum --format testname --jsonfile testresults.json -- $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
 
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
