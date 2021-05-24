@@ -1911,32 +1911,54 @@ func opStore(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opGload(cx *evalContext) {
-	gtxid := int(uint(cx.program[cx.pc+1]))
-	if gtxid >= len(cx.TxnGroup) {
-		cx.err = fmt.Errorf("gload lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int) (err error, scratchValue stackValue) {
+	if groupIdx >= len(cx.TxnGroup) {
+		err = fmt.Errorf("gload lookup TxnGroup[%d] but it only has %d", groupIdx, len(cx.TxnGroup))
 		return
-	}
-	txn := cx.TxnGroup[gtxid].Txn
-	gindex := int(uint(cx.program[cx.pc+2]))
-	if gindex >= 256 {
-		cx.err = fmt.Errorf("invalid Scratch index %d", gindex)
+	} else if scratchIdx >= 256 {
+		err = fmt.Errorf("invalid Scratch index %d", scratchIdx)
 		return
-	} else if txn.Type != protocol.ApplicationCallTx {
-		cx.err = fmt.Errorf("can't use gload on non-app call txn with index %d", gtxid)
+	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
+		err = fmt.Errorf("can't use gload on non-app call txn with index %d", groupIdx)
 		return
 	} else if cx.runModeFlags == runModeSignature {
-		cx.err = fmt.Errorf("can't use gload from within a LogicSig")
+		err = fmt.Errorf("can't use gload from within a LogicSig")
 		return
-	} else if gtxid == cx.GroupIndex {
-		cx.err = fmt.Errorf("can't use gload on self, use load instead")
+	} else if groupIdx == cx.GroupIndex {
+		err = fmt.Errorf("can't use gload on self, use load instead")
 		return
-	} else if gtxid > cx.GroupIndex {
-		cx.err = fmt.Errorf("gload can't get future scratch space from txn with index %d", gtxid)
+	} else if groupIdx > cx.GroupIndex {
+		err = fmt.Errorf("gload can't get future scratch space from txn with index %d", groupIdx)
 		return
 	}
-	scratchValue := cx.PastSideEffects[gtxid].GetScratchValue(uint8(gindex))
+
+	scratchValue = cx.PastSideEffects[groupIdx].GetScratchValue(uint8(scratchIdx))
+	return
+}
+
+func opGload(cx *evalContext) {
+	groupIdx := int(uint(cx.program[cx.pc+1]))
+	scratchIdx := int(uint(cx.program[cx.pc+2]))
+	err, scratchValue := opGloadImpl(cx, groupIdx, scratchIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
 	cx.stack = append(cx.stack, scratchValue)
+}
+
+func opGloads(cx *evalContext) {
+	last := len(cx.stack) - 1
+	groupIdx := int(cx.stack[last].Uint)
+	scratchIdx := int(uint(cx.program[cx.pc+1]))
+	err, scratchValue := opGloadImpl(cx, groupIdx, scratchIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[last] = scratchValue
 }
 
 func opConcat(cx *evalContext) {

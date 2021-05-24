@@ -170,6 +170,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `load i` | copy a value from scratch space to the stack |
 | `store i` | pop a value from the stack and store to scratch space |
 | `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
+| `gloads i` | push Ith scratch space index of the Ath transaction in the current group |
 
 **Transaction Fields**
 
