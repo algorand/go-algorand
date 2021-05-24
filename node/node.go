@@ -340,13 +340,13 @@ func (node *AlgorandFullNode) Start() {
 	// Set up a context we can use to cancel goroutines on Stop()
 	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
 
-	if !node.config.DisableNetworking {
-		// start accepting connections
-		node.net.Start()
-	}
 	node.config.NetAddress, _ = node.net.Address()
 
 	if node.catchpointCatchupService != nil {
+		if !node.config.DisableNetworking {
+			// start accepting connections
+			node.net.Start()
+		}
 		node.catchpointCatchupService.Start(node.ctx)
 	} else {
 		node.catchupService.Start()
@@ -356,6 +356,10 @@ func (node *AlgorandFullNode) Start() {
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.compactCert.Start()
+		if !node.config.DisableNetworking {
+			// start accepting connections
+			node.net.Start()
+		}
 
 		// start indexer
 		if idx, err := node.Indexer(); err == nil {
