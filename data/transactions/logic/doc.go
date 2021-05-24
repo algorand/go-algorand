@@ -81,6 +81,7 @@ var opDocByName = map[string]string{
 	"global":            "push value from globals to stack",
 	"load":              "copy a value from scratch space to the stack",
 	"store":             "pop a value from the stack and store to scratch space",
+	"gload":             "push Ith scratch space index of the Tth transaction in the current group",
 	"bnz":               "branch to TARGET if value X is not zero",
 	"bz":                "branch to TARGET if value X is zero",
 	"b":                 "branch unconditionally to TARGET",
@@ -141,6 +142,7 @@ var opcodeImmediateNotes = map[string]string{
 	"b":                 "{int16 branch offset, big endian. (negative offsets are illegal before v4)}",
 	"load":              "{uint8 position in scratch space to load from}",
 	"store":             "{uint8 position in scratch space to store to}",
+	"gload":             "{uint8 transaction group index} {uint8 position in scratch space to store to}",
 	"substring":         "{uint8 start position} {uint8 end position}",
 	"dig":               "{uint8 depth}",
 	"asset_holding_get": "{uint8 asset holding field index}",
@@ -201,7 +203,7 @@ type OpGroup struct {
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"}},
-	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store"}},
+	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store", "gload"}},
 	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert", "callsub", "retsub"}},
 	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }

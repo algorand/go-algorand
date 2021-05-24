@@ -881,3 +881,11 @@ The call stack is separate from the data stack. Only `callsub` and `retsub` mani
 - LogicSigVersion >= 4
 
 The call stack is separate from the data stack. Only `callsub` and `retsub` manipulate it.`
+
+## gload t i
+
+- Opcode: 0xb0 {uint8 transaction group index} {uint8 position in scratch space to store to}
+- Pops: _None_
+- Pushes: any
+- push Ith scratch space index of the Tth transaction in the current group
+- LogicSigVersion >= 2

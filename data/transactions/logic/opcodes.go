@@ -241,6 +241,9 @@ var OpSpecs = []OpSpec{
 	// shl, shr
 	// divw, modw convenience
 	// expmod
+
+	// Group scratch space access
+	{0xb0, "gload", opGload, asmDefault, disDefault, nil, oneAny, 2, modeAny, immediates("t", "i")},
 }
 
 type sortByOpcode []OpSpec

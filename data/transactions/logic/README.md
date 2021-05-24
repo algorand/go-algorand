@@ -27,7 +27,7 @@ A program can either authorize some delegated action on a normal private key sig
 * If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytes) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program.
 * If the SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address then this is a contract account wholly controlled by the program. No other signature is necessary or possible. The only way to execute a transaction against the contract account is for the program to approve it.
 
-The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, program costs was estimated as the static sum of all opcode costs in a program (ignoring conditionals that might skip some code).  Beginning with v4, a program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
+The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, program costs was estimated as the static sum of all opcode costs in a program (ignoring conditionals that might skip some code). Beginning with v4, a program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
 
 ## Execution modes
 
@@ -169,6 +169,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `global f` | push value from globals to stack |
 | `load i` | copy a value from scratch space to the stack |
 | `store i` | pop a value from the stack and store to scratch space |
+| `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
 
 **Transaction Fields**
 
