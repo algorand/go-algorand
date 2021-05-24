@@ -242,8 +242,12 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 	return pad.AccountData, nil
 }
 
-func (cs *roundCowState) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (basics.AccountData, error) {
-	pad, err := cs.lookupCreatableData(addr, []creatableDataLocator{{cidx: cidx, ctype: ctype, global: global, local: local}})
+func (cs *roundCowState) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, params bool, holding bool) (basics.AccountData, error) {
+	if !cs.proto.EnableUnlimitedAssets {
+		return cs.Get(addr, false)
+	}
+
+	pad, err := cs.lookupCreatableData(addr, cidx, ctype, params, holding)
 	if err != nil {
 		return basics.AccountData{}, err
 	}

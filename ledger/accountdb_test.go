@@ -49,7 +49,7 @@ const (
 	largeAssetAccount                        // like full but 1k+ asset holdings/params
 )
 
-var assetsThreshold = config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
+var testAssetsThreshold = config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 
 func randomAddress() basics.Address {
 	var addr basics.Address
@@ -411,7 +411,6 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 			t.Errorf("unknown status %v", d.Status)
 		}
 	}
-
 	require.NoError(t, err)
 	for a, pad := range all {
 		ad := accts[a]
@@ -672,7 +671,7 @@ retry:
 				prevEnd = start + g.DeltaMaxAssetIndex
 			}
 			require.Equal(t, ad, dbad.pad.AccountData)
-			if len(ad.Assets) > assetsThreshold {
+			if len(ad.Assets) > testAssetsThreshold {
 				for aidx := range ad.Assets {
 					gi, ai := dbad.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
 					require.NotEqual(t, -1, gi)
@@ -684,7 +683,7 @@ retry:
 				if action == ledgercore.ActionHoldingDelete {
 					_, ok := ad.Assets[basics.AssetIndex(aidx)]
 					require.True(t, ok)
-					if len(ad.Assets) > assetsThreshold {
+					if len(ad.Assets) > testAssetsThreshold {
 						gi, ai := dbad.pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(aidx), 0)
 						require.NotEqual(t, -1, gi)
 						require.NotEqual(t, -1, ai)
@@ -700,7 +699,7 @@ retry:
 
 		// ensure large holdings were generated
 		for _, acct := range accts {
-			if len(acct.Assets) > assetsThreshold {
+			if len(acct.Assets) > testAssetsThreshold {
 				largeHoldingsNum++
 			}
 		}
@@ -1626,7 +1625,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool, maxHoldingsPerA
 		for _, addr := range addrs {
 			dbad, err := qs.lookup(addr)
 			require.NoError(b, err)
-			if !simple && len(accounts[addr].Assets) > assetsThreshold {
+			if !simple && len(accounts[addr].Assets) > testAssetsThreshold {
 				for aidx := range accounts[addr].Assets {
 					h := benchLoadHolding(b, qs, dbad, aidx)
 					require.NotEmpty(b, h)
@@ -1703,7 +1702,7 @@ func benchmarkWritingRandomBalances(b *testing.B, inMemory bool, maxHoldingsPerA
 			dbad.pad.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx)}
 			updates := ledgercore.AccountDeltas{}
 			updates.Upsert(addr, dbad.pad)
-			if dbad.pad.ExtendedAssetHolding.Count > uint32(assetsThreshold) {
+			if dbad.pad.ExtendedAssetHolding.Count > uint32(testAssetsThreshold) {
 				updates.SetEntityDelta(addr, basics.CreatableIndex(aidx), ledgercore.ActionHoldingCreate)
 			}
 
@@ -1905,7 +1904,7 @@ func benchmarkAcctUpdateLarge(b *testing.B, maxHoldingsPerAccount int, largeHold
 			encodedPad := protocol.Encode(&dbad.pad)
 			var numToUpdate int
 			var gdu []groupDataUpdate
-			if len(dbad.pad.Assets) > assetsThreshold {
+			if len(dbad.pad.Assets) > testAssetsThreshold {
 				numToUpdate = assetUpdateRatio * len(dbad.pad.Assets) / 100
 				gdu = make([]groupDataUpdate, numToUpdate, numToUpdate)
 				k := 0
@@ -1925,7 +1924,7 @@ func benchmarkAcctUpdateLarge(b *testing.B, maxHoldingsPerAccount int, largeHold
 			_, err = acctUpdateStmt.Exec(dbad.pad.MicroAlgos.Raw, encodedPad, dbad.rowid)
 			require.NoError(b, err)
 
-			if len(dbad.pad.Assets) > assetsThreshold {
+			if len(dbad.pad.Assets) > testAssetsThreshold {
 				for _, entry := range gdu {
 					_, err = gdUpdateStmt.Exec(entry.data, entry.gi)
 				}
@@ -2295,7 +2294,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 	var createDeleteTests = []struct {
 		count int
 	}{
-		{0}, {1}, {assetsThreshold + 1},
+		{0}, {1}, {testAssetsThreshold + 1},
 	}
 	temp := randomAccountData(100)
 
@@ -2448,7 +2447,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 
 	// case 2)
 	// now create additional 1000 assets to exceed assetsThreshold
-	numNewAssets2 := assetsThreshold
+	numNewAssets2 := testAssetsThreshold
 	updated = basics.AccountData{}
 	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numBaseAssets+numNewAssets1+numNewAssets2)
 	savedAssets := make(map[basics.AssetIndex]bool, numBaseAssets+numNewAssets1+numNewAssets2)
@@ -2516,7 +2515,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 	// case 3.1)
 	// len(old.Assets) > assetsThreshold
 	// new count > assetsThreshold => delete, update, create few
-	a.GreaterOrEqual(assetsThreshold, 1000)
+	a.GreaterOrEqual(testAssetsThreshold, 1000)
 	del := []basics.AssetIndex{1, 2, 3, 10, 2900}
 	upd := []basics.AssetIndex{4, 5, 2999}
 	crt := []basics.AssetIndex{9001, 9501}

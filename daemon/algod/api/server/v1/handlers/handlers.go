@@ -757,7 +757,7 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 
 	ledger := ctx.Node.Ledger()
 	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, basics.Address(addr))
+	record, err := ledger.LookupFull(lastRound, basics.Address(addr))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
@@ -1288,7 +1288,7 @@ func AssetInformation(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, creator)
+	record, err := ledger.LookupCreatableDataWithoutRewards(lastRound, creator, basics.CreatableIndex(aidx), basics.AssetCreatable)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return

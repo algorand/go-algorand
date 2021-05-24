@@ -52,7 +52,7 @@ func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetPa
 		return
 	}
 
-	creatorRecord, err := balances.Get(creator, false)
+	creatorRecord, err := balances.GetEx(creator, basics.CreatableIndex(aidx), basics.AssetCreatable, true, false)
 	if err != nil {
 		return
 	}
@@ -92,7 +92,10 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			Amount: cc.AssetParams.Total,
 		}
 
-		if len(record.Assets) > balances.ConsensusParams().MaxAssetsPerAccount {
+		// This condition gets triggered only for pre EnableUnlimitedAssets consensus protocol.
+		// A code running EnableUnlimitedAssets protocol gets Assets map containing a requested asset and all modified assets in this group (or even a block).
+		if !balances.ConsensusParams().EnableUnlimitedAssets &&
+			len(record.Assets) > balances.ConsensusParams().MaxAssetsPerAccount {
 			return fmt.Errorf("too many assets in account: %d > %d", len(record.Assets), balances.ConsensusParams().MaxAssetsPerAccount)
 		}
 
@@ -280,7 +283,8 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 			sndHolding.Frozen = params.DefaultFrozen
 			snd.Assets[ct.XferAsset] = sndHolding
 
-			if len(snd.Assets) > balances.ConsensusParams().MaxAssetsPerAccount {
+			if !balances.ConsensusParams().EnableUnlimitedAssets &&
+				len(snd.Assets) > balances.ConsensusParams().MaxAssetsPerAccount {
 				return fmt.Errorf("too many assets in account: %d > %d", len(snd.Assets), balances.ConsensusParams().MaxAssetsPerAccount)
 			}
 

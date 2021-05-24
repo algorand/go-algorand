@@ -474,6 +474,14 @@ func (l *Ledger) LookupFull(rnd basics.Round, addr basics.Address) (basics.Accou
 	return data.AccountData, nil
 }
 
+// LookupCreatableDataWithoutRewards returns account data containing asset or app params if any
+func (l *Ledger) LookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	params := true
+	holdings := false
+	pad, err := l.lookupCreatableDataWithoutRewards(rnd, addr, cidx, ctype, params, holdings)
+	return pad.AccountData, err
+}
+
 func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.PersistedAccountData, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
