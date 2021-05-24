@@ -28,6 +28,13 @@ done
 set +e
 set -x
 
+# $1 - Start time in seconds
+# $2 - Message
+function duration() {
+  ELAPSED=$((SECONDS - $1))
+  printf '%s: %02dh:%02dm:%02ds\n' "$2" $(($ELAPSED/3600)) $(($ELAPSED%3600/60)) $(($ELAPSED%60))
+}
+
 CONFIGURE_SUCCESS=false
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
@@ -38,6 +45,7 @@ ARCH=$("${SCRIPTPATH}/../archtype.sh")
 # Get the go build version.
 GOLANG_VERSION=$(./scripts/get_golang_version.sh)
 
+CONFIGURE_START=$SECONDS
 curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
 chmod +x ~/gimme
 eval "$(~/gimme "${GOLANG_VERSION}")"
@@ -54,6 +62,7 @@ do
     echo "Running configure_dev.sh resulted in exit code ${ERR}; retrying in 3 seconds"
     sleep 3s
 done
+duration $CONFIGURE_START "Run duration configure_dev.sh"
 
 if [ "${CONFIGURE_SUCCESS}" = "false" ]; then
     echo "Attempted to configure the environment multiple times, and failed. See above logs for details."
@@ -61,7 +70,9 @@ if [ "${CONFIGURE_SUCCESS}" = "false" ]; then
 fi
 
 set -e
+BEFORE_BUILD_START=$SECONDS
 scripts/travis/before_build.sh
+duration $BEFORE_BUILD_START "Run duration before_build.sh"
 
 if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; then
     # for arm, build just the basic distro
@@ -69,8 +80,11 @@ if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; t
     MAKE_DEBUG_OPTION=""
 fi
 
+BUILD_START=$SECONDS
 if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
     make build build-race
+    duration $BUILD_START "Run duration 'make build build-race'"
 else
     make build
+    duration $BUILD_START "Run duration 'make build'"
 fi
