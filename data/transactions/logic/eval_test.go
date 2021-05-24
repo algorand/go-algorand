@@ -2419,6 +2419,70 @@ int 1`,
 	}
 }
 
+func TestGloads(t *testing.T) {
+	t.Parallel()
+
+	// Multiple app calls
+	source1 := `byte "txn 1"
+store 0
+int 1`
+	source2 := `byte "txn 2"
+store 1
+int 1`
+	source3 := `int 0
+gloads 0
+byte "txn 1"
+==
+int 1
+gloads 1
+byte "txn 2"
+==
+&&`
+
+	sources := []string{source1, source2, source3}
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+
+	// Assemble ops
+	opsList := make([]*OpStream, len(sources))
+	for j, source := range sources {
+		ops := testProg(t, source, AssemblerMaxVersion)
+		opsList[j] = ops
+	}
+
+	// Initialize txgroup and cxgroup
+	txgroup := make([]transactions.SignedTxn, len(sources))
+	for j := range txgroup {
+		txgroup[j] = transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+			},
+		}
+	}
+
+	// Construct EvalParams
+	pastSideEffects := make([]*EvalSideEffects, len(sources))
+	for j := range pastSideEffects {
+		pastSideEffects[j] = new(EvalSideEffects)
+	}
+	epList := make([]EvalParams, len(sources))
+	for j := range sources {
+		epList[j] = EvalParams{
+			Proto:           &proto,
+			Txn:             &txgroup[j],
+			TxnGroup:        txgroup,
+			GroupIndex:      j,
+			PastSideEffects: pastSideEffects,
+		}
+	}
+
+	// Evaluate app calls
+	for j, ops := range opsList {
+		pass, err := EvalStateful(ops.Program, epList[j])
+		require.NoError(t, err)
+		require.True(t, pass)
+	}
+}
+
 const testCompareProgramText = `int 35
 int 16
 >
