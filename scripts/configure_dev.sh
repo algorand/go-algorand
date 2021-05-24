@@ -40,6 +40,13 @@ function install_or_upgrade {
     fi
 }
 
+function get_go_version {
+    cd "$(dirname "$0")"
+    VERSION=$( grep "$1" 2>/dev/null < ./go.mod | awk -F " " '{print $2}')
+    echo "$VERSION"
+    return
+}
+
 function install_go_module {
     local OUTPUT
     local MODULE
