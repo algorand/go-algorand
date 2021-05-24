@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import configparser
 import contextlib
 import csv
 import gzip
@@ -121,8 +122,14 @@ def main():
     metrics_fname_re = re.compile(r'(.*)\.(.*).metrics')
     filesByNick = {}
     nonick = []
+    tf_inventory_path = None
+    metrics_dirs = set()
     for path in args.metrics_files:
         fname = os.path.basename(path)
+        if fname == 'terraform-inventory.host':
+            tf_inventory_path = path
+            continue
+        metrics_dirs.add(os.path.dirname(path))
         m = metrics_fname_re.match(fname)
         if not m:
             logger.error('could not parse metrics file name %r', fname)
@@ -130,10 +137,37 @@ def main():
             continue
         nick = m.group(1)
         dapp(filesByNick, nick, path)
+    if not tf_inventory_path:
+        for md in metrics_dirs:
+            tp = os.path.join(md, 'terraform-inventory.host')
+            if os.path.exists(tp):
+                tf_inventory_path = tp
+                break
+    nick_to_tfname = {}
+    if tf_inventory_path:
+        tf_inventory = configparser.ConfigParser(allow_no_value=True)
+        tf_inventory.read(tf_inventory_path)
+        ip_to_name = {}
+        for k, sub in tf_inventory.items():
+            if k.startswith('name_'):
+                for ip in sub:
+                    if ip in ip_to_name:
+                        logger.warning('ip %r already named %r, also got %r', ip, ip_to_name[ip], k)
+                    ip_to_name[ip] = k
+        for ip, name in ip_to_name.items():
+            found = []
+            for nick in filesByNick.keys():
+                if ip in nick:
+                    found.append(nick)
+            if len(found) == 1:
+                nick_to_tfname[found[0]] = name
+            elif len(found) > 1:
+                logger.warning('ip %s (%s) found in nicks: %r', ip, name, found)
     rsum = summary()
     if nonick:
         rsum(process_files(args, None, nonick), 'no nick')
     for nick, paths in filesByNick.items():
+        nick = nick_to_tfname.get(nick, nick)
         rsum(process_files(args, nick, paths), nick)
     print(rsum)
     return 0

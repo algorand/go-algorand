@@ -8,6 +8,7 @@
 
 import argparse
 import base64
+import configparser
 import fnmatch
 import json
 import logging
@@ -175,7 +176,6 @@ class watcher:
         self.netseen = set()
         os.makedirs(self.args.out, exist_ok=True)
         if not args.data_dirs and os.path.exists(args.tf_inventory):
-            import configparser
             cp = configparser.ConfigParser(allow_no_value=True)
             cp.read(args.tf_inventory)
             shutil.copy2(args.tf_inventory, self.args.out)
