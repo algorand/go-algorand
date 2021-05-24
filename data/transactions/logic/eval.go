@@ -1578,24 +1578,6 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		sv.Bytes = txn.FreezeAccount[:]
 	case FreezeAssetFrozen:
 		sv.Uint = boolToUint(txn.AssetFrozen)
-	case Scratch:
-		if txn.Type != protocol.ApplicationCallTx {
-			err = fmt.Errorf("can't use Scratch txn field on non-app call txn with index %d", groupIndex)
-			return
-		} else if cx.runModeFlags == runModeSignature {
-			err = fmt.Errorf("can't use Scratch txn field from within a LogicSig")
-			return
-		} else if arrayFieldIdx >= 256 {
-			err = fmt.Errorf("invalid Scratch index %d", arrayFieldIdx)
-			return
-		} else if groupIndex == cx.GroupIndex {
-			err = fmt.Errorf("can't use Scratch txn field on self, use load instead")
-			return
-		} else if groupIndex > cx.GroupIndex {
-			err = fmt.Errorf("can't get future Scratch from txn with index %d", groupIndex)
-			return
-		}
-		sv = cx.PastSideEffects[groupIndex].GetScratchValue(uint8(arrayFieldIdx))
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
