@@ -236,7 +236,7 @@ fulltest: build-race
 	done
 
 shorttest: build-race
-	gotestsum --format testname -- $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 2500s
+	gotestsum --format testname --jsonfile testresults.json -- $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 2500s
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
