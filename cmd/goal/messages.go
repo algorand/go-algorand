@@ -58,6 +58,7 @@ const (
 	// Node
 	infoNodeStart                     = "Algorand node successfully started!"
 	infoNodeAlreadyStarted            = "Algorand node was already started!"
+	infoNodeDidNotRestart             = "Algorand node did not restart. The node is still running!"
 	infoTryingToStopNode              = "Trying to stop the node..."
 	infoNodeShuttingDown              = "Algorand node is shutting down..."
 	infoNodeSuccessfullyStopped       = "The node was successfully stopped."
@@ -124,6 +125,7 @@ const (
 	rekeySenderTargetSameError = "The sender and the resulted multisig address are the same"
 	noOutputFileError          = "--msig-params must be specified with an output file name (-o)"
 	infoAutoFeeSet             = "Automatically set fee to %d MicroAlgos"
+	errorTransactionExpired    = "Transaction %s expired before it could be included in a block"
 
 	loggingNotConfigured = "Remote logging is not currently configured and won't be enabled"
 	loggingNotEnabled    = "Remote logging is current disabled"
@@ -156,6 +158,9 @@ const (
 	tealsignTooManyArg    = "--set-lsig-arg-idx too large, maximum of %d arguments"
 	tealsignInfoWroteSig  = "Wrote signature for %s to LSig.Args[%d]"
 
+	tealLogicSigSize = "%s: logicsig program size too large: %d > %d"
+	tealAppSize      = "%s: app program size too large: %d > %d"
+
 	// Wallet
 	infoRecoveryPrompt           = "Please type your recovery mnemonic below, and hit return when you are done: "
 	infoChoosePasswordPrompt     = "Please choose a password for wallet '%s': "
@@ -164,7 +169,6 @@ const (
 	infoCreatedWallet            = "Created wallet '%s'"
 	infoBackupExplanation        = "Your new wallet has a backup phrase that can be used for recovery.\nKeeping this backup phrase safe is extremely important.\nWould you like to see it now? (Y/n): "
 	infoPrintedBackupPhrase      = "Your backup phrase is printed below.\nKeep this information safe -- never share it with anyone!"
-	infoBackupPhrase             = "\n\x1B[32m%s\033[0m"
 	infoNoWallets                = "No wallets found. You can create a wallet with `goal wallet new`"
 	errorCouldntCreateWallet     = "Couldn't create wallet: %s"
 	errorCouldntInitializeWallet = "Couldn't initialize wallet: %s"

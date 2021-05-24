@@ -80,6 +80,8 @@ type OpStream struct {
 
 	// map opcode offsets to source line
 	OffsetToLine map[int]int
+
+	HasStatefulOps bool
 }
 
 // GetVersion returns the LogicSigVersion we're building to
@@ -97,7 +99,7 @@ func (ops *OpStream) createLabel(label string) {
 		ops.labels = make(map[string]int)
 	}
 	if _, ok := ops.labels[label]; ok {
-		ops.errorf("duplicate label %s", label)
+		ops.errorf("duplicate label %#v", label)
 	}
 	ops.labels[label] = ops.pending.Len()
 }
@@ -115,8 +117,14 @@ func (ops *OpStream) ReferToLabel(pc int, label string) {
 	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label})
 }
 
-func (ops *OpStream) tpush(argType StackType) {
-	ops.typeStack = append(ops.typeStack, argType)
+// returns allows opcodes like `txn` to be specific about their return
+// value types, based on the field requested, rather than use Any as
+// specified by opSpec.
+func (ops *OpStream) returns(argTypes ...StackType) {
+	for range argTypes {
+		ops.tpop()
+	}
+	ops.tpusha(argTypes)
 }
 
 func (ops *OpStream) tpusha(argType []StackType) {
@@ -221,146 +229,7 @@ func (ops *OpStream) ByteLiteral(val []byte) {
 	ops.Bytec(constIndex)
 }
 
-// Arg writes opcodes for loading from Lsig.Args
-func (ops *OpStream) Arg(val uint64) error {
-	switch val {
-	case 0:
-		ops.pending.WriteByte(0x2d) // arg_0
-	case 1:
-		ops.pending.WriteByte(0x2e) // arg_1
-	case 2:
-		ops.pending.WriteByte(0x2f) // arg_2
-	case 3:
-		ops.pending.WriteByte(0x30) // arg_3
-	default:
-		if val > 0xff {
-			return ops.error("cannot have more than 256 args")
-		}
-		ops.pending.WriteByte(0x2c)
-		ops.pending.WriteByte(uint8(val))
-	}
-	return nil
-}
-
-// Txn writes opcodes for loading a field from the current transaction
-func (ops *OpStream) Txn(val uint64) {
-	if val >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid txn field: %d", val)
-	}
-	ops.pending.WriteByte(0x31)
-	ops.pending.WriteByte(uint8(val))
-	ops.tpush(TxnFieldTypes[val])
-}
-
-// Txna writes opcodes for loading array field from the current transaction
-func (ops *OpStream) Txna(fieldNum uint64, arrayFieldIdx uint64) {
-	if fieldNum >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid txn field: %d", fieldNum)
-		fieldNum = 0 // avoid further error in tpush as we forge ahead
-	}
-	if arrayFieldIdx > 255 {
-		ops.errorf("txna array index beyond 255: %d", arrayFieldIdx)
-	}
-	ops.pending.WriteByte(0x36)
-	ops.pending.WriteByte(uint8(fieldNum))
-	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.tpush(TxnFieldTypes[fieldNum])
-}
-
-// Gtxn writes opcodes for loading a field from the current transaction
-func (ops *OpStream) Gtxn(gid, val uint64) {
-	if val >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid gtxn field: %d", val)
-		val = 0 // avoid further error in tpush as we forge ahead
-	}
-	if gid > 255 {
-		ops.errorf("gtxn transaction index beyond 255: %d", gid)
-	}
-	ops.pending.WriteByte(0x33)
-	ops.pending.WriteByte(uint8(gid))
-	ops.pending.WriteByte(uint8(val))
-	ops.tpush(TxnFieldTypes[val])
-}
-
-// Gtxna writes opcodes for loading an array field from the current transaction
-func (ops *OpStream) Gtxna(gid, fieldNum uint64, arrayFieldIdx uint64) {
-	if fieldNum >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid txn field: %d", fieldNum)
-		fieldNum = 0 // avoid further error in tpush as we forge ahead
-	}
-	if gid > 255 {
-		ops.errorf("gtxna group index beyond 255: %d", gid)
-	}
-	if arrayFieldIdx > 255 {
-		ops.errorf("gtxna array index beyond 255: %d", arrayFieldIdx)
-	}
-	ops.pending.WriteByte(0x37)
-	ops.pending.WriteByte(uint8(gid))
-	ops.pending.WriteByte(uint8(fieldNum))
-	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.tpush(TxnFieldTypes[fieldNum])
-}
-
-// Gtxns writes opcodes for loading a field from the current transaction
-func (ops *OpStream) Gtxns(fieldNum uint64) {
-	if fieldNum >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid gtxns field: %d", fieldNum)
-		fieldNum = 0 // avoid further error in tpush as we forge ahead
-	}
-	ops.pending.WriteByte(0x38)
-	ops.pending.WriteByte(uint8(fieldNum))
-	ops.tpush(TxnFieldTypes[fieldNum])
-}
-
-// Gtxnsa writes opcodes for loading an array field from the current transaction
-func (ops *OpStream) Gtxnsa(fieldNum uint64, arrayFieldIdx uint64) {
-	if fieldNum >= uint64(len(TxnFieldNames)) {
-		ops.errorf("invalid gtxnsa field: %d", fieldNum)
-		fieldNum = 0 // avoid further error in tpush as we forge ahead
-	}
-	if arrayFieldIdx > 255 {
-		ops.errorf("gtxnsa array index beyond 255: %d", arrayFieldIdx)
-	}
-	ops.pending.WriteByte(0x39)
-	ops.pending.WriteByte(uint8(fieldNum))
-	ops.pending.WriteByte(uint8(arrayFieldIdx))
-	ops.tpush(TxnFieldTypes[fieldNum])
-}
-
-// Global writes opcodes for loading an evaluator-global field
-func (ops *OpStream) Global(val GlobalField) {
-	ops.pending.WriteByte(0x32)
-	ops.pending.WriteByte(uint8(val))
-	ops.trace("%s (%s)", GlobalFieldNames[val], GlobalFieldTypes[val].String())
-	ops.tpush(GlobalFieldTypes[val])
-}
-
-// AssetHolding writes opcodes for accessing data from AssetHolding
-func (ops *OpStream) AssetHolding(val uint64) {
-	if val >= uint64(len(AssetHoldingFieldNames)) {
-		ops.errorf("invalid asset holding field: %d", val)
-		val = 0 // avoid further error in tpush as we forge ahead
-	}
-	ops.pending.WriteByte(OpsByName[ops.Version]["asset_holding_get"].Opcode)
-	ops.pending.WriteByte(uint8(val))
-	ops.tpush(AssetHoldingFieldTypes[val])
-	ops.tpush(StackUint64)
-}
-
-// AssetParams writes opcodes for accessing data from AssetParams
-func (ops *OpStream) AssetParams(val uint64) {
-	if val >= uint64(len(AssetParamsFieldNames)) {
-		ops.errorf("invalid asset params field: %d", val)
-		val = 0 // avoid further error in tpush as we forge ahead
-	}
-	ops.pending.WriteByte(OpsByName[ops.Version]["asset_params_get"].Opcode)
-	ops.pending.WriteByte(uint8(val))
-	ops.tpush(AssetParamsFieldTypes[val])
-	ops.tpush(StackUint64)
-}
-
 func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
 	if len(args) != 1 {
 		return ops.error("int needs one argument")
 	}
@@ -392,7 +261,6 @@ func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
 
 // Explicit invocation of const lookup and push
 func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
 	if len(args) != 1 {
 		return ops.error("intc operation needs one argument")
 	}
@@ -404,7 +272,6 @@ func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
 	if len(args) != 1 {
 		ops.error("bytec operation needs one argument")
 	}
@@ -417,7 +284,6 @@ func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
 	if len(args) != 1 {
 		ops.errorf("%s needs one argument", spec.Name)
 	}
@@ -432,7 +298,6 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
 	if len(args) != 1 {
 		ops.errorf("%s needs one argument", spec.Name)
 	}
@@ -596,7 +461,6 @@ func parseStringLiteral(input string) (result []byte, err error) {
 // byte 0x....
 // byte "this is a string\n"
 func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
 	if len(args) == 0 {
 		return ops.error("byte operation needs byte literal argument")
 	}
@@ -609,7 +473,7 @@ func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.pending.WriteByte(0x20) // intcblock
+	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
 	ops.pending.Write(scratch[:l])
@@ -628,7 +492,7 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.pending.WriteByte(0x26) // bytecblock
+	ops.pending.WriteByte(spec.Opcode)
 	bvals := make([][]byte, 0, len(args))
 	rest := args
 	for len(rest) > 0 {
@@ -660,7 +524,6 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 // addr A1EU...
 // parses base32-with-checksum account address strings into a byte literal
 func assembleAddr(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
 	if len(args) != 1 {
 		return ops.error("addr operation needs one argument")
 	}
@@ -673,7 +536,6 @@ func assembleAddr(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
 	if len(args) != 1 {
 		return ops.error("arg operation needs one argument")
 	}
@@ -681,12 +543,24 @@ func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return ops.error(err)
 	}
-	ops.Arg(val)
-	return nil
+	altSpec := *spec
+	if val < 4 {
+		switch val {
+		case 0:
+			altSpec = OpsByName[ops.Version]["arg_0"]
+		case 1:
+			altSpec = OpsByName[ops.Version]["arg_1"]
+		case 2:
+			altSpec = OpsByName[ops.Version]["arg_2"]
+		case 3:
+			altSpec = OpsByName[ops.Version]["arg_3"]
+		}
+		args = []string{}
+	}
+	return asmDefault(ops, &altSpec, args)
 }
 
 func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
 	if len(args) != 1 {
 		return ops.error("branch operation needs label argument")
 	}
@@ -716,17 +590,18 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("txn unknown field: %v", args[0])
+		return ops.errorf("txn unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found array field %v in txn op", args[0])
+		return ops.errorf("found array field %#v in txn op", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("field %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
-	val := fs.field
-	ops.Txn(uint64(val))
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
@@ -736,7 +611,8 @@ func assembleTxn2(ops *OpStream, spec *OpSpec, args []string) error {
 		return assembleTxn(ops, spec, args)
 	}
 	if len(args) == 2 {
-		return assembleTxna(ops, spec, args)
+		txna := OpsByName[ops.Version]["txna"]
+		return assembleTxna(ops, &txna, args)
 	}
 	return ops.error("txn expects one or two arguments")
 }
@@ -747,21 +623,27 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("txna unknown field: %v", args[0])
+		return ops.errorf("txna unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("txna unknown field: %v", args[0])
+		return ops.errorf("txna unknown field: %#v", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("txna %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("txna %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
-	fieldNum := fs.field
-	ops.Txna(uint64(fieldNum), uint64(arrayFieldIdx))
+	if arrayFieldIdx > 255 {
+		return ops.errorf("txna array index beyond 255: %d", arrayFieldIdx)
+	}
+
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.pending.WriteByte(uint8(arrayFieldIdx))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
@@ -769,23 +651,30 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return ops.error("gtxn expects two arguments")
 	}
-	gtid, err := strconv.ParseUint(args[0], 0, 64)
+	slot, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
+	if slot > 255 {
+		return ops.errorf("gtxn transaction index beyond 255: %d", slot)
+	}
+
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
-		return ops.errorf("gtxn unknown field: %v", args[1])
+		return ops.errorf("gtxn unknown field: %#v", args[1])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found array field %v in gtxn op", args[1])
+		return ops.errorf("found array field %#v in gtxn op", args[1])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[1], fs.version)
+		return ops.errorf("field %#v available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
-	val := fs.field
-	ops.Gtxn(gtid, uint64(val))
+
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(slot))
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
@@ -794,7 +683,8 @@ func assembleGtxn2(ops *OpStream, spec *OpSpec, args []string) error {
 		return assembleGtxn(ops, spec, args)
 	}
 	if len(args) == 3 {
-		return assembleGtxna(ops, spec, args)
+		gtxna := OpsByName[ops.Version]["gtxna"]
+		return assembleGtxna(ops, &gtxna, args)
 	}
 	return ops.error("gtxn expects two or three arguments")
 }
@@ -803,50 +693,64 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 3 {
 		return ops.error("gtxna expects three arguments")
 	}
-	gtid, err := strconv.ParseUint(args[0], 0, 64)
+	slot, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
+	if slot > 255 {
+		return ops.errorf("gtxna group index beyond 255: %d", slot)
+	}
+
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
-		return ops.errorf("gtxna unknown field: %v", args[1])
+		return ops.errorf("gtxna unknown field: %#v", args[1])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("gtxna unknown field: %v", args[1])
+		return ops.errorf("gtxna unknown field: %#v", args[1])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("gtxna %s available in version %d. Missed #pragma version?", args[1], fs.version)
+		return ops.errorf("gtxna %#v available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[2], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
-	fieldNum := fs.field
-	ops.Gtxna(gtid, uint64(fieldNum), uint64(arrayFieldIdx))
+	if arrayFieldIdx > 255 {
+		return ops.errorf("gtxna array index beyond 255: %d", arrayFieldIdx)
+	}
+
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(slot))
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.pending.WriteByte(uint8(arrayFieldIdx))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
 func assembleGtxns(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 2 {
-		return assembleGtxnsa(ops, spec, args)
+		gtxnsa := OpsByName[ops.Version]["gtxnsa"]
+		return assembleGtxnsa(ops, &gtxnsa, args)
 	}
 	if len(args) != 1 {
 		return ops.error("gtxns expects one or two immediate arguments")
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("gtxns unknown field: %v", args[0])
+		return ops.errorf("gtxns unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if ok {
-		return ops.errorf("found array field %v in gtxns op", args[0])
+		return ops.errorf("found array field %#v in gtxns op", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("field %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("field %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
-	val := fs.field
-	ops.Gtxns(uint64(val))
+
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
@@ -856,66 +760,75 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("gtxnsa unknown field: %v", args[0])
+		return ops.errorf("gtxnsa unknown field: %#v", args[0])
 	}
 	_, ok = txnaFieldSpecByField[fs.field]
 	if !ok {
-		return ops.errorf("gtxnsa unknown field: %v", args[0])
+		return ops.errorf("gtxnsa unknown field: %#v", args[0])
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("gtxnsa %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		return ops.errorf("gtxnsa %#v available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
 		return ops.error(err)
 	}
-	fieldNum := fs.field
-	ops.Gtxnsa(uint64(fieldNum), uint64(arrayFieldIdx))
+	if arrayFieldIdx > 255 {
+		return ops.errorf("gtxnsa array index beyond 255: %d", arrayFieldIdx)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	ops.pending.WriteByte(uint8(arrayFieldIdx))
+	ops.returns(TxnFieldTypes[fs.field])
 	return nil
 }
 
 func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		ops.error("global expects one argument")
-		args = []string{GlobalFieldNames[0]}
+		return ops.error("global expects one argument")
 	}
 	fs, ok := globalFieldSpecByName[args[0]]
 	if !ok {
-		ops.errorf("global unknown field: %v", args[0])
-		fs, _ = globalFieldSpecByName[GlobalFieldNames[0]]
+		return ops.errorf("global unknown field: %#v", args[0])
 	}
 	if fs.version > ops.Version {
+		// no return here. we may as well continue to maintain typestack
 		ops.errorf("global %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
-	ops.Global(fs.gfield)
+
+	val := fs.gfield
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	ops.trace("%s (%s)", GlobalFieldNames[val], GlobalFieldTypes[val].String())
+	ops.returns(GlobalFieldTypes[val])
 	return nil
 }
 
 func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		ops.error("asset_holding_get expects one argument")
-		args = []string{AssetHoldingFieldNames[0]}
+		return ops.error("asset_holding_get expects one argument")
 	}
 	val, ok := assetHoldingFields[args[0]]
 	if !ok {
-		ops.errorf("asset_holding_get unknown arg: %v", args[0])
-		val = 0
+		return ops.errorf("asset_holding_get unknown arg: %#v", args[0])
 	}
-	ops.AssetHolding(val)
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	ops.returns(AssetHoldingFieldTypes[val], StackUint64)
 	return nil
 }
 
 func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		ops.error("asset_params_get expects one argument")
-		args = []string{AssetParamsFieldNames[0]}
+		return ops.error("asset_params_get expects one argument")
 	}
 	val, ok := assetParamsFields[args[0]]
 	if !ok {
-		ops.errorf("asset_params_get unknown arg: %v", args[0])
-		val = 0
+		return ops.errorf("asset_params_get unknown arg: %#v", args[0])
 	}
-	ops.AssetParams(val)
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	ops.returns(AssetParamsFieldTypes[val], StackUint64)
 	return nil
 }
 
@@ -923,9 +836,8 @@ type assembleFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
-	ops.checkArgs(*spec)
 	if len(args) != spec.Details.Size-1 {
-		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.Size)
+		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.Size-1)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i := 0; i < spec.Details.Size-1; i++ {
@@ -1121,11 +1033,22 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			ops.trace("%d: no fields\n", ops.sourceLine)
 			continue
 		}
-		// we're going to process opcodes, so fix the Version
+		// we're about to begin processing opcodes, so fix the Version
 		if ops.Version == assemblerNoVersion {
 			ops.Version = AssemblerDefaultVersion
 		}
 		opstring := fields[0]
+
+		if opstring[len(opstring)-1] == ':' {
+			ops.createLabel(opstring[:len(opstring)-1])
+			fields = fields[1:]
+			if len(fields) == 0 {
+				// There was a label, not need to ops.trace this
+				continue
+			}
+			opstring = fields[0]
+		}
+
 		spec, ok := OpsByName[ops.Version][opstring]
 		if !ok {
 			spec, ok = keywords[opstring]
@@ -1133,12 +1056,12 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
 			ops.RecordSourceLine()
+			if spec.Modes == runModeApplication {
+				ops.HasStatefulOps = true
+			}
+			ops.checkArgs(spec)
 			spec.asm(ops, &spec, fields[1:])
 			ops.trace("\n")
-			continue
-		}
-		if opstring[len(opstring)-1] == ':' {
-			ops.createLabel(opstring[:len(opstring)-1])
 			continue
 		}
 		// unknown opcode, let's report a good error if version problem
@@ -1154,7 +1077,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
 			if dest == ops.pending.Len() {
-				ops.errorf("label %v is too far away", label)
+				ops.errorf("label %#v is too far away", label)
 			}
 		}
 	}
@@ -1225,20 +1148,20 @@ func (ops *OpStream) resolveLabels() {
 		dest, ok := ops.labels[lr.label]
 		if !ok {
 			if !reported[lr.label] {
-				ops.errorf("reference to undefined label %v", lr.label)
+				ops.errorf("reference to undefined label %#v", lr.label)
 			}
 			reported[lr.label] = true
 			continue
 		}
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
 		naturalPc := lr.position + 3
-		if dest < naturalPc {
-			ops.errorf("label %v is before reference but only forward jumps are allowed", lr.label)
+		if ops.Version < backBranchEnabledVersion && dest < naturalPc {
+			ops.errorf("label %#v is a back reference, back jump support was introduced in TEAL v4", lr.label)
 			continue
 		}
 		jump := dest - naturalPc
 		if jump > 0x7fff {
-			ops.errorf("label %v is too far away", lr.label)
+			ops.errorf("label %#v is too far away", lr.label)
 			continue
 		}
 		raw[lr.position+1] = uint8(jump >> 8)
@@ -1381,14 +1304,19 @@ func AssembleStringWithVersion(text string, version uint64) (*OpStream, error) {
 }
 
 type disassembleState struct {
-	program       []byte
-	pc            int
-	out           io.Writer
-	labelCount    int
-	pendingLabels map[int]string
+	program []byte
+	pc      int
+	out     io.Writer
+
+	numericTargets bool
+	labelCount     int
+	pendingLabels  map[int]string
 
 	nextpc int
 	err    error
+
+	intc  []uint64
+	bytec [][]byte
 }
 
 func (dis *disassembleState) putLabel(label string, target int) {
@@ -1405,29 +1333,22 @@ func (dis *disassembleState) outputLabelIfNeeded() (err error) {
 	return
 }
 
-type disassembleFunc func(dis *disassembleState, spec *OpSpec)
+type disassembleFunc func(dis *disassembleState, spec *OpSpec) (string, error)
 
 // Basic disasemble, and extra bytes of opcode are decoded as bytes integers.
-func disDefault(dis *disassembleState, spec *OpSpec) {
+func disDefault(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + spec.Details.Size - 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + spec.Details.Size
-	_, dis.err = fmt.Fprintf(dis.out, "%s", spec.Name)
-	if dis.err != nil {
-		return
-	}
+	out := spec.Name
 	for s := 1; s < spec.Details.Size; s++ {
 		b := uint(dis.program[dis.pc+s])
-		_, dis.err = fmt.Fprintf(dis.out, " %d", b)
-		if dis.err != nil {
-			return
-		}
+		out += fmt.Sprintf(" %d", b)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "\n")
+	return out, nil
 }
 
 var errShortIntcblock = errors.New("intcblock ran past end of program")
@@ -1462,33 +1383,29 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 	return
 }
 
-func checkIntConstBlock(cx *evalContext) int {
+func checkIntConstBlock(cx *evalContext) error {
 	pos := cx.pc + 1
 	numInts, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
-		cx.err = fmt.Errorf("could not decode int const block size at pc=%d", pos)
-		return 1
+		return fmt.Errorf("could not decode int const block size at pc=%d", pos)
 	}
 	pos += bytesUsed
 	if numInts > uint64(len(cx.program)) {
-		cx.err = errTooManyIntc
-		return 0
+		return errTooManyIntc
 	}
 	//intc = make([]uint64, numInts)
 	for i := uint64(0); i < numInts; i++ {
 		if pos >= len(cx.program) {
-			cx.err = errShortIntcblock
-			return 0
+			return errShortIntcblock
 		}
 		_, bytesUsed = binary.Uvarint(cx.program[pos:])
 		if bytesUsed <= 0 {
-			cx.err = fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
-			return 1
+			return fmt.Errorf("could not decode int const[%d] at pc=%d", i, pos)
 		}
 		pos += bytesUsed
 	}
 	cx.nextpc = pos
-	return 1
+	return nil
 }
 
 var errShortBytecblock = errors.New("bytecblock ran past end of program")
@@ -1534,258 +1451,319 @@ func parseBytecBlock(program []byte, pc int) (bytec [][]byte, nextpc int, err er
 	return
 }
 
-func checkByteConstBlock(cx *evalContext) int {
+func checkByteConstBlock(cx *evalContext) error {
 	pos := cx.pc + 1
 	numItems, bytesUsed := binary.Uvarint(cx.program[pos:])
 	if bytesUsed <= 0 {
-		cx.err = fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
-		return 1
+		return fmt.Errorf("could not decode []byte const block size at pc=%d", pos)
 	}
 	pos += bytesUsed
 	if numItems > uint64(len(cx.program)) {
-		cx.err = errTooManyItems
-		return 0
+		return errTooManyItems
 	}
 	//bytec = make([][]byte, numItems)
 	for i := uint64(0); i < numItems; i++ {
 		if pos >= len(cx.program) {
-			cx.err = errShortBytecblock
-			return 0
+			return errShortBytecblock
 		}
 		itemLen, bytesUsed := binary.Uvarint(cx.program[pos:])
 		if bytesUsed <= 0 {
-			cx.err = fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
-			return 1
+			return fmt.Errorf("could not decode []byte const[%d] at pc=%d", i, pos)
 		}
 		pos += bytesUsed
 		if pos >= len(cx.program) {
-			cx.err = errShortBytecblock
-			return 0
+			return errShortBytecblock
 		}
 		end := uint64(pos) + itemLen
 		if end > uint64(len(cx.program)) || end < uint64(pos) {
-			cx.err = errShortBytecblock
-			return 0
+			return errShortBytecblock
 		}
 		//bytec[i] = program[pos : pos+int(itemLen)]
 		pos += int(itemLen)
 	}
 	cx.nextpc = pos
-	return 1
+	return nil
 }
 
-func disIntcblock(dis *disassembleState, spec *OpSpec) {
-	var intc []uint64
-	intc, dis.nextpc, dis.err = parseIntcblock(dis.program, dis.pc)
-	if dis.err != nil {
-		return
+func disIntcblock(dis *disassembleState, spec *OpSpec) (string, error) {
+	intc, nextpc, err := parseIntcblock(dis.program, dis.pc)
+	if err != nil {
+		return "", err
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "intcblock")
-	if dis.err != nil {
-		return
-	}
+	dis.nextpc = nextpc
+	out := spec.Name
 	for _, iv := range intc {
-		_, dis.err = fmt.Fprintf(dis.out, " %d", iv)
-		if dis.err != nil {
-			return
-		}
+		dis.intc = append(dis.intc, iv)
+		out += fmt.Sprintf(" %d", iv)
 	}
-	_, dis.err = dis.out.Write([]byte("\n"))
+	return out, nil
 }
 
-func disBytecblock(dis *disassembleState, spec *OpSpec) {
-	var bytec [][]byte
-	bytec, dis.nextpc, dis.err = parseBytecBlock(dis.program, dis.pc)
-	if dis.err != nil {
-		return
+func disIntc(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + spec.Details.Size - 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "bytecblock")
-	if dis.err != nil {
-		return
+	dis.nextpc = dis.pc + spec.Details.Size
+	var suffix string
+	var b int
+	switch spec.Opcode {
+	case 0x22:
+		suffix = "_0"
+		b = 0
+	case 0x23:
+		suffix = "_1"
+		b = 1
+	case 0x24:
+		suffix = "_2"
+		b = 2
+	case 0x25:
+		suffix = "_3"
+		b = 3
+	case 0x21:
+		b = int(dis.program[dis.pc+1])
+		suffix = fmt.Sprintf(" %d", b)
+	default:
+		return "", fmt.Errorf("disIntc on %v", spec)
 	}
+	if b < len(dis.intc) {
+		return fmt.Sprintf("intc%s // %d", suffix, dis.intc[b]), nil
+	}
+	return fmt.Sprintf("intc%s", suffix), nil
+}
+
+func disBytecblock(dis *disassembleState, spec *OpSpec) (string, error) {
+	bytec, nextpc, err := parseBytecBlock(dis.program, dis.pc)
+	if err != nil {
+		return "", err
+	}
+	dis.nextpc = nextpc
+	out := spec.Name
 	for _, bv := range bytec {
-		_, dis.err = fmt.Fprintf(dis.out, " 0x%s", hex.EncodeToString(bv))
-		if dis.err != nil {
-			return
-		}
+		dis.bytec = append(dis.bytec, bv)
+		out += fmt.Sprintf(" 0x%s", hex.EncodeToString(bv))
 	}
-	_, dis.err = dis.out.Write([]byte("\n"))
+	return out, nil
 }
 
-func disPushInt(dis *disassembleState, spec *OpSpec) {
+func allPrintableASCII(bytes []byte) bool {
+	for _, b := range bytes {
+		if b < 32 || b > 126 {
+			return false
+		}
+	}
+	return true
+}
+func guessByteFormat(bytes []byte) string {
+	var short basics.Address
+
+	if len(bytes) == len(short) {
+		copy(short[:], bytes[:])
+		return fmt.Sprintf("addr %s", short.String())
+	}
+	if allPrintableASCII(bytes) {
+		return fmt.Sprintf("%#v", string(bytes))
+	}
+	return "0x" + hex.EncodeToString(bytes)
+}
+
+func disBytec(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + spec.Details.Size - 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+	}
+	dis.nextpc = dis.pc + spec.Details.Size
+	var suffix string
+	var b int
+	switch spec.Opcode {
+	case 0x28:
+		suffix = "_0"
+		b = 0
+	case 0x29:
+		suffix = "_1"
+		b = 1
+	case 0x2a:
+		suffix = "_2"
+		b = 2
+	case 0x2b:
+		suffix = "_3"
+		b = 3
+	case 0x27:
+		b = int(dis.program[dis.pc+1])
+		suffix = fmt.Sprintf(" %d", b)
+	}
+	if b < len(dis.bytec) {
+		return fmt.Sprintf("bytec%s // %s", suffix, guessByteFormat(dis.bytec[b])), nil
+	}
+	return fmt.Sprintf("bytec%s", suffix), nil
+}
+
+func disPushInt(dis *disassembleState, spec *OpSpec) (string, error) {
 	pos := dis.pc + 1
 	val, bytesUsed := binary.Uvarint(dis.program[pos:])
 	if bytesUsed <= 0 {
-		dis.err = fmt.Errorf("could not decode int at pc=%d", pos)
-		return
+		return "", fmt.Errorf("could not decode int at pc=%d", pos)
 	}
-	pos += bytesUsed
-	_, dis.err = fmt.Fprintf(dis.out, "%s %d\n", spec.Name, val)
-	dis.nextpc = pos
+	dis.nextpc = pos + bytesUsed
+	return fmt.Sprintf("%s %d", spec.Name, val), nil
 }
-func checkPushInt(cx *evalContext) int {
+func checkPushInt(cx *evalContext) error {
 	opPushInt(cx)
-	return 1
+	return cx.err
 }
 
-func disPushBytes(dis *disassembleState, spec *OpSpec) {
+func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
 	pos := dis.pc + 1
 	length, bytesUsed := binary.Uvarint(dis.program[pos:])
 	if bytesUsed <= 0 {
-		dis.err = fmt.Errorf("could not decode bytes length at pc=%d", pos)
-		return
+		return "", fmt.Errorf("could not decode bytes length at pc=%d", pos)
 	}
 	pos += bytesUsed
 	end := uint64(pos) + length
 	if end > uint64(len(dis.program)) || end < uint64(pos) {
-		dis.err = fmt.Errorf("pushbytes too long %d %d", end, pos)
-		return
+		return "", fmt.Errorf("pushbytes too long %d %d", end, pos)
 	}
 	bytes := dis.program[pos:end]
-	_, dis.err = fmt.Fprintf(dis.out, "%s 0x%s", spec.Name, hex.EncodeToString(bytes))
 	dis.nextpc = int(end)
+	return fmt.Sprintf("%s 0x%s", spec.Name, hex.EncodeToString(bytes)), nil
 }
-func checkPushBytes(cx *evalContext) int {
+func checkPushBytes(cx *evalContext) error {
 	opPushBytes(cx)
-	return 1
+	return cx.err
 }
 
 // This is also used to disassemble gtxns
-func disTxn(dis *disassembleState, spec *OpSpec) {
+func disTxn(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 2
 	txarg := dis.program[dis.pc+1]
 	if int(txarg) >= len(TxnFieldNames) {
-		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "%s %s\n", spec.Name, TxnFieldNames[txarg])
+	return fmt.Sprintf("%s %s", spec.Name, TxnFieldNames[txarg]), nil
 }
 
 // This is also used to disassemble gtxnsa
-func disTxna(dis *disassembleState, spec *OpSpec) {
+func disTxna(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 2
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 3
 	txarg := dis.program[dis.pc+1]
 	if int(txarg) >= len(TxnFieldNames) {
-		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
 	}
 	arrayFieldIdx := dis.program[dis.pc+2]
-	_, dis.err = fmt.Fprintf(dis.out, "%s %s %d\n", spec.Name, TxnFieldNames[txarg], arrayFieldIdx)
+	return fmt.Sprintf("%s %s %d", spec.Name, TxnFieldNames[txarg], arrayFieldIdx), nil
 }
 
-func disGtxn(dis *disassembleState, spec *OpSpec) {
+func disGtxn(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 2
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 3
 	gi := dis.program[dis.pc+1]
 	txarg := dis.program[dis.pc+2]
 	if int(txarg) >= len(TxnFieldNames) {
-		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "gtxn %d %s\n", gi, TxnFieldNames[txarg])
+	return fmt.Sprintf("gtxn %d %s", gi, TxnFieldNames[txarg]), nil
 }
 
-func disGtxna(dis *disassembleState, spec *OpSpec) {
+func disGtxna(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 3
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 4
 	gi := dis.program[dis.pc+1]
 	txarg := dis.program[dis.pc+2]
 	if int(txarg) >= len(TxnFieldNames) {
-		dis.err = fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid txn arg index %d at pc=%d", txarg, dis.pc)
 	}
 	arrayFieldIdx := dis.program[dis.pc+3]
-	_, dis.err = fmt.Fprintf(dis.out, "gtxna %d %s %d\n", gi, TxnFieldNames[txarg], arrayFieldIdx)
+	return fmt.Sprintf("gtxna %d %s %d", gi, TxnFieldNames[txarg], arrayFieldIdx), nil
 }
 
-func disGlobal(dis *disassembleState, spec *OpSpec) {
+func disGlobal(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 2
 	garg := dis.program[dis.pc+1]
 	if int(garg) >= len(GlobalFieldNames) {
-		dis.err = fmt.Errorf("invalid global arg index %d at pc=%d", garg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid global arg index %d at pc=%d", garg, dis.pc)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "global %s\n", GlobalFieldNames[garg])
+	return fmt.Sprintf("global %s", GlobalFieldNames[garg]), nil
 }
 
-func disBranch(dis *disassembleState, spec *OpSpec) {
+func disBranch(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 2
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 
 	dis.nextpc = dis.pc + 3
 	offset := (uint(dis.program[dis.pc+1]) << 8) | uint(dis.program[dis.pc+2])
 	target := int(offset) + dis.pc + 3
-	label, labelExists := dis.pendingLabels[target]
-	if !labelExists {
-		dis.labelCount++
-		label = fmt.Sprintf("label%d", dis.labelCount)
-		dis.putLabel(label, target)
+	if target > 0xffff {
+		target -= 0x10000
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "%s %s\n", spec.Name, label)
+	var label string
+	if dis.numericTargets {
+		label = fmt.Sprintf("%d", target)
+	} else {
+		if known, ok := dis.pendingLabels[target]; ok {
+			label = known
+		} else {
+			dis.labelCount++
+			label = fmt.Sprintf("label%d", dis.labelCount)
+			dis.putLabel(label, target)
+		}
+	}
+	return fmt.Sprintf("%s %s", spec.Name, label), nil
 }
 
-func disAssetHolding(dis *disassembleState, spec *OpSpec) {
+func disAssetHolding(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 2
 	arg := dis.program[dis.pc+1]
 	if int(arg) >= len(AssetHoldingFieldNames) {
-		dis.err = fmt.Errorf("invalid asset holding arg index %d at pc=%d", arg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid asset holding arg index %d at pc=%d", arg, dis.pc)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "asset_holding_get %s\n", AssetHoldingFieldNames[arg])
+	return fmt.Sprintf("asset_holding_get %s", AssetHoldingFieldNames[arg]), nil
 }
 
-func disAssetParams(dis *disassembleState, spec *OpSpec) {
+func disAssetParams(dis *disassembleState, spec *OpSpec) (string, error) {
 	lastIdx := dis.pc + 1
 	if len(dis.program) <= lastIdx {
 		missing := lastIdx - len(dis.program) + 1
-		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
-		return
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
 	}
 	dis.nextpc = dis.pc + 2
 	arg := dis.program[dis.pc+1]
 	if int(arg) >= len(AssetParamsFieldNames) {
-		dis.err = fmt.Errorf("invalid asset params arg index %d at pc=%d", arg, dis.pc)
-		return
+		return "", fmt.Errorf("invalid asset params arg index %d at pc=%d", arg, dis.pc)
 	}
-	_, dis.err = fmt.Fprintf(dis.out, "asset_params_get %s\n", AssetParamsFieldNames[arg])
+	return fmt.Sprintf("asset_params_get %s", AssetParamsFieldNames[arg]), nil
 }
 
 type disInfo struct {
@@ -1809,7 +1787,7 @@ func disassembleInstrumented(program []byte) (text string, ds disInfo, err error
 		text = out.String()
 		return
 	}
-	fmt.Fprintf(dis.out, "// version %d\n", version)
+	fmt.Fprintf(dis.out, "#pragma version %d\n", version)
 	dis.pc = vlen
 	for dis.pc < len(program) {
 		err = dis.outputLabelIfNeeded()
@@ -1834,11 +1812,13 @@ func disassembleInstrumented(program []byte) (text string, ds disInfo, err error
 		ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
 
 		// Actually do the disassembly
-		op.dis(&dis, &op)
-		if dis.err != nil {
-			err = dis.err
+		var line string
+		line, err = op.dis(&dis, &op)
+		if err != nil {
 			return
 		}
+		out.WriteString(line)
+		out.WriteRune('\n')
 		dis.pc = dis.nextpc
 	}
 	err = dis.outputLabelIfNeeded()

@@ -372,7 +372,7 @@ func TestAcctUpdates(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		au.newBlock(blk, delta)
@@ -455,7 +455,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -544,7 +544,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = protocolVersion
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -671,7 +671,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = testProtocolVersion
 
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		au.newBlock(blk, delta)
 		accts = append(accts, totals)
@@ -832,7 +832,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			blk.RewardsLevel = rewardLevel
 			blk.CurrentProtocol = testProtocolVersion
 
-			delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, len(updates))
+			delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, len(updates), 0)
 			for addr, ad := range updates {
 				delta.Accts.Upsert(addr, ad)
 			}
@@ -1498,7 +1498,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		}
 		blk.RewardsLevel = rewardLevel
 		blk.CurrentProtocol = testProtocolVersion
-		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len())
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		au.newBlock(blk, delta)
@@ -1543,5 +1543,380 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 				require.Equal(t, catchpointLabels[i], au.GetLastCatchpointLabel())
 			}
 		}
+	}
+}
+
+// TestCachesInitialization test the functionality of the initializeCaches cache.
+func TestCachesInitialization(t *testing.T) {
+	protocolVersion := protocol.ConsensusCurrentVersion
+	proto := config.Consensus[protocolVersion]
+
+	initialRounds := uint64(1)
+
+	ml := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion)
+	ml.log.SetLevel(logging.Warn)
+	defer ml.Close()
+
+	accountsCount := 5
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	// cover initialRounds genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < int(initialRounds); i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	recoveredLedgerRound := basics.Round(initialRounds + initializeCachesRoundFlushInterval + proto.MaxBalLookback + 1)
+
+	for i := basics.Round(initialRounds); i <= recoveredLedgerRound; i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		accountChanges := 2
+
+		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		prevTotals, err := au.Totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = protocolVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.addMockBlock(blockEntry{block: blk}, delta)
+		au.newBlock(blk, delta)
+		au.committedUpTo(basics.Round(i))
+		au.waitAccountsWriting()
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+	au.close()
+
+	// create another mocked ledger, but this time with a fresh new tracker database.
+	ml2 := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion)
+	ml2.log.SetLevel(logging.Warn)
+	defer ml2.Close()
+
+	// and "fix" it to contain the blocks and deltas from before.
+	ml2.blocks = ml.blocks
+	ml2.deltas = ml.deltas
+
+	au = &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	err = au.loadFromDisk(ml2)
+	require.NoError(t, err)
+	defer au.close()
+
+	// make sure the deltas array end up containing only the most recent 320 rounds.
+	require.Equal(t, int(proto.MaxBalLookback), len(au.deltas))
+	require.Equal(t, recoveredLedgerRound-basics.Round(proto.MaxBalLookback), au.dbRound)
+}
+
+// TestSplittingConsensusVersionCommits tests the a sequence of commits that spans over multiple consensus versions works correctly.
+func TestSplittingConsensusVersionCommits(t *testing.T) {
+	initProtocolVersion := protocol.ConsensusV20
+	initialProtoParams := config.Consensus[initProtocolVersion]
+
+	initialRounds := uint64(1)
+
+	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion)
+	ml.log.SetLevel(logging.Warn)
+	defer ml.Close()
+
+	accountsCount := 5
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", initialProtoParams, accts[0])
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+	defer au.close()
+
+	// cover initialRounds genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < int(initialRounds); i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	extraRounds := uint64(39)
+
+	// write the extraRounds rounds so that we will fill up the queue.
+	for i := basics.Round(initialRounds); i < basics.Round(initialRounds+extraRounds); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		accountChanges := 2
+
+		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		prevTotals, err := au.Totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = initProtocolVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.addMockBlock(blockEntry{block: blk}, delta)
+		au.newBlock(blk, delta)
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	newVersionBlocksCount := uint64(47)
+	newVersion := protocol.ConsensusV21
+	// add 47 more rounds that contains blocks using a newer consensus version, and stuff it with MaxBalLookback
+	lastRoundToWrite := basics.Round(initialRounds + initialProtoParams.MaxBalLookback + extraRounds + newVersionBlocksCount)
+	for i := basics.Round(initialRounds + extraRounds); i < lastRoundToWrite; i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		accountChanges := 2
+
+		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		prevTotals, err := au.Totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = newVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.addMockBlock(blockEntry{block: blk}, delta)
+		au.newBlock(blk, delta)
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+	// now, commit and verify that the committedUpTo method broken the range correctly.
+	au.committedUpTo(lastRoundToWrite)
+	au.waitAccountsWriting()
+	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.dbRound)
+
+}
+
+// TestSplittingConsensusVersionCommitsBoundry tests the a sequence of commits that spans over multiple consensus versions works correctly, and
+// in particular, complements TestSplittingConsensusVersionCommits by testing the commit boundry.
+func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
+	initProtocolVersion := protocol.ConsensusV20
+	initialProtoParams := config.Consensus[initProtocolVersion]
+
+	initialRounds := uint64(1)
+
+	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion)
+	ml.log.SetLevel(logging.Warn)
+	defer ml.Close()
+
+	accountsCount := 5
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", initialProtoParams, accts[0])
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+	defer au.close()
+
+	// cover initialRounds genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < int(initialRounds); i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	extraRounds := uint64(39)
+
+	// write extraRounds rounds so that we will fill up the queue.
+	for i := basics.Round(initialRounds); i < basics.Round(initialRounds+extraRounds); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		accountChanges := 2
+
+		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		prevTotals, err := au.Totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = initProtocolVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.addMockBlock(blockEntry{block: blk}, delta)
+		au.newBlock(blk, delta)
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	newVersion := protocol.ConsensusV21
+	// add MaxBalLookback-extraRounds more rounds that contains blocks using a newer consensus version.
+	endOfFirstNewProtocolSegment := basics.Round(initialRounds + extraRounds + initialProtoParams.MaxBalLookback)
+	for i := basics.Round(initialRounds + extraRounds); i <= endOfFirstNewProtocolSegment; i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		accountChanges := 2
+
+		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		prevTotals, err := au.Totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = newVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.addMockBlock(blockEntry{block: blk}, delta)
+		au.newBlock(blk, delta)
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+	// now, commit and verify that the committedUpTo method broken the range correctly.
+	au.committedUpTo(endOfFirstNewProtocolSegment)
+	au.waitAccountsWriting()
+	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.dbRound)
+
+	// write additional extraRounds elements and verify these can be flushed.
+	for i := endOfFirstNewProtocolSegment + 1; i <= basics.Round(initialRounds+2*extraRounds+initialProtoParams.MaxBalLookback); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		accountChanges := 2
+
+		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		prevTotals, err := au.Totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates.Upsert(testPoolAddr, newPool)
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = newVersion
+
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
+		delta.Accts.MergeAccounts(updates)
+		ml.addMockBlock(blockEntry{block: blk}, delta)
+		au.newBlock(blk, delta)
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+	au.committedUpTo(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
+	au.waitAccountsWriting()
+	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.dbRound)
+}
+
+// TestConsecutiveVersion tests the consecutiveVersion method correctness.
+func TestConsecutiveVersion(t *testing.T) {
+	var au accountUpdates
+	au.versions = []protocol.ConsensusVersion{
+		protocol.ConsensusV19,
+		protocol.ConsensusV20,
+		protocol.ConsensusV20,
+		protocol.ConsensusV20,
+		protocol.ConsensusV20,
+		protocol.ConsensusV21,
+		protocol.ConsensusV21,
+		protocol.ConsensusV21,
+		protocol.ConsensusV21,
+		protocol.ConsensusV21,
+		protocol.ConsensusV21,
+		protocol.ConsensusV22,
+	}
+	for offset := uint64(1); offset < uint64(len(au.versions)); offset++ {
+		co := au.consecutiveVersion(offset)
+		require.Equal(t, au.versions[1], au.versions[co])
+	}
+	au.versions = []protocol.ConsensusVersion{
+		protocol.ConsensusV19,
+		protocol.ConsensusV20,
+		protocol.ConsensusV21,
 	}
 }

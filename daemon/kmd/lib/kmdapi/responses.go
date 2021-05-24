@@ -54,11 +54,26 @@ type VersionsResponse struct {
 	Versions []string `json:"versions"`
 }
 
+// Response to `GET /versions`
+// swagger:response VersionsResponse
+type versionsResponse struct {
+	//Versions Response
+	//in:body
+	Body *VersionsResponse
+}
+
 // APIV1GETWalletsResponse is the response to `GET /v1/wallets`
 // friendly:ListWalletsResponse
 type APIV1GETWalletsResponse struct {
 	APIV1ResponseEnvelope
 	Wallets []APIV1Wallet `json:"wallets"`
+}
+
+// Response to `GET /v1/wallets`
+// swagger:response ListWalletsResponse
+type listWalletsResponse struct {
+	//in: body
+	Body *APIV1GETWalletsResponse
 }
 
 // APIV1POSTWalletResponse is the response to `POST /v1/wallet`
@@ -68,6 +83,13 @@ type APIV1POSTWalletResponse struct {
 	Wallet APIV1Wallet `json:"wallet"`
 }
 
+// Response to `POST /v1/wallet`
+// swagger:response CreateWalletResponse
+type createWalletResponse struct {
+	//	in:body
+	Body *APIV1POSTWalletResponse
+}
+
 // APIV1POSTWalletInitResponse is the response to `POST /v1/wallet/init`
 // friendly:InitWalletHandleTokenResponse
 type APIV1POSTWalletInitResponse struct {
@@ -75,10 +97,24 @@ type APIV1POSTWalletInitResponse struct {
 	WalletHandleToken string `json:"wallet_handle_token"`
 }
 
+// Response to `POST /v1/wallet/init`
+// swagger:response InitWalletHandleTokenResponse
+type initWalletHandleTokenResponse struct {
+	//	in:body
+	Body *APIV1POSTWalletInitResponse
+}
+
 // APIV1POSTWalletReleaseResponse is the response to `POST /v1/wallet/release`
 // friendly:ReleaseWalletHandleTokenResponse
 type APIV1POSTWalletReleaseResponse struct {
 	APIV1ResponseEnvelope
+}
+
+// Response to `POST /v1/wallet/release`
+// swagger:response ReleaseWalletHandleTokenResponse
+type releaseWalletHandleTokenResponse struct {
+	//	in:body
+	Body *APIV1POSTWalletReleaseResponse
 }
 
 // APIV1POSTWalletRenewResponse is the response to `POST /v1/wallet/renew`
@@ -88,11 +124,25 @@ type APIV1POSTWalletRenewResponse struct {
 	WalletHandle APIV1WalletHandle `json:"wallet_handle"`
 }
 
+// Response `POST /v1/wallet/renew`
+// swagger:response RenewWalletHandleTokenResponse
+type renewWalletHandleTokenResponse struct {
+	//	in:body
+	Body *APIV1POSTWalletRenewResponse
+}
+
 // APIV1POSTWalletRenameResponse is the response to `POST /v1/wallet/rename`
 // friendly:RenameWalletResponse
 type APIV1POSTWalletRenameResponse struct {
 	APIV1ResponseEnvelope
 	Wallet APIV1Wallet `json:"wallet"`
+}
+
+// Response to `POST /v1/wallet/rename`
+// swagger:response RenameWalletResponse
+type renameWalletResponse struct {
+	//	in:body
+	Body *APIV1POSTWalletRenameResponse
 }
 
 // APIV1POSTWalletInfoResponse is the response to `POST /v1/wallet/info`
@@ -102,11 +152,25 @@ type APIV1POSTWalletInfoResponse struct {
 	WalletHandle APIV1WalletHandle `json:"wallet_handle"`
 }
 
+// Response to `POST /v1/wallet/info`
+// swagger:response WalletInfoResponse
+type walletInfoResponse struct {
+	//	in:body
+	Body *APIV1POSTWalletInfoResponse
+}
+
 // APIV1POSTMasterKeyExportResponse is the reponse to `POST /v1/master-key/export`
 // friendly:ExportMasterKeyResponse
 type APIV1POSTMasterKeyExportResponse struct {
 	APIV1ResponseEnvelope
 	MasterDerivationKey APIV1MasterDerivationKey `json:"master_derivation_key"`
+}
+
+// Reponse to `POST /v1/master-key/export`
+// swagger:response ExportMasterKeyResponse
+type exportMasterKeyResponse struct {
+	//	in:body
+	Body *APIV1POSTMasterKeyExportResponse
 }
 
 // APIV1POSTKeyImportResponse is the repsonse to `POST /v1/key/import`
@@ -116,11 +180,25 @@ type APIV1POSTKeyImportResponse struct {
 	Address string `json:"address"`
 }
 
+// Repsonse to `POST /v1/key/import`
+// swagger:response ImportKeyResponse
+type importKeyResponse struct {
+	//	in:body
+	Body *APIV1POSTKeyImportResponse
+}
+
 // APIV1POSTKeyExportResponse is the reponse to `POST /v1/key/export`
 // friendly:ExportKeyResponse
 type APIV1POSTKeyExportResponse struct {
 	APIV1ResponseEnvelope
 	PrivateKey APIV1PrivateKey `json:"private_key"`
+}
+
+// Reponse to `POST /v1/key/export`
+// swagger:response ExportKeyResponse
+type exportKeyResponse struct {
+	//	in:body
+	Body *APIV1POSTKeyExportResponse
 }
 
 // APIV1POSTKeyResponse is the response to `POST /v1/key`
@@ -130,10 +208,24 @@ type APIV1POSTKeyResponse struct {
 	Address string `json:"address"`
 }
 
+// Response to `POST /v1/key`
+// swagger:response GenerateKeyResponse
+type generateKeyResponse struct {
+	//	in:body
+	Body *APIV1POSTKeyResponse
+}
+
 // APIV1DELETEKeyResponse is the response to `DELETE /v1/key`
 // friendly:DeleteKeyResponse
 type APIV1DELETEKeyResponse struct {
 	APIV1ResponseEnvelope
+}
+
+// Response to `DELETE /v1/key`
+// swagger:response DeleteKeyResponse
+type deleteKeyResponse struct {
+	//	in:body
+	Body *APIV1DELETEKeyResponse
 }
 
 // APIV1POSTKeyListResponse is the response to `POST /v1/key/list`
@@ -141,6 +233,13 @@ type APIV1DELETEKeyResponse struct {
 type APIV1POSTKeyListResponse struct {
 	APIV1ResponseEnvelope
 	Addresses []string `json:"addresses"`
+}
+
+// Response to `POST /v1/key/list`
+// swagger:response ListKeysResponse
+type listKeysResponse struct {
+	//in: body
+	Body *APIV1POSTKeyListResponse
 }
 
 // APIV1POSTTransactionSignResponse is the repsonse to `POST /v1/transaction/sign`
@@ -152,6 +251,13 @@ type APIV1POSTTransactionSignResponse struct {
 	SignedTransaction []byte `json:"signed_transaction"`
 }
 
+// Response to `POST /v1/transaction/sign`
+// swagger:response SignTransactionResponse
+type signTransactionResponse struct {
+	//	in:body
+	Body *APIV1POSTTransactionSignResponse
+}
+
 // APIV1POSTProgramSignResponse is the repsonse to `POST /v1/data/sign`
 // friendly:SignProgramResponse
 type APIV1POSTProgramSignResponse struct {
@@ -161,6 +267,13 @@ type APIV1POSTProgramSignResponse struct {
 	Signature []byte `json:"sig"`
 }
 
+// Response to `POST /v1/data/sign`
+// swagger:response SignProgramResponse
+type signProgramResponse struct {
+	//	in:body
+	Body *APIV1POSTProgramSignResponse
+}
+
 // APIV1POSTMultisigListResponse is the response to `POST /v1/multisig/list`
 // friendly:ListMultisigResponse
 type APIV1POSTMultisigListResponse struct {
@@ -168,11 +281,25 @@ type APIV1POSTMultisigListResponse struct {
 	Addresses []string `json:"addresses"`
 }
 
+// Response to `POST /v1/multisig/list`
+// swagger:response ListMultisigResponse
+type listMultisigResponse struct {
+	//	in:body
+	Body *APIV1POSTMultisigListResponse
+}
+
 // APIV1POSTMultisigImportResponse is the response to `POST /v1/multisig/import`
 // friendly:ImportMultisigResponse
 type APIV1POSTMultisigImportResponse struct {
 	APIV1ResponseEnvelope
 	Address string `json:"address"`
+}
+
+// Response to `POST /v1/multisig/import`
+// swagger:response ImportMultisigResponse
+type importMultisigResponse struct {
+	//	in:body
+	Body *APIV1POSTMultisigImportResponse
 }
 
 // APIV1POSTMultisigExportResponse is the response to `POST /v1/multisig/export`
@@ -184,10 +311,24 @@ type APIV1POSTMultisigExportResponse struct {
 	PKs       []APIV1PublicKey `json:"pks"`
 }
 
+// Response to `POST /v1/multisig/export`
+// swagger:response ExportMultisigResponse
+type exportMultisigResponse struct {
+	//	in:body
+	Body *APIV1POSTMultisigExportResponse
+}
+
 // APIV1DELETEMultisigResponse is the response to POST /v1/multisig/delete`
 // friendly:DeleteMultisigResponse
 type APIV1DELETEMultisigResponse struct {
 	APIV1ResponseEnvelope
+}
+
+// Response to POST /v1/multisig/delete
+// swagger:response DeleteMultisigResponse
+type deleteMultisigResponse struct {
+	// in:body
+	Body *APIV1DELETEMultisigResponse
 }
 
 // APIV1POSTMultisigTransactionSignResponse is the response to `POST /v1/multisig/sign`
@@ -199,6 +340,13 @@ type APIV1POSTMultisigTransactionSignResponse struct {
 	Multisig []byte `json:"multisig"`
 }
 
+// Response to `POST /v1/multisig/sign`
+// swagger:response SignMultisigResponse
+type signMultisigResponse struct {
+	//	in:body
+	Body *APIV1POSTMultisigTransactionSignResponse
+}
+
 // APIV1POSTMultisigProgramSignResponse is the response to `POST /v1/multisig/signdata`
 // friendly:SignProgramMultisigResponse
 type APIV1POSTMultisigProgramSignResponse struct {
@@ -206,4 +354,11 @@ type APIV1POSTMultisigProgramSignResponse struct {
 
 	// swagger:strfmt byte
 	Multisig []byte `json:"multisig"`
+}
+
+// Response to `POST /v1/multisig/signdata`
+// swagger:response SignProgramMultisigResponse
+type signProgramMultisigResponse struct {
+	//	in:body
+	Body *APIV1POSTMultisigProgramSignResponse
 }

@@ -50,7 +50,7 @@ var defaultAPIToken = []byte(strings.Repeat("a", 64))
 // KMDFixture is a test fixture for tests requiring interactions with kmd
 type KMDFixture struct {
 	baseFixture
-	t              TestingT
+	t              TestingTB
 	initialized    bool
 	dataDir        string
 	kmdDir         string
@@ -94,39 +94,39 @@ func (f *KMDFixture) ShutdownImpl(preserveData bool) {
 }
 
 // SetupWithWallet starts kmd and creates a wallet, returning a wallet handle
-func (f *KMDFixture) SetupWithWallet(t TestingT) (handleToken string) {
+func (f *KMDFixture) SetupWithWallet(t TestingTB) (handleToken string) {
 	f.Setup(t)
 	handleToken, _ = f.MakeWalletAndHandleToken()
 	return
 }
 
 // Setup starts kmd with the default config
-func (f *KMDFixture) Setup(t TestingT) {
+func (f *KMDFixture) Setup(t TestingTB) {
 	f.SetupWithConfig(t, "")
 }
 
 // Initialize initializes the dataDir and TestingT for this test but doesn't start kmd
-func (f *KMDFixture) Initialize(t TestingT) {
+func (f *KMDFixture) Initialize(t TestingTB) {
 	f.initialize(f)
-	f.t = t
+	f.t = SynchronizedTest(t)
 	f.dataDir = filepath.Join(f.testDir, t.Name())
 	// Remove any existing tests in this dataDir + recreate
 	err := os.RemoveAll(f.dataDir)
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 	err = os.Mkdir(f.dataDir, 0750)
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 
 	// Set up the kmd data dir within the main datadir
 	f.kmdDir = filepath.Join(f.dataDir, nodecontrol.DefaultKMDDataDir)
 	err = os.Mkdir(f.kmdDir, nodecontrol.DefaultKMDDataDirPerms)
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 }
 
 // SetupWithConfig starts a kmd node with the passed config or default test
 // config, if the passed config is blank. Though internally an error might
 // occur during setup, we never return one, because we'll still fail the test
 // for any errors here, and it keeps the test code much cleaner
-func (f *KMDFixture) SetupWithConfig(t TestingT, config string) {
+func (f *KMDFixture) SetupWithConfig(t TestingTB, config string) {
 	// Setup is called once per test, so it's OK for test to store one particular TestingT
 	f.Initialize(t)
 
@@ -134,14 +134,14 @@ func (f *KMDFixture) SetupWithConfig(t TestingT, config string) {
 	f.APIToken = defaultAPIToken
 	tokenFilepath := filepath.Join(f.kmdDir, "kmd.token")
 	err := ioutil.WriteFile(tokenFilepath, f.APIToken, 0640)
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 
 	if config == "" {
 		config = defaultConfig
 	}
 	configFilepath := filepath.Join(f.kmdDir, "kmd_config.json")
 	err = ioutil.WriteFile(configFilepath, []byte(config), 0640)
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 
 	// Start kmd
 	nc := nodecontrol.MakeNodeController(f.binDir, f.dataDir)
@@ -149,17 +149,17 @@ func (f *KMDFixture) SetupWithConfig(t TestingT, config string) {
 	_, err = nc.StartKMD(nodecontrol.KMDStartArgs{
 		TimeoutSecs: defaultTimeoutSecs,
 	})
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 
 	// Mark ourselves as initialized so we know to shut down server
 	f.initialized = true
 
 	// Build a client
 	sock, err := util.GetFirstLineFromFile(filepath.Join(f.kmdDir, "kmd.net"))
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 	f.Sock = sock
 	client, err := client.MakeKMDClient(f.Sock, string(f.APIToken))
-	require.NoError(t, err)
+	require.NoError(f.t, err)
 	f.Client = &client
 }
 

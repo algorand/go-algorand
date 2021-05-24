@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -85,6 +87,52 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.Transaction(st, transactions.ApplyData{})
 	require.NoError(t, err)
 
+	// Broken signature should fail
+	stbad := st
+	st.Sig[2] ^= 8
+	txgroup := []transactions.SignedTxn{stbad}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+
+	// Repeat should fail
+	txgroup = []transactions.SignedTxn{st}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.Error(t, err)
+
+	// out of range should fail
+	btxn := txn
+	btxn.FirstValid++
+	btxn.LastValid += 2
+	st = btxn.Sign(keys[0])
+	txgroup = []transactions.SignedTxn{st}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.Error(t, err)
+
+	// bogus group should fail
+	btxn = txn
+	btxn.Group[1] = 1
+	st = btxn.Sign(keys[0])
+	txgroup = []transactions.SignedTxn{st}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.Error(t, err)
+
+	// mixed fields should fail
+	btxn = txn
+	btxn.XferAsset = 3
+	st = btxn.Sign(keys[0])
+	txgroup = []transactions.SignedTxn{st}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	// We don't test eval.Transaction() here because it doesn't check txn.WellFormed(), instead relying on that to have already been checked by the transaction pool.
+	// err = eval.Transaction(st, transactions.ApplyData{})
+	// require.Error(t, err)
+
 	selfTxn := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
@@ -99,8 +147,57 @@ func TestBlockEvaluator(t *testing.T) {
 			Amount:   basics.MicroAlgos{Raw: 100},
 		},
 	}
-	err = eval.Transaction(selfTxn.Sign(keys[2]), transactions.ApplyData{})
+	stxn := selfTxn.Sign(keys[2])
+
+	// TestTransactionGroup() and Transaction() should have the same outcome, but work slightly different code paths.
+	txgroup = []transactions.SignedTxn{stxn}
+	err = eval.TestTransactionGroup(txgroup)
 	require.NoError(t, err)
+
+	err = eval.Transaction(stxn, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	t3 := txn
+	t3.Amount.Raw++
+	t4 := selfTxn
+	t4.Amount.Raw++
+
+	// a group without .Group should fail
+	s3 := t3.Sign(keys[0])
+	s4 := t4.Sign(keys[2])
+	txgroup = []transactions.SignedTxn{s3, s4}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
+	err = eval.TransactionGroup(txgroupad)
+	require.Error(t, err)
+
+	// Test a group that should work
+	var group transactions.TxGroup
+	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(t3), crypto.HashObj(t4)}
+	t3.Group = crypto.HashObj(group)
+	t4.Group = t3.Group
+	s3 = t3.Sign(keys[0])
+	s4 = t4.Sign(keys[2])
+	txgroup = []transactions.SignedTxn{s3, s4}
+	err = eval.TestTransactionGroup(txgroup)
+	require.NoError(t, err)
+
+	// disagreement on Group id should fail
+	t4bad := t4
+	t4bad.Group[3] ^= 3
+	s4bad := t4bad.Sign(keys[2])
+	txgroup = []transactions.SignedTxn{s3, s4bad}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
+	txgroupad = transactions.WrapSignedTxnsWithAD(txgroup)
+	err = eval.TransactionGroup(txgroupad)
+	require.Error(t, err)
+
+	// missing part of the group should fail
+	txgroup = []transactions.SignedTxn{s3}
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err)
 
 	validatedBlock, err := eval.GenerateBlock()
 	require.NoError(t, err)
@@ -420,6 +517,11 @@ ok:
 				}},
 		},
 	}
+	txgroup := []transactions.SignedTxn{stxn1, stxn2}
+	err = eval.TestTransactionGroup(txgroup)
+	if err != nil {
+		return eval, addrs[0], err
+	}
 	err = eval.transactionGroup(g)
 	return eval, addrs[0], err
 }
@@ -514,6 +616,10 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 	for i := 0; i < numTxns; i++ {
 		sender := i % len(addrs)
 		receiver := (i + 1) % len(addrs)
+		// The following would create more random selection of accounts, and prevent a cache of half of the accounts..
+		//		iDigest := crypto.Hash([]byte{byte(i), byte(i >> 8), byte(i >> 16), byte(i >> 24)})
+		//		sender := (uint64(iDigest[0]) + uint64(iDigest[1])*256 + uint64(iDigest[2])*256*256) % uint64(len(addrs))
+		//		receiver := (uint64(iDigest[4]) + uint64(iDigest[5])*256 + uint64(iDigest[6])*256*256) % uint64(len(addrs))
 		txn := transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
@@ -557,7 +663,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 		if withCrypto {
 			_, err = l2.Validate(context.Background(), validatedBlock.blk, backlogPool)
 		} else {
-			_, err = eval(context.Background(), l2, validatedBlock.blk, false, nil, nil, true)
+			_, err = eval(context.Background(), l2, validatedBlock.blk, false, nil, nil)
 		}
 		require.NoError(b, err)
 	}
@@ -567,4 +673,179 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 	b.ReportMetric(float64(abTime)/float64(numTxns*b.N), "ns/eval_validate_tx")
 
 	b.StopTimer()
+}
+
+func TestCowCompactCert(t *testing.T) {
+	var certRnd basics.Round
+	var certType protocol.CompactCertType
+	var cert compactcert.Cert
+	var atRound basics.Round
+	var validate bool
+	accts0 := randomAccounts(20, true)
+	blocks := make(map[basics.Round]bookkeeping.BlockHeader)
+	blockErr := make(map[basics.Round]error)
+	ml := mockLedger{balanceMap: accts0, blocks: blocks, blockErr: blockErr}
+	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
+
+	certType = protocol.CompactCertType(1234) // bad cert type
+	err := c0.compactCert(certRnd, certType, cert, atRound, validate)
+	require.Error(t, err)
+
+	// no certRnd block
+	certType = protocol.CompactCertBasic
+	noBlockErr := errors.New("no block")
+	blockErr[3] = noBlockErr
+	certRnd = 3
+	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	require.Error(t, err)
+
+	// no votersRnd block
+	// this is slightly a mess of things that don't quite line up with likely usage
+	validate = true
+	var certHdr bookkeeping.BlockHeader
+	certHdr.CurrentProtocol = "TestCowCompactCert"
+	certHdr.Round = 1
+	proto := config.Consensus[certHdr.CurrentProtocol]
+	proto.CompactCertRounds = 2
+	config.Consensus[certHdr.CurrentProtocol] = proto
+	blocks[certHdr.Round] = certHdr
+
+	certHdr.Round = 15
+	blocks[certHdr.Round] = certHdr
+	certRnd = certHdr.Round
+	blockErr[13] = noBlockErr
+	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	require.Error(t, err)
+
+	// validate fail
+	certHdr.Round = 1
+	certRnd = certHdr.Round
+	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	require.Error(t, err)
+
+	// fall through to no err
+	validate = false
+	err = c0.compactCert(certRnd, certType, cert, atRound, validate)
+	require.NoError(t, err)
+
+	// 100% coverage
+}
+
+// a couple trivial tests that don't need setup
+// see TestBlockEvaluator for more
+func TestTestTransactionGroup(t *testing.T) {
+	var txgroup []transactions.SignedTxn
+	eval := BlockEvaluator{}
+	err := eval.TestTransactionGroup(txgroup)
+	require.NoError(t, err) // nothing to do, no problem
+
+	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
+	txgroup = make([]transactions.SignedTxn, eval.proto.MaxTxGroupSize+1)
+	err = eval.TestTransactionGroup(txgroup)
+	require.Error(t, err) // too many
+}
+
+// test BlockEvaluator.transactionGroup()
+// some trivial checks that require no setup
+func TestPrivateTransactionGroup(t *testing.T) {
+	var txgroup []transactions.SignedTxnWithAD
+	eval := BlockEvaluator{}
+	err := eval.transactionGroup(txgroup)
+	require.NoError(t, err) // nothing to do, no problem
+
+	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
+	txgroup = make([]transactions.SignedTxnWithAD, eval.proto.MaxTxGroupSize+1)
+	err = eval.transactionGroup(txgroup)
+	require.Error(t, err) // too many
+}
+
+// BlockEvaluator.workaroundOverspentRewards() fixed a couple issues on testnet.
+// This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happenning.
+func TestTestnetFixup(t *testing.T) {
+	eval := &BlockEvaluator{}
+	var rewardPoolBalance basics.AccountData
+	rewardPoolBalance.MicroAlgos.Raw = 1234
+	var headerRound basics.Round
+	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
+
+	// not a fixup round, no change
+	headerRound = 1
+	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
+	require.Equal(t, rewardPoolBalance, poolOld)
+	require.NoError(t, err)
+
+	eval.genesisHash = testnetGenesisHash
+	eval.genesisHash[3]++
+
+	specialRounds := []basics.Round{1499995, 2926564}
+	for _, headerRound = range specialRounds {
+		poolOld, err = eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
+		require.Equal(t, rewardPoolBalance, poolOld)
+		require.NoError(t, err)
+	}
+
+	for _, headerRound = range specialRounds {
+		testnetFixupExecution(t, headerRound, 20000000000)
+	}
+	// do all the setup and do nothing for not a special round
+	testnetFixupExecution(t, specialRounds[0]+1, 0)
+}
+
+func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uint64) {
+	testnetGenesisHash, _ := crypto.DigestFromString("JBR3KGFEWPEE5SAQ6IWU6EEBZMHXD4CZU6WCBXWGF57XBZIJHIRA")
+	// big setup so we can move some algos
+	// boilerplate like TestBlockEvaluator, but pretend to be testnet
+	genesisInitState, addrs, keys := genesis(10)
+	genesisInitState.Block.BlockHeader.GenesisHash = testnetGenesisHash
+	genesisInitState.Block.BlockHeader.GenesisID = "testnet"
+	genesisInitState.GenesisHash = testnetGenesisHash
+
+	// for addr, adata := range genesisInitState.Accounts {
+	// 	t.Logf("%s: %+v", addr.String(), adata)
+	// }
+	rewardPoolBalance := genesisInitState.Accounts[testPoolAddr]
+	nextPoolBalance := rewardPoolBalance.MicroAlgos.Raw + poolBonus
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	require.NoError(t, err)
+
+	// won't work before funding bank
+	if poolBonus > 0 {
+		_, err = eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
+		require.Error(t, err)
+	}
+
+	bankAddr, _ := basics.UnmarshalChecksumAddress("GD64YIY3TWGDMCNPP553DZPPR6LDUSFQOIJVFDPPXWEG3FVOJCCDBBHU5A")
+
+	// put some algos in the bank so that fixup can pull from this account
+	txn := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addrs[0],
+			Fee:         minFee,
+			FirstValid:  newBlock.Round(),
+			LastValid:   newBlock.Round(),
+			GenesisHash: testnetGenesisHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: bankAddr,
+			Amount:   basics.MicroAlgos{Raw: 20000000000 * 10},
+		},
+	}
+	st := txn.Sign(keys[0])
+	err = eval.Transaction(st, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
+	require.Equal(t, nextPoolBalance, poolOld.MicroAlgos.Raw)
+	require.NoError(t, err)
 }

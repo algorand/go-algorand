@@ -65,6 +65,7 @@ func BenchmarkSQLErasableWrites(b *testing.B) {
 
 	wdb, err := MakeErasableAccessor(fn)
 	require.NoError(b, err)
+	defer wdb.Close()
 
 	logging.Base().SetLevel(logging.Error)
 

@@ -41,11 +41,9 @@ var kmdDataDirFlag string
 var versionCheck bool
 
 func init() {
-	// file.go
 	rootCmd.AddCommand(fileCmd)
 	rootCmd.AddCommand(netCmd)
 	rootCmd.AddCommand(databaseCmd)
-
 }
 
 var rootCmd = &cobra.Command{
