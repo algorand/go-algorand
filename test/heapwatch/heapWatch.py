@@ -182,6 +182,7 @@ class watcher:
             for role in args.tf_roles.split(','):
                 role_name = 'role_' + role
                 for net in cp[role_name].keys():
+                    logger.debug('addnet role %s %s', role, net)
                     self._addnet(net)
             for nre in args.tf_name_re:
                 namere = re.compile(nre)
@@ -189,6 +190,7 @@ class watcher:
                     if not namere.match(k):
                         continue
                     for net in v.keys():
+                        logger.debug('addnet re %s %s', nre, net)
                         self._addnet(net)
         for path in args.data_dirs:
             if not os.path.isdir(path):
@@ -264,7 +266,7 @@ def main():
     ap.add_argument('--token', default='', help='default algod api token to use')
     ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
     ap.add_argument('--tf-roles', default='relay', help='comma separated list of terraform roles to follow')
-    ap.add_argument('--tf-name-re', nargs='*', help='regexp to match terraform node names, may be repeated')
+    ap.add_argument('--tf-name-re', action='append', default=[], help='regexp to match terraform node names, may be repeated')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
