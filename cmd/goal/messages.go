@@ -24,8 +24,8 @@ const (
 	errorGenesisIDFail          = "Error determining kmd folder (%s). Ensure the node is running in %s."
 	errorDirectoryNotExist      = "Specified directory '%s' does not exist."
 	errorParseAddr              = "Failed to parse addr: %v"
-	errorNonPrintableCharacters = "One or more non-printable characters were ommited from the following error message:"
-	infoNonPrintableCharacters  = "One or more non-printable characters were ommited from the subsequent line:"
+	errorNonPrintableCharacters = "One or more non-printable characters were omitted from the following error message:"
+	infoNonPrintableCharacters  = "One or more non-printable characters were omitted from the subsequent line:"
 
 	// Account
 	infoNoAccounts                 = "Did not find any account. Please import or create a new one."
