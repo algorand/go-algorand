@@ -184,22 +184,52 @@ func TestAssetValidRounds(t *testing.T) {
 }
 
 // createTestAssets creates MaxAssetsPerAccount assets
-func createTestAssets(a *require.Assertions, fixture *fixtures.RestClientFixture, numAssets int, account0 string, manager string, reserve string, freeze string, clawback string, assetURL string, assetMetadataHash []byte) {
+func createTestAssets(a *require.Assertions, fixture *fixtures.RestClientFixture, numAssets int, account0 string, manager string, reserve string, freeze string, clawback string, assetURL string, assetMetadataHash []byte, params config.ConsensusParams) {
 	txids := make(map[string]string)
 	client := fixture.LibGoalClient
-	for i := 1; i <= numAssets; i++ {
+	min := func(a, b int) int {
+		if a < b {
+			return a
+		}
+		return b
+	}
+
+	i := 1
+	for i <= numAssets {
 		// re-generate wh, since this test takes a while and sometimes
 		// the wallet handle expires.
 		wh, err := client.GetUnencryptedWalletHandle()
 		a.NoError(err)
 
-		tx, err := client.MakeUnsignedAssetCreateTx(uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i), assetURL, assetMetadataHash, 0)
-		a.NoError(err)
-
-		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
-		a.NoError(err)
-		txids[txid] = account0
-
+		groupSize := min(params.MaxTxGroupSize, numAssets+1-i)
+		if groupSize == 1 {
+			tx, err := client.MakeUnsignedAssetCreateTx(uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i), assetURL, assetMetadataHash, 0)
+			a.NoError(err)
+			txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
+			a.NoError(err)
+			txids[txid] = account0
+		} else {
+			txns := make([]transactions.Transaction, 0, groupSize)
+			stxns := make([]transactions.SignedTxn, 0, groupSize)
+			for j := 0; j < groupSize; j++ {
+				tx, err := client.MakeUnsignedAssetCreateTx(uint64(i+j), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i+j), fmt.Sprintf("testname%d", i+j), assetURL, assetMetadataHash, 0)
+				a.NoError(err)
+				tx, err = client.FillUnsignedTxTemplate(account0, 0, 0, 1000000, tx)
+				a.NoError(err)
+				txns = append(txns, tx)
+			}
+			gid, err := client.GroupID(txns)
+			a.NoError(err)
+			for j := 0; j < groupSize; j++ {
+				txns[j].Group = gid
+				stxn, err := client.SignTransactionWithWallet(wh, nil, txns[j])
+				a.NoError(err)
+				stxns = append(stxns, stxn)
+				txids[stxn.ID().String()] = account0
+			}
+			err = client.BroadcastTransactionGroup(stxns)
+			a.NoError(err)
+		}
 		// Travis is slow, so help it along by waiting every once in a while
 		// for these transactions to commit..
 		if (i % 50) == 0 {
@@ -208,6 +238,7 @@ func createTestAssets(a *require.Assertions, fixture *fixtures.RestClientFixture
 			a.True(confirmed)
 			txids = make(map[string]string)
 		}
+		i += groupSize
 	}
 
 	_, curRound := fixture.GetBalanceAndRound(account0)
@@ -279,7 +310,7 @@ func TestAssetConfig(t *testing.T) {
 
 	// Create max number of assets
 	numAssets := config.Consensus[protocol.ConsensusV27].MaxAssetsPerAccount
-	createTestAssets(a, &fixture, numAssets, account0, manager, reserve, freeze, clawback, assetURL, assetMetadataHash)
+	createTestAssets(a, &fixture, numAssets, account0, manager, reserve, freeze, clawback, assetURL, assetMetadataHash, config.Consensus[protocol.ConsensusV27])
 
 	// re-generate wh, since this test takes a while and sometimes
 	// the wallet handle expires.
@@ -394,30 +425,77 @@ func TestAssetConfig(t *testing.T) {
 	a.True(strings.Contains(err.Error(), "outstanding assets"))
 
 	// Destroy assets
-	txids = make(map[string]string)
-	for idx := range info.AssetParams {
+	txids = make(map[string]string, len(info.AssetParams))
+	params := config.Consensus[protocol.ConsensusV27]
+	min := func(a, b int) int {
+		if a < b {
+			return a
+		}
+		return b
+	}
+
+	// flatten in order to send in groups
+	type flatten struct {
+		idx    uint64
+		params v1.AssetParams
+	}
+	assetParams := make([]flatten, 0, len(info.AssetParams))
+	for idx, params := range info.AssetParams {
+		assetParams = append(assetParams, flatten{idx, params})
+	}
+	i := 0
+	for i < len(assetParams) {
 		// re-generate wh, since this test takes a while and sometimes
 		// the wallet handle expires.
 		wh, err = client.GetUnencryptedWalletHandle()
 		a.NoError(err)
 
-		tx, err := client.MakeUnsignedAssetDestroyTx(idx)
-		sender := manager
-		if idx == assets[0].idx {
-			sender = account0
+		groupSize := min(params.MaxTxGroupSize, len(assetParams)-i)
+		if groupSize == 1 {
+			tx, err := client.MakeUnsignedAssetDestroyTx(assetParams[i].idx)
+			sender := manager
+			if assetParams[i].idx == assets[0].idx {
+				sender = account0
+			}
+			txid, err := helperFillSignBroadcast(client, wh, sender, tx, err)
+			a.NoError(err)
+			txids[txid] = sender
+		} else {
+			txns := make([]transactions.Transaction, 0, groupSize)
+			stxns := make([]transactions.SignedTxn, 0, groupSize)
+			for j := 0; j < groupSize; j++ {
+				tx, err := client.MakeUnsignedAssetDestroyTx(assetParams[i+j].idx)
+				a.NoError(err)
+				sender := manager
+				if assetParams[i+j].idx == assets[0].idx {
+					sender = account0
+				}
+				tx, err = client.FillUnsignedTxTemplate(sender, 0, 0, 1000000, tx)
+				a.NoError(err)
+				txns = append(txns, tx)
+			}
+			gid, err := client.GroupID(txns)
+			a.NoError(err)
+			for j := 0; j < groupSize; j++ {
+				txns[j].Group = gid
+				stxn, err := client.SignTransactionWithWallet(wh, nil, txns[j])
+				a.NoError(err)
+				stxns = append(stxns, stxn)
+				txids[stxn.ID().String()] = stxn.Txn.Sender.String()
+			}
+			err = client.BroadcastTransactionGroup(stxns)
+			a.NoError(err)
 		}
-		txid, err := helperFillSignBroadcast(client, wh, sender, tx, err)
-		a.NoError(err)
-		txids[txid] = sender
 
 		// Travis is slow, so help it along by waiting every once in a while
 		// for these transactions to commit..
-		if (idx % 50) == 0 {
+		if (i % 50) == 0 {
 			_, curRound = fixture.GetBalanceAndRound(account0)
 			confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 			a.True(confirmed)
 			txids = make(map[string]string)
 		}
+		i += groupSize
 	}
 
 	_, curRound = fixture.GetBalanceAndRound(account0)
@@ -479,8 +557,8 @@ func TestAssetConfigUnlimited(t *testing.T) {
 	a.Equal(len(info.AssetParams), 0)
 
 	// Create max number of assets
-	numAssets := config.Consensus[protocol.ConsensusV27].MaxAssetsPerAccount
-	createTestAssets(a, &fixture, numAssets, account0, manager, reserve, freeze, clawback, assetURL, assetMetadataHash)
+	numAssets := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
+	createTestAssets(a, &fixture, numAssets, account0, manager, reserve, freeze, clawback, assetURL, assetMetadataHash, config.Consensus[protocol.ConsensusFuture])
 
 	// re-generate wh, since this test takes a while and sometimes
 	// the wallet handle expires.
