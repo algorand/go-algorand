@@ -1806,196 +1806,6 @@ func testLogic(t *testing.T, program string, v uint64, ep EvalParams, problems .
 	}
 }
 
-func TestGtxnaScratch(t *testing.T) {
-	t.Parallel()
-
-	type scratchTestCase struct {
-		tealSources []string
-		errContains string
-	}
-
-	simpleCase := scratchTestCase{
-		tealSources: []string{
-			`int 2
-store 0
-int 1`,
-			`gtxna 0 Scratch 0
-int 2
-==
-`,
-		},
-	}
-
-	multipleTxnCase := scratchTestCase{
-		tealSources: []string{
-			`byte "txn 1"
-store 0
-int 1`,
-			`byte "txn 2"
-store 1
-int 1`,
-			`gtxna 0 Scratch 0
-byte "txn 1"
-==
-gtxna 1 Scratch 1
-byte "txn 2"
-==
-&&
-`,
-		},
-	}
-
-	selfCase := scratchTestCase{
-		tealSources: []string{
-			`gtxna 0 Scratch 0
-int 2
-store 0
-int 1
-`,
-		},
-		errContains: "can't use Scratch txn field on self, use load instead",
-	}
-
-	laterTxnSlotCase := scratchTestCase{
-		tealSources: []string{
-			`gtxna 1 Scratch 0
-int 2
-==
-`,
-			`int 2
-store 0
-int 1`,
-		},
-		errContains: "can't get future Scratch from txn with index 1",
-	}
-
-	cases := []scratchTestCase{
-		simpleCase, multipleTxnCase, selfCase, laterTxnSlotCase,
-	}
-	proto := defaultEvalProtoWithVersion(LogicVersion)
-
-	for i, testCase := range cases {
-		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			sources := testCase.tealSources
-			// Assemble ops
-			opsList := make([]*OpStream, len(sources))
-			for j, source := range sources {
-				ops := testProg(t, source, AssemblerMaxVersion)
-				opsList[j] = ops
-			}
-
-			// Initialize txgroup and cxgroup
-			txgroup := make([]transactions.SignedTxn, len(sources))
-			for j := range txgroup {
-				txgroup[j] = transactions.SignedTxn{
-					Txn: transactions.Transaction{
-						Type: protocol.ApplicationCallTx,
-					},
-				}
-			}
-
-			// Construct EvalParams
-			pastSideEffects := make([]*EvalSideEffects, len(sources))
-			for j := range pastSideEffects {
-				pastSideEffects[j] = new(EvalSideEffects)
-			}
-			epList := make([]EvalParams, len(sources))
-			for j := range sources {
-				epList[j] = EvalParams{
-					Proto:           &proto,
-					Txn:             &txgroup[j],
-					TxnGroup:        txgroup,
-					GroupIndex:      j,
-					PastSideEffects: pastSideEffects,
-				}
-			}
-
-			// Evaluate app calls
-			shouldErr := testCase.errContains != ""
-			didPass := true
-			for j, ops := range opsList {
-				pass, err := EvalStateful(ops.Program, epList[j])
-
-				// Confirm it errors or that the error message is the expected one
-				if !shouldErr {
-					require.NoError(t, err)
-				} else if shouldErr && err != nil {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), testCase.errContains)
-				}
-
-				if !pass {
-					didPass = false
-				}
-			}
-
-			require.Equal(t, !shouldErr, didPass)
-		})
-	}
-
-	type failureCase struct {
-		firstTxn    transactions.SignedTxn
-		runMode     runMode
-		errContains string
-	}
-
-	nonAppCall := failureCase{
-		firstTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: protocol.PaymentTx,
-			},
-		},
-		runMode:     runModeApplication,
-		errContains: "can't use Scratch txn field on non-app call txn with index 0",
-	}
-
-	logicSigCall := failureCase{
-		firstTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: protocol.ApplicationCallTx,
-			},
-		},
-		runMode:     runModeSignature,
-		errContains: "can't use Scratch txn field from within a LogicSig",
-	}
-
-	failCases := []failureCase{nonAppCall, logicSigCall}
-	for j, failCase := range failCases {
-		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
-			source := "gtxna 0 Scratch 0"
-			ops := testProg(t, source, AssemblerMaxVersion)
-
-			// Initialize txgroup and cxgroup
-			txgroup := make([]transactions.SignedTxn, 2)
-			txgroup[0] = failCase.firstTxn
-			txgroup[1] = transactions.SignedTxn{}
-
-			// Construct EvalParams
-			epList := make([]EvalParams, 2)
-			for j := range epList {
-				epList[j] = EvalParams{
-					Proto:      &proto,
-					Txn:        &txgroup[j],
-					TxnGroup:   txgroup,
-					GroupIndex: j,
-				}
-			}
-
-			// Evaluate app call
-			var err error
-			switch failCase.runMode {
-			case runModeApplication:
-				_, err = EvalStateful(ops.Program, epList[1])
-			default:
-				_, err = Eval(ops.Program, epList[1])
-			}
-
-			require.Error(t, err)
-			require.Contains(t, err.Error(), failCase.errContains)
-		})
-	}
-}
-
 func TestTxna(t *testing.T) {
 	t.Parallel()
 	source := `txna Accounts 1
@@ -2413,6 +2223,198 @@ int 5
 			}
 			require.NoError(t, err)
 			require.True(t, pass)
+		})
+	}
+}
+
+func TestGload(t *testing.T) {
+	t.Parallel()
+
+	// for simple app-call-only transaction groups
+	type scratchTestCase struct {
+		tealSources []string
+		errContains string
+	}
+
+	simpleCase := scratchTestCase{
+		tealSources: []string{
+			`int 2
+store 0
+int 1`,
+			`gload 0 0
+int 2
+==
+`,
+		},
+	}
+
+	multipleTxnCase := scratchTestCase{
+		tealSources: []string{
+			`byte "txn 1"
+store 0
+int 1`,
+			`byte "txn 2"
+store 1
+int 1`,
+			`gload 0 0
+byte "txn 1"
+==
+gload 1 1
+byte "txn 2"
+==
+&&
+`,
+		},
+	}
+
+	selfCase := scratchTestCase{
+		tealSources: []string{
+			`gload 0 0
+int 2
+store 0
+int 1
+`,
+		},
+		errContains: "can't use gload on self, use load instead",
+	}
+
+	laterTxnSlotCase := scratchTestCase{
+		tealSources: []string{
+			`gload 1 0
+int 2
+==
+`,
+			`int 2
+store 0
+int 1`,
+		},
+		errContains: "gload can't get future scratch space from txn with index 1",
+	}
+
+	cases := []scratchTestCase{
+		simpleCase, multipleTxnCase, selfCase, laterTxnSlotCase,
+	}
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+
+	for i, testCase := range cases {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			sources := testCase.tealSources
+			// Assemble ops
+			opsList := make([]*OpStream, len(sources))
+			for j, source := range sources {
+				ops := testProg(t, source, AssemblerMaxVersion)
+				opsList[j] = ops
+			}
+
+			// Initialize txgroup and cxgroup
+			txgroup := make([]transactions.SignedTxn, len(sources))
+			for j := range txgroup {
+				txgroup[j] = transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.ApplicationCallTx,
+					},
+				}
+			}
+
+			// Construct EvalParams
+			pastSideEffects := make([]*EvalSideEffects, len(sources))
+			for j := range pastSideEffects {
+				pastSideEffects[j] = new(EvalSideEffects)
+			}
+			epList := make([]EvalParams, len(sources))
+			for j := range sources {
+				epList[j] = EvalParams{
+					Proto:           &proto,
+					Txn:             &txgroup[j],
+					TxnGroup:        txgroup,
+					GroupIndex:      j,
+					PastSideEffects: pastSideEffects,
+				}
+			}
+
+			// Evaluate app calls
+			shouldErr := testCase.errContains != ""
+			didPass := true
+			for j, ops := range opsList {
+				pass, err := EvalStateful(ops.Program, epList[j])
+
+				// Confirm it errors or that the error message is the expected one
+				if !shouldErr {
+					require.NoError(t, err)
+				} else if shouldErr && err != nil {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.errContains)
+				}
+
+				if !pass {
+					didPass = false
+				}
+			}
+
+			require.Equal(t, !shouldErr, didPass)
+		})
+	}
+
+	// for more complex group transaction cases
+	type failureCase struct {
+		firstTxn    transactions.SignedTxn
+		runMode     runMode
+		errContains string
+	}
+
+	nonAppCall := failureCase{
+		firstTxn: transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.PaymentTx,
+			},
+		},
+		runMode:     runModeApplication,
+		errContains: "can't use gload on non-app call txn with index 0",
+	}
+
+	logicSigCall := failureCase{
+		firstTxn: transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+			},
+		},
+		runMode:     runModeSignature,
+		errContains: "can't use gload from within a LogicSig",
+	}
+
+	failCases := []failureCase{nonAppCall, logicSigCall}
+	for j, failCase := range failCases {
+		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
+			source := "gload 0 0"
+			ops := testProg(t, source, AssemblerMaxVersion)
+
+			// Initialize txgroup and cxgroup
+			txgroup := make([]transactions.SignedTxn, 2)
+			txgroup[0] = failCase.firstTxn
+			txgroup[1] = transactions.SignedTxn{}
+
+			// Construct EvalParams
+			epList := make([]EvalParams, 2)
+			for j := range epList {
+				epList[j] = EvalParams{
+					Proto:      &proto,
+					Txn:        &txgroup[j],
+					TxnGroup:   txgroup,
+					GroupIndex: j,
+				}
+			}
+
+			// Evaluate app call
+			var err error
+			switch failCase.runMode {
+			case runModeApplication:
+				_, err = EvalStateful(ops.Program, epList[1])
+			default:
+				_, err = Eval(ops.Program, epList[1])
+			}
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), failCase.errContains)
 		})
 	}
 }
