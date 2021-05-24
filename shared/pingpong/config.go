@@ -61,6 +61,11 @@ type PpConfig struct {
 	AppLocalKeys    uint32
 	Rekey           bool
 	MaxRuntime      time.Duration
+
+	// asset spam; make lots of NFT ASAs
+	NftAsaPerSecond       uint32 // e.g. 100
+	NftAsaPerAccount      uint32 // 0..999
+	NftAsaAccountInFlight uint32
 }
 
 // DefaultConfig object for Ping Pong
@@ -88,6 +93,9 @@ var DefaultConfig = PpConfig{
 	AppProgHashSize: "sha256",
 	Rekey:           false,
 	MaxRuntime:      0,
+
+	NftAsaAccountInFlight: 5,
+	NftAsaPerAccount:      900,
 }
 
 // LoadConfigFromFile reads and loads Ping Pong configuration

@@ -1,0 +1,31 @@
+=== RUN   TestAccountsCanSendMoney
+=== PAUSE TestAccountsCanSendMoney
+=== CONT  TestAccountsCanSendMoney
+Created new rootkey: /var/folders/2s/vtjjqkk14j12_mld26p260mh0000gn/T/tmp317215351/TestAccountsCanSendMoney/Wallet2.rootkey
+Created new rootkey: /var/folders/2s/vtjjqkk14j12_mld26p260mh0000gn/T/tmp317215351/TestAccountsCanSendMoney/Wallet1.rootkey
+Created new partkey: /var/folders/2s/vtjjqkk14j12_mld26p260mh0000gn/T/tmp317215351/TestAccountsCanSendMoney/Wallet2.0.3000000.partkey
+Created new partkey: /var/folders/2s/vtjjqkk14j12_mld26p260mh0000gn/T/tmp317215351/TestAccountsCanSendMoney/Wallet1.0.3000000.partkey
+https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff 100000
+algod(57402) : Telemetry configured from '/Users/tsachi/.algorand/logging.config'
+algod(57402) : No REST API Token found. Generated token: ed061c29ef14bd560d7ca7b591ce118842d949dd42d1f473c4202ca72b7d5ff9
+algod(57402) : No Admin REST API Token found. Generated token: 9102a9b56b543456d0f11527097dd8a14a4c76a5f196168d98b7f1384404fd86
+algod(57402) : Logging to:  /var/folders/2s/vtjjqkk14j12_mld26p260mh0000gn/T/tmp317215351/TestAccountsCanSendMoney/Primary/node.log
+algod(57402) : Deadlock detection is set to: disabled (Default state is 'disable')
+algod(57402) : Initializing the Algorand node... 
+algod(57402) : Success!
+algod(57402) : Node running and accepting RPC requests over HTTP on port 127.0.0.1:8080. Press Ctrl-C to exit
+algod(57402) : ⇨ http server started on 127.0.0.1:8080
+algod(57403) : Telemetry configured from '/Users/tsachi/.algorand/logging.config'
+algod(57403) : No REST API Token found. Generated token: e752c98368436d74c4074a1cd2b15f31ea7d7661768764018d51b42b2b53fba7
+algod(57403) : No Admin REST API Token found. Generated token: 5bcc51fabb5247bb8a839a18e7ac3f7914138aea92e19257ec13765015649483
+algod(57403) : Logging to:  /var/folders/2s/vtjjqkk14j12_mld26p260mh0000gn/T/tmp317215351/TestAccountsCanSendMoney/Node/node.log
+algod(57403) : Deadlock detection is set to: disabled (Default state is 'disable')
+algod(57403) : Initializing the Algorand node... 
+algod(57403) : Success!
+algod(57403) : Node running and accepting RPC requests over HTTP on port 127.0.0.1:64818. Press Ctrl-C to exit
+algod(57403) : ⇨ http server started on 127.0.0.1:64818
+algod(57403) : Exiting on terminated
+algod(57402) : Exiting on terminated
+--- PASS: TestAccountsCanSendMoney (112.79s)
+PASS
+ok  	github.com/algorand/go-algorand/test/e2e-go/features/transactions	113.107s

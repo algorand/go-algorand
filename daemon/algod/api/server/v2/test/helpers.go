@@ -74,6 +74,7 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	AppsTotalSchema:             &appsTotalSchema,
 	CreatedApps:                 &appCreatedApps,
 }
+var txnPoolGolden = make([]transactions.SignedTxn, 2)
 
 // ordinarily mockNode would live in `components/mocks`
 // but doing this would create an import cycle, as mockNode needs
@@ -120,7 +121,7 @@ func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWit
 }
 
 func (m mockNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
-	return nil, m.err
+	return txnPoolGolden, m.err
 }
 
 func (m mockNode) SuggestedFee() basics.MicroAlgos {
@@ -237,7 +238,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		}
 
 		roots[i] = root
-		parts[i] = part
+		parts[i] = part.Participation
 
 		startamt := basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
 		short := root.Address()
@@ -250,6 +251,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 			data.VoteID = parts[i].VotingSecrets().OneTimeSignatureVerifier
 			genesis[short] = data
 		}
+		part.Close()
 	}
 
 	genesis[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})

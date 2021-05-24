@@ -36,7 +36,7 @@ import (
 
 func TestCompactCerts(t *testing.T) {
 	t.Parallel()
-	r := require.New(t)
+	r := require.New(fixtures.SynchronizedTest(t))
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("test-fast-compactcert")
@@ -56,12 +56,35 @@ func TestCompactCerts(t *testing.T) {
 	restClient, err := fixture.NC.AlgodClient()
 	r.NoError(err)
 
+	node0Client := fixture.GetLibGoalClientForNamedNode("Node0")
+	node0Wallet, err := node0Client.GetUnencryptedWalletHandle()
+	r.NoError(err)
+	node0AccountList, err := node0Client.ListAddresses(node0Wallet)
+	r.NoError(err)
+	node0Account := node0AccountList[0]
+
+	node1Client := fixture.GetLibGoalClientForNamedNode("Node1")
+	node1Wallet, err := node1Client.GetUnencryptedWalletHandle()
+	r.NoError(err)
+	node1AccountList, err := node1Client.ListAddresses(node1Wallet)
+	r.NoError(err)
+	node1Account := node1AccountList[0]
+
 	var lastCertBlock v1.Block
 	libgoal := fixture.LibGoalClient
 	for rnd := uint64(1); rnd <= consensusParams.CompactCertRounds*4; rnd++ {
-		fixture.WaitForRound(rnd, 30*time.Second)
-		blk, err := libgoal.Block(rnd)
+		// send a dummy payment transaction.
+		minTxnFee, _, err := fixture.CurrentMinFeeAndBalance()
 		r.NoError(err)
+
+		_, err = node0Client.SendPaymentFromUnencryptedWallet(node0Account, node1Account, minTxnFee, rnd, nil)
+		r.NoError(err)
+
+		err = fixture.WaitForRound(rnd, 30*time.Second)
+		r.NoError(err)
+
+		blk, err := libgoal.Block(rnd)
+		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
 		t.Logf("Round %d, block %v\n", rnd, blk)
 
@@ -127,5 +150,5 @@ func TestCompactCerts(t *testing.T) {
 		}
 	}
 
-	r.True(lastCertBlock.Round == consensusParams.CompactCertRounds*3)
+	r.Equalf(consensusParams.CompactCertRounds*3, lastCertBlock.Round, "the expected last certificate block wasn't the one that was observed")
 }

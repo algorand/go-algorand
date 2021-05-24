@@ -44,7 +44,7 @@ func TestAlgodLogsToFile(t *testing.T) {
 }
 
 func testNodeCreatesLogFiles(t *testing.T, nc nodecontrol.NodeController, redirect bool) {
-	a := require.New(t)
+	a := require.New(fixtures.SynchronizedTest(t))
 
 	stdOutFile := filepath.Join(nc.GetDataDir(), nodecontrol.StdOutFilename)
 	exists := util.FileExists(stdOutFile)

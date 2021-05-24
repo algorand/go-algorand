@@ -19,7 +19,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"os"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/gen"
@@ -54,7 +56,11 @@ func main() {
 		genesisData.NetworkName = *netName
 	}
 
-	err = gen.GenerateGenesisFiles(genesisData, config.Consensus, *outDir, !*quiet)
+	var verboseOut io.Writer = nil
+	if !*quiet {
+		verboseOut = os.Stdout
+	}
+	err = gen.GenerateGenesisFiles(genesisData, config.Consensus, *outDir, verboseOut)
 	if err != nil {
 		reportErrorf("Cannot write genesis files: %s", err)
 	}

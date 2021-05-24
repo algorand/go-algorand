@@ -63,7 +63,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -372,6 +372,52 @@ type Local struct {
 	// On networks that doesn't have archive servers, this becomes a no-op, as the catchup service would have no
 	// archive server to pick from, and therefore automatically selects one of the relay nodes.
 	EnableCatchupFromArchiveServers bool `version[15]:"false"`
+
+	// DisableLocalhostConnectionRateLimit controls whether the incoming connection rate limit would apply for
+	// connections that are originating from the local machine. Setting this to "true", allow to create large
+	// local-machine networks that won't trip the incoming connection limit observed by relays.
+	DisableLocalhostConnectionRateLimit bool `version[16]:"true"`
+
+	// BlockServiceCustomFallbackEndpoints is a comma delimited list of endpoints which the block service uses to
+	// redirect the http requests to in case it does not have the round. If it is not specified, will check
+	// EnableBlockServiceFallbackToArchiver.
+	BlockServiceCustomFallbackEndpoints string `version[16]:""`
+
+	// EnableBlockServiceFallbackToArchiver controls whether the block service redirects the http requests to
+	// an archiver or return StatusNotFound (404) when in does not have the requested round, and
+	// BlockServiceCustomFallbackEndpoints is empty.
+	// The archiver is randomly selected, if none is available, will return StatusNotFound (404).
+	EnableBlockServiceFallbackToArchiver bool `version[16]:"true"`
+
+	// CatchupBlockValidateMode is a development and testing configuration used by the catchup service.
+	// It can be used to omit certain validations to speed up the catchup process, or to apply extra validations which are redundant in normal operation.
+	// This field is a bit-field with:
+	// bit 0: (default 0) 0: verify the block certificate; 1: skip this validation
+	// bit 1: (default 0) 0: verify payset committed hash in block header matches payset hash; 1: skip this validation
+	// bit 2: (default 0) 0: don't verify the transaction signatures on the block are valid; 1: verify the transaction signatures on block
+	// bit 3: (default 0) 0: don't verify that the hash of the recomputed payset matches the hash of the payset committed in the block header; 1: do perform the above verification
+	// Note: not all permutations of the above bitset are currently functional. In particular, the ones that are functional are:
+	// 0  : default behavior.
+	// 3  : speed up catchup by skipping necessary validations
+	// 12 : perform all validation methods (normal and additional). These extra tests helps to verify the integrity of the compiled executable against
+	//      previously used executabled, and would not provide any additional security guarantees.
+	CatchupBlockValidateMode int `version[16]:"0"`
+
+	// Generate AccountUpdates telemetry event
+	EnableAccountUpdatesStats bool `version[16]:"false"`
+
+	// Time interval in nanoseconds for generating accountUpdates telemetry event
+	AccountUpdatesStatsInterval time.Duration `version[16]:"5000000000"`
+
+	// ParticipationKeysRefreshInterval is the duration between two consecutive checks to see if new participation
+	// keys have been placed on the genesis directory.
+	ParticipationKeysRefreshInterval time.Duration `version[16]:"60000000000"`
+
+	// DisableNetworking disables all the incoming and outgoing communication a node would perform. This is useful
+	// when we have a single-node private network, where there is no other nodes that need to be communicated with.
+	// features like catchpoint catchup would be rendered completly non-operational, and many of the node inner
+	// working would be completly dis-functional.
+	DisableNetworking bool `version[16]:"false"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -620,3 +666,30 @@ func (cfg Local) DNSSecurityTelemeryAddrEnforced() bool {
 
 // ProposalAssemblyTime is the max amount of time to spend on generating a proposal block. This should eventually have it's own configurable value.
 const ProposalAssemblyTime time.Duration = 250 * time.Millisecond
+
+const (
+	catchupValidationModeCertificate                 = 1
+	catchupValidationModePaysetHash                  = 2
+	catchupValidationModeVerifyTransactionSignatures = 4
+	catchupValidationModeVerifyApplyData             = 8
+)
+
+// CatchupVerifyCertificate returns true if certificate verification is needed
+func (cfg Local) CatchupVerifyCertificate() bool {
+	return cfg.CatchupBlockValidateMode&catchupValidationModeCertificate == 0
+}
+
+// CatchupVerifyPaysetHash returns true if payset hash verification is needed
+func (cfg Local) CatchupVerifyPaysetHash() bool {
+	return cfg.CatchupBlockValidateMode&catchupValidationModePaysetHash == 0
+}
+
+// CatchupVerifyTransactionSignatures returns true if transactions signature verification is needed
+func (cfg Local) CatchupVerifyTransactionSignatures() bool {
+	return cfg.CatchupBlockValidateMode&catchupValidationModeVerifyTransactionSignatures != 0
+}
+
+// CatchupVerifyApplyData returns true if verifying the ApplyData of the payset needed
+func (cfg Local) CatchupVerifyApplyData() bool {
+	return cfg.CatchupBlockValidateMode&catchupValidationModeVerifyApplyData != 0
+}

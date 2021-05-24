@@ -117,8 +117,8 @@ func TestOpcodesByVersion(t *testing.T) {
 func TestOpcodesVersioningV2(t *testing.T) {
 	t.Parallel()
 
-	require.Equal(t, 4, len(opsByOpcode))
-	require.Equal(t, 4, len(OpsByName))
+	require.Equal(t, LogicVersion+1, len(opsByOpcode))
+	require.Equal(t, LogicVersion+1, len(OpsByName))
 
 	// ensure v0 has only v0 opcodes
 	cntv0 := 0

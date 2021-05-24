@@ -79,7 +79,28 @@ const baseAccountsPendingAccountsBufferSize = 100000
 // is being flushed into the main base account cache.
 const baseAccountsPendingAccountsWarnThreshold = 85000
 
-var trieMemoryConfig = merkletrie.MemoryConfig{
+// initializeCachesReadaheadBlocksStream defines how many block we're going to attempt to queue for the
+// initializeCaches method before it can process and store the account changes to disk.
+const initializeCachesReadaheadBlocksStream = 4
+
+// initializeCachesRoundFlushInterval defines the number of rounds between every to consecutive
+// attempts to flush the memory account data to disk. Setting this value too high would increase
+// memory utilization. Setting this too low, would increase disk i/o.
+const initializeCachesRoundFlushInterval = 1000
+
+// initializingAccountCachesMessageTimeout controls the amount of time passes before we
+// log "initializingAccount initializing.." message to the log file. This is primarily for
+// nodes with slower disk access, where a feedback that the node is functioning correctly is needed.
+const initializingAccountCachesMessageTimeout = 3 * time.Second
+
+// accountsUpdatePerRoundHighWatermark is the warning watermark for updating accounts data that takes
+// longer than expected. We set it up here for one second per round, so that if we're bulk updating
+// four rounds, we would allow up to 4 seconds. This becomes important when supporting balances recovery
+// where we end up batching up to 1000 rounds in a single update.
+const accountsUpdatePerRoundHighWatermark = 1 * time.Second
+
+// TrieMemoryConfig is the memory configuration setup used for the merkle trie.
+var TrieMemoryConfig = merkletrie.MemoryConfig{
 	NodesCountPerPage:         merkleCommitterNodesPerPage,
 	CachedNodesCount:          trieCachedNodesCount,
 	PageFillFactor:            0.95,
@@ -107,7 +128,7 @@ type accountUpdates struct {
 	// initAccounts specifies initial account values for database.
 	initAccounts map[basics.Address]basics.AccountData
 
-	// initProto specifies the initial consensus parameters.
+	// initProto specifies the initial consensus parameters at the genesis block.
 	initProto config.ConsensusParams
 
 	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directroy for the catchup files to be generated
@@ -152,9 +173,9 @@ type accountUpdates struct {
 	// appears in creatableDeltas
 	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	// protos stores consensus parameters dbRound and every
-	// round after it; i.e., protos is one longer than deltas.
-	protos []config.ConsensusParams
+	// versions stores consensus version dbRound and every
+	// round after it; i.e., versions is one longer than deltas.
+	versions []protocol.ConsensusVersion
 
 	// totals stores the totals for dbRound and every round after it;
 	// i.e., totals is one longer than deltas.
@@ -222,6 +243,21 @@ type accountUpdates struct {
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
 	baseAccounts lruAccounts
+
+	// the synchronous mode that would be used for the account database.
+	synchronousMode db.SynchronousMode
+
+	// the synchronous mode that would be used while the accounts database is being rebuilt.
+	accountsRebuildSynchronousMode db.SynchronousMode
+
+	// logAccountUpdatesMetrics is a flag for enable/disable metrics logging
+	logAccountUpdatesMetrics bool
+
+	// logAccountUpdatesInterval sets a time interval for metrics logging
+	logAccountUpdatesInterval time.Duration
+
+	// lastMetricsLogTime is the time when the previous metrics logging occurred
+	lastMetricsLogTime time.Time
 }
 
 type deferredCommit struct {
@@ -295,6 +331,13 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.commitSyncerClosed = make(chan struct{})
 	close(au.commitSyncerClosed)
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
+	au.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
+	au.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
+
+	// log metrics
+	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
+	au.logAccountUpdatesInterval = cfg.AccountUpdatesStatsInterval
+
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -623,11 +666,10 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 			au.committedOffset <- dc
 		}
 	}()
-
 	retRound = basics.Round(0)
 	var pendingDeltas int
 
-	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
+	lookback := basics.Round(config.Consensus[au.versions[len(au.versions)-1]].MaxBalLookback)
 	if committedRound < lookback {
 		return
 	}
@@ -684,6 +726,8 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 
 	offset = uint64(newBase - au.dbRound)
 
+	offset = au.consecutiveVersion(offset)
+
 	// check to see if this is a catchpoint round
 	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
 
@@ -716,6 +760,22 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		au.accountsWriting.Add(1)
 	}
 	return
+}
+
+func (au *accountUpdates) consecutiveVersion(offset uint64) uint64 {
+	// check if this update chunk spans across multiple consensus versions. If so, break it so that each update would tackle only a single
+	// consensus version.
+	if au.versions[1] != au.versions[offset] {
+		// find the tip point.
+		tipPoint := sort.Search(int(offset), func(i int) bool {
+			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
+			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
+			return au.versions[1] != au.versions[1+i]
+		})
+		// no need to handle the case of "no found", or tipPoint==int(offset), since we already know that it's there.
+		offset = uint64(tipPoint)
+	}
+	return offset
 }
 
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
@@ -881,7 +941,9 @@ func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals ledgercore.Accoun
 	return
 }
 
-// initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks
+// initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
+// the method also support balances recovery in cases where the difference between the lastBalancesRound and the lastestBlockRound
+// is far greater than 320; in these cases, it would flush to disk periodically in order to avoid high memory consumption.
 func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound, writingCatchpointRound basics.Round) (catchpointBlockDigest crypto.Digest, err error) {
 	var blk bookkeeping.Block
 	var delta ledgercore.StateDelta
@@ -896,27 +958,146 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 		}
 	}
 
-	for lastBalancesRound < lastestBlockRound {
-		next := lastBalancesRound + 1
-
-		blk, err = au.ledger.Block(next)
-		if err != nil {
-			return
+	skipAccountCacheMessage := make(chan struct{})
+	writeAccountCacheMessageCompleted := make(chan struct{})
+	defer func() {
+		close(skipAccountCacheMessage)
+		select {
+		case <-writeAccountCacheMessageCompleted:
+			if err == nil {
+				au.log.Infof("initializeCaches completed initializing account data caches")
+			}
+		default:
 		}
+	}()
 
+	// this goroutine logs a message once if the parent function have not completed in initializingAccountCachesMessageTimeout seconds.
+	// the message is important, since we're blocking on the ledger block database here, and we want to make sure that we log a message
+	// within the above timeout.
+	go func() {
+		select {
+		case <-time.After(initializingAccountCachesMessageTimeout):
+			au.log.Infof("initializeCaches is initializing account data caches")
+			close(writeAccountCacheMessageCompleted)
+		case <-skipAccountCacheMessage:
+		}
+	}()
+
+	blocksStream := make(chan bookkeeping.Block, initializeCachesReadaheadBlocksStream)
+	blockEvalFailed := make(chan struct{}, 1)
+	var blockRetrievalError error
+	go func() {
+		defer close(blocksStream)
+		for roundNumber := lastBalancesRound + 1; roundNumber <= lastestBlockRound; roundNumber++ {
+			blk, blockRetrievalError = au.ledger.Block(roundNumber)
+			if blockRetrievalError != nil {
+				return
+			}
+			select {
+			case blocksStream <- blk:
+			case <-blockEvalFailed:
+				return
+			}
+		}
+	}()
+
+	lastFlushedRound := lastBalancesRound
+	const accountsCacheLoadingMessageInterval = 5 * time.Second
+	lastProgressMessage := time.Now().Add(-accountsCacheLoadingMessageInterval / 2)
+
+	// rollbackSynchronousMode ensures that we switch to "fast writing mode" when we start flushing out rounds to disk, and that
+	// we exit this mode when we're done.
+	rollbackSynchronousMode := false
+	defer func() {
+		if rollbackSynchronousMode {
+			// restore default synchronous mode
+			au.dbs.Wdb.SetSynchronousMode(context.Background(), au.synchronousMode, au.synchronousMode >= db.SynchronousModeFull)
+		}
+	}()
+
+	for blk := range blocksStream {
 		delta, err = au.ledger.trackerEvalVerified(blk, &accLedgerEval)
 		if err != nil {
+			close(blockEvalFailed)
 			return
 		}
 
 		au.newBlockImpl(blk, delta)
-		lastBalancesRound = next
 
-		if next == basics.Round(writingCatchpointRound) {
+		if blk.Round() == basics.Round(writingCatchpointRound) {
 			catchpointBlockDigest = blk.Digest()
 		}
 
+		// flush to disk if any of the following applies:
+		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
+		// 2. if we completed the loading and we loaded up more than 320 rounds.
+		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
+		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(blk.ConsensusProtocol().MaxBalLookback) < lastestBlockRound)
+		if flushIntervalExceed || loadCompleted {
+			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
+			au.lastFlushTime = time.Now().Add(-balancesFlushInterval)
+
+			if !rollbackSynchronousMode {
+				// switch to rebuild synchronous mode to improve performance
+				au.dbs.Wdb.SetSynchronousMode(context.Background(), au.accountsRebuildSynchronousMode, au.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
+
+				// flip the switch to rollback the synchronous mode once we're done.
+				rollbackSynchronousMode = true
+			}
+
+			// The unlocking/relocking here isn't very elegant, but it does get the work done :
+			// this method is called on either startup or when fast catchup is complete. In the former usecase, the
+			// locking here is not really needed since the system is only starting up, and there are no other
+			// consumers for the accounts update. On the latter usecase, the function would always have exactly 320 rounds,
+			// and therefore this wouldn't be an issue.
+			// However, to make sure we're not missing any other future codepath, unlocking here and re-locking later on is a pretty
+			// safe bet.
+			au.accountsMu.Unlock()
+
+			// flush the account data
+			au.committedUpTo(blk.Round())
+
+			// wait for the writing to complete.
+			au.waitAccountsWriting()
+
+			// The au.dbRound after writing should be ~320 behind the block round.
+			roundsBehind := blk.Round() - au.dbRound
+
+			au.accountsMu.Lock()
+
+			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
+			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(au.catchpointInterval) {
+				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any futher changes
+				// would just accumulate in memory.
+				close(blockEvalFailed)
+				au.log.Errorf("initializeCaches was unable to fill up the account caches accounts round = %d, block round = %d. See above error for more details.", au.dbRound, blk.Round())
+				err = fmt.Errorf("initializeCaches failed to initialize the account data caches")
+				return
+			}
+
+			// and once we flushed it to disk, update the lastFlushedRound
+			lastFlushedRound = blk.Round()
+		}
+
+		// if enough time have passed since the last time we wrote a message to the log file then give the user an update about the progess.
+		if time.Now().Sub(lastProgressMessage) > accountsCacheLoadingMessageInterval {
+			// drop the initial message if we're got to this point since a message saying "still initializing" that comes after "is initializing" doesn't seems to be right.
+			select {
+			case skipAccountCacheMessage <- struct{}{}:
+				// if we got to this point, we should be able to close the writeAccountCacheMessageCompleted channel to have the "completed initializing" message written.
+				close(writeAccountCacheMessageCompleted)
+			default:
+			}
+			au.log.Infof("initializeCaches is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, lastestBlockRound-lastBalancesRound)
+			lastProgressMessage = time.Now()
+		}
+
+		// prepare for the next iteration.
 		accLedgerEval.prevHeader = *delta.Hdr
+	}
+
+	if blockRetrievalError != nil {
+		err = blockRetrievalError
 	}
 	return
 }
@@ -985,7 +1166,8 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	if err != nil {
 		return
 	}
-	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
+
+	au.versions = []protocol.ConsensusVersion{hdr.CurrentProtocol}
 	au.deltas = nil
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
@@ -1102,12 +1284,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	}
 
 	// create the merkle trie for the balances
-	committer, err := makeMerkleCommitter(tx, false)
+	committer, err := MakeMerkleCommitter(tx, false)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
 
-	trie, err := merkletrie.MakeTrie(committer, trieMemoryConfig)
+	trie, err := merkletrie.MakeTrie(committer, TrieMemoryConfig)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
@@ -1341,14 +1523,14 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 	}
 
 	if queryAddresses && len(addresses) > 0 {
-		mc, err := makeMerkleCommitter(tx, false)
+		mc, err := MakeMerkleCommitter(tx, false)
 		if err != nil {
 			// at this point record deleted and DB is pruned for account data
-			// if hash deletion fails just log it and do not about startup
+			// if hash deletion fails just log it and do not abort startup
 			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle committer: %v", err)
 			goto done
 		}
-		trie, err := merkletrie.MakeTrie(mc, trieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
 		if err != nil {
 			au.log.Errorf("upgradeDatabaseSchema4: failed to create merkle trie: %v", err)
 			goto done
@@ -1434,7 +1616,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
 			deleted, err = au.balancesTrie.Delete(deleteHash)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
 			}
 			if !deleted {
 				au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
@@ -1447,7 +1629,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
 			added, err = au.balancesTrie.Add(addHash)
 			if err != nil {
-				return err
+				return fmt.Errorf("attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
 			}
 			if !added {
 				au.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
@@ -1468,6 +1650,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 	if accumulatedChanges > 0 {
 		_, err = au.balancesTrie.Commit()
 	}
+
 	return
 }
 
@@ -1486,7 +1669,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
 	}
 	au.deltas = append(au.deltas, delta.Accts)
-	au.protos = append(au.protos, proto)
+	au.versions = append(au.versions, blk.CurrentProtocol)
 	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
 	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
@@ -1576,7 +1759,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			return
 		}
 
-		rewardsProto = au.protos[offset]
+		rewardsProto = config.Consensus[au.versions[offset]]
 		rewardsLevel = au.roundTotals[offset].RewardsLevel
 
 		// we're testing the withRewards here and setting the defer function only once, and only if withRewards is true.
@@ -1865,6 +2048,17 @@ func (au *accountUpdates) commitSyncer(deferedCommits chan deferredCommit) {
 
 // commitRound write to the database a "chunk" of rounds, and update the dbRound accordingly.
 func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookback basics.Round) {
+	var stats telemetryspec.AccountsUpdateMetrics
+	var updateStats bool
+
+	if au.logAccountUpdatesMetrics {
+		now := time.Now()
+		if now.Sub(au.lastMetricsLogTime) >= au.logAccountUpdatesInterval {
+			updateStats = true
+			au.lastMetricsLogTime = now
+		}
+	}
+
 	defer au.accountsWriting.Done()
 	au.accountsMu.RLock()
 
@@ -1885,6 +2079,15 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// adjust the offset according to what happened meanwhile..
 	offset -= uint64(au.dbRound - dbRound)
+
+	// if this iteration need to flush out zero rounds, just return right away.
+	// this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
+	// flush, without the commitRound have a chance of committing these rounds.
+	if offset == 0 {
+		au.accountsMu.RUnlock()
+		return
+	}
+
 	dbRound = au.dbRound
 
 	newBase := basics.Round(offset) + dbRound
@@ -1895,11 +2098,17 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	deltas := make([]ledgercore.AccountDeltas, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset, offset)
 	roundTotals := make([]ledgercore.AccountTotals, offset+1, offset+1)
-	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])
 	copy(roundTotals, au.roundTotals[:offset+1])
-	copy(protos, au.protos[:offset+1])
+
+	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
+	if au.versions[1] != au.versions[offset] {
+		au.accountsMu.RUnlock()
+		au.log.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
+		return
+	}
+	consensusVersion := au.versions[1]
 
 	var committedRoundDigest crypto.Digest
 
@@ -1932,15 +2141,18 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	var updatedPersistedAccounts []persistedAccountData
+	if updateStats {
+		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano())
+	}
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
-			mc, err0 := makeMerkleCommitter(tx, false)
+			mc, err0 := MakeMerkleCommitter(tx, false)
 			if err0 != nil {
 				return err0
 			}
 			if au.balancesTrie == nil {
-				trie, err := merkletrie.MakeTrie(mc, trieMemoryConfig)
+				trie, err := merkletrie.MakeTrie(mc, TrieMemoryConfig)
 				if err != nil {
 					au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
 					return err
@@ -1952,14 +2164,28 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 
+		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
+
+		if updateStats {
+			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
+		}
+
 		err = compactDeltas.accountsLoadOld(tx)
 		if err != nil {
 			return err
 		}
 
-		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], protos[1:offset+1])
+		if updateStats {
+			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - stats.OldAccountPreloadDuration
+		}
+
+		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
 		if err != nil {
 			return err
+		}
+
+		if updateStats {
+			stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano())
 		}
 
 		err = au.accountsUpdateBalances(compactDeltas)
@@ -1967,11 +2193,21 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
+		if updateStats {
+			now := time.Duration(time.Now().UnixNano())
+			stats.MerkleTrieUpdateDuration = now - stats.MerkleTrieUpdateDuration
+			stats.AccountsWritingDuration = now
+		}
+
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 		// so that we can update the base account back.
 		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
 		if err != nil {
 			return err
+		}
+
+		if updateStats {
+			stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano()) - stats.AccountsWritingDuration
 		}
 
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
@@ -1994,6 +2230,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		return
 	}
 
+	if updateStats {
+		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano()) - stats.DatabaseCommitDuration - stats.AccountsWritingDuration - stats.MerkleTrieUpdateDuration - stats.OldAccountPreloadDuration
+	}
+
 	if isCatchpointRound {
 		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
 		if err != nil {
@@ -2012,6 +2252,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 	updatingBalancesDuration := time.Now().Sub(beforeUpdatingBalancesTime)
 
+	if updateStats {
+		stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
+	}
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
@@ -2057,19 +2300,36 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.deltas = au.deltas[offset:]
 	au.deltasAccum = au.deltasAccum[offset:]
 	au.roundDigest = au.roundDigest[offset:]
-	au.protos = au.protos[offset:]
+	au.versions = au.versions[offset:]
 	au.roundTotals = au.roundTotals[offset:]
 	au.creatableDeltas = au.creatableDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
 
 	au.accountsMu.Unlock()
+
+	if updateStats {
+		stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano()) - stats.MemoryUpdatesDuration
+	}
+
 	au.accountsReadCond.Broadcast()
 
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
 		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
+	}
+
+	// log telemetry event
+	if updateStats {
+		stats.StartRound = uint64(dbRound)
+		stats.RoundsCount = offset
+		stats.UpdatedAccountsCount = uint64(len(updatedPersistedAccounts))
+		stats.UpdatedCreatablesCount = uint64(len(compactCreatableDeltas))
+
+		var details struct {
+		}
+		au.log.Metrics(telemetryspec.Accounts, stats, details)
 	}
 
 }

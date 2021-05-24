@@ -18,6 +18,7 @@ package main
 
 import (
 	"go/ast"
+	"strings"
 )
 
 func init() {
@@ -37,7 +38,29 @@ func deadlock(f *ast.File) bool {
 	}
 
 	fixed := false
+
+	var provisionalRewrites []*ast.SelectorExpr
+
 	walk(f, func(n interface{}) {
+		if f, ok := n.(*ast.Field); ok {
+			if f.Tag != nil {
+				if strings.Contains(f.Tag.Value, `algofix:"allow sync.Mutex"`) {
+					exceptPos := f.Pos()
+					exceptEnd := f.End()
+					// cancel a provisional rewrite if it winds up being contained in a struct field decl with a tag to allow sync.Mutex
+					for i, e := range provisionalRewrites {
+						if e == nil {
+							continue
+						}
+						if exceptPos <= e.Pos() && e.End() <= exceptEnd {
+							provisionalRewrites[i] = nil
+						}
+					}
+				}
+			}
+			return
+		}
+
 		e, ok := n.(*ast.SelectorExpr)
 		if !ok {
 			return
@@ -50,10 +73,18 @@ func deadlock(f *ast.File) bool {
 
 		estr := pkg.Name + "." + e.Sel.Name
 		if estr == "sync.Mutex" || estr == "sync.RWMutex" {
-			e.X = &ast.Ident{Name: "deadlock"}
-			fixed = true
+			provisionalRewrites = append(provisionalRewrites, e)
 		}
 	})
+
+	// actually apply any provisional rewrites that weren't cancelled
+	for _, e := range provisionalRewrites {
+		if e == nil {
+			continue
+		}
+		e.X = &ast.Ident{Name: "deadlock"}
+		fixed = true
+	}
 
 	if fixed {
 		addImport(f, "github.com/algorand/go-deadlock")

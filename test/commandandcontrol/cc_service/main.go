@@ -103,11 +103,11 @@ func monitorAgent(ws *websocket.Conn) {
 		}
 		switch messageType {
 		case websocket.TextMessage:
-			log.Infof("recieved text from agent: %s", message)
+			log.Infof("received text from agent: %s", message)
 			clientBroadcast <- message
 			break
 		default:
-			log.Infof("recieved other from agent: %s", message)
+			log.Infof("received other from agent: %s", message)
 			break
 		}
 	}

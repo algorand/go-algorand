@@ -70,12 +70,10 @@ function install_windows_shellcheck() {
 
 if [ "${OS}" = "linux" ]; then
     if ! which sudo > /dev/null; then
-        apt-get update
-        apt-get -y install sudo
+        "$SCRIPTPATH/install_linux_deps.sh"
+    else
+        sudo "$SCRIPTPATH/install_linux_deps.sh"
     fi
-
-    sudo apt-get update
-    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3 python3-venv
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap homebrew/cask
@@ -103,4 +101,3 @@ if ${SKIP_GO_DEPS}; then
 fi
 
 "$SCRIPTPATH/configure_dev-deps.sh"
-

@@ -160,9 +160,15 @@ func (nc *NodeController) StopAlgod() (err error) {
 	algodPID, err := nc.GetAlgodPID()
 	if err == nil {
 		// Kill algod by PID
-		err = killPID(int(algodPID))
-		if err != nil {
-			return
+		killed, killErr := killPID(int(algodPID))
+		if killErr != nil {
+			return killErr
+		}
+		// if we ended up killing the process, make sure to delete the pid file to avoid
+		// potential downstream issues.
+		if killed {
+			// delete the pid file.
+			os.Remove(nc.algodPidFile)
 		}
 	} else {
 		return &NodeNotRunningError{algodDataDir: nc.algodDataDir}
