@@ -103,10 +103,12 @@ E2E_BASIC_START_STOP=$SECONDS
 ./timeout 200 ./e2e_basic_start_stop.sh
 duration "$E2E_BASIC_START_STOP" "Run duration e2e_basic_start_stop.sh"
 
+E2E_CLIENT_CONFIG=$SECONDS
 python3 -m venv "${TEMPDIR}/ve"
 . "${TEMPDIR}/ve/bin/activate"
 "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
 "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
+duration "$E2E_CLIENT_CONFIG" "Run duration e2e client setup."
 
 E2E_CLIENT_RUNNER_PARALLEL=$SECONDS
 "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
