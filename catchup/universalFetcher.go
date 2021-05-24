@@ -94,7 +94,7 @@ func processBlockBytes(fetchedBuf []byte, r basics.Round, peerAddr string) (blk 
 	var decodedEntry rpcs.EncodedBlockCert
 	err = protocol.Decode(fetchedBuf, &decodedEntry)
 	if err != nil {
-		err = makeErrCannotDecodeBlock(r, peerAddr, err.Error())
+		err = makeErrCannotDecodeBlock(r, peerAddr, err)
 		return
 	}
 
@@ -247,7 +247,7 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 	// response content type is what we'd like it to be.
 	contentTypes := response.Header["Content-Type"]
 	if len(contentTypes) != 1 {
-		err = errHttpResponseContentType{contentTypeCount: len(contentTypes)}
+		err = errHTTPResponseContentType{contentTypeCount: len(contentTypes)}
 		hf.log.Warn(err)
 		response.Body.Close()
 		return nil, err
@@ -259,7 +259,7 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 	if contentTypes[0] != rpcs.BlockResponseContentType && contentTypes[0] != blockResponseContentTypeOld {
 		hf.log.Warnf("http block fetcher response has an invalid content type : %s", contentTypes[0])
 		response.Body.Close()
-		return nil, errHttpResponseContentType{contentTypeCount: 1, contentType: contentTypes[0]}
+		return nil, errHTTPResponseContentType{contentTypeCount: 1, contentType: contentTypes[0]}
 	}
 
 	return rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
@@ -308,18 +308,21 @@ func (wbfpe errWrongBlockFromPeer) Error() string {
 type errCannotDecodeBlock struct {
 	round basics.Round
 	peer  string
-	cause string
+	err error
 }
 
-func makeErrCannotDecodeBlock(round basics.Round, peer, cause string) errCannotDecodeBlock {
+func makeErrCannotDecodeBlock(round basics.Round, peer string, err error) errCannotDecodeBlock {
 	return errCannotDecodeBlock{
 		round: round,
 		peer:  peer,
-		cause: cause}
+		err: err}
 }
 func (cdbe errCannotDecodeBlock) Error() string {
 	return fmt.Sprintf("processBlockBytes: cannot decode block %d from peer %s: %s",
-		cdbe.round, cdbe.peer, cdbe.cause)
+		cdbe.round, cdbe.peer, cdbe.err.Error())
+}
+func (cdbe errCannotDecodeBlock) Unwrap() error {
+	return cdbe.err
 }
 
 type errWsFetcherRequestFailed struct {
@@ -339,28 +342,28 @@ func (wrfe errWsFetcherRequestFailed)Error () string {
 		wrfe.peer, wrfe.round, wrfe.cause)
 }
 
-type errHttpResponse struct {
+type errHTTPResponse struct {
 	responseStatus int
 	blockURL       string
 	cause          string
 }
 
-func makeErrHTTPResponse(responseStatus int, blockURL string, cause string) errHttpResponse {
-	return errHttpResponse{
+func makeErrHTTPResponse(responseStatus int, blockURL string, cause string) errHTTPResponse {
+	return errHTTPResponse{
 		responseStatus: responseStatus,
 		blockURL:       blockURL,
 		cause:          cause}
 }
-func (hre errHttpResponse) Error() string {
+func (hre errHTTPResponse) Error() string {
 	return fmt.Sprintf("HTTPFetcher.getBlockBytes: error response status code %d when requesting '%s': %s", hre.responseStatus, hre.blockURL, hre.cause)
 }
 
-type errHttpResponseContentType struct {
+type errHTTPResponseContentType struct {
 	contentTypeCount int
 	contentType      string
 }
 
-func (cte errHttpResponseContentType) Error() string {
+func (cte errHTTPResponseContentType) Error() string {
 	if cte.contentTypeCount == 1 {
 		return fmt.Sprintf("HTTPFetcher.getBlockBytes: invalid content type: %s", cte.contentType)
 	}

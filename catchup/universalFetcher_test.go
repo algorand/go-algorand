@@ -19,6 +19,7 @@ package catchup
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -76,8 +77,8 @@ func TestUGetBlockWs(t *testing.T) {
 	require.Equal(t, int64(duration), int64(0))
 }
 
-// TestUGetBlockHttp tests the universal fetcher http peer case
-func TestUGetBlockHttp(t *testing.T) {
+// TestUGetBlockHTTP tests the universal fetcher http peer case
+func TestUGetBlockHTTP(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 
@@ -151,20 +152,17 @@ func TestProcessBlockBytesErrors(t *testing.T) {
 	_, _, err := processBlockBytes(bc, 22, "test")
 	var wcfpe errWrongCertFromPeer
 	require.True(t, errors.As(err, &wcfpe))
-	err.Error()
 
 	// Check for round error
 	_, _, err = processBlockBytes(bc, 20, "test")
 	var wbfpe errWrongBlockFromPeer
 	require.True(t, errors.As(err, &wbfpe))
-	err.Error()
 
 	// Check for undecodable
 	bc[11] = 0
 	_, _, err = processBlockBytes(bc, 22, "test")
 	var cdbe errCannotDecodeBlock
 	require.True(t, errors.As(err, &cdbe))
-	err.Error()
 }
 
 // TestRequestBlockBytesErrors checks the error handling in requestBlockBytes
@@ -195,7 +193,6 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	var wrfe errWsFetcherRequestFailed
 	require.True(t, errors.As(err, &wrfe))
 	require.Equal(t, "context canceled", err.(errWsFetcherRequestFailed).cause)
-	err.Error()
 
 	ctx = context.Background()
 
@@ -205,7 +202,6 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
 	require.True(t, errors.As(err, &wrfe))
 	require.Equal(t, "Cert data not found", err.(errWsFetcherRequestFailed).cause)
-	err.Error()
 
 	responseOverride = network.Response{Topics: network.Topics{network.MakeTopic(rpcs.CertDataKey, make([]byte, 0))}}
 	up = makeTestUnicastPeerWithResponseOverride(net, t, &responseOverride)
@@ -213,7 +209,6 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
 	require.True(t, errors.As(err, &wrfe))
 	require.Equal(t, "Block data not found", err.(errWsFetcherRequestFailed).cause)	
-	err.Error()
 }
 
 type TestHTTPHandler struct {
@@ -254,28 +249,50 @@ func TestGetBlockBytesHTTPErrors(t *testing.T) {
 
 	ls.status = http.StatusBadRequest
 	_, _, _, err := fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
-	var hre errHttpResponse
+	var hre errHTTPResponse
 	require.True(t, errors.As(err, &hre))
-	require.Equal(t, "Response body '\x00'", err.(errHttpResponse).cause)
-	err.Error()
+	require.Equal(t, "Response body '\x00'", err.(errHTTPResponse).cause)
 
 	ls.exceedLimit = true
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
 	require.True(t, errors.As(err, &hre))
-	require.Equal(t, "read limit exceeded", err.(errHttpResponse).cause)
-	err.Error()
+	require.Equal(t, "read limit exceeded", err.(errHTTPResponse).cause)
 
 	ls.status = http.StatusOK
 	ls.content = append(ls.content, "undefined")
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
-	var cte errHttpResponseContentType
+	var cte errHTTPResponseContentType
 	require.True(t, errors.As(err, &cte))
-	require.Equal(t, "undefined", err.(errHttpResponseContentType).contentType)
-	err.Error()
+	require.Equal(t, "undefined", err.(errHTTPResponseContentType).contentType)
 
 	ls.status = http.StatusOK
 	ls.content = append(ls.content, "undefined2")
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
 	require.True(t, errors.As(err, &cte))
-	require.Equal(t, 2, err.(errHttpResponseContentType).contentTypeCount)
+	require.Equal(t, 2, err.(errHTTPResponseContentType).contentTypeCount)
+}
+
+type ErrTest struct {}
+func (et ErrTest) Error() string {
+	return "test"
+}
+
+// TestErrorTypes tests the error types are implemented correctly
+func TestErrorTypes(t *testing.T) {
+	err1 := makeErrWrongCertFromPeer(1, 2, "somepeer1") 
+	require.Equal(t, "processBlockBytes: got wrong cert from peer somepeer1: wanted 1, got 2", err1.Error())
+
+	err2 := makeErrWrongBlockFromPeer(2, 3, "somepeer2")
+	require.Equal(t, "processBlockBytes: got wrong block from peer somepeer2: wanted 2, got 3", err2.Error())
+
+	err3 := makeErrCannotDecodeBlock(3, "somepeer3", fmt.Errorf("WrappedError %w", ErrTest{}))
+	require.Equal(t, "processBlockBytes: cannot decode block 3 from peer somepeer3: WrappedError test", err3.Error())
+	var et ErrTest
+	require.True(t, errors.As(err3, &et))		
+
+	err4 := makeErrWsFetcherRequestFailed(4, "somepeer4", "somecause1")
+	require.Equal(t, "wsFetcherClient(somepeer4).requestBlock(4): Request failed: somecause1", err4.Error())
+
+	err5 := makeErrHTTPResponse(404, "someurl", "somecause2")
+	require.Equal(t, "HTTPFetcher.getBlockBytes: error response status code 404 when requesting 'someurl': somecause2", err5.Error())
 }
