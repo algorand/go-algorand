@@ -530,6 +530,8 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - LogicSigVersion >= 4
 - Mode: Application
 
+The `gload` opcode can only access scratch spaces of previous app calls contained in the current group.
+
 ## gloads i
 
 - Opcode: 0x3b {uint8 position in scratch space to load from}
@@ -538,6 +540,8 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - push Ith scratch space index of the Ath transaction in the current group
 - LogicSigVersion >= 4
 - Mode: Application
+
+The `gloads` opcode can only access scratch spaces of previous app calls contained in the current group.
 
 ## bnz target
 

@@ -172,6 +172,8 @@ var opDocExtras = map[string]string{
 	"txn":               "FirstValidTime causes the program to fail. The field is reserved for future use.",
 	"gtxn":              "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
 	"gtxns":             "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
+	"gload":             "The `gload` opcode can only access scratch spaces of previous app calls contained in the current group.",
+	"gloads":            "The `gloads` opcode can only access scratch spaces of previous app calls contained in the current group.",
 	"btoi":              "`btoi` panics if the input is longer than 8 bytes.",
 	"concat":            "`concat` panics if the result would be greater than 4096 bytes.",
 	"pushbytes":         "pushbytes args are not added to the bytecblock during assembly processes",
