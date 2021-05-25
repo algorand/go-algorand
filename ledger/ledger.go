@@ -267,7 +267,7 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs
 
 	go func() {
 		var lerr error
-		blockDBs, err = db.OpenPair(blockDBFilename, dbMem)
+		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
 		outErr <- lerr
 	}()
 
