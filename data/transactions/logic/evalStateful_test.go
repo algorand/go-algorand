@@ -2644,12 +2644,15 @@ func TestReturnTypes(t *testing.T) {
 	}
 	ep := defaultEvalParams(nil, nil)
 	txn := makeSampleTxn()
+	txn.Txn.Type = protocol.ApplicationCallTx
 	txgroup := makeSampleTxnGroup(txn)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
 	ep.Txn.Txn.ApplicationID = 1
 	ep.Txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
 	ep.Txn.Txn.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(1), basics.AssetIndex(1)}
+	ep.GroupIndex = 1
+	ep.PastSideEffects = makeSamplePastSideEffects(len(txgroup))
 	txn.Lsig.Args = [][]byte{
 		[]byte("aoeu"),
 		[]byte("aoeu"),
@@ -2693,6 +2696,8 @@ func TestReturnTypes(t *testing.T) {
 		"arg":               "arg 0",
 		"load":              "load 0",
 		"store":             "store 0",
+		"gload":             "gload 0 0",
+		"gloads":            "gloads 0",
 		"dig":               "dig 0",
 		"intc":              "intcblock 0; intc 0",
 		"intc_0":            "intcblock 0; intc_0",

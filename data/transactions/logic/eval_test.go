@@ -87,6 +87,7 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 	ep := EvalParams{}
 	ep.Proto = &proto
 	ep.Txn = pt
+	ep.PastSideEffects = makeSamplePastSideEffects(5)
 	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
 		ep.Trace = sb
 	}
@@ -1540,6 +1541,19 @@ func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
 	return txgroup
 }
 
+func makeSamplePastSideEffects(groupSize int) []*EvalSideEffects {
+	sampleScratch := scratchSpace{
+		stackValue{Uint: 1},
+	}
+	sideEffects := make([]*EvalSideEffects, groupSize)
+	for i := range sideEffects {
+		sideEffects[i] = &EvalSideEffects{
+			scratchSpace: sampleScratch,
+		}
+	}
+	return sideEffects
+}
+
 func TestTxn(t *testing.T) {
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
@@ -2379,7 +2393,7 @@ int 1`,
 			},
 		},
 		runMode:     runModeSignature,
-		errContains: "can't use gload from within a LogicSig",
+		errContains: "gload not allowed in current mode",
 	}
 
 	failCases := []failureCase{nonAppCall, logicSigCall}

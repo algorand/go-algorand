@@ -1921,9 +1921,6 @@ func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int) (err error, scra
 	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
 		err = fmt.Errorf("can't use gload on non-app call txn with index %d", groupIdx)
 		return
-	} else if cx.runModeFlags == runModeSignature {
-		err = fmt.Errorf("can't use gload from within a LogicSig")
-		return
 	} else if groupIdx == cx.GroupIndex {
 		err = fmt.Errorf("can't use gload on self, use load instead")
 		return
