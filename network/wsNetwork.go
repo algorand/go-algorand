@@ -849,8 +849,9 @@ func (wn *WebsocketNetwork) Stop() {
 		wn.log.Debugf("closed %s", listenAddr)
 	}
 
-	wn.messagesOfInterestMu.Lock()
-	defer wn.messagesOfInterestMu.Unlock()
+	wn.requestsTracker.Close()
+	<-wn.requestsTracker.getWaitUntilEmptyChannel()
+
 	wn.messagesOfInterestEncoded = false
 	wn.messagesOfInterestEnc = nil
 	wn.messagesOfInterest = nil
@@ -1111,8 +1112,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			InstanceName: trackedRequest.otherInstanceName,
 		})
 
-	wn.messagesOfInterestMu.Lock()
-	defer wn.messagesOfInterestMu.Unlock()
+	// We are careful to encode this prior to starting the server to avoid needing 'messagesOfInterestMu' here.
 	if wn.messagesOfInterestEnc != nil {
 		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag)
 		if err != nil {
