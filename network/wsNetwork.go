@@ -849,7 +849,6 @@ func (wn *WebsocketNetwork) Stop() {
 		wn.log.Debugf("closed %s", listenAddr)
 	}
 
-	wn.requestsTracker.Close()
 	<-wn.requestsTracker.getWaitUntilNoConnectionsChannel(5 * time.Millisecond)
 
 	wn.messagesOfInterestEncoded = false
