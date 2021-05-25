@@ -265,7 +265,7 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte) {
 		if (zb0005Mask & 0x40) == 0 { // if not empty
 			// string "apep"
 			o = append(o, 0xa4, 0x61, 0x70, 0x65, 0x70)
-			o = msgp.AppendInt32(o, (*z).ExtraProgramPages)
+			o = msgp.AppendUint32(o, (*z).ExtraProgramPages)
 		}
 		if (zb0005Mask & 0x80) == 0 { // if not empty
 			// string "apfa"
@@ -511,7 +511,7 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0005 > 0 {
 			zb0005--
-			(*z).ExtraProgramPages, bts, err = msgp.ReadInt32Bytes(bts)
+			(*z).ExtraProgramPages, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
@@ -709,7 +709,7 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					return
 				}
 			case "apep":
-				(*z).ExtraProgramPages, bts, err = msgp.ReadInt32Bytes(bts)
+				(*z).ExtraProgramPages, bts, err = msgp.ReadUint32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
@@ -750,7 +750,7 @@ func (z *ApplicationCallTxnFields) Msgsize() (s int) {
 	for zb0004 := range (*z).ForeignAssets {
 		s += (*z).ForeignAssets[zb0004].Msgsize()
 	}
-	s += 5 + (*z).LocalStateSchema.Msgsize() + 5 + (*z).GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 5 + msgp.Int32Size
+	s += 5 + (*z).LocalStateSchema.Msgsize() + 5 + (*z).GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 5 + msgp.Uint32Size
 	return
 }
 
@@ -3924,7 +3924,7 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 		if (zb0006Mask & 0x80000) == 0 { // if not empty
 			// string "apep"
 			o = append(o, 0xa4, 0x61, 0x70, 0x65, 0x70)
-			o = msgp.AppendInt32(o, (*z).ApplicationCallTxnFields.ExtraProgramPages)
+			o = msgp.AppendUint32(o, (*z).ApplicationCallTxnFields.ExtraProgramPages)
 		}
 		if (zb0006Mask & 0x100000) == 0 { // if not empty
 			// string "apfa"
@@ -4560,7 +4560,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0006 > 0 {
 			zb0006--
-			(*z).ApplicationCallTxnFields.ExtraProgramPages, bts, err = msgp.ReadInt32Bytes(bts)
+			(*z).ApplicationCallTxnFields.ExtraProgramPages, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
@@ -4972,7 +4972,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "apep":
-				(*z).ApplicationCallTxnFields.ExtraProgramPages, bts, err = msgp.ReadInt32Bytes(bts)
+				(*z).ApplicationCallTxnFields.ExtraProgramPages, bts, err = msgp.ReadUint32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
@@ -5031,7 +5031,7 @@ func (z *Transaction) Msgsize() (s int) {
 	for zb0005 := range (*z).ApplicationCallTxnFields.ForeignAssets {
 		s += (*z).ApplicationCallTxnFields.ForeignAssets[zb0005].Msgsize()
 	}
-	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram) + 5 + msgp.Int32Size + 8 + (*z).CompactCertTxnFields.CertRound.Msgsize() + 9 + (*z).CompactCertTxnFields.CertType.Msgsize() + 5 + (*z).CompactCertTxnFields.Cert.Msgsize()
+	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram) + 5 + msgp.Uint32Size + 8 + (*z).CompactCertTxnFields.CertRound.Msgsize() + 9 + (*z).CompactCertTxnFields.CertType.Msgsize() + 5 + (*z).CompactCertTxnFields.Cert.Msgsize()
 	return
 }
 

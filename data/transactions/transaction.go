@@ -385,16 +385,16 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
 		}
 
-		if tx.ExtraProgramPages > int32(proto.MaxExtraAppProgramPages) {
+		if tx.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
 			return fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages)
 		}
 
-		if int32(len(tx.ApprovalProgram)) > ((1 + tx.ExtraProgramPages) * int32(proto.MaxAppProgramLen)) {
-			return fmt.Errorf("approval program too long. max len %d bytes", (1+tx.ExtraProgramPages)*int32(proto.MaxAppProgramLen))
+		if uint32(len(tx.ApprovalProgram)) > ((1 + tx.ExtraProgramPages) * uint32(proto.MaxAppProgramLen)) {
+			return fmt.Errorf("approval program too long. max len %d bytes", (1+tx.ExtraProgramPages)*uint32(proto.MaxAppProgramLen))
 		}
 
-		if int32(len(tx.ClearStateProgram)) > (1+tx.ExtraProgramPages)*int32(proto.MaxAppProgramLen) {
-			return fmt.Errorf("clear state program too long. max len %d bytes", (1+tx.ExtraProgramPages)*int32(proto.MaxAppProgramLen))
+		if uint32(len(tx.ClearStateProgram)) > (1+tx.ExtraProgramPages)*uint32(proto.MaxAppProgramLen) {
+			return fmt.Errorf("clear state program too long. max len %d bytes", (1+tx.ExtraProgramPages)*uint32(proto.MaxAppProgramLen))
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {

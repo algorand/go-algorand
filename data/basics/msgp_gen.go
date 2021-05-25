@@ -406,7 +406,7 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 		if (zb0009Mask & 0x800) == 0 { // if not empty
 			// string "teap"
 			o = append(o, 0xa4, 0x74, 0x65, 0x61, 0x70)
-			o = msgp.AppendInt32(o, (*z).TotalExtraAppPages)
+			o = msgp.AppendUint32(o, (*z).TotalExtraAppPages)
 		}
 		if (zb0009Mask & 0x1000) == 0 { // if not empty
 			// string "tsch"
@@ -851,7 +851,7 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0009 > 0 {
 			zb0009--
-			(*z).TotalExtraAppPages, bts, err = msgp.ReadInt32Bytes(bts)
+			(*z).TotalExtraAppPages, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TotalExtraAppPages")
 				return
@@ -1223,7 +1223,7 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "teap":
-				(*z).TotalExtraAppPages, bts, err = msgp.ReadInt32Bytes(bts)
+				(*z).TotalExtraAppPages, bts, err = msgp.ReadUint32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TotalExtraAppPages")
 					return
@@ -1280,7 +1280,7 @@ func (z *AccountData) Msgsize() (s int) {
 			s += 0 + zb0007.Msgsize() + zb0008.Msgsize()
 		}
 	}
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Int32Size
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size
 	return
 }
 
@@ -1766,7 +1766,7 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte) {
 		if (zb0003Mask & 0x10) == 0 { // if not empty
 			// string "epp"
 			o = append(o, 0xa3, 0x65, 0x70, 0x70)
-			o = msgp.AppendInt32(o, (*z).ExtraProgramPages)
+			o = msgp.AppendUint32(o, (*z).ExtraProgramPages)
 		}
 		if (zb0003Mask & 0x20) == 0 { // if not empty
 			// string "gs"
@@ -2082,7 +2082,7 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			(*z).ExtraProgramPages, bts, err = msgp.ReadInt32Bytes(bts)
+			(*z).ExtraProgramPages, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
 				return
@@ -2318,7 +2318,7 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "epp":
-				(*z).ExtraProgramPages, bts, err = msgp.ReadInt32Bytes(bts)
+				(*z).ExtraProgramPages, bts, err = msgp.ReadUint32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
@@ -2351,7 +2351,7 @@ func (z *AppParams) Msgsize() (s int) {
 			s += 0 + msgp.StringPrefixSize + len(zb0001) + zb0002.Msgsize()
 		}
 	}
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Int32Size
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size
 	return
 }
 
@@ -3090,7 +3090,7 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 		if (zb0009Mask & 0x2000) == 0 { // if not empty
 			// string "teap"
 			o = append(o, 0xa4, 0x74, 0x65, 0x61, 0x70)
-			o = msgp.AppendInt32(o, (*z).AccountData.TotalExtraAppPages)
+			o = msgp.AppendUint32(o, (*z).AccountData.TotalExtraAppPages)
 		}
 		if (zb0009Mask & 0x4000) == 0 { // if not empty
 			// string "tsch"
@@ -3543,7 +3543,7 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0009 > 0 {
 			zb0009--
-			(*z).AccountData.TotalExtraAppPages, bts, err = msgp.ReadInt32Bytes(bts)
+			(*z).AccountData.TotalExtraAppPages, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TotalExtraAppPages")
 				return
@@ -3921,7 +3921,7 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "teap":
-				(*z).AccountData.TotalExtraAppPages, bts, err = msgp.ReadInt32Bytes(bts)
+				(*z).AccountData.TotalExtraAppPages, bts, err = msgp.ReadUint32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TotalExtraAppPages")
 					return
@@ -3978,7 +3978,7 @@ func (z *BalanceRecord) Msgsize() (s int) {
 			s += 0 + zb0007.Msgsize() + zb0008.Msgsize()
 		}
 	}
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Int32Size
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size
 	return
 }
 

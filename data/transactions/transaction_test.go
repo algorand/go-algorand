@@ -225,6 +225,7 @@ func TestWellFormedErrors(t *testing.T) {
 	specialAddr := SpecialAddresses{FeeSink: feeSink}
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
 	futureProto := config.Consensus[protocol.ConsensusFuture]
+	protoV27 := config.Consensus[protocol.ConsensusV27]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 	usecases := []struct {
@@ -277,7 +278,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 			},
 			spec:          specialAddr,
-			proto:         curProto,
+			proto:         protoV27,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", curProto.MaxExtraAppProgramPages),
 		},
 		{

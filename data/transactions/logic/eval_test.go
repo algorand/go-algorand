@@ -1548,6 +1548,7 @@ func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
 	txgroup[1].Txn.LastValid = 1066
 	txgroup[1].Txn.Sender = txn.Txn.Receiver
 	txgroup[1].Txn.Receiver = txn.Txn.Sender
+	txgroup[1].Txn.ExtraProgramPages = 2
 	return txgroup
 }
 
@@ -1741,7 +1742,7 @@ int 2
 &&
 `
 
-	gtxnText := gtxnTextV1 + `gtxna 0 ApplicationArgs 0
+	gtxnTextV2 := gtxnTextV1 + `gtxna 0 ApplicationArgs 0
 byte 0x706179
 ==
 &&
@@ -1758,10 +1759,20 @@ int 1
 ==
 &&
 `
+	gtxnText := gtxnTextV2 + ` gtxn 0 AppProgramExtraPages
+int 0
+==
+&&
+gtxn 1 AppProgramExtraPages
+int 2
+==
+&&
+`
 
 	tests := map[uint64]string{
 		1: gtxnTextV1,
-		2: gtxnText,
+		2: gtxnTextV2,
+		4: gtxnText,
 	}
 
 	for v, source := range tests {

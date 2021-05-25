@@ -234,10 +234,6 @@ type ConsensusParams struct {
 	// extra length for application program in pages. A page is MaxAppProgramLen bytes
 	MaxExtraAppProgramPages int
 
-	// maximum available length of application approval program or clear state
-	// program in bytes
-	MaxAvailableAppProgramLen int
-
 	// maximum number of accounts in the ApplicationCall Accounts field.
 	// this determines, in part, the maximum number of balance records
 	// accessed by a single transaction
@@ -464,6 +460,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
 	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
 	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
+	// MaxAvailableAppProgramLen is the max of supported app program size
 	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
 }
 

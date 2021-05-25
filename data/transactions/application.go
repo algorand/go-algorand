@@ -146,7 +146,7 @@ type ApplicationCallTxnFields struct {
 	// ExtraProgramPages specifies the additional app program len requested in pages.
 	// A page is MaxAppProgramLen bytes. This field enables execution of app programs
 	// larger than the default config, MaxAppProgramLen.
-	ExtraProgramPages int32 `codec:"apep,omitempty"`
+	ExtraProgramPages uint32 `codec:"apep,omitempty"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!

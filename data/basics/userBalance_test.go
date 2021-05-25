@@ -143,7 +143,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		ad.AssetParams[AssetIndex(0x1234123412341234-assetCreatorAssets)] = ap
 	}
 
-	for assetHolderAssets := 0; assetHolderAssets < currentConsensusParams.MaxAvailableAppProgramLen; assetHolderAssets++ {
+	for assetHolderAssets := 0; assetHolderAssets < config.MaxAvailableAppProgramLen; assetHolderAssets++ {
 		ah := AssetHolding{
 			Amount: 0x1234123412341234,
 			Frozen: true,
