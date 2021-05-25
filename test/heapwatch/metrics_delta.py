@@ -148,13 +148,18 @@ class summary:
             dictMax(rxMax, ns.rxPLists)
             dictMin(txMin, ns.txPLists)
             dictMin(rxMin, ns.rxPLists)
-        lines = ['{} nodes: {}'.format(len(nicks), nicks)]
+        lines = [
+            '{} nodes: {}'.format(len(nicks), nicks),
+            '\ttx B/s\trx B/s',
+        ]
         for msg, txB in txPSums.items():
             if msg not in rxPSums:
                 rxPSums[msg] = 0
         for rxBps, msg in sorted([(rxB/secondsSum, msg) for msg, rxB in rxPSums.items()], reverse=True):
             txBps = txPSums.get(msg,0)/secondsSum
-            lines.append('{}\t{:.0f} tx B/s\t{:.0f} rx B/s'.format(msg, txBps, rxBps))
+            if (txBps < 0.5) and (rxBps < 0.5):
+                continue
+            lines.append('{}\t{:.0f}\t{:.0f}'.format(msg, txBps, rxBps))
         return '\n'.join(lines)
 
 
