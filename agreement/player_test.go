@@ -1803,6 +1803,7 @@ func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 }
 
 func TestPlayerPropagatesProposalPayload(t *testing.T) {
+	// if a player receives a payload from the network, it should relay it.
 	const r = round(209)
 	_, pM, helper := setupP(t, r, 0, soft)
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
@@ -1837,6 +1838,7 @@ func TestPlayerPropagatesProposalPayload(t *testing.T) {
 }
 
 func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
+	// if a player receives a PayloadVerified event with its own payload, it should relay it.
 	const r = round(209)
 	_, pM, helper := setupP(t, r, 0, soft)
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
@@ -2168,7 +2170,7 @@ func TestPlayerPropagatesCertVote(t *testing.T) {
 
 // Malformed Messages
 // check both proposals, proposal payloads, and votes, bundles
-func TestPlayerDisconectsFromMalformedProposalVote(t *testing.T) {
+func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
 	const r = round(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2242,7 +2244,7 @@ func TestPlayerIgnoresMalformedPayload(t *testing.T) {
 	}), "Player should ignore malformed payload")
 }
 
-func TestPlayerDisconectsFromMalformedVotes(t *testing.T) {
+func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
 	const r = round(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2280,7 +2282,7 @@ func TestPlayerDisconectsFromMalformedVotes(t *testing.T) {
 	}), "Player should disconnect due to malformed vote")
 }
 
-func TestPlayerDisconectsFromMalformedBundles(t *testing.T) {
+func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
 	const r = round(201221)
 	const p = period(0)
 	_, pM, _ := setupP(t, r, p, cert)
