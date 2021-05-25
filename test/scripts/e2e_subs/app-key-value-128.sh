@@ -23,14 +23,6 @@ function call {
     ${gcmd} app call --app-id=$APPID --from=$ACCOUNT --app-arg=str:$1  --app-arg=str:$2  --app-arg=str:$3  --app-arg=str:$4
 }
 
-set +o pipefail
-call check global hello xyz 2>&1 | grep "cannot compare"
-set -o pipefail
-
-call write global hello xyz
-call check global hello xyz
-
-
 BIG64="1234567890123456789012345678901234567890123456789012345678901234"
 
 # This should work because the value is longer than 64, but the sum is still under 128
@@ -54,14 +46,6 @@ call check local hello xyz 2>&1 | grep "has not opted in"
 set -o pipefail
 
 ${gcmd} app optin --app-id "$APPID" --from "${ACCOUNT}"
-
-set +o pipefail
-call check local hello xyz 2>&1 | grep "cannot compare"
-set -o pipefail
-
-call write local hello xyz
-call check local hello xyz
-
 
 # This should work because the value is longer than 64, but the sum is still under 128
 call write local hello ${BIG64}EVENLONGEREVENLONGEREVENLONGEREVENLONGER
