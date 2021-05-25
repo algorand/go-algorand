@@ -850,7 +850,7 @@ func (wn *WebsocketNetwork) Stop() {
 	}
 
 	wn.requestsTracker.Close()
-	<-wn.requestsTracker.getWaitUntilEmptyChannel(5 * time.Millisecond)
+	<-wn.requestsTracker.getWaitUntilNoConnectionsChannel(5 * time.Millisecond)
 
 	wn.messagesOfInterestEncoded = false
 	wn.messagesOfInterestEnc = nil
