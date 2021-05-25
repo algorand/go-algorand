@@ -161,7 +161,13 @@ func (e *emulator) initNodes() {
 		e.nodes[i] = makeEmulatedNode(e, i)
 	}
 	for i := 0; i < e.nodeCount; i++ {
-		syncer := MakeTranscationSyncService(makeNodeLogger(e.log, e.nodes[i]), e.nodes[i], e.scenario.netConfig.nodes[i].isRelay)
+		syncer := MakeTranscationSyncService(
+			makeNodeLogger(e.log, e.nodes[i]),
+			e.nodes[i],
+			e.scenario.netConfig.nodes[i].isRelay,
+			"",
+			crypto.Digest{},
+		)
 		e.syncers = append(e.syncers, syncer)
 	}
 	randCounter := 0

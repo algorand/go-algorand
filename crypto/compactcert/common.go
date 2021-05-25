@@ -113,5 +113,5 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 }
 
 func (p Params) numReveals(signedWeight uint64) (uint64, error) {
-	return numReveals(signedWeight, p.ProvenWeight, p.SecKQ, maxReveals)
+	return numReveals(signedWeight, p.ProvenWeight, p.SecKQ, MaxReveals)
 }

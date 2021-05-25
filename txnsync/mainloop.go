@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/util/timers"
 )
@@ -38,6 +39,9 @@ type syncState struct {
 	node    NodeConnector
 	isRelay bool
 	clock   timers.WallClock
+
+	genesisID   string
+	genesisHash crypto.Digest
 
 	lastBeta                   time.Duration
 	round                      basics.Round
