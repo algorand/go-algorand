@@ -18,6 +18,7 @@ package upgrades
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,54 +51,79 @@ func TestRekeyUpgrade(t *testing.T) {
 	accountB, err := client.GenerateAddress(wh)
 	a.NoError(err)
 
-	round, err := client.CurrentRound()
+	addrB, err := basics.UnmarshalChecksumAddress(accountB)
 	a.NoError(err)
 
-	// Ensure no rekeying happened
-	ad, err := client.AccountData(accountA)
-	a.NoError(err)
-	a.Equal(basics.Address{}, ad.AuthAddr)
-
-	// rekey A -> B (RekeyTo check)
 	fee := uint64(1000)
 	amount := uint64(1000000)
 	lease := [32]byte{}
-	tx, err := client.ConstructPayment(accountA, accountB, fee, amount, nil, "", lease, basics.Round(round), basics.Round(round+1000))
-	a.NoError(err)
 
-	addrB, err := basics.UnmarshalChecksumAddress(accountB)
+	curStatus, err := client.Status()
+	a.NoError(err)
+	initialStatus := curStatus
+	round := curStatus.LastRound
+
+	if initialStatus.NextVersion != initialStatus.LastVersion {
+		// no consensus upgrade took place
+
+		// Ensure no rekeying happened
+		ad, err := client.AccountData(accountA)
+		a.NoError(err)
+		a.Equal(basics.Address{}, ad.AuthAddr)
+
+		// rekey A -> B (RekeyTo check)
+		tx, err := client.ConstructPayment(accountA, accountB, fee, amount, nil, "", lease, basics.Round(round), basics.Round(initialStatus.NextVersionRound).SubSaturate(1))
+		a.NoError(err)
+
+		tx.RekeyTo = addrB
+
+		rekey, err := client.SignTransactionWithWalletAndSigner(wh, nil, "", tx)
+		a.NoError(err)
+
+		_, err = client.BroadcastTransaction(rekey)
+		a.Error(err)
+		// should be either "transaction has RekeyTo set but rekeying not yet enable" or "txn dead"
+		if !strings.Contains(err.Error(), "transaction has RekeyTo set but rekeying not yet enable") &&
+			!strings.Contains(err.Error(), "txn dead") {
+			a.NoErrorf(err, "error message should be one of :\n%s\n%s", "transaction has RekeyTo set but rekeying not yet enable", "txn dead")
+		}
+
+		// use rekeyed key to authorize (AuthAddr check)
+		tx.RekeyTo = basics.Address{}
+		rekeyed, err := client.SignTransactionWithWalletAndSigner(wh, nil, accountB, tx)
+		a.NoError(err)
+		_, err = client.BroadcastTransaction(rekeyed)
+		// should be either "nonempty AuthAddr but rekeying not supported" or "txn dead"
+		if !strings.Contains(err.Error(), "nonempty AuthAddr but rekeying not supported") &&
+			!strings.Contains(err.Error(), "txn dead") {
+			a.NoErrorf(err, "error message should be one of :\n%s\n%s", "nonempty AuthAddr but rekeying not supported", "txn dead")
+		}
+
+		// go to upgrade
+		curStatus, err = client.Status()
+		a.NoError(err)
+
+		startLoopTime := time.Now()
+
+		// wait until the network upgrade : this can take a while.
+		for curStatus.LastVersion == initialStatus.LastVersion {
+			curStatus, err = client.Status()
+			a.NoError(err)
+
+			a.Less(int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
+			time.Sleep(time.Duration(smallLambdaMs) * time.Millisecond)
+			round = curStatus.LastRound
+		}
+	}
+
+	// now that the network alrady upgraded:
+
+	tx, err := client.ConstructPayment(accountA, accountB, fee, amount, nil, "", lease, basics.Round(round), basics.Round(round+1000))
 	a.NoError(err)
 	tx.RekeyTo = addrB
 
 	rekey, err := client.SignTransactionWithWalletAndSigner(wh, nil, "", tx)
 	a.NoError(err)
-	_, err = client.BroadcastTransaction(rekey)
-	a.Error(err)
-	a.Contains(err.Error(), "transaction has RekeyTo set but rekeying not yet enable")
-
-	// use rekeyed key to authorize (AuthAddr check)
-	tx.RekeyTo = basics.Address{}
-	rekeyed, err := client.SignTransactionWithWalletAndSigner(wh, nil, accountB, tx)
-	a.NoError(err)
-	_, err = client.BroadcastTransaction(rekeyed)
-	a.Error(err)
-	a.Contains(err.Error(), "nonempty AuthAddr but rekeying not supported")
-	// go to upgrade
-	curStatus, err := client.Status()
-	a.NoError(err)
-	initialStatus := curStatus
-
-	startLoopTime := time.Now()
-
-	// wait until the network upgrade : this can take a while.
-	for curStatus.LastVersion == initialStatus.LastVersion {
-		curStatus, err = client.Status()
-		a.NoError(err)
-
-		a.Less(int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
-		time.Sleep(time.Duration(smallLambdaMs) * time.Millisecond)
-		round = curStatus.LastRound
-	}
 
 	// now, that we have upgraded to the new protocol which supports rekey, try again.
 	_, err = client.BroadcastTransaction(rekey)
@@ -106,6 +132,11 @@ func TestRekeyUpgrade(t *testing.T) {
 	round, err = client.CurrentRound()
 	a.NoError(err)
 	client.WaitForRound(round + 1)
+
+	// use rekeyed key to authorize (AuthAddr check)
+	tx.RekeyTo = basics.Address{}
+	rekeyed, err := client.SignTransactionWithWalletAndSigner(wh, nil, accountB, tx)
+	a.NoError(err)
 
 	_, err = client.BroadcastTransaction(rekeyed)
 	a.NoError(err)
