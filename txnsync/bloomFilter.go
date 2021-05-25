@@ -106,12 +106,26 @@ func (bf *bloomFilter) test(txID transactions.Txid) bool {
 	return false
 }
 
-func filterFactory(hint int, builder *bloom.XorBuilder) bloom.GenericFilter {
-	return bloom.NewXor8(hint, builder)
-	//return bloom.NewXor(hint, builder)
+func filterFactoryBloom(numEntries int, s *syncState) bloom.GenericFilter {
+	shuffler := uint32(s.node.Random(0xffffffff))
+	sizeBits, numHashes := bloom.Optimal(numEntries, bloomFilterFalsePositiveRate)
+	return bloom.New(sizeBits, numHashes, shuffler)
 }
 
-func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, shuffler uint32, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
+func filterFactoryXor8(numEntries int, s *syncState) bloom.GenericFilter {
+	return bloom.NewXor8(numEntries, &s.xorBuilder)
+}
+
+func filterFactoryXor32(numEntries int, s *syncState) bloom.GenericFilter {
+	return bloom.NewXor(numEntries, &s.xorBuilder)
+}
+
+var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryXor8
+
+//var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryXor32
+//var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryBloom
+
+func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams
 	switch {
 	case encodingParams.Modulator == 0:
@@ -131,7 +145,7 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 			}
 		}
 
-		result.filter = filterFactory(len(txnGroups), &s.xorBuilder)
+		result.filter = filterFactory(len(txnGroups), s)
 		for _, group := range txnGroups {
 			result.filter.Set(group.FirstTransactionID[:])
 		}
@@ -159,7 +173,7 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 			}
 		}
 
-		result.filter = filterFactory(len(filtedTransactionsIDs), &s.xorBuilder)
+		result.filter = filterFactory(len(filtedTransactionsIDs), s)
 
 		for _, txid := range filtedTransactionsIDs {
 			result.filter.Set(txid[:])

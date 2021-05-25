@@ -110,7 +110,7 @@ func (b *bitmask) trimBitmask(entries int) {
 	default:
 	}
 
-	*b = bytes.TrimRight(*b, string(0))
+	*b = bytes.TrimRight(*b, "\x00")
 }
 
 func (b *bitmask) expandBitmask(entries int) {
@@ -171,7 +171,7 @@ func (b *bitmask) Iterate(entries int, maxIndex int, callback func(int, int) err
 	case 0:
 		for i, v := range (*b)[1:] {
 			for j := 0; j < 8 && v > 0; j++ {
-				if v & 1 != 0 {
+				if v&1 != 0 {
 					if index >= maxIndex {
 						return errDataMissing
 					}
@@ -180,13 +180,13 @@ func (b *bitmask) Iterate(entries int, maxIndex int, callback func(int, int) err
 					}
 					index++
 				}
-				v>>=1
+				v >>= 1
 			}
 		}
 	case 1:
 		for i, v := range (*b)[1:] {
 			for j := 0; j < 8 && v < 255; j++ {
-				if v & 1 == 0 {
+				if v&1 == 0 {
 					if index >= maxIndex {
 						return errDataMissing
 					}
@@ -195,10 +195,10 @@ func (b *bitmask) Iterate(entries int, maxIndex int, callback func(int, int) err
 					}
 					index++
 				}
-				v>>=1
+				v >>= 1
 			}
 		}
-		for i := (len(*b)-1)*8; i < entries; i ++ {
+		for i := (len(*b) - 1) * 8; i < entries; i++ {
 			if index >= maxIndex {
 				return errDataMissing
 			}
@@ -209,7 +209,7 @@ func (b *bitmask) Iterate(entries int, maxIndex int, callback func(int, int) err
 		}
 	case 2:
 		sum := 0
-		for index:= 0; index*2+2 < len(*b); index++ {
+		for index := 0; index*2+2 < len(*b); index++ {
 			sum += int((*b)[index*2+1])*256 + int((*b)[index*2+2])
 			if sum >= entries {
 				return errors.New("invalid bitmask: index not found")
