@@ -4,6 +4,7 @@ import argparse
 import configparser
 import contextlib
 import csv
+import glob
 import gzip
 import logging
 import json
@@ -108,6 +109,7 @@ def main():
     test_metric_line_re()
     ap = argparse.ArgumentParser()
     ap.add_argument('metrics_files', nargs='*')
+    ap.add_argument('-d', '--dir', default=None, help='dir path to find /*.metrics in')
     ap.add_argument('--mintps', default=None, type=float, help="records below min TPS don't add into summary")
     ap.add_argument('--deltas', default=None, help='path to write csv deltas')
     ap.add_argument('--report', default=None, help='path to write csv report')
@@ -119,12 +121,16 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
+    metrics_files = args.metrics_files
+    metrics_dirs = set()
+    if args.dir:
+        metrics_dirs.add(args.dir)
+        metrics_files += glob.glob(os.path.join(args.dir, '*.metrics'))
     metrics_fname_re = re.compile(r'(.*)\.(.*).metrics')
     filesByNick = {}
     nonick = []
     tf_inventory_path = None
-    metrics_dirs = set()
-    for path in args.metrics_files:
+    for path in metrics_files:
         fname = os.path.basename(path)
         if fname == 'terraform-inventory.host':
             tf_inventory_path = path
