@@ -1,11 +1,11 @@
-all:	TEAL_opcodes.md README.md fields_string.go
+all:	TEAL_opcodes.md teal.tmLanguage.json README.md fields_string.go
 
 # Location of algorandfoundation/specs repo. (Optional)
 SPECS := ../../../../specs
 # Location of algorand/docs repo. (Optional)
 DOCS :=  ../../../../docs
 
-TEAL_opcodes.md:	fields_string.go ../../../cmd/opdoc/opdoc.go eval.go assembler.go doc.go opcodes.go
+TEAL_opcodes.md teal.tmLanguage.json:	fields_string.go ../../../cmd/opdoc/opdoc.go ../../../cmd/opdoc/tmLanguage.go eval.go assembler.go doc.go opcodes.go
 	go run ../../../cmd/opdoc/opdoc.go ../../../cmd/opdoc/tmLanguage.go
 	@if [ -e $(SPECS)/dev/TEAL_opcodes.md ]; then \
 		sed '/^$$/q' $(SPECS)/dev/TEAL_opcodes.md | cat - TEAL_opcodes.md > opcodes.spec; \
