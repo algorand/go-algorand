@@ -91,9 +91,11 @@ type Reveal struct {
 	Part    Participant   `codec:"p"`
 }
 
-// maxReveals is a bound on allocation and on numReveals to limit log computation
-const maxReveals = 1024
-const maxProofDigests = 20 * maxReveals
+// MaxReveals is a bound on allocation and on numReveals to limit log computation
+const MaxReveals = 1024
+
+// MaxProofDigests is a bound on allocation on number of proofs
+const MaxProofDigests = 20 * MaxReveals
 
 // Cert represents a compact certificate.
 type Cert struct {
@@ -101,13 +103,13 @@ type Cert struct {
 
 	SigCommit    crypto.Digest   `codec:"c"`
 	SignedWeight uint64          `codec:"w"`
-	SigProofs    []crypto.Digest `codec:"S,allocbound=maxProofDigests"`
-	PartProofs   []crypto.Digest `codec:"P,allocbound=maxProofDigests"`
+	SigProofs    []crypto.Digest `codec:"S,allocbound=MaxProofDigests"`
+	PartProofs   []crypto.Digest `codec:"P,allocbound=MaxProofDigests"`
 
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
 	// arrays.
-	Reveals map[uint64]Reveal `codec:"r,allocbound=maxReveals"`
+	Reveals map[uint64]Reveal `codec:"r,allocbound=MaxReveals"`
 }
 
 // SortUint64 implements sorting by uint64 keys for

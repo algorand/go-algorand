@@ -17,34 +17,61 @@
 package txnsync
 
 import (
+	"errors"
+	"fmt"
+
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const maxEncodedTransactionGroup = 10000
-const maxEncodedTransactionGroupEntries = 10000
-
-//msgp:allocbound txnGroups maxEncodedTransactionGroupEntries
-type txnGroups []transactions.SignedTxn
-
-type txGroupsEncodingStub struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	TxnGroups []txnGroups `codec:"t,allocbound=maxEncodedTransactionGroup"`
-}
-
-func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) []byte {
+func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, error) {
+	txnCount := 0
+	for _, txGroup := range inTxnGroups {
+		txnCount += len(txGroup.Transactions)
+	}
 	stub := txGroupsEncodingStub{
-		TxnGroups: make([]txnGroups, len(inTxnGroups)),
-	}
-	for i := range inTxnGroups {
-		stub.TxnGroups[i] = inTxnGroups[i].Transactions
+		TotalTransactionsCount: uint64(txnCount),
+		TransactionGroupCount:  uint64(len(inTxnGroups)),
+		TransactionGroupSizes:  make([]byte, 0, len(inTxnGroups)),
 	}
 
-	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
+	bitmaskLen := bytesNeededBitmask(int(stub.TotalTransactionsCount))
+	index := 0
+	for _, txGroup := range inTxnGroups {
+		if len(txGroup.Transactions) > 1 {
+			for _, txn := range txGroup.Transactions {
+				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
+					return nil, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
+				}
+				index++
+			}
+			stub.TransactionGroupSizes = append(stub.TransactionGroupSizes, byte(len(txGroup.Transactions)-1))
+		}
+	}
+	stub.TransactionGroupSizes = compactNibblesArray(stub.TransactionGroupSizes)
+	for _, txGroup := range inTxnGroups {
+		if len(txGroup.Transactions) == 1 {
+			for _, txn := range txGroup.Transactions {
+				if !txn.Txn.Group.MsgIsZero() {
+					if len(stub.BitmaskGroup) == 0 {
+						stub.BitmaskGroup = make(bitmask, bitmaskLen)
+					}
+					stub.BitmaskGroup.SetBit(index)
+				}
+				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
+					return nil, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
+				}
+				index++
+			}
+		}
+	}
+	stub.finishDeconstructSignedTransactions()
+
+	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0]), nil
 }
 
-func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGroup, err error) {
+func decodeTransactionGroups(bytes []byte, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {
 	if len(bytes) == 0 {
 		return nil, nil
 	}
@@ -53,10 +80,34 @@ func decodeTransactionGroups(bytes []byte) (txnGroups []transactions.SignedTxGro
 	if err != nil {
 		return nil, err
 	}
-	txnGroups = make([]transactions.SignedTxGroup, len(stub.TxnGroups))
-	for i := range stub.TxnGroups {
-		txnGroups[i].Transactions = stub.TxnGroups[i]
+
+	if stub.TransactionGroupCount > maxEncodedTransactionGroup {
+		return nil, errors.New("invalid TransactionGroupCount")
 	}
+
+	stx := make([]transactions.SignedTxn, stub.TotalTransactionsCount)
+
+	err = stub.reconstructSignedTransactions(stx, genesisID, genesisHash)
+	if err != nil {
+		return nil, err
+	}
+
+	txnGroups = make([]transactions.SignedTxGroup, stub.TransactionGroupCount)
+	for txnCounter, txnGroupIndex := 0, 0; txnCounter < int(stub.TotalTransactionsCount); txnGroupIndex++ {
+		size := 1
+		if txnGroupIndex < len(stub.TransactionGroupSizes)*2 {
+			nibble, err := getNibble(stub.TransactionGroupSizes, txnGroupIndex)
+			if err != nil {
+				return nil, err
+			}
+			size = int(nibble) + 1
+		}
+		txnGroups[txnGroupIndex].Transactions = stx[txnCounter : txnCounter+size]
+		txnCounter += size
+	}
+
+	addGroupHashes(txnGroups, int(stub.TotalTransactionsCount), stub.BitmaskGroup)
+
 	return txnGroups, nil
 }
 
