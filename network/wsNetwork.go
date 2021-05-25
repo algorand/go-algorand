@@ -849,7 +849,10 @@ func (wn *WebsocketNetwork) Stop() {
 		wn.log.Debugf("closed %s", listenAddr)
 	}
 
+	// Wait for the requestsTracker to finish up to avoid potential race condition
 	<-wn.requestsTracker.getWaitUntilNoConnectionsChannel(5 * time.Millisecond)
+	wn.messagesOfInterestMu.Lock()
+	defer wn.messagesOfInterestMu.Unlock()
 
 	wn.messagesOfInterestEncoded = false
 	wn.messagesOfInterestEnc = nil
