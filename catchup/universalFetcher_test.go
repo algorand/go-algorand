@@ -295,4 +295,7 @@ func TestErrorTypes(t *testing.T) {
 
 	err5 := makeErrHTTPResponse(404, "someurl", "somecause2")
 	require.Equal(t, "HTTPFetcher.getBlockBytes: error response status code 404 when requesting 'someurl': somecause2", err5.Error())
+
+	err6 := errHTTPResponseContentType{contentTypeCount: 1, contentType: "UNDEFINED"}
+	require.Equal(t, "HTTPFetcher.getBlockBytes: invalid content type: UNDEFINED", err6.Error())
 }
