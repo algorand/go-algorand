@@ -893,7 +893,6 @@ func TestCreatePeerSelector(t *testing.T) {
 
 	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
 	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
-
 }
 
 func TestServiceStartStop(t *testing.T) {
@@ -904,8 +903,7 @@ func TestServiceStartStop(t *testing.T) {
 	s.Start()
 	s.Stop()
 	_, ok := (<-s.done)
-	require.False(t, ok)
-	
+	require.False(t, ok)	
 }
 
 func TestSynchronizingTime(t *testing.T) {
