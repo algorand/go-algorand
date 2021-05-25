@@ -525,7 +525,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 	for _, tableCreate := range accountsSchema {
 		_, err = tx.Exec(tableCreate)
 		if err != nil {
-			return false, err
+			return
 		}
 	}
 
@@ -537,11 +537,11 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		for _, migrateCmd := range creatablesMigration {
 			_, err = tx.Exec(migrateCmd)
 			if err != nil {
-				return false, err
+				return
 			}
 		}
 	} else if err != nil {
-		return false, err
+		return
 	}
 
 	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
@@ -573,7 +573,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		// serr.Code is sqlite.ErrConstraint if the database has already been initialized;
 		// in that case, ignore the error and return nil.
 		if !ok || serr.Code != sqlite3.ErrConstraint {
-			return false, err
+			return
 		}
 
 	}
