@@ -143,7 +143,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		ad.AssetParams[AssetIndex(0x1234123412341234-assetCreatorAssets)] = ap
 	}
 
-	for assetHolderAssets := 0; assetHolderAssets < config.MaxAvailableAppProgramLen; assetHolderAssets++ {
+	for assetHolderAssets := 0; assetHolderAssets < currentConsensusParams.MaxAssetsPerAccount; assetHolderAssets++ {
 		ah := AssetHolding{
 			Amount: 0x1234123412341234,
 			Frozen: true,
@@ -151,7 +151,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		ad.Assets[AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
 	}
 
-	maxProg := []byte(makeString(currentConsensusParams.MaxAppProgramLen))
+	maxProg := []byte(makeString(config.MaxAvailableAppProgramLen))
 	maxGlobalState := make(TealKeyValue, currentConsensusParams.MaxGlobalSchemaEntries)
 	maxLocalState := make(TealKeyValue, currentConsensusParams.MaxLocalSchemaEntries)
 	maxValue := TealValue{
