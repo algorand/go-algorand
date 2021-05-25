@@ -99,8 +99,6 @@ func (xf *XorFilter) MarshalBinary() ([]byte, error) {
 		binary.LittleEndian.PutUint32(out[pos:], v)
 		pos += 4
 	}
-	//copy(out[pos:], xf.xor.Fingerprints) // for Xor8
-	//pos += len(xf.xor.Fingerprints)
 	out = out[:pos]
 	return out, nil
 }
@@ -130,9 +128,7 @@ func (xf *XorFilter) UnmarshalBinary(data []byte) error {
 	}
 	pos += dp
 	if lenFingerprints > 0 {
-		//xor.Fingerprints = make([]byte, lenFingerprints)
 		xor.Fingerprints = make([]uint32, lenFingerprints)
-		//copy(xor.Fingerprints, data[pos:])
 		for i := 0; i < int(lenFingerprints); i++ {
 			xor.Fingerprints[i] = binary.LittleEndian.Uint32(data[pos:])
 			pos += 4
