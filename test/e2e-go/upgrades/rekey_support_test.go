@@ -63,8 +63,8 @@ func TestRekeyUpgrade(t *testing.T) {
 	initialStatus := curStatus
 	round := curStatus.LastRound
 
-	if initialStatus.NextVersion != initialStatus.LastVersion {
-		// no consensus upgrade took place
+	if initialStatus.NextVersion != initialStatus.LastVersion || round == 0 {
+		// no consensus upgrade took place (yet)
 
 		// Ensure no rekeying happened
 		ad, err := client.AccountData(accountA)
