@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-// TestRekeyUpgrade tests that we rekey does not work before the upgrade and works well after
+// TestRekeyUpgrade tests that the rekey does not work before the upgrade and works well after
 func TestRekeyUpgrade(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
