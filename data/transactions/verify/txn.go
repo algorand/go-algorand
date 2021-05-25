@@ -118,8 +118,8 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 		return nil, err
 	}
 
-	requiredFees := uint64(0)
-	feeSum := uint64(0)
+	minFeeCount := uint64(0)
+	feesPaid := uint64(0)
 	for i, stxn := range stxs {
 		err = Txn(&stxn, i, groupCtx)
 		if err != nil {
@@ -127,13 +127,21 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 			return
 		}
 		if stxn.Txn.Type != protocol.CompactCertTx {
-			requiredFees++
+			minFeeCount++
 		}
-		feeSum += stxn.Txn.Fee.Raw
+		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
 	}
-	if feeSum < groupCtx.consensusParams.MinTxnFee*requiredFees {
+	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
+	if overflow {
+		err = fmt.Errorf("txgroup fee requirement overflow")
+		return
+	}
+	// feesPaid may have saturated. That's ok. Since we know
+	// feeNeeded did not overlfow, simple comparision tells us
+	// feesPaid was enough.
+	if feesPaid < feeNeeded {
 		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",
-			feeSum, requiredFees, groupCtx.consensusParams.MinTxnFee)
+			feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee)
 		return
 	}
 

@@ -104,7 +104,8 @@ type ConsensusParams struct {
 	MinTxnFee uint64
 
 	// EnableFeePooling specifies that the sum of the fees in a
-	// group must exceed one MinTxnFee, rather check on each Txn.
+	// group must exceed one MinTxnFee per Txn, rather than check that
+	// each Txn has a MinFee.
 	EnableFeePooling bool
 
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
