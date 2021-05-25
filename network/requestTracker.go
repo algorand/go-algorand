@@ -379,21 +379,23 @@ func (rt *RequestTracker) Close() error {
 	return rt.listener.Close()
 }
 
-func (rt *RequestTracker) getWaitUntilEmptyChannel() <-chan struct{}{
+func (rt *RequestTracker) getWaitUntilEmptyChannel(checkInterval time.Duration) <-chan struct{}{
 	done := make(chan struct{})
 
 	go func() {
+		checkEmpty := func (rt *RequestTracker) bool {
+			rt.httpConnectionsMu.Lock()
+			defer rt.httpConnectionsMu.Unlock()
+			return len(rt.httpConnections) == 0
+		}
+
 		for true {
-			select {
-			case <-time.After(100 * time.Millisecond):
-				rt.httpConnectionsMu.Lock()
-				if len(rt.httpConnections) == 0 {
-					done <- struct{}{}
-					rt.httpConnectionsMu.Unlock()
-					return
-				}
-				rt.httpConnectionsMu.Unlock()
+			if checkEmpty(rt) {
+				close(done)
+				return
 			}
+
+			time.Sleep(checkInterval)
 		}
 	}()
 
