@@ -439,12 +439,14 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	err = accountsInit(tx, accts, proto)
+	newDB, err := accountsInit(tx, accts, proto)
 	require.NoError(t, err)
+	require.True(t, newDB)
 	checkAccounts(t, tx, 0, accts)
 
-	err = accountsInit(tx, accts, proto)
+	newDB, err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
+	require.False(t, newDB)
 	checkAccounts(t, tx, 0, accts)
 }
 
@@ -528,7 +530,7 @@ func TestAccountDBRound(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	err = accountsInit(tx, accts, proto)
+	_, err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 
@@ -735,7 +737,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
 
-	err = accountsInit(tx, updates, proto)
+	_, err = accountsInit(tx, updates, proto)
 	require.NoError(b, err)
 	err = accountsAddNormalizedBalance(tx, proto)
 	require.NoError(b, err)
@@ -956,7 +958,7 @@ func TestAccountsReencoding(t *testing.T) {
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
 		}
@@ -1034,7 +1036,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
 		}
