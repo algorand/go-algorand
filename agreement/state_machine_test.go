@@ -150,6 +150,15 @@ func (t ioTrace) ContainsFn(compareFn func(b event) bool) bool {
 	return false
 }
 
+func (t ioTrace) countAction() (count int) {
+	for _, ev := range t.events {
+		if ev.t() == wrappedAction {
+			count ++
+		}
+	}
+	return
+}
+
 // ioSafetyProp denotes whether some trace is "safe" according to itself
 type ioSafetyProp interface {
 	// returns bool whether trace is in the safety property. If false,
