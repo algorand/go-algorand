@@ -36,6 +36,7 @@ Initial environment setup:
 git clone https://github.com/algorand/go-algorand
 cd go-algorand
 ./scripts/configure_dev.sh
+./scripts/buildtools/install_buildtools.sh
 ```
 
 At this point you are ready to build go-algorand. We use `make` and have a
