@@ -283,6 +283,7 @@ func makeErrWrongCertFromPeer(round, certRound basics.Round, peer string) errWro
 		peer:      peer,
 		certRound: certRound}
 }
+
 func (wcfpe errWrongCertFromPeer) Error() string {
 	return fmt.Sprintf("processBlockBytes: got wrong cert from peer %s: wanted %d, got %d",
 		wcfpe.peer, wcfpe.round, wcfpe.certRound)
@@ -300,6 +301,7 @@ func makeErrWrongBlockFromPeer(round, certRound basics.Round, peer string) errWr
 		peer:      peer,
 		certRound: certRound}
 }
+
 func (wbfpe errWrongBlockFromPeer) Error() string {
 	return fmt.Sprintf("processBlockBytes: got wrong block from peer %s: wanted %d, got %d",
 		wbfpe.peer, wbfpe.round, wbfpe.certRound)
@@ -317,10 +319,12 @@ func makeErrCannotDecodeBlock(round basics.Round, peer string, err error) errCan
 		peer:  peer,
 		err: err}
 }
+
 func (cdbe errCannotDecodeBlock) Error() string {
 	return fmt.Sprintf("processBlockBytes: cannot decode block %d from peer %s: %s",
 		cdbe.round, cdbe.peer, cdbe.err.Error())
 }
+
 func (cdbe errCannotDecodeBlock) Unwrap() error {
 	return cdbe.err
 }
@@ -337,6 +341,7 @@ func makeErrWsFetcherRequestFailed(round basics.Round, peer, cause string) errWs
 		peer:  peer,
 		cause: cause}
 }
+
 func (wrfe errWsFetcherRequestFailed)Error () string {
 	return fmt.Sprintf("wsFetcherClient(%s).requestBlock(%d): Request failed: %s",
 		wrfe.peer, wrfe.round, wrfe.cause)
@@ -354,6 +359,7 @@ func makeErrHTTPResponse(responseStatus int, blockURL string, cause string) errH
 		blockURL:       blockURL,
 		cause:          cause}
 }
+
 func (hre errHTTPResponse) Error() string {
 	return fmt.Sprintf("HTTPFetcher.getBlockBytes: error response status code %d when requesting '%s': %s", hre.responseStatus, hre.blockURL, hre.cause)
 }

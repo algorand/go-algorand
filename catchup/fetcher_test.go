@@ -304,6 +304,7 @@ func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.
 func makeTestUnicastPeer(gn network.GossipNode, t *testing.T) network.UnicastPeer {
 	return makeTestUnicastPeerWithResponseOverride(gn, t, nil)
 }
+
 func makeTestUnicastPeerWithResponseOverride(gn network.GossipNode, t *testing.T, responseOverride *network.Response) network.UnicastPeer {
 	wsp := testUnicastPeer{}
 	wsp.gn = gn
