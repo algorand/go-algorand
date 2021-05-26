@@ -1953,13 +1953,13 @@ store 0
 int 1`,
 			`
 byte "txn 2"
-store 1
+store 2
 int 1`,
 			`
 gload 0 0
 byte "txn 1"
 ==
-gload 1 1
+gload 1 2
 byte "txn 2"
 ==
 &&
