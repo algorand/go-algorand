@@ -42,7 +42,9 @@ var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_l
 // to avoid context switching overhead while providing good validation cancelation responsiveness. Each one of these worksets is
 // "populated" with roughly txnPerWorksetThreshold transactions. ( note that the real evaluation time is unknown, but benchmarks
 // showen that these are realistic numbers )
-const txnPerWorksetThreshold = 32
+// since the paysetgroup uses batch verification and the batch verification validates 64 signatures
+// at a time. this number is recommended for the group size
+const txnPerWorksetThreshold = 64
 
 // When the PaysetGroups is generating worksets, it enqueues up to concurrentWorksets entries to the execution pool. This serves several
 // purposes :
@@ -123,24 +125,23 @@ func txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVer
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
 func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
+	return TxnGroupVerifiyInBatch(stxs, contextHdr, cache, nil)
+}
+
+// TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
+// This function doesn't validate the digial signature in each transaction. It enqueues the signautre
+// to the verifier.
+func TxnGroupVerifiyInBatch(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
 	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
 	if err != nil {
 		return nil, err
 	}
 
-	batchVerifier := crypto.MakeBatchVerifier(len(stxs))
 	for i, stxn := range stxs {
-		err = txn(&stxn, i, groupCtx, batchVerifier)
+		err = txn(&stxn, i, groupCtx, verifier)
 		if err != nil {
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 			return
-		}
-	}
-
-	//in case of logic signatures ,there might be non empty txn group with no crypto validation enqueued to the batch verifier
-	if batchVerifier.GetNumberOfEnqueuedSignatures() != 0 {
-		if !batchVerifier.Verify() {
-			return nil, errBatchVerificationFailed
 		}
 	}
 
@@ -358,15 +359,24 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 						return tasksCtx.Err()
 					}
 
+					batchVerifier := crypto.MakeBatchVerifier(len(payset))
 					txnGroups := arg.([][]transactions.SignedTxn)
 					groupCtxs := make([]*GroupContext, len(txnGroups))
 					for i, signTxnsGrp := range txnGroups {
-						groupCtxs[i], grpErr = TxnGroup(signTxnsGrp, blkHeader, nil)
+						groupCtxs[i], grpErr = TxnGroupVerifiyInBatch(signTxnsGrp, blkHeader, nil, batchVerifier)
 						// abort only if it's a non-cache error.
 						if grpErr != nil {
 							return grpErr
 						}
 					}
+
+					//in case of logic signatures ,there might be non empty txn group with no crypto validation enqueued to the batch verifier
+					if batchVerifier.GetNumberOfEnqueuedSignatures() != 0 {
+						if !batchVerifier.Verify() {
+							return errBatchVerificationFailed
+						}
+					}
+
 					cache.AddPayset(txnGroups, groupCtxs)
 					return nil
 				}, nextWorkset, worksDoneCh)
