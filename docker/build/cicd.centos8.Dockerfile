@@ -20,6 +20,7 @@ COPY . $GOPATH/src/github.com/algorand/go-algorand
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     GOPROXY=https://proxy.golang.org,https://pkg.go.dev,https://goproxy.io,direct
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
+RUN ./scripts/configure_dev.sh
 RUN make ci-deps && make clean
 RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
     mkdir -p $GOPATH/src/github.com/algorand/go-algorand
