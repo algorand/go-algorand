@@ -83,11 +83,11 @@ class algodDir:
     def __init__(self, path, net=None, token=None, admin_token=None):
         self.path = path
         self.nick = os.path.basename(self.path)
+        if net is None:
+            net, token, admin_token = read_algod_dir(self.path)
         self.net = net
         self.token = token
         self.admin_token = admin_token
-        if net is None:
-            net, token, admin_token = read_algod_dir(self.path)
         self.headers = {}
         self._pid = None
         self._algod = None
