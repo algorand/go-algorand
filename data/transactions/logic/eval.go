@@ -164,14 +164,14 @@ type EvalSideEffects struct {
 	scratchSpace scratchSpace
 }
 
-// GetScratchValue loads and clones a stackValue
+// getScratchValue loads and clones a stackValue
 // The value is cloned so the original bytes are protected from changes
-func (se *EvalSideEffects) GetScratchValue(scratchPos uint8) stackValue {
+func (se *EvalSideEffects) getScratchValue(scratchPos uint8) stackValue {
 	return se.scratchSpace[scratchPos].clone()
 }
 
-// SetScratchSpace stores the scratch space
-func (se *EvalSideEffects) SetScratchSpace(scratch scratchSpace) {
+// setScratchSpace stores the scratch space
+func (se *EvalSideEffects) setScratchSpace(scratch scratchSpace) {
 	se.scratchSpace = scratch
 }
 
@@ -465,7 +465,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	}
 
 	// set side effects
-	cx.PastSideEffects[cx.GroupIndex].SetScratchSpace(cx.scratch)
+	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
 
 	return cx.stack[0].Uint != 0, nil
 }
@@ -2265,7 +2265,7 @@ func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int, opName string) (
 		return
 	}
 
-	scratchValue = cx.PastSideEffects[groupIdx].GetScratchValue(uint8(scratchIdx))
+	scratchValue = cx.PastSideEffects[groupIdx].getScratchValue(uint8(scratchIdx))
 	return
 }
 
