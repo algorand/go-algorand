@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/xorfilter"
@@ -30,8 +31,9 @@ import (
 )
 
 func TestXorBloom(t *testing.T) {
+	t.Parallel()
 	numElementsCases := []int{2000, 20000, 200000}
-	fpRateCases := []float64{0.0041} //, 0.00001, 0.0000001}
+	fpRateCases := []float64{0.0042} //, 0.00001, 0.0000001}
 	numFP := []int{100, 25, 5}
 	if testing.Short() {
 		numElementsCases = []int{2000, 20000}
@@ -54,6 +56,10 @@ func TestXorBloom(t *testing.T) {
 // based on "github.com/willf/bloom"
 func estimateFalsePositiveRateXor(t *testing.T, numAdded int, numFP int) float64 {
 	var xf XorFilter
+	maxDuration := 5 * time.Second
+	if testing.Short() {
+		maxDuration = 100 * time.Millisecond
+	}
 	x := make([]byte, 8)
 	for i := 0; i < numAdded; i++ {
 		binary.BigEndian.PutUint32(x, uint32(i))
@@ -62,10 +68,11 @@ func estimateFalsePositiveRateXor(t *testing.T, numAdded int, numFP int) float64
 
 	xord, err := xf.MarshalBinary()
 	require.NoError(t, err)
-	var nxf XorFilter
+	var nxf XorFilter8
 	err = nxf.UnmarshalBinary(xord)
 	require.NoError(t, err)
 
+	start := time.Now()
 	falsePositives := 0
 	numRounds := 0
 	for i := 0; falsePositives < numFP; i++ {
@@ -74,12 +81,20 @@ func estimateFalsePositiveRateXor(t *testing.T, numAdded int, numFP int) float64
 			falsePositives++
 		}
 		numRounds++
+		if numRounds%10000 == 0 {
+			dt := time.Now().Sub(start)
+			if dt > maxDuration {
+				t.Logf("t %s > max duration %s without finding false positive rate", dt, maxDuration)
+				break
+			}
+		}
 	}
 
 	return float64(falsePositives) / float64(numRounds)
 }
 
 func TestByte32FalsePositive(t *testing.T) {
+	t.Parallel()
 	var filterSizes = []int{1000, 5000, 10000, 50000, 100000}
 	for _, filterSetSize := range filterSizes {
 		//const filterSetSize = 100000
@@ -198,6 +213,7 @@ func memDelta(a, b *runtime.MemStats) string {
 }
 
 func TestMemXor(t *testing.T) {
+	t.Parallel()
 	var xb xorfilter.Builder
 	xff := func() GenericFilter {
 		xf := NewXor(5000, &xb)
@@ -208,6 +224,7 @@ func TestMemXor(t *testing.T) {
 }
 
 func TestMemBloom(t *testing.T) {
+	t.Parallel()
 	fpRate := 0.004
 	filterSetSize := 5000
 	numBits, numHashes := Optimal(filterSetSize, fpRate)
