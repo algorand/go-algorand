@@ -103,7 +103,7 @@ type AccountDeltas struct {
 	holdings map[basics.Address]map[basics.AssetIndex]HoldingAction
 }
 
-// PersistedBalanceRecord is similar to BalanceREcord but contains PersistedAccountData
+// PersistedBalanceRecord is similar to BalanceRecord but contains PersistedAccountData
 //msgp:ignore PersistedBalanceRecord
 type PersistedBalanceRecord struct {
 	Addr basics.Address
@@ -191,16 +191,13 @@ func (ad *AccountDeltas) upsert(pbr PersistedBalanceRecord) {
 // SetHoldingDelta saves creation/deletion info about asset holding
 // Creation is not really important since the holding is already in ad.accts,
 // but saving deleteion info is only the way to know if the asset gone
-func (ad *AccountDeltas) SetHoldingDelta(addr basics.Address, aidx basics.AssetIndex, created bool) {
+func (ad *AccountDeltas) SetHoldingDelta(addr basics.Address, aidx basics.AssetIndex, action HoldingAction) {
 	hmap, ok := ad.holdings[addr]
 	if !ok {
-		hmap = make(map[basics.AssetIndex]HoldingAction)
-	}
-
-	if created {
-		hmap[aidx] = ActionCreate
+		// in most cases there will be only one asset modification per account
+		hmap = map[basics.AssetIndex]HoldingAction{aidx: action}
 	} else {
-		hmap[aidx] = ActionDelete
+		hmap[aidx] = action
 	}
 
 	if ad.holdings == nil {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -34,12 +35,10 @@ func TestAssetHoldingConvertToGroups(t *testing.T) {
 	e.ConvertToGroups(nil)
 	a.Equal(uint32(0), e.Count)
 	a.Equal(0, len(e.Groups))
-	a.False(e.loaded)
 
 	e.ConvertToGroups(map[basics.AssetIndex]basics.AssetHolding{})
 	a.Equal(uint32(0), e.Count)
 	a.Equal(0, len(e.Groups))
-	a.False(e.loaded)
 
 	var tests = []struct {
 		size        int
@@ -65,7 +64,6 @@ func TestAssetHoldingConvertToGroups(t *testing.T) {
 			var e ExtendedAssetHolding
 			e.ConvertToGroups(assets)
 			a.Equal(uint32(test.size), e.Count)
-			a.True(e.loaded)
 			a.Equal(test.numGroups, len(e.Groups))
 			total := 0
 			for i := 0; i < len(e.Groups); i++ {
@@ -111,6 +109,7 @@ func TestAssetHoldingFindAsset(t *testing.T) {
 		groups    []int
 		assets    []int
 	}{
+		{8, 1, []basics.AssetIndex{1, 5, 10, 12}, []int{0, 0, -1, -1}, []int{0, 4, -1, -1}},
 		{10, 1, []basics.AssetIndex{1, 5, 10, 12}, []int{0, 0, 0, -1}, []int{0, 4, 9, -1}},
 		{255, 1, []basics.AssetIndex{1, 255, 256, 257, 258}, []int{0, 0, -1, -1, -1}, []int{0, 254, -1, -1, -1}},
 		{256, 1, []basics.AssetIndex{1, 255, 256, 257, 258}, []int{0, 0, 0, -1, -1}, []int{0, 254, 255, -1, -1}},
@@ -185,8 +184,6 @@ func genExtendedHolding(t *testing.T, spec []groupSpec) (e ExtendedAssetHolding)
 		e.Groups[i].loaded = true
 		e.Count += uint32(s.count)
 	}
-	e.loaded = true
-
 	a := require.New(t)
 	for _, s := range spec {
 		gi, ai := e.FindAsset(s.start, 0)
@@ -760,4 +757,295 @@ func TestAssetHoldingDeleteRepeat(t *testing.T) {
 
 		e = genExtendedHolding(t, spec)
 	}
+}
+
+type groupLayout struct {
+	count  int
+	loaded bool
+}
+
+func genExtendedHoldingGroups(spec []groupLayout) (e ExtendedAssetHolding) {
+	if len(spec) == 0 {
+		return
+	}
+	e.Groups = make([]AssetsHoldingGroup, len(spec), len(spec))
+	for i, s := range spec {
+		e.Groups[i] = AssetsHoldingGroup{Count: uint32(s.count), loaded: s.loaded}
+	}
+	return
+}
+
+func TestFindLoadedSiblings(t *testing.T) {
+	type result struct {
+		loaded []int
+		crs    []continuosRange
+	}
+	type test struct {
+		i    []groupLayout
+		r    result
+		seed int64
+	}
+
+	tests := []test{
+		{i: []groupLayout{}, r: result{}},
+		{i: []groupLayout{{1, false}}, r: result{}},
+		{i: []groupLayout{{1, false}, {3, false}}, r: result{}},
+		{i: []groupLayout{{1, true}, {3, true}}, r: result{[]int{0, 1}, []continuosRange{{0, 2, 4}}}},
+		{i: []groupLayout{{1, true}, {3, false}}, r: result{[]int{0}, nil}},
+		{i: []groupLayout{{1, false}, {3, true}}, r: result{[]int{1}, nil}},
+		{i: []groupLayout{{1, false}, {3, true}, {5, true}}, r: result{[]int{1, 2}, []continuosRange{{1, 2, 8}}}},
+		{i: []groupLayout{{1, false}, {3, true}, {5, true}, {7, false}}, r: result{[]int{1, 2}, []continuosRange{{1, 2, 8}}}},
+		{i: []groupLayout{{1, false}, {3, true}, {5, true}, {7, true}}, r: result{[]int{1, 2, 3}, []continuosRange{{1, 3, 15}}}},
+		{i: []groupLayout{{1, false}, {3, true}, {5, false}, {7, true}}, r: result{[]int{1, 3}, nil}},
+		{
+			i: []groupLayout{{1, false}, {3, true}, {5, true}, {7, false}, {9, true}},
+			r: result{[]int{1, 2, 4}, []continuosRange{{1, 2, 8}}},
+		},
+		{
+			i: []groupLayout{{1, false}, {3, true}, {5, true}, {7, false}, {9, true}, {11, true}},
+			r: result{[]int{1, 2, 4, 5}, []continuosRange{{1, 2, 8}, {4, 2, 20}}},
+		},
+		{
+			i: []groupLayout{{1, true}, {3, true}, {5, true}, {7, false}, {9, true}, {11, true}},
+			r: result{[]int{0, 1, 2, 4, 5}, []continuosRange{{0, 3, 9}, {4, 2, 20}}},
+		},
+		{
+			i: []groupLayout{{1, true}, {3, true}, {5, true}, {7, false}, {9, true}, {11, false}},
+			r: result{[]int{0, 1, 2, 4}, []continuosRange{{0, 3, 9}}},
+		},
+		{
+			i: []groupLayout{{1, true}, {3, true}, {5, true}, {7, true}, {9, true}, {11, true}},
+			r: result{[]int{0, 1, 2, 3, 4, 5}, []continuosRange{{0, 6, 36}}},
+		},
+	}
+
+	// random tests
+	getRandTest := func(seed int64) test {
+		rand.Seed(seed)
+		num := rand.Intn(128)
+		gl := make([]groupLayout, num, num)
+		var r result
+		lastLoaded := -1
+		for i := 0; i < num; i++ {
+			val := rand.Intn(256)
+			gl[i] = groupLayout{val, val%2 == 0}
+			if gl[i].loaded {
+				r.loaded = append(r.loaded, i)
+				if lastLoaded == -1 {
+					lastLoaded = i
+				}
+			}
+			if lastLoaded != -1 && (!gl[i].loaded || i == num-1) {
+				if i-lastLoaded > 1 || i == num-1 && gl[i].loaded && i-lastLoaded >= 1 {
+					count := 0
+					lastIndex := i
+					if gl[i].loaded && i == num-1 {
+						lastIndex = num
+					}
+					for j := lastLoaded; j < lastIndex; j++ {
+						count += gl[j].count
+					}
+					r.crs = append(r.crs, continuosRange{lastLoaded, lastIndex - lastLoaded, count})
+				}
+				// reset
+				lastLoaded = -1
+			}
+		}
+		return test{gl, r, seed}
+	}
+
+	// these seeds a know to produce intersting loaded combinations in the end
+	seeds := []int64{1615596918, 1615597682, 1615609061, 1615824956, 1615940924}
+	for _, seed := range seeds {
+		rt := getRandTest(seed)
+		tests = append(tests, rt)
+	}
+	rt := getRandTest(time.Now().Unix())
+	tests = append(tests, rt)
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			e := genExtendedHoldingGroups(test.i)
+			l, c := e.findLoadedSiblings()
+			if test.seed != 0 {
+				fmt.Printf("seed = %d\n", test.seed)
+			}
+			require.Equal(t, test.r.loaded, l)
+			require.Equal(t, test.r.crs, c)
+		})
+	}
+}
+
+// generate groups from sizes. group N increments each asset id by N
+// i.e. Group[0] = [aidx, aidx+1, aidx+2,...]
+func genExtendedHoldingGroupsFromSizes(t *testing.T, sizes []int, aidx basics.AssetIndex) (e ExtendedAssetHolding) {
+	spec := make([]groupSpec, 0, len(sizes))
+	for i, size := range sizes {
+		increment := i + 1
+		end := aidx + basics.AssetIndex(increment*(size-1))
+		s := groupSpec{aidx, end, size}
+		spec = append(spec, s)
+		aidx = end + 1
+	}
+
+	e = genExtendedHolding(t, spec)
+	for i := 0; i < len(e.Groups); i++ {
+		e.Groups[i].AssetGroupKey = int64(i + 1)
+	}
+
+	return
+}
+
+func getAllHoldings(e ExtendedAssetHolding) map[basics.AssetIndex]basics.AssetHolding {
+	holdings := make(map[basics.AssetIndex]basics.AssetHolding, int(e.Count))
+	for _, g := range e.Groups {
+		aidx := g.MinAssetIndex
+		for ai, offset := range g.groupData.AssetOffsets {
+			aidx += offset
+			holdings[aidx] = g.GetHolding(ai)
+		}
+	}
+	return holdings
+}
+
+func TestGroupMergeInternal(t *testing.T) {
+	estimate := func(sizes []int) (int, int, int) {
+		sum := 0
+		for _, size := range sizes {
+			sum += size
+		}
+		groupsNeeded := (sum + MaxHoldingGroupSize - 1) / MaxHoldingGroupSize
+		groupsToDelete := len(sizes) - groupsNeeded
+		return groupsNeeded, groupsToDelete, sum
+	}
+
+	type test struct {
+		sizes []int
+	}
+
+	tests := []test{
+		{[]int{1, 2}},
+		{[]int{1, 2, 3}},
+		{[]int{1, 255, 3}},
+		{[]int{1, 253, 1}},
+		{[]int{256, 2, 3}},
+		{[]int{256, 1, 256}},
+		{[]int{254, 1, 1}},
+		{[]int{256, 255, 1}},
+		{[]int{256, 256, 1}},
+		{[]int{256, 256, 256}},
+		{[]int{128, 179, 128, 142, 128, 164, 128, 156, 147}},
+		{[]int{128, 168, 242, 128, 144, 255, 232}},
+	}
+
+	// random test
+	n := rand.Intn(100)
+	sizes := make([]int, n, n)
+	for i := 0; i < n; i++ {
+		sizes[i] = rand.Intn(MaxHoldingGroupSize-1) + 1 // no zeroes please
+	}
+	tests = append(tests, test{sizes})
+
+	for n, test := range tests {
+		t.Run(fmt.Sprintf("%d", n), func(t *testing.T) {
+			a := require.New(t)
+			sizes := test.sizes
+			groupsNeeded, groupsToDelete, totalAssets := estimate(sizes)
+			a.Equal(len(sizes), groupsNeeded+groupsToDelete)
+			e := genExtendedHoldingGroupsFromSizes(t, sizes, basics.AssetIndex(1))
+			oldCount := e.Count
+
+			oldHoldings := getAllHoldings(e)
+			deleted := e.merge(0, len(sizes), groupsToDelete)
+			a.Equal(groupsToDelete, len(deleted))
+			a.Equal(groupsNeeded, len(e.Groups))
+			a.Equal(oldCount, e.Count)
+			for i := 0; i < groupsNeeded-1; i++ {
+				a.Equal(uint32(MaxHoldingGroupSize), e.Groups[i].Count)
+			}
+			a.Equal(uint32(totalAssets-(groupsNeeded-1)*MaxHoldingGroupSize), e.Groups[groupsNeeded-1].Count)
+			newHoldings := getAllHoldings(e)
+			a.Equal(oldHoldings, newHoldings)
+
+		})
+	}
+}
+
+func TestGroupMerge(t *testing.T) {
+	delgroup := func(e ExtendedAssetHolding, d []int) ExtendedAssetHolding {
+		offset := 0
+		for _, gi := range d {
+			e.Count -= e.Groups[gi+offset].Count
+			if gi == len(e.Groups)-1 {
+				e.Groups = e.Groups[:len(e.Groups)-1]
+			} else {
+				e.Groups = append(e.Groups[:gi], e.Groups[gi+1:]...)
+			}
+		}
+		return e
+	}
+
+	type result struct {
+		l []int
+		d []int64
+	}
+	type test struct {
+		sizes  []int
+		unload []int
+		del    []int
+		r      result
+	}
+
+	tests := []test{
+		{[]int{1, 2, 3}, nil, nil, result{[]int{0}, []int64{2, 3}}},
+		{[]int{1, 2, 3}, nil, []int{1}, result{[]int{0}, []int64{3}}},
+		{[]int{1, 2, 3}, []int{1}, nil, result{[]int{0, 2}, nil}},
+		{[]int{1, 2, 3}, []int{1}, []int{0}, result{[]int{1}, nil}}, // unload 1, del 0 => idx 1 left loaded
+		{[]int{1, 2, 3, 4}, nil, []int{0}, result{[]int{0}, []int64{3, 4}}},
+		{[]int{1, 2, 3, 4}, []int{3}, []int{0}, result{[]int{0}, []int64{3}}},
+		{[]int{1, 2, 3, 4}, []int{0, 1}, nil, result{[]int{2}, []int64{4}}},
+		{[]int{1, 2, 3, 4}, []int{1, 3}, nil, result{[]int{0, 2}, nil}},
+		{[]int{1, 2, 3, 4}, []int{1, 2}, nil, result{[]int{0, 3}, nil}},
+		{[]int{1, 2, 3, 4}, []int{3}, nil, result{[]int{0}, []int64{2, 3}}},
+		{[]int{1, 2, 3, 4}, []int{0, 3}, nil, result{[]int{1}, []int64{3}}},
+		{[]int{255, 5, 255}, nil, nil, result{[]int{0, 1, 2}, nil}},
+		{[]int{250, 5, 255}, nil, nil, result{[]int{0, 1}, []int64{2}}},
+		{[]int{250, 5, 255}, []int{1}, nil, result{[]int{0, 2}, nil}},
+		{[]int{250, 5, 255}, []int{2}, nil, result{[]int{0}, []int64{2}}},
+	}
+
+	for n, test := range tests {
+		t.Run(fmt.Sprintf("%d", n), func(t *testing.T) {
+			a := require.New(t)
+			sizes := test.sizes
+			e := genExtendedHoldingGroupsFromSizes(t, sizes, basics.AssetIndex(1))
+			for _, gi := range test.unload {
+				e.Groups[gi].loaded = false
+			}
+			e = delgroup(e, test.del)
+			oldCount := e.Count
+			oldHoldings := getAllHoldings(e)
+
+			loaded, deleted := e.Merge()
+			a.Equal(test.r.l, loaded)
+			a.Equal(test.r.d, deleted)
+			a.Equal(oldCount, e.Count)
+			newHoldings := getAllHoldings(e)
+			a.Equal(oldHoldings, newHoldings)
+		})
+	}
+
+	// simulate new in-mem group
+	a := require.New(t)
+	e := genExtendedHoldingGroupsFromSizes(t, []int{250, 5, 255}, basics.AssetIndex(1))
+	e.Groups[1].AssetGroupKey = 0
+	oldCount := e.Count
+	oldHoldings := getAllHoldings(e)
+	loaded, deleted := e.Merge()
+	a.Equal([]int{0, 1}, loaded)
+	a.Equal([]int64(nil), deleted)
+	a.Equal(oldCount, e.Count)
+	newHoldings := getAllHoldings(e)
+	a.Equal(oldHoldings, newHoldings)
+
 }
