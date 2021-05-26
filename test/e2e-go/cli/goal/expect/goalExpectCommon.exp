@@ -283,7 +283,7 @@ proc ::AlgorandGoal::CreateWallet { WALLET_NAME WALLET_PASSWORD TEST_PRIMARY_NOD
         }
         expect {
              timeout {::AlgorandGoal::Abort "Timed out CreateWallet pass phrase"  }
-             -re {32m([a-z ]+)} {set WALLET_PASS_PHRASE $expect_out(1,string); close;}
+             -re {([a-z ]+)} {set WALLET_PASS_PHRASE $expect_out(1,string); close;}
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in CreateWallet: $EXCEPTION"

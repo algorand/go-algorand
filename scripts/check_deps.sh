@@ -37,7 +37,6 @@ missing_dep() {
 GO_DEPS=(
     "$GO_BIN/golint"
     "$GO_BIN/stringer"
-    "$GO_BIN/swagger"
     "$GO_BIN/msgp"
 )
 

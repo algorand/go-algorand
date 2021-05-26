@@ -1414,7 +1414,7 @@ int 1
 	require.NoError(t, err)
 	pass, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot compare ([]byte == uint64)")
+	require.Contains(t, err.Error(), "cannot compare ([]byte to uint64)")
 	require.False(t, pass)
 }
 
