@@ -111,6 +111,11 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `>=` | A greater than or equal to B => {0 or 1} |
 | `&&` | A is not zero and B is not zero => {0 or 1} |
 | `\|\|` | A is not zero or B is not zero => {0 or 1} |
+| `shl` | A times 2^B, modulo 2^64 |
+| `shr` | A divided by 2^B |
+| `sqrt` | The largest integer X such that X^2 <= A |
+| `bitlen` | The index of the highest bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer |
+| `exp` | A raised to the Bth power. Panic if A == B == 0 and on overflow |
 | `==` | A is equal to B => {0 or 1} |
 | `!=` | A is not equal to B => {0 or 1} |
 | `!` | X == 0 yields 1; else 0 |
@@ -124,7 +129,8 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `~` | bitwise invert value X |
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 | `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
-| `divw` | Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top. |
+| `divmodw` | Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top. |
+| `expw` | A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1 |
 | `getbit` | pop a target A (integer or byte-array), and index B. Push the Bth bit of A. |
 | `setbit` | pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result |
 | `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
@@ -132,6 +138,42 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `concat` | pop two byte-arrays A and B and join them, push the result |
 | `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
+
+These opcodes take and return byte-array values that are interpreted
+as big-endian unsigned integers.  Returned values are the shortest
+byte-array that can represent the returned value.  For example, the
+zero value is the empty byte-array.
+
+Input lengths are limited to maximum length 64, which represents a 512
+bit unsigned integer.
+
+| Op | Description |
+| --- | --- |
+| `b+` | A plus B, where A and B are byte-arrays interpreted as big-endian unsigned integers |
+| `b-` | A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow. |
+| `b/` | A divided by B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero. |
+| `b*` | A times B, where A and B are byte-arrays interpreted as big-endian unsigned integers. |
+| `b<` | A is less than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b>` | A is greater than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b<=` | A is less than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b>=` | A is greater than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b==` | A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b!=` | A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero. |
+
+These opcodes operate on the bits of byte-array values.  The shorter
+array is interpeted as though left padded with zeros until it is the
+same length as the other input.  The returned values are the same
+length as the longest input.  Therefore, unlike array arithmetic,
+these results may contain leading zero bytes.
+
+| Op | Description |
+| --- | --- |
+| `b\|` | A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b&` | A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b^` | A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b~` | A with all bits inverted |
+
 
 ### Loading Values
 
@@ -155,6 +197,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `bytec_2` | push constant 2 from bytecblock to stack |
 | `bytec_3` | push constant 3 from bytecblock to stack |
 | `pushbytes bytes` | push the following program bytes to the stack |
+| `bzero` | push a byte-array of length A, containing all zero bytes |
 | `arg n` | push Nth LogicSig argument to stack |
 | `arg_0` | push LogicSig argument 0 to stack |
 | `arg_1` | push LogicSig argument 1 to stack |

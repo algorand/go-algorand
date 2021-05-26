@@ -155,7 +155,7 @@ var OpSpecs = []OpSpec{
 	{0x1c, "~", opBitNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opDefault},
 	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opDefault},
 	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opDefault},
-	{0x1f, "divw", opDivw, asmDefault, disDefault, twoInts.plus(twoInts), twoInts.plus(twoInts), 4, modeAny, opDefault},
+	{0x1f, "divmodw", opDivModw, asmDefault, disDefault, twoInts.plus(twoInts), twoInts.plus(twoInts), 4, modeAny, costly(20)},
 
 	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, varies(checkIntConstBlock, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, immediates("i")},
@@ -211,7 +211,7 @@ var OpSpecs = []OpSpec{
 	{0x51, "substring", opSubstring, assembleSubstring, disDefault, oneBytes, oneBytes, 2, modeAny, immediates("s", "e")},
 	{0x52, "substring3", opSubstring3, asmDefault, disDefault, byteIntInt, oneBytes, 2, modeAny, opDefault},
 	{0x53, "getbit", opGetBit, asmDefault, disDefault, anyInt, oneInt, 3, modeAny, opDefault},
-	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneInt, 3, modeAny, opDefault},
+	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneAny, 3, modeAny, opDefault},
 	{0x55, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opDefault},
 	{0x56, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opDefault},
 
@@ -241,9 +241,30 @@ var OpSpecs = []OpSpec{
 	// Leave a little room for indirect function calls, or similar
 
 	// More math
-	// shl, shr
-	// divw, modw convenience
-	// expmod
+	{0x90, "shl", opShiftLeft, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
+	{0x91, "shr", opShiftRight, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
+	{0x92, "sqrt", opSqrt, asmDefault, disDefault, oneInt, oneInt, 4, modeAny, costly(4)},
+	{0x93, "bitlen", opBitLen, asmDefault, disDefault, oneAny, oneInt, 4, modeAny, opDefault},
+	{0x94, "exp", opExp, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
+	{0x95, "expw", opExpw, asmDefault, disDefault, twoInts, twoInts, 4, modeAny, costly(10)},
+
+	// Byteslice math.
+	{0xa0, "b+", opBytesPlus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},
+	{0xa1, "b-", opBytesMinus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},
+	{0xa2, "b/", opBytesDiv, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(20)},
+	{0xa3, "b*", opBytesMul, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(20)},
+	{0xa4, "b<", opBytesLt, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xa5, "b>", opBytesGt, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xa6, "b<=", opBytesLe, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xa7, "b>=", opBytesGe, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xa8, "b==", opBytesEq, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xa9, "b!=", opBytesNeq, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xaa, "b%", opBytesModulo, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(20)},
+	{0xab, "b|", opBytesBitOr, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(6)},
+	{0xac, "b&", opBytesBitAnd, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(6)},
+	{0xad, "b^", opBytesBitXor, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(6)},
+	{0xae, "b~", opBytesBitNot, asmDefault, disDefault, oneBytes, oneBytes, 4, modeAny, costly(4)},
+	{0xaf, "bzero", opBytesZero, asmDefault, disDefault, oneInt, oneBytes, 4, modeAny, opDefault},
 }
 
 type sortByOpcode []OpSpec
