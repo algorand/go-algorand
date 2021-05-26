@@ -156,17 +156,22 @@ int 1
 	a.NoError(err)
 
 	_, err = client.BroadcastTransaction(signedTxn)
-	a.Error(err)
-	a.Contains(err.Error(), "application transaction not supported")
+	if err != nil {
+		a.Contains(err.Error(), "application transaction not supported")
+	} else {
+		// if we had no error it must mean that we've upgraded already. Verify that.
+		curStatus, err := client.Status()
+		a.NoError(err)
+		require.Equal(t, consensusTestFastUpgrade(firstProtocolWithApplicationSupport), protocol.ConsensusVersion(curStatus.LastVersion))
+	}
 
 	curStatus, err := client.Status()
 	a.NoError(err)
-	initialStatus := curStatus
 
 	startLoopTime := time.Now()
 
 	// wait until the network upgrade : this can take a while.
-	for curStatus.LastVersion == initialStatus.LastVersion {
+	for protocol.ConsensusVersion(curStatus.LastVersion) != consensusTestFastUpgrade(firstProtocolWithApplicationSupport) {
 		curStatus, err = client.Status()
 		a.NoError(err)
 
