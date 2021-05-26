@@ -189,7 +189,7 @@ type EvalParams struct {
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
 
-	PastSideEffects []*EvalSideEffects
+	PastSideEffects []EvalSideEffects
 
 	Logger logging.Logger
 
