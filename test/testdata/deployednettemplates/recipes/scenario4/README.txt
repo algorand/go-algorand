@@ -4,7 +4,3 @@ nodes are in a 4th region.
 
 This scenario was designed to stress-test the situation where the
 agreement proposal arrives for the next round.
-
-
-
-

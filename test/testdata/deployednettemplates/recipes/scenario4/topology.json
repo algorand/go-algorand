@@ -1,0 +1,168 @@
+{ "Hosts":
+  [
+    {
+      "Name": "R1",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R2",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "R3",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "R4",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R5",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "R6",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "R7",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R8",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "R9",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "R10",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R11",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "R12",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "R13",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R14",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "R15",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "R16",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R17",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "R18",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "R19",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R20",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "R21",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "R22",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R23",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "R24",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "R25",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R26",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "R27",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "R28",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "R29",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "R30",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN1",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN2",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN3",
+      "Template": "AWS-AP-SOUTHEAST-2-m5d.4xl"
+    },
+    {
+      "Name": "NPN4",
+      "Template": "AWS-AP-SOUTHEAST-1-m5d.4xl"
+    },
+    {
+      "Name": "NPN5",
+      "Template": "AWS-EU-CENTRAL-1-m5d.4xl"
+    },
+    {
+      "Name": "N1",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "N2",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "N3",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "N4",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "N5",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "N6",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    }
+  ]
+}
