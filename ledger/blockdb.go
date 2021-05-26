@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -28,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -145,65 +143,6 @@ func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 	}
 
 	return
-}
-
-func blockReplaceIfExists(tx *sql.Tx, log logging.Logger, blk bookkeeping.Block, cert agreement.Certificate) (updated bool, err error) {
-	// Fetch encoded block + cert for the requested round so we can compare
-	var oldProto protocol.ConsensusVersion
-	var oldHdr, oldBlk, oldCert []byte
-	const query = "SELECT proto, hdrdata, blkdata, certdata FROM blocks WHERE rnd=?"
-	err = tx.QueryRow(query, blk.Round()).Scan(&oldProto, &oldHdr, &oldBlk, &oldCert)
-	if err != nil {
-		// Didn't have a block to replace, no problem
-		if err == sql.ErrNoRows {
-			return false, nil
-		}
-		return false, err
-	}
-
-	// Encode new block + cert in order to check against old values and replace
-	newProto := blk.CurrentProtocol
-	newHdr := protocol.Encode(&blk.BlockHeader)
-	newBlk := protocol.Encode(&blk)
-	newCert := protocol.Encode(&cert)
-
-	// if the header hasn't been modified, just return.
-	if bytes.Equal(oldHdr[:], newHdr[:]) {
-		return false, nil
-	}
-
-	// Log if protocol version or certificate changed for the block we're replacing
-	if newProto != oldProto {
-		log.Warnf("blockReplaceIfExists(%v): old proto %v != new proto %v", blk.Round(), oldProto, newProto)
-	}
-	if !bytes.Equal(oldCert, newCert) {
-		log.Warnf("blockReplaceIfExists(%v): old cert %v != new cert %v", blk.Round(), oldCert, newCert)
-	}
-
-	// Replace the block
-	res, err := tx.Exec("UPDATE blocks SET proto=?, hdrdata=?, blkdata=?, certdata=? WHERE rnd=?",
-		newProto,
-		newHdr,
-		newBlk,
-		newCert,
-		blk.Round(),
-	)
-	if err != nil {
-		return false, err
-	}
-
-	// Ensure we actually updated a row
-	cnt, err := res.RowsAffected()
-	if err != nil {
-		return true, err
-	}
-	if cnt > 0 {
-		return true, nil
-	}
-
-	// Shouldn't get here since we found the block
-	log.Warnf("blockReplaceIfExists(%v): found block but didn't update any rows?", blk.Round())
-	return false, nil
 }
 
 func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {

@@ -50,9 +50,15 @@ var opDocByName = map[string]string{
 	"&":                 "A bitwise-and B",
 	"^":                 "A bitwise-xor B",
 	"~":                 "bitwise invert value X",
+	"shl":               "A times 2^B, modulo 2^64",
+	"shr":               "A divided by 2^B",
+	"sqrt":              "The largest integer X such that X^2 <= A",
+	"bitlen":            "The index of the highest bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer",
+	"exp":               "A raised to the Bth power. Panic if A == B == 0 and on overflow",
+	"expw":              "A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1",
 	"mulw":              "A times B out to 128-bit long result as low (top) and high uint64 values on the stack",
 	"addw":              "A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack",
-	"divw":              "Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top.",
+	"divmodw":           "Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top.",
 	"intcblock":         "prepare block of uint64 constants for use by intc",
 	"intc":              "push Ith constant from intcblock to stack",
 	"intc_0":            "push constant 0 from intcblock to stack",
@@ -67,6 +73,7 @@ var opDocByName = map[string]string{
 	"bytec_2":           "push constant 2 from bytecblock to stack",
 	"bytec_3":           "push constant 3 from bytecblock to stack",
 	"pushbytes":         "push the following program bytes to the stack",
+	"bzero":             "push a byte-array of length A, containing all zero bytes",
 	"arg":               "push Nth LogicSig argument to stack",
 	"arg_0":             "push LogicSig argument 0 to stack",
 	"arg_1":             "push LogicSig argument 1 to stack",
@@ -114,6 +121,22 @@ var opDocByName = map[string]string{
 	"assert":            "immediately fail unless value X is a non-zero number",
 	"callsub":           "branch unconditionally to TARGET, saving the next instruction on the call stack",
 	"retsub":            "pop the top instruction from the call stack and branch to it",
+
+	"b+":  "A plus B, where A and B are byte-arrays interpreted as big-endian unsigned integers",
+	"b-":  "A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow.",
+	"b/":  "A divided by B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.",
+	"b*":  "A times B, where A and B are byte-arrays interpreted as big-endian unsigned integers.",
+	"b<":  "A is less than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b>":  "A is greater than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b<=": "A is less than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b>=": "A is greater than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b==": "A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b!=": "A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
+	"b%":  "A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.",
+	"b|":  "A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
+	"b&":  "A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
+	"b^":  "A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
+	"b~":  "A with all bits inverted",
 }
 
 // OpDoc returns a description of the op
@@ -164,7 +187,8 @@ var opDocExtras = map[string]string{
 	"bytecblock":        "`bytecblock` loads the following program bytes into an array of byte-array constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script.",
 	"*":                 "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.",
 	"+":                 "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.",
-	"/":                 "`divw` is available to divide the two-element values produced by `mulw` and `addw`.",
+	"/":                 "`divmodw` is available to divide the two-element values produced by `mulw` and `addw`.",
+	"bitlen":            "bitlen interprets arrays as big-endian integers, unlike setbit/getbit",
 	"txn":               "FirstValidTime causes the program to fail. The field is reserved for future use.",
 	"gtxn":              "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
 	"gtxns":             "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
@@ -191,19 +215,14 @@ func OpDocExtra(opName string) string {
 	return opDocExtras[opName]
 }
 
-// OpGroup is a grouping of ops for documentation purposes.
-// e.g. "Arithmetic", ["+": "-", ...]
-type OpGroup struct {
-	GroupName string
-	Ops       []string
-}
-
-// OpGroupList is groupings of ops for documentation purposes.
-var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"}},
-	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store"}},
-	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert", "callsub", "retsub"}},
-	{"State Access", []string{"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
+// OpGroups is groupings of ops for documentation purposes.
+var OpGroups = map[string][]string{
+	"Arithmetic":           {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"},
+	"Byteslice Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
+	"Byteslice Logic":      {"b|", "b&", "b^", "b~"},
+	"Loading Values":       {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store"},
+	"Flow Control":         {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert", "callsub", "retsub"},
+	"State Access":         {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"},
 }
 
 // OpCost indicates the cost of an operation over the range of
