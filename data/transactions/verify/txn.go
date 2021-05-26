@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -128,7 +129,7 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	return TxnGroupVerifiyInBatch(stxs, contextHdr, cache, nil)
 }
 
-// TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
+// TxnGroupVerifiyInBatch verifies a []SignedTxn as being signed and having no obviously inconsistent data.
 // This function doesn't validate the digial signature in each transaction. It enqueues the signautre
 // to the verifier.
 func TxnGroupVerifiyInBatch(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
@@ -370,6 +371,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 						}
 					}
 
+					logging.Base().Infof("we enqueued %v signatures into validation\n", batchVerifier.GetNumberOfEnqueuedSignatures())
 					//in case of logic signatures ,there might be non empty txn group with no crypto validation enqueued to the batch verifier
 					if batchVerifier.GetNumberOfEnqueuedSignatures() != 0 {
 						if !batchVerifier.Verify() {

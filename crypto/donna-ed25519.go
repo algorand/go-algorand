@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package crypto
 
 // #cgo CFLAGS: -I${SRCDIR}/ed25519-donna/ -Wall -Werror -std=c99 -Wno-incompatible-pointer-types-discards-qualifiers -m64 -O3 -DED25519_REFHASH -DED25519_CUSTOMRANDOM -Wno-macro-redefined
@@ -172,6 +173,7 @@ import (
 	"unsafe"
 )
 
+// DonnaSeed type represents a source of entropy used by the cryptographic functions
 type DonnaSeed ed25519DonnaSeed
 
 type ed25519DonnaSignature [64]byte
@@ -179,8 +181,10 @@ type ed25519DonnaPublicKey [32]byte
 type ed25519DonnaPrivateKey [64]byte
 type ed25519DonnaSeed [32]byte
 
+// DonnaPrivateKey epresents a prviate key in the ed25519 donna implementation
 type DonnaPrivateKey ed25519DonnaPrivateKey
 
+// DonnaPublicKey represents a public key in the ed25519 donna implementation
 type DonnaPublicKey ed25519DonnaPublicKey
 
 const ed25519DonnaPublicKeyLenBytes = 32
@@ -221,16 +225,27 @@ func ed25519DonnaVerify(public ed25519DonnaPublicKey, data []byte, sig ed25519Do
 	return result == 0
 }
 
+// The DonnaSignature is a cryptographic signature. It proves that a message was
+// produced by a holder of a cryptographic secret.
+// This signature type is used by the ed25519 donna implementation
 type DonnaSignature ed25519DonnaSignature
 
+// BlankDonnaSignature is an empty signature structure, containing nothing but zeroes
 var BlankDonnaSignature = DonnaSignature{}
 
+// Blank function checks if the signature is all zeros
 func (s *DonnaSignature) Blank() bool {
 	return (*s) == BlankDonnaSignature
 }
 
+// DonnaSignatureVerifier is used to identify the holder of SignatureSecrets
+// and verify the authenticity of Signatures.
+// This signature type is used by the ed25519 Idonna mplementation
 type DonnaSignatureVerifier = DonnaPublicKey
 
+// DonnaSignatureSecrets are used by an entity to produce unforgeable signatures over
+// a message.
+// This type is used by the ed25519 donna implementation
 type DonnaSignatureSecrets struct {
 	_struct struct{} `codec:""`
 
@@ -238,48 +253,67 @@ type DonnaSignatureSecrets struct {
 	SK ed25519DonnaPrivateKey
 }
 
+// GenerateSignatureSecretsDonna creates SignatureSecrets from a source of entropy.
+// This function uses the ed25519 donna implementation
 func GenerateSignatureSecretsDonna(seed DonnaSeed) *DonnaSignatureSecrets {
 	pk0, sk := ed25519DonnaGenerateKeySeed(ed25519DonnaSeed(seed))
 	pk := DonnaSignatureVerifier(pk0)
 	return &DonnaSignatureSecrets{DonnaSignatureVerifier: pk, SK: sk}
 }
 
+// SignBytes signs a message directly, without first hashing.
+// Caller is responsible for domain separation.
+// This function uses the ed25519 donna implementation
 func (s *DonnaSignatureSecrets) SignBytes(message []byte) DonnaSignature {
 	return DonnaSignature(ed25519DonnaSign(s.SK, ed25519DonnaPublicKey(s.DonnaSignatureVerifier), message))
 }
 
+// Sign produces a cryptographic Signature of a Hashable message, given
+// cryptographic secrets.
+// This function uses the ed25519 donna implementation
 func (s *DonnaSignatureSecrets) Sign(message Hashable) DonnaSignature {
 	return s.SignBytes(hashRep(message))
 }
 
+// Verify verifies that some holder of a cryptographic secret authentically
+// signed a Hashable message.
+//
+// This function uses the ed25519 donna implementation
 func (v DonnaSignatureVerifier) Verify(message Hashable, sig DonnaSignature) bool {
 	return v.VerifyBytes(hashRep(message), sig)
 
 }
+
+// VerifyBytes verifies a signature, where the message is not hashed first.
+// Caller is responsible for domain separation.
+// If the message is a Hashable, Verify() can be used instead.
 func (v DonnaSignatureVerifier) VerifyBytes(message []byte, sig DonnaSignature) bool {
 	cryptoSigSecretsVerifyBytesTotal.Inc(map[string]string{})
 	return ed25519DonnaVerify(ed25519DonnaPublicKey(v), message, ed25519DonnaSignature(sig))
 }
 
-func DoonaBatchVerification(messages [][]byte, publicKeys []byte, signatures []byte, failed bool) bool {
+// DonnaBatchVerification calls the batch verification implemention in C. it prepares the arguments
+// to create a call to C code.
+// it returns true if all the signatures were authentically signed by the owners
+func DonnaBatchVerification(messages [][]byte, publicKeys []byte, signatures []byte, failed bool) bool {
 	if failed {
 		return false
 	}
 
 	numberOfSignatures := len(messages)
 	// allocate staging memory
-	messages_allocation := C.malloc(C.ulong(C.sizeofPtr * numberOfSignatures))
-	messagesLen_allocation := C.malloc(C.ulong(C.sizeof_size_t * numberOfSignatures))
-	publicKeys_allocation := C.malloc(C.ulong(C.sizeofPtr * numberOfSignatures))
-	signatures_allocation := C.malloc(C.ulong(C.sizeofPtr * numberOfSignatures))
+	messagesAllocation := C.malloc(C.ulong(C.sizeofPtr * numberOfSignatures))
+	messagesLenAllocation := C.malloc(C.ulong(C.sizeof_size_t * numberOfSignatures))
+	publicKeysAllocation := C.malloc(C.ulong(C.sizeofPtr * numberOfSignatures))
+	signaturesAllocation := C.malloc(C.ulong(C.sizeofPtr * numberOfSignatures))
 	valid := C.malloc(C.ulong(C.sizeof_int * numberOfSignatures))
 
 	defer func() {
 		// release staging memory
-		C.free(messages_allocation)
-		C.free(messagesLen_allocation)
-		C.free(publicKeys_allocation)
-		C.free(signatures_allocation)
+		C.free(messagesAllocation)
+		C.free(messagesLenAllocation)
+		C.free(publicKeysAllocation)
+		C.free(signaturesAllocation)
 		C.free(valid)
 	}()
 
@@ -288,18 +322,18 @@ func DoonaBatchVerification(messages [][]byte, publicKeys []byte, signatures []b
 
 	// load all the data pointers into the array pointers.
 	for i := 0; i < numberOfSignatures; i++ {
-		*(*uintptr)(unsafe.Pointer(uintptr(messages_allocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&messages[i][0]))
-		*(*C.size_t)(unsafe.Pointer(uintptr(messagesLen_allocation) + uintptr(i*C.sizeof_size_t))) = C.size_t(len(messages[i]))
-		*(*uintptr)(unsafe.Pointer(uintptr(publicKeys_allocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(uintptr(preallocatedPublicKeys) + uintptr(i*ed25519DonnaPublicKeyLenBytes)))
-		*(*uintptr)(unsafe.Pointer(uintptr(signatures_allocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(uintptr(preallocatedSignatures) + uintptr(i*ed25519DonnaSignatureLenBytes)))
+		*(*uintptr)(unsafe.Pointer(uintptr(messagesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&messages[i][0]))
+		*(*C.size_t)(unsafe.Pointer(uintptr(messagesLenAllocation) + uintptr(i*C.sizeof_size_t))) = C.size_t(len(messages[i]))
+		*(*uintptr)(unsafe.Pointer(uintptr(publicKeysAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(uintptr(preallocatedPublicKeys) + uintptr(i*ed25519DonnaPublicKeyLenBytes)))
+		*(*uintptr)(unsafe.Pointer(uintptr(signaturesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(uintptr(preallocatedSignatures) + uintptr(i*ed25519DonnaSignatureLenBytes)))
 	}
 
 	// call the batch verifier
 	allValid := C.ed25519_sign_open_batch(
-		(**C.uchar)(unsafe.Pointer(messages_allocation)),
-		(*C.size_t)(unsafe.Pointer(messagesLen_allocation)),
-		(**C.uchar)(unsafe.Pointer(publicKeys_allocation)),
-		(**C.uchar)(unsafe.Pointer(signatures_allocation)),
+		(**C.uchar)(unsafe.Pointer(messagesAllocation)),
+		(*C.size_t)(unsafe.Pointer(messagesLenAllocation)),
+		(**C.uchar)(unsafe.Pointer(publicKeysAllocation)),
+		(**C.uchar)(unsafe.Pointer(signaturesAllocation)),
 		C.size_t(len(messages)),
 		(*C.int)(unsafe.Pointer(valid))) == 0
 

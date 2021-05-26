@@ -288,7 +288,7 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (err error) {
 	return nil
 }
 
-// MultisigVerify verifies an assembled MultisigSig.
+// MultisigVerifyInBatch verifies an assembled MultisigSig.
 // this function validate the correctness of the Multisig and enqueues the signatures onto to the verifier
 // to later be varified
 func MultisigVerifyInBatch(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (err error) {

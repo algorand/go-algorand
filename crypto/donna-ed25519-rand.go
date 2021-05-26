@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package crypto
 
 // #cgo CFLAGS: -I${SRCDIR}/ed25519-donna/ -Werror -Wall -std=c99 -Wno-incompatible-pointer-types-discards-qualifiers -m64 -O3 -DED25519_REFHASH -DED25519_CUSTOMRANDOM -Wno-macro-redefined

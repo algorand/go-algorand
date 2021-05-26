@@ -59,10 +59,6 @@ func (b *BatchVerifier) enqueueRaw(sigVerifier SignatureVerifier, message []byte
 	b.signatures = append(b.signatures, sig[:]...)
 }
 
-func (b *BatchVerifier) GetNumberOfSignatures() int {
-	return len(b.messages)
-}
-
 func (b *BatchVerifier) expand() {
 	messages := make([][]byte, len(b.messages), len(b.messages)*2)
 	publicKeys := make([]byte, len(b.publicKeys), len(b.publicKeys)*2)
@@ -75,6 +71,7 @@ func (b *BatchVerifier) expand() {
 	b.signatures = signatures
 }
 
+// GetNumberOfEnqueuedSignatures returns the number of signatures current enqueue onto the bacth verifier object
 func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
 	return len(b.messages)
 }
@@ -109,12 +106,12 @@ func (b *BatchVerifier) Verify() bool {
 		}
 	}
 	////// ******************
-	batchCheck := DoonaBatchVerification(b.messages, b.publicKeys, b.signatures, b.failed)
+	batchCheck := DonnaBatchVerification(b.messages, b.publicKeys, b.signatures, b.failed)
 
 	////// TODO: remove those methods after testing signatures
 	libsoduiomResults := make([]bool, b.GetNumberOfEnqueuedSignatures())
 
-	for i, _ := range b.messages {
+	for i := range b.messages {
 		var pubKey PublicKey
 		var sig Signature
 		copy(pubKey[:], b.publicKeys[i*32:((i+1)*32)])
@@ -124,7 +121,7 @@ func (b *BatchVerifier) Verify() bool {
 	}
 	libdonnaResults := make([]bool, b.GetNumberOfEnqueuedSignatures())
 
-	for i, _ := range b.messages {
+	for i := range b.messages {
 		var pubKey PublicKey
 		var sig DonnaSignature
 		copy(pubKey[:], b.publicKeys[i*ed25519DonnaPublicKeyLenBytes:((i+1)*ed25519DonnaPublicKeyLenBytes)])
