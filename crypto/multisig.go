@@ -215,13 +215,11 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 	return
 }
 
-// MultisigVerify verifies an assembled MultisigSig
-func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, err error) {
-
-	verified = false
+func multisigValidateStructer(addr Digest, sig MultisigSig) (err error) {
 	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
 	// then terminate (the upper layer should now verify the unisig)
 	if (len(sig.Subsigs) == 0 || sig.Subsigs[0] == MultisigSubsig{}) {
+		err = errors.New(errorinvalidnumberofsignature)
 		return
 	}
 
@@ -242,6 +240,8 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, 
 	}
 
 	// check that we don't have too few multisig subsigs
+	// this is a sainty check because if we have less sign than threshold, the MultisigAddrGenWithSubsigs
+	// will fail
 	if len(sig.Subsigs) < int(sig.Threshold) {
 		err = errors.New(errorinvalidnumberofsignature)
 		return
@@ -258,7 +258,14 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, 
 		err = errors.New(errorinvalidnumberofsignature)
 		return
 	}
+	return nil
+}
 
+// MultisigVerify verifies an assembled MultisigSig.
+func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (err error) {
+	if err = multisigValidateStructer(addr, sig); err != nil {
+		return
+	}
 	// checks individual signature verifies
 	var verifiedCount int
 	for _, subsigi := range sig.Subsigs {
@@ -278,8 +285,22 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, 
 		return
 	}
 
-	verified = true
-	return
+	return nil
+}
+
+// MultisigVerify verifies an assembled MultisigSig.
+// this function validate the correctness of the Multisig and enqueues the signatures onto to the verifier
+// to later be varified
+func MultisigVerifyInBatch(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (err error) {
+	if err = multisigValidateStructer(addr, sig); err != nil {
+		return
+	}
+	for _, subsigi := range sig.Subsigs {
+		if (subsigi.Sig != Signature{}) {
+			batchVerifier.Enqueue(subsigi.Key, msg, subsigi.Sig)
+		}
+	}
+	return nil
 }
 
 // MultisigAdd adds unisig to an existing msig
