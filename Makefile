@@ -228,15 +228,15 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	gotestsum --format testname --jsonfile testresults.json -- $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
+	gotestsum --format pkgname --jsonfile testresults.json -- $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
 
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
-		gotestsum --format testname -- $(GOTAGS) -race $$PACKAGE_DIRECTORY -timeout 2500s; \
+		gotestsum --format pkgname -- $(GOTAGS) -race $$PACKAGE_DIRECTORY -timeout 2500s; \
 	done
 
 shorttest: build-race
-	gotestsum --format testname --jsonfile testresults.json -- $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 2500s
+	gotestsum --format pkgname --jsonfile testresults.json -- $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 2500s
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh

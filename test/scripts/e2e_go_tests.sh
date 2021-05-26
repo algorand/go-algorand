@@ -96,7 +96,7 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
         for TEST_DIR in ${TESTS_DIRECTORIES[@]}; do
             TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com" || true)
             for TEST_NAME in ${TESTS[@]}; do
-                go test ${RACE_OPTION} -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR} | logfilter
+                gotestsum --format testname -- ${RACE_OPTION} -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR}
                 KMD_INSTANCES_COUNT=$(set +o pipefail; ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
                 if [ "${KMD_INSTANCES_COUNT}" != "0" ]; then
                     echo "One or more than one KMD instances remains running:"
@@ -112,11 +112,11 @@ if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
             done
         done
     else
-        gotestsum --format testname --jsonfile integrationtestresults.json -- ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} ./...
+        gotestsum --format pkgname --jsonfile integrationtestresults.json -- ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} ./...
     fi
 else
     for TEST in ${TESTPATTERNS[@]}; do
-        gotestsum --format testname --jsonfile integrationtestresults.json -- ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
+        gotestsum --format pkgname --jsonfile integrationtestresults.json -- ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
     done
 fi
 
