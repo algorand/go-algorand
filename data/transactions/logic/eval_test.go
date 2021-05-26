@@ -1933,10 +1933,12 @@ func TestGload(t *testing.T) {
 
 	simpleCase := scratchTestCase{
 		tealSources: []string{
-			`int 2
+			`
+int 2
 store 0
 int 1`,
-			`gload 0 0
+			`
+gload 0 0
 int 2
 ==
 `,
@@ -1945,13 +1947,16 @@ int 2
 
 	multipleTxnCase := scratchTestCase{
 		tealSources: []string{
-			`byte "txn 1"
+			`
+byte "txn 1"
 store 0
 int 1`,
-			`byte "txn 2"
+			`
+byte "txn 2"
 store 1
 int 1`,
-			`gload 0 0
+			`
+gload 0 0
 byte "txn 1"
 ==
 gload 1 1
@@ -1964,7 +1969,8 @@ byte "txn 2"
 
 	selfCase := scratchTestCase{
 		tealSources: []string{
-			`gload 0 0
+			`
+gload 0 0
 int 2
 store 0
 int 1
@@ -1975,11 +1981,12 @@ int 1
 
 	laterTxnSlotCase := scratchTestCase{
 		tealSources: []string{
-			`gload 1 0
+			`
+gload 1 0
 int 2
-==
-`,
-			`int 2
+==`,
+			`
+int 2
 store 0
 int 1`,
 		},
@@ -2118,13 +2125,16 @@ func TestGloads(t *testing.T) {
 	t.Parallel()
 
 	// Multiple app calls
-	source1 := `byte "txn 1"
+	source1 := `
+byte "txn 1"
 store 0
 int 1`
-	source2 := `byte "txn 2"
+	source2 := `
+byte "txn 2"
 store 1
 int 1`
-	source3 := `int 0
+	source3 := `
+int 0
 gloads 0
 byte "txn 1"
 ==
