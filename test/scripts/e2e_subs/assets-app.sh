@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# TIMEOUT=300
 #
 # assets-app.sh and assets-app-b.sh both test the same TEAL app script, but in two separate parallelizeable chunks
 
