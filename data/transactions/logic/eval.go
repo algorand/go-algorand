@@ -27,6 +27,7 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"math/bits"
 	"runtime"
 	"strings"
 
@@ -48,6 +49,9 @@ const EvalMaxScratchSize = 255
 
 // MaxStringSize is the limit of byte strings created by `concat`
 const MaxStringSize = 4096
+
+// MaxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
+const MaxByteMathSize = 64
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -559,15 +563,14 @@ func (cx *evalContext) step() {
 		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
 		return
 	}
-	argsTypes := spec.Args
 
 	// check args for stack underflow and types
-	if len(cx.stack) < len(argsTypes) {
+	if len(cx.stack) < len(spec.Args) {
 		cx.err = fmt.Errorf("stack underflow in %s", spec.Name)
 		return
 	}
-	first := len(cx.stack) - len(argsTypes)
-	for i, argType := range argsTypes {
+	first := len(cx.stack) - len(spec.Args)
+	for i, argType := range spec.Args {
 		if !opCompat(argType, cx.stack[first+i].argType()) {
 			cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType.String(), cx.stack[first+i].typeName())
 			return
@@ -584,7 +587,31 @@ func (cx *evalContext) step() {
 		cx.err = fmt.Errorf("pc=%3d dynamic cost budget of %d exceeded, executing %s", cx.pc, cx.budget(), spec.Name)
 		return
 	}
+
+	preheight := len(cx.stack)
 	spec.op(cx)
+
+	if cx.err == nil {
+		postheight := len(cx.stack)
+		if spec.Name != "return" && postheight-preheight != len(spec.Returns)-len(spec.Args) {
+			cx.err = fmt.Errorf("%s changed stack height improperly %d != %d",
+				spec.Name, postheight-preheight, len(spec.Returns)-len(spec.Args))
+			return
+		}
+		first = postheight - len(spec.Returns)
+		for i, argType := range spec.Returns {
+			stackType := cx.stack[first+i].argType()
+			if !opCompat(argType, stackType) {
+				cx.err = fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType.String())
+				return
+			}
+			if stackType == StackBytes && len(cx.stack[first+i].Bytes) > MaxStringSize {
+				cx.err = fmt.Errorf("%s produced a too big (%d) byte-array", spec.Name, len(cx.stack[first+i].Bytes))
+				return
+			}
+		}
+	}
+
 	if cx.Trace != nil {
 		// This code used to do a little disassembly on its
 		// own, but then it missed out on some nuances like
@@ -791,7 +818,7 @@ func uint128(hi uint64, lo uint64) *big.Int {
 	return whole
 }
 
-func opDivwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
+func opDivModwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
 	dividend := uint128(hiNum, loNum)
 	divisor := uint128(hiDen, loDen)
 
@@ -802,7 +829,7 @@ func opDivwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, 
 		rem.Uint64()
 }
 
-func opDivw(cx *evalContext) {
+func opDivModw(cx *evalContext) {
 	loDen := len(cx.stack) - 1
 	hiDen := loDen - 1
 	if cx.stack[loDen].Uint == 0 && cx.stack[hiDen].Uint == 0 {
@@ -812,7 +839,7 @@ func opDivw(cx *evalContext) {
 	loNum := loDen - 2
 	hiNum := loDen - 3
 	hiQuo, loQuo, hiRem, loRem :=
-		opDivwImpl(cx.stack[hiNum].Uint, cx.stack[loNum].Uint, cx.stack[hiDen].Uint, cx.stack[loDen].Uint)
+		opDivModwImpl(cx.stack[hiNum].Uint, cx.stack[loNum].Uint, cx.stack[hiDen].Uint, cx.stack[loDen].Uint)
 	cx.stack[hiNum].Uint = hiQuo
 	cx.stack[loNum].Uint = loQuo
 	cx.stack[hiDen].Uint = hiRem
@@ -911,39 +938,18 @@ func opLt(cx *evalContext) {
 }
 
 func opGt(cx *evalContext) {
-	last := len(cx.stack) - 1
-	prev := last - 1
-	cond := cx.stack[prev].Uint > cx.stack[last].Uint
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
-	cx.stack = cx.stack[:last]
+	opSwap(cx)
+	opLt(cx)
 }
 
 func opLe(cx *evalContext) {
-	last := len(cx.stack) - 1
-	prev := last - 1
-	cond := cx.stack[prev].Uint <= cx.stack[last].Uint
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
-	cx.stack = cx.stack[:last]
+	opGt(cx)
+	opNot(cx)
 }
 
 func opGe(cx *evalContext) {
-	last := len(cx.stack) - 1
-	prev := last - 1
-	cond := cx.stack[prev].Uint >= cx.stack[last].Uint
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
-	cx.stack = cx.stack[:last]
+	opLt(cx)
+	opNot(cx)
 }
 
 func opAnd(cx *evalContext) {
@@ -976,7 +982,7 @@ func opEq(cx *evalContext) {
 	ta := cx.stack[prev].argType()
 	tb := cx.stack[last].argType()
 	if ta != tb {
-		cx.err = fmt.Errorf("cannot compare (%s == %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
+		cx.err = fmt.Errorf("cannot compare (%s to %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
 		return
 	}
 	var cond bool
@@ -995,27 +1001,8 @@ func opEq(cx *evalContext) {
 }
 
 func opNeq(cx *evalContext) {
-	last := len(cx.stack) - 1
-	prev := last - 1
-	ta := cx.stack[prev].argType()
-	tb := cx.stack[last].argType()
-	if ta != tb {
-		cx.err = fmt.Errorf("cannot compare (%s == %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
-		return
-	}
-	var cond bool
-	if ta == StackBytes {
-		cond = bytes.Compare(cx.stack[prev].Bytes, cx.stack[last].Bytes) != 0
-		cx.stack[prev].Bytes = nil
-	} else {
-		cond = cx.stack[prev].Uint != cx.stack[last].Uint
-	}
-	if cond {
-		cx.stack[prev].Uint = 1
-	} else {
-		cx.stack[prev].Uint = 0
-	}
-	cx.stack = cx.stack[:last]
+	opEq(cx)
+	opNot(cx)
 }
 
 func opNot(cx *evalContext) {
@@ -1083,6 +1070,355 @@ func opBitXor(cx *evalContext) {
 func opBitNot(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.stack[last].Uint = cx.stack[last].Uint ^ 0xffffffffffffffff
+}
+
+func opShiftLeft(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	if cx.stack[last].Uint > 63 {
+		cx.err = fmt.Errorf("shl arg too big, (%d)", cx.stack[last].Uint)
+		return
+	}
+	cx.stack[prev].Uint = cx.stack[prev].Uint << cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
+}
+
+func opShiftRight(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	if cx.stack[last].Uint > 63 {
+		cx.err = fmt.Errorf("shr arg too big, (%d)", cx.stack[last].Uint)
+		return
+	}
+	cx.stack[prev].Uint = cx.stack[prev].Uint >> cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
+}
+
+func opSqrt(cx *evalContext) {
+	/*
+		        It would not be safe to use math.Sqrt, because we would have to
+			convert our u64 to an f64, but f64 cannot represent all u64s exactly.
+
+			This algorithm comes from Jack W. Crenshaw's 1998 article in Embedded:
+			http://www.embedded.com/electronics-blogs/programmer-s-toolbox/4219659/Integer-Square-Roots
+	*/
+
+	last := len(cx.stack) - 1
+
+	sq := cx.stack[last].Uint
+	var rem uint64 = 0
+	var root uint64 = 0
+
+	for i := 0; i < 32; i++ {
+		root <<= 1
+		rem = (rem << 2) | (sq >> (64 - 2))
+		sq <<= 2
+		if root < rem {
+			rem -= root | 1
+			root += 2
+		}
+	}
+	cx.stack[last].Uint = root >> 1
+}
+
+func opBitLen(cx *evalContext) {
+	last := len(cx.stack) - 1
+	if cx.stack[last].argType() == StackUint64 {
+		cx.stack[last].Uint = uint64(bits.Len64(cx.stack[last].Uint))
+		return
+	}
+	length := len(cx.stack[last].Bytes)
+	idx := 0
+	for i, b := range cx.stack[last].Bytes {
+		if b != 0 {
+			idx = bits.Len8(b) + (8 * (length - i - 1))
+			break
+		}
+
+	}
+	cx.stack[last].Bytes = nil
+	cx.stack[last].Uint = uint64(idx)
+}
+
+func opExpImpl(base uint64, exp uint64) (uint64, error) {
+	// These checks are slightly repetive but the clarity of
+	// avoiding nested checks seems worth it.
+	if exp == 0 && base == 0 {
+		return 0, errors.New("0^0 is undefined")
+	}
+	if base == 0 {
+		return 0, nil
+	}
+	if exp == 0 || base == 1 {
+		return 1, nil
+	}
+	// base is now at least 2, so exp can not be over 64
+	if exp > 64 {
+		return 0, fmt.Errorf("%d^%d overflow", base, exp)
+	}
+	answer := base
+	// safe to cast exp, because it is known to fit in int (it's <= 64)
+	for i := 1; i < int(exp); i++ {
+		next := answer * base
+		if next/answer != base {
+			return 0, fmt.Errorf("%d^%d overflow", base, exp)
+		}
+		answer = next
+	}
+	return answer, nil
+}
+
+func opExp(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	exp := cx.stack[last].Uint
+	base := cx.stack[prev].Uint
+	val, err := opExpImpl(base, exp)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack[prev].Uint = val
+	cx.stack = cx.stack[:last]
+}
+
+func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
+	// These checks are slightly repetive but the clarity of
+	// avoiding nested checks seems worth it.
+	if exp == 0 && base == 0 {
+		return &big.Int{}, errors.New("0^0 is undefined")
+	}
+	if base == 0 {
+		return &big.Int{}, nil
+	}
+	if exp == 0 || base == 1 {
+		return new(big.Int).SetUint64(1), nil
+	}
+	// base is now at least 2, so exp can not be over 128
+	if exp > 128 {
+		return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
+	}
+
+	answer := new(big.Int).SetUint64(base)
+	bigbase := new(big.Int).SetUint64(base)
+	// safe to cast exp, because it is known to fit in int (it's <= 128)
+	for i := 1; i < int(exp); i++ {
+		next := answer.Mul(answer, bigbase)
+		answer = next
+		if answer.BitLen() > 128 {
+			return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
+		}
+	}
+	return answer, nil
+
+}
+
+func opExpw(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	exp := cx.stack[last].Uint
+	base := cx.stack[prev].Uint
+	val, err := opExpwImpl(base, exp)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	hi := new(big.Int).Rsh(val, 64).Uint64()
+	lo := val.Uint64()
+
+	cx.stack[prev].Uint = hi
+	cx.stack[last].Uint = lo
+}
+
+func opBytesBinOp(cx *evalContext, result *big.Int, op func(x, y *big.Int) *big.Int) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	if len(cx.stack[last].Bytes) > MaxByteMathSize || len(cx.stack[prev].Bytes) > MaxByteMathSize {
+		cx.err = errors.New("math attempted on large byte-array")
+		return
+	}
+
+	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
+	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
+	op(lhs, rhs) // op's receiver has already been bound to result
+	if result.Sign() < 0 {
+		cx.err = errors.New("byte math would have negative result")
+		return
+	}
+	cx.stack[prev].Bytes = result.Bytes()
+	cx.stack = cx.stack[:last]
+}
+
+func opBytesPlus(cx *evalContext) {
+	result := new(big.Int)
+	opBytesBinOp(cx, result, result.Add)
+}
+
+func opBytesMinus(cx *evalContext) {
+	result := new(big.Int)
+	opBytesBinOp(cx, result, result.Sub)
+}
+
+func opBytesDiv(cx *evalContext) {
+	result := new(big.Int)
+	checkDiv := func(x, y *big.Int) *big.Int {
+		if y.BitLen() == 0 {
+			cx.err = errors.New("division by zero")
+			return new(big.Int)
+		}
+		return result.Div(x, y)
+	}
+	opBytesBinOp(cx, result, checkDiv)
+}
+
+func opBytesMul(cx *evalContext) {
+	result := new(big.Int)
+	opBytesBinOp(cx, result, result.Mul)
+}
+
+func opBytesLt(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	if len(cx.stack[last].Bytes) > MaxByteMathSize || len(cx.stack[prev].Bytes) > MaxByteMathSize {
+		cx.err = errors.New("math attempted on large byte-array")
+		return
+	}
+
+	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
+	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
+	cx.stack[prev].Bytes = nil
+	if lhs.Cmp(rhs) < 0 {
+		cx.stack[prev].Uint = 1
+	} else {
+		cx.stack[prev].Uint = 0
+	}
+	cx.stack = cx.stack[:last]
+}
+
+func opBytesGt(cx *evalContext) {
+	opSwap(cx)
+	opBytesLt(cx)
+}
+
+func opBytesLe(cx *evalContext) {
+	opBytesGt(cx)
+	opNot(cx)
+}
+
+func opBytesGe(cx *evalContext) {
+	opBytesLt(cx)
+	opNot(cx)
+}
+
+func opBytesEq(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	if len(cx.stack[last].Bytes) > MaxByteMathSize || len(cx.stack[prev].Bytes) > MaxByteMathSize {
+		cx.err = errors.New("math attempted on large byte-array")
+		return
+	}
+
+	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
+	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
+	cx.stack[prev].Bytes = nil
+	if lhs.Cmp(rhs) == 0 {
+		cx.stack[prev].Uint = 1
+	} else {
+		cx.stack[prev].Uint = 0
+	}
+	cx.stack = cx.stack[:last]
+}
+
+func opBytesNeq(cx *evalContext) {
+	opBytesEq(cx)
+	opNot(cx)
+}
+
+func opBytesModulo(cx *evalContext) {
+	result := new(big.Int)
+	checkMod := func(x, y *big.Int) *big.Int {
+		if y.BitLen() == 0 {
+			cx.err = errors.New("modulo by zero")
+			return new(big.Int)
+		}
+		return result.Mod(x, y)
+	}
+	opBytesBinOp(cx, result, checkMod)
+}
+
+func zpad(smaller []byte, size int) []byte {
+	padded := make([]byte, size)
+	extra := size - len(smaller)  // how much was added?
+	copy(padded[extra:], smaller) // slide original contents to the right
+	return padded
+}
+
+// Return two slices, representing the top two slices on the stack.
+// They can be returned in either order, but the first slice returned
+// must be newly allocated, and already in place at the top of stack
+// (the original top having been popped).
+func opBytesBinaryLogicPrep(cx *evalContext) ([]byte, []byte) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	llen := len(cx.stack[last].Bytes)
+	plen := len(cx.stack[prev].Bytes)
+
+	var fresh, other []byte
+	if llen > plen {
+		fresh, other = zpad(cx.stack[prev].Bytes, llen), cx.stack[last].Bytes
+	} else {
+		fresh, other = zpad(cx.stack[last].Bytes, plen), cx.stack[prev].Bytes
+	}
+	cx.stack[prev].Bytes = fresh
+	cx.stack = cx.stack[:last]
+	return fresh, other
+}
+
+func opBytesBitOr(cx *evalContext) {
+	a, b := opBytesBinaryLogicPrep(cx)
+	for i := range a {
+		a[i] = a[i] | b[i]
+	}
+}
+
+func opBytesBitAnd(cx *evalContext) {
+	a, b := opBytesBinaryLogicPrep(cx)
+	for i := range a {
+		a[i] = a[i] & b[i]
+	}
+}
+
+func opBytesBitXor(cx *evalContext) {
+	a, b := opBytesBinaryLogicPrep(cx)
+	for i := range a {
+		a[i] = a[i] ^ b[i]
+	}
+}
+
+func opBytesBitNot(cx *evalContext) {
+	last := len(cx.stack) - 1
+
+	fresh := make([]byte, len(cx.stack[last].Bytes))
+	for i, b := range cx.stack[last].Bytes {
+		fresh[i] = ^b
+	}
+	cx.stack[last].Bytes = fresh
+}
+
+func opBytesZero(cx *evalContext) {
+	last := len(cx.stack) - 1
+	length := cx.stack[last].Uint
+	if length > MaxStringSize {
+		cx.err = fmt.Errorf("bzero attempted to create a too large string")
+		return
+	}
+	cx.stack[last].Bytes = make([]byte, length)
 }
 
 func opIntConstBlock(cx *evalContext) {
@@ -1892,10 +2228,6 @@ func opConcat(cx *evalContext) {
 	a := cx.stack[prev].Bytes
 	b := cx.stack[last].Bytes
 	newlen := len(a) + len(b)
-	if newlen > MaxStringSize {
-		cx.err = errors.New("concat resulted in string too long")
-		return
-	}
 	newvalue := make([]byte, newlen)
 	copy(newvalue, a)
 	copy(newvalue[len(a):], b)
