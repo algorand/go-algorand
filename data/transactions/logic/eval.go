@@ -1911,21 +1911,21 @@ func opStore(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int) (err error, scratchValue stackValue) {
+func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int, opName string) (scratchValue stackValue, err error) {
 	if groupIdx >= len(cx.TxnGroup) {
-		err = fmt.Errorf("gload lookup TxnGroup[%d] but it only has %d", groupIdx, len(cx.TxnGroup))
+		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
 		return
 	} else if scratchIdx >= 256 {
 		err = fmt.Errorf("invalid Scratch index %d", scratchIdx)
 		return
 	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
-		err = fmt.Errorf("can't use gload on non-app call txn with index %d", groupIdx)
+		err = fmt.Errorf("can't use %s on non-app call txn with index %d", opName, groupIdx)
 		return
 	} else if groupIdx == cx.GroupIndex {
-		err = fmt.Errorf("can't use gload on self, use load instead")
+		err = fmt.Errorf("can't use %s on self, use load instead", opName)
 		return
 	} else if groupIdx > cx.GroupIndex {
-		err = fmt.Errorf("gload can't get future scratch space from txn with index %d", groupIdx)
+		err = fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, groupIdx)
 		return
 	}
 
@@ -1936,7 +1936,7 @@ func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int) (err error, scra
 func opGload(cx *evalContext) {
 	groupIdx := int(uint(cx.program[cx.pc+1]))
 	scratchIdx := int(uint(cx.program[cx.pc+2]))
-	err, scratchValue := opGloadImpl(cx, groupIdx, scratchIdx)
+	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gload")
 	if err != nil {
 		cx.err = err
 		return
@@ -1949,7 +1949,7 @@ func opGloads(cx *evalContext) {
 	last := len(cx.stack) - 1
 	groupIdx := int(cx.stack[last].Uint)
 	scratchIdx := int(uint(cx.program[cx.pc+1]))
-	err, scratchValue := opGloadImpl(cx, groupIdx, scratchIdx)
+	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gloads")
 	if err != nil {
 		cx.err = err
 		return
