@@ -1258,7 +1258,7 @@ func (ops *OpStream) optimizeIntcBlock() error {
 		found := false
 		for i := range freqs {
 			if ref.value == freqs[i].value {
-				freqs[i].freq += 1
+				freqs[i].freq++
 				found = true
 				break
 			}
@@ -1421,7 +1421,7 @@ func (ops *OpStream) optimizeBytecBlock() error {
 		found := false
 		for i := range freqs {
 			if bytes.Compare(ref.value, freqs[i].value) == 0 {
-				freqs[i].freq += 1
+				freqs[i].freq++
 				found = true
 				break
 			}
