@@ -2844,7 +2844,7 @@ func benchmarkExpensiveProgram(b *testing.B, source string) {
 // during the "operation".  They are presumed to be fast (15/ns), so
 // the idea is that you can subtract that out from the reported speed
 func benchmarkOperation(b *testing.B, prefix string, operation string, suffix string) {
-	runs := 1 + b.N / 2000
+	runs := 1 + b.N/2000
 	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
 	source := prefix + ";" + strings.Repeat(operation+";", 2000) + ";" + suffix
 	source = strings.ReplaceAll(source, ";", "\n")
@@ -2870,7 +2870,7 @@ func BenchmarkUintMath(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
-			benchmarkOperation(b, bench[1], bench[2], bench[3]);
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
 	}
 }
@@ -2879,7 +2879,7 @@ func BenchmarkUintCmp(b *testing.B) {
 	ops := []string{"==", "!=", "<", "<=", ">", ">="}
 	for _, op := range ops {
 		b.Run(op, func(b *testing.B) {
-			benchmarkOperation(b, "", "int 7263; int 273834; "+op+"; pop", "int 1");
+			benchmarkOperation(b, "", "int 7263; int 273834; "+op+"; pop", "int 1")
 		})
 	}
 }
@@ -2887,7 +2887,7 @@ func BenchmarkBigLogic(b *testing.B) {
 	benches := [][]string{
 		{"b&", "byte 0x01234576", "byte 0x01ffffffffffffff; b&", "pop; int 1"},
 		{"b|", "byte 0x0ffff1234576", "byte 0x1202; b|", "pop; int 1"},
-		{"b^", "byte 0x01234576",  "byte 0x0223627389; b^", "pop; int 1"},
+		{"b^", "byte 0x01234576", "byte 0x0223627389; b^", "pop; int 1"},
 		{"b~", "byte 0x0123457673624736", "b~", "pop; int 1"},
 
 		{"b&big",
@@ -2898,7 +2898,7 @@ func BenchmarkBigLogic(b *testing.B) {
 			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
 			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b|",
 			"pop; int 1"},
-		{"b^big", "",	// u256*u256
+		{"b^big", "", // u256*u256
 			`byte 0x123457601234576012345760123457601234576012345760123457601234576a
 			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b^; pop`,
 			"int 1"},
@@ -2908,7 +2908,7 @@ func BenchmarkBigLogic(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
-			benchmarkOperation(b, bench[1], bench[2], bench[3]);
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
 	}
 }
@@ -2923,30 +2923,30 @@ func BenchmarkBigMath(b *testing.B) {
 		{"b/", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
 		{"b%", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
 
-		{"b+big",	// u256 + u256
+		{"b+big", // u256 + u256
 			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
 			"byte 0x01ffffffffffffff01ffffffffffffff01234576012345760123457601234576; b+",
 			"pop; int 1"},
-		{"b-big",	// second is a bit small, so we can subtract it over and over
+		{"b-big", // second is a bit small, so we can subtract it over and over
 			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
 			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b-",
 			"pop; int 1"},
-		{"b*big", "",	// u256*u256
+		{"b*big", "", // u256*u256
 			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
 			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b*; pop`,
 			"int 1"},
-		{"b/big", "",	// u256 / u128 (half sized divisor seems pessimal)
+		{"b/big", "", // u256 / u128 (half sized divisor seems pessimal)
 			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
 			 byte 0x34576012345760123457601234576312; b/; pop`,
 			"int 1"},
-		{"b%big", "",	// u256 / u128 (half sized divisor seems pessimal)
+		{"b%big", "", // u256 / u128 (half sized divisor seems pessimal)
 			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
 			 byte 0x34576012345760123457601234576312; b/; pop`,
 			"int 1"},
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
-			benchmarkOperation(b, bench[1], bench[2], bench[3]);
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
 	}
 }
@@ -2956,23 +2956,22 @@ func BenchmarkHash(b *testing.B) {
 	for _, hash := range hashes {
 		b.Run(hash+"-small", func(b *testing.B) { // hash 32 bytes
 			benchmarkOperation(b, "byte 0x1234567890", hash,
-				"pop; int 1");
+				"pop; int 1")
 		})
 	}
 	for _, hash := range hashes {
 		b.Run(hash+"-med", func(b *testing.B) { // hash 128 bytes
 			benchmarkOperation(b, "byte 0x1234567890",
-				hash+"; dup; concat; dup; concat", "pop; int 1");
+				hash+"; dup; concat; dup; concat", "pop; int 1")
 		})
 	}
 	for _, hash := range hashes {
 		b.Run(hash+"-big", func(b *testing.B) { // hash 512 bytes
 			benchmarkOperation(b, "byte 0x1234567890",
-				hash+"; dup; concat; dup; concat; dup; concat; dup; concat", "pop; int 1");
+				hash+"; dup; concat; dup; concat; dup; concat; dup; concat", "pop; int 1")
 		})
 	}
 }
-
 
 func BenchmarkAddx64(b *testing.B) {
 	progs := [][]string{
@@ -3054,7 +3053,6 @@ ed25519verify`, pkStr), v)
 		})
 	}
 }
-
 
 func BenchmarkEd25519Verifyx1(b *testing.B) {
 	//benchmark setup
