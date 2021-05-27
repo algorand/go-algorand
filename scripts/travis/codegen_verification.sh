@@ -28,10 +28,7 @@ eval "$(~/gimme "${GOLANG_VERSION}")"
 make gen
 
 function runGoFmt() {
-    gofiles="$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v ^vendor/)" || true
-    [ -z "$gofiles" ] && return 0
-
-    unformatted=$(gofmt -l $gofiles)
+    unformatted=$(gofmt -l .)
     [ -z "$unformatted" ] && return 0
 
     # Some files are not gofmt'd. Print message and fail.
