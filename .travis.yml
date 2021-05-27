@@ -25,32 +25,38 @@ jobs:
   include:
     - stage: build_commit
       os: linux
+      arch: amd64
       script:
         - travis_retry scripts/travis/build_test.sh
 
     - stage: build_pr
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 CodeGen Verification
       script:
         - scripts/travis/codegen_verification.sh
     - # same stage, parallel job
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 Build
       script:
         - travis_retry scripts/travis/build_test.sh
     - # same stage, parallel job
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 Integration Test
       script:
         - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       name: ARM64 Build
-      os: arm64
+      os: linux
+      arch: arm64
       script:
         - travis_retry ./scripts/travis/build_test.sh
     - # same stage, parallel job
       name: ARM64 Integration Test
-      os: arm64
+      os: linux
+      arch: arm64
       script:
         - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
@@ -77,11 +83,13 @@ jobs:
 
     - stage: build_release
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 Build
       script:
         - travis_retry ./scripts/travis/build_test.sh
     - # same stage, parallel job
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 Integration Test
       script:
         - travis_retry ./scripts/travis/integration_test.sh
@@ -93,7 +101,8 @@ jobs:
         - travis_retry scripts/travis/build_test.sh
     - # same stage, parallel job
       name: ARM64 Integration Test
-      os: arm64
+      os: linux
+      arch: arm64
       script:
         - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
@@ -109,6 +118,7 @@ jobs:
     - stage: deploy
       name: Ubuntu Deploy
       os: linux
+      arch: amd64
       script:
         - scripts/travis/deploy_packages.sh
         - scripts/travis/test_release.sh
@@ -119,7 +129,8 @@ jobs:
       script: scripts/travis/deploy_packages.sh
     - # same stage, parallel job
       name: ARM64 Deploy
-      os: arm64
+      os: linux
+      arch: arm64
       script:
         - ./scripts/travis/deploy_packages.sh
     - # same stage, parallel job
