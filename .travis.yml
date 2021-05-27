@@ -20,9 +20,6 @@ stages:
 
 jobs:
   allow_failures:
-    - name: External ARM64 Deploy
-    - name: External ARM64 Integration Test
-    - name: External ARM Build
     - name: External ARM Deploy
     - name: Test Release Builds
   include:
@@ -52,7 +49,7 @@ jobs:
       script:
         - travis_retry ./scripts/travis/build_test.sh
     - # same stage, parallel job
-      name: External ARM64 Integration Test
+      name: ARM64 Integration Test
       os: arm64
       script:
         - travis_retry ./scripts/travis/integration_test.sh
@@ -95,7 +92,7 @@ jobs:
       script:
         - travis_retry scripts/travis/build_test.sh
     - # same stage, parallel job
-      name: External ARM64 Integration Test
+      name: ARM64 Integration Test
       os: arm64
       script:
         - travis_retry ./scripts/travis/integration_test.sh
@@ -121,7 +118,7 @@ jobs:
       osx_image: xcode11
       script: scripts/travis/deploy_packages.sh
     - # same stage, parallel job
-      name: External ARM64 Deploy
+      name: ARM64 Deploy
       os: arm64
       script:
         - ./scripts/travis/deploy_packages.sh
