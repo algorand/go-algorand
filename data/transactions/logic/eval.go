@@ -474,7 +474,9 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	}
 
 	// set side effects
-	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
+	if cx.runModeFlags == runModeApplication {
+		cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
+	}
 
 	return cx.stack[0].Uint != 0, nil
 }
