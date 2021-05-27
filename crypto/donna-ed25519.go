@@ -16,7 +16,10 @@
 
 package crypto
 
-// #cgo CFLAGS: -I${SRCDIR}/ed25519-donna/ -Wall -Werror -std=c99 -Wno-incompatible-pointer-types-discards-qualifiers -m64 -O3 -DED25519_REFHASH -DED25519_CUSTOMRANDOM -Wno-macro-redefined
+// #cgo CFLAGS: -I${SRCDIR}/ed25519-donna/ -Wall -Werror -std=c99 -Wno-incompatible-pointer-types-discards-qualifiers -O3 -DED25519_REFHASH -DED25519_CUSTOMRANDOM -Wno-macro-redefined
+// #cgo darwin,amd64 CFLAGS: -m64
+// #cgo linux,amd64 CFLAGS: -m64
+// #cgo windows,amd64 CFLAGS: -m64
 // /*
 // 	Public domain by Andrew M. <liquidsun@gmail.com>
 //

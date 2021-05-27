@@ -49,7 +49,7 @@ func (b *BatchVerifier) Enqueue(sigVerifier SignatureVerifier, message Hashable,
 	b.enqueueRaw(DonnaSignatureVerifier(sigVerifier), hashRep(message), DonnaSignature(sig))
 }
 
-// Enqueue enqueues a verification of a DonnaSignatureVerifier
+// EnqueueDonnaSignatures enqueues a verification of a DonnaSignatureVerifier
 func (b *BatchVerifier) EnqueueDonnaSignatures(sigVerifier DonnaSignatureVerifier, message Hashable, sig DonnaSignature) {
 	b.enqueueRaw(sigVerifier, hashRep(message), sig)
 }

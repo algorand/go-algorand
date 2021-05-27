@@ -16,7 +16,6 @@
 
 package crypto
 
-// #cgo CFLAGS: -I${SRCDIR}/ed25519-donna/ -Werror -Wall -std=c99 -Wno-incompatible-pointer-types-discards-qualifiers -m64 -O3 -DED25519_REFHASH -DED25519_CUSTOMRANDOM -Wno-macro-redefined
 import "C"
 import "unsafe"
 
