@@ -2652,7 +2652,7 @@ func TestReturnTypes(t *testing.T) {
 	ep.Txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
 	ep.Txn.Txn.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(1), basics.AssetIndex(1)}
 	ep.GroupIndex = 1
-	ep.PastSideEffects = makeSamplePastSideEffects(len(txgroup))
+	ep.PastSideEffects = MakePastSideEffects(len(txgroup))
 	txn.Lsig.Args = [][]byte{
 		[]byte("aoeu"),
 		[]byte("aoeu"),

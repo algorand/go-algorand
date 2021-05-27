@@ -353,7 +353,11 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, err error) {
 	var cx evalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
-	return eval(program, &cx)
+	pass, err = eval(program, &cx)
+
+	// set side effects
+	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
+	return
 }
 
 // Eval checks to see if a transaction passes logic
@@ -471,11 +475,6 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	}
 	if cx.stack[0].Bytes != nil {
 		return false, errors.New("stack finished with bytes not int")
-	}
-
-	// set side effects
-	if cx.runModeFlags == runModeApplication {
-		cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
 	}
 
 	return cx.stack[0].Uint != 0, nil
