@@ -157,7 +157,7 @@ func TestPeerSelector(t *testing.T) {
 	require.Nil(t, peer)
 
 	r1, r2 = peerSelector.RankPeer(nil, 10)
-	require.False(t, r1 != r2 )
+	require.False(t, r1 != r2)
 	r2, r2 = peerSelector.RankPeer(&mockHTTPPeer{address: "abc123"}, 10)
 	require.False(t, r1 != r2)
 
@@ -429,4 +429,72 @@ func TestPenalty(t *testing.T) {
 	require.GreaterOrEqual(t, counters[2], 2*counters[1])
 	require.Equal(t, counters[3], 0)
 	require.Equal(t, counters[4], 0)
+}
+
+// TestPeerDownloadDurationToRank tests all the cases handled by PeerDownloadDurationToRank
+func TestPeerDownloadDurationToRank(t *testing.T) {
+
+	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
+	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
+	peers3 := []network.Peer{&mockHTTPPeer{address: "c1"}, &mockHTTPPeer{address: "c2"}}
+	peers4 := []network.Peer{&mockHTTPPeer{address: "d1"}, &mockHTTPPeer{address: "d2"}}
+
+	peerSelector := makePeerSelector(
+		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
+			for _, opt := range options {
+				if opt == network.PeersPhonebookArchivers {
+					peers = append(peers, peers1...)
+				} else if opt == network.PeersPhonebookRelays {
+					peers = append(peers, peers2...)
+				} else if opt == network.PeersConnectedOut {
+					peers = append(peers, peers3...)
+				} else {
+					peers = append(peers, peers4...)
+				}
+			}
+			return
+		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+			{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedOut},
+			{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn}},
+	)
+
+	_, err := peerSelector.GetNextPeer()
+	require.NoError(t, err)
+
+	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank0LowBlockTime, peerRank0HighBlockTime),
+		peerSelector.PeerDownloadDurationToRank(peers1[0], 500*time.Millisecond))
+	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank1LowBlockTime, peerRank1HighBlockTime),
+		peerSelector.PeerDownloadDurationToRank(peers2[0], 500*time.Millisecond))
+	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank2LowBlockTime, peerRank2HighBlockTime),
+		peerSelector.PeerDownloadDurationToRank(peers3[0], 500*time.Millisecond))
+	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank3LowBlockTime, peerRank3HighBlockTime),
+		peerSelector.PeerDownloadDurationToRank(peers4[0], 500*time.Millisecond))
+}
+
+func TestLowerUpperBounds(t *testing.T) {
+	classes := []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+		{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+		{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedOut},
+		{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn}}
+
+	require.Equal(t, peerRank0LowBlockTime, lowerBound(classes[0]))
+	require.Equal(t, peerRank1LowBlockTime, lowerBound(classes[1]))
+	require.Equal(t, peerRank2LowBlockTime, lowerBound(classes[2]))
+	require.Equal(t, peerRank3LowBlockTime, lowerBound(classes[3]))
+
+	require.Equal(t, peerRank0HighBlockTime, upperBound(classes[0]))
+	require.Equal(t, peerRank1HighBlockTime, upperBound(classes[1]))
+	require.Equal(t, peerRank2HighBlockTime, upperBound(classes[2]))
+	require.Equal(t, peerRank3HighBlockTime, upperBound(classes[3]))
+}
+
+func TestFullResetRequestPenalty(t *testing.T) {
+	class := peerClass{initialRank: 10, peerClass: network.PeersPhonebookArchivers}
+	hs := makeHistoricStatus(10)
+	hs.push(5, 1, class)
+	require.Equal(t, 1, len(hs.requestGaps))
+
+	hs.resetRequestPenalty(0, 0, class)
+	require.Equal(t, 0, len(hs.requestGaps))
 }
