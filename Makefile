@@ -28,6 +28,7 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}
+export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
 
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
@@ -228,15 +229,15 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	gotestsum --format pkgname --jsonfile testresults.json -- $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
 
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
-		gotestsum --format pkgname -- $(GOTAGS) -race $$PACKAGE_DIRECTORY -timeout 2500s; \
+		$(GOTESTCOMMAND) $(GOTAGS) -race $$PACKAGE_DIRECTORY -timeout 2500s; \
 	done
 
 shorttest: build-race
-	gotestsum --format pkgname --jsonfile testresults.json -- $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 2500s
+	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 2500s
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
