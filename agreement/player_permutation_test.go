@@ -24,30 +24,29 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const r = round(209)
-const p = period(0)
-
 func makeRandomProposalPayload(r round) *proposal {
 	f := testBlockFactory{Owner: 1}
-	ve, _ := f.AssembleBlock(r, time.Now().Add(time.Minute))
+	ve, _ := f.AssembleBlock(r, time.Time{})
 
 	var payload unauthenticatedProposal
 	payload.Block = ve.Block()
-	payload.SeedProof = randomVRFProof()
+	payload.SeedProof = crypto.VRFProof{}
 
 	return &proposal{unauthenticatedProposal: payload, ve: ve}
 }
 
-var payload = makeRandomProposalPayload(r)
-var pV = payload.value()
-
-var verifyError = makeSerErrStr("test error")
+var errTestVerifyFailed = makeSerErrStr("test error")
 
 func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper) {
+	const r = round(209)
+	const p = period(0)
+	var payload = makeRandomProposalPayload(r)
+	var pV = payload.value()
 	switch n {
 	case 0: // same round and period as proposal
 		return setupP(t, r, p, soft)
@@ -56,7 +55,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 	case 2:
 		plyr, pMachine, helper = setupP(t, r-1, p, soft)
 		plyr.Pending.push(&messageEvent{
-			T:     payloadPresent,
+			T: payloadPresent,
 			Input: message{
 				MessageHandle:           "uniquemessage",
 				UnauthenticatedProposal: payload.u(),
@@ -121,13 +120,17 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 }
 
 func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e messageEvent) {
+	const r = round(209)
+	const p = period(0)
+	var payload = makeRandomProposalPayload(r)
+	var pV = payload.value()
 	switch n {
 	case 0:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
-				MessageHandle:           "uniquemessage",
+				MessageHandle:       "uniquemessage",
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
@@ -138,7 +141,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: votePresent,
 			Input: message{
-				MessageHandle:           "uniquemessage",
+				MessageHandle:       "uniquemessage",
 				UnauthenticatedVote: vvote.u(),
 			},
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
@@ -148,7 +151,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
-				MessageHandle:           "uniquemessage",
+				MessageHandle:       "uniquemessage",
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
@@ -159,26 +162,26 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
-				MessageHandle:           "uniquemessage",
+				MessageHandle:       "uniquemessage",
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
 			TaskIndex: 1,
-			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+			Proto:     ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case 4:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
 		e = messageEvent{
 			T: votePresent,
 			Input: message{
-				MessageHandle:           "uniquemessage",
+				MessageHandle:       "uniquemessage",
 				UnauthenticatedVote: vvote.u(),
 			},
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case 5:
 		e = messageEvent{
-			T:     payloadPresent,
+			T: payloadPresent,
 			Input: message{
 				MessageHandle:           "uniquemessage",
 				UnauthenticatedProposal: payload.u(),
@@ -186,7 +189,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		}
 	case 6:
 		e = messageEvent{
-			T:     payloadVerified,
+			T: payloadVerified,
 			Input: message{
 				MessageHandle:           "uniquemessage",
 				UnauthenticatedProposal: payload.u(),
@@ -195,7 +198,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		}
 	case 7:
 		e = messageEvent{
-			T:     payloadVerified,
+			T: payloadVerified,
 			Input: message{
 				UnauthenticatedProposal: payload.u(),
 				Proposal:                *payload,
@@ -233,7 +236,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			Proposal: pV,
 		}
 		e = messageEvent{
-			T:     bundlePresent,
+			T: bundlePresent,
 			Input: message{
 				UnauthenticatedBundle: bun,
 			},
@@ -244,11 +247,11 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
-				MessageHandle:           "uniquemessage",
+				MessageHandle:       "uniquemessage",
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
-			Err: verifyError,
+			Err:   errTestVerifyFailed,
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case 11:
@@ -256,31 +259,31 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 		e = messageEvent{
 			T: voteVerified,
 			Input: message{
-				MessageHandle:           "uniquemessage",
+				MessageHandle:       "uniquemessage",
 				Vote:                vvote,
 				UnauthenticatedVote: vvote.u(),
 			},
-			Err: verifyError,
+			Err:   errTestVerifyFailed,
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
 	case 12:
 		e = messageEvent{
-			T:     bundleVerified,
+			T: bundleVerified,
 			Input: message{
 				Bundle:                bundle{},
 				UnauthenticatedBundle: unauthenticatedBundle{},
 				MessageHandle:         "uniquemalformedBundle",
 			},
-			Err:   verifyError,
+			Err: errTestVerifyFailed,
 		}
 	case 13:
 		e = messageEvent{
-			T:     payloadVerified,
+			T: payloadVerified,
 			Input: message{
 				UnauthenticatedProposal: payload.u(),
 				Proposal:                *payload,
 			},
-			Err: verifyError,
+			Err: errTestVerifyFailed,
 		}
 	default:
 		require.Fail(t, "messageEvent permutation %v does not exist", n)
@@ -323,6 +326,10 @@ func expectDisconnect(t *testing.T, trace ioTrace, errMsg string, playerN int, e
 }
 
 func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, helper *voteMakerHelper, trace ioTrace) {
+	const r = round(209)
+	const p = period(0)
+	var payload = makeRandomProposalPayload(r)
+	var pV = payload.value()
 	switch playerN {
 	case 0:
 		switch eventN {
@@ -621,9 +628,9 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			require.Equalf(t, trace.countAction(), 3, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
 			ea := ensureAction{Certificate: Certificate(unauthenticatedBundle{Round: r}), Payload: *payload}
 			require.Truef(t, trace.Contains(ev(ea)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-			ra := rezeroAction{Round: r+1}
+			ra := rezeroAction{Round: r + 1}
 			require.Truef(t, trace.Contains(ev(ra)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-			pa := pseudonodeAction{T: assemble, Round: r+1, Period: 0, Step: 0}
+			pa := pseudonodeAction{T: assemble, Round: r + 1, Period: 0, Step: 0}
 			require.Truef(t, trace.Contains(ev(pa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
 		case 7:
 			require.Equalf(t, trace.countAction(), 4, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
@@ -631,9 +638,9 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			require.Truef(t, trace.Contains(ev(na)), "Player should emit action, player: %v, event: %v", playerN, eventN)
 			ea := ensureAction{Certificate: Certificate(unauthenticatedBundle{Round: r}), Payload: *payload}
 			require.Truef(t, trace.Contains(ev(ea)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-			ra := rezeroAction{Round: r+1}
+			ra := rezeroAction{Round: r + 1}
 			require.Truef(t, trace.Contains(ev(ra)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-			pa := pseudonodeAction{T: assemble, Round: r+1, Period: 0, Step: 0}
+			pa := pseudonodeAction{T: assemble, Round: r + 1, Period: 0, Step: 0}
 			require.Truef(t, trace.Contains(ev(pa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
 		case 8:
 			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
@@ -698,9 +705,9 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			require.Truef(t, trace.Contains(ev(na)), "Player should emit action, player: %v, event: %v", playerN, eventN)
 			ea := ensureAction{Certificate: Certificate(bun), Payload: *payload}
 			require.Truef(t, trace.Contains(ev(ea)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-			ra := rezeroAction{Round: r+1}
+			ra := rezeroAction{Round: r + 1}
 			require.Truef(t, trace.Contains(ev(ra)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-			pa := pseudonodeAction{T: assemble, Round: r+1, Period: 0, Step: 0}
+			pa := pseudonodeAction{T: assemble, Round: r + 1, Period: 0, Step: 0}
 			require.Truef(t, trace.Contains(ev(pa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
 		case 9:
 			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)

@@ -153,7 +153,7 @@ func (t ioTrace) ContainsFn(compareFn func(b event) bool) bool {
 func (t ioTrace) countAction() (count int) {
 	for _, ev := range t.events {
 		if ev.t() == wrappedAction {
-			count ++
+			count++
 		}
 	}
 	return
