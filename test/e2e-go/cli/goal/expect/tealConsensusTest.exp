@@ -61,14 +61,14 @@ if { [catch {
         "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
     }
 
-    teal "$TEST_ROOT_DIR/barely-fits-app.teal" 2 1001 1 "int 0\nbalance\npop\n"
+    teal "$TEST_ROOT_DIR/barely-fits-app.teal" 2 4090 1 "int 0\nbalance\npop\n"
     spawn goal clerk compile "$TEST_ROOT_DIR/barely-fits-app.teal"
     expect {
         -re {[A-Z2-9]{58}} { puts "hash $expect_out(0,string)" }
         "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
     }
 
-    teal "$TEST_ROOT_DIR/big-app.teal" 2 1025 1 "int 0\nbalance\npop\n"
+    teal "$TEST_ROOT_DIR/big-app.teal" 3 4097 1 "int 0\nbalance\npop\n"
     spawn goal clerk compile "$TEST_ROOT_DIR/big-app.teal"
     expect {
         -re {[A-Z2-9]{58}} { ::AlgorandGoal::Abort "hash" }
@@ -97,6 +97,7 @@ if { [catch {
 
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
+
 
     puts "TEAL Consensus Test Successful"
 
