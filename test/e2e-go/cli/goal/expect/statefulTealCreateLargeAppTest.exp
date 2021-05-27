@@ -91,9 +91,10 @@ if { [catch {
     set LOCAL_BYTE_SLICES 0
     set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
 
-    # Create a large teal program
+    # Create large teal programs
     teal "$TEST_ROOT_DIR/big-app.teal" 3 4090 1 "int 0\nbalance\npop\n"
     teal "$TEST_ROOT_DIR/sm-app.teal" 3 10 1 "int 0\nbalance\npop\n"
+    teal "$TEST_ROOT_DIR/big-app-v4.teal" 4 4090 1 "int 0\nbalance\npop\n"
 
     # App create fails. Approval program too long
     spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog ${TEST_ROOT_DIR}/big-app.teal --global-byteslices $GLOBAL_BYTE_SLICES --global-ints 0 --local-byteslices $LOCAL_BYTE_SLICES --local-ints 0 --app-arg "str:hello" --clear-prog ${TEST_ROOT_DIR}/big-app.teal  -w $PRIMARY_WALLET_NAME  -d $TEST_PRIMARY_NODE_DIR
@@ -111,11 +112,19 @@ if { [catch {
         eof { close; ::AlgorandGoal::Abort "did not receive expected error" }
     }
 
-    # App create with extra pages
+    # App create with extra pages, v3 teal
     spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog ${TEST_ROOT_DIR}/big-app.teal --global-byteslices $GLOBAL_BYTE_SLICES --global-ints 0 --local-byteslices $LOCAL_BYTE_SLICES --local-ints 0 --app-arg "str:hello" --clear-prog ${TEST_ROOT_DIR}/big-app.teal --extra-pages 3 -w $PRIMARY_WALLET_NAME  -d $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
         "*pc=705 static cost budget of 700 exceeded" {puts "received expected message"; close}
+        eof { close; ::AlgorandGoal::Abort "did not receive expected message" }
+    }
+
+    # App create with extra pages, v4 teal
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog ${TEST_ROOT_DIR}/big-app-v4.teal --global-byteslices $GLOBAL_BYTE_SLICES --global-ints 0 --local-byteslices $LOCAL_BYTE_SLICES --local-ints 0 --app-arg "str:hello" --clear-prog ${TEST_ROOT_DIR}/big-app-v4.teal --extra-pages 3 -w $PRIMARY_WALLET_NAME  -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "*pc=704 dynamic cost budget of 700 exceeded, executing intc_1" {puts "received expected message"; close}
         eof { close; ::AlgorandGoal::Abort "did not receive expected message" }
     }
 
