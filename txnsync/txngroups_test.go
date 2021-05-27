@@ -41,7 +41,6 @@ var blockDBFilename = flag.String("db", "", "Location of block db")
 var startRound = flag.Int("start", 0, "Starting round")
 var endRound = flag.Int("end", 10, "Ending round")
 
-
 func TestBitmaskType0And2(t *testing.T) {
 	entries := 80
 	b := make(bitmask, 12)
@@ -353,8 +352,12 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 			}
 		}
 	}
-	fmt.Println(count)
-	fmt.Println(sigs, msigs, lsigs)
+	require.Equal(t, 2, len(count))
+	require.Equal(t, 18351, count["axfer"])
+	require.Equal(t, 1663, count["pay"])
+	require.Equal(t, 20005, sigs)
+	require.Equal(t, 9, msigs)
+	require.Equal(t, 0, lsigs)
 }
 
 func BenchmarkTxnGroupEncoding(b *testing.B) {
@@ -438,7 +441,7 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 			txn.Txn.CompactCertTxnFields = transactions.CompactCertTxnFields{}
 			txn.Txn.Type = txType
 			txn.Lsig.Logic = []byte("logic")
-			switch i%3 {
+			switch i % 3 {
 			case 0: // only have normal sig
 				txn.Msig = crypto.MultisigSig{}
 				txn.Lsig = transactions.LogicSig{}
