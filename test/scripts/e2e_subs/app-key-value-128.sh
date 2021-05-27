@@ -33,18 +33,22 @@ call check global hello ${BIG64}EVENLONGEREVENLONGEREVENLONGEREVENLONGER
 call write global $BIG64 $BIG64
 call check global $BIG64 $BIG64
 
-# This should not work because the key 64 and the value is 65
+# This causes problems because the sum is too big
+call write global $BIG64 ${BIG64}X && exit 1
+
+# These test some details of the checking, using the error message to
+# confirm which code path is being tested.  Details of strings are irrelevant
 set +o pipefail
+call write global $BIG64 ${BIG64}X 2>&1 | grep "value too long" | grep sum
 # This value so big that it fails before the sum is considered
 call write global $BIG64 ${BIG64}${BIG64}X 2>&1 | grep "value too long" | grep length
-# This causes problems because the sum is too big
-call write global $BIG64 ${BIG64}X 2>&1 | grep "value too long" | grep sum
 set -o pipefail
 
 
 # Same tests below, but on LOCAL state (so first have to deal with opt-in)
 
 set +o pipefail
+call check local hello xyz && exit 1
 call check local hello xyz 2>&1 | grep "has not opted in"
 set -o pipefail
 
@@ -60,6 +64,7 @@ call check local $BIG64 $BIG64
 
 # This should not work because the key 64 and the value is 65
 set +o pipefail
+call write local $BIG64 ${BIG64}X 2>&1 && exit 1
 call write local $BIG64 ${BIG64}X 2>&1 | grep "value too long"
 set -o pipefail
 
