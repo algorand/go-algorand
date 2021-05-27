@@ -164,6 +164,15 @@ type EvalSideEffects struct {
 	scratchSpace scratchSpace
 }
 
+// MakePastSideEffects allocates and initializes a slice of EvalSideEffects of length `size`
+func MakePastSideEffects(size int) (pastSideEffects []EvalSideEffects) {
+	pastSideEffects = make([]EvalSideEffects, size)
+	for j := range pastSideEffects {
+		pastSideEffects[j] = EvalSideEffects{}
+	}
+	return
+}
+
 // getScratchValue loads and clones a stackValue
 // The value is cloned so the original bytes are protected from changes
 func (se *EvalSideEffects) getScratchValue(scratchPos uint8) stackValue {

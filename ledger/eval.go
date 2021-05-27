@@ -680,11 +680,10 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 		// Initialize side effects and group without ApplyData lazily
 		if groupNoAD == nil {
 			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
-			pastSideEffects = make([]logic.EvalSideEffects, len(txgroup))
 			for j := range txgroup {
 				groupNoAD[j] = txgroup[j].SignedTxn
-				pastSideEffects[j] = logic.EvalSideEffects{}
 			}
+			pastSideEffects = logic.MakePastSideEffects(len(txgroup))
 			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
 		}
 

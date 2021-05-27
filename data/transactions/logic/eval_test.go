@@ -2019,10 +2019,7 @@ int 1`,
 			}
 
 			// Construct EvalParams
-			pastSideEffects := make([]EvalSideEffects, len(sources))
-			for j := range pastSideEffects {
-				pastSideEffects[j] = EvalSideEffects{}
-			}
+			pastSideEffects := MakePastSideEffects(len(sources))
 			epList := make([]EvalParams, len(sources))
 			for j := range sources {
 				epList[j] = EvalParams{
@@ -2165,10 +2162,7 @@ byte "txn 2"
 	}
 
 	// Construct EvalParams
-	pastSideEffects := make([]EvalSideEffects, len(sources))
-	for j := range pastSideEffects {
-		pastSideEffects[j] = EvalSideEffects{}
-	}
+	pastSideEffects := MakePastSideEffects(len(sources))
 	epList := make([]EvalParams, len(sources))
 	for j := range sources {
 		epList[j] = EvalParams{
