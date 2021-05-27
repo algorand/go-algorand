@@ -47,29 +47,15 @@ jobs:
       script:
         - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
-      name: External ARM64 Build
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
+      name: ARM64 Build
+      os: arm64
       script:
-        - travis_retry scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+        - travis_retry ./scripts/travis/build_test.sh
     - # same stage, parallel job
       name: External ARM64 Integration Test
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
+      os: arm64
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+        - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
@@ -110,16 +96,9 @@ jobs:
         - travis_retry scripts/travis/build_test.sh
     - # same stage, parallel job
       name: External ARM64 Integration Test
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
+      os: arm64
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+        - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
        os: windows
        name: Windows x64 Build
@@ -143,16 +122,9 @@ jobs:
       script: scripts/travis/deploy_packages.sh
     - # same stage, parallel job
       name: External ARM64 Deploy
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
+      os: arm64
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
+        - ./scripts/travis/deploy_packages.sh
     - # same stage, parallel job
       name: External ARM Deploy
       os: linux
