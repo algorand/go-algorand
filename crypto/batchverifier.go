@@ -22,10 +22,10 @@ import (
 
 // BatchVerifier provides faster implementation for verifing a series of independent signatures.
 type BatchVerifier struct {
-	messages   [][]byte // contains the messages to be hashed.
-	publicKeys []byte   // contains the public keys. Each individual public key is 32 bytes.
-	signatures []byte   // contains the signatures keys. Each individual signature is 64 bytes.
-	failed     bool     // failed indicates that the verification has failed. This is used by the multisig verification which has few fail cases that precedes the cryptographic validation.
+	messages   [][]byte                 // contains a slice of messages to be hashed. Each message is varible length
+	publicKeys []DonnaSignatureVerifier // contains a slice of public keys. Each individual public key is 32 bytes.
+	signatures []DonnaSignature         // contains a slice of signatures keys. Each individual signature is 64 bytes.
+	failed     bool                     // failed indicates that the verification has failed. This is used by the multisig verification which has few fail cases that precedes the cryptographic validation.
 }
 
 const minBatchVerifierAlloc = 16
@@ -38,31 +38,36 @@ func MakeBatchVerifier(hint int) *BatchVerifier {
 	}
 	return &BatchVerifier{
 		messages:   make([][]byte, 0, hint),
-		publicKeys: make([]byte, 0, hint*ed25519DonnaPublicKeyLenBytes),
-		signatures: make([]byte, 0, hint*ed25519DonnaSignatureLenBytes),
+		publicKeys: make([]DonnaSignatureVerifier, 0, hint),
+		signatures: make([]DonnaSignature, 0, hint),
 		failed:     false,
 	}
 }
 
 // Enqueue enqueues a verification of a SignatureVerifier
 func (b *BatchVerifier) Enqueue(sigVerifier SignatureVerifier, message Hashable, sig Signature) {
+	b.enqueueRaw(DonnaSignatureVerifier(sigVerifier), hashRep(message), DonnaSignature(sig))
+}
+
+// Enqueue enqueues a verification of a DonnaSignatureVerifier
+func (b *BatchVerifier) EnqueueDonnaSignatures(sigVerifier DonnaSignatureVerifier, message Hashable, sig DonnaSignature) {
 	b.enqueueRaw(sigVerifier, hashRep(message), sig)
 }
 
-func (b *BatchVerifier) enqueueRaw(sigVerifier SignatureVerifier, message []byte, sig Signature) {
+func (b *BatchVerifier) enqueueRaw(sigVerifier DonnaSignatureVerifier, message []byte, sig DonnaSignature) {
 	// do we need to reallocate ?
 	if len(b.messages) == cap(b.messages) {
 		b.expand()
 	}
 	b.messages = append(b.messages, message)
-	b.publicKeys = append(b.publicKeys, sigVerifier[:]...)
-	b.signatures = append(b.signatures, sig[:]...)
+	b.publicKeys = append(b.publicKeys, sigVerifier)
+	b.signatures = append(b.signatures, sig)
 }
 
 func (b *BatchVerifier) expand() {
 	messages := make([][]byte, len(b.messages), len(b.messages)*2)
-	publicKeys := make([]byte, len(b.publicKeys), len(b.publicKeys)*2)
-	signatures := make([]byte, len(b.signatures), len(b.signatures)*2)
+	publicKeys := make([]DonnaSignatureVerifier, len(b.publicKeys), len(b.publicKeys)*2)
+	signatures := make([]DonnaSignature, len(b.signatures), len(b.signatures)*2)
 	copy(messages, b.messages)
 	copy(publicKeys, b.publicKeys)
 	copy(signatures, b.signatures)
@@ -89,16 +94,11 @@ func (b *BatchVerifier) Verify() bool {
 
 	if b.GetNumberOfEnqueuedSignatures()%batchSize <= 3 {
 
-		var pubKey PublicKey
-		var sig Signature
-
-		copy(pubKey[:], b.publicKeys[0:32])
-		copy(sig[:], b.signatures[0:64])
 		message := make([]byte, len(b.messages[0]))
 		copy(message[:], b.messages[0][:])
 
 		for i := 0; i < 4; i++ {
-			b.enqueueRaw(pubKey, message, sig)
+			b.enqueueRaw(b.publicKeys[0], message, b.signatures[0])
 		}
 
 		if b.GetNumberOfEnqueuedSignatures()%batchSize <= 3 {
@@ -110,40 +110,25 @@ func (b *BatchVerifier) Verify() bool {
 
 	////// TODO: remove those methods after testing signatures
 	libsoduiomResults := make([]bool, b.GetNumberOfEnqueuedSignatures())
-
 	for i := range b.messages {
-		var pubKey PublicKey
-		var sig Signature
-		copy(pubKey[:], b.publicKeys[i*32:((i+1)*32)])
-		copy(sig[:], b.signatures[i*64:((i+1)*64)])
-
-		libsoduiomResults[i] = SignatureVerifier(PublicKey(pubKey)).VerifyBytes(b.messages[i], sig)
+		libsoduiomResults[i] = SignatureVerifier(b.publicKeys[i]).VerifyBytes(b.messages[i], Signature(b.signatures[i]))
 	}
+
 	libdonnaResults := make([]bool, b.GetNumberOfEnqueuedSignatures())
-
 	for i := range b.messages {
-		var pubKey PublicKey
-		var sig DonnaSignature
-		copy(pubKey[:], b.publicKeys[i*ed25519DonnaPublicKeyLenBytes:((i+1)*ed25519DonnaPublicKeyLenBytes)])
-		copy(sig[:], b.signatures[i*ed25519DonnaSignatureLenBytes:((i+1)*ed25519DonnaSignatureLenBytes)])
-
-		libdonnaResults[i] = DonnaSignatureVerifier(DonnaPublicKey(pubKey)).VerifyBytes(b.messages[i], sig)
+		libdonnaResults[i] = DonnaSignatureVerifier(b.publicKeys[i]).VerifyBytes(b.messages[i], b.signatures[i])
 	}
 
 	for i, isValid := range libsoduiomResults {
-		var pubKey PublicKey
-		copy(pubKey[:], b.publicKeys[i*32:((i+1)*32)])
-
 		if !isValid {
-			logging.Base().Infof("VALIDATION FAILED! libsoduiom on key: %v", pubKey)
+			logging.Base().Infof("VALIDATION FAILED! libsoduiom on key: %v", b.publicKeys[i])
 		}
 		//logging.Base().Infof("VALIDATION PASS! libsoduiom on key: %v", pubKey)
 	}
+
 	for i, isValid := range libdonnaResults {
-		var pubKey PublicKey
-		copy(pubKey[:], b.publicKeys[i*ed25519DonnaPublicKeyLenBytes:((i+1)*ed25519DonnaPublicKeyLenBytes)])
 		if !isValid {
-			logging.Base().Infof("VALIDATION FAILED! libdonna on key: %v", pubKey)
+			logging.Base().Infof("VALIDATION FAILED! libdonna on key: %v", b.publicKeys[i])
 		}
 		//logging.Base().Infof("VALIDATION PASS! libdonna on key: %v", pubKey)
 	}
@@ -162,16 +147,10 @@ func (b *BatchVerifier) VerifySlow() bool {
 		return false
 	}
 
-	// iterate and verify each of the signatures.
-	var sigVerifier DonnaSignatureVerifier
-	var sig DonnaSignature
-	for i := 0; i < b.GetNumberOfEnqueuedSignatures(); i++ {
-		copy(sigVerifier[:], b.publicKeys[i*ed25519DonnaPublicKeyLenBytes:])
-		copy(sig[:], b.signatures[i*ed25519DonnaSignatureLenBytes:])
-		if !sigVerifier.VerifyBytes(b.messages[i][:], sig) {
+	for i := range b.messages {
+		if !DonnaSignatureVerifier(b.publicKeys[i]).VerifyBytes(b.messages[i], b.signatures[i]) {
 			return false
 		}
 	}
-
 	return true
 }

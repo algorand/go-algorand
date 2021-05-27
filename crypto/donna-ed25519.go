@@ -187,9 +187,6 @@ type DonnaPrivateKey ed25519DonnaPrivateKey
 // DonnaPublicKey represents a public key in the ed25519 donna implementation
 type DonnaPublicKey ed25519DonnaPublicKey
 
-const ed25519DonnaPublicKeyLenBytes = 32
-const ed25519DonnaSignatureLenBytes = 64
-
 func ed25519DonnaGenerateKey() (public ed25519DonnaPublicKey, secret ed25519DonnaPrivateKey) {
 	var seed ed25519DonnaSeed
 	RandBytes(seed[:])
@@ -295,18 +292,18 @@ func (v DonnaSignatureVerifier) VerifyBytes(message []byte, sig DonnaSignature) 
 // DonnaBatchVerification calls the batch verification implemention in C. it prepares the arguments
 // to create a call to C code.
 // it returns true if all the signatures were authentically signed by the owners
-func DonnaBatchVerification(messages [][]byte, publicKeys []byte, signatures []byte, failed bool) bool {
+func DonnaBatchVerification(messages [][]byte, publicKeys []DonnaSignatureVerifier, signatures []DonnaSignature, failed bool) bool {
 	if failed {
 		return false
 	}
 
 	numberOfSignatures := len(messages)
-	// allocate staging memory
-	messagesAllocation := C.malloc(C.ulong(C.sizeofPtr * numberOfSignatures))
-	messagesLenAllocation := C.malloc(C.ulong(C.sizeof_size_t * numberOfSignatures))
-	publicKeysAllocation := C.malloc(C.ulong(C.sizeofPtr * numberOfSignatures))
-	signaturesAllocation := C.malloc(C.ulong(C.sizeofPtr * numberOfSignatures))
-	valid := C.malloc(C.ulong(C.sizeof_int * numberOfSignatures))
+
+	messagesAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
+	messagesLenAllocation := C.malloc(C.size_t(C.sizeof_size_t * numberOfSignatures))
+	publicKeysAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
+	signaturesAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
+	valid := C.malloc(C.size_t(C.sizeof_int * numberOfSignatures))
 
 	defer func() {
 		// release staging memory
@@ -317,15 +314,12 @@ func DonnaBatchVerification(messages [][]byte, publicKeys []byte, signatures []b
 		C.free(valid)
 	}()
 
-	preallocatedPublicKeys := unsafe.Pointer(&publicKeys[0])
-	preallocatedSignatures := unsafe.Pointer(&signatures[0])
-
 	// load all the data pointers into the array pointers.
 	for i := 0; i < numberOfSignatures; i++ {
 		*(*uintptr)(unsafe.Pointer(uintptr(messagesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&messages[i][0]))
 		*(*C.size_t)(unsafe.Pointer(uintptr(messagesLenAllocation) + uintptr(i*C.sizeof_size_t))) = C.size_t(len(messages[i]))
-		*(*uintptr)(unsafe.Pointer(uintptr(publicKeysAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(uintptr(preallocatedPublicKeys) + uintptr(i*ed25519DonnaPublicKeyLenBytes)))
-		*(*uintptr)(unsafe.Pointer(uintptr(signaturesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(uintptr(preallocatedSignatures) + uintptr(i*ed25519DonnaSignatureLenBytes)))
+		*(*uintptr)(unsafe.Pointer(uintptr(publicKeysAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&publicKeys[i][0]))
+		*(*uintptr)(unsafe.Pointer(uintptr(signaturesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&signatures[i][0]))
 	}
 
 	// call the batch verifier
@@ -335,7 +329,7 @@ func DonnaBatchVerification(messages [][]byte, publicKeys []byte, signatures []b
 		(**C.uchar)(unsafe.Pointer(publicKeysAllocation)),
 		(**C.uchar)(unsafe.Pointer(signaturesAllocation)),
 		C.size_t(len(messages)),
-		(*C.int)(unsafe.Pointer(valid))) == 0
+		(*C.int)(unsafe.Pointer(valid)))
 
-	return allValid
+	return allValid == 0
 }
