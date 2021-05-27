@@ -393,7 +393,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("approval program too long. max len %d bytes", (1+tx.ExtraProgramPages)*uint32(proto.MaxAppProgramLen))
 		}
 
-		if uint32(len(tx.ClearStateProgram)) > (1+tx.ExtraProgramPages)*uint32(proto.MaxAppProgramLen) {
+		if uint32(len(tx.ClearStateProgram)) > ((1 + tx.ExtraProgramPages) * uint32(proto.MaxAppProgramLen)) {
 			return fmt.Errorf("clear state program too long. max len %d bytes", (1+tx.ExtraProgramPages)*uint32(proto.MaxAppProgramLen))
 		}
 
