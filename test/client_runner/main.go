@@ -151,7 +151,7 @@ outer:
 		select {
 		case testComplete := <-testsCompleteCh:
 			if testComplete.successfull {
-				fmt.Printf("test %s completed in %v\n", testComplete.testFileName, testComplete.executionTime)
+				fmt.Printf("test %s completed in %4.3f sec\n", testComplete.testFileName, testComplete.executionTime.Seconds())
 			} else {
 				fmt.Printf("test %s failed after %v:\n%s\n", testComplete.testFileName, testComplete.executionTime, testComplete.testOutput)
 				testFailed++
