@@ -35,7 +35,10 @@ call check global $BIG64 $BIG64
 
 # This should not work because the key 64 and the value is 65
 set +o pipefail
-call write global $BIG64 ${BIG64}X 2>&1 | grep "value too long"
+# This value so big that it fails before the sum is considered
+call write global $BIG64 ${BIG64}${BIG64}X 2>&1 | grep "value too long" | grep length
+# This causes problems because the sum is too big
+call write global $BIG64 ${BIG64}X 2>&1 | grep "value too long" | grep sum
 set -o pipefail
 
 
