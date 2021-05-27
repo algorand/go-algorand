@@ -95,6 +95,7 @@ if { [catch {
     teal "$TEST_ROOT_DIR/big-app.teal" 3 4090 1 "int 0\nbalance\npop\n"
     teal "$TEST_ROOT_DIR/big-app-v4.teal" 4 4090 1 "int 0\nbalance\npop\n"
 
+    # Create a small program
     teal "$TEST_ROOT_DIR/sm-app.teal" 3 10 1 "int 0\nbalance\npop\n"
 
     # App create fails. Approval program too long
