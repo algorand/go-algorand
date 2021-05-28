@@ -98,18 +98,13 @@ fi
 # modify genesis.json to use a custom network name to prevent SRV record resolving
 TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
 cp installer/genesis/${DEFAULTNETWORK}/genesis.json ${TEMPDIR}
+
 # make directory to hold genesis.json file
 mkdir -p "gen/${DEFAULTNETWORK}"
-echo "cp ${TEMPDIR}/genesis.json gen/${DEFAULTNETWORK};rm -rf ${TEMPDIR}"
 trap "cp ${TEMPDIR}/genesis.json gen/${DEFAULTNETWORK};rm -rf ${TEMPDIR}" 0
-echo "if genesis file then sed in GENESISFILE=${GENESISFILE}"
 if [[ "${GENESISFILE}" = "" ]]; then
-    echo "${GENESISFILE} was empty"
-    echo "sed s/${DEFAULTNETWORK}/${NETWORK}/ ${TEMPDIR}/genesis.json > gen/${DEFAULTNETWORK}/genesis.json"
     sed "s/${DEFAULTNETWORK}/${NETWORK}/" ${TEMPDIR}/genesis.json > gen/${DEFAULTNETWORK}/genesis.json
 else
-    echo "${GENESISFILE} not empty"
-
     cp ${GENESISFILE} gen/${DEFAULTNETWORK}/genesis.json
 fi
 
