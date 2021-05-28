@@ -753,6 +753,70 @@ bytec_1 // 0x0103
 			})
 		}
 	})
+
+	t.Run("Back jumps", func(t *testing.T) {
+		t.Parallel()
+
+		program := `
+int 1
+byte 0x0102
+int OptIn // 1
+byte base64(AQI=) // 0x0102
+int 2
+byte base32(AEBA====) // 0x0102
+int 3
+byte "test"
+target:
+retsub
+int 4
+byte base32(ORSXG5A=) // "test"
+int ClearState // 3
+addr WSJHNPJ6YCLX5K4GUMQ4ISPK3ABMS3AL3F6CSVQTCUI5F4I65PWEMCWT3M
+int 4
+byte 0x0103
+int 3
+byte base64(AQM=) // 0x0103
+int 4
+callsub target
+byte base32(AEBQ====) // 0x0103
+`
+		expected := `
+intcblock 3 4 1
+bytecblock 0x0102 0x0103 0x74657374
+intc_2 // 1
+bytec_0 // 0x0102
+intc_2 // 1
+bytec_0 // 0x0102
+pushint 2
+bytec_0 // 0x0102
+intc_0 // 3
+bytec_2 // "test"
+target:
+retsub
+intc_1 // 4
+bytec_2 // "test"
+intc_0 // 3
+pushbytes 0xb49276bd3ec0977eab86a321c449ead802c96c0bd97c2956131511d2f11eebec // addr WSJHNPJ6YCLX5K4GUMQ4ISPK3ABMS3AL3F6CSVQTCUI5F4I65PWEMCWT3M
+intc_1 // 4
+bytec_1 // 0x0103
+intc_0 // 3
+bytec_1 // 0x0103
+intc_1 // 4
+callsub target
+bytec_1 // 0x0103
+`
+		for v := uint64(optimizeConstantsEnabledVersion); v <= AssemblerMaxVersion; v++ {
+			t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+				expectedOps := testProg(t, expected, v)
+				expectedHex := hex.EncodeToString(expectedOps.Program)
+
+				actualOps := testProg(t, program, v)
+				actualHex := hex.EncodeToString(actualOps.Program)
+
+				require.Equal(t, expectedHex, actualHex)
+			})
+		}
+	})
 }
 
 func TestAssembleOptimizedUint(t *testing.T) {
