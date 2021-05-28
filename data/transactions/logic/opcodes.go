@@ -34,8 +34,7 @@ const rekeyingEnabledVersion = 2
 const appsEnabledVersion = 2
 
 // backBranchEnabledVersion is the first version of TEAL where branches could
-// go back. Also, the first version where cost accounting was done during
-// execution and where the assembler optimizes constants
+// go back (and cost accounting was done during execution)
 const backBranchEnabledVersion = 4
 
 // opDetails records details such as non-standard costs, immediate

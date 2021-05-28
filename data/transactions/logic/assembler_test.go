@@ -539,8 +539,7 @@ func TestAssembleInt(t *testing.T) {
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			expected := expectedDefaultConsts
-			if v >= backBranchEnabledVersion {
-				// back branching enabled version also optimizes constants
+			if v >= optimizeConstantsEnabledVersion {
 				expected = expectedOptimizedConsts
 			}
 
@@ -589,8 +588,7 @@ func TestAssembleBytes(t *testing.T) {
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			expected := expectedDefaultConsts
-			if v >= backBranchEnabledVersion {
-				// back branching enabled version also optimizes constants
+			if v >= optimizeConstantsEnabledVersion {
 				expected = expectedOptimizedConsts
 			}
 
@@ -631,7 +629,7 @@ byte 0x0103
 byte base64(AQM=) // 0x0103
 byte base32(AEBQ====) // 0x0103
 `
-		// 0x0102 and 0x0103 are tied for most frequent int, but 0x0102 should win because it appears first
+		// 0x0102 and 0x0103 are tied for most frequent bytes, but 0x0102 should win because it appears first
 		expected := `
 bytecblock 0x0102 0x0103 0x74657374
 bytec_0 // 0x0102
@@ -644,14 +642,12 @@ bytec_1 // 0x0103
 bytec_1 // 0x0103
 bytec_1 // 0x0103
 `
-		for v := uint64(backBranchEnabledVersion); v <= AssemblerMaxVersion; v++ {
+		for v := uint64(optimizeConstantsEnabledVersion); v <= AssemblerMaxVersion; v++ {
 			t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-				expectedOps, err := AssembleStringWithVersion(expected, v)
-				require.NoError(t, err)
+				expectedOps := testProg(t, expected, v)
 				expectedHex := hex.EncodeToString(expectedOps.Program)
 
-				actualOps, err := AssembleStringWithVersion(program, v)
-				require.NoError(t, err)
+				actualOps := testProg(t, program, v)
 				actualHex := hex.EncodeToString(actualOps.Program)
 
 				require.Equal(t, expectedHex, actualHex)
@@ -686,14 +682,12 @@ intc_1 // 4
 intc_0 // 3
 intc_1 // 4
 `
-		for v := uint64(backBranchEnabledVersion); v <= AssemblerMaxVersion; v++ {
+		for v := uint64(optimizeConstantsEnabledVersion); v <= AssemblerMaxVersion; v++ {
 			t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-				expectedOps, err := AssembleStringWithVersion(expected, v)
-				require.NoError(t, err)
+				expectedOps := testProg(t, expected, v)
 				expectedHex := hex.EncodeToString(expectedOps.Program)
 
-				actualOps, err := AssembleStringWithVersion(program, v)
-				require.NoError(t, err)
+				actualOps := testProg(t, program, v)
 				actualHex := hex.EncodeToString(actualOps.Program)
 
 				require.Equal(t, expectedHex, actualHex)
@@ -747,14 +741,12 @@ bytec_1 // 0x0103
 intc_1 // 4
 bytec_1 // 0x0103
 `
-		for v := uint64(backBranchEnabledVersion); v <= AssemblerMaxVersion; v++ {
+		for v := uint64(optimizeConstantsEnabledVersion); v <= AssemblerMaxVersion; v++ {
 			t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-				expectedOps, err := AssembleStringWithVersion(expected, v)
-				require.NoError(t, err)
+				expectedOps := testProg(t, expected, v)
 				expectedHex := hex.EncodeToString(expectedOps.Program)
 
-				actualOps, err := AssembleStringWithVersion(program, v)
-				require.NoError(t, err)
+				actualOps := testProg(t, program, v)
 				actualHex := hex.EncodeToString(actualOps.Program)
 
 				require.Equal(t, expectedHex, actualHex)
@@ -776,7 +768,7 @@ int ClearState
 `
 	expected := "042002030123238102222222"
 
-	for v := uint64(backBranchEnabledVersion); v <= AssemblerMaxVersion; v++ {
+	for v := uint64(optimizeConstantsEnabledVersion); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops, err := AssembleStringWithVersion(program, v)
 			require.NoError(t, err)
@@ -1032,8 +1024,7 @@ byte b64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			expected := expectedDefaultConsts
-			if v >= backBranchEnabledVersion {
-				// back branching enabled version also optimizes constants
+			if v >= optimizeConstantsEnabledVersion {
 				expected = expectedOptimizedConsts
 			}
 

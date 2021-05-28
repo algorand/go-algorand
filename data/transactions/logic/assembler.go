@@ -34,6 +34,10 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+// optimizeConstantsEnabledVersion is the first version of TEAL where the
+// assembler optimizes constants introduced by pseudo-ops
+const optimizeConstantsEnabledVersion = 4
+
 // Writer is what we want here. Satisfied by bufio.Buffer
 type Writer interface {
 	Write([]byte) (int, error)
@@ -1100,6 +1104,11 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		}
 	}
 
+	// if the version was not fixed above (because there were no opcodes), fix it now
+	if ops.Version == assemblerNoVersion {
+		ops.Version = AssemblerDefaultVersion
+	}
+
 	// backward compatibility: do not allow jumps behind last instruction in TEAL v1
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
@@ -1109,7 +1118,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		}
 	}
 
-	if ops.Version >= backBranchEnabledVersion {
+	if ops.Version >= optimizeConstantsEnabledVersion {
 		ops.optimizeIntcBlock()
 		ops.optimizeBytecBlock()
 	}
@@ -1288,6 +1297,13 @@ func (ops *OpStream) optimizeIntcBlock() error {
 		return ops.intcRefs[i].position > ops.intcRefs[j].position
 	})
 
+	opIntc0 := OpsByName[ops.Version]["intc_0"].Opcode
+	opIntc1 := OpsByName[ops.Version]["intc_1"].Opcode
+	opIntc2 := OpsByName[ops.Version]["intc_2"].Opcode
+	opIntc3 := OpsByName[ops.Version]["intc_3"].Opcode
+	opIntc := OpsByName[ops.Version]["intc"].Opcode
+	opPushInt := OpsByName[ops.Version]["pushint"].Opcode
+
 	var scratch [binary.MaxVarintLen64]byte
 	raw := ops.pending.Bytes()
 	for _, ref := range ops.intcRefs {
@@ -1308,34 +1324,28 @@ func (ops *OpStream) optimizeIntcBlock() error {
 		if singleton {
 			vlen := binary.PutUvarint(scratch[:], ref.value)
 			newBytes = make([]byte, 1+vlen)
-			newBytes[0] = 0x81 // pushint
+			newBytes[0] = opPushInt
 			copy(newBytes[1:], scratch[:vlen])
 		} else {
 			switch newIndex {
 			case 0:
-				newBytes = []byte{0x22} // intc_0
+				newBytes = []byte{opIntc0}
 			case 1:
-				newBytes = []byte{0x23} // intc_1
+				newBytes = []byte{opIntc1}
 			case 2:
-				newBytes = []byte{0x24} // intc_2
+				newBytes = []byte{opIntc2}
 			case 3:
-				newBytes = []byte{0x25} // intc_3
+				newBytes = []byte{opIntc3}
 			default:
-				newBytes = []byte{0x21, uint8(newIndex)} // intc {index}
+				newBytes = []byte{opIntc, uint8(newIndex)}
 			}
 		}
 
 		var currentBytesLen int
 		switch raw[ref.position] {
-		case 0x22:
-			fallthrough
-		case 0x23:
-			fallthrough
-		case 0x24:
-			fallthrough
-		case 0x25:
+		case opIntc0, opIntc1, opIntc2, opIntc3:
 			currentBytesLen = 1
-		case 0x21:
+		case opIntc:
 			currentBytesLen = 2
 		default:
 			return ops.errorf("Unexpected op at intReference: %d, from source line %d", raw[ref.position], ops.OffsetToLine[ref.position])
@@ -1451,6 +1461,13 @@ func (ops *OpStream) optimizeBytecBlock() error {
 		return ops.bytecRefs[i].position > ops.bytecRefs[j].position
 	})
 
+	opBytec0 := OpsByName[ops.Version]["bytec_0"].Opcode
+	opBytec1 := OpsByName[ops.Version]["bytec_1"].Opcode
+	opBytec2 := OpsByName[ops.Version]["bytec_2"].Opcode
+	opBytec3 := OpsByName[ops.Version]["bytec_3"].Opcode
+	opBytec := OpsByName[ops.Version]["bytec"].Opcode
+	opPushBytes := OpsByName[ops.Version]["pushbytes"].Opcode
+
 	var scratch [binary.MaxVarintLen64]byte
 	raw := ops.pending.Bytes()
 	for _, ref := range ops.bytecRefs {
@@ -1471,35 +1488,29 @@ func (ops *OpStream) optimizeBytecBlock() error {
 		if singleton {
 			vlen := binary.PutUvarint(scratch[:], uint64(len(ref.value)))
 			newBytes = make([]byte, 1+vlen+len(ref.value))
-			newBytes[0] = 0x80 // pushbytes
+			newBytes[0] = opPushBytes
 			copy(newBytes[1:], scratch[:vlen])
 			copy(newBytes[1+vlen:], ref.value)
 		} else {
 			switch newIndex {
 			case 0:
-				newBytes = []byte{0x28} // bytec_0
+				newBytes = []byte{opBytec0}
 			case 1:
-				newBytes = []byte{0x29} // bytec_1
+				newBytes = []byte{opBytec1}
 			case 2:
-				newBytes = []byte{0x2a} // bytec_2
+				newBytes = []byte{opBytec2}
 			case 3:
-				newBytes = []byte{0x2b} // bytec_3
+				newBytes = []byte{opBytec3}
 			default:
-				newBytes = []byte{0x27, uint8(newIndex)} // bytec {index}
+				newBytes = []byte{opBytec, uint8(newIndex)}
 			}
 		}
 
 		var currentBytesLen int
 		switch raw[ref.position] {
-		case 0x28:
-			fallthrough
-		case 0x29:
-			fallthrough
-		case 0x2a:
-			fallthrough
-		case 0x2b:
+		case opBytec0, opBytec1, opBytec2, opBytec3:
 			currentBytesLen = 1
-		case 0x27:
+		case opBytec:
 			currentBytesLen = 2
 		default:
 			return ops.errorf("Unexpected op at byteReference: %d, from source line %d", raw[ref.position], ops.OffsetToLine[ref.position])
@@ -1508,6 +1519,9 @@ func (ops *OpStream) optimizeBytecBlock() error {
 		raw = replaceBytes(raw, ref.position, currentBytesLen, newBytes)
 		positionDelta := len(newBytes) - currentBytesLen
 
+		// this code mirrors the byteRefs correction in optimizeIntcBlock(), though technically this
+		// is a no-op because ints always get optimized before bytes, meaning ops.intcRefs is
+		// guaranteed to be nil at this point
 		for i := range ops.intcRefs {
 			if ops.intcRefs[i].position > ref.position {
 				ops.intcRefs[i].position += positionDelta
