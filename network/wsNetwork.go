@@ -422,6 +422,9 @@ func (wn *WebsocketNetwork) Address() (string, bool) {
 	parsedURL := url.URL{Scheme: wn.scheme}
 	var connected bool
 	if wn.listener == nil {
+		if wn.config.NetAddress == "" {
+			parsedURL.Scheme = ""
+		}
 		parsedURL.Host = wn.config.NetAddress
 		connected = false
 	} else {

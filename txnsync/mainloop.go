@@ -350,9 +350,11 @@ func (s *syncState) updatePeersRequestParams(peers []*Peer) {
 			peer.setLocalRequestParams(0, 1)
 		}
 	} else {
-		for i, peer := range peers {
-			// on non-relay, ask for offset/modulator
-			peer.setLocalRequestParams(uint64(i)+s.requestsOffset, uint64(len(peers)))
+		if s.fetchTransactions {
+			for i, peer := range peers {
+				// on non-relay, ask for offset/modulator
+				peer.setLocalRequestParams(uint64(i)+s.requestsOffset, uint64(len(peers)))
+			}
 		}
 	}
 }
