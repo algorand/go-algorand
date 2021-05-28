@@ -99,7 +99,7 @@ fi
 TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
 cp installer/genesis/${DEFAULTNETWORK}/genesis.json ${TEMPDIR}
 
-# make directory to hold genesis.json file
+# make directory to hold genesis.json file if it doesn't exist.
 mkdir -p "gen/${DEFAULTNETWORK}"
 trap "cp ${TEMPDIR}/genesis.json gen/${DEFAULTNETWORK};rm -rf ${TEMPDIR}" 0
 if [[ "${GENESISFILE}" = "" ]]; then
