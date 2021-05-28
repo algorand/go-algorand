@@ -141,14 +141,24 @@ type Peer struct {
 	// messageSeriesPendingTransactions contain the transactions we are sending in the current "message-series". It allows us to pick a given
 	// "snapshot" from the transaction pool, and send that "snapshot" to completion before attempting to re-iterate.
 	messageSeriesPendingTransactions []transactions.SignedTxGroup
+
+	// transactionPoolAckCh is passed to the transaction handler when incoming transaction arrives. The channel is passed upstream, so that once
+	// a transaction is added to the transaction pool, we can get some feedback for that.
+	transactionPoolAckCh chan uint64
+
+	// transactionPoolAckMessages maintain a list of the recent incoming messages sequence numbers whose transactions were added fully to the transaction
+	// pool. This list is being flushed out every time we send a message to the peer.
+	transactionPoolAckMessages []uint64
 }
 
 func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *Peer {
 	p := &Peer{
-		networkPeer:            networkPeer,
-		isOutgoing:             isOutgoing,
-		recentSentTransactions: makeTransactionCache(recentTransactionsSentBufferLength),
-		dataExchangeRate:       defaultDataExchangeRate,
+		networkPeer:                networkPeer,
+		isOutgoing:                 isOutgoing,
+		recentSentTransactions:     makeTransactionCache(recentTransactionsSentBufferLength),
+		dataExchangeRate:           defaultDataExchangeRate,
+		transactionPoolAckCh:       make(chan uint64, maxAcceptedMsgSeq),
+		transactionPoolAckMessages: make([]uint64, 0, maxAcceptedMsgSeq),
 	}
 	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
@@ -157,7 +167,41 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *
 	return p
 }
 
+// GetNetworkPeer returns the network peer associated with this particular peer.
+func (p *Peer) GetNetworkPeer() interface{} {
+	return p.networkPeer
+}
+
+// GetTransactionPoolAckChannel returns the transaction pool ack channel
+func (p *Peer) GetTransactionPoolAckChannel() chan uint64 {
+	return p.transactionPoolAckCh
+}
+
+// dequeuePendingTransactionPoolAckMessages removed the pending entries from transactionPoolAckCh and add them to transactionPoolAckMessages
+func (p *Peer) dequeuePendingTransactionPoolAckMessages() {
+	for {
+		select {
+		case msgSeq := <-p.transactionPoolAckCh:
+			if len(p.transactionPoolAckMessages) == maxAcceptedMsgSeq {
+				p.transactionPoolAckMessages = append(p.transactionPoolAckMessages[1:], msgSeq)
+			} else {
+				p.transactionPoolAckMessages = append(p.transactionPoolAckMessages, msgSeq)
+			}
+		default:
+			return
+		}
+	}
+}
+
 // outgoing related methods :
+
+// getAcceptedMessages returns the content of the transactionPoolAckMessages and clear the existing buffer.
+func (p *Peer) getAcceptedMessages() []uint64 {
+	p.dequeuePendingTransactionPoolAckMessages()
+	acceptedMessages := p.transactionPoolAckMessages
+	p.transactionPoolAckMessages = make([]uint64, 0, maxAcceptedMsgSeq)
+	return acceptedMessages
+}
 
 func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTranscationsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )

@@ -203,6 +203,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 	if peer.lastReceivedMessageTimestamp != 0 && peer.lastReceivedMessageLocalRound == s.round {
 		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((s.clock.Since() - peer.lastReceivedMessageTimestamp).Nanoseconds())
 	}
+	metaMessage.message.MsgSync.AcceptedMsgSeq = peer.getAcceptedMessages()
 
 	if msgOps&messageConstNextMinDelay == messageConstNextMinDelay {
 		metaMessage.message.MsgSync.NextMsgMinDelay = uint64(s.lastBeta.Nanoseconds()) * 2

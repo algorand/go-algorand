@@ -80,7 +80,7 @@ type NodeConnector interface {
 	GetPendingTransactionGroups() (txGroups []transactions.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64)
 	// IncomingTransactionGroups is called by the transaction sync when transactions have been received and need
 	// to be stored in the transaction pool
-	IncomingTransactionGroups(interface{}, []transactions.SignedTxGroup) (transactionPoolSize int)
+	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int)
 	NotifyMonitor() chan struct{}
 }
 
