@@ -20,6 +20,8 @@ stages:
 
 jobs:
   allow_failures:
+    - name: ARM64 Build
+      name: ARM64 Integration Test
     - name: External ARM Deploy
     - name: Test Release Builds
   include:
