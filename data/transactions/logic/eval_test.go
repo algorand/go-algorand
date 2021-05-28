@@ -73,6 +73,12 @@ func defaultEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalPar
 	return defaultEvalParamsWithVersion(sb, txn, LogicVersion)
 }
 
+func benchmarkEvalParams(sb *strings.Builder, txn *transactions.SignedTxn) EvalParams {
+	ep := defaultEvalParamsWithVersion(sb, txn, LogicVersion)
+	ep.Proto.LogicSigMaxCost = 1000 * 1000
+	return ep
+}
+
 func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedTxn, version uint64) EvalParams {
 	proto := defaultEvalProtoWithVersion(version)
 
@@ -97,8 +103,7 @@ func TestTooManyArgs(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, "int 1", v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			args := [transactions.EvalMaxArgs + 1][]byte{}
@@ -189,8 +194,7 @@ func TestWrongProtoVersion(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1`, v)
-			require.NoError(t, err)
+			ops := testProg(t, "int 1", v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			sb := strings.Builder{}
@@ -198,7 +202,7 @@ func TestWrongProtoVersion(t *testing.T) {
 			proto.LogicSigVersion = 0
 			ep := defaultEvalParams(&sb, &txn)
 			ep.Proto = &proto
-			err = Check(ops.Program, ep)
+			err := Check(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "LogicSig not supported")
 			pass, err := Eval(ops.Program, ep)
@@ -223,17 +227,16 @@ func TestSha256EqArg(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`arg 0
+			ops := testProg(t, `arg 0
 sha256
 byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
-==`, 1)
-			require.NoError(t, err)
+==`, v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
-			err = Check(ops.Program, ep)
+			err := Check(ops.Program, ep)
 			require.NoError(t, err)
 			pass, err := Eval(ops.Program, ep)
 			require.True(t, pass)
@@ -284,8 +287,7 @@ func TestTLHC(t *testing.T) {
 			a1, _ := basics.UnmarshalChecksumAddress("DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE")
 			a2, _ := basics.UnmarshalChecksumAddress("YYKRMERAFXMXCDWMBNR6BUUWQXDCUR53FPUGXLUYS7VNASRTJW2ENQ7BMQ")
 			secret, _ := base64.StdEncoding.DecodeString("xPUB+DJir1wsH7g2iEY1QwYqHqYH1vUJtzZKW4RxXsY=")
-			ops, err := AssembleStringWithVersion(tlhcProgramText, v)
-			require.NoError(t, err)
+			ops := testProg(t, tlhcProgramText, v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			// right answer
@@ -294,7 +296,7 @@ func TestTLHC(t *testing.T) {
 			sb := strings.Builder{}
 			block := bookkeeping.Block{}
 			ep := defaultEvalParams(&sb, &txn)
-			err = Check(ops.Program, ep)
+			err := Check(ops.Program, ep)
 			if err != nil {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(sb.String())
@@ -375,6 +377,12 @@ func TestItob(t *testing.T) {
 func TestBtoi(t *testing.T) {
 	t.Parallel()
 	testAccepts(t, "int 0x1234567812345678; byte 0x1234567812345678; btoi; ==", 1)
+	testAccepts(t, "int 0x34567812345678; byte 0x34567812345678; btoi; ==", 1)
+	testAccepts(t, "int 0x567812345678; byte 0x567812345678; btoi; ==", 1)
+	testAccepts(t, "int 0x7812345678; byte 0x7812345678; btoi; ==", 1)
+	testAccepts(t, "int 0x12345678; byte 0x12345678; btoi; ==", 1)
+	testAccepts(t, "int 0x345678; byte 0x345678; btoi; ==", 1)
+	testAccepts(t, "int 0; byte b64(); btoi; ==", 1)
 }
 
 func TestBtoiTooLong(t *testing.T) {
@@ -548,24 +556,24 @@ func TestUint128(t *testing.T) {
 	require.Equal(t, x.String(), "340282366920938463463374607431768211455")
 }
 
-func TestDivw(t *testing.T) {
+func TestDivModw(t *testing.T) {
 	t.Parallel()
 	// 2:0 / 1:0 == 2r0 == 0:2,0:0
-	testAccepts(t, `int 2; int 0; int 1; int 0; divw;
+	testAccepts(t, `int 2; int 0; int 1; int 0; divmodw;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 2; ==; assert;
                         int 0; ==; assert; int 1`, 4)
 
 	// 2:0 / 0:1 == 2:0r0 == 2:0,0:0
-	testAccepts(t, `int 2; int 0; int 0; int 1; divw;
+	testAccepts(t, `int 2; int 0; int 0; int 1; divmodw;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 2; ==; assert; int 1`, 4)
 
 	// 0:0 / 0:7 == 0r0
-	testAccepts(t, `int 0; int 0; int 0; int 7; divw;
+	testAccepts(t, `int 0; int 0; int 0; int 7; divmodw;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 0; ==; assert;
@@ -573,22 +581,66 @@ func TestDivw(t *testing.T) {
 
 	// maxu64:maxu64 / maxu64:maxu64 == 1r0
 	testAccepts(t, `int 18446744073709551615; int 18446744073709551615; int 18446744073709551615; int 18446744073709551615;
-                        divw;
+                        divmodw;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 1; ==; assert;
                         int 0; ==; assert; int 1`, 4)
 
 	// 0:7777 / 1:0 == 0:0r7777 == 0:0,0:7777
-	testAccepts(t, `int 0; int 7777; int 1; int 0; divw;
+	testAccepts(t, `int 0; int 7777; int 1; int 0; divmodw;
                         int 7777; ==; assert;
                         int 0; ==; assert;
                         int 0; ==; assert;
                         int 0; ==; assert; int 1`, 4)
 
 	// 10:0 / 0:0 ==> panic
-	testPanics(t, `int 10; int 0; int 0; int 0; divw;
+	testPanics(t, `int 10; int 0; int 0; int 0; divmodw;
 	               pop; pop; pop; pop; int 1`, 4)
+}
+
+func TestWideMath(t *testing.T) {
+	// 2^64 = 18446744073709551616, we use a bunch of numbers close to that below
+	pattern := `
+int %d
+dup
+store 0
+int %d
+dup
+store 1
+mulw
+// add one less than the first number
+load 0
+int 1
+-
+addw
+// stack is now [high word, carry bit, low word]
+store 2
++				// combine carry and high
+load 2
+// now divmodw by the 1st given number (widened)
+int 0
+load 0
+divmodw
+// remainder should be one less that first number
+load 0; int 1; -;  ==; assert
+int 0; ==; assert		// (upper word)
+// then the 2nd given number is left (widened)
+load 1; ==; assert
+int 0; ==; assert
+// succeed
+int 1
+`
+
+	testAccepts(t, fmt.Sprintf(pattern, 1000, 8192378), 4)
+	testAccepts(t, fmt.Sprintf(pattern, 1082734200, 8192378), 4)
+	testAccepts(t, fmt.Sprintf(pattern, 1000, 8129387292378), 4)
+	testAccepts(t, fmt.Sprintf(pattern, 10278362800, 8192378), 4)
+	for i := 1; i < 100; i++ {
+		for j := 1; i < 100; i++ {
+			testAccepts(t, fmt.Sprintf(pattern, i+j<<40, (i*j)<<40+j), 4)
+		}
+	}
 }
 
 func TestDivZero(t *testing.T) {
@@ -598,243 +650,55 @@ func TestDivZero(t *testing.T) {
 
 func TestModZero(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 0x111111111
-int 0
-%
-pop
-int 1`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			require.Error(t, err)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "int 0x111111111; int 0; %; pop; int 1", 1)
 }
 
 func TestErr(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`err
-int 1`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.False(t, pass)
-			require.Error(t, err)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "err; int 1", 1)
 }
 
 func TestModSubMulOk(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 35
-int 16
-%
-int 1
--
-int 2
-*
-int 4
-==`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+	testAccepts(t, "int 35; int 16; %; int 1; -; int 2; *; int 4; ==", 1)
 }
 
 func TestPop(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1
-int 0
-pop`, v)
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			err = Check(ops.Program, defaultEvalParams(&sb, nil))
-			require.NoError(t, err)
-			sb = strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+	testAccepts(t, "int 1; int 0; pop", 1)
 }
 
 func TestStackLeftover(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1
-int 1`, v)
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			err = Check(ops.Program, defaultEvalParams(&sb, nil))
-			require.NoError(t, err)
-			sb = strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "int 1; int 1", 1)
 }
 
 func TestStackBytesLeftover(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`byte 0x10101010`, v)
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			err = Check(ops.Program, defaultEvalParams(&sb, nil))
-			require.NoError(t, err)
-			sb = strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "byte 0x10101010", 1)
 }
 
 func TestStackEmpty(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 1
-int 1
-pop
-pop`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "int 1; int 1; pop; pop", 1)
 }
 
 func TestArgTooFar(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`arg_1
-btoi`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			sb := strings.Builder{}
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			txn.Lsig.Args = nil
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "arg_1; btoi", 1)
 }
 
 func TestIntcTooFar(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`intc_1`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			sb := strings.Builder{}
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			txn.Lsig.Args = nil
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
-		})
-	}
+	// Want to be super clear that intc_1 fails, whether an intcblock exists (but small) or not
+	testPanics(t, "intc_1", 1)
+	testPanics(t, "int 1; intc_1; pop", 1)
 }
 
 func TestBytecTooFar(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`bytec_1
-btoi`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err) // TODO: Check should know the type stack was wrong
-			sb := strings.Builder{}
-			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
-			txn.Lsig.Args = nil
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, &txn))
-			if pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.Error(t, err)
-			require.False(t, pass)
-			isNotPanic(t, err)
-		})
-	}
+	testPanics(t, "bytec_1; btoi", 1)
+	testPanics(t, "byte 0x23; bytec_1; btoi", 1)
 }
 
 func TestTxnBadField(t *testing.T) {
@@ -862,8 +726,7 @@ func TestTxnBadField(t *testing.T) {
 	fields := []TxnField{ApplicationArgs, Accounts}
 	for _, field := range fields {
 		source := fmt.Sprintf("txn %s 0", field.String())
-		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-		require.NoError(t, err)
+		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
 		pass, err = Eval(ops.Program, defaultEvalParams(&sb, &txn))
@@ -925,8 +788,7 @@ func TestGtxnBadField(t *testing.T) {
 	fields := []TxnField{ApplicationArgs, Accounts}
 	for _, field := range fields {
 		source := fmt.Sprintf("txn %s 0", field.String())
-		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-		require.NoError(t, err)
+		ops := testProg(t, source, AssemblerMaxVersion)
 		require.Equal(t, txnaOpcode, ops.Program[1])
 		ops.Program[1] = txnOpcode
 		pass, err = Eval(ops.Program, defaultEvalParams(&sb, &txn))
@@ -959,7 +821,7 @@ func TestArg(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`arg 0
+			ops := testProg(t, `arg 0
 arg 1
 ==
 arg 2
@@ -971,8 +833,7 @@ len
 int 9
 <
 &&`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
+			err := Check(ops.Program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
@@ -1163,7 +1024,6 @@ int %s
 					txn.Txn.Type = tt
 					sb := strings.Builder{}
 					ep := defaultEvalParams(&sb, &txn)
-					ep.GroupIndex = 3
 					pass, err := Eval(ops.Program, ep)
 					if !pass {
 						t.Log(hex.EncodeToString(ops.Program))
@@ -1200,26 +1060,13 @@ func TestOnCompletionConstants(t *testing.T) {
 	}
 
 	// check constants matching to their values
-	ep := defaultEvalParams(nil, nil)
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			for i := 0; i < last; i++ {
-				oc := OnCompletionConstType(i)
-				symbol := oc.String()
-				require.Contains(t, onCompletionConstToUint64, symbol)
-				require.Equal(t, uint64(i), onCompletionConstToUint64[symbol])
-				t.Run(symbol, func(t *testing.T) {
-					text := fmt.Sprintf(`int %s
-int %s
-==
-`, symbol, oc)
-					ops, err := AssembleStringWithVersion(text, v)
-					require.NoError(t, err)
-					pass, err := Eval(ops.Program, ep)
-					require.NoError(t, err)
-					require.True(t, pass)
-				})
-			}
+	for i := 0; i < last; i++ {
+		oc := OnCompletionConstType(i)
+		symbol := oc.String()
+		require.Contains(t, onCompletionConstToUint64, symbol)
+		require.Equal(t, uint64(i), onCompletionConstToUint64[symbol])
+		t.Run(symbol, func(t *testing.T) {
+			testAccepts(t, fmt.Sprintf("int %s; int %s; ==;", symbol, oc), 1)
 		})
 	}
 }
@@ -1556,8 +1403,7 @@ func TestTxn(t *testing.T) {
 		3: testTxnProgramTextV3,
 	}
 
-	clearOps, err := AssembleStringWithVersion("int 1", 1)
-	require.NoError(t, err)
+	clearOps := testProg(t, "int 1", 1)
 
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -1812,8 +1658,7 @@ func TestTxna(t *testing.T) {
 txna ApplicationArgs 0
 ==
 `
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, source, AssemblerMaxVersion)
 	var txn transactions.SignedTxn
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Sender
@@ -1823,7 +1668,7 @@ txna ApplicationArgs 0
 	txgroup[0] = txn
 	ep := defaultEvalParams(nil, &txn)
 	ep.TxnGroup = txgroup
-	_, err = Eval(ops.Program, ep)
+	_, err := Eval(ops.Program, ep)
 	require.NoError(t, err)
 
 	// modify txn field
@@ -1862,8 +1707,7 @@ txna ApplicationArgs 0
 txn Sender
 ==
 `
-	ops2, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops2 := testProg(t, source, AssemblerMaxVersion)
 	var txn2 transactions.SignedTxn
 	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
 	ep2 := defaultEvalParams(nil, &txn2)
@@ -1875,7 +1719,7 @@ txn Sender
 	source = `gtxna 0 Accounts 1
 txna ApplicationArgs 0
 ==`
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops = testProg(t, source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	_, err = Eval(ops.Program, ep)
 	require.NoError(t, err)
@@ -1916,8 +1760,7 @@ txna ApplicationArgs 0
 txn Sender
 ==
 `
-	ops3, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops3 := testProg(t, source, AssemblerMaxVersion)
 	var txn3 transactions.SignedTxn
 	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
 	txgroup3 := make([]transactions.SignedTxn, 1)
@@ -1937,8 +1780,7 @@ btoi
 int 0
 ==
 `
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, source, AssemblerMaxVersion)
 
 	var txn transactions.SignedTxn
 	txn.Txn.ApplicationArgs = make([][]byte, 1)
@@ -1961,8 +1803,7 @@ int 0
 global ZeroAddress
 ==
 `
-	ops2, err := AssembleStringWithVersion(source2, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops2 := testProg(t, source2, AssemblerMaxVersion)
 
 	var txn2 transactions.SignedTxn
 	txn2.Txn.Accounts = make([]basics.Address, 1)
@@ -1984,9 +1825,7 @@ global ZeroAddress
 
 func TestBitOps(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(`int 0x17
+	testAccepts(t, `int 0x17
 int 0x3e
 & // == 0x16
 int 0x0a
@@ -1997,25 +1836,12 @@ int 0x0f
 int 0x300
 |
 int 0x310
-==`, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+==`, 1)
 }
 
 func TestStringOps(t *testing.T) {
 	t.Parallel()
-	ops := testProg(t, `byte 0x123456789abc
+	testAccepts(t, `byte 0x123456789abc
 substring 1 3
 byte 0x3456
 ==
@@ -2041,134 +1867,59 @@ substring3
 len
 int 0
 ==
-&&`, 2)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-	if !pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.NoError(t, err)
-	require.True(t, pass)
+&&`, 2) // substring, concat, substring3 came in v2
 }
 
 func TestConsOverflow(t *testing.T) {
 	t.Parallel()
-	ops := testProg(t, `byte 0xf000000000000000
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-dup
-concat
-len`, 2)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-	if pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.False(t, pass)
-	require.Error(t, err)
-	isNotPanic(t, err)
+	justfits := `byte 0xf000000000000000
+dup; concat				// 16
+dup; concat				// 32
+dup; concat				// 64
+dup; concat				// 128
+dup; concat				// 256
+dup; concat				// 512
+dup; concat				// 1024
+dup; concat				// 2048
+dup; concat				// 4096
+`
+	testAccepts(t, justfits+"len", 2)
+	testPanics(t, justfits+"byte 0x11; concat; len", 2)
 }
 
 func TestSubstringFlop(t *testing.T) {
 	t.Parallel()
 	// fails in compiler
-	ops := testProg(t, `byte 0xf000000000000000
+	testProg(t, `byte 0xf000000000000000
 substring 4 2
 len`, 2, expect{2, "substring end is before start"})
 
 	// fails at runtime
-	ops = testProg(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 int 4
 int 2
 substring3
 len`, 2)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-	if pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.False(t, pass)
-	require.Error(t, err)
-	isNotPanic(t, err)
 
 	// fails at runtime
-	ops = testProg(t, `byte 0xf000000000000000
+	err := testPanics(t, `byte 0xf000000000000000
 int 4
 int 0xFFFFFFFFFFFFFFFE
 substring3
 len`, 2)
-	err = Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	pass, err = Eval(ops.Program, defaultEvalParams(nil, nil))
-	require.False(t, pass)
-	require.Error(t, err)
 	require.Contains(t, err.Error(), "substring range beyond length of string")
 }
 
 func TestSubstringRange(t *testing.T) {
 	t.Parallel()
-	ops := testProg(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 substring 2 99
 len`, 2)
-	err := Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-	sb := strings.Builder{}
-	pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-	if pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.False(t, pass)
-	require.Error(t, err)
-	isNotPanic(t, err)
 }
 
 func TestLoadStore(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 37
+	testAccepts(t, `int 37
 int 37
 store 1
 byte 0xabbacafe
@@ -2182,19 +1933,7 @@ byte 0xabbacafe
 load 0
 load 1
 +
-&&`, v)
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+&&`, 1)
 }
 
 func TestLoadStore2(t *testing.T) {
@@ -2210,21 +1949,7 @@ load 42
 +
 int 5
 ==`
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, progText, v)
-			err := Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+	testAccepts(t, progText, 1)
 }
 
 const testCompareProgramText = `int 35
@@ -2289,22 +2014,7 @@ byte 0xf00d
 
 func TestCompares(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(testCompareProgramText, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+	testAccepts(t, testCompareProgramText, 1)
 }
 
 func TestKeccak256(t *testing.T) {
@@ -2319,22 +2029,7 @@ func TestKeccak256(t *testing.T) {
 keccak256
 byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
 ==`
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(progText, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+	testAccepts(t, progText, 1)
 }
 
 func TestSHA512_256(t *testing.T) {
@@ -2353,22 +2048,7 @@ sha512_256
 
 byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 ==`
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops, err := AssembleStringWithVersion(progText, v)
-			require.NoError(t, err)
-			err = Check(ops.Program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
-			sb := strings.Builder{}
-			pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-			if !pass {
-				t.Log(hex.EncodeToString(ops.Program))
-				t.Log(sb.String())
-			}
-			require.NoError(t, err)
-			require.True(t, pass)
-		})
-	}
+	testAccepts(t, progText, 1)
 }
 
 func TestSlowLogic(t *testing.T) {
@@ -3163,18 +2843,14 @@ int 142791994204213819
 +
 `
 
-func benchmarkBasicProgram(b *testing.B, source string) {
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(b, err)
-	err = Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(b, err)
-	//b.Logf("%d bytes of program", len(ops.Program))
-	//b.Log(hex.EncodeToString(ops.Program))
+func evalLoop(b *testing.B, runs int, program []byte) {
 	b.ResetTimer()
-	sb := strings.Builder{} // Trace: &sb
-	for i := 0; i < b.N; i++ {
-		pass, err := Eval(ops.Program, defaultEvalParams(nil, nil))
+	for i := 0; i < runs; i++ {
+		pass, err := Eval(program, benchmarkEvalParams(nil, nil))
 		if !pass {
+			// rerun to trace it.  tracing messes up timing too much
+			sb := strings.Builder{}
+			pass, err = Eval(program, benchmarkEvalParams(&sb, nil))
 			b.Log(sb.String())
 		}
 		// require is super slow but makes useful error messages, wrap it in a check that makes the benchmark run a bunch faster
@@ -3187,28 +2863,151 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 	}
 }
 
+func benchmarkBasicProgram(b *testing.B, source string) {
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(b, err)
+	err = Check(ops.Program, defaultEvalParams(nil, nil))
+	require.NoError(b, err)
+	evalLoop(b, b.N, ops.Program)
+}
+
 func benchmarkExpensiveProgram(b *testing.B, source string) {
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(b, err)
-	ep := defaultEvalParams(nil, nil)
-	err = Check(ops.Program, ep)
+	err = Check(ops.Program, defaultEvalParams(nil, nil))
+	require.NoError(b, err)
+	_, err = Eval(ops.Program, defaultEvalParams(nil, nil))
 	require.Error(b, err) // excessive cost
-	//b.Logf("%d bytes of program", len(ops.Program))
-	//b.Log(hex.EncodeToString(ops.Program))
-	b.ResetTimer()
-	sb := strings.Builder{} // Trace: &sb
-	for i := 0; i < b.N; i++ {
-		pass, err := Eval(ops.Program, defaultEvalParams(&sb, nil))
-		if !pass {
-			b.Log(sb.String())
-		}
-		// require is super slow but makes useful error messages, wrap it in a check that makes the benchmark run a bunch faster
-		if err != nil {
-			require.NoError(b, err)
-		}
-		if !pass {
-			require.True(b, pass)
-		}
+	evalLoop(b, b.N, ops.Program)
+}
+
+// Rather than run b.N times, build a program that runs the operation
+// 2000 times, and does so for b.N / 2000 tuns.  This lets us amortize
+// away the creation and teardown of the evaluation system.  We report
+// the "waste/op" as the number of extra instructions that are run
+// during the "operation".  They are presumed to be fast (15/ns), so
+// the idea is that you can subtract that out from the reported speed
+func benchmarkOperation(b *testing.B, prefix string, operation string, suffix string) {
+	runs := 1 + b.N/2000
+	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
+	source := prefix + ";" + strings.Repeat(operation+";", 2000) + ";" + suffix
+	source = strings.ReplaceAll(source, ";", "\n")
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	err = Check(ops.Program, defaultEvalParams(nil, nil))
+	require.NoError(b, err)
+	evalLoop(b, runs, ops.Program)
+	b.ReportMetric(float64(inst)*15.0, "waste/op")
+}
+
+func BenchmarkUintMath(b *testing.B) {
+	benches := [][]string{
+		{"pop1", "", "int 1234576; pop", "int 1"},
+		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
+		{"add", "", "int 1234576; int 6712; +; pop", "int 1"},
+		{"sub", "", "int 1234576; int 2; -; pop", "int 1"},
+		{"mul", "", "int 212; int 323; *; pop", "int 1"},
+		{"div", "", "int 736247364; int 892; /; pop", "int 1"},
+		{"divmodw", "", "int 736247364; int 892; int 126712; int 71672; divmodw; pop; pop; pop; pop", "int 1"},
+		{"sqrt", "", "int 736247364; sqrt; pop", "int 1"},
+		{"exp", "", "int 734; int 5; exp; pop", "int 1"},
+		{"expw", "", "int 734; int 10; expw; pop; pop", "int 1"},
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
+
+func BenchmarkUintCmp(b *testing.B) {
+	ops := []string{"==", "!=", "<", "<=", ">", ">="}
+	for _, op := range ops {
+		b.Run(op, func(b *testing.B) {
+			benchmarkOperation(b, "", "int 7263; int 273834; "+op+"; pop", "int 1")
+		})
+	}
+}
+func BenchmarkBigLogic(b *testing.B) {
+	benches := [][]string{
+		{"b&", "byte 0x01234576", "byte 0x01ffffffffffffff; b&", "pop; int 1"},
+		{"b|", "byte 0x0ffff1234576", "byte 0x1202; b|", "pop; int 1"},
+		{"b^", "byte 0x01234576", "byte 0x0223627389; b^", "pop; int 1"},
+		{"b~", "byte 0x0123457673624736", "b~", "pop; int 1"},
+
+		{"b&big",
+			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
+			"byte 0x01ffffffffffffff01ffffffffffffff01234576012345760123457601234576; b&",
+			"pop; int 1"},
+		{"b|big",
+			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
+			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b|",
+			"pop; int 1"},
+		{"b^big", "", // u256*u256
+			`byte 0x123457601234576012345760123457601234576012345760123457601234576a
+			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b^; pop`,
+			"int 1"},
+		{"b~big", "byte 0xa123457601234576012345760123457601234576012345760123457601234576",
+			"b~",
+			"pop; int 1"},
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
+
+func BenchmarkBigMath(b *testing.B) {
+	benches := [][]string{
+		{"bpop", "", "byte 0x01ffffffffffffff; pop", "int 1"},
+
+		{"b+", "byte 0x01234576", "byte 0x01ffffffffffffff; b+", "pop; int 1"},
+		{"b-", "byte 0x0ffff1234576", "byte 0x1202; b-", "pop; int 1"},
+		{"b*", "", "byte 0x01234576; byte 0x0223627389; b*; pop", "int 1"},
+		{"b/", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
+		{"b%", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
+
+		{"b+big", // u256 + u256
+			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
+			"byte 0x01ffffffffffffff01ffffffffffffff01234576012345760123457601234576; b+",
+			"pop; int 1"},
+		{"b-big", // second is a bit small, so we can subtract it over and over
+			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
+			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b-",
+			"pop; int 1"},
+		{"b*big", "", // u256*u256
+			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
+			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b*; pop`,
+			"int 1"},
+		{"b/big", "", // u256 / u128 (half sized divisor seems pessimal)
+			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
+			 byte 0x34576012345760123457601234576312; b/; pop`,
+			"int 1"},
+		{"b%big", "", // u256 / u128 (half sized divisor seems pessimal)
+			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
+			 byte 0x34576012345760123457601234576312; b/; pop`,
+			"int 1"},
+	}
+	for _, bench := range benches {
+		b.Run(bench[0], func(b *testing.B) {
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
+		})
+	}
+}
+
+func BenchmarkHash(b *testing.B) {
+	for _, hash := range []string{"sha256", "keccak256", "sha512_256"} {
+		b.Run(hash+"-small", func(b *testing.B) { // hash 32 bytes
+			benchmarkOperation(b, "int 32; bzero", hash, "pop; int 1")
+		})
+		b.Run(hash+"-med", func(b *testing.B) { // hash 128 bytes
+			benchmarkOperation(b, "int 32; bzero",
+				"dup; concat; dup; concat;"+hash, "pop; int 1")
+		})
+		b.Run(hash+"-big", func(b *testing.B) { // hash 512 bytes
+			benchmarkOperation(b, "int 32; bzero",
+				"dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
+		})
 	}
 }
 
@@ -3236,39 +3035,6 @@ func BenchmarkSha256Raw(b *testing.B) {
 		t := sha256.Sum256(a)
 		a = t[:]
 	}
-}
-
-func BenchmarkSha256x900(b *testing.B) {
-	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
-	sb := strings.Builder{}
-	sb.WriteString(firstline)
-	for i := 0; i < 900; i++ {
-		sb.WriteString("sha256\n")
-	}
-	sb.WriteString("len\nint 0\n>\n")
-	benchmarkExpensiveProgram(b, sb.String())
-}
-
-func BenchmarkKeccak256x900(b *testing.B) {
-	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
-	sb := strings.Builder{}
-	sb.WriteString(firstline)
-	for i := 0; i < 900; i++ {
-		sb.WriteString("keccak256\n")
-	}
-	sb.WriteString("len\nint 0\n>\n")
-	benchmarkExpensiveProgram(b, sb.String())
-}
-
-func BenchmarkSha512_256x900(b *testing.B) {
-	const firstline = "addr OC6IROKUJ7YCU5NV76AZJEDKYQG33V2CJ7HAPVQ4ENTAGMLIOINSQ6EKGE\n"
-	sb := strings.Builder{}
-	sb.WriteString(firstline)
-	for i := 0; i < 900; i++ {
-		sb.WriteString("sha512_256\n")
-	}
-	sb.WriteString("len\nint 0\n>\n")
-	benchmarkExpensiveProgram(b, sb.String())
 }
 
 func TestEd25519verify(t *testing.T) {
@@ -3348,7 +3114,10 @@ addr %s
 ed25519verify`, pkStr), AssemblerMaxVersion)
 		require.NoError(b, err)
 		programs = append(programs, ops.Program)
-		sig := secret.SignBytes(buffer[:])
+		sig := secret.Sign(Msg{
+			ProgramHash: crypto.HashObj(Program(ops.Program)),
+			Data:        buffer[:],
+		})
 		signatures = append(signatures, sig)
 	}
 
@@ -3422,13 +3191,12 @@ func TestEvalVersions(t *testing.T) {
 txna ApplicationArgs 0
 pop
 `
-	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
+	ops := testProg(t, text, AssemblerMaxVersion)
 
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &transactions.SignedTxn{}
 	ep.Txn.Txn.ApplicationArgs = [][]byte{[]byte("test")}
-	_, err = Eval(ops.Program, ep)
+	_, err := Eval(ops.Program, ep)
 	require.NoError(t, err)
 
 	ep = defaultEvalParamsV1(nil, nil)
@@ -3444,34 +3212,14 @@ pop
 	require.Contains(t, err.Error(), "illegal opcode 0x36") // txna
 }
 
-func TestStepErrors(t *testing.T) {
-	// This test modifies opsByName table, do not run in parallel
-
-	source := `intcblock 0
-intc_0
-intc_0
-+
-`
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-
-	ep := defaultEvalParams(nil, nil)
-
-	origSpec := OpsByName[LogicVersion]["+"]
-	spec := origSpec
-	defer func() {
-		// restore, opsByOpcode is global
-		opsByOpcode[LogicVersion][spec.Opcode] = origSpec
-	}()
-
-	spec.op = func(cx *evalContext) {
-		// overflow
-		cx.stack = make([]stackValue, 2000)
+func TestStackOverflow(t *testing.T) {
+	t.Parallel()
+	source := "int 1; int 2;"
+	for i := 1; i < MaxStackDepth/2; i++ {
+		source += "dup2;"
 	}
-	opsByOpcode[LogicVersion][spec.Opcode] = spec
-	_, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "stack overflow")
+	testAccepts(t, source+"return", 2)
+	testPanics(t, source+"dup2; return", 2)
 }
 
 func TestDup(t *testing.T) {
@@ -3504,24 +3252,9 @@ err
 exit:
 int 1
 `
-	ep := defaultEvalParams(nil, nil)
-
-	ops := testProg(t, text, AssemblerMaxVersion)
-	pass, err := Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-
-	text = `int 1; int 2; dup2; pop; pop; pop`
-	ops = testProg(t, text, AssemblerMaxVersion)
-	pass, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
-
-	text = `int 1; int 2; dup2; pop; pop`
-	ops = testProg(t, text, AssemblerMaxVersion)
-	pass, err = Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.False(t, pass)
+	testAccepts(t, text, 2)
+	testAccepts(t, "int 1; int 2; dup2; pop; pop; pop", 2)
+	testPanics(t, "int 1; int 2; dup2; pop; pop", 2)
 }
 
 func TestStringLiteral(t *testing.T) {
@@ -3531,43 +3264,25 @@ func TestStringLiteral(t *testing.T) {
 byte b64(Zm9vIGJhcg==)
 ==
 `
-	ep := defaultEvalParams(nil, nil)
-
-	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err := Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testAccepts(t, text, 1)
 
 	text = `byte "foo bar // not a comment"
 byte b64(Zm9vIGJhciAvLyBub3QgYSBjb21tZW50)
 ==
 `
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testAccepts(t, text, 1)
 
 	text = `byte ""
 byte 0x
 ==
 `
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testAccepts(t, text, 1)
 
 	text = `byte "" // empty string literal
 byte 0x // empty byte constant
 ==
 `
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	pass, err = Eval(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testAccepts(t, text, 1)
 }
 
 func TestArgType(t *testing.T) {
@@ -3882,7 +3597,8 @@ func obfuscate(program string) string {
 
 type evalTester func(pass bool, err error) bool
 
-func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) {
+func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) error {
+	var outer error
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			if v < introduced {
@@ -3914,10 +3630,15 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					}
 					require.True(t, ok)
 					isNotPanic(t, err) // Never want a Go level panic.
+					if err != nil {
+						// Use wisely. This could probably return any of the concurrent runs' errors.
+						outer = err
+					}
 				})
 			}
 		})
 	}
+	return outer
 }
 
 func testAccepts(t *testing.T, program string, introduced uint64) {
@@ -3931,8 +3652,8 @@ func testRejects(t *testing.T, program string, introduced uint64) {
 		return !pass && err == nil
 	})
 }
-func testPanics(t *testing.T, program string, introduced uint64) {
-	testEvaluation(t, program, introduced, func(pass bool, err error) bool {
+func testPanics(t *testing.T, program string, introduced uint64) error {
+	return testEvaluation(t, program, introduced, func(pass bool, err error) bool {
 		// TEAL panic! not just reject at exit
 		return !pass && err != nil
 	})
@@ -4007,6 +3728,7 @@ func TestBytes(t *testing.T) {
 func TestSwap(t *testing.T) {
 	t.Parallel()
 	testAccepts(t, "int 1; byte 0x1234; swap; int 1; ==; assert; byte 0x1234; ==", 3)
+	testPanics(t, obfuscate("int 1; swap; int 1; return"), 3)
 }
 
 func TestSelect(t *testing.T) {
@@ -4057,7 +3779,6 @@ func TestLoop(t *testing.T) {
 	// Double until > 10. Should be 16
 	testAccepts(t, "int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
 
-	// Why does this label on line with instruction cause trouble?
 	testAccepts(t, "int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", 4)
 
 	// Infinite loop because multiply by one instead of two
@@ -4144,4 +3865,170 @@ main:
 	testPanics(t, "int 1; retsub", 4)
 
 	testPanics(t, "int 1; recur: callsub recur; int 1", 4)
+}
+
+func TestShifts(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 1; int 1; shl; int 2; ==", 4)
+	testAccepts(t, "int 1; int 2; shl; int 4; ==", 4)
+	testAccepts(t, "int 3; int 2; shl; int 12; ==", 4)
+	testAccepts(t, "int 2; int 63; shl; int 0; ==", 4)
+
+	testAccepts(t, "int 1; int 1; shr; int 0; ==", 4)
+	testAccepts(t, "int 1; int 2; shr; int 0; ==", 4)
+	testAccepts(t, "int 3; int 1; shr; int 1; ==", 4)
+	testAccepts(t, "int 96; int 3; shr; int 12; ==", 4)
+	testAccepts(t, "int 8756675; int 63; shr; int 0; ==", 4)
+
+}
+
+func TestSqrt(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 0; sqrt; int 0; ==", 4)
+	testAccepts(t, "int 1; sqrt; int 1; ==", 4)
+	testAccepts(t, "int 2; sqrt; int 1; ==", 4)
+	testAccepts(t, "int 4; sqrt; int 2; ==", 4)
+	testAccepts(t, "int 5; sqrt; int 2; ==", 4)
+
+	testAccepts(t, "int 3735928559; sqrt; int 61122; ==", 4)
+	testAccepts(t, "int 244837814094590; sqrt; int 15647294; ==", 4)
+
+	testAccepts(t, "int 2024; sqrt; int 44; ==", 4)
+	testAccepts(t, "int 2025; sqrt; int 45; ==", 4)
+	testAccepts(t, "int 2026; sqrt; int 45; ==", 4)
+
+	// Largest possible uint64
+	testAccepts(t, "int 18446744073709551615; sqrt; int 4294967295; ==", 4)
+
+	// The actual square of that largest possible sqrt
+	testAccepts(t, "int 18446744065119617025; sqrt; int 4294967295; ==", 4)
+	testAccepts(t, "int 18446744065119617024; sqrt; int 4294967294; ==", 4)
+
+}
+
+func TestExp(t *testing.T) {
+	t.Parallel()
+	testPanics(t, "int 0; int 0; exp; int 1; ==", 4)
+	testAccepts(t, "int 0; int 200; exp; int 0; ==", 4)
+	testAccepts(t, "int 1000; int 0; exp; int 1; ==", 4)
+	testAccepts(t, "int 1; int 2; exp; int 1; ==", 4)
+	testAccepts(t, "int 3; int 1; exp; int 3; ==", 4)
+	testAccepts(t, "int 96; int 3; exp; int 884736; ==", 4)
+	testPanics(t, "int 96; int 15; exp; int 884736; >", 4)
+}
+
+func TestExpw(t *testing.T) {
+	t.Parallel()
+	testPanics(t, "int 0; int 0; expw; int 1; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 0; int 200; expw; int 0; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 1000; int 0; expw; int 1; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 1; int 2; expw; int 1; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 3; int 1; expw; int 3; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 96; int 3; expw; int 884736; ==; assert; int 0; ==", 4)
+	testAccepts(t, "int 64; int 21; expw; pop; pop; int 1", 4) // (2^6)^21 = 2^126
+	testPanics(t, "int 64; int 22; expw; pop; pop; int 1", 4)  // (2^6)^22 = 2^132
+
+	testAccepts(t, "int 97; int 15; expw; int 10271255586529954209; ==; assert; int 34328615749; ==;", 4)
+}
+
+func TestBitLen(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 0; bitlen; int 0; ==", 4)
+	testAccepts(t, "int 1; bitlen; int 1; ==", 4)
+	testAccepts(t, "int 2; bitlen; int 2; ==", 4)
+	testAccepts(t, "int 4; bitlen; int 3; ==", 4)
+	testAccepts(t, "int 5; bitlen; int 3; ==", 4)
+	testAccepts(t, "int 8; bitlen; int 4; ==", 4)
+
+	testAccepts(t, "byte 0x; bitlen; int 0; ==", 4)
+	testAccepts(t, "byte 0x00; bitlen; int 0; ==", 4)
+	testAccepts(t, "byte 0x01; bitlen; int 1; ==", 4)
+	testAccepts(t, "byte 0x02; bitlen; int 2; ==", 4)
+	testAccepts(t, "byte 0x03; bitlen; int 2; ==", 4)
+	testAccepts(t, "byte 0x04; bitlen; int 3; ==", 4)
+	testAccepts(t, "byte 0xf0; bitlen; int 8; ==", 4)
+	testAccepts(t, "byte 0x0100; bitlen; int 9; ==", 4)
+	testAccepts(t, "byte 0x010001000100010001000100010001000100; bitlen; int 137; ==", 4)
+
+}
+
+func TestBytesMath(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "byte 0x01; byte 0x01; b+; byte 0x02; ==", 4)
+	testAccepts(t, "byte 0x01FF; byte 0x01; b+; byte 0x0200; ==", 4)
+
+	effs := strings.Repeat("ff", 64)
+	// 64 byte long inputs are accepted, even if they produce longer outputs
+	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 65; ==", effs), 4)
+	// 65 byte inputs are not ok.
+	testPanics(t, fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs), 4)
+
+	testAccepts(t, `byte 0x01; byte 0x01; b-; byte ""; ==`, 4)
+	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
+	// returns are smallest possible
+	testAccepts(t, "byte 0x0100; byte 0x01; b-; byte 0xFF; ==", 4)
+	testPanics(t, "byte 0x01; byte 0x02; b-; int 1; return", 4)
+
+	testAccepts(t, "byte 0x01; byte 0x01; b/; byte 0x01; ==", 4)
+	testPanics(t, "byte 0x0200; byte b64(); b/; int 1; return", 4)
+	testPanics(t, "byte 0x01; byte 0x00; b/; int 1; return", 4)
+
+	testAccepts(t, "byte 0x10; byte 0x07; b%; byte 0x02; ==; return", 4)
+	testPanics(t, "byte 0x01; byte 0x00; b%; int 1; return", 4)
+
+	// Even 128 byte outputs are ok
+	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x%s; b*; len; int 128; ==", effs, effs), 4)
+}
+
+func TestBytesCompare(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "byte 0x10; byte 0x10; b*; byte 0x0100; ==", 4)
+	testAccepts(t, "byte 0x100000000000; byte 0x00; b*; byte b64(); ==", 4)
+
+	testAccepts(t, "byte 0x10; byte 0x10; b<; !", 4)
+	testAccepts(t, "byte 0x10; byte 0x10; b<=", 4)
+
+	testAccepts(t, "byte 0x11; byte 0x10; b>", 4)
+	testAccepts(t, "byte 0x11; byte 0x0010; b>", 4)
+
+	testAccepts(t, "byte 0x11; byte 0x10; b>=", 4)
+	testAccepts(t, "byte 0x11; byte 0x0011; b>=", 4)
+
+	testAccepts(t, "byte 0x11; byte 0x11; b==", 4)
+	testAccepts(t, "byte 0x0011; byte 0x11; b==", 4)
+	testAccepts(t, "byte 0x11; byte 0x00000000000011; b==", 4)
+
+	testAccepts(t, "byte 0x11; byte 0x00; b!=", 4)
+	testAccepts(t, "byte 0x0011; byte 0x1100; b!=", 4)
+	testPanics(t, obfuscate("byte 0x11; int 17; b!="), 4)
+}
+
+func TestBytesBits(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "byte 0x11; byte 0x10; b|; byte 0x11; ==", 4)
+	testAccepts(t, "byte 0x01; byte 0x10; b|; byte 0x11; ==", 4)
+	testAccepts(t, "byte 0x0201; byte 0x10f1; b|; byte 0x12f1; ==", 4)
+	testAccepts(t, "byte 0x0001; byte 0x00f1; b|; byte 0x00f1; ==", 4)
+
+	testAccepts(t, "byte 0x11; byte 0x10; b&; byte 0x10; ==", 4)
+	testAccepts(t, "byte 0x01; byte 0x10; b&; byte 0x00; ==", 4)
+	testAccepts(t, "byte 0x0201; byte 0x10f1; b&; byte 0x0001; ==", 4)
+	testAccepts(t, "byte 0x01; byte 0x00f1; b&; byte 0x0001; ==", 4)
+
+	testAccepts(t, "byte 0x11; byte 0x10; b^; byte 0x01; ==", 4)
+	testAccepts(t, "byte 0x01; byte 0x10; b^; byte 0x11; ==", 4)
+	testAccepts(t, "byte 0x0201; byte 0x10f1; b^; byte 0x12f0; ==", 4)
+	testAccepts(t, "byte 0x0001; byte 0xf1; b^; byte 0x00f0; ==", 4)
+
+	testAccepts(t, "byte 0x0001; b~; byte 0xfffe; ==", 4)
+	testAccepts(t, "byte 0x; b~; byte 0x; ==", 4)
+	testAccepts(t, "byte 0xf001; b~; byte 0x0ffe; ==", 4)
+
+	testAccepts(t, "int 3; bzero; byte 0x000000; ==", 4)
+	testAccepts(t, "int 33; bzero; byte 0x000000000000000000000000000000000000000000000000000000000000000000; ==", 4)
+}
+
+func TestBytesConversions(t *testing.T) {
+	testAccepts(t, "byte 0x11; byte 0x10; b+; btoi; int 0x21; ==", 4)
+	testAccepts(t, "byte 0x0011; byte 0x10; b+; btoi; int 0x21; ==", 4)
 }

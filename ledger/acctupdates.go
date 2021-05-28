@@ -1144,6 +1144,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		au.roundTotals = []ledgercore.AccountTotals{totals}
 		return nil
 	})
+
 	ledgerAccountsinitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return
@@ -1156,7 +1157,6 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 
 	au.accountsq, err = accountsDbInit(au.dbs.Rdb.Handle, au.dbs.Wdb.Handle)
-
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
 	if err != nil {
 		return
@@ -1186,7 +1186,6 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 
 	lastBalancesRound = au.dbRound
 	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
-
 	return
 }
 
@@ -1222,37 +1221,39 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 
 	if dbVersion < accountDBVersion {
 		au.log.Infof("accountsInitialize upgrading database schema from version %d to version %d", dbVersion, accountDBVersion)
-
+		// newDatabase is determined during the tables creations. If we're filling the database with accounts,
+		// then we set this variable to true, allowing some of the upgrades to be skipped.
+		var newDatabase bool
 		for dbVersion < accountDBVersion {
 			au.log.Infof("accountsInitialize performing upgrade from version %d", dbVersion)
 			// perform the initialization/upgrade
 			switch dbVersion {
 			case 0:
-				dbVersion, err = au.upgradeDatabaseSchema0(ctx, tx)
+				dbVersion, newDatabase, err = au.upgradeDatabaseSchema0(ctx, tx)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 0 : %v", err)
 					return 0, err
 				}
 			case 1:
-				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx)
+				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return 0, err
 				}
 			case 2:
-				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx)
+				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
 					return 0, err
 				}
 			case 3:
-				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx)
+				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
 			case 4:
-				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx)
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
 					return 0, err
@@ -1397,17 +1398,17 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 // The accounttotals would get initialized to align with the initialization account added to accountbase
 // The acctrounds would get updated to indicate that the balance matches round 0
 //
-func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, newDatabase bool, err error) {
 	au.log.Infof("accountsInitialize initializing schema")
-	err = accountsInit(tx, au.initAccounts, au.initProto)
+	newDatabase, err = accountsInit(tx, au.initAccounts, au.initProto)
 	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to initialize schema : %v", err)
+		return 0, newDatabase, fmt.Errorf("accountsInitialize unable to initialize schema : %v", err)
 	}
 	_, err = db.SetUserVersion(ctx, tx, 1)
 	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 0 to 1: %v", err)
+		return 0, newDatabase, fmt.Errorf("accountsInitialize unable to update database schema version from 0 to 1: %v", err)
 	}
-	return 1, nil
+	return 1, newDatabase, nil
 }
 
 // upgradeDatabaseSchema1 upgrades the database schema from version 1 to version 2
@@ -1426,10 +1427,15 @@ func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx
 // This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
 // a functional update to it's content.
 //
-func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
+	var modifiedAccounts uint
+	if newDatabase {
+		goto schemaUpdateComplete
+	}
+
 	// update accounts encoding.
 	au.log.Infof("accountsInitialize verifying accounts data encoding")
-	modifiedAccounts, err := reencodeAccounts(ctx, tx)
+	modifiedAccounts, err = reencodeAccounts(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
@@ -1471,6 +1477,7 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 		au.log.Infof("accountsInitialize found that no accounts needed to be reencoded")
 	}
 
+schemaUpdateComplete:
 	// update version
 	_, err = db.SetUserVersion(ctx, tx, 2)
 	if err != nil {
@@ -1485,8 +1492,10 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 // If the user has already specified the OptimizeAccountsDatabaseOnStartup flag in the configuration file, this
 // step becomes a no-op.
 //
-func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
-	au.vacuumOnStartup = true
+func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
+	if !newDatabase {
+		au.vacuumOnStartup = true
+	}
 
 	// update version
 	_, err = db.SetUserVersion(ctx, tx, 3)
@@ -1498,7 +1507,7 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 
 // upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
 // adding the normalizedonlinebalance column to the accountbase table.
-func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
 	err = accountsAddNormalizedBalance(tx, au.ledger.GenesisProto())
 	if err != nil {
 		return 0, err
@@ -1514,10 +1523,16 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 
 // upgradeDatabaseSchema4 does not change the schema but migrates data:
 // remove empty AccountData entries from accountbase table
-func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
-
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
 	queryAddresses := au.catchpointInterval != 0
-	numDeleted, addresses, err := removeEmptyAccountData(tx, queryAddresses)
+	var numDeleted int64
+	var addresses []basics.Address
+
+	if newDatabase {
+		goto done
+	}
+
+	numDeleted, addresses, err = removeEmptyAccountData(tx, queryAddresses)
 	if err != nil {
 		return 0, err
 	}
