@@ -3474,7 +3474,8 @@ func TestStackValues(t *testing.T) {
 func TestEvalVersions(t *testing.T) {
 	t.Parallel()
 
-	text := `int 1
+	text := `intcblock 1
+intc_0
 txna ApplicationArgs 0
 pop
 `
