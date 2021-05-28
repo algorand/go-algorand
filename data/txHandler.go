@@ -343,7 +343,7 @@ func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []transactio
 		}
 		remainedTxnsGroupOffset++
 	}
-	return unverifiedTxGroups[:remainedTxnsGroupOffset+1], nonDuplicatedFilteredGroups
+	return unverifiedTxGroups[:remainedTxnsGroupOffset], nonDuplicatedFilteredGroups
 }
 
 // processDecodedArray receives a slice of transaction groups and attempt to add them to the transaction pool.
