@@ -379,11 +379,11 @@ func (rt *RequestTracker) Close() error {
 	return rt.listener.Close()
 }
 
-func (rt *RequestTracker) getWaitUntilNoConnectionsChannel(checkInterval time.Duration) <-chan struct{}{
+func (rt *RequestTracker) getWaitUntilNoConnectionsChannel(checkInterval time.Duration) <-chan struct{} {
 	done := make(chan struct{})
 
 	go func() {
-		checkEmpty := func (rt *RequestTracker) bool {
+		checkEmpty := func(rt *RequestTracker) bool {
 			rt.httpConnectionsMu.Lock()
 			defer rt.httpConnectionsMu.Unlock()
 			return len(rt.httpConnections) == 0
