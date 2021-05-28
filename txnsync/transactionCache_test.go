@@ -25,7 +25,7 @@ import (
 
 func TestTransactionCache(t *testing.T) {
 	var txid transactions.Txid
-	a := makeTransactionCache(5)
+	a := makeTransactionCache(5, 10, 20)
 	// add 5
 	for i := 0; i < 5; i++ {
 		txid[0] = byte(i)

@@ -17,49 +17,167 @@
 package txnsync
 
 import (
+	"sort"
+
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
-// transactionCache is a cache of recently accessed transactions ids, allowing to limit the size of the historical kept transactions.
+const cachedEntriesPerMap = 917
+
+// transactionCache is a cache of recently sent transactions ids, allowing to limit the size of the historical kept transactions.
 // transactionCache has FIFO replacement.
 // implementation is a simple cyclic-buffer with a map to accelerate lookups.
+// internally, it's being manages as two tier cache, where the long-term cache is bigger and requires acknowledgements.
 type transactionCache struct {
+	shortTermCache  shortTermTransactionCache
+	longTermCache   longTermTransactionCache
+	ackPendingTxids []ackPendingTxids
+}
+
+type ackPendingTxids struct {
+	txids []transactions.Txid
+	seq   uint64
+}
+
+type shortTermTransactionCache struct {
 	size            int
 	transactionsIDs []transactions.Txid
 	transactionsMap map[transactions.Txid]bool
 	oldest          int
 }
 
-func makeTransactionCache(size int) *transactionCache {
-	return &transactionCache{
-		size:            size,
-		transactionsIDs: make([]transactions.Txid, size, size),
-		transactionsMap: make(map[transactions.Txid]bool, size),
+type longTermTransactionCache struct {
+	current         int
+	transactionsMap []map[transactions.Txid]bool
+}
+
+func makeTransactionCache(shortTermSize, longTermSize, pendingAckTxids int) *transactionCache {
+	txnCache := &transactionCache{
+		shortTermCache: shortTermTransactionCache{
+			size:            shortTermSize,
+			transactionsIDs: make([]transactions.Txid, shortTermSize, shortTermSize),
+			transactionsMap: make(map[transactions.Txid]bool, shortTermSize),
+		},
+		ackPendingTxids: make([]ackPendingTxids, 0, pendingAckTxids),
+		longTermCache: longTermTransactionCache{
+			transactionsMap: make([]map[transactions.Txid]bool, longTermSize/cachedEntriesPerMap),
+		},
 	}
+	for i := range txnCache.longTermCache.transactionsMap {
+		txnCache.longTermCache.transactionsMap[i] = make(map[transactions.Txid]bool, cachedEntriesPerMap)
+	}
+	return txnCache
 }
 
 func (lru *transactionCache) add(txid transactions.Txid) {
-	if lru.transactionsMap[txid] {
-		return
+	lru.shortTermCache.add(txid)
+}
+
+func (lru *transactionCache) addSlice(txids []transactions.Txid, msgSeq uint64) {
+	for _, txid := range txids {
+		lru.shortTermCache.add(txid)
 	}
-	mapLen := len(lru.transactionsMap)
-	if mapLen >= lru.size {
-		// we reached size, delete the oldest entry.
-		delete(lru.transactionsMap, lru.transactionsIDs[lru.oldest])
-		lru.transactionsIDs[lru.oldest] = txid
-		lru.transactionsMap[txid] = true
-		lru.oldest = (lru.oldest + 1) % lru.size
-		return
+	// verify that the new msgSeq is bigger than the previous we have.
+	if len(lru.ackPendingTxids) > 0 {
+		if lru.ackPendingTxids[len(lru.ackPendingTxids)-1].seq >= msgSeq {
+			return
+		}
 	}
-	lru.transactionsIDs[mapLen] = txid
-	lru.transactionsMap[txid] = true
+
+	if len(lru.ackPendingTxids) == cap(lru.ackPendingTxids) {
+		lru.ackPendingTxids = append(lru.ackPendingTxids[1:], ackPendingTxids{txids: txids, seq: msgSeq})
+	} else {
+		lru.ackPendingTxids = append(lru.ackPendingTxids, ackPendingTxids{txids: txids, seq: msgSeq})
+	}
 }
 
 func (lru *transactionCache) contained(txid transactions.Txid) bool {
-	return lru.transactionsMap[txid]
+	return lru.shortTermCache.contained(txid) || lru.longTermCache.contained(txid)
 }
 
 func (lru *transactionCache) reset() {
-	lru.transactionsMap = make(map[transactions.Txid]bool, lru.size)
-	lru.oldest = 0
+	lru.shortTermCache.reset()
+}
+
+func (lru *transactionCache) acknowledge(seqs []uint64) {
+	for _, seq := range seqs {
+		i := sort.Search(len(lru.ackPendingTxids), func(i int) bool {
+			return lru.ackPendingTxids[i].seq >= seq
+		})
+		if i == len(lru.ackPendingTxids) {
+			continue
+		}
+		lru.longTermCache.add(lru.ackPendingTxids[i].txids)
+		lru.ackPendingTxids = append(lru.ackPendingTxids[:i], lru.ackPendingTxids[i+1:]...)
+	}
+}
+
+func (st *shortTermTransactionCache) add(txid transactions.Txid) {
+	if st.transactionsMap[txid] {
+		return
+	}
+	mapLen := len(st.transactionsMap)
+	if mapLen >= st.size {
+		// we reached size, delete the oldest entry.
+		delete(st.transactionsMap, st.transactionsIDs[st.oldest])
+		st.transactionsIDs[st.oldest] = txid
+		st.transactionsMap[txid] = true
+		st.oldest = (st.oldest + 1) % st.size
+		return
+	}
+	st.transactionsIDs[mapLen] = txid
+	st.transactionsMap[txid] = true
+}
+
+func (st *shortTermTransactionCache) contained(txid transactions.Txid) bool {
+	return st.transactionsMap[txid]
+}
+
+func (st *shortTermTransactionCache) reset() {
+	st.transactionsMap = make(map[transactions.Txid]bool, st.size)
+	st.oldest = 0
+}
+
+func (lt *longTermTransactionCache) contained(txid transactions.Txid) bool {
+	for i := lt.current; i >= 0; i-- {
+		if lt.transactionsMap[i][txid] {
+			return true
+		}
+	}
+	for i := len(lt.transactionsMap) - 1; i > lt.current; i-- {
+		if lt.transactionsMap[i][txid] {
+			return true
+		}
+	}
+	return false
+}
+
+func (lt *longTermTransactionCache) add(slice []transactions.Txid) {
+	if len(lt.transactionsMap[lt.current])+len(slice) < cachedEntriesPerMap {
+		// just add them all.
+		for _, txid := range slice {
+			lt.transactionsMap[lt.current][txid] = true
+		}
+		return
+	}
+
+	// otherwise, add as many as we can fit -
+	availableEntries := cachedEntriesPerMap - len(lt.transactionsMap[lt.current])
+	for i := 0; i < availableEntries; i++ {
+		lt.transactionsMap[lt.current][slice[i]] = true
+	}
+
+	// remove the ones we've alread added from the slice.
+	slice = slice[availableEntries:]
+
+	// move to the next map.
+	lt.current = (lt.current + len(lt.transactionsMap)) % len(lt.transactionsMap)
+
+	// if full, reset bucket.
+	if len(lt.transactionsMap[lt.current]) >= cachedEntriesPerMap {
+		// reset.
+		lt.transactionsMap[lt.current] = make(map[transactions.Txid]bool, cachedEntriesPerMap)
+	}
+	// recursive call with the remainder of the slice.
+	lt.add(slice)
 }

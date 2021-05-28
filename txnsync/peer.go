@@ -34,11 +34,13 @@ type peersOps int
 type messageConstructionOps int
 
 const maxIncomingBloomFilterHistory = 20
-const recentTransactionsSentBufferLength = 10000
+const shortTermRecentTransactionsSentBufferLength = 5000
+const longTermRecentTransactionsSentBufferLength = 15000
 const minDataExchangeRateThreshold = 100 * 1024            // 100KB/s, which is ~0.8Mbps
 const maxDataExchangeRateThreshold = 100 * 1024 * 1024 / 8 // 100Mbps
 const defaultDataExchangeRate = minDataExchangeRateThreshold
 const defaultRelayToRelayDataExchangeRate = 10 * 1024 * 1024 / 8 // 10Mbps
+const pendingUnconfirmedRemoteMessages = 20
 
 const (
 	// peerStateStartup is before the timeout for the sending the first message to the peer has reached.
@@ -155,7 +157,7 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *
 	p := &Peer{
 		networkPeer:                networkPeer,
 		isOutgoing:                 isOutgoing,
-		recentSentTransactions:     makeTransactionCache(recentTransactionsSentBufferLength),
+		recentSentTransactions:     makeTransactionCache(shortTermRecentTransactionsSentBufferLength, longTermRecentTransactionsSentBufferLength, pendingUnconfirmedRemoteMessages),
 		dataExchangeRate:           defaultDataExchangeRate,
 		transactionPoolAckCh:       make(chan uint64, maxAcceptedMsgSeq),
 		transactionPoolAckMessages: make([]uint64, 0, maxAcceptedMsgSeq),
@@ -315,9 +317,7 @@ func (p *Peer) getLocalRequestParams() (offset, modulator byte) {
 
 // update the peer once the message was sent successfully.
 func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs []transactions.Txid, timestamp time.Duration, sequenceNumber uint64, messageSize int, filter bloomFilter) {
-	for _, txid := range selectedTxnIDs {
-		p.recentSentTransactions.add(txid)
-	}
+	p.recentSentTransactions.addSlice(selectedTxnIDs, sequenceNumber)
 	p.lastSentMessageSequenceNumber = sequenceNumber
 	p.lastSentMessageRound = txMsg.Round
 	p.lastSentMessageTimestamp = timestamp
@@ -430,6 +430,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 	p.lastReceivedMessageTimestamp = currentTime
 	p.lastReceivedMessageSize = incomingMessageSize
 	p.lastReceivedMessageNextMsgMinDelay = time.Duration(timings.NextMsgMinDelay) * time.Nanosecond
+	p.recentSentTransactions.acknowledge(timings.AcceptedMsgSeq)
 }
 
 // advancePeerState is called when a peer schedule arrives, before we're doing any operation.
