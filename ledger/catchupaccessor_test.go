@@ -131,3 +131,22 @@ func BenchmarkRestoringFromCatchpointFile(b *testing.B) {
 		})
 	}
 }
+
+func TestCatchupAcessorFoo(t *testing.T) {
+	log := logging.TestingLog(t)
+	dbBaseFileName := t.Name()
+	const inMem = true
+	genesisInitState, _ /* initKeys */ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer func() {
+		l.Close()
+	}()
+	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
+	catchpointAccessor.ResetStagingBalances(context.Background(), true)
+
+	state, err := catchpointAccessor.GetState(context.Background())
+	require.NoError(t, err, "catchpointAccessor.GetState")
+	t.Logf("catchpoint state %#v", state)
+}
