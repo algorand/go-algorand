@@ -150,12 +150,9 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *
 		recentSentTransactions: makeTransactionCache(recentTransactionsSentBufferLength),
 		dataExchangeRate:       defaultDataExchangeRate,
 	}
-	if isOutgoing {
-		// outgoing implies it's a relay, which means that it would want to receive all messages.
+	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
-		if isLocalNodeRelay {
-			p.dataExchangeRate = defaultRelayToRelayDataExchangeRate
-		}
+		p.dataExchangeRate = defaultRelayToRelayDataExchangeRate
 	}
 	return p
 }
@@ -474,6 +471,12 @@ func (p *Peer) advancePeerState(currenTime time.Duration, isRelay bool) (ops pee
 	return
 }
 
+// getMessageConstructionOps constructs the messageConstructionOps that would be needed when
+// sending a message back to the peer. The two arguments are:
+// - isRelay defines whether the local node is a relay.
+// - fetchTransactions defines whether the local node is interested in receiving transactions from
+//   the peer ( this is essentially allow us to skip receiving transactions for non-relays that aren't going
+//   to make any proposals )
 func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (ops messageConstructionOps) {
 	// on outgoing peers of relays, we want have some custom logic.
 	if isRelay {
@@ -485,9 +488,11 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 				ops |= messageConstTransactions
 			}
 		} else {
-			ops |= messageConstTransactions
-			if p.nextStateTimestamp == 0 {
-				ops |= messageConstBloomFilter
+			if p.requestedTransactionsModulator != 0 {
+				ops |= messageConstTransactions
+				if p.nextStateTimestamp == 0 {
+					ops |= messageConstBloomFilter
+				}
 			}
 			if p.nextStateTimestamp == 0 {
 				ops |= messageConstNextMinDelay
@@ -495,7 +500,7 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 		}
 		ops |= messageConstUpdateRequestParams
 	} else {
-		ops |= messageConstTransactions
+		ops |= messageConstTransactions // send transactions to the other peer
 		if fetchTransactions {
 			if p.localTransactionsModulator == 1 {
 				// special optimization if we have just one relay that we're connected to:
