@@ -599,6 +599,50 @@ func TestDivModw(t *testing.T) {
 	               pop; pop; pop; pop; int 1`, 4)
 }
 
+func TestWideMath(t *testing.T) {
+	// 2^64 = 18446744073709551616, we use a bunch of numbers close to that below
+	pattern := `
+int %d
+dup
+store 0
+int %d
+dup
+store 1
+mulw
+// add one less than the first number
+load 0
+int 1
+-
+addw
+// stack is now [high word, carry bit, low word]
+store 2
++				// combine carry and high
+load 2
+// now divmodw by the 1st given number (widened)
+int 0
+load 0
+divmodw
+// remainder should be one less that first number
+load 0; int 1; -;  ==; assert
+int 0; ==; assert		// (upper word)
+// then the 2nd given number is left (widened)
+load 1; ==; assert
+int 0; ==; assert
+// succeed
+int 1
+`
+
+	testAccepts(t, fmt.Sprintf(pattern, 1000, 8192378), 4)
+	testAccepts(t, fmt.Sprintf(pattern, 1082734200, 8192378), 4)
+	testAccepts(t, fmt.Sprintf(pattern, 1000, 8129387292378), 4)
+	testAccepts(t, fmt.Sprintf(pattern, 10278362800, 8192378), 4)
+	for i := 1; i < 100; i++ {
+		for j := 1; i < 100; i++ {
+			testAccepts(t, fmt.Sprintf(pattern, i+j<<40, (i*j)<<40+j), 4)
+		}
+	}
+}
+
 func TestDivZero(t *testing.T) {
 	t.Parallel()
 	testPanics(t, "int 0x11; int 0; /; pop; int 1", 1)
@@ -2952,23 +2996,17 @@ func BenchmarkBigMath(b *testing.B) {
 }
 
 func BenchmarkHash(b *testing.B) {
-	hashes := []string{"sha256", "keccak256", "sha512_256"}
-	for _, hash := range hashes {
+	for _, hash := range []string{"sha256", "keccak256", "sha512_256"} {
 		b.Run(hash+"-small", func(b *testing.B) { // hash 32 bytes
-			benchmarkOperation(b, "byte 0x1234567890", hash,
-				"pop; int 1")
+			benchmarkOperation(b, "int 32; bzero", hash, "pop; int 1")
 		})
-	}
-	for _, hash := range hashes {
 		b.Run(hash+"-med", func(b *testing.B) { // hash 128 bytes
-			benchmarkOperation(b, "byte 0x1234567890",
-				hash+"; dup; concat; dup; concat", "pop; int 1")
+			benchmarkOperation(b, "int 32; bzero",
+				"dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
-	}
-	for _, hash := range hashes {
 		b.Run(hash+"-big", func(b *testing.B) { // hash 512 bytes
-			benchmarkOperation(b, "byte 0x1234567890",
-				hash+"; dup; concat; dup; concat; dup; concat; dup; concat", "pop; int 1")
+			benchmarkOperation(b, "int 32; bzero",
+				"dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
 	}
 }
@@ -3987,6 +4025,7 @@ func TestBytesBits(t *testing.T) {
 	testAccepts(t, "byte 0xf001; b~; byte 0x0ffe; ==", 4)
 
 	testAccepts(t, "int 3; bzero; byte 0x000000; ==", 4)
+	testAccepts(t, "int 33; bzero; byte 0x000000000000000000000000000000000000000000000000000000000000000000; ==", 4)
 }
 
 func TestBytesConversions(t *testing.T) {
