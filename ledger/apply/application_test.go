@@ -81,6 +81,9 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 
 	ac.ClearStateProgram = nil
 	a.True(ac.Empty())
+
+	ac.ExtraProgramPages = 0
+	a.True(ac.Empty())
 }
 
 func getRandomAddress(a *require.Assertions) basics.Address {
@@ -531,6 +534,13 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Equal(basics.StateSchema{}, br.AppParams[appIdx].LocalStateSchema)
 	a.Equal(basics.StateSchema{NumUint: 1}, br.TotalAppSchema)
 	a.Equal(basics.StateSchema{}, br.AppParams[appIdx].LocalStateSchema)
+
+	ac.ExtraProgramPages = 1
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	br = b.putWithBalances[creator]
+	a.Equal(uint32(1), br.AppParams[appIdx].ExtraProgramPages)
+	a.Equal(uint32(1), br.TotalExtraAppPages)
 }
 
 // TestAppCallApplyCreateOptIn checks balance record fields without tracking substages
@@ -1017,6 +1027,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(uint32(0), br.TotalExtraAppPages)
 }
 
 func TestAppCallApplyCreateClearState(t *testing.T) {

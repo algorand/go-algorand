@@ -1308,6 +1308,17 @@ assert
 int 1
 `
 
+const testTxnProgramTextV4 = testTxnProgramTextV3 + `
+assert
+txn AppProgramExtraPages
+int 2
+==
+assert
+
+
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1384,13 +1395,14 @@ func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
 	txgroup[1].Txn.LastValid = 1066
 	txgroup[1].Txn.Sender = txn.Txn.Receiver
 	txgroup[1].Txn.Receiver = txn.Txn.Sender
+	txgroup[1].Txn.ExtraProgramPages = 2
 	return txgroup
 }
 
 func TestTxn(t *testing.T) {
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV3, txnField) {
+		if !strings.Contains(testTxnProgramTextV4, txnField) {
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
@@ -1401,6 +1413,7 @@ func TestTxn(t *testing.T) {
 		1: testTxnProgramTextV1,
 		2: testTxnProgramTextV2,
 		3: testTxnProgramTextV3,
+		4: testTxnProgramTextV4,
 	}
 
 	clearOps := testProg(t, "int 1", 1)
@@ -1414,6 +1427,7 @@ func TestTxn(t *testing.T) {
 			txn.Txn.ApprovalProgram = ops.Program
 			txn.Txn.ClearStateProgram = clearOps.Program
 			txn.Lsig.Logic = ops.Program
+			txn.Txn.ExtraProgramPages = 2
 			// RekeyTo not allowed in TEAL v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
@@ -1574,7 +1588,7 @@ int 2
 &&
 `
 
-	gtxnText := gtxnTextV1 + `gtxna 0 ApplicationArgs 0
+	gtxnTextV2 := gtxnTextV1 + `gtxna 0 ApplicationArgs 0
 byte 0x706179
 ==
 &&
@@ -1591,10 +1605,20 @@ int 1
 ==
 &&
 `
+	gtxnText := gtxnTextV2 + ` gtxn 0 AppProgramExtraPages
+int 0
+==
+&&
+gtxn 1 AppProgramExtraPages
+int 2
+==
+&&
+`
 
 	tests := map[uint64]string{
 		1: gtxnTextV1,
-		2: gtxnText,
+		2: gtxnTextV2,
+		4: gtxnText,
 	}
 
 	for v, source := range tests {
