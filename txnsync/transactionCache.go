@@ -153,31 +153,31 @@ func (lt *longTermTransactionCache) contained(txid transactions.Txid) bool {
 }
 
 func (lt *longTermTransactionCache) add(slice []transactions.Txid) {
-	if len(lt.transactionsMap[lt.current])+len(slice) < cachedEntriesPerMap {
-		// just add them all.
-		for _, txid := range slice {
-			lt.transactionsMap[lt.current][txid] = true
+	for {
+		availableEntries := cachedEntriesPerMap - len(lt.transactionsMap[lt.current])
+		if len(slice) <= availableEntries {
+			// just add them all.
+			for _, txid := range slice {
+				lt.transactionsMap[lt.current][txid] = true
+			}
+			return
 		}
-		return
+
+		// otherwise, add as many as we can fit -
+		for i := 0; i < availableEntries; i++ {
+			lt.transactionsMap[lt.current][slice[i]] = true
+		}
+
+		// remove the ones we've alread added from the slice.
+		slice = slice[availableEntries:]
+
+		// move to the next map.
+		lt.current = (lt.current + 1) % len(lt.transactionsMap)
+
+		// if full, reset bucket.
+		if len(lt.transactionsMap[lt.current]) >= cachedEntriesPerMap {
+			// reset.
+			lt.transactionsMap[lt.current] = make(map[transactions.Txid]bool, cachedEntriesPerMap)
+		}
 	}
-
-	// otherwise, add as many as we can fit -
-	availableEntries := cachedEntriesPerMap - len(lt.transactionsMap[lt.current])
-	for i := 0; i < availableEntries; i++ {
-		lt.transactionsMap[lt.current][slice[i]] = true
-	}
-
-	// remove the ones we've alread added from the slice.
-	slice = slice[availableEntries:]
-
-	// move to the next map.
-	lt.current = (lt.current + len(lt.transactionsMap)) % len(lt.transactionsMap)
-
-	// if full, reset bucket.
-	if len(lt.transactionsMap[lt.current]) >= cachedEntriesPerMap {
-		// reset.
-		lt.transactionsMap[lt.current] = make(map[transactions.Txid]bool, cachedEntriesPerMap)
-	}
-	// recursive call with the remainder of the slice.
-	lt.add(slice)
 }
