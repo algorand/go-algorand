@@ -421,7 +421,6 @@ func TestMultisigSignProgram(t *testing.T) {
 	err = protocol.Decode(resp3.Multisig, &msig)
 	a.NoError(err)
 
-	ok, err := crypto.MultisigVerify(logic.Program(program), crypto.Digest(msigAddr), msig)
+	err = crypto.MultisigVerify(logic.Program(program), crypto.Digest(msigAddr), msig)
 	a.NoError(err)
-	a.True(ok)
 }
