@@ -3,6 +3,7 @@ module github.com/algorand/go-algorand
 go 1.14
 
 require (
+	filippo.io/edwards25519 v1.0.0-rc.1
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.2.1
 	github.com/algorand/graphtrace v0.0.0-20201117160756-e524ed1a6f64

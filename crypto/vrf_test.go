@@ -32,6 +32,7 @@ func mustDecode(t *testing.T, out []byte, hexIn string) {
 }
 
 func testVector(t *testing.T, skHex, pkHex, alphaHex, piHex, betaHex string) {
+	t.Helper()
 	var seed [32]byte
 	// our "secret keys" are 64 bytes: the spec's 32-byte "secret keys" (which we call the "seed") followed by the 32-byte precomputed public key
 	// so the 32-byte "SK" in the test vectors is not directly decoded into a VrfPrivkey, it instead has to go through VrfKeypairFromSeed()
@@ -97,17 +98,18 @@ func BenchmarkVrfVerify(b *testing.B) {
 	strs := make([][]byte, b.N)
 	proofs := make([]VrfProof, b.N)
 	for i := 0; i < b.N; i++ {
+		validPoint := false
 		var sk VrfPrivkey
-		pks[i], sk = VrfKeygen()
-		strs[i] = make([]byte, 100)
-		_, err := rand.Read(strs[i])
-		if err != nil {
-			panic(err)
-		}
-		var ok bool
-		proofs[i], ok = sk.proveBytes(strs[i])
-		if !ok {
-			panic("Failed to construct VRF proof")
+		for !validPoint {
+			pks[i], sk = VrfKeygen()
+			strs[i] = make([]byte, 100)
+			_, err := rand.Read(strs[i])
+			if err != nil {
+				panic(err)
+			}
+			var ok bool
+			proofs[i], ok = sk.proveBytesGo(strs[i])
+			validPoint = ok == true
 		}
 	}
 
