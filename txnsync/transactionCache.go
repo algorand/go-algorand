@@ -60,7 +60,7 @@ func makeTransactionCache(shortTermSize, longTermSize, pendingAckTxids int) *tra
 		},
 		ackPendingTxids: make([]ackPendingTxids, 0, pendingAckTxids),
 		longTermCache: longTermTransactionCache{
-			transactionsMap: make([]map[transactions.Txid]bool, longTermSize/cachedEntriesPerMap),
+			transactionsMap: make([]map[transactions.Txid]bool, (longTermSize+cachedEntriesPerMap-1)/cachedEntriesPerMap),
 		},
 	}
 	for i := range txnCache.longTermCache.transactionsMap {
@@ -85,6 +85,8 @@ func (lru *transactionCache) addSlice(txids []transactions.Txid, msgSeq uint64) 
 	}
 
 	if len(lru.ackPendingTxids) == cap(lru.ackPendingTxids) {
+		// clear out the entry at lru.ackPendingTxids[0] so that the GC could reclaim it.
+		lru.ackPendingTxids[0] = ackPendingTxids{}
 		lru.ackPendingTxids = append(lru.ackPendingTxids[1:], ackPendingTxids{txids: txids, seq: msgSeq})
 	} else {
 		lru.ackPendingTxids = append(lru.ackPendingTxids, ackPendingTxids{txids: txids, seq: msgSeq})
@@ -104,10 +106,14 @@ func (lru *transactionCache) acknowledge(seqs []uint64) {
 		i := sort.Search(len(lru.ackPendingTxids), func(i int) bool {
 			return lru.ackPendingTxids[i].seq >= seq
 		})
-		if i == len(lru.ackPendingTxids) {
+		// if not found, skip it.
+		if i >= len(lru.ackPendingTxids) || seq != lru.ackPendingTxids[i].seq {
 			continue
 		}
 		lru.longTermCache.add(lru.ackPendingTxids[i].txids)
+		// clear out the entry at lru.ackPendingTxids[i] so that the GC could reclaim it.
+		lru.ackPendingTxids[i] = ackPendingTxids{}
+		// and delete the entry from the array
 		lru.ackPendingTxids = append(lru.ackPendingTxids[:i], lru.ackPendingTxids[i+1:]...)
 	}
 }
