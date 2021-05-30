@@ -422,7 +422,6 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 }
 
 func TestOnSwitchToUnSupportedProtocol(t *testing.T) {
-	t.Skip("This test is flacky and need to be fixed.")
 
 	// Test the interruption in the initial loop
 	// This cannot happen in practice, but is used to test the code.
@@ -535,7 +534,8 @@ func helperTestOnSwitchToUnSupportedProtocol(
 	config := defaultConfig
 	config.CatchupParallelBlocks = 2
 
-	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{}) //mRemote.blocks[0])
+	block1 := mRemote.blocks[1]
+	remote, _, blk, err := buildTestLedger(t, block1)
 	if err != nil {
 		t.Fatal(err)
 		return local, remote
