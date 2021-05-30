@@ -317,7 +317,7 @@ func (p *Peer) getLocalRequestParams() (offset, modulator byte) {
 
 // update the peer once the message was sent successfully.
 func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs []transactions.Txid, timestamp time.Duration, sequenceNumber uint64, messageSize int, filter bloomFilter) {
-	p.recentSentTransactions.addSlice(selectedTxnIDs, sequenceNumber)
+	p.recentSentTransactions.addSlice(selectedTxnIDs, sequenceNumber, timestamp)
 	p.lastSentMessageSequenceNumber = sequenceNumber
 	p.lastSentMessageRound = txMsg.Round
 	p.lastSentMessageTimestamp = timestamp

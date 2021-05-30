@@ -18,11 +18,13 @@ package txnsync
 
 import (
 	"sort"
+	"time"
 
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
 const cachedEntriesPerMap = 917
+const cacheHistoryDuration = 10 * time.Second
 
 // transactionCache is a cache of recently sent transactions ids, allowing to limit the size of the historical kept transactions.
 // transactionCache has FIFO replacement.
@@ -35,8 +37,9 @@ type transactionCache struct {
 }
 
 type ackPendingTxids struct {
-	txids []transactions.Txid
-	seq   uint64
+	txids     []transactions.Txid
+	seq       uint64
+	timestamp time.Duration
 }
 
 type shortTermTransactionCache struct {
@@ -49,6 +52,7 @@ type shortTermTransactionCache struct {
 type longTermTransactionCache struct {
 	current         int
 	transactionsMap []map[transactions.Txid]bool
+	timestamps      []time.Duration
 }
 
 func makeTransactionCache(shortTermSize, longTermSize, pendingAckTxids int) *transactionCache {
@@ -61,6 +65,7 @@ func makeTransactionCache(shortTermSize, longTermSize, pendingAckTxids int) *tra
 		ackPendingTxids: make([]ackPendingTxids, 0, pendingAckTxids),
 		longTermCache: longTermTransactionCache{
 			transactionsMap: make([]map[transactions.Txid]bool, (longTermSize+cachedEntriesPerMap-1)/cachedEntriesPerMap),
+			timestamps:      make([]time.Duration, (longTermSize+cachedEntriesPerMap-1)/cachedEntriesPerMap),
 		},
 	}
 	for i := range txnCache.longTermCache.transactionsMap {
@@ -73,7 +78,7 @@ func (lru *transactionCache) add(txid transactions.Txid) {
 	lru.shortTermCache.add(txid)
 }
 
-func (lru *transactionCache) addSlice(txids []transactions.Txid, msgSeq uint64) {
+func (lru *transactionCache) addSlice(txids []transactions.Txid, msgSeq uint64, timestamp time.Duration) {
 	for _, txid := range txids {
 		lru.shortTermCache.add(txid)
 	}
@@ -87,9 +92,32 @@ func (lru *transactionCache) addSlice(txids []transactions.Txid, msgSeq uint64) 
 	if len(lru.ackPendingTxids) == cap(lru.ackPendingTxids) {
 		// clear out the entry at lru.ackPendingTxids[0] so that the GC could reclaim it.
 		lru.ackPendingTxids[0] = ackPendingTxids{}
-		lru.ackPendingTxids = append(lru.ackPendingTxids[1:], ackPendingTxids{txids: txids, seq: msgSeq})
+		lru.ackPendingTxids = append(lru.ackPendingTxids[1:], ackPendingTxids{txids: txids, seq: msgSeq, timestamp: timestamp})
 	} else {
-		lru.ackPendingTxids = append(lru.ackPendingTxids, ackPendingTxids{txids: txids, seq: msgSeq})
+		lru.ackPendingTxids = append(lru.ackPendingTxids, ackPendingTxids{txids: txids, seq: msgSeq, timestamp: timestamp})
+	}
+
+	// clear the entries that are too old.
+	lastValidEntry := -1
+	for i, entry := range lru.ackPendingTxids {
+		if entry.timestamp < timestamp-cacheHistoryDuration {
+			lastValidEntry = i
+		} else {
+			break
+		}
+	}
+	if lastValidEntry >= 0 {
+		// copy the elements
+		var i int
+		for i = 0; i < len(lru.ackPendingTxids)-1-lastValidEntry; i++ {
+			lru.ackPendingTxids[i] = lru.ackPendingTxids[i+lastValidEntry+1]
+		}
+		// clear the rest of the entries.
+		for ; i < len(lru.ackPendingTxids); i++ {
+			lru.ackPendingTxids[i] = ackPendingTxids{}
+		}
+		// reset the slice
+		lru.ackPendingTxids = lru.ackPendingTxids[:len(lru.ackPendingTxids)-lastValidEntry-1]
 	}
 }
 
@@ -110,7 +138,8 @@ func (lru *transactionCache) acknowledge(seqs []uint64) {
 		if i >= len(lru.ackPendingTxids) || seq != lru.ackPendingTxids[i].seq {
 			continue
 		}
-		lru.longTermCache.add(lru.ackPendingTxids[i].txids)
+		lru.longTermCache.add(lru.ackPendingTxids[i].txids, lru.ackPendingTxids[i].timestamp)
+		lru.longTermCache.prune(lru.ackPendingTxids[i].timestamp - cacheHistoryDuration)
 		// clear out the entry at lru.ackPendingTxids[i] so that the GC could reclaim it.
 		lru.ackPendingTxids[i] = ackPendingTxids{}
 		// and delete the entry from the array
@@ -158,8 +187,9 @@ func (lt *longTermTransactionCache) contained(txid transactions.Txid) bool {
 	return false
 }
 
-func (lt *longTermTransactionCache) add(slice []transactions.Txid) {
+func (lt *longTermTransactionCache) add(slice []transactions.Txid, timestamp time.Duration) {
 	for {
+		lt.timestamps[lt.current] = timestamp
 		availableEntries := cachedEntriesPerMap - len(lt.transactionsMap[lt.current])
 		if len(slice) <= availableEntries {
 			// just add them all.
@@ -185,5 +215,24 @@ func (lt *longTermTransactionCache) add(slice []transactions.Txid) {
 			// reset.
 			lt.transactionsMap[lt.current] = make(map[transactions.Txid]bool, cachedEntriesPerMap)
 		}
+	}
+}
+func (lt *longTermTransactionCache) prune(timestamp time.Duration) {
+	// find the index of the first entry where the timestamp is still valid.
+	latestValidIndex := sort.Search(len(lt.transactionsMap), func(i int) bool {
+		arrayIndex := (i + lt.current + 1) % len(lt.transactionsMap)
+		return lt.timestamps[arrayIndex] > timestamp
+	})
+
+	// find the first non-empty map index.
+	firstValidIndex := sort.Search(len(lt.transactionsMap), func(i int) bool {
+		arrayIndex := (i + lt.current + 1) % len(lt.transactionsMap)
+		return lt.timestamps[arrayIndex] != time.Duration(0)
+	})
+
+	for i := firstValidIndex - 1; i < latestValidIndex; i++ {
+		arrayIndex := (i + lt.current + 1) % len(lt.transactionsMap)
+		lt.timestamps[arrayIndex] = time.Duration(0)
+		lt.transactionsMap[lt.current] = make(map[transactions.Txid]bool, cachedEntriesPerMap)
 	}
 }
