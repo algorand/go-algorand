@@ -297,6 +297,14 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 
 	p.lastSelectedTransactionsCount = len(selectedTxnIDs)
 
+	// if we've over-allocated, resize the buffer; This becomes important on relays,
+	// as storing these arrays can consume considerable amount of memory.
+	if len(selectedTxnIDs)*2 < cap(selectedTxnIDs) {
+		exactBuffer := make([]transactions.Txid, len(selectedTxnIDs))
+		copy(exactBuffer, selectedTxnIDs)
+		selectedTxnIDs = exactBuffer
+	}
+
 	// update the lastTransactionSelectionGroupCounter if needed -
 	// if we selected any transaction to be sent, update the lastTransactionSelectionGroupCounter with the latest
 	// group counter. If the startIndex was *after* the last pending transaction, it means that we don't
