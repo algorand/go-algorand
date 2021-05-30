@@ -30,18 +30,21 @@ const cacheHistoryDuration = 10 * time.Second
 // transactionCache has FIFO replacement.
 // implementation is a simple cyclic-buffer with a map to accelerate lookups.
 // internally, it's being manages as two tier cache, where the long-term cache is bigger and requires acknowledgements.
+//msgp:ignore transactionCache
 type transactionCache struct {
 	shortTermCache  shortTermTransactionCache
 	longTermCache   longTermTransactionCache
 	ackPendingTxids []ackPendingTxids
 }
 
+//msgp:ignore ackPendingTxids
 type ackPendingTxids struct {
 	txids     []transactions.Txid
 	seq       uint64
 	timestamp time.Duration
 }
 
+//msgp:ignore shortTermTransactionCache
 type shortTermTransactionCache struct {
 	size            int
 	transactionsIDs []transactions.Txid
@@ -49,6 +52,7 @@ type shortTermTransactionCache struct {
 	oldest          int
 }
 
+//msgp:ignore longTermTransactionCache
 type longTermTransactionCache struct {
 	current         int
 	transactionsMap []map[transactions.Txid]bool
@@ -190,18 +194,24 @@ func (lt *longTermTransactionCache) add(slice []transactions.Txid, timestamp tim
 	for {
 		lt.timestamps[lt.current] = timestamp
 		availableEntries := cachedEntriesPerMap - len(lt.transactionsMap[lt.current])
+		txMap := lt.transactionsMap[lt.current]
+		if txMap == nil {
+			txMap = make(map[transactions.Txid]bool, cachedEntriesPerMap)
+		}
 		if len(slice) <= availableEntries {
 			// just add them all.
 			for _, txid := range slice {
-				lt.transactionsMap[lt.current][txid] = true
+				txMap[txid] = true
 			}
+			lt.transactionsMap[lt.current] = txMap
 			return
 		}
 
 		// otherwise, add as many as we can fit -
 		for i := 0; i < availableEntries; i++ {
-			lt.transactionsMap[lt.current][slice[i]] = true
+			txMap[slice[i]] = true
 		}
+		lt.transactionsMap[lt.current] = txMap
 
 		// remove the ones we've alread added from the slice.
 		slice = slice[availableEntries:]
