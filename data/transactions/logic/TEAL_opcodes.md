@@ -522,6 +522,28 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - push Ith value of the array field F from the Ath transaction in the current group
 - LogicSigVersion >= 3
 
+## gload t i
+
+- Opcode: 0x3a {uint8 transaction group index} {uint8 position in scratch space to load from}
+- Pops: _None_
+- Pushes: any
+- push Ith scratch space index of the Tth transaction in the current group
+- LogicSigVersion >= 4
+- Mode: Application
+
+The `gload` opcode can only access scratch spaces of previous app calls contained in the current group.
+
+## gloads i
+
+- Opcode: 0x3b {uint8 position in scratch space to load from}
+- Pops: *... stack*, uint64
+- Pushes: any
+- push Ith scratch space index of the Ath transaction in the current group
+- LogicSigVersion >= 4
+- Mode: Application
+
+The `gloads` opcode can only access scratch spaces of previous app calls contained in the current group.
+
 ## bnz target
 
 - Opcode: 0x40 {int16 branch offset, big endian. (negative offsets are illegal before v4)}
