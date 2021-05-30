@@ -68,9 +68,8 @@ func makeTransactionCache(shortTermSize, longTermSize, pendingAckTxids int) *tra
 			timestamps:      make([]time.Duration, (longTermSize+cachedEntriesPerMap-1)/cachedEntriesPerMap),
 		},
 	}
-	for i := range txnCache.longTermCache.transactionsMap {
-		txnCache.longTermCache.transactionsMap[i] = make(map[transactions.Txid]bool, cachedEntriesPerMap)
-	}
+	// initialize only the first entry; the rest would be created dynamically.
+	txnCache.longTermCache.transactionsMap[0] = make(map[transactions.Txid]bool, cachedEntriesPerMap)
 	return txnCache
 }
 
@@ -211,7 +210,7 @@ func (lt *longTermTransactionCache) add(slice []transactions.Txid, timestamp tim
 		lt.current = (lt.current + 1) % len(lt.transactionsMap)
 
 		// if full, reset bucket.
-		if len(lt.transactionsMap[lt.current]) >= cachedEntriesPerMap {
+		if len(lt.transactionsMap[lt.current]) >= cachedEntriesPerMap || lt.transactionsMap[lt.current] == nil {
 			// reset.
 			lt.transactionsMap[lt.current] = make(map[transactions.Txid]bool, cachedEntriesPerMap)
 		}
@@ -233,6 +232,6 @@ func (lt *longTermTransactionCache) prune(timestamp time.Duration) {
 	for i := firstValidIndex - 1; i < latestValidIndex; i++ {
 		arrayIndex := (i + lt.current + 1) % len(lt.transactionsMap)
 		lt.timestamps[arrayIndex] = time.Duration(0)
-		lt.transactionsMap[lt.current] = make(map[transactions.Txid]bool, cachedEntriesPerMap)
+		lt.transactionsMap[lt.current] = nil
 	}
 }

@@ -151,6 +151,10 @@ type Peer struct {
 	// transactionPoolAckMessages maintain a list of the recent incoming messages sequence numbers whose transactions were added fully to the transaction
 	// pool. This list is being flushed out every time we send a message to the peer.
 	transactionPoolAckMessages []uint64
+
+	// used by the selectPendingTransactions method, the lastSelectedTransactionsCount contains the number of entries selected on the previous iteration.
+	// this value is used to optimize the memory preallocation for the selection IDs array.
+	lastSelectedTransactionsCount int
 }
 
 func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *Peer {
@@ -231,11 +235,16 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	windowLengthBytes -= bloomFilterSize
 
 	accumulatedSize := 0
-	selectedTxnIDs = make([]transactions.Txid, 0, len(pendingTransactions))
 
 	startIndex := sort.Search(len(pendingTransactions), func(i int) bool {
 		return pendingTransactions[i].GroupCounter >= p.lastTransactionSelectionGroupCounter
 	})
+
+	selectedIDsSliceLength := len(pendingTransactions) - startIndex
+	if selectedIDsSliceLength > p.lastSelectedTransactionsCount*2 {
+		selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
+	}
+	selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
 
 	windowSizedReached := false
 	hasMorePendingTransactions := false
@@ -285,6 +294,8 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 			windowSizedReached = true
 		}
 	}
+
+	p.lastSelectedTransactionsCount = len(selectedTxnIDs)
 
 	// update the lastTransactionSelectionGroupCounter if needed -
 	// if we selected any transaction to be sent, update the lastTransactionSelectionGroupCounter with the latest
