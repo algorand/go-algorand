@@ -205,16 +205,17 @@ const (
 
 // evaluation is a description of a single debugger run
 type evaluation struct {
-	program      []byte
-	source       string
-	offsetToLine map[int]int
-	name         string
-	groupIndex   int
-	mode         modeType
-	aidx         basics.AppIndex
-	ba           apply.Balances
-	result       evalResult
-	states       AppState
+	program         []byte
+	source          string
+	offsetToLine    map[int]int
+	name            string
+	groupIndex      int
+	pastSideEffects []logic.EvalSideEffects
+	mode            modeType
+	aidx            basics.AppIndex
+	ba              apply.Balances
+	result          evalResult
+	states          AppState
 }
 
 func (e *evaluation) eval(ep logic.EvalParams) (pass bool, err error) {
@@ -339,6 +340,17 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		dp.LatestTimestamp = int64(ddr.LatestTimestamp)
 	}
 
+	if dp.PastSideEffects == nil {
+		dp.PastSideEffects = logic.MakePastSideEffects(len(r.txnGroup))
+	} else if len(dp.PastSideEffects) != len(r.txnGroup) {
+		err = fmt.Errorf(
+			"invalid past side effects slice with length %d should match group length of %d txns",
+			len(dp.PastSideEffects),
+			len(r.txnGroup),
+		)
+		return
+	}
+
 	// if program(s) specified then run from it
 	if len(dp.ProgramBlobs) > 0 {
 		if len(r.txnGroup) == 1 && dp.GroupIndex != 0 {
@@ -376,6 +388,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				}
 			}
 			r.runs[i].groupIndex = dp.GroupIndex
+			r.runs[i].pastSideEffects = dp.PastSideEffects
 			r.runs[i].name = dp.ProgramNames[i]
 
 			var mode modeType
@@ -438,12 +451,13 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 						return
 					}
 					run := evaluation{
-						program:    stxn.Txn.ApprovalProgram,
-						groupIndex: gi,
-						mode:       modeStateful,
-						aidx:       appIdx,
-						ba:         b,
-						states:     states,
+						program:         stxn.Txn.ApprovalProgram,
+						groupIndex:      gi,
+						pastSideEffects: dp.PastSideEffects,
+						mode:            modeStateful,
+						aidx:            appIdx,
+						ba:              b,
+						states:          states,
 					}
 					r.runs = append(r.runs, run)
 				}
@@ -473,12 +487,13 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 								return
 							}
 							run := evaluation{
-								program:    program,
-								groupIndex: gi,
-								mode:       modeStateful,
-								aidx:       appIdx,
-								ba:         b,
-								states:     states,
+								program:         program,
+								groupIndex:      gi,
+								pastSideEffects: dp.PastSideEffects,
+								mode:            modeStateful,
+								aidx:            appIdx,
+								ba:              b,
+								states:          states,
 							}
 							r.runs = append(r.runs, run)
 							found = true
@@ -513,11 +528,12 @@ func (r *LocalRunner) RunAll() error {
 		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
 
 		ep := logic.EvalParams{
-			Proto:      &r.proto,
-			Debugger:   r.debugger,
-			Txn:        &r.txnGroup[groupIndex],
-			TxnGroup:   r.txnGroup,
-			GroupIndex: run.groupIndex,
+			Proto:           &r.proto,
+			Debugger:        r.debugger,
+			Txn:             &r.txnGroup[groupIndex],
+			TxnGroup:        r.txnGroup,
+			GroupIndex:      run.groupIndex,
+			PastSideEffects: run.pastSideEffects,
 		}
 
 		run.result.pass, run.result.err = run.eval(ep)
@@ -541,10 +557,11 @@ func (r *LocalRunner) Run() (bool, error) {
 	run := r.runs[0]
 
 	ep := logic.EvalParams{
-		Proto:      &r.proto,
-		Txn:        &r.txnGroup[groupIndex],
-		TxnGroup:   r.txnGroup,
-		GroupIndex: run.groupIndex,
+		Proto:           &r.proto,
+		Txn:             &r.txnGroup[groupIndex],
+		TxnGroup:        r.txnGroup,
+		GroupIndex:      run.groupIndex,
+		PastSideEffects: run.pastSideEffects,
 	}
 
 	// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.

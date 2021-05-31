@@ -310,14 +310,14 @@ func (wbfpe errWrongBlockFromPeer) Error() string {
 type errCannotDecodeBlock struct {
 	round basics.Round
 	peer  string
-	err error
+	err   error
 }
 
 func makeErrCannotDecodeBlock(round basics.Round, peer string, err error) errCannotDecodeBlock {
 	return errCannotDecodeBlock{
 		round: round,
 		peer:  peer,
-		err: err}
+		err:   err}
 }
 
 func (cdbe errCannotDecodeBlock) Error() string {
@@ -342,7 +342,7 @@ func makeErrWsFetcherRequestFailed(round basics.Round, peer, cause string) errWs
 		cause: cause}
 }
 
-func (wrfe errWsFetcherRequestFailed)Error () string {
+func (wrfe errWsFetcherRequestFailed) Error() string {
 	return fmt.Sprintf("wsFetcherClient(%s).requestBlock(%d): Request failed: %s",
 		wrfe.peer, wrfe.round, wrfe.cause)
 }

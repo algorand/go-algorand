@@ -93,6 +93,7 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 	ep := EvalParams{}
 	ep.Proto = &proto
 	ep.Txn = pt
+	ep.PastSideEffects = MakePastSideEffects(5)
 	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
 		ep.Trace = sb
 	}
@@ -597,6 +598,50 @@ func TestDivModw(t *testing.T) {
 	// 10:0 / 0:0 ==> panic
 	testPanics(t, `int 10; int 0; int 0; int 0; divmodw;
 	               pop; pop; pop; pop; int 1`, 4)
+}
+
+func TestWideMath(t *testing.T) {
+	// 2^64 = 18446744073709551616, we use a bunch of numbers close to that below
+	pattern := `
+int %d
+dup
+store 0
+int %d
+dup
+store 1
+mulw
+// add one less than the first number
+load 0
+int 1
+-
+addw
+// stack is now [high word, carry bit, low word]
+store 2
++				// combine carry and high
+load 2
+// now divmodw by the 1st given number (widened)
+int 0
+load 0
+divmodw
+// remainder should be one less that first number
+load 0; int 1; -;  ==; assert
+int 0; ==; assert		// (upper word)
+// then the 2nd given number is left (widened)
+load 1; ==; assert
+int 0; ==; assert
+// succeed
+int 1
+`
+
+	testAccepts(t, fmt.Sprintf(pattern, 1000, 8192378), 4)
+	testAccepts(t, fmt.Sprintf(pattern, 1082734200, 8192378), 4)
+	testAccepts(t, fmt.Sprintf(pattern, 1000, 8129387292378), 4)
+	testAccepts(t, fmt.Sprintf(pattern, 10278362800, 8192378), 4)
+	for i := 1; i < 100; i++ {
+		for j := 1; i < 100; i++ {
+			testAccepts(t, fmt.Sprintf(pattern, i+j<<40, (i*j)<<40+j), 4)
+		}
+	}
 }
 
 func TestDivZero(t *testing.T) {
@@ -1264,6 +1309,17 @@ assert
 int 1
 `
 
+const testTxnProgramTextV4 = testTxnProgramTextV3 + `
+assert
+txn AppProgramExtraPages
+int 2
+==
+assert
+
+
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1340,13 +1396,14 @@ func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
 	txgroup[1].Txn.LastValid = 1066
 	txgroup[1].Txn.Sender = txn.Txn.Receiver
 	txgroup[1].Txn.Receiver = txn.Txn.Sender
+	txgroup[1].Txn.ExtraProgramPages = 2
 	return txgroup
 }
 
 func TestTxn(t *testing.T) {
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV3, txnField) {
+		if !strings.Contains(testTxnProgramTextV4, txnField) {
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
@@ -1357,6 +1414,7 @@ func TestTxn(t *testing.T) {
 		1: testTxnProgramTextV1,
 		2: testTxnProgramTextV2,
 		3: testTxnProgramTextV3,
+		4: testTxnProgramTextV4,
 	}
 
 	clearOps := testProg(t, "int 1", 1)
@@ -1370,6 +1428,7 @@ func TestTxn(t *testing.T) {
 			txn.Txn.ApprovalProgram = ops.Program
 			txn.Txn.ClearStateProgram = clearOps.Program
 			txn.Lsig.Logic = ops.Program
+			txn.Txn.ExtraProgramPages = 2
 			// RekeyTo not allowed in TEAL v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
@@ -1530,7 +1589,7 @@ int 2
 &&
 `
 
-	gtxnText := gtxnTextV1 + `gtxna 0 ApplicationArgs 0
+	gtxnTextV2 := gtxnTextV1 + `gtxna 0 ApplicationArgs 0
 byte 0x706179
 ==
 &&
@@ -1547,10 +1606,20 @@ int 1
 ==
 &&
 `
+	gtxnText := gtxnTextV2 + ` gtxn 0 AppProgramExtraPages
+int 0
+==
+&&
+gtxn 1 AppProgramExtraPages
+int 2
+==
+&&
+`
 
 	tests := map[uint64]string{
 		1: gtxnTextV1,
-		2: gtxnText,
+		2: gtxnTextV2,
+		4: gtxnText,
 	}
 
 	for v, source := range tests {
@@ -1906,6 +1975,268 @@ load 42
 int 5
 ==`
 	testAccepts(t, progText, 1)
+}
+
+func TestGload(t *testing.T) {
+	t.Parallel()
+
+	// for simple app-call-only transaction groups
+	type scratchTestCase struct {
+		tealSources []string
+		errContains string
+	}
+
+	simpleCase := scratchTestCase{
+		tealSources: []string{
+			`
+int 2
+store 0
+int 1`,
+			`
+gload 0 0
+int 2
+==
+`,
+		},
+	}
+
+	multipleTxnCase := scratchTestCase{
+		tealSources: []string{
+			`
+byte "txn 1"
+store 0
+int 1`,
+			`
+byte "txn 2"
+store 2
+int 1`,
+			`
+gload 0 0
+byte "txn 1"
+==
+gload 1 2
+byte "txn 2"
+==
+&&
+`,
+		},
+	}
+
+	selfCase := scratchTestCase{
+		tealSources: []string{
+			`
+gload 0 0
+int 2
+store 0
+int 1
+`,
+		},
+		errContains: "can't use gload on self, use load instead",
+	}
+
+	laterTxnSlotCase := scratchTestCase{
+		tealSources: []string{
+			`
+gload 1 0
+int 2
+==`,
+			`
+int 2
+store 0
+int 1`,
+		},
+		errContains: "gload can't get future scratch space from txn with index 1",
+	}
+
+	cases := []scratchTestCase{
+		simpleCase, multipleTxnCase, selfCase, laterTxnSlotCase,
+	}
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+
+	for i, testCase := range cases {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			sources := testCase.tealSources
+			// Assemble ops
+			opsList := make([]*OpStream, len(sources))
+			for j, source := range sources {
+				ops := testProg(t, source, AssemblerMaxVersion)
+				opsList[j] = ops
+			}
+
+			// Initialize txgroup and cxgroup
+			txgroup := make([]transactions.SignedTxn, len(sources))
+			for j := range txgroup {
+				txgroup[j] = transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.ApplicationCallTx,
+					},
+				}
+			}
+
+			// Construct EvalParams
+			pastSideEffects := MakePastSideEffects(len(sources))
+			epList := make([]EvalParams, len(sources))
+			for j := range sources {
+				epList[j] = EvalParams{
+					Proto:           &proto,
+					Txn:             &txgroup[j],
+					TxnGroup:        txgroup,
+					GroupIndex:      j,
+					PastSideEffects: pastSideEffects,
+				}
+			}
+
+			// Evaluate app calls
+			shouldErr := testCase.errContains != ""
+			didPass := true
+			for j, ops := range opsList {
+				pass, err := EvalStateful(ops.Program, epList[j])
+
+				// Confirm it errors or that the error message is the expected one
+				if !shouldErr {
+					require.NoError(t, err)
+				} else if shouldErr && err != nil {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), testCase.errContains)
+				}
+
+				if !pass {
+					didPass = false
+				}
+			}
+
+			require.Equal(t, !shouldErr, didPass)
+		})
+	}
+
+	// for more complex group transaction cases
+	type failureCase struct {
+		firstTxn    transactions.SignedTxn
+		runMode     runMode
+		errContains string
+	}
+
+	nonAppCall := failureCase{
+		firstTxn: transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.PaymentTx,
+			},
+		},
+		runMode:     runModeApplication,
+		errContains: "can't use gload on non-app call txn with index 0",
+	}
+
+	logicSigCall := failureCase{
+		firstTxn: transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+			},
+		},
+		runMode:     runModeSignature,
+		errContains: "gload not allowed in current mode",
+	}
+
+	failCases := []failureCase{nonAppCall, logicSigCall}
+	for j, failCase := range failCases {
+		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
+			source := "gload 0 0"
+			ops := testProg(t, source, AssemblerMaxVersion)
+
+			// Initialize txgroup and cxgroup
+			txgroup := make([]transactions.SignedTxn, 2)
+			txgroup[0] = failCase.firstTxn
+			txgroup[1] = transactions.SignedTxn{}
+
+			// Construct EvalParams
+			pastSideEffects := MakePastSideEffects(2)
+			epList := make([]EvalParams, 2)
+			for j := range epList {
+				epList[j] = EvalParams{
+					Proto:           &proto,
+					Txn:             &txgroup[j],
+					TxnGroup:        txgroup,
+					GroupIndex:      j,
+					PastSideEffects: pastSideEffects,
+				}
+			}
+
+			// Evaluate app call
+			var err error
+			switch failCase.runMode {
+			case runModeApplication:
+				_, err = EvalStateful(ops.Program, epList[1])
+			default:
+				_, err = Eval(ops.Program, epList[1])
+			}
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), failCase.errContains)
+		})
+	}
+}
+
+func TestGloads(t *testing.T) {
+	t.Parallel()
+
+	// Multiple app calls
+	source1 := `
+byte "txn 1"
+store 0
+int 1`
+	source2 := `
+byte "txn 2"
+store 1
+int 1`
+	source3 := `
+int 0
+gloads 0
+byte "txn 1"
+==
+int 1
+gloads 1
+byte "txn 2"
+==
+&&`
+
+	sources := []string{source1, source2, source3}
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+
+	// Assemble ops
+	opsList := make([]*OpStream, len(sources))
+	for j, source := range sources {
+		ops := testProg(t, source, AssemblerMaxVersion)
+		opsList[j] = ops
+	}
+
+	// Initialize txgroup and cxgroup
+	txgroup := make([]transactions.SignedTxn, len(sources))
+	for j := range txgroup {
+		txgroup[j] = transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+			},
+		}
+	}
+
+	// Construct EvalParams
+	pastSideEffects := MakePastSideEffects(len(sources))
+	epList := make([]EvalParams, len(sources))
+	for j := range sources {
+		epList[j] = EvalParams{
+			Proto:           &proto,
+			Txn:             &txgroup[j],
+			TxnGroup:        txgroup,
+			GroupIndex:      j,
+			PastSideEffects: pastSideEffects,
+		}
+	}
+
+	// Evaluate app calls
+	for j, ops := range opsList {
+		pass, err := EvalStateful(ops.Program, epList[j])
+		require.NoError(t, err)
+		require.True(t, pass)
+	}
 }
 
 const testCompareProgramText = `int 35
@@ -2844,7 +3175,7 @@ func benchmarkExpensiveProgram(b *testing.B, source string) {
 // during the "operation".  They are presumed to be fast (15/ns), so
 // the idea is that you can subtract that out from the reported speed
 func benchmarkOperation(b *testing.B, prefix string, operation string, suffix string) {
-	runs := 1 + b.N / 2000
+	runs := 1 + b.N/2000
 	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
 	source := prefix + ";" + strings.Repeat(operation+";", 2000) + ";" + suffix
 	source = strings.ReplaceAll(source, ";", "\n")
@@ -2870,7 +3201,7 @@ func BenchmarkUintMath(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
-			benchmarkOperation(b, bench[1], bench[2], bench[3]);
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
 	}
 }
@@ -2879,7 +3210,7 @@ func BenchmarkUintCmp(b *testing.B) {
 	ops := []string{"==", "!=", "<", "<=", ">", ">="}
 	for _, op := range ops {
 		b.Run(op, func(b *testing.B) {
-			benchmarkOperation(b, "", "int 7263; int 273834; "+op+"; pop", "int 1");
+			benchmarkOperation(b, "", "int 7263; int 273834; "+op+"; pop", "int 1")
 		})
 	}
 }
@@ -2887,7 +3218,7 @@ func BenchmarkBigLogic(b *testing.B) {
 	benches := [][]string{
 		{"b&", "byte 0x01234576", "byte 0x01ffffffffffffff; b&", "pop; int 1"},
 		{"b|", "byte 0x0ffff1234576", "byte 0x1202; b|", "pop; int 1"},
-		{"b^", "byte 0x01234576",  "byte 0x0223627389; b^", "pop; int 1"},
+		{"b^", "byte 0x01234576", "byte 0x0223627389; b^", "pop; int 1"},
 		{"b~", "byte 0x0123457673624736", "b~", "pop; int 1"},
 
 		{"b&big",
@@ -2898,7 +3229,7 @@ func BenchmarkBigLogic(b *testing.B) {
 			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
 			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b|",
 			"pop; int 1"},
-		{"b^big", "",	// u256*u256
+		{"b^big", "", // u256*u256
 			`byte 0x123457601234576012345760123457601234576012345760123457601234576a
 			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b^; pop`,
 			"int 1"},
@@ -2908,7 +3239,7 @@ func BenchmarkBigLogic(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
-			benchmarkOperation(b, bench[1], bench[2], bench[3]);
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
 	}
 }
@@ -2923,56 +3254,49 @@ func BenchmarkBigMath(b *testing.B) {
 		{"b/", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
 		{"b%", "", "byte 0x0123457673624736; byte 0x0223627389; b/; pop", "int 1"},
 
-		{"b+big",	// u256 + u256
+		{"b+big", // u256 + u256
 			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
 			"byte 0x01ffffffffffffff01ffffffffffffff01234576012345760123457601234576; b+",
 			"pop; int 1"},
-		{"b-big",	// second is a bit small, so we can subtract it over and over
+		{"b-big", // second is a bit small, so we can subtract it over and over
 			"byte 0x0123457601234576012345760123457601234576012345760123457601234576",
 			"byte           0xffffff01ffffffffffffff01234576012345760123457601234576; b-",
 			"pop; int 1"},
-		{"b*big", "",	// u256*u256
+		{"b*big", "", // u256*u256
 			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
 			 byte 0xf123457601234576012345760123457601234576012345760123457601234576; b*; pop`,
 			"int 1"},
-		{"b/big", "",	// u256 / u128 (half sized divisor seems pessimal)
+		{"b/big", "", // u256 / u128 (half sized divisor seems pessimal)
 			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
 			 byte 0x34576012345760123457601234576312; b/; pop`,
 			"int 1"},
-		{"b%big", "",	// u256 / u128 (half sized divisor seems pessimal)
+		{"b%big", "", // u256 / u128 (half sized divisor seems pessimal)
 			`byte 0xa123457601234576012345760123457601234576012345760123457601234576
 			 byte 0x34576012345760123457601234576312; b/; pop`,
 			"int 1"},
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
-			benchmarkOperation(b, bench[1], bench[2], bench[3]);
+			benchmarkOperation(b, bench[1], bench[2], bench[3])
 		})
 	}
 }
 
 func BenchmarkHash(b *testing.B) {
-	hashes := []string{"sha256", "keccak256", "sha512_256"}
-	for _, hash := range hashes {
+	for _, hash := range []string{"sha256", "keccak256", "sha512_256"} {
 		b.Run(hash+"-small", func(b *testing.B) { // hash 32 bytes
-			benchmarkOperation(b, "byte 0x1234567890", hash,
-				"pop; int 1");
+			benchmarkOperation(b, "int 32; bzero", hash, "pop; int 1")
 		})
-	}
-	for _, hash := range hashes {
 		b.Run(hash+"-med", func(b *testing.B) { // hash 128 bytes
-			benchmarkOperation(b, "byte 0x1234567890",
-				hash+"; dup; concat; dup; concat", "pop; int 1");
+			benchmarkOperation(b, "int 32; bzero",
+				"dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
-	}
-	for _, hash := range hashes {
 		b.Run(hash+"-big", func(b *testing.B) { // hash 512 bytes
-			benchmarkOperation(b, "byte 0x1234567890",
-				hash+"; dup; concat; dup; concat; dup; concat; dup; concat", "pop; int 1");
+			benchmarkOperation(b, "int 32; bzero",
+				"dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
 		})
 	}
 }
-
 
 func BenchmarkAddx64(b *testing.B) {
 	progs := [][]string{
@@ -3054,7 +3378,6 @@ ed25519verify`, pkStr), v)
 		})
 	}
 }
-
 
 func BenchmarkEd25519Verifyx1(b *testing.B) {
 	//benchmark setup
@@ -3989,6 +4312,7 @@ func TestBytesBits(t *testing.T) {
 	testAccepts(t, "byte 0xf001; b~; byte 0x0ffe; ==", 4)
 
 	testAccepts(t, "int 3; bzero; byte 0x000000; ==", 4)
+	testAccepts(t, "int 33; bzero; byte 0x000000000000000000000000000000000000000000000000000000000000000000; ==", 4)
 }
 
 func TestBytesConversions(t *testing.T) {

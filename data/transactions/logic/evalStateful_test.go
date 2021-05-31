@@ -167,11 +167,12 @@ func (l *testLedger) MinBalance(addr basics.Address, proto *config.ConsensusPara
 	assetCost := basics.MulSaturate(proto.MinBalance, uint64(len(br.holdings)))
 	min = basics.AddSaturate(min, assetCost)
 
-	// Base MinBalance + GlobalStateSchema.MinBalance for each created application
+	// Base MinBalance + GlobalStateSchema.MinBalance + ExtraProgramPages MinBalance for each created application
 	for _, params := range l.applications {
 		if params.Creator == addr {
 			min = basics.AddSaturate(min, proto.AppFlatParamsMinBalance)
 			min = basics.AddSaturate(min, params.GlobalStateSchema.MinBalance(proto).Raw)
+			min = basics.AddSaturate(min, basics.MulSaturate(proto.AppFlatParamsMinBalance, uint64(params.ExtraProgramPages)))
 		}
 	}
 
@@ -807,7 +808,7 @@ func TestMinBalance(t *testing.T) {
 	ep.Ledger = ledger
 
 	testApp(t, "int 0; min_balance; int 1001; ==", ep)
-	// Sender makes an asset, min blance goes up
+	// Sender makes an asset, min balance goes up
 	ledger.newAsset(txn.Txn.Sender, 7, basics.AssetParams{Total: 1000})
 	testApp(t, "int 0; min_balance; int 2002; ==", ep)
 	schemas := makeSchemas(1, 2, 3, 4)
@@ -815,6 +816,12 @@ func TestMinBalance(t *testing.T) {
 	// create + optin + 10 schema base + 4 ints + 6 bytes (local
 	// and global count b/c newApp opts the creator in)
 	minb := 2*1002 + 10*1003 + 4*1004 + 6*1005
+	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
+	// request extra program pages, min balance increase
+	app := ledger.applications[77]
+	app.ExtraProgramPages = 2
+	ledger.applications[77] = app
+	minb += 2 * 1002
 	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
 
 	testApp(t, "int 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
@@ -2644,12 +2651,15 @@ func TestReturnTypes(t *testing.T) {
 	}
 	ep := defaultEvalParams(nil, nil)
 	txn := makeSampleTxn()
+	txn.Txn.Type = protocol.ApplicationCallTx
 	txgroup := makeSampleTxnGroup(txn)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
 	ep.Txn.Txn.ApplicationID = 1
 	ep.Txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
 	ep.Txn.Txn.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(1), basics.AssetIndex(1)}
+	ep.GroupIndex = 1
+	ep.PastSideEffects = MakePastSideEffects(len(txgroup))
 	txn.Lsig.Args = [][]byte{
 		[]byte("aoeu"),
 		[]byte("aoeu"),
@@ -2693,6 +2703,8 @@ func TestReturnTypes(t *testing.T) {
 		"arg":               "arg 0",
 		"load":              "load 0",
 		"store":             "store 0",
+		"gload":             "gload 0 0",
+		"gloads":            "gloads 0",
 		"dig":               "dig 0",
 		"intc":              "intcblock 0; intc 0",
 		"intc_0":            "intcblock 0; intc_0",
