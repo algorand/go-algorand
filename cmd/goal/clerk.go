@@ -924,8 +924,8 @@ func assembleFile(fname string) (program []byte) {
 	}
 	_, params := getProto(protoVersion)
 	if ops.HasStatefulOps {
-		if len(ops.Program) > params.MaxAppProgramLen {
-			reportErrorf(tealAppSize, fname, len(ops.Program), params.MaxAppProgramLen)
+		if len(ops.Program) > config.MaxAvailableAppProgramLen {
+			reportErrorf(tealAppSize, fname, len(ops.Program), config.MaxAvailableAppProgramLen)
 		}
 	} else {
 		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
