@@ -245,6 +245,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
 	}
 	selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
+	selectedTxns = make([]transactions.SignedTxGroup, 0, selectedIDsSliceLength)
 
 	windowSizedReached := false
 	hasMorePendingTransactions := false
