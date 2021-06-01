@@ -40,34 +40,6 @@ function install_or_upgrade {
     fi
 }
 
-function get_go_version {
-    cd "$(dirname "$0")"
-    VERSION=$( grep "$1" 2>/dev/null < ./go.mod | awk -F " " '{print $2}')
-    echo "$VERSION"
-    return
-}
-
-function install_go_module {
-    local OUTPUT
-    local MODULE
-    if [[ "$2" != "" ]]; then
-        MODULE=$2
-    else
-        MODULE=$1
-    fi
-    # Check for version to go.mod version
-    VERSION=$(get_go_version "$1")
-    if [ -z "$VERSION" ]; then
-        OUTPUT=$(GO111MODULE=off go get -u "${MODULE}" 2>&1)
-    else
-        OUTPUT=$(cd && GO111MODULE=on go get "${MODULE}@${VERSION}" 2>&1)
-    fi
-    if [ $? != 0 ]; then
-        echo "error: executing \"go get ${MODULE}\" failed : ${OUTPUT}"
-        exit 1
-    fi
-}
-
 function install_windows_shellcheck() {
     version="v0.7.1"
     if ! wget https://github.com/koalaman/shellcheck/releases/download/$version/shellcheck-$version.zip -O /tmp/shellcheck-$version.zip; then
@@ -120,5 +92,3 @@ elif [ "${OS}" = "windows" ]; then
         exit 1
     fi
 fi
-
-install_go_module gotest.tools/gotestsum
