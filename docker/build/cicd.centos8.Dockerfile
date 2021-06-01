@@ -6,7 +6,7 @@ ARG ARCH="amd64"
 RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
     yum update -y && \
     yum install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel sqlite3 boost-devel expect jq \
-    libtool gcc-c++ libstdc++-devel libstdc++-static rpmdevtools createrepo rpm-sign bzip2 which ShellCheck \
+    libtool gcc-c++ libstdc++-devel libstdc++-static rpmdevtools createrepo rpm-sign bzip2 which \
     libffi-devel openssl-devel
 WORKDIR /root
 RUN wget https://dl.google.com/go/go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz \
