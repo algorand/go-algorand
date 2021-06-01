@@ -408,6 +408,7 @@ func TestPrepareEvalParams(t *testing.T) {
 			for j, present := range testCase.expected {
 				if present {
 					require.NotNil(t, res[j])
+					require.NotNil(t, res[j].PastSideEffects)
 					require.Equal(t, res[j].GroupIndex, j)
 					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
 					require.Equal(t, *res[j].Proto, eval.proto)

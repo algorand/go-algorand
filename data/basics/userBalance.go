@@ -203,6 +203,10 @@ type AccountData struct {
 	// we created local for applications we opted in to), so that we don't
 	// have to iterate over all of them to compute MinBalance.
 	TotalAppSchema StateSchema `codec:"tsch"`
+
+	// TotalExtraAppPages stores the extra length in pages (MaxAppProgramLen bytes per page)
+	// requested for app program by this account
+	TotalExtraAppPages uint32 `codec:"teap"`
 }
 
 // AppLocalState stores the LocalState associated with an application. It also
@@ -220,10 +224,11 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   []byte       `codec:"approv,allocbound=config.MaxAppProgramLen"`
-	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAppProgramLen"`
+	ApprovalProgram   []byte       `codec:"approv,allocbound=config.MaxAvailableAppProgramLen"`
+	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAvailableAppProgramLen"`
 	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
+	ExtraProgramPages uint32 `codec:"epp"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the
@@ -439,6 +444,10 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 	// GlobalStateSchemas
 	schemaCost := u.TotalAppSchema.MinBalance(proto)
 	min = AddSaturate(min, schemaCost.Raw)
+
+	// MinBalance for each extra app program page
+	extraAppProgramLenCost := MulSaturate(proto.AppFlatParamsMinBalance, uint64(u.TotalExtraAppPages))
+	min = AddSaturate(min, extraAppProgramLenCost)
 
 	res.Raw = min
 	return res
