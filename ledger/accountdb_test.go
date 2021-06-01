@@ -462,8 +462,8 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.Equal(t, len(top), len(onlineAccounts))
 }
 
-func initTestAccountDB(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (err error) {
-	err = accountsInit(tx, initAccounts, proto)
+func initTestAccountDB(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
+	newDB, err = accountsInit(tx, initAccounts, proto)
 	if err != nil {
 		return
 	}
@@ -487,12 +487,14 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	err = initTestAccountDB(tx, accts, proto)
+	newDB, err = initTestAccountDB(tx, accts, proto)
 	require.NoError(t, err)
+	require.True(t, newDB)
 	checkAccounts(t, tx, 0, accts)
 
-	err = accountsInit(tx, accts, proto)
+	newDB, err = initTestAccountDB(tx, accts, proto)
 	require.NoError(t, err)
+	require.False(t, newDB)
 	checkAccounts(t, tx, 0, accts)
 }
 
@@ -573,6 +575,7 @@ func TestAccountDBRound(t *testing.T) {
 
 	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
+	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
 	err = initTestAccountDB(tx, accts, proto)
@@ -1120,7 +1123,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 
 	accts = generateRandomTestingAccountBalances(numAccounts)
 
-	err = accountsInit(tx, accts, proto)
+	_, err = accountsInit(tx, accts, proto)
 	require.NoError(b, err)
 	err = accountsAddNormalizedBalance(tx, proto)
 	require.NoError(b, err)
@@ -1579,7 +1582,7 @@ func TestAccountsReencoding(t *testing.T) {
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		_, err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
 		}
@@ -1657,7 +1660,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	defer dbs.Close()
 
 	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		err = initTestAccountDB(tx, nil, config.Consensus[protocol.ConsensusCurrentVersion])
+		_, err = initTestAccountDB(tx, nil, config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
 		}

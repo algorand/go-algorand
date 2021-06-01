@@ -21,6 +21,7 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -421,6 +422,8 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 }
 
 func TestOnSwitchToUnSupportedProtocol(t *testing.T) {
+	t.Skip("This test is flacky and need to be fixed.")
+
 	// Test the interruption in the initial loop
 	// This cannot happen in practice, but is used to test the code.
 	{
@@ -765,4 +768,150 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 		pc.Cert.Proposal.BlockDigest = block.Digest()
 		s.syncCert(pc)
 	}
+}
+
+// TestCreatePeerSelector tests if the correct peer selector coonfigurations are prepared
+func TestCreatePeerSelector(t *testing.T) {
+	// Make Service
+	cfg := defaultConfig
+
+	cfg.EnableCatchupFromArchiveServers = true
+
+	cfg.NetAddress = "someAddress"
+	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps := s.createPeerSelector(true)
+	require.Equal(t, 4, len(ps.peerClasses))
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+	require.Equal(t, peerRankInitialFourthPriority, ps.peerClasses[3].initialRank)
+
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[3].peerClass)
+
+	// cfg.EnableCatchupFromArchiveServers = true; cfg.NetAddress == ""; pipelineFetch = true;
+	cfg.EnableCatchupFromArchiveServers = true
+	cfg.NetAddress = ""
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps = s.createPeerSelector(true)
+	require.Equal(t, 3, len(ps.peerClasses))
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+
+	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+
+	// cfg.EnableCatchupFromArchiveServers = true;  cfg.NetAddress != ""; pipelineFetch = false
+	cfg.EnableCatchupFromArchiveServers = true
+	cfg.NetAddress = "someAddress"
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps = s.createPeerSelector(false)
+
+	require.Equal(t, 4, len(ps.peerClasses))
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+	require.Equal(t, peerRankInitialFourthPriority, ps.peerClasses[3].initialRank)
+
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[3].peerClass)
+
+	// cfg.EnableCatchupFromArchiveServers = true; cfg.NetAddress == ""; pipelineFetch = false
+	cfg.EnableCatchupFromArchiveServers = true
+	cfg.NetAddress = ""
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps = s.createPeerSelector(false)
+
+	require.Equal(t, 3, len(ps.peerClasses))
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[2].peerClass)
+
+	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress != ""; pipelineFetch = true
+	cfg.EnableCatchupFromArchiveServers = false
+	cfg.NetAddress = "someAddress"
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps = s.createPeerSelector(true)
+
+	require.Equal(t, 3, len(ps.peerClasses))
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[2].peerClass)
+
+	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress == ""; pipelineFetch = true
+	cfg.EnableCatchupFromArchiveServers = false
+	cfg.NetAddress = ""
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps = s.createPeerSelector(true)
+
+	require.Equal(t, 2, len(ps.peerClasses))
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
+
+	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress != ""; pipelineFetch = false
+	cfg.EnableCatchupFromArchiveServers = false
+	cfg.NetAddress = "someAddress"
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps = s.createPeerSelector(false)
+
+	require.Equal(t, 3, len(ps.peerClasses))
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+
+	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress == ""; pipelineFetch = false
+	cfg.EnableCatchupFromArchiveServers = false
+	cfg.NetAddress = ""
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps = s.createPeerSelector(false)
+
+	require.Equal(t, 2, len(ps.peerClasses))
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
+}
+
+func TestServiceStartStop(t *testing.T) {
+	cfg := defaultConfig
+	ledger := new(mockedLedger)
+	ledger.blocks = append(ledger.blocks, bookkeeping.Block{})
+	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s.Start()
+	s.Stop()
+	_, ok := (<-s.done)
+	require.False(t, ok)
+}
+
+func TestSynchronizingTime(t *testing.T) {
+	cfg := defaultConfig
+	ledger := new(mockedLedger)
+	ledger.blocks = append(ledger.blocks, bookkeeping.Block{})
+	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+
+	require.Equal(t, time.Duration(0), s.SynchronizingTime())
+	atomic.StoreInt64(&s.syncStartNS, 1000000)
+	require.NotEqual(t, time.Duration(0), s.SynchronizingTime())
 }

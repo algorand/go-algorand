@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -85,10 +86,11 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 		return n, err
 	}
 
-	n.cfg.RelayDirs, n.nodeDirs, n.gen, err = template.createNodeDirectories(rootDir, binDir, importKeys)
+	n.cfg.RelayDirs, n.nodeDirs, err = template.createNodeDirectories(rootDir, binDir, importKeys)
 	if err != nil {
 		return n, err
 	}
+	n.gen = template.Genesis
 
 	err = n.Save(rootDir)
 	n.SetConsensus(binDir, consensus)
@@ -146,6 +148,7 @@ func (n Network) NodeDataDirs() []string {
 	for _, nodeDir := range n.nodeDirs {
 		directories = append(directories, n.getNodeFullPath(nodeDir))
 	}
+	sort.Strings(directories)
 	return directories
 }
 
@@ -227,7 +230,7 @@ func (n *Network) scanForNodes() error {
 		genesisFile := filepath.Join(n.getNodeFullPath(nodeName), genesisFileName)
 		fileExists := util.FileExists(genesisFile)
 		if fileExists {
-			isPrimeDir := strings.EqualFold(nodeName, n.cfg.RelayDirs[0])
+			isPrimeDir := len(n.cfg.RelayDirs) > 0 && strings.EqualFold(nodeName, n.cfg.RelayDirs[0])
 			if isPrimeDir {
 				sawPrimeDir = true
 			} else {
@@ -235,7 +238,7 @@ func (n *Network) scanForNodes() error {
 			}
 		}
 	}
-	if !sawPrimeDir {
+	if !sawPrimeDir && len(nodes) > 1 {
 		return fmt.Errorf("primary relay directory (%s) invalid - can't run", n.cfg.RelayDirs[0])
 	}
 	n.nodeDirs = nodes

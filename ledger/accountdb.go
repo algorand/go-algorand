@@ -603,27 +603,27 @@ func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint 
 //
 // accountsInit returns nil if either it has initialized the database
 // correctly, or if the database has already been initialized.
-func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) error {
+func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
 	for _, tableCreate := range accountsSchema {
-		_, err := tx.Exec(tableCreate)
+		_, err = tx.Exec(tableCreate)
 		if err != nil {
-			return err
+			return
 		}
 	}
 
 	// Run creatables migration if it hasn't run yet
 	var creatableMigrated bool
-	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('assetcreators') WHERE name='ctype'").Scan(&creatableMigrated)
+	err = tx.QueryRow("SELECT 1 FROM pragma_table_info('assetcreators') WHERE name='ctype'").Scan(&creatableMigrated)
 	if err == sql.ErrNoRows {
 		// Run migration
 		for _, migrateCmd := range creatablesMigration {
 			_, err = tx.Exec(migrateCmd)
 			if err != nil {
-				return err
+				return
 			}
 		}
 	} else if err != nil {
-		return err
+		return
 	}
 
 	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
@@ -635,29 +635,31 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
 				addr[:], protocol.Encode(&data))
 			if err != nil {
-				return err
+				return true, err
 			}
 			totals.AddAccount(proto, data, &ot)
 		}
 
 		if ot.Overflowed {
-			return fmt.Errorf("overflow computing totals")
+			return true, fmt.Errorf("overflow computing totals")
 		}
 
 		err = accountsPutTotals(tx, totals, false)
 		if err != nil {
-			return err
+			return true, err
 		}
+		newDatabase = true
 	} else {
 		serr, ok := err.(sqlite3.Error)
 		// serr.Code is sqlite.ErrConstraint if the database has already been initialized;
 		// in that case, ignore the error and return nil.
 		if !ok || serr.Code != sqlite3.ErrConstraint {
-			return err
+			return
 		}
+
 	}
 
-	return nil
+	return newDatabase, nil
 }
 
 // accountsAddNormalizedBalance adds the normalizedonlinebalance column

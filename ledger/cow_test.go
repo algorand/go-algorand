@@ -29,6 +29,8 @@ import (
 
 type mockLedger struct {
 	balanceMap map[basics.Address]basics.AccountData
+	blocks     map[basics.Round]bookkeeping.BlockHeader
+	blockErr   map[basics.Round]error
 }
 
 func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.PersistedAccountData, error) {
@@ -79,8 +81,13 @@ func (ml *mockLedger) compactCertNext() basics.Round {
 	return 0
 }
 
-func (ml *mockLedger) blockHdr(_ basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{}, nil
+func (ml *mockLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	err, hit := ml.blockErr[rnd]
+	if hit {
+		return bookkeeping.BlockHeader{}, err
+	}
+	hdr := ml.blocks[rnd] // default struct is fine if nothing found
+	return hdr, nil
 }
 
 func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.AccountData) {

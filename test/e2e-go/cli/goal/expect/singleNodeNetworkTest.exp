@@ -1,0 +1,72 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+if { [catch {
+
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/SingleNodeNetwork.json"
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
+
+    # Determine primary account
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME $TEST_PRIMARY_NODE_DIR]
+
+    # Check the primary account balance.
+    set INITIAL_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+
+    # set the destination as a random address
+    set DEST_ACCOUNT "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
+
+    # send 1000 messages and wait for them to get applied.
+    set EXPECTED_BALANCE $INITIAL_ACCOUNT_BALANCE
+    set TRANSFER_AMOUNT_BASE 1000000
+    set FEE_AMOUNT 1000
+    set TRANSACTION_COUNT 10
+    for {set txIdx 0} {$txIdx < $TRANSACTION_COUNT} {incr txIdx 1} {
+        set TRANSFER_AMOUNT [expr $TRANSFER_AMOUNT_BASE+$txIdx]
+        set TRANSACTION_ID [::AlgorandGoal::AccountTransferWait $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $DEST_ACCOUNT $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR "" ""]
+        set EXPECTED_BALANCE [expr $EXPECTED_BALANCE-$FEE_AMOUNT-$TRANSFER_AMOUNT]
+    }
+
+    # Get node last committed round
+    set LAST_COMMITTED_ROUND [::AlgorandGoal::GetNodeLastCommittedBlock $TEST_PRIMARY_NODE_DIR]
+
+    # Wait for node to advance to next round.
+    ::AlgorandGoal::WaitForRound [expr $LAST_COMMITTED_ROUND+2] $TEST_PRIMARY_NODE_DIR
+
+    # Check the primary account balance.
+    set ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
+
+    if { $EXPECTED_BALANCE != $ACCOUNT_BALANCE } {
+        puts "Node was supposed to have a balance of $EXPECTED_BALANCE but ended up with a balance of $ACCOUNT_BALANCE"
+        exit 1
+    }
+
+    puts "Single Node Network Goal Test Successful"
+
+    exit 0
+} EXCEPTION] } {
+    puts "ERROR in singleNodeNetworkTest: $EXCEPTION"
+    exit 1
+}

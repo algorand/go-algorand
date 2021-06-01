@@ -27,7 +27,7 @@ A program can either authorize some delegated action on a normal private key sig
 * If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytes) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program.
 * If the SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address then this is a contract account wholly controlled by the program. No other signature is necessary or possible. The only way to execute a transaction against the contract account is for the program to approve it.
 
-The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost estimate and the program cost estimate must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have an estimated cost of 1, but a few slow crypto ops are much higher.
+The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, program costs was estimated as the static sum of all opcode costs in a program (ignoring conditionals that might skip some code). Beginning with v4, a program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
 
 ## Execution modes
 
@@ -80,11 +80,6 @@ An application transaction must indicate the action to be taken following the ex
 ## Operations
 
 Most operations work with only one type of argument, uint64 or bytes, and panic if the wrong type value is on the stack.
-The instruction set was designed to execute calculator-like expressions.
-What might be a one line expression with various parenthesized clauses should be efficiently representable in TEAL.
-
-Looping is not possible, by design, to ensure predictably fast execution.
-There is a branch instruction (`bnz`, branch if not zero) which allows forward branching only so that some code may be skipped.
 
 Many programs need only a few dozen instructions. The instruction set has some optimization built in. `intc`, `bytec`, and `arg` take an immediate value byte, making a 2-byte op to load a value onto the stack, but they also have single byte versions for loading the most common constant values. Any program will benefit from having a few common values loaded with a smaller one byte opcode. Cryptographic hashes and `ed25519verify` are single byte opcodes with powerful libraries behind them. These operations still take more time than other ops (and this is reflected in the cost of each op and the cost limit of a program) but are efficient in compiled code space.
 
@@ -116,6 +111,11 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `>=` | A greater than or equal to B => {0 or 1} |
 | `&&` | A is not zero and B is not zero => {0 or 1} |
 | `\|\|` | A is not zero or B is not zero => {0 or 1} |
+| `shl` | A times 2^B, modulo 2^64 |
+| `shr` | A divided by 2^B |
+| `sqrt` | The largest integer X such that X^2 <= A |
+| `bitlen` | The index of the highest bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer |
+| `exp` | A raised to the Bth power. Panic if A == B == 0 and on overflow |
 | `==` | A is equal to B => {0 or 1} |
 | `!=` | A is not equal to B => {0 or 1} |
 | `!` | X == 0 yields 1; else 0 |
@@ -129,6 +129,8 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `~` | bitwise invert value X |
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 | `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
+| `divmodw` | Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top. |
+| `expw` | A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1 |
 | `getbit` | pop a target A (integer or byte-array), and index B. Push the Bth bit of A. |
 | `setbit` | pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result |
 | `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
@@ -136,6 +138,42 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `concat` | pop two byte-arrays A and B and join them, push the result |
 | `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
+
+These opcodes take and return byte-array values that are interpreted
+as big-endian unsigned integers.  Returned values are the shortest
+byte-array that can represent the returned value.  For example, the
+zero value is the empty byte-array.
+
+Input lengths are limited to maximum length 64, which represents a 512
+bit unsigned integer.
+
+| Op | Description |
+| --- | --- |
+| `b+` | A plus B, where A and B are byte-arrays interpreted as big-endian unsigned integers |
+| `b-` | A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow. |
+| `b/` | A divided by B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero. |
+| `b*` | A times B, where A and B are byte-arrays interpreted as big-endian unsigned integers. |
+| `b<` | A is less than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b>` | A is greater than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b<=` | A is less than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b>=` | A is greater than or equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b==` | A is equals to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b!=` | A is not equal to B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1} |
+| `b%` | A modulo B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero. |
+
+These opcodes operate on the bits of byte-array values.  The shorter
+array is interpeted as though left padded with zeros until it is the
+same length as the other input.  The returned values are the same
+length as the longest input.  Therefore, unlike array arithmetic,
+these results may contain leading zero bytes.
+
+| Op | Description |
+| --- | --- |
+| `b\|` | A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b&` | A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b^` | A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
+| `b~` | A with all bits inverted |
+
 
 ### Loading Values
 
@@ -159,6 +197,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `bytec_2` | push constant 2 from bytecblock to stack |
 | `bytec_3` | push constant 3 from bytecblock to stack |
 | `pushbytes bytes` | push the following program bytes to the stack |
+| `bzero` | push a byte-array of length A, containing all zero bytes |
 | `arg n` | push Nth LogicSig argument to stack |
 | `arg_0` | push LogicSig argument 0 to stack |
 | `arg_1` | push LogicSig argument 1 to stack |
@@ -173,6 +212,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `global f` | push value from globals to stack |
 | `load i` | copy a value from scratch space to the stack |
 | `store i` | pop a value from the stack and store to scratch space |
+| `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
+| `gloads i` | push Ith scratch space index of the Ath transaction in the current group |
 
 **Transaction Fields**
 
@@ -297,6 +338,8 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | `swap` | swaps two last values on stack: A, B -> B, A |
 | `select` | selects one of two values based on top-of-stack: A, B, C -> (if C != 0 then B else A) |
 | `assert` | immediately fail unless value X is a non-zero number |
+| `callsub target` | branch unconditionally to TARGET, saving the next instruction on the call stack |
+| `retsub` | pop the top instruction from the call stack and branch to it |
 
 ### State Access
 
@@ -384,12 +427,13 @@ A '[proto-buf style variable length unsigned int](https://developers.google.com/
 
 # What TEAL Cannot Do
 
-Current design and implementation limitations to be aware of.
+Design and implementation limitations to be aware of with various versions of TEAL.
 
 * TEAL cannot create or change a transaction, only approve or reject.
 * Stateless TEAL cannot lookup balances of Algos or other assets. (Standard transaction accounting will apply after TEAL has run and authorized a transaction. A TEAL-approved transaction could still be invalid by other accounting rules just as a standard signed transaction could be invalid. e.g. I can't give away money I don't have.)
 * TEAL cannot access information in previous blocks. TEAL cannot access most information in other transactions in the current block. (TEAL can access fields of the transaction it is attached to and the transactions in an atomic transaction group.)
 * TEAL cannot know exactly what round the current transaction will commit in (but it is somewhere in FirstValid through LastValid).
 * TEAL cannot know exactly what time its transaction is committed.
-* TEAL cannot loop. Its branch instructions `bnz` "branch if not zero", `bz` "branch if zero" and `b` "branch" can only branch forward so as to skip some code.
-* TEAL cannot recurse. There is no subroutine jump operation.
+* TEAL cannot loop prior to v4. In v3 and prior, the branch instructions `bnz` "branch if not zero", `bz` "branch if zero" and `b` "branch" can only branch forward so as to skip some code.
+* Until v4, TEAL had no notion of subroutines (and therefore no recursion). As of v4, use `callsub` and `retsub`.
+* TEAL cannot make indirect jumps. `b`, `bz`, `bnz`, and `callsub` jump to an immediately specified address, and `retsub` jumps to the address currently on the top of the call stack, which is manipulated only by previous calls to `callsub`.

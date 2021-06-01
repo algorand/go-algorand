@@ -346,8 +346,9 @@ func init() {
 
 	// legder requires proto string and proto params set
 	var proto config.ConsensusParams
-	proto.LogicSigVersion = 2
-	proto.LogicSigMaxCost = 1000
+	proto.LogicSigVersion = 4
+	proto.LogicSigMaxCost = 20000
+	proto.MaxAppProgramCost = 700
 	proto.MaxAppKeyLen = 64
 	proto.MaxAppBytesValueLen = 64
 

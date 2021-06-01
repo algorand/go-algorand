@@ -1043,7 +1043,7 @@ func TestListCreatables(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	accts := make(map[basics.Address]basics.AccountData)
-	err = initTestAccountDB(tx, accts, proto)
+	_, err = initTestAccountDB(tx, accts, proto)
 	require.NoError(t, err)
 
 	au := &accountUpdates{}
