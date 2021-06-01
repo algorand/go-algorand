@@ -805,7 +805,6 @@ func TestCreatePeerSelector(t *testing.T) {
 	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[1].peerClass)
 	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
 
-	
 	// cfg.EnableCatchupFromArchiveServers = true;  cfg.NetAddress != ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = "someAddress"
@@ -880,7 +879,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
 	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].peerClass)
 	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
-	
+
 	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress == ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = ""
@@ -903,7 +902,7 @@ func TestServiceStartStop(t *testing.T) {
 	s.Start()
 	s.Stop()
 	_, ok := (<-s.done)
-	require.False(t, ok)	
+	require.False(t, ok)
 }
 
 func TestSynchronizingTime(t *testing.T) {

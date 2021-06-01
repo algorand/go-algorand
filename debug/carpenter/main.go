@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/fatih/color"
 	"golang.org/x/crypto/ssh/terminal"
@@ -334,7 +335,8 @@ func outputRow(tabWriter *tabwriter.Writer, rowContent string) {
 
 type agreementLogMessage struct {
 	logspec.AgreementEvent
-	Message string `json:"msg"`
+	Message string    `json:"msg"`
+	Time    time.Time `json:"time"`
 }
 
 func showAgreement(line string) (string, error) {
@@ -350,19 +352,19 @@ func showAgreement(line string) (string, error) {
 	if event.Type == logspec.VoteAccepted || event.Type == logspec.ThresholdReached {
 		eventType = fmt.Sprintf("%s(%d/%d)", event.Type, event.Weight, event.WeightTotal)
 	}
-
+	timestamp := fmt.Sprintf("%02d:%02d:%02d.%03d", event.Time.Hour(), event.Time.Minute(), event.Time.Second(), event.Time.Nanosecond()/int(time.Millisecond))
 	eventHash := hash(event.Hash)
 	rps := roundperiodstep{event.Round, event.Period, event.Step}
 	objrps := roundperiodstep{event.ObjectRound, event.ObjectPeriod, event.ObjectStep}
-	cell := fmt.Sprintf("%7v:%30.30s %5v-%7v", rps, eventType, eventHash, objrps)
+	cell := fmt.Sprintf("%12v %7v:%30.30s %5v-%7v", timestamp, rps, eventType, eventHash, objrps)
 	if strings.Contains(eventType, "Conclude") {
-		cell = fmt.Sprintf("%v:%38.38s %v-%v", rps, bold(eventType), eventHash, objrps)
+		cell = fmt.Sprintf("%12v %7v:%38.38s %v-%v", timestamp, rps, bold(eventType), eventHash, objrps)
 		if strings.Contains(eventType, "Round") {
 			cell += " "
 		}
 	}
 	if *verbose && event.Type == logspec.VoteRejected {
-		cell = fmt.Sprintf("%s %s", cell, event.Message)
+		cell = fmt.Sprintf("%12v %s %s", timestamp, cell, event.Message)
 	}
 	return cell, nil
 }
