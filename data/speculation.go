@@ -26,9 +26,9 @@ import (
 )
 
 // A SpeculationLedger adapts a BlockEvaluator to the Ledger interface
-// (and provides access to the BlockEvalutors ability to execute
-// trasnactions) This means we code that expects a Ledger to report on
-// balances and such as we go.
+// (and provides access to the BlockEvalutor's ability to execute
+// trasnactions) This means we can write code that expects a Ledger to
+// report on balances and such as we go.
 
 type SpeculationLedger struct {
 	baseLedger  *Ledger
