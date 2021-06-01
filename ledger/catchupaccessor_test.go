@@ -144,9 +144,43 @@ func TestCatchupAcessorFoo(t *testing.T) {
 		l.Close()
 	}()
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
-	catchpointAccessor.ResetStagingBalances(context.Background(), true)
+	err = catchpointAccessor.ResetStagingBalances(context.Background(), true)
+	require.NoError(t, err, "ResetStagingBalances")
+
+	// TODO: GetState/SetState/GetLabel/SetLabel but setup for an error? (disconnected db?)
+
+	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateInactive)
+	require.NoError(t, err, "catchpointAccessor.SetState")
+	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLedgerDownload)
+	require.NoError(t, err, "catchpointAccessor.SetState")
+	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateLastestBlockDownload)
+	require.NoError(t, err, "catchpointAccessor.SetState")
+	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateBlocksDownload)
+	require.NoError(t, err, "catchpointAccessor.SetState")
+	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateSwitch)
+	require.NoError(t, err, "catchpointAccessor.SetState")
+	err = catchpointAccessor.SetState(context.Background(), catchpointCatchupStateLast+1)
+	require.Error(t, err, "catchpointAccessor.SetState")
 
 	state, err := catchpointAccessor.GetState(context.Background())
 	require.NoError(t, err, "catchpointAccessor.GetState")
+	require.Equal(t, CatchpointCatchupState(CatchpointCatchupStateSwitch), state)
 	t.Logf("catchpoint state %#v", state)
+
+	// invalid label
+	err = catchpointAccessor.SetLabel(context.Background(), "wat")
+	require.Error(t, err, "catchpointAccessor.SetLabel")
+
+	// ok
+	calabel := "98#QGMCMMUPV74AXXVKSNPRN73XMJG44ZJTZHU25HDG7JH5OHMM6N3Q"
+	err = catchpointAccessor.SetLabel(context.Background(), calabel)
+	require.NoError(t, err, "catchpointAccessor.SetLabel")
+
+	label, err := catchpointAccessor.GetLabel(context.Background())
+	require.NoError(t, err, "catchpointAccessor.GetLabel")
+	require.Equal(t, calabel, label)
+	t.Logf("catchpoint label %#v", label)
+
+	err = catchpointAccessor.ResetStagingBalances(context.Background(), false)
+	require.NoError(t, err, "ResetStagingBalances")
 }

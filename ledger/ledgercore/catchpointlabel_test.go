@@ -77,6 +77,7 @@ func TestCatchpointLabelParsing(t *testing.T) {
 					require.Equal(t, r, parsedRound)
 					require.NotEqual(t, crypto.Digest{}, parsedHash)
 					require.NoError(t, err)
+					t.Log(label)
 				}
 			}
 		}
