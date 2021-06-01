@@ -22,6 +22,6 @@ else
     if [[ "${OS}" != "darwin" ]]; then
         # setting it to 1 disable parallel making. This is done specicifically for travis, as travis seems to
         # have memory limitations and setting this to 1 could reduce the likelihood of hitting these.
-	    make test -j1
+	    make shorttest -j1
     fi
 fi
