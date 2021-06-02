@@ -221,6 +221,11 @@ func TestPaymentValidation(t *testing.T) {
 		if badFee.WellFormed(spec, tc.Proto) == nil {
 			t.Errorf("transaction with no fee %#v verified incorrectly", badFee)
 		}
+		badFee.Fee.Raw = 1
+		if badFee.WellFormed(spec, tc.Proto) == nil {
+			t.Errorf("transaction with low fee %#v verified incorrectly", badFee)
+		}
+
 	}
 }
 

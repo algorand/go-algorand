@@ -472,7 +472,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 	}
 
-	if tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
+	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
 		if tx.Type == protocol.CompactCertTx {
 			// Zero fee allowed for compact cert txn.
 		} else {
