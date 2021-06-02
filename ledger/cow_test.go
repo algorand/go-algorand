@@ -37,7 +37,7 @@ func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.PersistedAccountDa
 	return ledgercore.PersistedAccountData{AccountData: ml.balanceMap[addr]}, nil
 }
 
-func (ml *mockLedger) lookupCreatableData(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (ledgercore.PersistedAccountData, error) {
+func (ml *mockLedger) lookupCreatableData(addr basics.Address, locators []creatableDataLocator) (ledgercore.PersistedAccountData, error) {
 	return ledgercore.PersistedAccountData{AccountData: ml.balanceMap[addr]}, nil
 }
 
@@ -121,7 +121,7 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts0)
 
-	require.Panics(t, func() {
+	require.NotPanics(t, func() {
 		c1.put(randomAddress(), basics.AccountData{}, nil, nil)
 	})
 

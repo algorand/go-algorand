@@ -45,7 +45,7 @@ func (ml *emptyLedger) lookup(addr basics.Address) (ledgercore.PersistedAccountD
 	return ledgercore.PersistedAccountData{}, nil
 }
 
-func (ml *emptyLedger) lookupCreatableData(basics.Address, basics.CreatableIndex, basics.CreatableType, bool, bool) (ledgercore.PersistedAccountData, error) {
+func (ml *emptyLedger) lookupCreatableData(basics.Address, []creatableDataLocator) (ledgercore.PersistedAccountData, error) {
 	return ledgercore.PersistedAccountData{}, nil
 }
 

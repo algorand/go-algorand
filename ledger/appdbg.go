@@ -53,7 +53,7 @@ func (w *ledgerForCowBaseWrapper) lookupWithoutRewards(rnd basics.Round, addr ba
 	return ledgercore.PersistedAccountData{AccountData: ad}, rnd, err
 }
 
-func (w *ledgerForCowBaseWrapper) lookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (ledgercore.PersistedAccountData, error) {
+func (w *ledgerForCowBaseWrapper) lookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, locators []creatableDataLocator) (ledgercore.PersistedAccountData, error) {
 	ad, _, err := w.l.LookupWithoutRewards(rnd, addr)
 	return ledgercore.PersistedAccountData{AccountData: ad}, err
 }

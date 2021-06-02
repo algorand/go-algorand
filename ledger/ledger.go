@@ -487,11 +487,11 @@ func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (le
 }
 
 // lookupCreatableDataWithoutRewards is like lookupWithoutRewards but also loads the specified holding/local state
-func (l *Ledger) lookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (ledgercore.PersistedAccountData, error) {
+func (l *Ledger) lookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, locators []creatableDataLocator) (ledgercore.PersistedAccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, err := l.accts.LookupCreatableDataWithoutRewards(rnd, addr, cidx, ctype, global, local)
+	data, err := l.accts.LookupCreatableDataWithoutRewards(rnd, addr, locators)
 	if err != nil {
 		return ledgercore.PersistedAccountData{}, err
 	}
