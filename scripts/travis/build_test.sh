@@ -16,11 +16,9 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine
     "${SCRIPTPATH}/travis_wait.sh" 120 "${SCRIPTPATH}/build.sh" --make_debug
-    "${SCRIPTPATH}/../buildtools/install_buildtools.sh"
     "${SCRIPTPATH}/travis_wait.sh" 120 "${SCRIPTPATH}/test.sh"
 else
     # we're running on an ephermal build machine
     "${SCRIPTPATH}/build.sh" --make_debug
-    "${SCRIPTPATH}/../buildtools/install_buildtools.sh"
     "${SCRIPTPATH}/test.sh"
 fi
