@@ -18,10 +18,10 @@ package compress
 
 // #cgo CFLAGS: -Wall -std=c99 -I${SRCDIR}/libdeflate
 // #cgo amd64 CFLAGS: -DX86 -D__x86_64__ -D__i386__
-// #cgo linux CFLAGS: -march=sandybridge
-// #cgo darwin CFLAGS: -march=tremont
 // #cgo arm64 CFLAGS: -DARM
 // #cgo arm CFLAGS: -DARM
+// #cgo linux,amd64 CFLAGS: -march=sandybridge
+// #cgo darwin,amd64 CFLAGS: -march=tremont
 // #include <stdint.h>
 // int isNull(void * c) {
 // 	if(!c) {
