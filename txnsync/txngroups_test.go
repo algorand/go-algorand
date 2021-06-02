@@ -266,9 +266,9 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 		},
 	}
 	addGroupHashes(inTxnGroups, 6, []byte{1})
-	encodedGroupsBytes, err := encodeTransactionGroups(inTxnGroups)
+	encodedGroupsBytes, err := encodeTransactionGroups(inTxnGroups, true)
 	require.NoError(t, err)
-	out, err := decodeTransactionGroups(encodedGroupsBytes, genesisID, genesisHash)
+	out, err := decodeTransactionGroups(encodedGroupsBytes, true, genesisID, genesisHash)
 	require.NoError(t, err)
 	require.ElementsMatch(t, inTxnGroups, out)
 }
@@ -323,9 +323,9 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 	txnGroups, genesisID, genesisHash, err := txnGroupsData()
 	require.NoError(t, err)
 
-	encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
+	encodedGroupsBytes, err := encodeTransactionGroups(txnGroups, true)
 	require.NoError(t, err)
-	out, err := decodeTransactionGroups(encodedGroupsBytes, genesisID, genesisHash)
+	out, err := decodeTransactionGroups(encodedGroupsBytes, true, genesisID, genesisHash)
 	require.NoError(t, err)
 	require.ElementsMatch(t, txnGroups, out)
 
@@ -363,32 +363,71 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 func BenchmarkTxnGroupEncoding(b *testing.B) {
 	txnGroups, _, _, err := txnGroupsData()
 	require.NoError(b, err)
-	var encodedGroupsBytes []byte
+	var size int
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
+		encodedGroupsBytes, err := encodeTransactionGroups(txnGroups, false)
 		require.NoError(b, err)
+		size = len(encodedGroupsBytes)
 		releaseEncodedTransactionGroups(encodedGroupsBytes)
 	}
 
-	fmt.Println("new data: ", len(encodedGroupsBytes))
+	fmt.Println("new data: ", size)
+}
+
+func BenchmarkTxnGroupCompression(b *testing.B) {
+	txnGroups, _, _, err := txnGroupsData()
+	require.NoError(b, err)
+	var size int
+	encodedGroupsBytes, err := encodeTransactionGroups(txnGroups, false)
+	require.NoError(b, err)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		compressedGroupBytes, err := compressTransactionGroupsBytes(encodedGroupsBytes)
+		require.NoError(b, err)
+		size = len(encodedGroupsBytes) - len(compressedGroupBytes)
+		releaseEncodedTransactionGroups(encodedGroupsBytes)
+	}
+
+	fmt.Printf("saved: %v bytes \n", size)
 }
 
 func BenchmarkTxnGroupDecoding(b *testing.B) {
 	txnGroups, genesisID, genesisHash, err := txnGroupsData()
 	require.NoError(b, err)
 
-	encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
+	encodedGroupsBytes, err := encodeTransactionGroups(txnGroups, false)
 	require.NoError(b, err)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = decodeTransactionGroups(encodedGroupsBytes, genesisID, genesisHash)
+		_, err = decodeTransactionGroups(encodedGroupsBytes, false, genesisID, genesisHash)
 		require.NoError(b, err)
 	}
+}
+
+func BenchmarkTxnGroupDecompression(b *testing.B) {
+	txnGroups, _, _, err := txnGroupsData()
+	require.NoError(b, err)
+	var size int
+	encodedGroupsBytes, err := encodeTransactionGroups(txnGroups, false)
+	require.NoError(b, err)
+	compressedGroupBytes, err := compressTransactionGroupsBytes(encodedGroupsBytes)
+	require.NoError(b, err)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = decompressTransactionGroupsBytes(compressedGroupBytes)
+		require.NoError(b, err)
+	}
+
+	fmt.Printf("saved: %v bytes \n", size)
 }
 
 func BenchmarkTxnGroupEncodingOld(b *testing.B) {
@@ -511,9 +550,9 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 		}
 		addGroupHashes(txnGroups, len(txns), []byte{1})
 
-		encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
+		encodedGroupsBytes, err := encodeTransactionGroups(txnGroups, true)
 		require.NoError(t, err)
-		out, err := decodeTransactionGroups(encodedGroupsBytes, stx.Txn.GenesisID, stx.Txn.GenesisHash)
+		out, err := decodeTransactionGroups(encodedGroupsBytes, true, stx.Txn.GenesisID, stx.Txn.GenesisHash)
 		require.NoError(t, err)
 		//if fmt.Sprintf("%v", out[0].Transactions[0]) != fmt.Sprintf("%v", txnGroups[0].Transactions[0]) {
 		//	fmt.Println(out[0].Transactions[0])
@@ -561,9 +600,9 @@ func TestTxnGroupEncodingArchival(t *testing.T) {
 			txnGroups = append(txnGroups, txnGroup)
 		}
 
-		encodedGroupsBytes, err := encodeTransactionGroups(txnGroups)
+		encodedGroupsBytes, err := encodeTransactionGroups(txnGroups, true)
 		require.NoError(t, err)
-		out, err := decodeTransactionGroups(encodedGroupsBytes, genesisID, genesisHash)
+		out, err := decodeTransactionGroups(encodedGroupsBytes, true, genesisID, genesisHash)
 		require.NoError(t, err)
 		require.ElementsMatch(t, txnGroups, out)
 	}

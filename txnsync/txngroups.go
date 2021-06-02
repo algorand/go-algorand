@@ -17,6 +17,8 @@
 package txnsync
 
 import (
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"fmt"
 
@@ -25,7 +27,10 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, error) {
+const compressionSpeed = 23071093.0 // bytes per second
+const compressionSavings = 0.32 // fraction of data reduced
+
+func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExchangeRate int) ([]byte, bool, error) {
 	txnCount := 0
 	for _, txGroup := range inTxnGroups {
 		txnCount += len(txGroup.Transactions)
@@ -42,7 +47,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, 
 		if len(txGroup.Transactions) > 1 {
 			for _, txn := range txGroup.Transactions {
 				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
-					return nil, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
+					return nil, false, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
 			}
@@ -60,7 +65,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, 
 					stub.BitmaskGroup.SetBit(index)
 				}
 				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
-					return nil, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
+					return nil, false, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
 			}
@@ -68,15 +73,44 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup) ([]byte, 
 	}
 	stub.finishDeconstructSignedTransactions()
 
-	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0]), nil
+	encoded := stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
+
+	if len(encoded) > 1000 && (1.0 / compressionSpeed) < (compressionSavings / float32(dataExchangeRate)) {
+		compressedBytes, err := compressTransactionGroupsBytes(encoded)
+		return compressedBytes, true, err
+	}
+
+	return encoded, false, nil
 }
 
-func decodeTransactionGroups(bytes []byte, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {
-	if len(bytes) == 0 {
+func compressTransactionGroupsBytes(data []byte) ([]byte, error) {
+	b := make([]byte, 0, len(data))
+	buf := bytes.NewBuffer(b)
+	zw := gzip.NewWriter(buf)
+
+	if _, err := zw.Write(data); err != nil {
+		return nil, fmt.Errorf("error gzip compressing data: %w", err)
+	}
+	if err := zw.Close(); err != nil {
+		return nil, fmt.Errorf("error gzip compressing data: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+func decodeTransactionGroups(data []byte, compressed bool, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {
+	if len(data) == 0 {
 		return nil, nil
 	}
+
+	if compressed {
+		data, err = decompressTransactionGroupsBytes(data)
+		if err != nil {
+			return
+		}
+	}
+
 	var stub txGroupsEncodingStub
-	_, err = stub.UnmarshalMsg(bytes)
+	_, err = stub.UnmarshalMsg(data)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +143,19 @@ func decodeTransactionGroups(bytes []byte, genesisID string, genesisHash crypto.
 	addGroupHashes(txnGroups, int(stub.TotalTransactionsCount), stub.BitmaskGroup)
 
 	return txnGroups, nil
+}
+
+func decompressTransactionGroupsBytes(data []byte) (decoded []byte, err error){
+	zr, err := gzip.NewReader(bytes.NewBuffer(data))
+	if err != nil {
+		return nil, fmt.Errorf("error gzip decompressing data: %w", err)
+	}
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(zr)
+	if err != nil {
+		return nil, fmt.Errorf("error gzip decompressing data: %w", err)
+	}
+	return buf.Bytes(), nil
 }
 
 func releaseEncodedTransactionGroups(buffer []byte) {
