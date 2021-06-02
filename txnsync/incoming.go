@@ -224,8 +224,14 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		// add the received transaction groups to the peer's recentSentTransactions so that we won't be sending these back to the peer.
 		peer.updateIncomingTransactionGroups(txnGroups)
 
-		// send the incoming transaction group to the node last, so that the txhandler could modify the underlaying array if needed.
-		transacationPoolSize = s.node.IncomingTransactionGroups(peer.networkPeer, txnGroups)
+		// before enqueing more data to the transaction pool, make sure we flush the ack channel
+		peer.dequeuePendingTransactionPoolAckMessages()
+
+		// if we recieved at least a single transaction group, then forward it to the transaction handler.
+		if len(txnGroups) > 0 {
+			// send the incoming transaction group to the node last, so that the txhandler could modify the underlaying array if needed.
+			transacationPoolSize = s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, txnGroups)
+		}
 
 		s.log.incomingMessage(msgStats{seq, txMsg.Round, len(txnGroups), txMsg.UpdatedRequestParams, len(txMsg.TxnBloomFilter.BloomFilter), txMsg.MsgSync.NextMsgMinDelay, peer.networkAddress()})
 		messageProcessed = true

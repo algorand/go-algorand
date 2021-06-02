@@ -63,6 +63,6 @@ type timingParams struct {
 
 	RefTxnBlockMsgSeq   uint64   `codec:"s"`
 	ResponseElapsedTime uint64   `codec:"r"`
-	AcceptedMsgSeq      []uint32 `codec:"a,allocbound=maxAcceptedMsgSeq"`
+	AcceptedMsgSeq      []uint64 `codec:"a,allocbound=maxAcceptedMsgSeq"`
 	NextMsgMinDelay     uint64   `codec:"m"`
 }

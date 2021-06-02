@@ -203,6 +203,10 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 	if peer.lastReceivedMessageTimestamp != 0 && peer.lastReceivedMessageLocalRound == s.round {
 		metaMessage.message.MsgSync.ResponseElapsedTime = uint64((s.clock.Since() - peer.lastReceivedMessageTimestamp).Nanoseconds())
 	}
+	// use the messages seq number that we've accepted so far, and let the other peer
+	// know about them. The getAcceptedMessages would delete the returned list from the peer's storage before
+	// returning.
+	metaMessage.message.MsgSync.AcceptedMsgSeq = peer.getAcceptedMessages()
 
 	if msgOps&messageConstNextMinDelay == messageConstNextMinDelay {
 		metaMessage.message.MsgSync.NextMsgMinDelay = uint64(s.lastBeta.Nanoseconds()) * 2
@@ -233,10 +237,11 @@ func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTra
 	count := 0
 	for i := 0; i <= n; i++ {
 		txnGroup := pendingTransactions.pendingTransactionsGroups[i]
-		if txnGroup.LocallyOriginated {
-			result[count] = txnGroup
-			count++
+		if !txnGroup.LocallyOriginated {
+			continue
 		}
+		result[count] = txnGroup
+		count++
 	}
 	return result[:count]
 }

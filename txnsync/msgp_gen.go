@@ -264,8 +264,8 @@ func (z addresses) MarshalMsg(b []byte) (o []byte) {
 	} else {
 		o = msgp.AppendArrayHeader(o, uint32(len(z)))
 	}
-	for za0003 := range z {
-		o = z[za0003].MarshalMsg(o)
+	for za0004 := range z {
+		o = z[za0004].MarshalMsg(o)
 	}
 	return
 }
@@ -318,8 +318,8 @@ func (_ *addresses) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z addresses) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
-	for za0003 := range z {
-		s += z[za0003].Msgsize()
+	for za0004 := range z {
+		s += z[za0004].Msgsize()
 	}
 	return
 }
@@ -26176,7 +26176,7 @@ func (z *timingParams) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).AcceptedMsgSeq)))
 			}
 			for zb0001 := range (*z).AcceptedMsgSeq {
-				o = msgp.AppendUint32(o, (*z).AcceptedMsgSeq[zb0001])
+				o = msgp.AppendUint64(o, (*z).AcceptedMsgSeq[zb0001])
 			}
 		}
 		if (zb0002Mask & 0x4) == 0 { // if not empty
@@ -26251,10 +26251,10 @@ func (z *timingParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).AcceptedMsgSeq != nil && cap((*z).AcceptedMsgSeq) >= zb0004 {
 				(*z).AcceptedMsgSeq = ((*z).AcceptedMsgSeq)[:zb0004]
 			} else {
-				(*z).AcceptedMsgSeq = make([]uint32, zb0004)
+				(*z).AcceptedMsgSeq = make([]uint64, zb0004)
 			}
 			for zb0001 := range (*z).AcceptedMsgSeq {
-				(*z).AcceptedMsgSeq[zb0001], bts, err = msgp.ReadUint32Bytes(bts)
+				(*z).AcceptedMsgSeq[zb0001], bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AcceptedMsgSeq", zb0001)
 					return
@@ -26322,10 +26322,10 @@ func (z *timingParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).AcceptedMsgSeq != nil && cap((*z).AcceptedMsgSeq) >= zb0006 {
 					(*z).AcceptedMsgSeq = ((*z).AcceptedMsgSeq)[:zb0006]
 				} else {
-					(*z).AcceptedMsgSeq = make([]uint32, zb0006)
+					(*z).AcceptedMsgSeq = make([]uint64, zb0006)
 				}
 				for zb0001 := range (*z).AcceptedMsgSeq {
-					(*z).AcceptedMsgSeq[zb0001], bts, err = msgp.ReadUint32Bytes(bts)
+					(*z).AcceptedMsgSeq[zb0001], bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "AcceptedMsgSeq", zb0001)
 						return
@@ -26357,7 +26357,7 @@ func (_ *timingParams) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *timingParams) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.ArrayHeaderSize + (len((*z).AcceptedMsgSeq) * (msgp.Uint32Size)) + 2 + msgp.Uint64Size
+	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.ArrayHeaderSize + (len((*z).AcceptedMsgSeq) * (msgp.Uint64Size)) + 2 + msgp.Uint64Size
 	return
 }
 
