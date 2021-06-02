@@ -818,7 +818,7 @@ func initConsensusProtocols() {
 	v24.MaxAppProgramLen = 1024
 	v24.MaxAppKeyLen = 64
 	v24.MaxAppBytesValueLen = 64
-	v24.MaxAppSumKeyValueLens = 128
+	v24.MaxAppSumKeyValueLens = 128 // Set here to have no effect until MaxAppBytesValueLen increases
 
 	// 0.1 Algos (Same min balance cost as an Asset)
 	v24.AppFlatParamsMinBalance = 100000
