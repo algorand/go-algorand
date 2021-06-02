@@ -98,7 +98,6 @@ type sendMessage struct {
 	peerEnqueued time.Time                            // the time at which the peer was attempting to enqueue the message
 	msgTags      map[protocol.Tag]bool                // when msgTags is speficied ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
 	callback     UnicastWebsocketMessageStateCallback // when non-nil, the callback function would be called after entry would be placed on the outgoing websocket queue
-	hash         crypto.Digest
 	ctx          context.Context
 }
 
@@ -745,7 +744,7 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	msgs := make([]sendMessage, 0, len(includeIndices))
 	enqueueTime := time.Now()
 	for _, index := range includeIndices {
-		msgs = append(msgs, sendMessage{data: data[index], enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, hash: digest[index], ctx: ctx, callback: callback})
+		msgs = append(msgs, sendMessage{data: data[index], enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, ctx: ctx, callback: callback})
 	}
 
 	if highPrio {

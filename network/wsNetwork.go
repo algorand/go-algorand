@@ -54,7 +54,11 @@ import (
 )
 
 const incomingThreads = 20
-const messageFilterSize = 5000 // messages greater than that size may be blocked by incoming/outgoing filter
+
+// messageFilterSize is the threshold beyond we send a request to the other peer to avoid sending us a message with that particular hash.
+// typically, this is beneficial for proposal messages, which tends to be large and uniform across the network. Non-uniform messages, such
+// as the transaction sync messages should not included in this filter.
+const messageFilterSize = 200000
 
 // httpServerReadHeaderTimeout is the amount of time allowed to read
 // request headers. The connection's read deadline is reset
