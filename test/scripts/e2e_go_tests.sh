@@ -93,7 +93,6 @@ echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
 
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
     gotestsum --format pkgname --jsonfile integrationtestresults.json -- ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ./...
-    fi
 else
     for TEST in ${TESTPATTERNS[@]}; do
         gotestsum --format pkgname --jsonfile integrationtestresults.json -- ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
