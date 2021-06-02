@@ -262,6 +262,7 @@ def main():
     ap.add_argument('--metrics', default=False, action='store_true', help='also capture /metrics counts')
     ap.add_argument('--blockinfo', default=False, action='store_true', help='also capture block header info')
     ap.add_argument('--period', default=None, help='seconds between automatically capturing')
+    ap.add_argument('--runtime', default=None, help='(\d+)[hm]? time in hour/minute (default second) to gather info then exit')
     ap.add_argument('--tf-inventory', default='terraform-inventory.host', help='terraform inventory file to use if no data_dirs specified')
     ap.add_argument('--token', default='', help='default algod api token to use')
     ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
@@ -291,6 +292,18 @@ def main():
     now = start
 
     app.do_snap(now)
+    endtime = None
+    if args.runtime:
+        rts = args.runtime
+        if rts.endswith('h'):
+            mult = 3600
+            rts = rts[:-1]
+        elif rts.endswith('m'):
+            mult = 60
+            rts = rts[:-1]
+        else:
+            mult = 1
+        endtime = (float(rts) * mult) + start
 
     if args.period:
         lastc = args.period.lower()[-1:]
@@ -317,6 +330,8 @@ def main():
             periodi += 1
             nextt += periodSecs
             app.do_snap(now)
+            if (endtime is not None) and (now > endtime):
+                return
     return 0
 
 if __name__ == '__main__':
