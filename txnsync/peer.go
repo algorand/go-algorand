@@ -34,13 +34,23 @@ type peersOps int
 type messageConstructionOps int
 
 const maxIncomingBloomFilterHistory = 20
+
+// shortTermRecentTransactionsSentBufferLength is the size of the short term storage for the recently sent transaction ids.
+// it should be configured sufficiently high so that any number of transaction sent would not exceed that number before
+// the other peer has a chance of sending a feedback. ( when the feedback is received, we will store these IDs into the long-term cache )
 const shortTermRecentTransactionsSentBufferLength = 5000
+
+// pendingUnconfirmedRemoteMessages is the number of messages we would cache before receiving a feedback from the other
+// peer that these message have been accepted. The general guideline here is that if we have a message every 200ms on one side
+// and a message every 20ms on the other, then the ratio of 200/20 = 10, should be the number of required messages (min).
+const pendingUnconfirmedRemoteMessages = 20
+
+// longTermRecentTransactionsSentBufferLength is the size of the long term transaction id cache.
 const longTermRecentTransactionsSentBufferLength = 15000
 const minDataExchangeRateThreshold = 100 * 1024            // 100KB/s, which is ~0.8Mbps
 const maxDataExchangeRateThreshold = 100 * 1024 * 1024 / 8 // 100Mbps
 const defaultDataExchangeRate = minDataExchangeRateThreshold
 const defaultRelayToRelayDataExchangeRate = 10 * 1024 * 1024 / 8 // 10Mbps
-const pendingUnconfirmedRemoteMessages = 20
 
 const (
 	// peerStateStartup is before the timeout for the sending the first message to the peer has reached.

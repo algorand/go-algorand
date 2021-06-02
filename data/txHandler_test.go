@@ -175,8 +175,9 @@ func TestFilterAlreadyCommitted(t *testing.T) {
 			Transactions: signedTransactions[11:12],
 		},
 	}
-	allNewTransactions, _ := txHandler.filterAlreadyCommitted(allNew)
+	allNewTransactions, allNewNonDupFilteredGroups := txHandler.filterAlreadyCommitted(allNew)
 	require.Equal(t, allNewRef, allNewTransactions)
+	require.False(t, allNewNonDupFilteredGroups)
 
 	firstTxDup := []transactions.SignedTxGroup{
 		transactions.SignedTxGroup{
@@ -191,8 +192,9 @@ func TestFilterAlreadyCommitted(t *testing.T) {
 			Transactions: signedTransactions[11:12],
 		},
 	}
-	firstTxDupTransactions, _ := txHandler.filterAlreadyCommitted(firstTxDup)
+	firstTxDupTransactions, firstTxDupNonDupFilteredGroups := txHandler.filterAlreadyCommitted(firstTxDup)
 	require.Equal(t, firstTxExpectedOutput, firstTxDupTransactions)
+	require.False(t, firstTxDupNonDupFilteredGroups)
 
 	lastTxDup := []transactions.SignedTxGroup{
 		transactions.SignedTxGroup{
@@ -207,8 +209,9 @@ func TestFilterAlreadyCommitted(t *testing.T) {
 			Transactions: signedTransactions[11:12],
 		},
 	}
-	lastTxDupTransactions, _ := txHandler.filterAlreadyCommitted(lastTxDup)
+	lastTxDupTransactions, lastTxDupNonDupFilteredGroups := txHandler.filterAlreadyCommitted(lastTxDup)
 	require.Equal(t, lastTxExpectedOutput, lastTxDupTransactions)
+	require.False(t, lastTxDupNonDupFilteredGroups)
 
 	midTxDup := []transactions.SignedTxGroup{
 		transactions.SignedTxGroup{
@@ -253,8 +256,9 @@ func TestFilterAlreadyCommitted(t *testing.T) {
 			Transactions: signedTransactions[15:16],
 		},
 	}
-	midTxDupTransactions, _ := txHandler.filterAlreadyCommitted(midTxDup)
+	midTxDupTransactions, midTxDupNonDupFilteredGroups := txHandler.filterAlreadyCommitted(midTxDup)
 	require.Equal(t, midTxDupExpectedOutput, midTxDupTransactions)
+	require.False(t, midTxDupNonDupFilteredGroups)
 
 	return
 }

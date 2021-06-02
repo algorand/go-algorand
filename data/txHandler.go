@@ -436,10 +436,14 @@ type solicitedAyncTxHandler struct {
 }
 
 type txGroups struct {
+	// the network package opaque network peer
 	networkPeer interface{}
-	ackCh       chan uint64
-	messageSeq  uint64
-	txGroups    []transactions.SignedTxGroup
+	// the feedback channel, in case we've successfully added the transaction groups to the transaction pool.
+	ackCh chan uint64
+	// the message sequence number, which would be written back to the feedback channel
+	messageSeq uint64
+	// the transactions groups slice
+	txGroups []transactions.SignedTxGroup
 }
 
 // SolicitedAsyncTxHandler converts a transaction handler to a SolicitedTxHandler

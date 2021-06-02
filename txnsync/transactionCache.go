@@ -23,7 +23,13 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
+// cachedEntriesPerMap is the number of entries the longTermTransactionCache will have in each of it's
+// buckets.
 const cachedEntriesPerMap = 917
+
+// cacheHistoryDuration is the time we will keep a transaction in the cache, assuming that the cache
+// storage would not get recycled first. When applied to transactions maps in the longTermTransactionCache, this
+// applies to the timestamp of the most recent transaction in the map.
 const cacheHistoryDuration = 10 * time.Second
 
 // transactionCache is a cache of recently sent transactions ids, allowing to limit the size of the historical kept transactions.
@@ -59,6 +65,7 @@ type longTermTransactionCache struct {
 	timestamps      []time.Duration
 }
 
+// makeTransactionCache creates the transaction cache
 func makeTransactionCache(shortTermSize, longTermSize, pendingAckTxids int) *transactionCache {
 	txnCache := &transactionCache{
 		shortTermCache: shortTermTransactionCache{
@@ -77,10 +84,12 @@ func makeTransactionCache(shortTermSize, longTermSize, pendingAckTxids int) *tra
 	return txnCache
 }
 
+// add adds a single trasaction ID to the short term cache.
 func (lru *transactionCache) add(txid transactions.Txid) {
 	lru.shortTermCache.add(txid)
 }
 
+// addSlice adds a slice to both the short term cache as well as the pending ack transaction ids.
 func (lru *transactionCache) addSlice(txids []transactions.Txid, msgSeq uint64, timestamp time.Duration) {
 	for _, txid := range txids {
 		lru.shortTermCache.add(txid)
@@ -124,14 +133,18 @@ func (lru *transactionCache) addSlice(txids []transactions.Txid, msgSeq uint64, 
 	}
 }
 
+// contained checks if a given transaction ID is contained in either the short term or long term cache
 func (lru *transactionCache) contained(txid transactions.Txid) bool {
 	return lru.shortTermCache.contained(txid) || lru.longTermCache.contained(txid)
 }
 
+// reset clears the short term cache
 func (lru *transactionCache) reset() {
 	lru.shortTermCache.reset()
 }
 
+// acknowledge process a given slice of previously sent message sequence numbers. The transaction IDs that
+// were previously sent with these sequence numbers are being added to the long term cache.
 func (lru *transactionCache) acknowledge(seqs []uint64) {
 	for _, seq := range seqs {
 		i := sort.Search(len(lru.ackPendingTxids), func(i int) bool {
@@ -150,6 +163,7 @@ func (lru *transactionCache) acknowledge(seqs []uint64) {
 	}
 }
 
+// add a given transaction ID to the short term cache.
 func (st *shortTermTransactionCache) add(txid transactions.Txid) {
 	if st.transactionsMap[txid] {
 		return
@@ -167,15 +181,18 @@ func (st *shortTermTransactionCache) add(txid transactions.Txid) {
 	st.transactionsMap[txid] = true
 }
 
+// contained checks if the given transaction id presents in the short term cache
 func (st *shortTermTransactionCache) contained(txid transactions.Txid) bool {
 	return st.transactionsMap[txid]
 }
 
+// reset clears the short term cache
 func (st *shortTermTransactionCache) reset() {
 	st.transactionsMap = make(map[transactions.Txid]bool, st.size)
 	st.oldest = 0
 }
 
+// contained checks if the given transaction id presents in the log term cache
 func (lt *longTermTransactionCache) contained(txid transactions.Txid) bool {
 	for i := lt.current; i >= 0; i-- {
 		if lt.transactionsMap[i][txid] {
@@ -190,6 +207,7 @@ func (lt *longTermTransactionCache) contained(txid transactions.Txid) bool {
 	return false
 }
 
+// add a given slice of transaction IDs to the long term transaction cache, at a given timestamp.
 func (lt *longTermTransactionCache) add(slice []transactions.Txid, timestamp time.Duration) {
 	for {
 		lt.timestamps[lt.current] = timestamp
@@ -226,6 +244,9 @@ func (lt *longTermTransactionCache) add(slice []transactions.Txid, timestamp tim
 		}
 	}
 }
+
+// prune the long term cache by clearing out all the cached transaction IDs maps that are dated before the given
+// timestamp
 func (lt *longTermTransactionCache) prune(timestamp time.Duration) {
 	// find the index of the first entry where the timestamp is still valid.
 	latestValidIndex := sort.Search(len(lt.transactionsMap), func(i int) bool {
