@@ -231,6 +231,9 @@ type ConsensusParams struct {
 	// program in bytes
 	MaxAppProgramLen int
 
+	// extra length for application program in pages. A page is MaxAppProgramLen bytes
+	MaxExtraAppProgramPages int
+
 	// maximum number of accounts in the ApplicationCall Accounts field.
 	// this determines, in part, the maximum number of balance records
 	// accessed by a single transaction
@@ -351,6 +354,15 @@ type ConsensusParams struct {
 
 	// NoEmptyLocalDeltas updates how ApplyDelta.EvalDelta.LocalDeltas are stored
 	NoEmptyLocalDeltas bool
+
+	// EnableKeyregCoherencyCheck enable the following extra checks on key registration transactions:
+	// 1. checking that [VotePK/SelectionPK/VoteKeyDilution] are all set or all clear.
+	// 2. checking that the VoteFirst is less or equal to VoteLast.
+	// 3. checking that in the case of going offline, both the VoteFirst and VoteLast are clear.
+	// 4. checking that in the case of going online the VoteLast is non-zero and greater then the current network round.
+	// 5. checking that in the case of going online the VoteFirst is less or equal to the LastValid+1.
+	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
+	EnableKeyregCoherencyCheck bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -410,6 +422,14 @@ var MaxAppProgramLen int
 // used for decoding purposes.
 var MaxBytesKeyValueLen int
 
+// MaxExtraAppProgramLen is the maximum extra app program length supported by any
+// of the consensus protocols. used for decoding purposes.
+var MaxExtraAppProgramLen int
+
+// MaxAvailableAppProgramLen is the largest supported app program size include the extra pages
+//supported supported by any of the consensus protocols. used for decoding purposes.
+var MaxAvailableAppProgramLen int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -439,6 +459,9 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
 	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
 	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
+	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
+	// MaxAvailableAppProgramLen is the max of supported app program size
+	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -905,10 +928,21 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
+	vFuture.EnableKeyregCoherencyCheck = true
+
+	// Enable support for larger app program size
+	vFuture.MaxExtraAppProgramPages = 3
+
 	// enable the InitialRewardsRateCalculation fix
 	vFuture.InitialRewardsRateCalculation = true
 	// Enable transaction Merkle tree.
 	vFuture.PaysetCommit = PaysetCommitMerkle
+
+	// Enable TEAL 4
+	vFuture.LogicSigVersion = 4
+
+	// Increase asset URL length to allow for IPFS URLs
+	vFuture.MaxAssetURLBytes = 96
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

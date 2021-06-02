@@ -151,7 +151,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		ad.Assets[AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
 	}
 
-	maxProg := []byte(makeString(currentConsensusParams.MaxAppProgramLen))
+	maxProg := []byte(makeString(config.MaxAvailableAppProgramLen))
 	maxGlobalState := make(TealKeyValue, currentConsensusParams.MaxGlobalSchemaEntries)
 	maxLocalState := make(TealKeyValue, currentConsensusParams.MaxLocalSchemaEntries)
 	maxValue := TealValue{

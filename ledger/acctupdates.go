@@ -250,6 +250,15 @@ type accountUpdates struct {
 
 	// the synchronous mode that would be used while the accounts database is being rebuilt.
 	accountsRebuildSynchronousMode db.SynchronousMode
+
+	// logAccountUpdatesMetrics is a flag for enable/disable metrics logging
+	logAccountUpdatesMetrics bool
+
+	// logAccountUpdatesInterval sets a time interval for metrics logging
+	logAccountUpdatesInterval time.Duration
+
+	// lastMetricsLogTime is the time when the previous metrics logging occurred
+	lastMetricsLogTime time.Time
 }
 
 type deferredCommit struct {
@@ -325,6 +334,11 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
 	au.synchronousMode = db.SynchronousMode(cfg.LedgerSynchronousMode)
 	au.accountsRebuildSynchronousMode = db.SynchronousMode(cfg.AccountsRebuildSynchronousMode)
+
+	// log metrics
+	au.logAccountUpdatesMetrics = cfg.EnableAccountUpdatesStats
+	au.logAccountUpdatesInterval = cfg.AccountUpdatesStatsInterval
+
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -398,7 +412,6 @@ func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Addres
 
 // LookupFullWithRewards returns the account data for a given address at a given round.
 // Note that the function doesn't update the account with the rewards,
-// even while it does return the AccoutData which represent the "rewarded" account data.
 func (au *accountUpdates) LookupFullWithRewards(rnd basics.Round, addr basics.Address) (pad ledgercore.PersistedAccountData, err error) {
 	full := true
 	return au.lookupWithRewards(rnd, addr, full)
@@ -1156,6 +1169,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		au.roundTotals = []ledgercore.AccountTotals{totals}
 		return nil
 	})
+
 	ledgerAccountsinitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return
@@ -1168,7 +1182,6 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 
 	au.accountsq, err = accountsDbInit(au.dbs.Rdb.Handle, au.dbs.Wdb.Handle)
-
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
 	if err != nil {
 		return
@@ -1198,7 +1211,6 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 
 	lastBalancesRound = au.dbRound
 	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
-
 	return
 }
 
@@ -1234,43 +1246,45 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 
 	if dbVersion < accountDBVersion {
 		au.log.Infof("accountsInitialize upgrading database schema from version %d to version %d", dbVersion, accountDBVersion)
-
+		// newDatabase is determined during the tables creations. If we're filling the database with accounts,
+		// then we set this variable to true, allowing some of the upgrades to be skipped.
+		var newDatabase bool
 		for dbVersion < accountDBVersion {
 			au.log.Infof("accountsInitialize performing upgrade from version %d", dbVersion)
 			// perform the initialization/upgrade
 			switch dbVersion {
 			case 0:
-				dbVersion, err = au.upgradeDatabaseSchema0(ctx, tx)
+				dbVersion, newDatabase, err = au.upgradeDatabaseSchema0(ctx, tx)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 0 : %v", err)
 					return 0, err
 				}
 			case 1:
-				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx)
+				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return 0, err
 				}
 			case 2:
-				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx)
+				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
 					return 0, err
 				}
 			case 3:
-				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx)
+				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
 			case 4:
-				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx)
+				dbVersion, err = au.upgradeDatabaseSchema4(ctx, tx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
 					return 0, err
 				}
 			case 5:
-				dbVersion, err = au.upgradeDatabaseSchema5(ctx, tx)
+				dbVersion, err = au.upgradeDatabaseSchema5(ctx, tx, newDatabase)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 5 : %v", err)
 					return 0, err
@@ -1415,17 +1429,17 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 // The accounttotals would get initialized to align with the initialization account added to accountbase
 // The acctrounds would get updated to indicate that the balance matches round 0
 //
-func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, newDatabase bool, err error) {
 	au.log.Infof("accountsInitialize initializing schema")
-	err = accountsInit(tx, au.initAccounts, au.initProto)
+	newDatabase, err = accountsInit(tx, au.initAccounts, au.initProto)
 	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to initialize schema : %v", err)
+		return 0, newDatabase, fmt.Errorf("accountsInitialize unable to initialize schema : %v", err)
 	}
 	_, err = db.SetUserVersion(ctx, tx, 1)
 	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 0 to 1: %v", err)
+		return 0, newDatabase, fmt.Errorf("accountsInitialize unable to update database schema version from 0 to 1: %v", err)
 	}
-	return 1, nil
+	return 1, newDatabase, nil
 }
 
 // upgradeDatabaseSchema1 upgrades the database schema from version 1 to version 2
@@ -1444,10 +1458,15 @@ func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx
 // This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
 // a functional update to it's content.
 //
-func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
+	var modifiedAccounts uint
+	if newDatabase {
+		goto schemaUpdateComplete
+	}
+
 	// update accounts encoding.
 	au.log.Infof("accountsInitialize verifying accounts data encoding")
-	modifiedAccounts, err := reencodeAccounts(ctx, tx)
+	modifiedAccounts, err = reencodeAccounts(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
@@ -1489,6 +1508,7 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 		au.log.Infof("accountsInitialize found that no accounts needed to be reencoded")
 	}
 
+schemaUpdateComplete:
 	// update version
 	_, err = db.SetUserVersion(ctx, tx, 2)
 	if err != nil {
@@ -1503,8 +1523,10 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 // If the user has already specified the OptimizeAccountsDatabaseOnStartup flag in the configuration file, this
 // step becomes a no-op.
 //
-func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
-	au.vacuumOnStartup = true
+func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
+	if !newDatabase {
+		au.vacuumOnStartup = true
+	}
 
 	// update version
 	_, err = db.SetUserVersion(ctx, tx, 3)
@@ -1516,7 +1538,7 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 
 // upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
 // adding the normalizedonlinebalance column to the accountbase table.
-func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
 	err = accountsAddNormalizedBalance(tx, au.ledger.GenesisProto())
 	if err != nil {
 		return 0, err
@@ -1532,10 +1554,16 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 
 // upgradeDatabaseSchema4 does not change the schema but migrates data:
 // remove empty AccountData entries from accountbase table
-func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
-
+func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
 	queryAddresses := au.catchpointInterval != 0
-	numDeleted, addresses, err := removeEmptyAccountData(tx, queryAddresses)
+	var numDeleted int64
+	var addresses []basics.Address
+
+	if newDatabase {
+		goto done
+	}
+
+	numDeleted, addresses, err = removeEmptyAccountData(tx, queryAddresses)
 	if err != nil {
 		return 0, err
 	}
@@ -1572,8 +1600,6 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 		if _, err = trie.Commit(); err != nil {
 			au.log.Errorf("upgradeDatabaseSchema4: failed to commit changes to merkle trie: %v", err)
 		}
-
-		au.log.Infof("upgradeDatabaseSchema4: deleted %d hashes", totalHashesDeleted)
 	}
 
 done:
@@ -1587,8 +1613,8 @@ done:
 	return 5, nil
 }
 
-// upgradeDatabaseSchem a5 upgrades the database schema from version 5 to version 6 adding accountext table
-func (au *accountUpdates) upgradeDatabaseSchema5(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+// upgradeDatabaseSchema5 upgrades the database schema from version 5 to version 6 adding accountext table
+func (au *accountUpdates) upgradeDatabaseSchema5(ctx context.Context, tx *sql.Tx, newDatabase bool) (updatedDBVersion int32, err error) {
 	current := int32(5)
 	upgraded := current + 1
 
@@ -2212,6 +2238,17 @@ func (au *accountUpdates) commitSyncer(deferedCommits chan deferredCommit) {
 
 // commitRound write to the database a "chunk" of rounds, and update the dbRound accordingly.
 func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookback basics.Round) {
+	var stats telemetryspec.AccountsUpdateMetrics
+	var updateStats bool
+
+	if au.logAccountUpdatesMetrics {
+		now := time.Now()
+		if now.Sub(au.lastMetricsLogTime) >= au.logAccountUpdatesInterval {
+			updateStats = true
+			au.lastMetricsLogTime = now
+		}
+	}
+
 	defer au.accountsWriting.Done()
 	au.accountsMu.RLock()
 
@@ -2294,6 +2331,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	var updatedPersistedAccounts []dbAccountData
+	if updateStats {
+		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano())
+	}
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -2316,6 +2356,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 
+		if updateStats {
+			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano())
+		}
+
 		err = compactDeltas.accountsLoadOld(tx)
 		if err != nil {
 			if e, ok := err.(*MismatchingDatabaseRoundError); ok {
@@ -2324,9 +2368,17 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
+		if updateStats {
+			stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - stats.OldAccountPreloadDuration
+		}
+
 		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], config.Consensus[consensusVersion])
 		if err != nil {
 			return err
+		}
+
+		if updateStats {
+			stats.MerkleTrieUpdateDuration = time.Duration(time.Now().UnixNano())
 		}
 
 		err = au.accountsUpdateBalances(compactDeltas)
@@ -2334,11 +2386,21 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
+		if updateStats {
+			now := time.Duration(time.Now().UnixNano())
+			stats.MerkleTrieUpdateDuration = now - stats.MerkleTrieUpdateDuration
+			stats.AccountsWritingDuration = now
+		}
+
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 		// so that we can update the base account back.
 		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
 		if err != nil {
 			return err
+		}
+
+		if updateStats {
+			stats.AccountsWritingDuration = time.Duration(time.Now().UnixNano()) - stats.AccountsWritingDuration
 		}
 
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
@@ -2361,6 +2423,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		return
 	}
 
+	if updateStats {
+		stats.DatabaseCommitDuration = time.Duration(time.Now().UnixNano()) - stats.DatabaseCommitDuration - stats.AccountsWritingDuration - stats.MerkleTrieUpdateDuration - stats.OldAccountPreloadDuration
+	}
+
 	if isCatchpointRound {
 		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
 		if err != nil {
@@ -2379,6 +2445,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 	updatingBalancesDuration := time.Now().Sub(beforeUpdatingBalancesTime)
 
+	if updateStats {
+		stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
+	}
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
@@ -2431,12 +2500,29 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.lastFlushTime = flushTime
 
 	au.accountsMu.Unlock()
+
+	if updateStats {
+		stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano()) - stats.MemoryUpdatesDuration
+	}
+
 	au.accountsReadCond.Broadcast()
 
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
 		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
+	}
+
+	// log telemetry event
+	if updateStats {
+		stats.StartRound = uint64(dbRound)
+		stats.RoundsCount = offset
+		stats.UpdatedAccountsCount = uint64(len(updatedPersistedAccounts))
+		stats.UpdatedCreatablesCount = uint64(len(compactCreatableDeltas))
+
+		var details struct {
+		}
+		au.log.Metrics(telemetryspec.Accounts, stats, details)
 	}
 
 }

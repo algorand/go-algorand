@@ -11,12 +11,9 @@ Options:
     -f        Force dependencies to be installed (May overwrite existing files)
 "
 
-SKIP_GO_DEPS=false
 FORCE=false
 while getopts ":sfh" opt; do
   case ${opt} in
-    s ) SKIP_GO_DEPS=true
-      ;;
     f ) FORCE=true
       ;;
     h ) echo "${HELP}"
@@ -70,12 +67,10 @@ function install_windows_shellcheck() {
 
 if [ "${OS}" = "linux" ]; then
     if ! which sudo > /dev/null; then
-        apt-get update
-        apt-get -y install sudo
+        "$SCRIPTPATH/install_linux_deps.sh"
+    else
+        sudo "$SCRIPTPATH/install_linux_deps.sh"
     fi
-
-    sudo apt-get update
-    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3 python3-venv
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap homebrew/cask
@@ -97,10 +92,3 @@ elif [ "${OS}" = "windows" ]; then
         exit 1
     fi
 fi
-
-if ${SKIP_GO_DEPS}; then
-    exit 0
-fi
-
-"$SCRIPTPATH/configure_dev-deps.sh"
-

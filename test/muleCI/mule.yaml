@@ -114,45 +114,45 @@ tasks:
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
     globSpecs:
       - tmp/node_pkgs/**/*
-      - gen/devnet/genesis.json
-      - gen/testnet/genesis.json
-      - gen/mainnet/genesis.json
+      - installer/genesis/devnet/genesis.json
+      - installer/genesis/testnet/genesis.json
+      - installer/genesis/mainnet/genesis.json
   - task: stash.Stash
     name: darwin-amd64
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
     globSpecs:
       - tmp/node_pkgs/**/*
-      - gen/devnet/genesis.json
-      - gen/testnet/genesis.json
-      - gen/mainnet/genesis.json
+      - installer/genesis/devnet/genesis.json
+      - installer/genesis/testnet/genesis.json
+      - installer/genesis/mainnet/genesis.json
   - task: stash.Stash
     name: linux-arm64
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
     globSpecs:
       - tmp/node_pkgs/**/*
-      - gen/devnet/genesis.json
-      - gen/testnet/genesis.json
-      - gen/mainnet/genesis.json
+      - installer/genesis/devnet/genesis.json
+      - installer/genesis/testnet/genesis.json
+      - installer/genesis/mainnet/genesis.json
   - task: stash.Stash
     name: linux-arm
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
     globSpecs:
       - tmp/node_pkgs/**/*
-      - gen/devnet/genesis.json
-      - gen/testnet/genesis.json
-      - gen/mainnet/genesis.json
+      - installer/genesis/devnet/genesis.json
+      - installer/genesis/testnet/genesis.json
+      - installer/genesis/mainnet/genesis.json
   - task: stash.Stash
     name: packages
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/packages
     globSpecs:
       - tmp/node_pkgs/**/*
-      - gen/devnet/genesis.json
-      - gen/testnet/genesis.json
-      - gen/mainnet/genesis.json
+      - installer/genesis/devnet/genesis.json
+      - installer/genesis/testnet/genesis.json
+      - installer/genesis/mainnet/genesis.json
 
     # Unstash tasks
   - task: stash.Unstash

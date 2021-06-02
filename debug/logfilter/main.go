@@ -80,6 +80,7 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			} else {
 				fmt.Fprintf(outFile, line+"\r\n")
 				delete(tests, testName)
+				currentTestName = ""
 			}
 			continue
 		}
@@ -96,6 +97,7 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 				fmt.Fprintf(outFile, line+"\r\n")
 				test.outputBuffer = ""
 				tests[testName] = test
+				currentTestName = ""
 			}
 			continue
 		}
