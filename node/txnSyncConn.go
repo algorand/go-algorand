@@ -211,12 +211,13 @@ func (tsnc *transcationSyncNodeConnector) stop() {
 	tsnc.txHandler.Stop()
 }
 
-func (tsnc *transcationSyncNodeConnector) IncomingTransactionGroups(networkPeer interface{}, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
+func (tsnc *transcationSyncNodeConnector) IncomingTransactionGroups(peer *txnsync.Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
 	// count the transactions that we are adding.
 	txCount := 0
 	for _, txGroup := range txGroups {
 		txCount += len(txGroup.Transactions)
 	}
-	tsnc.txHandler.HandleTransactionGroups(networkPeer, txGroups)
+
+	tsnc.txHandler.HandleTransactionGroups(peer.GetNetworkPeer(), peer.GetTransactionPoolAckChannel(), messageSeq, txGroups)
 	return tsnc.node.transactionPool.PendingCount() + txCount
 }

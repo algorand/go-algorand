@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -275,11 +276,11 @@ func (n *emulatedNode) GetPendingTransactionGroups() ([]transactions.SignedTxGro
 	return n.txpoolEntries, n.latestLocallyOriginatedGroupCounter
 }
 
-func (n *emulatedNode) IncomingTransactionGroups(peer interface{}, groups []transactions.SignedTxGroup) (transactionPoolSize int) {
+func (n *emulatedNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
 	// add to transaction pool.
 	duplicateMessage := 0
 	duplicateMessageSize := 0
-	for _, group := range groups {
+	for _, group := range txGroups {
 		if group.Transactions[0].Txn.LastValid < n.emulator.currentRound {
 			continue
 		}
@@ -300,6 +301,11 @@ func (n *emulatedNode) IncomingTransactionGroups(peer interface{}, groups []tran
 	}
 	atomic.AddUint64(&n.emulator.totalDuplicateTransactions, uint64(duplicateMessage))
 	atomic.AddUint64(&n.emulator.totalDuplicateTransactionSize, uint64(duplicateMessageSize))
+	select {
+	case peer.GetTransactionPoolAckChannel() <- messageSeq:
+	default:
+		panic(errors.New("IncomingTransactionGroups was unable to write messageSeq to the ack channel"))
+	}
 	return len(n.txpoolEntries)
 }
 

@@ -34,7 +34,19 @@ type peersOps int
 type messageConstructionOps int
 
 const maxIncomingBloomFilterHistory = 20
-const recentTransactionsSentBufferLength = 10000
+
+// shortTermRecentTransactionsSentBufferLength is the size of the short term storage for the recently sent transaction ids.
+// it should be configured sufficiently high so that any number of transaction sent would not exceed that number before
+// the other peer has a chance of sending a feedback. ( when the feedback is received, we will store these IDs into the long-term cache )
+const shortTermRecentTransactionsSentBufferLength = 5000
+
+// pendingUnconfirmedRemoteMessages is the number of messages we would cache before receiving a feedback from the other
+// peer that these message have been accepted. The general guideline here is that if we have a message every 200ms on one side
+// and a message every 20ms on the other, then the ratio of 200/20 = 10, should be the number of required messages (min).
+const pendingUnconfirmedRemoteMessages = 20
+
+// longTermRecentTransactionsSentBufferLength is the size of the long term transaction id cache.
+const longTermRecentTransactionsSentBufferLength = 15000
 const minDataExchangeRateThreshold = 100 * 1024            // 100KB/s, which is ~0.8Mbps
 const maxDataExchangeRateThreshold = 100 * 1024 * 1024 / 8 // 100Mbps
 const defaultDataExchangeRate = minDataExchangeRateThreshold
@@ -141,14 +153,28 @@ type Peer struct {
 	// messageSeriesPendingTransactions contain the transactions we are sending in the current "message-series". It allows us to pick a given
 	// "snapshot" from the transaction pool, and send that "snapshot" to completion before attempting to re-iterate.
 	messageSeriesPendingTransactions []transactions.SignedTxGroup
+
+	// transactionPoolAckCh is passed to the transaction handler when incoming transaction arrives. The channel is passed upstream, so that once
+	// a transaction is added to the transaction pool, we can get some feedback for that.
+	transactionPoolAckCh chan uint64
+
+	// transactionPoolAckMessages maintain a list of the recent incoming messages sequence numbers whose transactions were added fully to the transaction
+	// pool. This list is being flushed out every time we send a message to the peer.
+	transactionPoolAckMessages []uint64
+
+	// used by the selectPendingTransactions method, the lastSelectedTransactionsCount contains the number of entries selected on the previous iteration.
+	// this value is used to optimize the memory preallocation for the selection IDs array.
+	lastSelectedTransactionsCount int
 }
 
 func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *Peer {
 	p := &Peer{
-		networkPeer:            networkPeer,
-		isOutgoing:             isOutgoing,
-		recentSentTransactions: makeTransactionCache(recentTransactionsSentBufferLength),
-		dataExchangeRate:       defaultDataExchangeRate,
+		networkPeer:                networkPeer,
+		isOutgoing:                 isOutgoing,
+		recentSentTransactions:     makeTransactionCache(shortTermRecentTransactionsSentBufferLength, longTermRecentTransactionsSentBufferLength, pendingUnconfirmedRemoteMessages),
+		dataExchangeRate:           defaultDataExchangeRate,
+		transactionPoolAckCh:       make(chan uint64, maxAcceptedMsgSeq),
+		transactionPoolAckMessages: make([]uint64, 0, maxAcceptedMsgSeq),
 	}
 	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
@@ -157,7 +183,41 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *
 	return p
 }
 
+// GetNetworkPeer returns the network peer associated with this particular peer.
+func (p *Peer) GetNetworkPeer() interface{} {
+	return p.networkPeer
+}
+
+// GetTransactionPoolAckChannel returns the transaction pool ack channel
+func (p *Peer) GetTransactionPoolAckChannel() chan uint64 {
+	return p.transactionPoolAckCh
+}
+
+// dequeuePendingTransactionPoolAckMessages removed the pending entries from transactionPoolAckCh and add them to transactionPoolAckMessages
+func (p *Peer) dequeuePendingTransactionPoolAckMessages() {
+	for {
+		select {
+		case msgSeq := <-p.transactionPoolAckCh:
+			if len(p.transactionPoolAckMessages) == maxAcceptedMsgSeq {
+				p.transactionPoolAckMessages = append(p.transactionPoolAckMessages[1:], msgSeq)
+			} else {
+				p.transactionPoolAckMessages = append(p.transactionPoolAckMessages, msgSeq)
+			}
+		default:
+			return
+		}
+	}
+}
+
 // outgoing related methods :
+
+// getAcceptedMessages returns the content of the transactionPoolAckMessages and clear the existing buffer.
+func (p *Peer) getAcceptedMessages() []uint64 {
+	p.dequeuePendingTransactionPoolAckMessages()
+	acceptedMessages := p.transactionPoolAckMessages
+	p.transactionPoolAckMessages = make([]uint64, 0, maxAcceptedMsgSeq)
+	return acceptedMessages
+}
 
 func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTranscationsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )
@@ -185,11 +245,17 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	windowLengthBytes -= bloomFilterSize
 
 	accumulatedSize := 0
-	selectedTxnIDs = make([]transactions.Txid, 0, len(pendingTransactions))
 
 	startIndex := sort.Search(len(pendingTransactions), func(i int) bool {
 		return pendingTransactions[i].GroupCounter >= p.lastTransactionSelectionGroupCounter
 	})
+
+	selectedIDsSliceLength := len(pendingTransactions) - startIndex
+	if selectedIDsSliceLength > p.lastSelectedTransactionsCount*2 {
+		selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
+	}
+	selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
+	selectedTxns = make([]transactions.SignedTxGroup, 0, selectedIDsSliceLength)
 
 	windowSizedReached := false
 	hasMorePendingTransactions := false
@@ -240,6 +306,16 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		}
 	}
 
+	p.lastSelectedTransactionsCount = len(selectedTxnIDs)
+
+	// if we've over-allocated, resize the buffer; This becomes important on relays,
+	// as storing these arrays can consume considerable amount of memory.
+	if len(selectedTxnIDs)*2 < cap(selectedTxnIDs) {
+		exactBuffer := make([]transactions.Txid, len(selectedTxnIDs))
+		copy(exactBuffer, selectedTxnIDs)
+		selectedTxnIDs = exactBuffer
+	}
+
 	// update the lastTransactionSelectionGroupCounter if needed -
 	// if we selected any transaction to be sent, update the lastTransactionSelectionGroupCounter with the latest
 	// group counter. If the startIndex was *after* the last pending transaction, it means that we don't
@@ -271,9 +347,7 @@ func (p *Peer) getLocalRequestParams() (offset, modulator byte) {
 
 // update the peer once the message was sent successfully.
 func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs []transactions.Txid, timestamp time.Duration, sequenceNumber uint64, messageSize int, filter bloomFilter) {
-	for _, txid := range selectedTxnIDs {
-		p.recentSentTransactions.add(txid)
-	}
+	p.recentSentTransactions.addSlice(selectedTxnIDs, sequenceNumber, timestamp)
 	p.lastSentMessageSequenceNumber = sequenceNumber
 	p.lastSentMessageRound = txMsg.Round
 	p.lastSentMessageTimestamp = timestamp
@@ -386,6 +460,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 	p.lastReceivedMessageTimestamp = currentTime
 	p.lastReceivedMessageSize = incomingMessageSize
 	p.lastReceivedMessageNextMsgMinDelay = time.Duration(timings.NextMsgMinDelay) * time.Nanosecond
+	p.recentSentTransactions.acknowledge(timings.AcceptedMsgSeq)
 }
 
 // advancePeerState is called when a peer schedule arrives, before we're doing any operation.
