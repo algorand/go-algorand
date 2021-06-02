@@ -11,6 +11,7 @@ set -e
 
 ALGORAND_DEADLOCK=enable
 export ALGORAND_DEADLOCK
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine
