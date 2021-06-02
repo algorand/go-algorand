@@ -1212,6 +1212,9 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]ledgercore.PersistedAccoun
 		}
 		if pad.ExtendedAssetHolding.Count > 0 {
 			pad.AccountData.Assets, pad.ExtendedAssetHolding, err = loadHoldings(stmt, pad.ExtendedAssetHolding, 0)
+			if err != nil {
+				return
+			}
 		}
 
 		copy(addr[:], addrbuf)

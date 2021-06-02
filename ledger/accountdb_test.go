@@ -379,11 +379,11 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	all, err := accountsAll(tx)
+	require.NoError(t, err)
 	for addr, data := range accts {
 		pad, ok := all[addr]
 		require.True(t, ok)
 		d := pad.AccountData
-		require.NoError(t, err)
 		require.Equal(t, d, data)
 
 		switch d.Status {
@@ -463,7 +463,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 }
 
 func initTestAccountDB(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
-	newDB, err = accountsInit(tx, initAccounts, proto)
+	newDatabase, err = accountsInit(tx, initAccounts, proto)
 	if err != nil {
 		return
 	}
@@ -487,7 +487,7 @@ func TestAccountDBInit(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	newDB, err = initTestAccountDB(tx, accts, proto)
+	newDB, err := initTestAccountDB(tx, accts, proto)
 	require.NoError(t, err)
 	require.True(t, newDB)
 	checkAccounts(t, tx, 0, accts)
@@ -578,7 +578,7 @@ func TestAccountDBRound(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	err = initTestAccountDB(tx, accts, proto)
+	_, err = initTestAccountDB(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 
@@ -727,7 +727,7 @@ func TestAccountDBRoundAssetHoldings(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	err = initTestAccountDB(tx, accts, proto)
+	_, err = initTestAccountDB(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 
@@ -1872,7 +1872,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 	tx, err := dbs.Wdb.Handle.Begin()
 	a.NoError(err)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	err = initTestAccountDB(tx, nil, proto)
+	_, err = initTestAccountDB(tx, nil, proto)
 	a.NoError(err)
 	tx.Commit()
 
@@ -2328,7 +2328,7 @@ func TestLoadHolding(t *testing.T) {
 	tx, err := dbs.Wdb.Handle.Begin()
 	a.NoError(err)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	err = initTestAccountDB(tx, nil, proto)
+	_, err = initTestAccountDB(tx, nil, proto)
 	a.NoError(err)
 	tx.Commit()
 

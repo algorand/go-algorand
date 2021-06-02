@@ -1584,7 +1584,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 
 		var totalHashesDeleted int
 		for _, addr := range addresses {
-			hash := accountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
+			hash := accountHashBuilder(addr, 0, []byte{0x80})
 			deleted, err := trie.Delete(hash)
 			if err != nil {
 				au.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, err)

@@ -23,7 +23,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -371,7 +370,6 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	return nil // note: deletion cannot cause us to violate maxCount
 }
 
-		accounts: make(map[basics.Address]basics.AccountData),
 // StatefulEval runs application.
 // Execution happens in a child cow and all modifications are merged into parent if the program passes
 func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta basics.EvalDelta, err error) {
