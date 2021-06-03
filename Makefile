@@ -28,7 +28,13 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}
+
+# If available, use gotestsum instead of 'go test'.
+ifeq (, $(shell which gotestsumm))
+export GOTESTCOMMAND=go test
+else
 export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
+endif
 
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc

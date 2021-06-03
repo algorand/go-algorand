@@ -9,7 +9,7 @@ export GOPATH=$(go env GOPATH)
 export GO111MODULE=on
 GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
 
-# If one or more -t <pattern> are specified, use go test -run <pattern> for each
+# If one or more -t <pattern> are specified, use GOTESTCOMMAND -run <pattern> for each
 
 TESTPATTERNS=()
 NORACEBUILD=""
@@ -92,10 +92,10 @@ fi
 echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
 
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    gotestsum --format pkgname --jsonfile integrationtestresults.json -- ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ./...
+    ${GOTESTCOMMAND} --format pkgname --jsonfile integrationtestresults.json -- ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ./...
 else
     for TEST in ${TESTPATTERNS[@]}; do
-        gotestsum --format pkgname --jsonfile integrationtestresults.json -- ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
+        ${GOTESTCOMMAND} --format pkgname --jsonfile integrationtestresults.json -- ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
     done
 fi
 
