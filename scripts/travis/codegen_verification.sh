@@ -42,7 +42,7 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$("$GOPATH"/bin/golint $(GO111MODULE=off go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
+    warningCount=$("$GOPATH"/bin/golint $(GO111MODULE=on go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
     if [ "${warningCount}" = "0" ]; then
         return 0
     fi
@@ -54,7 +54,7 @@ function runGoLint() {
 }
 
 echo "Running go vet..."
-go vet $(GO111MODULE=off go list ./... | grep -v /test/e2e-go/)
+go vet $(GO111MODULE=on go list ./... | grep -v /test/e2e-go/)
 
 echo "Running gofmt..."
 runGoFmt
