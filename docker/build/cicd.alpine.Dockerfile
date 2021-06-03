@@ -26,7 +26,6 @@ COPY . $GOPATH/src/github.com/algorand/go-algorand
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
 ENV GCC_CONFIG="--with-arch=armv6" \
     GOPROXY=https://proxy.golang.org,https://pkg.go.dev,https://goproxy.io,direct
-RUN ./scripts/configure_dev.sh
 RUN make clean
 RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
     mkdir -p $GOPATH/src/github.com/algorand/go-algorand
