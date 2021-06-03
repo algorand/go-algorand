@@ -81,7 +81,6 @@ if ! ${NO_BUILD} ; then
     export PATH=${BINDIR}:${PATH}
 fi
 
-cp gen/devnet/genesis.json ${DATADIR}
 # check our install
 algod -v
 goal -v
@@ -102,6 +101,9 @@ python3 -m venv "${TEMPDIR}/ve"
 "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
 for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
     "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
+done
+for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
+    "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
 done
 deactivate
 

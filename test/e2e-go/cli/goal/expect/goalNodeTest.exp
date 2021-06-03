@@ -102,6 +102,6 @@ if { [catch {
 
     exit 0
 } EXCEPTION] } {
-    puts "ERROR in goalNodeStartSystemdTest: $EXCEPTION"
+    puts "ERROR in goalNodeTest: $EXCEPTION"
     exit 1
 }

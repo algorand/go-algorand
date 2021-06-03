@@ -554,9 +554,19 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			return append(actions, ignoreAction(e, ef.(payloadProcessedEvent).Err))
 		case payloadPipelined:
 			ep := ef.(payloadProcessedEvent)
+
+			up := e.Input.UnauthenticatedProposal
+			uv := ef.(payloadProcessedEvent).Vote.u()
+
+			// relay proposal if it has been pipelined
+			ra := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
+
 			if ep.Round == p.Round {
-				return append(actions, verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned))
+				vpa := verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned)
+				return append(actions, vpa, ra)
 			}
+
+			actions = append(actions, ra)
 		}
 
 		var uv unauthenticatedVote
