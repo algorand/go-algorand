@@ -569,17 +569,20 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			actions = append(actions, ra)
 		}
 
-		var uv unauthenticatedVote
-		switch ef.t() {
-		case payloadPipelined, payloadAccepted:
-			uv = ef.(payloadProcessedEvent).Vote.u()
-		case proposalCommittable:
-			uv = ef.(committableEvent).Vote.u()
-		}
-		up := e.Input.UnauthenticatedProposal
+		// relay as the proposer
+		if e.Input.MessageHandle == nil {
+			var uv unauthenticatedVote
+			switch ef.t() {
+			case payloadPipelined, payloadAccepted:
+				uv = ef.(payloadProcessedEvent).Vote.u()
+			case proposalCommittable:
+				uv = ef.(committableEvent).Vote.u()
+			}
+			up := e.Input.UnauthenticatedProposal
 
-		a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
-		actions = append(actions, a)
+			a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
+			actions = append(actions, a)
+		}
 
 		// If the payload is valid, check it against any received cert threshold.
 		// Of course, this should only trigger for payloadVerified case.
