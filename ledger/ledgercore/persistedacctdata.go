@@ -25,11 +25,10 @@ import (
 )
 
 // MaxHoldingGroupSize specifies maximum number of entries in AssetsHoldingGroup.groupData
-const MaxHoldingGroupSize = 256
+const MaxHoldingGroupSize = 256 // 256 entries take approx 3473 bytes
 
 // MaxParamsGroupSize specifies maximum number of entries in AssetsParamsGroup.groupData
-// TODO
-const MaxParamsGroupSize = 256
+const MaxParamsGroupSize = 14 // 14 entries take approx 3665 bytes
 
 // AssetGroupDesc is asset group descriptor
 type AssetGroupDesc struct {
@@ -1662,7 +1661,7 @@ func merge(agl AbstractAssetGroupList, assetThreshold uint32) (loaded []int, del
 	}
 
 	someGroupDeleted := false
-	offset := 0 // difference in group indexes that happens after deleteion some groups from e.Groups array
+	offset := 0 // difference in group indexes that happens after deletion some groups from e.Groups array
 	for _, cr := range crs {
 		minGroupsRequired := (cr.count + int(assetThreshold) - 1) / int(assetThreshold)
 		if minGroupsRequired == cr.size {

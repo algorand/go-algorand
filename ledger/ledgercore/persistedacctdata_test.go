@@ -628,10 +628,26 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 		{4001, 5000, MaxHoldingGroupSize},
 	}
 
+	spec1_1 := []groupSpec{
+		{10, 700, MaxParamsGroupSize},
+		{1001, 1060, 3},
+		{2001, 3000, MaxParamsGroupSize},
+		{4001, 5000, MaxParamsGroupSize},
+	}
+
 	e1 := genExtendedHolding(t, spec1)
-	e2 := genExtendedParams(t, spec1)
-	tests := []AbstractAssetGroupList{&e1, &e2}
-	for _, e := range tests {
+	e2 := genExtendedParams(t, spec1_1)
+	var tests = []struct {
+		e    AbstractAssetGroupList
+		spec []groupSpec
+	}{
+		{&e1, spec1},
+		{&e2, spec1_1},
+	}
+
+	for _, test := range tests {
+		e := test.e
+		spec := test.spec
 		t.Run(fmt.Sprintf("%T", e), func(t *testing.T) {
 
 			// new group at the beginning
@@ -642,7 +658,7 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 			a.Equal(-1, res.gi)
 
 			// split group 0
-			aidx = basics.AssetIndex(spec1[0].start + 1)
+			aidx = basics.AssetIndex(spec[0].start + 1)
 			res = findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.True(res.split)
@@ -655,42 +671,42 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 			a.Equal(1, res.gi)
 
 			// prepend into group 1
-			aidx = basics.AssetIndex(spec1[0].end + 10)
+			aidx = basics.AssetIndex(spec[0].end + 10)
 			res = findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.False(res.split)
 			a.Equal(1, res.gi)
 
 			// append into group 1
-			aidx = basics.AssetIndex(spec1[1].end + 10)
+			aidx = basics.AssetIndex(spec[1].end + 10)
 			res = findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.False(res.split)
 			a.Equal(1, res.gi)
 
 			// insert into group 1
-			aidx = basics.AssetIndex(spec1[1].start + 1)
+			aidx = basics.AssetIndex(spec[1].start + 1)
 			res = findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.False(res.split)
 			a.Equal(1, res.gi)
 
 			// split group 2
-			aidx = basics.AssetIndex(spec1[2].start + 1)
+			aidx = basics.AssetIndex(spec[2].start + 1)
 			res = findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.True(res.split)
 			a.Equal(2, res.gi)
 
 			// new group after group 2
-			aidx = basics.AssetIndex(spec1[2].end + 100)
+			aidx = basics.AssetIndex(spec[2].end + 100)
 			res = findGroup(aidx, 0, e)
 			a.False(res.found)
 			a.False(res.split)
 			a.Equal(2, res.gi)
 
 			// new group after group 3
-			aidx = basics.AssetIndex(spec1[3].end + 100)
+			aidx = basics.AssetIndex(spec[3].end + 100)
 			res = findGroup(aidx, 0, e)
 			a.False(res.found)
 			a.False(res.split)
@@ -715,17 +731,28 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 	for _, aidx := range assets {
 		params[aidx] = basics.AssetParams{Total: uint64(aidx), AssetName: fmt.Sprintf("a%d", aidx)}
 	}
-	oldCount := e1.Count
+	oldCount1 := e1.Count
+	oldCount2 := e2.Count
 
 	e1.Insert(assets, holdings)
 	e2.Insert(assets, params)
 
-	tests = []AbstractAssetGroupList{&e1, &e2}
-	for _, e := range tests {
+	var tests2 = []struct {
+		e     AbstractAssetGroupList
+		count uint32
+		spec  []groupSpec
+	}{
+		{&e1, oldCount1, spec1},
+		{&e2, oldCount2, spec1_1},
+	}
+	for _, test := range tests2 {
+		e := test.e
+		oldCount := test.count
+		spec := test.spec
 		t.Run(fmt.Sprintf("%T", e), func(t *testing.T) {
 
 			a.Equal(oldCount+uint32(len(assets)), e.Total())
-			a.Equal(4+len(spec1), e.Len())
+			a.Equal(4+len(spec), e.Len())
 
 			a.Equal(uint32(1), e.Get(0).AssetCount())
 			a.Equal(assets[0], e.Get(0).MinAsset())
@@ -735,22 +762,22 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 			checkGroup(t, e.Get(0))
 
 			// two cases below checked in split + insertAfter test
-			a.Equal(uint32(spec1[0].count/2+1), e.Get(1).AssetCount())
+			a.Equal(uint32(spec[0].count/2+1), e.Get(1).AssetCount())
 			checkGroupDataArrays(a, int(e.Get(1).AssetCount()), e.Get(1))
 			checkGroup(t, e.Get(1))
 
-			a.Equal(uint32(spec1[0].count/2+1), e.Get(2).AssetCount())
+			a.Equal(uint32(spec[0].count/2+1), e.Get(2).AssetCount())
 			checkGroupDataArrays(a, int(e.Get(2).AssetCount()), e.Get(2))
 			checkGroup(t, e.Get(2))
 
-			a.Equal(uint32(spec1[1].count+1), e.Get(3).AssetCount())
-			a.Equal(spec1[1].start, e.Get(3).MinAsset())
-			a.Equal(e.Get(3).MinAsset()+spec1[1].end-spec1[1].start, e.Get(3).MaxAsset())
+			a.Equal(uint32(spec[1].count+1), e.Get(3).AssetCount())
+			a.Equal(spec[1].start, e.Get(3).MinAsset())
+			a.Equal(e.Get(3).MinAsset()+spec[1].end-spec[1].start, e.Get(3).MaxAsset())
 			checkGroupDataArrays(a, int(e.Get(3).AssetCount()), e.Get(3))
 			checkGroup(t, e.Get(3))
 
 			// checked in group insert test
-			a.Equal(uint32(spec1[2].count), e.Get(4).AssetCount())
+			a.Equal(uint32(spec[2].count), e.Get(4).AssetCount())
 			checkGroupDataArrays(a, int(e.Get(4).AssetCount()), e.Get(4))
 			checkGroup(t, e.Get(4))
 
@@ -774,10 +801,24 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 		{2001, 3000, MaxHoldingGroupSize},
 	}
 
+	spec2_1 := []groupSpec{
+		{1001, 1060, 3},
+		{2001, 3000, MaxParamsGroupSize},
+	}
+
 	e1 = genExtendedHolding(t, spec2)
-	e2 = genExtendedParams(t, spec2)
-	tests = []AbstractAssetGroupList{&e1, &e2}
-	for _, e := range tests {
+	e2 = genExtendedParams(t, spec2_1)
+	tests = []struct {
+		e    AbstractAssetGroupList
+		spec []groupSpec
+	}{
+		{&e1, spec2},
+		{&e2, spec2_1},
+	}
+
+	for _, test := range tests {
+		e := test.e
+		spec := test.spec
 		t.Run(fmt.Sprintf("%T", e), func(t *testing.T) {
 
 			// insert into group 0
@@ -788,28 +829,28 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 			a.Equal(0, res.gi)
 
 			// insert into group 0
-			aidx = basics.AssetIndex(spec2[0].start + 1)
+			aidx = basics.AssetIndex(spec[0].start + 1)
 			res = findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.False(res.split)
 			a.Equal(0, res.gi)
 
 			// insert into group 0
-			aidx = basics.AssetIndex(spec2[0].end + 1)
+			aidx = basics.AssetIndex(spec[0].end + 1)
 			res = findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.False(res.split)
 			a.Equal(0, res.gi)
 
 			// split group 1
-			aidx = basics.AssetIndex(spec2[1].start + 1)
+			aidx = basics.AssetIndex(spec[1].start + 1)
 			res = findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.True(res.split)
 			a.Equal(1, res.gi)
 
 			// new group after group 1
-			aidx = basics.AssetIndex(spec2[1].end + 1)
+			aidx = basics.AssetIndex(spec[1].end + 1)
 			res = findGroup(aidx, 0, e)
 			a.False(res.found)
 			a.False(res.split)
@@ -822,28 +863,41 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 		{3002, 3062, 20},
 	}
 
+	spec3_1 := []groupSpec{
+		{2001, 3000, MaxParamsGroupSize},
+		{3002, 3062, 3},
+	}
+
 	e1 = genExtendedHolding(t, spec3)
-	e2 = genExtendedParams(t, spec3)
-	tests = []AbstractAssetGroupList{&e1, &e2}
-	for _, e := range tests {
+	e2 = genExtendedParams(t, spec3_1)
+	tests = []struct {
+		e    AbstractAssetGroupList
+		spec []groupSpec
+	}{
+		{&e1, spec3},
+		{&e2, spec3_1},
+	}
+	for _, test := range tests {
+		e := test.e
+		spec := test.spec
 		t.Run(fmt.Sprintf("%T", e), func(t *testing.T) {
 
 			// split group 0
-			aidx := basics.AssetIndex(spec3[0].start + 1)
+			aidx := basics.AssetIndex(spec[0].start + 1)
 			res := findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.True(res.split)
 			a.Equal(0, res.gi)
 
 			// insert into group 1
-			aidx = basics.AssetIndex(spec3[1].start - 1)
+			aidx = basics.AssetIndex(spec[1].start - 1)
 			res = findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.False(res.split)
 			a.Equal(1, res.gi)
 
 			// insert into group 1
-			aidx = basics.AssetIndex(spec3[1].end + 1)
+			aidx = basics.AssetIndex(spec[1].end + 1)
 			res = findGroup(aidx, 0, e)
 			a.True(res.found)
 			a.False(res.split)
@@ -856,14 +910,26 @@ func TestAssetHoldingInsertGroup(t *testing.T) {
 		{3002, 4000, MaxHoldingGroupSize},
 	}
 
-	e1 = genExtendedHolding(t, spec4)
-	e2 = genExtendedParams(t, spec4)
-	tests = []AbstractAssetGroupList{&e1, &e2}
-	for _, e := range tests {
-		t.Run(fmt.Sprintf("%T", e), func(t *testing.T) {
+	spec4_1 := []groupSpec{
+		{2001, 3000, MaxParamsGroupSize},
+		{3002, 4000, MaxParamsGroupSize},
+	}
 
+	e1 = genExtendedHolding(t, spec4)
+	e2 = genExtendedParams(t, spec4_1)
+	tests = []struct {
+		e    AbstractAssetGroupList
+		spec []groupSpec
+	}{
+		{&e1, spec4},
+		{&e2, spec4_1},
+	}
+	for _, test := range tests {
+		e := test.e
+		spec := test.spec
+		t.Run(fmt.Sprintf("%T", e), func(t *testing.T) {
 			// new group after 0
-			aidx := basics.AssetIndex(spec4[0].end + 1)
+			aidx := basics.AssetIndex(spec[0].end + 1)
 			res := findGroup(aidx, 0, e)
 			a.False(res.found)
 			a.False(res.split)
@@ -1248,56 +1314,68 @@ func TestGroupMergeInternal(t *testing.T) {
 	}
 
 	type test struct {
-		sizes []int
+		sizes   []int
+		maxSize int
 	}
 
 	tests := []test{
-		{[]int{1, 2}},
-		{[]int{1, 2, 3}},
-		{[]int{1, 255, 3}},
-		{[]int{1, 253, 1}},
-		{[]int{256, 2, 3}},
-		{[]int{256, 1, 256}},
-		{[]int{254, 1, 1}},
-		{[]int{256, 255, 1}},
-		{[]int{256, 256, 1}},
-		{[]int{256, 256, 256}},
-		{[]int{128, 179, 128, 142, 128, 164, 128, 156, 147}},
-		{[]int{128, 168, 242, 128, 144, 255, 232}},
+		{[]int{1, 2}, MaxHoldingGroupSize},
+		{[]int{1, 2, 3}, MaxHoldingGroupSize},
+		{[]int{1, 255, 3}, MaxHoldingGroupSize},
+		{[]int{1, 253, 1}, MaxHoldingGroupSize},
+		{[]int{256, 2, 3}, MaxHoldingGroupSize},
+		{[]int{256, 1, 256}, MaxHoldingGroupSize},
+		{[]int{254, 1, 1}, MaxHoldingGroupSize},
+		{[]int{256, 255, 1}, MaxHoldingGroupSize},
+		{[]int{256, 256, 1}, MaxHoldingGroupSize},
+		{[]int{256, 256, 256}, MaxHoldingGroupSize},
+		{[]int{128, 179, 128, 142, 128, 164, 128, 156, 147}, MaxHoldingGroupSize},
+		{[]int{128, 168, 242, 128, 144, 255, 232}, MaxHoldingGroupSize},
+		{[]int{1, 2}, MaxParamsGroupSize},
+		{[]int{1, 2, 3}, MaxParamsGroupSize},
+		{[]int{1, 13, 3}, MaxParamsGroupSize},
+		{[]int{1, 12, 1}, MaxParamsGroupSize},
+		{[]int{14, 2, 3}, MaxParamsGroupSize},
+		{[]int{14, 1, 14}, MaxParamsGroupSize},
+		{[]int{12, 1, 1}, MaxParamsGroupSize},
 	}
 
-	// random test
-	n := rand.Intn(100)
-	sizes := make([]int, n, n)
-	for i := 0; i < n; i++ {
-		sizes[i] = rand.Intn(MaxHoldingGroupSize-1) + 1 // no zeroes please
+	addRandomTest := func(maxSize int) {
+		// random test
+		n := rand.Intn(100)
+		sizes := make([]int, n, n)
+		for i := 0; i < n; i++ {
+			sizes[i] = rand.Intn(maxSize-1) + 1 // no zeroes please
+		}
+		tests = append(tests, test{sizes, maxSize})
 	}
-	tests = append(tests, test{sizes})
+
+	addRandomTest(MaxHoldingGroupSize)
+	addRandomTest(MaxParamsGroupSize)
 
 	for n, test := range tests {
-		for _, size := range []uint32{MaxHoldingGroupSize, MaxParamsGroupSize} {
-			t.Run(fmt.Sprintf("%d_%d", n, size), func(t *testing.T) {
-				a := require.New(t)
-				sizes := test.sizes
-				groupsNeeded, groupsToDelete, totalAssets := estimate(sizes, int(size))
-				a.Equal(len(sizes), groupsNeeded+groupsToDelete)
-				e := genExtendedHoldingGroupsFromSizes(t, sizes, basics.AssetIndex(1))
-				oldCount := e.Count
+		size := uint32(test.maxSize)
+		t.Run(fmt.Sprintf("%d_%d", n, size), func(t *testing.T) {
+			a := require.New(t)
+			sizes := test.sizes
+			groupsNeeded, groupsToDelete, totalAssets := estimate(sizes, int(size))
+			a.Equal(len(sizes), groupsNeeded+groupsToDelete)
+			e := genExtendedHoldingGroupsFromSizes(t, sizes, basics.AssetIndex(1))
+			oldCount := e.Count
 
-				oldHoldings := getAllHoldings(e)
-				deleted := mergeInternal(&e, 0, len(sizes), groupsToDelete, size)
-				a.Equal(groupsToDelete, len(deleted))
-				a.Equal(groupsNeeded, len(e.Groups))
-				a.Equal(oldCount, e.Count)
-				for i := 0; i < groupsNeeded-1; i++ {
-					a.Equal(uint32(size), e.Groups[i].Count)
-				}
-				a.Equal(uint32(totalAssets-(groupsNeeded-1)*int(size)), e.Groups[groupsNeeded-1].Count)
-				newHoldings := getAllHoldings(e)
-				a.Equal(oldHoldings, newHoldings)
+			oldHoldings := getAllHoldings(e)
+			deleted := mergeInternal(&e, 0, len(sizes), groupsToDelete, size)
+			a.Equal(groupsToDelete, len(deleted))
+			a.Equal(groupsNeeded, len(e.Groups))
+			a.Equal(oldCount, e.Count)
+			for i := 0; i < groupsNeeded-1; i++ {
+				a.Equal(uint32(size), e.Groups[i].Count)
+			}
+			a.Equal(uint32(totalAssets-(groupsNeeded-1)*int(size)), e.Groups[groupsNeeded-1].Count)
+			newHoldings := getAllHoldings(e)
+			a.Equal(oldHoldings, newHoldings)
 
-			})
-		}
+		})
 	}
 }
 
@@ -1384,7 +1462,14 @@ func TestGroupMerge(t *testing.T) {
 
 		t.Run(fmt.Sprintf("params_%d", n), func(t *testing.T) {
 			a := require.New(t)
-			sizes := test.sizes
+			sizes := make([]int, len(test.sizes))
+			copy(sizes, test.sizes)
+			// fixup sizes
+			for i, size := range sizes {
+				if size > MaxParamsGroupSize {
+					sizes[i] = MaxParamsGroupSize - (MaxHoldingGroupSize - size)
+				}
+			}
 			e := genExtendedParamsGroupsFromSizes(t, sizes, basics.AssetIndex(1))
 			for _, gi := range test.unload {
 				e.Groups[gi].loaded = false
