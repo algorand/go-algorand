@@ -37,7 +37,9 @@ done
 shift $((OPTIND -1))
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-pushd "${SCRIPTPATH}/../.."
+pushd .
+cd ${SCRIPTPATH}
+(cd ../..; ${SCRIPTPATH}/../check_golang_version.sh dev)
 
 function get_go_version {
     cd "${SCRIPTPATH}"
