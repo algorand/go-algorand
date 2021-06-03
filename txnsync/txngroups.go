@@ -50,7 +50,7 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 		if len(txGroup.Transactions) > 1 {
 			for _, txn := range txGroup.Transactions {
 				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
-					return nil, 0, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
+					return nil, compressionFormatNone, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
 			}
@@ -68,7 +68,7 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 					stub.BitmaskGroup.SetBit(index)
 				}
 				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
-					return nil, 0, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
+					return nil, compressionFormatNone, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
 			}
@@ -83,12 +83,12 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 	if len(encoded) > minEncodedTransactionGroupsCompressionThreshold && float32(dataExchangeRate) < (estimatedGzipCompressionGains*estimatedGzipCompressionSpeed) {
 		compressedBytes, err := compressTransactionGroupsBytes(encoded)
 		if err == nil {
-			return compressedBytes, 1, nil
+			return compressedBytes, compressionFormatGzip, nil
 		}
 		s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(encoded), err)
 	}
 
-	return encoded, 0, nil
+	return encoded, compressionFormatNone, nil
 }
 
 func compressTransactionGroupsBytes(data []byte) ([]byte, error) {
@@ -111,17 +111,16 @@ func decodeTransactionGroups(data []byte, compressionFormat byte, genesisID stri
 		return nil, nil
 	}
 
-	if compressionFormat == 1 {
+	switch compressionFormat {
+	case compressionFormatNone:
+	case compressionFormatGzip:
 		data, err = decompressTransactionGroupsBytes(data)
 		if err != nil {
 			return
 		}
-	}
-
-	if compressionFormat > 1 {
+	default:
 		return nil, fmt.Errorf("invalid compressionFormat, %d", compressionFormat)
 	}
-
 	var stub txGroupsEncodingStub
 	_, err = stub.UnmarshalMsg(data)
 	if err != nil {

@@ -52,6 +52,11 @@ type requestParams struct {
 	Modulator byte `codec:"m"`
 }
 
+const (
+	compressionFormatNone byte = iota
+	compressionFormatGzip
+)
+
 type packedTransactionGroups struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
