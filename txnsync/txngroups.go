@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/logging"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -30,11 +29,11 @@ import (
 
 // gzip performance constants measured by BenchmarkTxnGroupCompression
 const estimatedGzipCompressionSpeed = 23071093.0 // bytes per second of how fast gzip compresses data
-const estimatedGzipCompressionGains = 0.32 // fraction of data reduced by gzip on txnsync msgs
+const estimatedGzipCompressionGains = 0.32       // fraction of data reduced by gzip on txnsync msgs
 
 const minEncodedTransactionGroupsCompressionThreshold = 1000
 
-func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExchangeRate uint64) ([]byte, byte, error) {
+func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExchangeRate uint64) ([]byte, byte, error) {
 	txnCount := 0
 	for _, txGroup := range inTxnGroups {
 		txnCount += len(txGroup.Transactions)
@@ -81,12 +80,12 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExcha
 
 	// check if time saved by compression: estimatedGzipCompressionGains * len(msg) / dataExchangeRate
 	// is greater than by time spent during compression: len(msg) / estimatedGzipCompressionSpeed
-	if len(encoded) > minEncodedTransactionGroupsCompressionThreshold && float32(dataExchangeRate) < (estimatedGzipCompressionGains * estimatedGzipCompressionSpeed) {
+	if len(encoded) > minEncodedTransactionGroupsCompressionThreshold && float32(dataExchangeRate) < (estimatedGzipCompressionGains*estimatedGzipCompressionSpeed) {
 		compressedBytes, err := compressTransactionGroupsBytes(encoded)
 		if err == nil {
 			return compressedBytes, 1, nil
 		}
-		logging.Base().Warnf("failed to compress txnsync msg: %v", err)
+		s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(encoded), err)
 	}
 
 	return encoded, 0, nil
@@ -98,6 +97,7 @@ func compressTransactionGroupsBytes(data []byte) ([]byte, error) {
 	zw := gzip.NewWriter(buf)
 
 	if _, err := zw.Write(data); err != nil {
+		zw.Close()
 		return nil, fmt.Errorf("error gzip compressing data: %w", err)
 	}
 	if err := zw.Close(); err != nil {
@@ -119,7 +119,7 @@ func decodeTransactionGroups(data []byte, compressionFormat byte, genesisID stri
 	}
 
 	if compressionFormat > 1 {
-		return nil, fmt.Errorf("invalid compressionFormat, %v", compressionFormat)
+		return nil, fmt.Errorf("invalid compressionFormat, %d", compressionFormat)
 	}
 
 	var stub txGroupsEncodingStub
@@ -158,8 +158,9 @@ func decodeTransactionGroups(data []byte, compressionFormat byte, genesisID stri
 	return txnGroups, nil
 }
 
-func decompressTransactionGroupsBytes(data []byte) (decoded []byte, err error){
+func decompressTransactionGroupsBytes(data []byte) (decoded []byte, err error) {
 	zr, err := gzip.NewReader(bytes.NewBuffer(data))
+	defer zr.Close()
 	if err != nil {
 		return nil, fmt.Errorf("error gzip decompressing data: %w", err)
 	}
