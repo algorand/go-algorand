@@ -1217,7 +1217,7 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]ledgercore.PersistedAccoun
 			}
 		}
 		if pad.ExtendedAssetParams.Count > 0 {
-			pad.AccountData.AssetParams, pad.ExtendedAssetParams, err = loadParams(stmt, pad.ExtendedAssetParams)
+			pad.AccountData.AssetParams, pad.ExtendedAssetParams, err = loadParams(stmt, pad.ExtendedAssetParams, 0)
 			if err != nil {
 				return
 			}

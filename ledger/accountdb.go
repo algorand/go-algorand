@@ -259,7 +259,7 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 	return
 }
 
-func loadCreatedDeletedGroups(agl ledgercore.AbstractAssetGroupList, delta accountDelta, create ledgercore.AssetAction, delete ledgercore.AssetAction, fetcher fetcher, adRound basics.Round) (err error) {
+func loadCreatedDeletedGroups(agl ledgercore.AbstractAssetGroupList, entityDelta ledgercore.EntityDelta, create ledgercore.EntityAction, delete ledgercore.EntityAction, fetcher fetcher, adRound basics.Round) (err error) {
 	for cidx, action := range entityDelta {
 		gi := -1
 		if action == create {
@@ -1102,9 +1102,6 @@ func lookupFull(rdb db.Accessor, addr basics.Address) (dbad dbAccountData, err e
 			if dbad.pad.ExtendedAssetParams.Count > 0 {
 				dbad.pad.AssetParams, dbad.pad.ExtendedAssetParams, err = loadParams(loadStmt, dbad.pad.ExtendedAssetParams, dbad.round)
 			}
-		if data.pad.ExtendedAssetParams.Count > 0 {
-			data.pad.AssetParams, data.pad.ExtendedAssetParams, err = loadParams(loadStmt, data.pad.ExtendedAssetParams)
-		}
 			return err
 		})
 		return err
@@ -1239,18 +1236,16 @@ func (qs *accountsDbQueries) close() {
 }
 
 func (qs *accountsDbQueries) loadHoldings(eah ledgercore.ExtendedAssetHolding, rnd basics.Round) (holdings map[basics.AssetIndex]basics.AssetHolding, result ledgercore.ExtendedAssetHolding, err error) {
-	holdings, result, err = loadHoldings(qs.loadAccountGroupDataStmt, eah, rnd)
+	err = db.Retry(func() error {
+		holdings, result, err = loadHoldings(qs.loadAccountGroupDataStmt, eah, rnd)
+		return err
+	})
 	return
 }
 
 func (qs *accountsDbQueries) loadParams(eap ledgercore.ExtendedAssetParams, rnd basics.Round) (params map[basics.AssetIndex]basics.AssetParams, result ledgercore.ExtendedAssetParams, err error) {
-	params, result, err = loadParams(qs.loadAccountGroupDataStmt, eap, rnd)
-	return
-}
-
-func (qs *accountsDbQueries) loadParams(eap ledgercore.ExtendedAssetParams) (params map[basics.AssetIndex]basics.AssetParams, result ledgercore.ExtendedAssetParams, err error) {
 	err = db.Retry(func() error {
-		params, result, err = loadParams(qs.loadAccountGroupDataStmt, eap)
+		params, result, err = loadParams(qs.loadAccountGroupDataStmt, eap, rnd)
 		return err
 	})
 	return
@@ -1364,17 +1359,17 @@ func loadHoldings(stmt *sql.Stmt, eah ledgercore.ExtendedAssetHolding, baseRound
 
 // loadParams initiates all params mentioned in ExtendedAssetHolding groups.
 // baseRound specifies a round number records need satisfy to. If baseRound is zero any data are OK.
-func loadParams(stmt *sql.Stmt, eah ledgercore.ExtendedAssetParams, baseRound basics.Round) (map[basics.AssetIndex]basics.AssetParams, ledgercore.ExtendedAssetParams, error) {
-	if len(eah.Groups) == 0 {
+func loadParams(stmt *sql.Stmt, eap ledgercore.ExtendedAssetParams, baseRound basics.Round) (map[basics.AssetIndex]basics.AssetParams, ledgercore.ExtendedAssetParams, error) {
+	if len(eap.Groups) == 0 {
 		return nil, ledgercore.ExtendedAssetParams{}, nil
 	}
 	var err error
-	params := make(map[basics.AssetIndex]basics.AssetParams, eah.Count)
-	groups := make([]ledgercore.AssetsParamsGroup, len(eah.Groups), len(eah.Groups))
+	params := make(map[basics.AssetIndex]basics.AssetParams, eap.Count)
+	groups := make([]ledgercore.AssetsParamsGroup, len(eap.Groups), len(eap.Groups))
 	fetcher := makeAssetFetcher(stmt)
 	fetchedRound := basics.Round(0)
-	for gi := range eah.Groups {
-		groups[gi] = eah.Groups[gi]
+	for gi := range eap.Groups {
+		groups[gi] = eap.Groups[gi]
 		fetchedRound, err = groups[gi].Fetch(fetcher, params)
 		if err != nil {
 			return nil, ledgercore.ExtendedAssetParams{}, err

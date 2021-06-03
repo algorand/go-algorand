@@ -1859,14 +1859,39 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 				}
 
 				// remove deleted assets that might come from loadHoldings
-				mods := delta.GetAssetDeltas(addr)
-				for aidx, action := range mods {
+				mods := delta.GetEntityHoldingDeltas(addr)
+				for cidx, action := range mods {
 					if action == ledgercore.ActionHoldingDelete {
-						delete(assets, aidx)
+						delete(assets, basics.AssetIndex(cidx))
 					}
 				}
-
 				data.Assets = assets
+
+				var params map[basics.AssetIndex]basics.AssetParams
+				params, data.ExtendedAssetParams, err = au.accountsq.loadParams(data.ExtendedAssetParams, 0)
+				if err != nil {
+					return ledgercore.PersistedAccountData{}, err
+				}
+				assetParams := make(map[basics.AssetIndex]basics.AssetParams, len(data.AssetParams)+len(params))
+
+				// apply loaded extended params
+				for aidx, param := range params {
+					assetParams[aidx] = param
+				}
+				// apply deltas
+				for aidx, param := range data.AssetParams {
+					assetParams[aidx] = param
+				}
+
+				// remove deleted assets that might come from loadParams
+				mods = delta.GetEntityParamsDeltas(addr)
+				for cidx, action := range mods {
+					if action == ledgercore.ActionParamsDelete {
+						delete(assetParams, basics.AssetIndex(cidx))
+					}
+				}
+				data.AssetParams = assetParams
+
 				return *data, nil
 			}
 
@@ -1875,12 +1900,6 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			if offset == uint64(len(au.deltas)) {
 				if full && (macct.data.ExtendedAssetHolding.Count != 0 || macct.data.ExtendedAssetParams.Count != 0) {
 					macct.data, err = loadFull(addr, &au.deltas[offset-1], &macct.data)
-					if err != nil {
-						return ledgercore.PersistedAccountData{}, err
-					}
-				}
-				if full && macct.data.ExtendedAssetParams.Count != 0 {
-					macct.data.AssetParams, macct.data.ExtendedAssetParams, err = au.accountsq.loadParams(macct.data.ExtendedAssetParams)
 					if err != nil {
 						return ledgercore.PersistedAccountData{}, err
 					}
@@ -1898,11 +1917,6 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 					// load existing holdings and apply deltas
 					if full && (macct.data.ExtendedAssetHolding.Count != 0 || macct.data.ExtendedAssetParams.Count != 0) {
 						d, err = loadFull(addr, &au.deltas[offset], &d)
-							return ledgercore.PersistedAccountData{}, err
-						}
-					}
-					if full && macct.data.ExtendedAssetParams.Count != 0 {
-						d.AssetParams, d.ExtendedAssetParams, err = au.accountsq.loadParams(d.ExtendedAssetParams)
 						if err != nil {
 							return ledgercore.PersistedAccountData{}, err
 						}
@@ -1981,28 +1995,29 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 	}
 }
 
-func lookupExtendedGroup(loadStmt *sql.Stmt, aidx basics.AssetIndex, agl ledgercore.AbstractAssetGroupList) (int, int, error) {
+func lookupExtendedGroup(loadStmt *sql.Stmt, aidx basics.AssetIndex, agl ledgercore.AbstractAssetGroupList) (int, int, basics.Round, error) {
 	var err error
+	var rnd basics.Round
 	const notFound = -1
 	gi, ai := agl.FindAsset(aidx, 0)
 	if gi != notFound {
 		// if matching group found but the group is not loaded then load it
 		if ai == notFound {
 			fetcher := makeAssetFetcher(loadStmt)
-			err = agl.Get(gi).Fetch(fetcher, nil)
+			rnd, err = agl.Get(gi).Fetch(fetcher, nil)
 			if err != nil {
-				return notFound, notFound, err
+				return notFound, notFound, 0, err
 			}
 			_, ai = agl.FindAsset(aidx, gi)
 		}
 	}
-	return gi, ai, err
+	return gi, ai, rnd, err
 }
 
-func lookupAssetHolding(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgercore.PersistedAccountData) error {
-	gi, ai, err := lookupExtendedGroup(loadStmt, aidx, &pad.ExtendedAssetHolding)
+func lookupAssetHolding(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgercore.PersistedAccountData) (basics.Round, error) {
+	gi, ai, rnd, err := lookupExtendedGroup(loadStmt, aidx, &pad.ExtendedAssetHolding)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if gi != -1 && ai != -1 {
 		if pad.AccountData.Assets == nil {
@@ -2011,13 +2026,13 @@ func lookupAssetHolding(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgerc
 		}
 		pad.AccountData.Assets[aidx] = pad.ExtendedAssetHolding.Groups[gi].GetHolding(ai)
 	}
-	return nil
+	return rnd, nil
 }
 
-func lookupAssetParams(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgercore.PersistedAccountData) error {
-	gi, ai, err := lookupExtendedGroup(loadStmt, aidx, &pad.ExtendedAssetParams)
+func lookupAssetParams(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgercore.PersistedAccountData) (basics.Round, error) {
+	gi, ai, rnd, err := lookupExtendedGroup(loadStmt, aidx, &pad.ExtendedAssetParams)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if gi != -1 && ai != -1 {
 		if pad.AccountData.Assets == nil {
@@ -2026,10 +2041,10 @@ func lookupAssetParams(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgerco
 		}
 		pad.AccountData.AssetParams[aidx] = pad.ExtendedAssetParams.Groups[gi].GetParams(ai)
 	}
-	return nil
+	return rnd, nil
 }
 
-// lookupWithHoldings returns the full account data for a given address at a given round.
+// lookupCreatableDataWithoutRewards returns the full account data for a given address at a given round.
 // The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
 func (au *accountUpdates) lookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, locators []creatableDataLocator, synchronized bool) (pad ledgercore.PersistedAccountData, err error) {
@@ -2045,20 +2060,24 @@ func (au *accountUpdates) lookupCreatableDataWithoutRewards(rnd basics.Round, ad
 			for _, loc := range assetLocators {
 				// if not extended params then all the params in pad.AccountData.AssetParams
 				if loc.global && pad.ExtendedAssetParams.Count != 0 {
-					err := lookupAssetParams(loadStmt, basics.AssetIndex(loc.cidx), pad)
+					round, err := lookupAssetParams(loadStmt, basics.AssetIndex(loc.cidx), pad)
 					if err != nil {
 						return err
 					}
 					if round != rnd {
-						au.log.Errorf("accountUpdates.lookupHoldingWithoutRewards: database round %d mismatching in-memory round %d", round, rnd)
+						au.log.Errorf("accountUpdates.lookupCreatableDataWithoutRewards: database round %d mismatching in-memory round %d", round, rnd)
 						return &MismatchingDatabaseRoundError{databaseRound: round, memoryRound: rnd}
 					}
 
 				}
 				if loc.local && pad.ExtendedAssetHolding.Count != 0 {
-					err := lookupAssetHolding(loadStmt, basics.AssetIndex(loc.cidx), pad)
+					round, err := lookupAssetHolding(loadStmt, basics.AssetIndex(loc.cidx), pad)
 					if err != nil {
 						return err
+					}
+					if round != rnd {
+						au.log.Errorf("accountUpdates.lookupCreatableDataWithoutRewards: database round %d mismatching in-memory round %d", round, rnd)
+						return &MismatchingDatabaseRoundError{databaseRound: round, memoryRound: rnd}
 					}
 				}
 			}

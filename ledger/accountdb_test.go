@@ -1037,7 +1037,7 @@ func TestAccountDBRoundAssetParams(t *testing.T) {
 	defer tx.Rollback()
 
 	accts := randomAccounts(20, true)
-	err = initTestAccountDB(tx, accts, proto)
+	_, err = initTestAccountDB(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 	err = tx.Commit()
