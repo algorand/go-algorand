@@ -186,7 +186,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		profTxnsSelection.start()
 		txnGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
 		profTxnsSelection.end()
-		metaMessage.message.TransactionGroups.Bytes, metaMessage.message.TransactionGroups.Compressed, err = encodeTransactionGroups(txnGroups, peer.dataExchangeRate)
+		metaMessage.message.TransactionGroups.Bytes, metaMessage.message.TransactionGroups.CompressionFormat, err = encodeTransactionGroups(txnGroups, peer.dataExchangeRate)
 		if err != nil {
 			return
 		}

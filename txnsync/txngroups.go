@@ -30,7 +30,7 @@ import (
 const compressionSpeed = 23071093.0 // bytes per second
 const compressionSavings = 0.32 // fraction of data reduced
 
-func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExchangeRate int) ([]byte, bool, error) {
+func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExchangeRate uint64) ([]byte, byte, error) {
 	txnCount := 0
 	for _, txGroup := range inTxnGroups {
 		txnCount += len(txGroup.Transactions)
@@ -47,7 +47,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExcha
 		if len(txGroup.Transactions) > 1 {
 			for _, txn := range txGroup.Transactions {
 				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
-					return nil, false, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
+					return nil, 0, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
 			}
@@ -65,7 +65,7 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExcha
 					stub.BitmaskGroup.SetBit(index)
 				}
 				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
-					return nil, false, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
+					return nil, 0, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
 				}
 				index++
 			}
@@ -77,10 +77,10 @@ func encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExcha
 
 	if len(encoded) > 1000 && (1.0 / compressionSpeed) < (compressionSavings / float32(dataExchangeRate)) {
 		compressedBytes, err := compressTransactionGroupsBytes(encoded)
-		return compressedBytes, true, err
+		return compressedBytes, 1, err
 	}
 
-	return encoded, false, nil
+	return encoded, 0, nil
 }
 
 func compressTransactionGroupsBytes(data []byte) ([]byte, error) {
@@ -97,12 +97,12 @@ func compressTransactionGroupsBytes(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func decodeTransactionGroups(data []byte, compressed bool, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {
+func decodeTransactionGroups(data []byte, compressionFormat byte, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
 
-	if compressed {
+	if compressionFormat == 1 {
 		data, err = decompressTransactionGroupsBytes(data)
 		if err != nil {
 			return
