@@ -393,7 +393,6 @@ func BenchmarkTxnGroupCompression(b *testing.B) {
 		compressedGroupBytes, err := compressTransactionGroupsBytes(encodedGroupsBytes)
 		require.NoError(b, err)
 		size = len(encodedGroupsBytes) - len(compressedGroupBytes)
-		releaseEncodedTransactionGroups(encodedGroupsBytes)
 	}
 
 	fmt.Printf("saved: %v bytes \n", size)
