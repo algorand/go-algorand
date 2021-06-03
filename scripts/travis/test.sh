@@ -15,6 +15,7 @@ chmod +x ~/gimme
 eval "$(~/gimme "${GOLANG_VERSION}")"
 
 "${SCRIPTPATH}/../buildtools/install_buildtools.sh" "gotest.tools/gotestsum"
+export GOTESTCOMMAND="gotestsum --format pkgname --jsonfile testresults.json --"
 
 if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; then
      # for arm, no tests need to be invoked.

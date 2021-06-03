@@ -40,7 +40,7 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 pushd "${SCRIPTPATH}/../.."
 
 function get_go_version {
-    cd "$(dirname "$0")"
+    cd "${SCRIPTPATH}"
     VERSION=$( grep "$1" 2>/dev/null < ./go.mod | awk -F " " '{print $2}')
     echo "$VERSION"
     return
@@ -56,6 +56,9 @@ function install_go_module {
     fi
     # Check for version to go.mod version
     VERSION=$(get_go_version "$1")
+
+    # TODO: When we switch to 1.16 this should be changed to use 'go install'
+    #       instead of 'go get': https://tip.golang.org/doc/go1.16#modules
     if [ -z "$VERSION" ]; then
         OUTPUT=$(GO111MODULE=off go get -u "${MODULE}" 2>&1)
     else
