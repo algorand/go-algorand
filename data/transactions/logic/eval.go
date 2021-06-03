@@ -2452,7 +2452,7 @@ func opGetByte(cx *evalContext) {
 	target := cx.stack[prev]
 
 	if idx >= uint64(len(target.Bytes)) {
-		cx.err = errors.New("getbyte index beyond byteslice")
+		cx.err = errors.New("getbyte index beyond array length")
 		return
 	}
 	cx.stack[prev].Uint = uint64(target.Bytes[idx])
@@ -2468,8 +2468,8 @@ func opSetByte(cx *evalContext) {
 		cx.err = errors.New("setbyte value > 255")
 		return
 	}
-	if cx.stack[prev].Uint > uint64(len(cx.stack[pprev].Bytes)) {
-		cx.err = errors.New("setbyte index > byte length")
+	if cx.stack[prev].Uint >= uint64(len(cx.stack[pprev].Bytes)) {
+		cx.err = errors.New("setbyte index beyond array length")
 		return
 	}
 	// Copy to avoid modifying shared slice
