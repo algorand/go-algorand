@@ -1308,6 +1308,16 @@ assert
 int 1
 `
 
+const testTxnProgramTextV4 = testTxnProgramTextV3 + `
+assert
+txn CreatableID
+int 0
+==
+
+
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1401,6 +1411,7 @@ func TestTxn(t *testing.T) {
 		1: testTxnProgramTextV1,
 		2: testTxnProgramTextV2,
 		3: testTxnProgramTextV3,
+		4: testTxnProgramTextV4,
 	}
 
 	clearOps := testProg(t, "int 1", 1)
@@ -1574,7 +1585,7 @@ int 2
 &&
 `
 
-	gtxnText := gtxnTextV1 + `gtxna 0 ApplicationArgs 0
+	gtxnTextV2 := gtxnTextV1 + `gtxna 0 ApplicationArgs 0
 byte 0x706179
 ==
 &&
@@ -1591,10 +1602,21 @@ int 1
 ==
 &&
 `
+	gtxnTextV4 := gtxnTextV2 + `
+gtxn 0 CreatableID
+bz fail
+int 1
+return
+
+fail:
+int 0
+return
+`
 
 	tests := map[uint64]string{
 		1: gtxnTextV1,
-		2: gtxnText,
+		2: gtxnTextV2,
+		4: gtxnTextV4,
 	}
 
 	for v, source := range tests {
