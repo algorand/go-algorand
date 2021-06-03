@@ -58,25 +58,32 @@ import (
 )
 
 var (
-	errorOutOfMemory           = errors.New("out of memory")
-	errorShortBuffer           = errors.New("short buffer")
-	errorNoInput               = errors.New("empty input")
-	errorBadData               = errors.New("data was corrupted, invalid or unsupported")
-	errorInsufficientSpace     = errors.New("decompression failed: buffer too short. Retry with larger buffer")
-	errorShortOutput           = errors.New("buffer too long: decompressed to fewer bytes than expected, indicating possible error in decompression. Make sure your out buffer has the exact length of the decompressed data or pass nil for out")
-	errorPartiallyConsumedData = errors.New("partially consumed data")
+	// ErrOutOfMemory is returned when we fail to allocate the compressor/decompressor
+	ErrOutOfMemory = errors.New("out of memory")
+	// ErrShortBuffer is returned when the output buffer is too small to fit the compressed/decompressed data
+	ErrShortBuffer = errors.New("short buffer")
+	// ErrNoInput is returned when no input buffer data is provided
+	ErrNoInput = errors.New("empty input")
+	// ErrBadData is returned when the compressed data is corrupted
+	ErrBadData = errors.New("data was corrupted, invalid or unsupported")
+	// ErrInsufficientSpace is returned when the provided output buffer is found to be too small during the decompression
+	ErrInsufficientSpace = errors.New("decompression failed: buffer too short. Retry with larger buffer")
+	// ErrShortOutput should not be generated using the current libdeflate usage, but remain here for compatibility
+	ErrShortOutput = errors.New("buffer too long: decompressed to fewer bytes than expected, indicating possible error in decompression. Make sure your out buffer has the exact length of the decompressed data or pass nil for out")
+	// ErrPartiallyConsumedData is returned if only a subset of the input data was consumed during the decompression
+	ErrPartiallyConsumedData = errors.New("partially consumed data")
 
-	// unknown error.
-	errorUnknown = errors.New("unknown error code from decompressor library")
+	// ErrUnknown returned when the libdeflate returns unexpected enum error
+	ErrUnknown = errors.New("unknown error code from decompressor library")
 )
 
 // Compress the input buffer into the output buffer.
 func Compress(in, out []byte, compressLevel int) (int, []byte, error) {
 	if len(in) == 0 {
-		return 0, out, errorNoInput
+		return 0, out, ErrNoInput
 	}
 	if cap(out) == 0 {
-		return 0, out, errorShortBuffer
+		return 0, out, ErrShortBuffer
 	}
 
 	if compressLevel < 1 {
@@ -87,7 +94,7 @@ func Compress(in, out []byte, compressLevel int) (int, []byte, error) {
 
 	c := C.libdeflate_alloc_compressor(C.int(compressLevel))
 	if C.isNull(unsafe.Pointer(c)) == 1 {
-		return 0, out, errorOutOfMemory
+		return 0, out, ErrOutOfMemory
 	}
 	defer func() {
 		C.libdeflate_free_compressor(c)
@@ -98,7 +105,7 @@ func Compress(in, out []byte, compressLevel int) (int, []byte, error) {
 	written := int(C.libdeflate_gzip_compress(c, unsafe.Pointer(inAddr), C.ulong(len(in)), unsafe.Pointer(outAddr), C.ulong(cap(out))))
 
 	if written == 0 {
-		return written, out, errorShortBuffer
+		return written, out, ErrShortBuffer
 	}
 	return written, out[:written], nil
 }
@@ -106,14 +113,14 @@ func Compress(in, out []byte, compressLevel int) (int, []byte, error) {
 // Decompress decompresses the input buffer data into the output buffer.
 func Decompress(in, out []byte) ([]byte, error) {
 	if len(in) == 0 {
-		return out, errorNoInput
+		return out, ErrNoInput
 	}
 	if cap(out) == 0 {
-		return out, errorShortBuffer
+		return out, ErrShortBuffer
 	}
 	dc := C.libdeflate_alloc_decompressor()
 	if C.isNull(unsafe.Pointer(dc)) == 1 {
-		return out, errorOutOfMemory
+		return out, ErrOutOfMemory
 	}
 	defer func() {
 		C.libdeflate_free_decompressor(dc)
@@ -132,17 +139,17 @@ func Decompress(in, out []byte) ([]byte, error) {
 	case C.LIBDEFLATE_SUCCESS:
 		if actualInBytes != C.size_t(len(in)) {
 			// return an error if not all the data was consumed.
-			return out, errorPartiallyConsumedData
+			return out, ErrPartiallyConsumedData
 		}
 		return out[:actualOutBytes], nil
 	case C.LIBDEFLATE_BAD_DATA:
-		return out, errorBadData
+		return out, ErrBadData
 	case C.LIBDEFLATE_SHORT_OUTPUT:
-		return out, errorShortOutput
+		return out, ErrShortOutput
 	case C.LIBDEFLATE_INSUFFICIENT_SPACE:
-		return out, errorInsufficientSpace
+		return out, ErrInsufficientSpace
 	default:
-		return out, errorUnknown
+		return out, ErrUnknown
 	}
 }
 
