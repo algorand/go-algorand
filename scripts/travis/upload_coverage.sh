@@ -3,19 +3,21 @@
 # Download codecov bash script, verify checksum from github, run script
 
 # fail if shasum detects a problem
-set -e
+set -eo pipefail
 
 FILE_ARG=""
 if [[ -f "$1" ]]; then
   FILE_ARG="-f $1"
 fi
 
-curl -fLso codecov https://codecov.io/bash;
-VERSION=$(grep -o 'VERSION=\"[0-9\.]*\"' codecov | cut -d'"' -f2);
+curl -fLso codecov https://codecov.io/bash
+VERSION=$(grep -o 'VERSION=\"[0-9\.]*\"' codecov | cut -d'"' -f2)
 for i in 1 256 512
 do
-  shasum -a $i -c --ignore-missing <(curl -s "https://raw.githubusercontent.com/codecov/codecov-bash/${VERSION}/SHA${i}SUM")
+  curl -so sum "https://raw.githubusercontent.com/codecov/codecov-bash/${VERSION}/SHA${i}SUM"
+  shasum -a $i -c --ignore-missing sum
 done
+rm sum
 
 # Unset everything except "TRAVIS*" variables.
 unset $(compgen -e | grep -v "^TRAVIS")
