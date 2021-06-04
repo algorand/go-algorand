@@ -1321,7 +1321,7 @@ func TestGroupMergeInternal(t *testing.T) {
 	type test struct {
 		sizes   []int
 		maxSize int
-		seed  int64
+		seed    int64
 	}
 
 	tests := []test{
@@ -1357,8 +1357,10 @@ func TestGroupMergeInternal(t *testing.T) {
 		tests = append(tests, test{sizes, maxSize, seed})
 	}
 
-	addRandomTest(MaxHoldingGroupSize)
-	addRandomTest(MaxParamsGroupSize)
+	for s := int64(1); s < 100; s++ {
+		addRandomTest(MaxHoldingGroupSize, s)
+		addRandomTest(MaxParamsGroupSize, s)
+	}
 
 	printSeed := false
 	for n, test := range tests {
@@ -1370,9 +1372,9 @@ func TestGroupMergeInternal(t *testing.T) {
 			a.Equal(len(sizes), groupsNeeded+groupsToDelete)
 			e := genExtendedHoldingGroupsFromSizes(t, sizes, basics.AssetIndex(1))
 			oldCount := e.Count
-				if test.seed != 0 && printSeed {
-					fmt.Printf("seed = %d\n", test.seed)
-				}
+			if test.seed != 0 && printSeed {
+				fmt.Printf("seed = %d\n", test.seed)
+			}
 
 			oldHoldings := getAllHoldings(e)
 			deleted := mergeInternal(&e, 0, len(sizes), groupsToDelete, size)

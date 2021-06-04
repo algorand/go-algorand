@@ -1103,7 +1103,7 @@ func TestLookupFull(t *testing.T) {
 	protoParams := config.Consensus[protocol.ConsensusFuture]
 
 	accts := randomAccounts(20, true)
-	err = initTestAccountDB(tx, accts, protoParams)
+	_, err = initTestAccountDB(tx, accts, protoParams)
 	a.NoError(err)
 
 	getAddrAD := func(map[basics.Address]basics.AccountData) (addr basics.Address, ad basics.AccountData) {

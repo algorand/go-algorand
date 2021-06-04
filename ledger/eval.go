@@ -247,7 +247,7 @@ func (cs *roundCowState) GetEx(addr basics.Address, cidx basics.CreatableIndex, 
 		return cs.Get(addr, false)
 	}
 
-	pad, err := cs.lookupCreatableData(addr, cidx, ctype, params, holding)
+	pad, err := cs.lookupCreatableData(addr, []creatableDataLocator{{cidx: cidx, ctype: ctype, global: params, local: holding}})
 	if err != nil {
 		return basics.AccountData{}, err
 	}

@@ -478,7 +478,7 @@ func (l *Ledger) LookupFull(rnd basics.Round, addr basics.Address) (basics.Accou
 func (l *Ledger) LookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
 	params := true
 	holdings := false
-	pad, err := l.lookupCreatableDataWithoutRewards(rnd, addr, cidx, ctype, params, holdings)
+	pad, err := l.lookupCreatableDataWithoutRewards(rnd, addr, []creatableDataLocator{{cidx: cidx, ctype: ctype, global: params, local: holdings}})
 	return pad.AccountData, err
 }
 
