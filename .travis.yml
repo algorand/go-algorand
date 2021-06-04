@@ -93,6 +93,11 @@ jobs:
 
     - stage: build_release
       os: linux
+      name: Ubuntu AMD64 CodeGen Verification
+      script:
+        - scripts/travis/codegen_verification.sh
+    - # same stage, parallel job
+      os: linux
       name: Ubuntu AMD64 Build
       script:
         - travis_retry ./scripts/travis/build_test.sh
@@ -102,11 +107,17 @@ jobs:
       script:
         - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
-      os: osx
-      osx_image: xcode11
-      name: MacOS AMD64 Build
+      name: External ARM64 Build
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
       script:
-        - travis_retry scripts/travis/build_test.sh
+        - travis_retry scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
       name: External ARM64 Integration Test
       os: linux
@@ -119,6 +130,18 @@ jobs:
             - awscli
       script:
         - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Build
+      script:
+        - travis_retry scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Integration Test
+      script:
+        - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
        os: windows
        name: Windows x64 Build
@@ -146,18 +169,6 @@ jobs:
       env:
         - BUILD_TYPE: "external_build"
         - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
-      script:
-        - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
-    - # same stage, parallel job
-      name: External ARM Deploy
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm"
       addons:
         apt:
           packages:
