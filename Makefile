@@ -228,13 +228,13 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=~/coverage.txt -covermode=atomic
+	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 fulltest: build-race
-	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=~/coverage.txt -covermode=atomic
+	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 shorttest: build-race
-	go test $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=~/coverage.txt -covermode=atomic
+	go test $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
