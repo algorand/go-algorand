@@ -279,3 +279,34 @@ func TestBuildMerkleTrie(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(0), blockRound)
 }
+
+// blockdb.go code
+// TODO: blockStartCatchupStaging called from StoreFirstBlock()
+// TODO: blockCompleteCatchup called from FinishBlocks()
+// TODO: blockAbortCatchup called from FinishBlocks()
+// TODO: blockPutStaging called from StoreBlock()
+// TODO: blockEnsureSingleBlock called from EnsureFirstBlock()
+
+func TestCatchupAccessorBlockdb(t *testing.T) {
+	// setup boilerplate
+	log := logging.TestingLog(t)
+	dbBaseFileName := t.Name()
+	const inMem = true
+	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer func() {
+		l.Close()
+	}()
+	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
+
+	progressCallCount := 0
+	progressNop := func(uint64) {
+		progressCallCount++
+	}
+
+	ctx := context.Background()
+
+	// actual testing...
+}
