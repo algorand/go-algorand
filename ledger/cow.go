@@ -71,16 +71,17 @@ type roundCowState struct {
 	compatibilityGetKeyCache map[basics.Address]map[storagePtr]uint64
 
 	// track creatables created during each transaction in the round
-	trackedCreatables []basics.CreatableLocator
+	trackedCreatables map[int]basics.CreatableLocator
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
 	cb := roundCowState{
-		lookupParent: b,
-		commitParent: nil,
-		proto:        config.Consensus[hdr.CurrentProtocol],
-		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
-		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
+		lookupParent:      b,
+		commitParent:      nil,
+		proto:             config.Consensus[hdr.CurrentProtocol],
+		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
+		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
+		trackedCreatables: make(map[int]basics.CreatableLocator),
 	}
 
 	// compatibilityMode retains producing application' eval deltas under the following rule:
@@ -227,12 +228,17 @@ func (cb *roundCowState) setCompactCertNext(rnd basics.Round) {
 
 func (cb *roundCowState) child(hint int) *roundCowState {
 	ch := roundCowState{
-		lookupParent:      cb,
-		commitParent:      cb,
-		proto:             cb.proto,
-		mods:              ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.CompactCertNext),
-		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
-		trackedCreatables: make([]basics.CreatableLocator, hint),
+		lookupParent: cb,
+		commitParent: cb,
+		proto:        cb.proto,
+		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.CompactCertNext),
+		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
+	}
+
+	// clone tracked creatables
+	ch.trackedCreatables = make(map[int]basics.CreatableLocator)
+	for i, tc := range cb.trackedCreatables {
+		ch.trackedCreatables[i] = tc
 	}
 
 	if cb.compatibilityMode {
@@ -272,6 +278,9 @@ func (cb *roundCowState) commitToParent() {
 				cb.commitParent.sdeltas[addr][aapp] = nsd
 			}
 		}
+	}
+	for gidx, tc := range cb.trackedCreatables {
+		cb.commitParent.trackedCreatables[gidx] = tc
 	}
 	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
 }

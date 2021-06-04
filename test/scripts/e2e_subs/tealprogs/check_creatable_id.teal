@@ -1,0 +1,24 @@
+#pragma version 4
+        txn ApplicationID
+        bz skip                 // skip code on creation
+
+        int OptIn
+        txn OnCompletion
+        ==
+        bnz skip                 // skip code on opt-in
+
+main:
+        // This program allows the reading of creatable ids.
+        // ARGS = groupIndex
+        //   -> succeeds if the creatableID of that groupIndex is non-zero
+
+        txn ApplicationArgs 0  // groupIndex
+        btoi
+        gtxns CreatableID
+        int 0
+        >
+        return
+
+skip:
+        int 1
+        return
