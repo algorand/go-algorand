@@ -27,7 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -147,6 +147,8 @@ func (am *Tracker) ProcessMessage(txn v1.Transaction) error {
 				continue
 			}
 
+			d := msg.SignedDeposit.Deposit
+			log.Infof("Deposit (id=%d) of %d from bidder (%s, %d, %s)", d.DepositID, d.Currency, d.BidderKey, d.AuctionID, d.AuctionKey)
 			if err = am.placeDeposit(msg.SignedDeposit.Deposit, txn.ConfirmedRound); err != nil {
 				log.Warnf("Placing deposit failed, dropping message, err: %v", err)
 				continue
@@ -164,6 +166,8 @@ func (am *Tracker) ProcessMessage(txn v1.Transaction) error {
 				continue
 			}
 
+			b := msg.SignedBid.Bid
+			log.Infof("Bid (id=%d) of %d maxprice=%d from bidder (%s, %d, %s)", b.BidID, b.BidCurrency, b.MaxPrice, b.BidderKey, b.AuctionID, b.AuctionKey)
 			if err = am.placeBid(msg.SignedBid.Bid, txn.ConfirmedRound); err != nil {
 				log.Warnf("Placing bid failed, dropping message, err: %v", err)
 				continue

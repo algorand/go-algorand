@@ -282,6 +282,8 @@ func (f *AuctionFixture) StartAuctionWithAuctionMasterBalance(auctionParamFile s
 		return
 	}
 
+	fmt.Println(stdout)
+
 	f.abPid, err = f.GetAuctionBankPid()
 	f.abPort, _ = f.GetAuctionBankPort()
 
@@ -819,7 +821,7 @@ func (f *AuctionFixture) signBid(walletHandle []byte, password string, account s
 
 	auctionKeyAddress, err := basics.UnmarshalChecksumAddress(auctionKey)
 	if err != nil {
-		f.t.Errorf("Errror getting auctionKey address %v", err)
+		f.t.Errorf("Error getting auctionKey address %v", err)
 	}
 
 	var auctionKeyCryptoDigest crypto.Digest

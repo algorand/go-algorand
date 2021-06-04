@@ -313,9 +313,9 @@ func TestStartAndEndAuctionTenUsersOneBidEach(t *testing.T) {
 }
 
 func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	// if runtime.GOOS == "darwin" {
+	// 	t.Skip()
+	// }
 	t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
 	var fixture fixtures.AuctionFixture
@@ -382,6 +382,7 @@ func TestStartAndEndAuctionTenUsersTenBidsEach(t *testing.T) {
 				price, _ = fixture.ComputeCurrentPrice(curStatus.LastRound, params.FirstRound, params.NumChunks, params.PriceChunkRounds, params.LastPrice, params.MaxPriceMultiple)
 				price = price + 1
 			}
+			t.Logf("Bid (id=%d) of %d with maxprice %d from bidder (%s, %d, %s)", bidID, currencySpentOnEachBid, price, bidder, auctionID.AuctionID, auctionKey)
 			txid, _, err := fixture.MakeAndPostBidAndDeposit(bidID, auctionID.AuctionID, auctionKey, bidder, price, currencySpentOnEachBid)
 			r.NoError(err)
 			t.Logf("MakeAndPostBidAndDeposit() returned transaction id %s", txid)
