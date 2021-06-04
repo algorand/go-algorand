@@ -1,6 +1,7 @@
 {
   "Genesis": {
     "NetworkName": "tbd",
+    "ConsensusProtocol": "shortpartkeysprotocol",
     "Wallets": [
       {
         "Name": "Rich",

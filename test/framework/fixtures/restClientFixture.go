@@ -287,6 +287,21 @@ func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassw
 	return
 }
 
+// VerifyBlockProposed checks the rounds starting at fromRounds and moving backwards checking countDownNumRounds rounds if any
+// blocks were proposed by address
+func (f *RestClientFixture) VerifyBlockProposedRange(account string, fromRound, countDownNumRounds int) (blockWasProposed bool) {
+	c := f.LibGoalClient
+	for i := 0; i < countDownNumRounds; i++ {
+		block, err := c.Block(uint64(fromRound - i))
+		require.NoError(f.t, err, "client failed to get block %d", fromRound - i)
+		if block.Proposer == account {
+			blockWasProposed = true
+			break
+		}
+	}
+	return
+}
+
 // VerifyBlockProposed checks the last searchRange blocks to see if any blocks were proposed by address
 func (f *RestClientFixture) VerifyBlockProposed(account string, searchRange int) (blockWasProposed bool) {
 	c := f.LibGoalClient
@@ -294,15 +309,7 @@ func (f *RestClientFixture) VerifyBlockProposed(account string, searchRange int)
 	if err != nil {
 		require.NoError(f.t, err, "client failed to get the last round")
 	}
-	for i := 0; i < searchRange; i++ {
-		block, err := c.Block(currentRound - uint64(i))
-		require.NoError(f.t, err, "client failed to get block %d", currentRound-uint64(i))
-		if block.Proposer == account {
-			blockWasProposed = true
-			break
-		}
-	}
-	return
+	return f.VerifyBlockProposedRange(account, int(currentRound), int(searchRange))
 }
 
 // GetBalancesOnSameRound gets the balances for the passed addresses, and keeps trying until the balances are all the same round
