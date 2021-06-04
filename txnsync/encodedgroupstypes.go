@@ -110,17 +110,17 @@ type encodedTxns struct {
 type encodedTxnHeaders struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sender             []byte              `codec:"snd,allocbound=maxAddressBytes"`
-	BitmaskSender      bitmask             `codec:"sndbm"`
-	Fee                []basics.MicroAlgos `codec:"fee,allocbound=maxEncodedTransactionGroup"`
-	BitmaskFee         bitmask             `codec:"feebm"`
-	FirstValid         []basics.Round      `codec:"fv,allocbound=maxEncodedTransactionGroup"`
-	BitmaskFirstValid  bitmask             `codec:"fvbm"`
-	LastValid          []basics.Round      `codec:"lv,allocbound=maxEncodedTransactionGroup"`
-	BitmaskLastValid   bitmask             `codec:"lvbm"`
-	Note               [][]byte            `codec:"note,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxTxnNoteBytes"`
-	BitmaskNote        bitmask             `codec:"notebm"`
-	BitmaskGenesisID   bitmask             `codec:"genbm"`
+	Sender            []byte              `codec:"snd,allocbound=maxAddressBytes"`
+	BitmaskSender     bitmask             `codec:"sndbm"`
+	Fee               []basics.MicroAlgos `codec:"fee,allocbound=maxEncodedTransactionGroup"`
+	BitmaskFee        bitmask             `codec:"feebm"`
+	FirstValid        []basics.Round      `codec:"fv,allocbound=maxEncodedTransactionGroup"`
+	BitmaskFirstValid bitmask             `codec:"fvbm"`
+	LastValid         []basics.Round      `codec:"lv,allocbound=maxEncodedTransactionGroup"`
+	BitmaskLastValid  bitmask             `codec:"lvbm"`
+	Note              [][]byte            `codec:"note,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxTxnNoteBytes"`
+	BitmaskNote       bitmask             `codec:"notebm"`
+	BitmaskGenesisID  bitmask             `codec:"genbm"`
 
 	BitmaskGroup bitmask `codec:"grpbm"`
 
@@ -283,6 +283,9 @@ type encodedApplicationCallTxnFields struct {
 
 	ClearStateProgram        []program `codec:"apsu,allocbound=maxEncodedTransactionGroup"`
 	BitmaskClearStateProgram bitmask   `codec:"apsubm"`
+
+	ExtraProgramPages        []uint32 `codec:"apep,allocbound=maxEncodedTransactionGroup"`
+	BitmaskExtraProgramPages bitmask  `codec:"apepbm"`
 }
 
 type encodedCompactCertTxnFields struct {

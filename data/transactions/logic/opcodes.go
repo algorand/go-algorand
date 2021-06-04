@@ -21,7 +21,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 3
+const LogicVersion = 4
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -32,6 +32,10 @@ const rekeyingEnabledVersion = 2
 // functionality was enabled. We use this to disallow v0 and v1 TEAL programs
 // from being used with applications. Do not edit!
 const appsEnabledVersion = 2
+
+// backBranchEabledVersion is the version of TEAL where branches could
+// go back (and cost accounting was done during execution)
+const backBranchEnabledVersion = 4
 
 // opDetails records details such as non-standard costs, immediate
 // arguments, or dynamic layout controlled by a check function.
@@ -151,6 +155,7 @@ var OpSpecs = []OpSpec{
 	{0x1c, "~", opBitNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opDefault},
 	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opDefault},
 	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opDefault},
+	{0x1f, "divmodw", opDivModw, asmDefault, disDefault, twoInts.plus(twoInts), twoInts.plus(twoInts), 4, modeAny, costly(20)},
 
 	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, varies(checkIntConstBlock, "uint ...", immInts)},
 	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, immediates("i")},
@@ -184,6 +189,9 @@ var OpSpecs = []OpSpec{
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
 	{0x38, "gtxns", opGtxns, assembleGtxns, disTxn, oneInt, oneAny, 3, modeAny, immediates("f")},
 	{0x39, "gtxnsa", opGtxnsa, assembleGtxns, disTxna, oneInt, oneAny, 3, modeAny, immediates("f", "i")},
+	// Group scratch space access
+	{0x3a, "gload", opGload, asmDefault, disDefault, nil, oneAny, 4, runModeApplication, immediates("t", "i")},
+	{0x3b, "gloads", opGloads, asmDefault, disDefault, oneInt, oneAny, 4, runModeApplication, immediates("i")},
 
 	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opBranch},
 	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opBranch},
@@ -203,7 +211,7 @@ var OpSpecs = []OpSpec{
 	{0x51, "substring", opSubstring, assembleSubstring, disDefault, oneBytes, oneBytes, 2, modeAny, immediates("s", "e")},
 	{0x52, "substring3", opSubstring3, asmDefault, disDefault, byteIntInt, oneBytes, 2, modeAny, opDefault},
 	{0x53, "getbit", opGetBit, asmDefault, disDefault, anyInt, oneInt, 3, modeAny, opDefault},
-	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneInt, 3, modeAny, opDefault},
+	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneAny, 3, modeAny, opDefault},
 	{0x55, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opDefault},
 	{0x56, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opDefault},
 
@@ -226,6 +234,37 @@ var OpSpecs = []OpSpec{
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, asmPushBytes, disPushBytes, nil, oneBytes, 3, modeAny, varies(checkPushBytes, "bytes", immBytes)},
 	{0x81, "pushint", opPushInt, asmPushInt, disPushInt, nil, oneInt, 3, modeAny, varies(checkPushInt, "uint", immInt)},
+
+	// "Function oriented"
+	{0x88, "callsub", opCallSub, assembleBranch, disBranch, nil, nil, 4, modeAny, opBranch},
+	{0x89, "retsub", opRetSub, asmDefault, disDefault, nil, nil, 4, modeAny, opDefault},
+	// Leave a little room for indirect function calls, or similar
+
+	// More math
+	{0x90, "shl", opShiftLeft, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
+	{0x91, "shr", opShiftRight, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
+	{0x92, "sqrt", opSqrt, asmDefault, disDefault, oneInt, oneInt, 4, modeAny, costly(4)},
+	{0x93, "bitlen", opBitLen, asmDefault, disDefault, oneAny, oneInt, 4, modeAny, opDefault},
+	{0x94, "exp", opExp, asmDefault, disDefault, twoInts, oneInt, 4, modeAny, opDefault},
+	{0x95, "expw", opExpw, asmDefault, disDefault, twoInts, twoInts, 4, modeAny, costly(10)},
+
+	// Byteslice math.
+	{0xa0, "b+", opBytesPlus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},
+	{0xa1, "b-", opBytesMinus, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(10)},
+	{0xa2, "b/", opBytesDiv, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(20)},
+	{0xa3, "b*", opBytesMul, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(20)},
+	{0xa4, "b<", opBytesLt, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xa5, "b>", opBytesGt, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xa6, "b<=", opBytesLe, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xa7, "b>=", opBytesGe, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xa8, "b==", opBytesEq, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xa9, "b!=", opBytesNeq, asmDefault, disDefault, twoBytes, oneInt, 4, modeAny, opDefault},
+	{0xaa, "b%", opBytesModulo, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(20)},
+	{0xab, "b|", opBytesBitOr, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(6)},
+	{0xac, "b&", opBytesBitAnd, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(6)},
+	{0xad, "b^", opBytesBitXor, asmDefault, disDefault, twoBytes, oneBytes, 4, modeAny, costly(6)},
+	{0xae, "b~", opBytesBitNot, asmDefault, disDefault, oneBytes, oneBytes, 4, modeAny, costly(4)},
+	{0xaf, "bzero", opBytesZero, asmDefault, disDefault, oneInt, oneBytes, 4, modeAny, opDefault},
 }
 
 type sortByOpcode []OpSpec

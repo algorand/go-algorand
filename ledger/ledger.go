@@ -101,7 +101,6 @@ func OpenLedger(
 	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
-
 	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
 	if verifiedCacheSize < cfg.TxPoolSize {
 		verifiedCacheSize = cfg.TxPoolSize
@@ -259,15 +258,24 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs
 	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
 	blockDBFilename = dbPathPrefix + ".block.sqlite"
 
-	trackerDBs, err = db.OpenPair(trackerDBFilename, dbMem)
-	if err != nil {
-		return
-	}
+	outErr := make(chan error, 2)
+	go func() {
+		var lerr error
+		trackerDBs, lerr = db.OpenPair(trackerDBFilename, dbMem)
+		outErr <- lerr
+	}()
 
-	blockDBs, err = db.OpenPair(blockDBFilename, dbMem)
+	go func() {
+		var lerr error
+		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
+		outErr <- lerr
+	}()
+
+	err = <-outErr
 	if err != nil {
 		return
 	}
+	err = <-outErr
 	return
 }
 
@@ -322,26 +330,6 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockInit 2 %v", err)
 				return err
-			}
-		}
-
-		// Manually replace block 0, even if we already had it
-		// (necessary to normalize the payset commitment because of a
-		// bug that caused its value to change)
-		//
-		// Don't bother for non-archival nodes since they will toss
-		// block 0 almost immediately
-		//
-		// TODO remove this once a version containing this code has
-		// been deployed to archival nodes
-		if len(initBlocks) > 0 && initBlocks[0].Round() == basics.Round(0) {
-			updated, err := blockReplaceIfExists(tx, l.log, initBlocks[0], agreement.Certificate{})
-			if err != nil {
-				err = fmt.Errorf("initBlocksDB.blockReplaceIfExists %v", err)
-				return err
-			}
-			if updated {
-				l.log.Infof("initBlocksDB replaced block 0")
 			}
 		}
 	}

@@ -63,9 +63,6 @@ fi
 set -e
 scripts/travis/before_build.sh
 
-# Force re-evaluation of genesis files to see if source files changed w/o running make
-touch gen/generate.go
-
 if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; then
     # for arm, build just the basic distro
     # for windows, we still have some issues with the enlistment checking, so we'll make it simple for now.
@@ -73,17 +70,6 @@ if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; t
 fi
 
 if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
-    # Force re-generation of msgpack encoders/decoders with msgp.  If this re-generated code
-    # does not match the checked-in code, some structs may have been added or updated without
-    # refreshing the generated codecs.  The enlistment check below will error out, if so.
-    # we want to have that only on system where we have some debugging abilities. Platforms that do not support
-    # debugging ( i.e. arm ) are also usually under powered and making this extra step
-    # would be very costly there.
-    if [ "${BUILD_TYPE}" = "integration" ]; then
-        echo "Skipping msgp regeneration on integration test"
-    else
-        make msgp
-    fi
     make build build-race
 else
     make build
