@@ -56,6 +56,7 @@ type roundCowState struct {
 	commitParent *roundCowState
 	proto        config.ConsensusParams
 	mods         ledgercore.StateDelta
+	groupIdx     int
 
 	// storage deltas populated as side effects of AppCall transaction
 	// 1. Opt-in/Close actions (see Allocate/Deallocate)
@@ -68,6 +69,9 @@ type roundCowState struct {
 	compatibilityMode bool
 	// cache mainaining accountIdx used in getKey for local keys access
 	compatibilityGetKeyCache map[basics.Address]map[storagePtr]uint64
+
+	// track creatables created during each transaction in the round
+	trackedCreatables []basics.CreatableLocator
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
@@ -131,6 +135,10 @@ func (cb *roundCowState) round() basics.Round {
 
 func (cb *roundCowState) prevTimestamp() int64 {
 	return cb.mods.PrevTimestamp
+}
+
+func (cb *roundCowState) getCreatable(groupIdx int) basics.CreatableLocator {
+	return cb.trackedCreatables[groupIdx]
 }
 
 func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
@@ -204,6 +212,10 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 	}
 }
 
+func (cb *roundCowState) trackCreatable(creatable *basics.CreatableLocator) {
+	cb.trackedCreatables[cb.groupIdx] = *creatable
+}
+
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
 	cb.mods.Txids[txid] = txn.LastValid
 	cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
@@ -215,11 +227,12 @@ func (cb *roundCowState) setCompactCertNext(rnd basics.Round) {
 
 func (cb *roundCowState) child(hint int) *roundCowState {
 	ch := roundCowState{
-		lookupParent: cb,
-		commitParent: cb,
-		proto:        cb.proto,
-		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.CompactCertNext),
-		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
+		lookupParent:      cb,
+		commitParent:      cb,
+		proto:             cb.proto,
+		mods:              ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.CompactCertNext),
+		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
+		trackedCreatables: make([]basics.CreatableLocator, hint),
 	}
 
 	if cb.compatibilityMode {
@@ -227,6 +240,11 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 		ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
 	}
 	return &ch
+}
+
+// setGroupIdx sets this transaction's index within its group
+func (cb *roundCowState) setGroupIdx(txnIdx int) {
+	cb.groupIdx = txnIdx
 }
 
 func (cb *roundCowState) commitToParent() {

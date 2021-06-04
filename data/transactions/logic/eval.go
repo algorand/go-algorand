@@ -136,6 +136,7 @@ type LedgerForLogic interface {
 	ApplicationID() basics.AppIndex
 	CreatorAddress() basics.Address
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
+	GetCreatableID(groupIdx int) basics.CreatableIndex
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (value basics.TealValue, exists bool, err error)
 	SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error
@@ -1780,6 +1781,12 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case TxID:
 		txid := cx.getTxID(txn, groupIndex)
 		sv.Bytes = txid[:]
+	case CreatableID:
+		cid, err := cx.getCreatableID(groupIndex)
+		if err != nil {
+			return sv, err
+		}
+		sv.Uint = cid
 	case Lease:
 		sv.Bytes = txn.Lease[:]
 	case ApplicationID:
@@ -2090,6 +2097,14 @@ func (cx *evalContext) getApplicationID() (rnd uint64, err error) {
 		return
 	}
 	return uint64(cx.Ledger.ApplicationID()), nil
+}
+
+func (cx *evalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+	return uint64(cx.Ledger.GetCreatableID(groupIndex)), nil
 }
 
 func (cx *evalContext) getCreatorAddress() ([]byte, error) {

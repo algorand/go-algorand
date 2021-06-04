@@ -238,6 +238,10 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 	return acct, nil
 }
 
+func (cs *roundCowState) GetCreatableID(groupIdx int) basics.CreatableIndex {
+	return cs.getCreatable(groupIdx).Index
+}
+
 func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return cs.getCreator(cidx, ctype)
 }
@@ -248,6 +252,11 @@ func (cs *roundCowState) Put(addr basics.Address, acct basics.AccountData) error
 
 func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	cs.put(addr, acct, newCreatable, deletedCreatable)
+
+	// store the creatable locator
+	if newCreatable != nil {
+		cs.trackCreatable(newCreatable)
+	}
 	return nil
 }
 
@@ -723,6 +732,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
+		cow.setGroupIdx(gi)
 		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
