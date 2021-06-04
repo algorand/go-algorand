@@ -421,98 +421,96 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	//require.True(t, s.fetcherFactory.(*MockedFetcherFactory).fetcher.client.closed)
 }
 
-func TestOnSwitchToUnSupportedProtocol(t *testing.T) {
-	t.Skip("This test is flacky and need to be fixed.")
+// Test the interruption in the initial loop
+// This cannot happen in practice, but is used to test the code.
+func TestOnSwitchToUnSupportedProtocol1(t *testing.T) {
 
-	// Test the interruption in the initial loop
-	// This cannot happen in practice, but is used to test the code.
-	{
-		lastRoundRemote := 5
-		lastRoundLocal := 0
-		roundWithSwitchOn := 0
-		local, remote := helperTestOnSwitchToUnSupportedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
+	lastRoundRemote := 5
+	lastRoundLocal := 0
+	roundWithSwitchOn := 0
+	local, remote := helperTestOnSwitchToUnSupportedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
 
-		// Last supported round is 0, but is guaranteed
-		// to stop after 2 rounds.
+	// Last supported round is 0, but is guaranteed
+	// to stop after 2 rounds.
 
-		// SeedLookback is 2, which allows two parallel fetches.
-		// i.e. rounds 1 and 2 may be simultaneously fetched.
-		require.Less(t, int(local.LastRound()), 3)
-		require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-		remote.Ledger.Close()
+	// SeedLookback is 2, which allows two parallel fetches.
+	// i.e. rounds 1 and 2 may be simultaneously fetched.
+	require.Less(t, int(local.LastRound()), 3)
+	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
+	remote.Ledger.Close()
+}
+
+// Test the interruption in "the rest" loop
+func TestOnSwitchToUnSupportedProtocol2(t *testing.T) {
+
+	lastRoundRemote := 10
+	lastRoundLocal := 7
+	roundWithSwitchOn := 5
+	local, remote := helperTestOnSwitchToUnSupportedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
+	for r := 1; r <= lastRoundLocal; r++ {
+		blk, err := local.Block(basics.Round(r))
+		require.NoError(t, err)
+		require.Equal(t, r, int(blk.Round()))
 	}
+	require.Equal(t, lastRoundLocal, int(local.LastRound()))
+	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
+	remote.Ledger.Close()
+}
 
-	// Test the interruption in "the rest" loop
-	{
-		lastRoundRemote := 10
-		lastRoundLocal := 7
-		roundWithSwitchOn := 5
-		local, remote := helperTestOnSwitchToUnSupportedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
-		for r := 1; r <= lastRoundLocal; r++ {
-			blk, err := local.Block(basics.Round(r))
-			require.NoError(t, err)
-			require.Equal(t, r, int(blk.Round()))
-		}
-		require.Equal(t, lastRoundLocal, int(local.LastRound()))
-		require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-		remote.Ledger.Close()
+// Test the interruption with short notice (less than
+// SeedLookback or the number of parallel fetches which in the
+// test is the same: 2)
+// This can not happen in practice, because there will be
+// enough rounds for the protocol upgrade notice.
+func TestOnSwitchToUnSupportedProtocol3(t *testing.T) {
+
+	lastRoundRemote := 14
+	lastRoundLocal := 7
+	roundWithSwitchOn := 7
+	local, remote := helperTestOnSwitchToUnSupportedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
+	for r := 1; r <= lastRoundLocal; r = r + 1 {
+		blk, err := local.Block(basics.Round(r))
+		require.NoError(t, err)
+		require.Equal(t, r, int(blk.Round()))
 	}
+	// Since round with switch on (7) can be fetched
+	// Simultaneously with round 8, round 8 might also be
+	// fetched.
+	require.Less(t, int(local.LastRound()), lastRoundLocal+2)
+	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
+	remote.Ledger.Close()
+}
 
-	// Test the interruption with short notice (less than
-	// SeedLookback or the number of parallel fetches which in the
-	// test is the same: 2)
+// Test the interruption with short notice (less than
+// SeedLookback or the number of parallel fetches which in the
+// test is the same: 2)
+// This case is a variation of the previous case. This may
+// happen when the catchup service restart at the round when
+// an upgrade happens.
+func TestOnSwitchToUnSupportedProtocol4(t *testing.T) {
 
-	// This can not happen in practice, because there will be
-	// enough rounds for the protocol upgrade notice.
-	{
-		lastRoundRemote := 14
-		lastRoundLocal := 7
-		roundWithSwitchOn := 7
-		local, remote := helperTestOnSwitchToUnSupportedProtocol(t, lastRoundRemote, lastRoundLocal, roundWithSwitchOn, 0)
-		for r := 1; r <= lastRoundLocal; r = r + 1 {
-			blk, err := local.Block(basics.Round(r))
-			require.NoError(t, err)
-			require.Equal(t, r, int(blk.Round()))
-		}
-		// Since round with switch on (7) can be fetched
-		// Simultaneously with round 8, round 8 might also be
-		// fetched.
-		require.Less(t, int(local.LastRound()), lastRoundLocal+2)
-		require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-		remote.Ledger.Close()
+	lastRoundRemote := 14
+	lastRoundLocal := 7
+	roundWithSwitchOn := 7
+	roundsAlreadyInLocal := 8 // round 0 -> 7
+
+	local, remote := helperTestOnSwitchToUnSupportedProtocol(
+		t,
+		lastRoundRemote,
+		lastRoundLocal,
+		roundWithSwitchOn,
+		roundsAlreadyInLocal)
+
+	for r := 1; r <= lastRoundLocal; r = r + 1 {
+		blk, err := local.Block(basics.Round(r))
+		require.NoError(t, err)
+		require.Equal(t, r, int(blk.Round()))
 	}
-
-	// Test the interruption with short notice (less than
-	// SeedLookback or the number of parallel fetches which in the
-	// test is the same: 2)
-
-	// This case is a variation of the previous case. This may
-	// happen when the catchup service restart at the round when
-	// an upgrade happens.
-	{
-		lastRoundRemote := 14
-		lastRoundLocal := 7
-		roundWithSwitchOn := 7
-		roundsAlreadyInLocal := 8 // round 0 -> 7
-
-		local, remote := helperTestOnSwitchToUnSupportedProtocol(
-			t,
-			lastRoundRemote,
-			lastRoundLocal,
-			roundWithSwitchOn,
-			roundsAlreadyInLocal)
-
-		for r := 1; r <= lastRoundLocal; r = r + 1 {
-			blk, err := local.Block(basics.Round(r))
-			require.NoError(t, err)
-			require.Equal(t, r, int(blk.Round()))
-		}
-		// Since round with switch on (7) is already in the
-		// ledger, round 8 will not be fetched.
-		require.Equal(t, int(local.LastRound()), lastRoundLocal)
-		require.Equal(t, lastRoundRemote, int(remote.LastRound()))
-		remote.Ledger.Close()
-	}
+	// Since round with switch on (7) is already in the
+	// ledger, round 8 will not be fetched.
+	require.Equal(t, int(local.LastRound()), lastRoundLocal)
+	require.Equal(t, lastRoundRemote, int(remote.LastRound()))
+	remote.Ledger.Close()
 }
 
 func helperTestOnSwitchToUnSupportedProtocol(
@@ -535,14 +533,16 @@ func helperTestOnSwitchToUnSupportedProtocol(
 	config := defaultConfig
 	config.CatchupParallelBlocks = 2
 
-	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{}) //mRemote.blocks[0])
+	block1 := mRemote.blocks[1]
+	remote, _, blk, err := buildTestLedger(t, block1)
 	if err != nil {
 		t.Fatal(err)
 		return local, remote
 	}
 	for i := 1; i < lastRoundRemote; i++ {
-		blk.NextProtocolSwitchOn = mRemote.blocks[i].NextProtocolSwitchOn
-		blk.NextProtocol = mRemote.blocks[i].NextProtocol
+		blk.NextProtocolSwitchOn = mRemote.blocks[i+1].NextProtocolSwitchOn
+		blk.NextProtocol = mRemote.blocks[i+1].NextProtocol
+		// Adds blk.BlockHeader.Round + 1
 		addBlocks(t, remote, blk, 1)
 		blk.BlockHeader.Round++
 	}
@@ -805,7 +805,6 @@ func TestCreatePeerSelector(t *testing.T) {
 	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[1].peerClass)
 	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
 
-	
 	// cfg.EnableCatchupFromArchiveServers = true;  cfg.NetAddress != ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = "someAddress"
@@ -880,7 +879,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
 	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].peerClass)
 	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
-	
+
 	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress == ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = ""
@@ -903,7 +902,7 @@ func TestServiceStartStop(t *testing.T) {
 	s.Start()
 	s.Stop()
 	_, ok := (<-s.done)
-	require.False(t, ok)	
+	require.False(t, ok)
 }
 
 func TestSynchronizingTime(t *testing.T) {
