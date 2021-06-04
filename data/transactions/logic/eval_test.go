@@ -1313,6 +1313,7 @@ assert
 txn CreatableID
 int 0
 ==
+assert
 
 
 int 1
@@ -1400,7 +1401,7 @@ func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
 func TestTxn(t *testing.T) {
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(testTxnProgramTextV3, txnField) {
+		if !strings.Contains(testTxnProgramTextV4, txnField) {
 			if txnField != FirstValidTime.String() {
 				t.Errorf("TestTxn missing field %v", txnField)
 			}
@@ -1447,6 +1448,7 @@ func TestTxn(t *testing.T) {
 			}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
+			ep.Ledger = makeTestLedger(nil)
 			ep.GroupIndex = 3
 			pass, err := Eval(ops.Program, ep)
 			if !pass {
@@ -1634,8 +1636,13 @@ return
 				txn.Txn.SelectionPK[:],
 				txn.Txn.Note,
 			}
+			ledger := makeTestLedger(nil)
+			ledger.setTrackedCreatable(0, basics.CreatableLocator{
+				Index: 100,
+			})
 			ep := defaultEvalParams(nil, &txn)
 			ep.TxnGroup = makeSampleTxnGroup(txn)
+			ep.Ledger = ledger
 			testLogic(t, source, v, ep)
 			if v >= 3 {
 				gtxnsProg := strings.ReplaceAll(source, "gtxn 0", "int 0; gtxns")

@@ -47,12 +47,13 @@ type appParams struct {
 }
 
 type testLedger struct {
-	balances     map[basics.Address]balanceRecord
-	applications map[basics.AppIndex]appParams
-	assets       map[basics.AssetIndex]basics.AssetParams
-	appID        basics.AppIndex
-	creatorAddr  basics.Address
-	mods         map[basics.AppIndex]map[string]basics.ValueDelta
+	balances          map[basics.Address]balanceRecord
+	applications      map[basics.AppIndex]appParams
+	assets            map[basics.AssetIndex]basics.AssetParams
+	trackedCreatables map[int]basics.CreatableLocator
+	appID             basics.AppIndex
+	creatorAddr       basics.Address
+	mods              map[basics.AppIndex]map[string]basics.ValueDelta
 }
 
 func makeSchemas(li uint64, lb uint64, gi uint64, gb uint64) basics.StateSchemas {
@@ -81,6 +82,7 @@ func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 	}
 	l.applications = make(map[basics.AppIndex]appParams)
 	l.assets = make(map[basics.AssetIndex]basics.AssetParams)
+	l.trackedCreatables = make(map[int]basics.CreatableLocator)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
 	return l
 }
@@ -354,6 +356,14 @@ func (l *testLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool,
 	}
 	_, ok = br.locals[appIdx]
 	return ok, nil
+}
+
+func (l *testLedger) setTrackedCreatable(groupIdx int, cl basics.CreatableLocator) {
+	l.trackedCreatables[groupIdx] = cl
+}
+
+func (l *testLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
+	return l.trackedCreatables[groupIdx].Index
 }
 
 func (l *testLedger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (basics.AssetHolding, error) {

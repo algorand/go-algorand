@@ -978,6 +978,7 @@ txn GlobalNumUint
 txn GlobalNumByteSlice
 txn LocalNumUint
 txn LocalNumByteSlice
+txn CreatableID
 gtxn 12 Fee
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
