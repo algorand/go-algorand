@@ -292,8 +292,8 @@ func TestRewardUnitThreshold(t *testing.T) {
 	r.Truef(latestBalancePoorAccount.AmountWithoutPendingRewards >= updatedBalancePoorAccount.Amount+amountRichAccountPokesWith, "rewards should have been applied")
 
 	// Test e2e REST API convenience computations
-	r.Truef(latestBalanceNewAccount.PendingRewards >= (initialBalanceNewAccount+amountRichAccountPokesWith)/rewardUnit, "new account should have pending rewards (e2e)")
-	r.Truef(latestBalancePoorAccount.Rewards-latestBalancePoorAccount.PendingRewards >= updatedBalancePoorAccount.Rewards, "poor account rewards should have been applied")
+	r.GreaterOrEqualf(latestBalanceNewAccount.PendingRewards, (initialBalanceNewAccount+amountRichAccountPokesWith)/rewardUnit, "new account should have pending rewards (e2e)")
+	r.GreaterOrEqualf(latestBalancePoorAccount.Rewards-latestBalancePoorAccount.PendingRewards, updatedBalancePoorAccount.Rewards, "poor account rewards should have been applied")
 
 }
 

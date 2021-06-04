@@ -81,6 +81,9 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 
 	ac.ClearStateProgram = nil
 	a.True(ac.Empty())
+
+	ac.ExtraProgramPages = 0
+	a.True(ac.Empty())
 }
 
 func getRandomAddress(a *require.Assertions) basics.Address {
@@ -349,32 +352,36 @@ func TestAppCallCheckPrograms(t *testing.T) {
 
 	var ac transactions.ApplicationCallTxnFields
 	var ep logic.EvalParams
-	proto := config.Consensus[protocol.ConsensusFuture]
+	// This check is for static costs. v26 is last with static cost checking
+	proto := config.Consensus[protocol.ConsensusV26]
 	ep.Proto = &proto
 
-	err := checkPrograms(&ac, &ep, 1)
+	proto.MaxAppProgramCost = 1
+	err := checkPrograms(&ac, &ep)
 	a.Error(err)
 	a.Contains(err.Error(), "check failed on ApprovalProgram")
 
 	program := []byte{2, 0x20, 1, 1, 0x22} // version, intcb, int 1
 	ac.ApprovalProgram = program
-	err = checkPrograms(&ac, &ep, 1)
-	a.Error(err)
-	a.Contains(err.Error(), "ApprovalProgram too resource intensive")
+	ac.ClearStateProgram = program
 
-	err = checkPrograms(&ac, &ep, 10)
+	err = checkPrograms(&ac, &ep)
+	a.Error(err)
+	a.Contains(err.Error(), "check failed on ApprovalProgram")
+
+	proto.MaxAppProgramCost = 10
+	err = checkPrograms(&ac, &ep)
+	a.NoError(err)
+
+	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
+	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
+	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
+	err = checkPrograms(&ac, &ep)
 	a.Error(err)
 	a.Contains(err.Error(), "check failed on ClearStateProgram")
 
-	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
-	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
-	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
-	err = checkPrograms(&ac, &ep, 10)
-	a.Error(err)
-	a.Contains(err.Error(), "ClearStateProgram too resource intensive")
-
 	ac.ClearStateProgram = program
-	err = checkPrograms(&ac, &ep, 10)
+	err = checkPrograms(&ac, &ep)
 	a.NoError(err)
 }
 
@@ -527,6 +534,13 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Equal(basics.StateSchema{}, br.AppParams[appIdx].LocalStateSchema)
 	a.Equal(basics.StateSchema{NumUint: 1}, br.TotalAppSchema)
 	a.Equal(basics.StateSchema{}, br.AppParams[appIdx].LocalStateSchema)
+
+	ac.ExtraProgramPages = 1
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	br = b.putWithBalances[creator]
+	a.Equal(uint32(1), br.AppParams[appIdx].ExtraProgramPages)
+	a.Equal(uint32(1), br.TotalExtraAppPages)
 }
 
 // TestAppCallApplyCreateOptIn checks balance record fields without tracking substages
@@ -1013,6 +1027,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(uint32(0), br.TotalExtraAppPages)
 }
 
 func TestAppCallApplyCreateClearState(t *testing.T) {
