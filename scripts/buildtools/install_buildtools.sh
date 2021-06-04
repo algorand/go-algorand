@@ -11,7 +11,6 @@ function usage {
   echo "usage: $0 [-o packagename]"
   echo "  -o packagename    when used only packagename is installed."
   echo "  -h                print this usage information."
-  exit 1
 }
 
 while getopts ":o:h" opt; do
@@ -21,6 +20,7 @@ while getopts ":o:h" opt; do
       ;;
     h)
       usage
+      exit 0
       ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
@@ -56,13 +56,15 @@ function install_go_module {
     else
         MODULE=$1
     fi
+
     # Check for version to go.mod version
     VERSION=$(get_go_version "$1")
 
     # TODO: When we switch to 1.16 this should be changed to use 'go install'
     #       instead of 'go get': https://tip.golang.org/doc/go1.16#modules
     if [ -z "$VERSION" ]; then
-        OUTPUT=$(GO111MODULE=off go get -u "${MODULE}" 2>&1)
+        echo "Unable to install requested package '$1' (${MODULE}): no version listed in ${SCRIPTPATH}/go.mod"
+        exit 1
     else
         OUTPUT=$(GO111MODULE=on go get "${MODULE}@${VERSION}" 2>&1)
     fi
@@ -72,14 +74,13 @@ function install_go_module {
     fi
 }
 
-if [[ "${BUILDTOOLS_INSTALL}" == "ALL" ]]; then
-  install_go_module golang.org/x/lint golang.org/x/lint/golint
-  install_go_module golang.org/x/tools golang.org/x/tools/cmd/stringer
-  install_go_module github.com/go-swagger/go-swagger github.com/go-swagger/go-swagger/cmd/swagger
-  install_go_module github.com/algorand/msgp
-  install_go_module gotest.tools/gotestsum
-else
+if [[ "${BUILDTOOLS_INSTALL}" != "ALL" ]]; then
   install_go_module "${BUILDTOOLS_INSTALL}"
+  return
 fi
 
-popd
+install_go_module golang.org/x/lint golang.org/x/lint/golint
+install_go_module golang.org/x/tools golang.org/x/tools/cmd/stringer
+install_go_module github.com/go-swagger/go-swagger github.com/go-swagger/go-swagger/cmd/swagger
+install_go_module github.com/algorand/msgp
+install_go_module gotest.tools/gotestsum
