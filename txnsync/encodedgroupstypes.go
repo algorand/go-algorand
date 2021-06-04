@@ -283,6 +283,9 @@ type encodedApplicationCallTxnFields struct {
 
 	ClearStateProgram        []program `codec:"apsu,allocbound=maxEncodedTransactionGroup"`
 	BitmaskClearStateProgram bitmask   `codec:"apsubm"`
+
+	ExtraProgramPages        []uint32 `codec:"apep,allocbound=maxEncodedTransactionGroup"`
+	BitmaskExtraProgramPages bitmask  `codec:"apepbm"`
 }
 
 type encodedCompactCertTxnFields struct {

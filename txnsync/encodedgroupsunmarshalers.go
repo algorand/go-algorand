@@ -559,6 +559,13 @@ func (stub *txGroupsEncodingStub) reconstructApplicationCallTxnFields(signedTxns
 	if err != nil {
 		return err
 	}
+	err = stub.BitmaskExtraProgramPages.Iterate(int(stub.TotalTransactionsCount), len(stub.ExtraProgramPages), func(i int, index int) error {
+		signedTxns[i].Txn.ExtraProgramPages = stub.ExtraProgramPages[index]
+		return nil
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
