@@ -19,6 +19,7 @@ package logic
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha512"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
@@ -643,6 +644,24 @@ func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+// selector "add(uint64,uint64)uint64"
+func assembleSelector(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) == 0 {
+		return ops.error("selector requires a literal argument")
+	}
+	arg := args[0]
+	if len(arg) > 1 && arg[0] == '"' && arg[len(arg)-1] == '"' {
+		val, err := parseStringLiteral(arg)
+		if err != nil {
+			return ops.error(err)
+		}
+		hash := sha512.Sum512_256(val)
+		ops.ByteLiteral(hash[0:4])
+		return nil
+	}
+	return ops.error("Unable to parse method signature")
+}
+
 func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
@@ -1036,7 +1055,8 @@ var keywords = map[string]OpSpec{
 	"byte": {0, "byte", nil, assembleByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
 	// parse basics.Address, actually just another []byte constant
 	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
-}
+	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
+	"selector": {0, "selector", nil, assembleSelector, nil, nil, oneBytes, 4, modeAny, opDetails{1, 2, nil, nil}}}
 
 type lineError struct {
 	Line int
@@ -1228,6 +1248,9 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		spec, ok := OpsByName[ops.Version][opstring]
 		if !ok {
 			spec, ok = keywords[opstring]
+			if spec.Version > 1 && spec.Version > ops.Version {
+				ok = false
+			}
 		}
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
@@ -1242,6 +1265,9 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		}
 		// unknown opcode, let's report a good error if version problem
 		spec, ok = OpsByName[AssemblerMaxVersion][opstring]
+		if !ok {
+			spec, ok = keywords[opstring]
+		}
 		if ok {
 			ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
 		} else {
