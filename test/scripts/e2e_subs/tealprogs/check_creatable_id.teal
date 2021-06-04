@@ -1,5 +1,15 @@
 #pragma version 4
+        // This program allows the reading of creatable ids.
+        // ARGS = "skipcreation|dontskip",groupIndex
+        // If arg0 is "skipcreation", main is skipped on creation
+        // If arg0 is "dontskip", main is run even on creation
+        //   -> succeeds if the creatableID of that groupIndex is non-zero
+
+        txn ApplicationArgs 0
+        byte "dontskip"
+        ==
         txn ApplicationID
+        ||                      // appID > 0 || arg1 == "dontskip"
         bz skip                 // skip code on creation
 
         int OptIn
@@ -8,11 +18,7 @@
         bnz skip                 // skip code on opt-in
 
 main:
-        // This program allows the reading of creatable ids.
-        // ARGS = groupIndex
-        //   -> succeeds if the creatableID of that groupIndex is non-zero
-
-        txn ApplicationArgs 0  // groupIndex
+        txn ApplicationArgs 1  // groupIndex
         btoi
         gtxns CreatableID
         int 0
