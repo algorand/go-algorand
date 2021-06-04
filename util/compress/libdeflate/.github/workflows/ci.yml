@@ -1,0 +1,123 @@
+name: CI
+on: [pull_request]
+env:
+  CFLAGS: -Werror
+
+jobs:
+  x86_64-build-and-test:
+    name: Build and test (x86_64, ${{ matrix.os }}, ${{ matrix.compiler }})
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, ubuntu-18.04, ubuntu-16.04]
+        compiler: [gcc, clang]
+        exclude:
+          # clang 3.8.0-2ubuntu4 crashes with:
+          # "fatal error: error in backend: Cannot select: 0x21025a0: v64i8 = X86ISD::VBROADCAST 0x2101fb0"
+          - os: ubuntu-16.04
+            compiler: clang
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.compiler }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang llvm libz-dev valgrind
+    - run: scripts/run_tests.sh
+
+  other-arch-build-and-test:
+    name: Build and test (${{ matrix.arch }}, Debian Buster, ${{ matrix.compiler }})
+    strategy:
+      matrix:
+        arch: [armv6, armv7, aarch64, s390x, ppc64le]
+        compiler: [gcc, clang]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: uraimo/run-on-arch-action@v2.0.5
+        with:
+          arch: ${{ matrix.arch }}
+          distro: buster
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update
+            apt-get install -y build-essential clang llvm libz-dev valgrind
+          run: |
+            # Valgrind and ASAN crash on at least s390x, ppc64le, and aarch64
+            # here.  (It's probably something related to the QEMU user-mode
+            # emulation that run-on-arch-action uses.)
+            export SKIP_VALGRIND=1
+            export SKIP_ASAN=1
+
+            case ${{ matrix.arch }} in
+            s390x)
+              # On s390x, in freestanding builds the shared library links to an
+              # external symbol __clzdi2, even when -static-libgcc is used.
+              export SKIP_FREESTANDING=1
+              ;;
+            aarch64)
+              # "ldd: exited with unknown exit code (139)"
+              if [ ${{ matrix.compiler }} = clang ]; then
+                export SKIP_SHARED_LIB=1
+              fi
+              ;;
+            esac
+
+            export CC=${{ matrix.compiler }}
+            scripts/run_tests.sh
+
+  macos-build-and-test:
+    name: Build and test (macOS)
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+    - run: make all check
+
+  windows-build-and-test:
+    name: Build and test (Windows)
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - shell: bash
+      run: |
+        PATH="C:\\msys64\\mingw64\\bin:C:\\msys64\\usr\\bin:$PATH" \
+          make CC=gcc all check
+
+  run-clang-static-analyzer:
+    name: Run clang static analyzer
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-tools
+    - name: Run clang static analyzer
+      run: make scan-build
+
+  run-shellcheck:
+    name: Run shellcheck
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y shellcheck
+    - name: Run shellcheck
+      run: make shellcheck
+
+  cross-compile-for-windows:
+    name: Cross compile for Windows
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-mingw-w64-i686 gcc-mingw-w64-x86-64 libz-mingw-w64-dev
+    - name: 32-bit build
+      run: make CC=i686-w64-mingw32-gcc all test_programs
+    - name: 64-bit build
+      run: make CC=x86_64-w64-mingw32-gcc all test_programs
