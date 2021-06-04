@@ -1539,6 +1539,42 @@ return
 	require.True(t, pass)
 }
 
+func TestTxnCreatableID(t *testing.T) {
+	t.Parallel()
+	checkCreatableIDProg := `
+gtxn 0 CreatableID
+int 0
+>
+`
+	ops, err := AssembleStringWithVersion(checkCreatableIDProg, 4)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	err = Check(ops.Program, defaultEvalParams(&sb, nil))
+	if err != nil {
+		t.Log(hex.EncodeToString(ops.Program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	txn := makeSampleTxn()
+	txgroup := make([]transactions.SignedTxn, 2)
+	txgroup[1] = txn
+	sb = strings.Builder{}
+	ledger := makeTestLedger(nil)
+	ledger.setTrackedCreatable(0, basics.CreatableLocator{
+		Index: 100,
+	})
+	ep := defaultEvalParams(&sb, &txn)
+	ep.Ledger = ledger
+	ep.TxnGroup = txgroup
+	pass, err := Eval(ops.Program, ep)
+	if !pass || err != nil {
+		t.Log(hex.EncodeToString(ops.Program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
 func TestGtxn(t *testing.T) {
 	t.Parallel()
 	gtxnTextV1 := `gtxn 1 Amount
