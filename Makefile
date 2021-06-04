@@ -29,6 +29,13 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
+# If available, use gotestsum instead of 'go test'.
+ifeq (, $(shell which gotestsum))
+export GOTESTCOMMAND=go test
+else
+export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
+endif
+
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
 ifeq ($(ARCH), amd64)
@@ -228,13 +235,13 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 fulltest: build-race
-	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 shorttest: build-race
-	go test $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
+	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh

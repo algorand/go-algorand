@@ -13,7 +13,7 @@ if [ "${BUILD_TYPE}" = "integration" ]; then
         SHORTTEST=-short
     fi
     export SHORTTEST 
-    ./test/scripts/run_integration_tests.sh
+    make integration
 elif [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
     if [[ "${OS}" != "darwin" ]]; then
 	    make fulltest -j2
