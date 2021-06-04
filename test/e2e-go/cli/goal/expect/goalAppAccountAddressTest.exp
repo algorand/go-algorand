@@ -32,7 +32,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 
     set TEAL_PROGRAM "appAccountParams.teal"
 
-    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+    exec cp $TEST_DATA_DIR/../../installer/genesis/devnet/genesis.json $TEST_ALGO_DIR
 
     # Create network
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR

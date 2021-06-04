@@ -688,6 +688,14 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 		stub.BitmaskClearStateProgram.SetBit(i)
 		stub.ClearStateProgram = append(stub.ClearStateProgram, txn.Txn.ClearStateProgram)
 	}
+	if txn.Txn.ExtraProgramPages != 0 {
+		if len(stub.BitmaskExtraProgramPages) == 0 {
+			stub.BitmaskExtraProgramPages = make(bitmask, bitmaskLen)
+			stub.ExtraProgramPages = make([]uint32, 0, stub.TotalTransactionsCount)
+		}
+		stub.BitmaskExtraProgramPages.SetBit(i)
+		stub.ExtraProgramPages = append(stub.ExtraProgramPages, txn.Txn.ExtraProgramPages)
+	}
 }
 
 func (stub *txGroupsEncodingStub) finishDeconstructApplicationCallTxnFields() {
@@ -704,6 +712,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructApplicationCallTxnFields() {
 	stub.BitmaskGlobalNumByteSlice.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskApprovalProgram.trimBitmask(int(stub.TotalTransactionsCount))
 	stub.BitmaskClearStateProgram.trimBitmask(int(stub.TotalTransactionsCount))
+	stub.BitmaskExtraProgramPages.trimBitmask(int(stub.TotalTransactionsCount))
 }
 
 func (stub *txGroupsEncodingStub) deconstructCompactCertTxnFields(i int, txn *transactions.SignedTxn) {

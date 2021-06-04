@@ -108,10 +108,6 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 		return err
 	}
 
-	if s.Txn.Src().IsZero() {
-		return errors.New("empty address")
-	}
-
 	return stxnVerifyCore(s, txnIdx, groupCtx)
 }
 
@@ -121,13 +117,34 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	if err != nil {
 		return nil, err
 	}
+
+	minFeeCount := uint64(0)
+	feesPaid := uint64(0)
 	for i, stxn := range stxs {
 		err = Txn(&stxn, i, groupCtx)
 		if err != nil {
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 			return
 		}
+		if stxn.Txn.Type != protocol.CompactCertTx {
+			minFeeCount++
+		}
+		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
 	}
+	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
+	if overflow {
+		err = fmt.Errorf("txgroup fee requirement overflow")
+		return
+	}
+	// feesPaid may have saturated. That's ok. Since we know
+	// feeNeeded did not overlfow, simple comparision tells us
+	// feesPaid was enough.
+	if feesPaid < feeNeeded {
+		err = fmt.Errorf("txgroup had %d in fees, which is less than the minimum %d * %d",
+			feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee)
+		return
+	}
+
 	if cache != nil {
 		cache.Add(stxs, groupCtx)
 	}
@@ -214,12 +231,9 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 		GroupIndex:     groupIndex,
 		MinTealVersion: &groupCtx.minTealVersion,
 	}
-	cost, err := logic.Check(lsig.Logic, ep)
+	err := logic.Check(lsig.Logic, ep)
 	if err != nil {
 		return err
-	}
-	if cost > int(groupCtx.consensusParams.LogicSigMaxCost) {
-		return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, groupCtx.consensusParams.LogicSigMaxCost)
 	}
 
 	hasMsig := false
