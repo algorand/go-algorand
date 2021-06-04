@@ -267,22 +267,22 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 
 // SendMoneyAndWait uses the rest client to send money and WaitForTxnConfirmation to wait for the send to confirm
 // it adds some extra error checking as well
-func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string) (fundingTxid string) {
+func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v1.Transaction) {
 	client := f.LibGoalClient
 	wh, err := client.GetUnencryptedWalletHandle()
 	require.NoError(f.t, err, "client should be able to get unencrypted wallet handle")
-	fundingTxid = f.SendMoneyAndWaitFromWallet(wh, nil, curRound, amountToSend, transactionFee, fromAccount, toAccount)
+	txn = f.SendMoneyAndWaitFromWallet(wh, nil, curRound, amountToSend, transactionFee, fromAccount, toAccount, closeToAccount)
 	return
 }
 
 // SendMoneyAndWaitFromWallet is as above, but for a specific wallet
-func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassword []byte, curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string) (fundingTxid string) {
+func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassword []byte, curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v1.Transaction) {
 	client := f.LibGoalClient
-	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, "", 0, 0)
+	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, closeToAccount, 0, 0)
 	require.NoError(f.t, err, "client should be able to send money from rich to poor account")
 	require.NotEmpty(f.t, fundingTx.ID().String(), "transaction ID should not be empty")
 	waitingDeadline := curRound + uint64(5)
-	_, err = f.WaitForConfirmedTxn(waitingDeadline, fromAccount, fundingTx.ID().String())
+	txn, err = f.WaitForConfirmedTxn(waitingDeadline, fromAccount, fundingTx.ID().String())
 	require.NoError(f.t, err)
 	return
 }

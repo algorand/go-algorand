@@ -100,6 +100,10 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 	return false
 }
 
+// TestNewAccountCanGoOnlineAndParticipate tests two behaviors:
+// - When the account does not have enough stake, or after receivning algos, but before the lookback rounds,
+//   it should not be proposing blocks
+// - When the account balance receives enough stake, it should be proposing after lookback rounds
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -108,7 +112,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	// Make the seed lookback shorter, otherwise will waite for 320 rounds
+	// Make the seed lookback shorter, otherwise will wait for 320 rounds
 	consensus := make(config.ConsensusProtocols)
 	shortPartKeysProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
 	shortPartKeysProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
@@ -123,7 +127,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesOneOnline.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "OneNode.json"))
 	defer fixture.Shutdown()
 	client := fixture.LibGoalClient
 
@@ -144,7 +148,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 	transactionFee := minTxnFee
 	amountToSendInitial := 5 * minAcctBalance
-	fixture.SendMoneyAndWait(initialRound, amountToSendInitial, transactionFee, richAccount, newAccount)
+	fixture.SendMoneyAndWait(initialRound, amountToSendInitial, transactionFee, richAccount, newAccount, "")
 	amt, err := client.GetBalance(newAccount)
 	a.NoError(err)
 	nodeStatus, err := client.Status()
@@ -175,40 +179,33 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.NoError(err, "client should be able to get information about new account")
 	a.Equal(basics.Online.String(), newAccountStatus.Status, "new account should be online")
 
-	nodeStatus, _ = client.Status()
-	fundedRoundBefore := nodeStatus.LastRound
-	
-	// account receives almost all of rich account's stake (minus enough to
-	// keep it over MinBalance), so it will be selected for participation
+	// transfer the funds and close to the new account
 	amountToSend := richBalance - 3*transactionFee - amountToSendInitial - minAcctBalance
-	fixture.SendMoneyAndWait(onlineRound, amountToSend, transactionFee, richAccount, newAccount)
+	txn := fixture.SendMoneyAndWait(onlineRound, amountToSend, transactionFee, richAccount, newAccount, newAccount)
+	fundedRound := txn.ConfirmedRound
 
 	nodeStatus, _ = client.Status()
-	fundedRoundAfter := nodeStatus.LastRound	
-
-	params, err := client.ConsensusParams(fundedRoundAfter)
+	params, err := client.ConsensusParams(nodeStatus.LastRound)
 	a.NoError(err)
-	fundedAccountRoundBefore := balanceRoundOf(basics.Round(fundedRoundBefore), params)
-	fundedAccountRoundAfter := balanceRoundOf(basics.Round(fundedRoundAfter), params)
+	accountProposesStarting := balanceRoundOf(basics.Round(fundedRound), params)
 
 	// Need to wait for funding to take effect on selection, then we can see if we're participating
 	// Stop before the account should become eligible for selection so we can ensure it wasn't
-	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(fundedAccountRoundBefore),
-		time.Duration(uint64(globals.MaxTimePerRound) * uint64(fundedAccountRoundBefore)))
-	err = fixture.WaitForRoundWithTimeout(uint64(fundedAccountRoundBefore))
+	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting-1),
+		time.Duration(uint64(globals.MaxTimePerRound) * uint64(accountProposesStarting-1)))
+	err = fixture.WaitForRoundWithTimeout(uint64(accountProposesStarting-1))
 	a.NoError(err)
 
-	blockWasProposed := fixture.VerifyBlockProposedRange(newAccount, int(fundedAccountRoundBefore),
-		int(fundedAccountRoundBefore)-1)
-	a.False(blockWasProposed, "account should not be selected until BalLookback (round %d) passes", int(fundedAccountRoundBefore))
+	// Check if the account did not propose any blocks up to this round
+	blockWasProposed := fixture.VerifyBlockProposedRange(newAccount, int(accountProposesStarting)-1,
+		int(accountProposesStarting)-1)
+	a.False(blockWasProposed, "account should not be selected until BalLookback (round %d) passes", int(accountProposesStarting-1))
 
-	// Now wait until the round where the funded account will be used. Give additonal rounds for stability. 
-	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(fundedAccountRoundAfter) + 4,
-		time.Duration(uint64(globals.MaxTimePerRound) * uint64(fundedAccountRoundAfter + 4)))
+	// Now wait until the round where the funded account will be used. 
+	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting), 10*globals.MaxTimePerRound)
 	a.NoError(err)
 	
-	blockWasProposedByNewAccountRecently := fixture.VerifyBlockProposedRange(newAccount, int(fundedAccountRoundAfter) + 4,
-		int(fundedAccountRoundAfter) + 3)
+	blockWasProposedByNewAccountRecently := fixture.VerifyBlockProposedRange(newAccount, int(accountProposesStarting), 1)
 	a.True(blockWasProposedByNewAccountRecently, "newly online account should be proposing blocks")
 }
 
