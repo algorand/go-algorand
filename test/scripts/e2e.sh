@@ -69,6 +69,14 @@ function reset_dirs() {
     mkdir -p ${DATADIR}
 }
 
+# $1 - Message
+LAST_DURATION=$SECONDS
+function duration() {
+  ELAPSED=$((SECONDS - $LAST_DURATION))
+  printf "Duration: '%s' - %02dh:%02dm:%02ds\n" "$1" $(($ELAPSED/3600)) $(($ELAPSED%3600/60)) $(($ELAPSED%60))
+  LAST_DURATION=$SECONDS
+}
+
 #----------------------
 # Start E2E tests by installing the current build after killing all instances
 reset_dirs
@@ -93,18 +101,27 @@ export GOPATH=$(go env GOPATH)
 cd "${SCRIPT_PATH}"
 
 ./timeout 200 ./e2e_basic_start_stop.sh
+duration "e2e_basic_start_stop.sh"
 
 python3 -m venv "${TEMPDIR}/ve"
 . "${TEMPDIR}/ve/bin/activate"
 "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
 "${TEMPDIR}/ve/bin/pip3" install --upgrade py-algorand-sdk cryptography
+duration "e2e client setup"
+
 "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} "$SRCROOT"/test/scripts/e2e_subs/*.sh
+duration "parallel client runner"
+
 for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
     "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} --version "$(basename "$vdir")" "$vdir"/*.sh
 done
+duration "vdir client runners"
+
 for script in "$SRCROOT"/test/scripts/e2e_subs/serial/*; do
     "${TEMPDIR}/ve/bin/python3" e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT} $script
 done
+duration "serial client runners"
+
 deactivate
 
 # Export our root temp folder as 'TESTDIR' for tests to use as their root test folder
@@ -114,6 +131,7 @@ export TESTDATADIR=${SRCROOT}/test/testdata
 export SRCROOT=${SRCROOT}
 
 ./e2e_go_tests.sh ${GO_TEST_ARGS}
+duration "e2e_go_tests.sh"
 
 rm -rf "${TEMPDIR}"
 
