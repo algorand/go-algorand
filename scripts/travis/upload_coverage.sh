@@ -5,6 +5,11 @@
 # fail if shasum detects a problem
 set -e
 
+FILE_ARG=""
+if [[ -f "$1" ]]; then
+  FILE_ARG="-f $1"
+fi
+
 curl -fLso codecov https://codecov.io/bash;
 VERSION=$(grep -o 'VERSION=\"[0-9\.]*\"' codecov | cut -d'"' -f2);
 for i in 1 256 512
@@ -14,4 +19,4 @@ done
 
 # Unset everything except "TRAVIS*" variables.
 unset $(compgen -e | grep -v "^TRAVIS")
-bash codecov -t "${CODECOV_TOKEN}"
+bash codecov -t "${CODECOV_TOKEN}" "${FILE_ARG}"

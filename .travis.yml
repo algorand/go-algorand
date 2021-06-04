@@ -208,7 +208,7 @@ before_cache:
    docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
 
 after_success:
-  - scripts/travis/upload_coverage.sh || true
+  - scripts/travis/upload_coverage.sh ~/coverage.txt || true
 
 addons:
   apt:
