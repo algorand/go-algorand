@@ -182,8 +182,8 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 
 func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 	newBeta := beta(ent.transactionPoolSize)
-	// see if the newBeta is at least 20% smaller than the current one.
-	if (s.lastBeta * 9 / 10) <= newBeta {
+	// see if the newBeta is at least 10% smaller or bigger than the current one
+	if (s.lastBeta*9/10) <= newBeta || (s.lastBeta*11/10) >= newBeta {
 		// no, it's not.
 		return
 	}
