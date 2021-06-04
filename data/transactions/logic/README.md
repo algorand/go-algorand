@@ -275,6 +275,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 53 | GlobalNumByteSlice | uint64 | Number of global state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
+| 56 | AppProgramExtraPages | uint64 |  |
+| 57 | CreatableID | uint64 | The assigned creatable ID for an asset or application creation transaction, or 0 if the transaction does not create anything. LogicSigVersion >= 4. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
