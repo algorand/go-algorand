@@ -1556,7 +1556,7 @@ int 0
 	}
 	require.NoError(t, err)
 	txn := makeSampleTxn()
-	txgroup := make([]transactions.SignedTxn, 2)
+	txgroup := make([]transactions.SignedTxn, 3)
 	txgroup[1] = txn
 	sb = strings.Builder{}
 	ledger := makeTestLedger(nil)
@@ -1573,6 +1573,19 @@ int 0
 	}
 	require.NoError(t, err)
 	require.True(t, pass)
+
+	// should fail when accessing future transaction in group
+	futureCreatableIDProg := `
+gtxn 2 CreatableID
+int 0
+>
+`
+
+	ops, err = AssembleStringWithVersion(futureCreatableIDProg, 4)
+	require.NoError(t, err)
+	_, err = Eval(ops.Program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "can't get future creatable ID of txn with index 2")
 }
 
 func TestGtxn(t *testing.T) {
