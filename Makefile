@@ -30,7 +30,7 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
 # If available, use gotestsum instead of 'go test'.
-ifeq (, $(shell which gotestsumm))
+ifeq (, $(shell which gotestsum))
 export GOTESTCOMMAND=go test
 else
 export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
