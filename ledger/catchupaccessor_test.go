@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -292,7 +293,31 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()
 	const inMem = true
-	genesisInitState, initKeys := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState, _ /*initKeys*/ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer func() {
+		l.Close()
+	}()
+	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
+	ctx := context.Background()
+	progressCallCount := 0
+	progressNop := func(uint64) {
+		progressCallCount++
+	}
+
+	// actual testing...
+	err = catchpointAccessor.BuildMerkleTrie(ctx, progressNop)
+	require.Error(t, err)
+}
+
+func TestVerifyCatchpoint(t *testing.T) {
+	// setup boilerplate
+	log := logging.TestingLog(t)
+	dbBaseFileName := t.Name()
+	const inMem = true
+	genesisInitState, _ /*initKeys*/ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
 	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
@@ -301,12 +326,36 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 	}()
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
 
-	progressCallCount := 0
-	progressNop := func(uint64) {
-		progressCallCount++
-	}
-
 	ctx := context.Background()
 
 	// actual testing...
+	var blk bookkeeping.Block
+	err = catchpointAccessor.VerifyCatchpoint(ctx, &blk)
+	require.Error(t, err)
+
+	err = catchpointAccessor.ResetStagingBalances(ctx, true)
+	require.NoError(t, err, "ResetStagingBalances")
+
+	err = catchpointAccessor.VerifyCatchpoint(ctx, &blk)
+	require.Error(t, err)
+	// TODO: verify a catchpoint block that is valid
+
+	// StoreBalancesRound assumes things are valid, so just does the db put
+	err = catchpointAccessor.StoreBalancesRound(ctx, &blk)
+	require.NoError(t, err)
+	// StoreFirstBlock is a dumb wrapper on some db logic
+	err = catchpointAccessor.StoreFirstBlock(ctx, &blk)
+	require.NoError(t, err)
+
+	_, err = catchpointAccessor.EnsureFirstBlock(ctx)
+	require.NoError(t, err)
+
+	blk.BlockHeader.Round++
+	err = catchpointAccessor.StoreBlock(ctx, &blk)
+	require.NoError(t, err)
+
+	// TODO: write a case with working no-err
+	err = catchpointAccessor.CompleteCatchup(ctx)
+	require.Error(t, err)
+	//require.NoError(t, err)
 }
