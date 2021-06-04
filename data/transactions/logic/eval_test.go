@@ -4004,6 +4004,9 @@ func TestBytes(t *testing.T) {
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
 
+	testPanics(t, `global ZeroAddress; dup; concat; int 64; int 7; setbyte; int 1; return`, 3)
+	testAccepts(t, `global ZeroAddress; dup; concat; int 63; int 7; setbyte; int 1; return`, 3)
+
 	// These test that setbyte is not modifying a shared value.
 	// Since neither bytec nor dup copies, the first test is
 	// insufficient, the setbyte changes the original constant (if
