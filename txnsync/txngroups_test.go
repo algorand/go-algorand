@@ -386,9 +386,9 @@ func BenchmarkTxnGroupCompression(b *testing.B) {
 	require.NoError(b, err)
 	var size int
 	var s syncState
-	encodedGroupsBytes, compressionFromat, err := s.encodeTransactionGroups(txnGroups, 1000000000)
+	encodedGroupsBytes, compressionFormat, err := s.encodeTransactionGroups(txnGroups, 1000000000)
 	require.NoError(b, err)
-	require.Equal(b, compressionFromat, compressionFormatNone)
+	require.Equal(b, compressionFormat, compressionFormatNone)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -397,8 +397,9 @@ func BenchmarkTxnGroupCompression(b *testing.B) {
 		require.NoError(b, err)
 		size = len(compressedGroupBytes)
 	}
-
-	b.ReportMetric(float64(size), "encodedDataBytes")
+	b.StopTimer()
+	b.ReportMetric(float64(len(encodedGroupsBytes)), "encodedDataBytes")
+	b.ReportMetric(float64(len(encodedGroupsBytes) - size) / float64(len(encodedGroupsBytes)), "estimatedGzipCompressionGains")
 }
 
 func BenchmarkTxnGroupDecoding(b *testing.B) {
@@ -406,15 +407,15 @@ func BenchmarkTxnGroupDecoding(b *testing.B) {
 	require.NoError(b, err)
 
 	var s syncState
-	encodedGroupsBytes, compressionFromat, err := s.encodeTransactionGroups(txnGroups, 1000000000)
+	encodedGroupsBytes, compressionFormat, err := s.encodeTransactionGroups(txnGroups, 1000000000)
 	require.NoError(b, err)
-	require.Equal(b, compressionFromat, compressionFormatNone)
+	require.Equal(b, compressionFormat, compressionFormatNone)
 	require.NoError(b, err)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = decodeTransactionGroups(encodedGroupsBytes, compressionFromat, genesisID, genesisHash)
+		_, err = decodeTransactionGroups(encodedGroupsBytes, compressionFormat, genesisID, genesisHash)
 		require.NoError(b, err)
 	}
 }
