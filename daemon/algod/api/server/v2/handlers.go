@@ -220,7 +220,7 @@ func (v2 *Handlers) GetProof(ctx echo.Context, round uint64, txid string, params
 				return internalError(ctx, err, "generating proof", v2.Log)
 			}
 
-			var proofconcat []byte
+			proofconcat := make([]byte, 0)
 			for _, proofelem := range proof {
 				proofconcat = append(proofconcat, proofelem[:]...)
 			}
