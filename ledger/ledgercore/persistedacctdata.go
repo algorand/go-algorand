@@ -676,6 +676,7 @@ func (g *AssetsHoldingGroup) HasSpace() bool {
 	return g.Count < MaxHoldingGroupSize
 }
 
+// HasSpace returns true if this group has space to accommodate one more asset entry
 func (g *AssetsParamsGroup) HasSpace() bool {
 	return g.Count < MaxParamsGroupSize
 }
@@ -705,6 +706,7 @@ func (g *AssetGroupDesc) Key() int64 {
 	return g.AssetGroupKey
 }
 
+// AssetAt returns asset value at postion ai
 func (g *AssetsHoldingGroup) AssetAt(ai int) basics.AssetIndex {
 	asset := g.MinAssetIndex
 	for i := 0; i <= int(ai); i++ {
@@ -713,6 +715,7 @@ func (g *AssetsHoldingGroup) AssetAt(ai int) basics.AssetIndex {
 	return asset
 }
 
+// AssetAt returns asset value at postion ai
 func (g *AssetsParamsGroup) AssetAt(ai int) basics.AssetIndex {
 	asset := g.MinAssetIndex
 	for i := 0; i <= int(ai); i++ {
@@ -731,12 +734,12 @@ func (g *AssetsParamsGroup) GroupData() AbstractAssetGroupData {
 	return &g.groupData.AssetsCommonGroupData
 }
 
-// GroupData returns interface to AbstractAssetGroupData for this group data
+// Reset clears this group
 func (g *AssetsHoldingGroup) Reset() {
 	*g = AssetsHoldingGroup{}
 }
 
-// GroupData returns interface to AbstractAssetGroupData for this group data
+// Reset clears this group
 func (g *AssetsParamsGroup) Reset() {
 	*g = AssetsParamsGroup{}
 }
@@ -907,12 +910,14 @@ func (e *ExtendedAssetParams) dropGroup(gi int) {
 	e.Groups = e.Groups[:len(e.Groups)-1]
 }
 
+// ReleaseGroup removes all assets in group gi and the group itself
 func (e *ExtendedAssetHolding) ReleaseGroup(gi int) {
 	count := e.Groups[gi].AssetCount()
 	e.dropGroup(gi)
 	e.Count -= count
 }
 
+// ReleaseGroup removes all assets in group gi and the group itself
 func (e *ExtendedAssetParams) ReleaseGroup(gi int) {
 	count := e.Groups[gi].AssetCount()
 	e.dropGroup(gi)
@@ -1187,6 +1192,8 @@ func (e *ExtendedAssetHolding) Insert(input []basics.AssetIndex, data map[basics
 	insert(flatten, e)
 }
 
+// Insert takes an array of asset params into ExtendedAssetParams.
+// The input sequence must be sorted.
 func (e *ExtendedAssetParams) Insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetParams) {
 	flatten := make([]flattenAsset, len(input), len(input))
 	for i, aidx := range input {
