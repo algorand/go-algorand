@@ -143,6 +143,9 @@ const (
 	// LocalNumByteSlice uint64
 	LocalNumByteSlice
 
+	// AppProgramExtraPages AppParams.ExtraProgramPages
+	AppProgramExtraPages
+
 	// CreatableID basics.CreatableIndex
 	CreatableID
 
@@ -231,6 +234,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{GlobalNumByteSlice, StackUint64, 3},
 	{LocalNumUint, StackUint64, 3},
 	{LocalNumByteSlice, StackUint64, 3},
+	{AppProgramExtraPages, StackUint64, 4},
 	{CreatableID, StackUint64, 4},
 }
 

@@ -75,6 +75,17 @@ func (sv *stackValue) typeName() string {
 	return "uint64"
 }
 
+func (sv *stackValue) clone() stackValue {
+	if sv.Bytes != nil {
+		// clone stack value if Bytes
+		bytesClone := make([]byte, len(sv.Bytes))
+		copy(bytesClone, sv.Bytes)
+		return stackValue{Bytes: bytesClone}
+	}
+	// otherwise no cloning is needed if Uint
+	return stackValue{Uint: sv.Uint}
+}
+
 func (sv *stackValue) String() string {
 	if sv.Bytes != nil {
 		return hex.EncodeToString(sv.Bytes)
@@ -149,6 +160,31 @@ type LedgerForLogic interface {
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
 }
 
+// EvalSideEffects contains data returned from evaluation
+type EvalSideEffects struct {
+	scratchSpace scratchSpace
+}
+
+// MakePastSideEffects allocates and initializes a slice of EvalSideEffects of length `size`
+func MakePastSideEffects(size int) (pastSideEffects []EvalSideEffects) {
+	pastSideEffects = make([]EvalSideEffects, size)
+	for j := range pastSideEffects {
+		pastSideEffects[j] = EvalSideEffects{}
+	}
+	return
+}
+
+// getScratchValue loads and clones a stackValue
+// The value is cloned so the original bytes are protected from changes
+func (se *EvalSideEffects) getScratchValue(scratchPos uint8) stackValue {
+	return se.scratchSpace[scratchPos].clone()
+}
+
+// setScratchSpace stores the scratch space
+func (se *EvalSideEffects) setScratchSpace(scratch scratchSpace) {
+	se.scratchSpace = scratch
+}
+
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	// the transaction being evaluated
@@ -162,6 +198,8 @@ type EvalParams struct {
 
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
+
+	PastSideEffects []EvalSideEffects
 
 	Logger logging.Logger
 
@@ -226,6 +264,8 @@ func (ep EvalParams) log() logging.Logger {
 	return logging.Base()
 }
 
+type scratchSpace = [256]stackValue
+
 type evalContext struct {
 	EvalParams
 
@@ -238,7 +278,7 @@ type evalContext struct {
 	intc      []uint64
 	bytec     [][]byte
 	version   uint64
-	scratch   [256]stackValue
+	scratch   scratchSpace
 
 	cost int // cost incurred so far
 
@@ -314,7 +354,11 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, err error) {
 	var cx evalContext
 	cx.EvalParams = params
 	cx.runModeFlags = runModeApplication
-	return eval(program, &cx)
+	pass, err = eval(program, &cx)
+
+	// set side effects
+	cx.PastSideEffects[cx.GroupIndex].setScratchSpace(cx.scratch)
+	return
 }
 
 // Eval checks to see if a transaction passes logic
@@ -433,6 +477,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	if cx.stack[0].Bytes != nil {
 		return false, errors.New("stack finished with bytes not int")
 	}
+
 	return cx.stack[0].Uint != 0, nil
 }
 
@@ -1667,7 +1712,7 @@ func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, fie
 
 	assetHoldingField := AssetHoldingField(field)
 	assetHoldingFieldType := AssetHoldingFieldTypes[assetHoldingField]
-	if assetHoldingFieldType != sv.argType() {
+	if !typecheck(assetHoldingFieldType, sv.argType()) {
 		err = fmt.Errorf("%s expected field type is %s but got %s", assetHoldingField.String(), assetHoldingFieldType.String(), sv.argType().String())
 	}
 	return
@@ -1704,7 +1749,7 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 
 	assetParamsField := AssetParamsField(field)
 	assetParamsFieldType := AssetParamsFieldTypes[assetParamsField]
-	if assetParamsFieldType != sv.argType() {
+	if !typecheck(assetParamsFieldType, sv.argType()) {
 		err = fmt.Errorf("%s expected field type is %s but got %s", assetParamsField.String(), assetParamsFieldType.String(), sv.argType().String())
 	}
 	return
@@ -1886,6 +1931,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		sv.Bytes = txn.FreezeAccount[:]
 	case FreezeAssetFrozen:
 		sv.Uint = boolToUint(txn.AssetFrozen)
+	case AppProgramExtraPages:
+		sv.Uint = uint64(txn.ExtraProgramPages)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
@@ -1893,7 +1940,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 
 	txnField := TxnField(field)
 	txnFieldType := TxnFieldTypes[txnField]
-	if txnFieldType != sv.argType() {
+	if !typecheck(txnFieldType, sv.argType()) {
 		err = fmt.Errorf("%s expected field type is %s but got %s", txnField.String(), txnFieldType.String(), sv.argType().String())
 	}
 	return
@@ -1911,9 +1958,7 @@ func opTxn(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	var sv stackValue
-	var err error
-	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -1933,10 +1978,8 @@ func opTxna(cx *evalContext) {
 		cx.err = fmt.Errorf("txna unsupported field %d", field)
 		return
 	}
-	var sv stackValue
-	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	sv, err := cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -1995,10 +2038,8 @@ func opGtxna(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
 		return
 	}
-	var sv stackValue
-	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
@@ -2059,10 +2100,8 @@ func opGtxnsa(cx *evalContext) {
 		cx.err = fmt.Errorf("gtxnsa unsupported field %d", field)
 		return
 	}
-	var sv stackValue
-	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	sv, err := cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
@@ -2165,7 +2204,7 @@ func opGlobal(cx *evalContext) {
 	}
 
 	globalFieldType := GlobalFieldTypes[globalField]
-	if globalFieldType != sv.argType() {
+	if !typecheck(globalFieldType, sv.argType()) {
 		cx.err = fmt.Errorf("%s expected field type is %s but got %s", globalField.String(), globalFieldType.String(), sv.argType().String())
 		return
 	}
@@ -2233,6 +2272,53 @@ func opStore(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.scratch[gindex] = cx.stack[last]
 	cx.stack = cx.stack[:last]
+}
+
+func opGloadImpl(cx *evalContext, groupIdx int, scratchIdx int, opName string) (scratchValue stackValue, err error) {
+	if groupIdx >= len(cx.TxnGroup) {
+		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
+		return
+	} else if scratchIdx >= 256 {
+		err = fmt.Errorf("invalid Scratch index %d", scratchIdx)
+		return
+	} else if txn := cx.TxnGroup[groupIdx].Txn; txn.Type != protocol.ApplicationCallTx {
+		err = fmt.Errorf("can't use %s on non-app call txn with index %d", opName, groupIdx)
+		return
+	} else if groupIdx == cx.GroupIndex {
+		err = fmt.Errorf("can't use %s on self, use load instead", opName)
+		return
+	} else if groupIdx > cx.GroupIndex {
+		err = fmt.Errorf("%s can't get future scratch space from txn with index %d", opName, groupIdx)
+		return
+	}
+
+	scratchValue = cx.PastSideEffects[groupIdx].getScratchValue(uint8(scratchIdx))
+	return
+}
+
+func opGload(cx *evalContext) {
+	groupIdx := int(uint(cx.program[cx.pc+1]))
+	scratchIdx := int(uint(cx.program[cx.pc+2]))
+	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gload")
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack = append(cx.stack, scratchValue)
+}
+
+func opGloads(cx *evalContext) {
+	last := len(cx.stack) - 1
+	groupIdx := int(cx.stack[last].Uint)
+	scratchIdx := int(uint(cx.program[cx.pc+1]))
+	scratchValue, err := opGloadImpl(cx, groupIdx, scratchIdx, "gloads")
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[last] = scratchValue
 }
 
 func opConcat(cx *evalContext) {
@@ -2381,7 +2467,7 @@ func opGetByte(cx *evalContext) {
 	target := cx.stack[prev]
 
 	if idx >= uint64(len(target.Bytes)) {
-		cx.err = errors.New("getbyte index beyond byteslice")
+		cx.err = errors.New("getbyte index beyond array length")
 		return
 	}
 	cx.stack[prev].Uint = uint64(target.Bytes[idx])
@@ -2397,8 +2483,8 @@ func opSetByte(cx *evalContext) {
 		cx.err = errors.New("setbyte value > 255")
 		return
 	}
-	if cx.stack[prev].Uint > uint64(len(cx.stack[pprev].Bytes)) {
-		cx.err = errors.New("setbyte index > byte length")
+	if cx.stack[prev].Uint >= uint64(len(cx.stack[pprev].Bytes)) {
+		cx.err = errors.New("setbyte index beyond array length")
 		return
 	}
 	// Copy to avoid modifying shared slice

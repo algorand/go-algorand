@@ -1076,6 +1076,26 @@ proc ::AlgorandGoal::AppCreate { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APP
     return $APP_ID
 }
 
+# App Create with extra pages
+proc ::AlgorandGoal::AppCreateExPages { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APPROVAL_PROGRAM APP_ARG GLOBAL_BYTE_SLICES LOCAL_BYTE_SLICES CLEAR_PROGRAM DATA_DIR EXTRA_PAGES } {
+    set timeout 60
+    if { [ catch {
+        set APP_ID "NOT SET"
+        puts "calling goal app create with extra pages"
+        spawn goal app create --creator $ACCOUNT_ADDRESS --approval-prog $APPROVAL_PROGRAM --global-byteslices $GLOBAL_BYTE_SLICES --global-ints 0 --local-byteslices $LOCAL_BYTE_SLICES --local-ints 0 --app-arg $APP_ARG --clear-prog $CLEAR_PROGRAM --extra-pages $EXTRA_PAGES -w $WALLET_NAME  -d $DATA_DIR
+        expect {
+            timeout { abort "\n Failed to see expected output" }
+            "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue }
+            -re {Created app with app index ([0-9]+)} {set APP_ID $expect_out(1,string) ;close  }
+            eof {close; ::AlgorandGoal::Abort "app not created" }
+        }
+        puts "App ID $APP_ID"
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in AppCreate: $EXCEPTION"
+    }
+    return $APP_ID
+}
+
 # App Create with onCompletion argument
 proc ::AlgorandGoal::AppCreateOnCompletion { \
 						 WALLET_NAME \

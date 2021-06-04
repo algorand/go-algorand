@@ -103,6 +103,11 @@ type ConsensusParams struct {
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
 
+	// EnableFeePooling specifies that the sum of the fees in a
+	// group must exceed one MinTxnFee per Txn, rather than check that
+	// each Txn has a MinFee.
+	EnableFeePooling bool
+
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -230,6 +235,9 @@ type ConsensusParams struct {
 	// maximum length of application approval program or clear state
 	// program in bytes
 	MaxAppProgramLen int
+
+	// extra length for application program in pages. A page is MaxAppProgramLen bytes
+	MaxExtraAppProgramPages int
 
 	// maximum number of accounts in the ApplicationCall Accounts field.
 	// this determines, in part, the maximum number of balance records
@@ -419,6 +427,14 @@ var MaxAppProgramLen int
 // used for decoding purposes.
 var MaxBytesKeyValueLen int
 
+// MaxExtraAppProgramLen is the maximum extra app program length supported by any
+// of the consensus protocols. used for decoding purposes.
+var MaxExtraAppProgramLen int
+
+// MaxAvailableAppProgramLen is the largest supported app program size include the extra pages
+//supported supported by any of the consensus protocols. used for decoding purposes.
+var MaxAvailableAppProgramLen int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -448,6 +464,9 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
 	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
 	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
+	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
+	// MaxAvailableAppProgramLen is the max of supported app program size
+	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -916,6 +935,9 @@ func initConsensusProtocols() {
 
 	vFuture.EnableKeyregCoherencyCheck = true
 
+	// Enable support for larger app program size
+	vFuture.MaxExtraAppProgramPages = 3
+
 	// enable the InitialRewardsRateCalculation fix
 	vFuture.InitialRewardsRateCalculation = true
 	// Enable transaction Merkle tree.
@@ -926,6 +948,8 @@ func initConsensusProtocols() {
 
 	// Increase asset URL length to allow for IPFS URLs
 	vFuture.MaxAssetURLBytes = 96
+
+	vFuture.EnableFeePooling = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

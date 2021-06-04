@@ -1802,6 +1802,120 @@ func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 	require.Truef(t, pM.getTrace().Contains(resynchEvent), "Player should try to repropagate freshest bundle")
 }
 
+func TestPlayerPropagatesProposalPayload(t *testing.T) {
+	// if a player receives a payload from the network, it should relay it.
+	const r = round(209)
+	_, pM, helper := setupP(t, r, 0, soft)
+	payload, pV := helper.MakeRandomProposalPayload(t, r)
+
+	// store an arbitrary proposal/payload
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	m := message{
+		MessageHandle:           "msghandle",
+		UnauthenticatedProposal: payload.u(),
+	}
+	inMsg = messageEvent{
+		T:     payloadPresent,
+		Input: m,
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	relayPayloadEvent := ev(networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
+	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay payload on reception")
+}
+
+func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
+	// if a player receives a PayloadVerified event with its own payload, it should relay it.
+	const r = round(209)
+	_, pM, helper := setupP(t, r, 0, soft)
+	payload, pV := helper.MakeRandomProposalPayload(t, r)
+
+	// store an arbitrary proposal/payload
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	m := message{
+		UnauthenticatedProposal: payload.u(),
+		Proposal:                *payload,
+	}
+	inMsg = messageEvent{
+		T:     payloadVerified,
+		Input: m,
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	relayPayloadEvent := ev(networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
+	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay own payload")
+}
+
+func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
+	// if a player receives a proposal payload for a future round, it should still
+	// propagate it at some point.
+	const r = round(209)
+	_, pM, helper := setupP(t, r, 0, soft)
+	payload, pV := helper.MakeRandomProposalPayload(t, r+1)
+
+	// store an arbitrary proposal/payload
+	vVote := helper.MakeVerifiedVote(t, 0, r+1, 0, propose, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	m := message{
+		MessageHandle:           "msghandle",
+		UnauthenticatedProposal: payload.u(),
+	}
+	inMsg = messageEvent{
+		T:     payloadPresent,
+		Input: m,
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// advance to the next round
+	msg := roundInterruptionEvent{
+		Round: r + 1,
+	}
+	err, panicErr = pM.transition(msg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	relayPayloadEvent := ev(networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
+	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay payload on new round")
+}
+
 func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	// if player broadcasts a non-bottom freshest bundle during recovery/resynch, broadcast the
 	// associated proposal payload. note this is distinct from relaying the payload
@@ -1988,9 +2102,75 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay staged payload over pinned payload on resynch")
 }
 
+func TestPlayerPropagatesProposalVote(t *testing.T) {
+	const r = round(209)
+	_, pM, helper := setupP(t, r, 0, soft)
+	_, pV := helper.MakeRandomProposalPayload(t, r)
+
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, propose, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	relayVoteEvent := ev(networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vVote.u()})
+	require.Truef(t, pM.getTrace().Contains(relayVoteEvent), "Player should relay proposal vote")
+}
+
+func TestPlayerPropagatesSoftVote(t *testing.T) {
+	const r = round(209)
+	_, pM, helper := setupP(t, r, 0, soft)
+	_, pV := helper.MakeRandomProposalPayload(t, r)
+
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, soft, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	relayVoteEvent := ev(networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vVote.u()})
+	require.Truef(t, pM.getTrace().Contains(relayVoteEvent), "Player should relay soft vote")
+}
+
+func TestPlayerPropagatesCertVote(t *testing.T) {
+	const r = round(209)
+	_, pM, helper := setupP(t, r, 0, cert)
+	_, pV := helper.MakeRandomProposalPayload(t, r)
+
+	vVote := helper.MakeVerifiedVote(t, 0, r, 0, cert, *pV)
+	inMsg := messageEvent{
+		T: voteVerified,
+		Input: message{
+			Vote:                vVote,
+			UnauthenticatedVote: vVote.u(),
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	relayVoteEvent := ev(networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vVote.u()})
+	require.Truef(t, pM.getTrace().Contains(relayVoteEvent), "Player should relay cert vote")
+}
+
 // Malformed Messages
 // check both proposals, proposal payloads, and votes, bundles
-func TestPlayerDisconectsFromMalformedProposalVote(t *testing.T) {
+func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
 	const r = round(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2064,7 +2244,7 @@ func TestPlayerIgnoresMalformedPayload(t *testing.T) {
 	}), "Player should ignore malformed payload")
 }
 
-func TestPlayerDisconectsFromMalformedVotes(t *testing.T) {
+func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
 	const r = round(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
@@ -2102,7 +2282,7 @@ func TestPlayerDisconectsFromMalformedVotes(t *testing.T) {
 	}), "Player should disconnect due to malformed vote")
 }
 
-func TestPlayerDisconectsFromMalformedBundles(t *testing.T) {
+func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
 	const r = round(201221)
 	const p = period(0)
 	_, pM, _ := setupP(t, r, p, cert)

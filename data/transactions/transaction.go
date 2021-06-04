@@ -344,11 +344,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
-		// Schemas may only be set during application creation
+		// Schemas and ExtraProgramPages may only be set during application creation
 		if tx.ApplicationID != 0 {
 			if tx.LocalStateSchema != (basics.StateSchema{}) ||
 				tx.GlobalStateSchema != (basics.StateSchema{}) {
 				return fmt.Errorf("local and global state schemas are immutable")
+			}
+			if tx.ExtraProgramPages != 0 {
+				return fmt.Errorf("ExtraProgramPages field is immutable")
 			}
 		}
 
@@ -382,12 +385,16 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
 		}
 
-		if len(tx.ApprovalProgram) > proto.MaxAppProgramLen {
-			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxAppProgramLen)
+		if tx.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
+			return fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages)
 		}
 
-		if len(tx.ClearStateProgram) > proto.MaxAppProgramLen {
-			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxAppProgramLen)
+		if uint32(len(tx.ApprovalProgram)) > ((1 + tx.ExtraProgramPages) * uint32(proto.MaxAppProgramLen)) {
+			return fmt.Errorf("approval program too long. max len %d bytes", (1+tx.ExtraProgramPages)*uint32(proto.MaxAppProgramLen))
+		}
+
+		if uint32(len(tx.ClearStateProgram)) > ((1 + tx.ExtraProgramPages) * uint32(proto.MaxAppProgramLen)) {
+			return fmt.Errorf("clear state program too long. max len %d bytes", (1+tx.ExtraProgramPages)*uint32(proto.MaxAppProgramLen))
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
@@ -465,7 +472,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 	}
 
-	if tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
+	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
 		if tx.Type == protocol.CompactCertTx {
 			// Zero fee allowed for compact cert txn.
 		} else {
