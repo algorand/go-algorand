@@ -206,16 +206,16 @@ func TestEncodedAccountAllocationBounds(t *testing.T) {
 			require.Failf(t, "proto.MaxAssetsPerAccount > EncodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
 		}
 		if proto.MaxAppsCreated > EncodedMaxAppParams {
-			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
+			require.Failf(t, "proto.MaxAppsCreated > EncodedMaxAppParams", "protocol version = %s", protoVer)
 		}
 		if proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
-			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
+			require.Failf(t, "proto.MaxAppsOptedIn > EncodedMaxAppLocalStates", "protocol version = %s", protoVer)
 		}
 		if proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries {
-			require.Failf(t, "proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
+			require.Failf(t, "proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries", "protocol version = %s", protoVer)
 		}
 		if proto.MaxGlobalSchemaEntries > EncodedMaxKeyValueEntries {
-			require.Failf(t, "proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
+			require.Failf(t, "proto.MaxGlobalSchemaEntries > EncodedMaxKeyValueEntries", "protocol version = %s", protoVer)
 		}
 	}
 }
