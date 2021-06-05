@@ -8,10 +8,12 @@ if: tag IS blank
 stages:
   - name: build_commit
     if: NOT (branch =~ /^rel\//) AND type != pull_request
+  - name: build_debug_release
+    if: branch == onetechnical/fulltest-debug AND type = pull_request
   - name: build_pr
-    if: type = pull_request
+    if: type = pull_request AND branch != onetechnical/fulltest-debug
   - name: build_release
-    if: (branch =~ /^rel\// OR branch == onetechnical/fulltest-debug) AND type != pull_request
+    if: branch =~ /^rel\// AND type != pull_request
   - name: deploy
     if: branch =~ /^rel\// AND type != pull_request
   - name: post_deploy
@@ -92,6 +94,67 @@ jobs:
          - travis_retry $mingw64 scripts/travis/build_test.sh
 
     - stage: build_release
+      os: linux
+      name: Ubuntu AMD64 CodeGen Verification
+      script:
+        - scripts/travis/codegen_verification.sh
+    - # same stage, parallel job
+      os: linux
+      name: Ubuntu AMD64 Build
+      script:
+        - travis_retry ./scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: linux
+      name: Ubuntu AMD64 Integration Test
+      script:
+        - travis_retry ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Build
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - travis_retry scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+    - # same stage, parallel job
+      name: External ARM64 Integration Test
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
+      script:
+        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Build
+      script:
+        - travis_retry scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Integration Test
+      script:
+        - travis_retry ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+       os: windows
+       name: Windows x64 Build
+       cache:
+         directories:
+           - $HOME/AppData/Local/Temp/chocolatey
+           - /C/tools/msys64
+       script:
+         - travis_retry $mingw64 scripts/travis/build_test.sh
+
+    - stage: build_debug_release
       os: linux
       name: Ubuntu AMD64 CodeGen Verification
       script:
