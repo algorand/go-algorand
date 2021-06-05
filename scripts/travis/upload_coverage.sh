@@ -24,5 +24,5 @@ done
 rm sum
 
 # Unset everything except "TRAVIS*" variables.
-unset $(compgen -e | grep -v "^TRAVIS")
+unset $(compgen -e | grep -v "^TRAVIS\|^CI$\|^SHIPPABLE$")
 /usr/bin/env bash codecov -t "${CODECOV_TOKEN}" "${FILE_ARG}"
