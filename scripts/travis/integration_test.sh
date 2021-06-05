@@ -15,16 +15,6 @@ export ALGORAND_DEADLOCK
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 export BUILD_TYPE="integration"
-
-
-if [ "${USER}" = "travis" ]; then
-    # we're running on a travis machine
-    "${SCRIPTPATH}/travis_wait.sh" 120 "${SCRIPTPATH}/build.sh" --make_debug
-    "${SCRIPTPATH}/travis_wait.sh" 120 "${SCRIPTPATH}/test.sh"
-else
-    # we're running on an ephermal build machine
-    "${SCRIPTPATH}/build.sh" --make_debug
-    "${SCRIPTPATH}/test.sh"
-fi
+"${SCRIPTPATH}/build_test.sh"
 
 echo "Integration test completed successfully"
