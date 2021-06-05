@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -392,14 +393,16 @@ func BenchmarkTxnGroupCompression(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
+	loopStartTime := time.Now()
 	for i := 0; i < b.N; i++ {
 		compressedGroupBytes, err := compressTransactionGroupsBytes(encodedGroupsBytes)
 		require.NoError(b, err)
 		size = len(compressedGroupBytes)
 	}
+	loopDuration := time.Now().Sub(loopStartTime)
 	b.StopTimer()
-	b.ReportMetric(float64(len(encodedGroupsBytes)), "encodedDataBytes")
-	b.ReportMetric(float64(len(encodedGroupsBytes) - size) / float64(len(encodedGroupsBytes)), "estimatedGzipCompressionGains")
+	b.ReportMetric(float64(len(encodedGroupsBytes)*b.N)/loopDuration.Seconds(), "estimatedGzipCompressionSpeed")
+	b.ReportMetric(float64(len(encodedGroupsBytes)-size)/float64(len(encodedGroupsBytes)), "estimatedGzipCompressionGains")
 }
 
 func BenchmarkTxnGroupDecoding(b *testing.B) {
