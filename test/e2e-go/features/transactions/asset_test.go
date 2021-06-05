@@ -17,14 +17,22 @@
 package transactions
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -183,17 +191,17 @@ func TestAssetValidRounds(t *testing.T) {
 	a.Equal(basics.Round(cparams.MaxTxnLife+1), tx.LastValid)
 }
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // createTestAssets creates MaxAssetsPerAccount assets
-func createTestAssets(a *require.Assertions, fixture *fixtures.RestClientFixture, numAssets int, account0 string, manager string, reserve string, freeze string, clawback string, assetURL string, assetMetadataHash []byte, params config.ConsensusParams) {
+func createTestAssets(a *require.Assertions, fixture *fixtures.RestClientFixture, numAssets int, account0 string, manager string, reserve string, freeze string, clawback string, assetURL string, assetMetadataHash []byte, maxTxnGroupSize int, totals uint64) {
 	txids := make(map[string]string)
 	client := fixture.LibGoalClient
-	min := func(a, b int) int {
-		if a < b {
-			return a
-		}
-		return b
-	}
-
 	i := 1
 	for i <= numAssets {
 		// re-generate wh, since this test takes a while and sometimes
@@ -201,9 +209,17 @@ func createTestAssets(a *require.Assertions, fixture *fixtures.RestClientFixture
 		wh, err := client.GetUnencryptedWalletHandle()
 		a.NoError(err)
 
-		groupSize := min(params.MaxTxGroupSize, numAssets+1-i)
+		groupSize := min(maxTxnGroupSize, numAssets+1-i)
+
 		if groupSize == 1 {
-			tx, err := client.MakeUnsignedAssetCreateTx(uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i), assetURL, assetMetadataHash, 0)
+			total := uint64(i)
+			unitName := fmt.Sprintf("test%d", i)
+			assetName := fmt.Sprintf("testname%d", i)
+			if totals != 0 {
+				total = totals
+			}
+
+			tx, err := client.MakeUnsignedAssetCreateTx(total, false, manager, reserve, freeze, clawback, unitName, assetName, assetURL, assetMetadataHash, 0)
 			a.NoError(err)
 			txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 			a.NoError(err)
@@ -212,7 +228,13 @@ func createTestAssets(a *require.Assertions, fixture *fixtures.RestClientFixture
 			txns := make([]transactions.Transaction, 0, groupSize)
 			stxns := make([]transactions.SignedTxn, 0, groupSize)
 			for j := 0; j < groupSize; j++ {
-				tx, err := client.MakeUnsignedAssetCreateTx(uint64(i+j), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i+j), fmt.Sprintf("testname%d", i+j), assetURL, assetMetadataHash, 0)
+				total := uint64(i + j)
+				unitName := fmt.Sprintf("test%d", i+j)
+				assetName := fmt.Sprintf("testname%d", i+j)
+				if totals != 0 {
+					total = totals
+				}
+				tx, err := client.MakeUnsignedAssetCreateTx(total, false, manager, reserve, freeze, clawback, unitName, assetName, assetURL, assetMetadataHash, 0)
 				a.NoError(err)
 				tx, err = client.FillUnsignedTxTemplate(account0, 0, 0, 1000000, tx)
 				a.NoError(err)
@@ -310,7 +332,7 @@ func TestAssetConfig(t *testing.T) {
 
 	// Create max number of assets
 	numAssets := config.Consensus[protocol.ConsensusV27].MaxAssetsPerAccount
-	createTestAssets(a, &fixture, numAssets, account0, manager, reserve, freeze, clawback, assetURL, assetMetadataHash, config.Consensus[protocol.ConsensusV27])
+	createTestAssets(a, &fixture, numAssets, account0, manager, reserve, freeze, clawback, assetURL, assetMetadataHash, config.Consensus[protocol.ConsensusV27].MaxTxGroupSize, 0)
 
 	// re-generate wh, since this test takes a while and sometimes
 	// the wallet handle expires.
@@ -427,13 +449,6 @@ func TestAssetConfig(t *testing.T) {
 	// Destroy assets
 	txids = make(map[string]string, len(info.AssetParams))
 	params := config.Consensus[protocol.ConsensusV27]
-	min := func(a, b int) int {
-		if a < b {
-			return a
-		}
-		return b
-	}
-
 	// flatten in order to send in groups
 	type flatten struct {
 		idx    uint64
@@ -558,7 +573,7 @@ func TestAssetConfigUnlimited(t *testing.T) {
 
 	// Create max number of assets
 	numAssets := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
-	createTestAssets(a, &fixture, numAssets, account0, manager, reserve, freeze, clawback, assetURL, assetMetadataHash, config.Consensus[protocol.ConsensusFuture])
+	createTestAssets(a, &fixture, numAssets, account0, manager, reserve, freeze, clawback, assetURL, assetMetadataHash, config.Consensus[protocol.ConsensusFuture].MaxTxGroupSize, 0)
 
 	// re-generate wh, since this test takes a while and sometimes
 	// the wallet handle expires.
@@ -1302,4 +1317,474 @@ func verifyAssetParameters(asset v1.AssetParams,
 	asser.Equal(asset.ClawbackAddr, clawback)
 	asser.Equal(asset.MetadataHash, metadataHash)
 	asser.Equal(asset.URL, assetURL)
+}
+
+type logEntry struct {
+	aidx   uint64
+	amount uint64
+	from   string
+	to     string
+}
+type assetTxnGroupSenderInfo struct {
+	a       *require.Assertions
+	fixture *fixtures.RestClientFixture
+	gs      int
+}
+
+type assetTxnGroupLogger struct {
+	assetTxnGroupSenderInfo
+	file    *os.File
+	entries []logEntry
+}
+
+type assetTxnGroupSender struct {
+	assetTxnGroupSenderInfo
+	txns  []transactions.Transaction
+	txids []map[string]string
+	fee   uint64
+}
+
+func makeAssetTxnGroupSender(a *require.Assertions, f *fixtures.RestClientFixture, groupSize int) assetTxnGroupSender {
+	sender := assetTxnGroupSender{
+		assetTxnGroupSenderInfo: assetTxnGroupSenderInfo{
+			a:       a,
+			fixture: f,
+			gs:      groupSize,
+		},
+		txns:  make([]transactions.Transaction, 0, groupSize),
+		txids: []map[string]string{},
+		fee:   100000,
+	}
+
+	return sender
+}
+
+func makeAssetTxnGroupLogger(a *require.Assertions, f *fixtures.RestClientFixture, groupSize int, logname string) assetTxnGroupLogger {
+	file, err := os.OpenFile(logname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	a.NoError(err)
+	logger := assetTxnGroupLogger{
+		assetTxnGroupSenderInfo: assetTxnGroupSenderInfo{
+			a:       a,
+			fixture: f,
+			gs:      groupSize,
+		},
+		file:    file,
+		entries: make([]logEntry, 0, groupSize),
+	}
+
+	return logger
+}
+
+type txnProcessor interface {
+	addTxn(index uint64, amount uint64, from, to string)
+	flush(wait bool)
+}
+
+func (s *assetTxnGroupSender) addTxn(index uint64, amount uint64, from, to string) {
+	tx, err := s.fixture.LibGoalClient.MakeUnsignedAssetSendTx(index, amount, to, "", "")
+	s.a.NoError(err)
+	tx, err = s.fixture.LibGoalClient.FillUnsignedTxTemplate(from, 0, 0, s.fee, tx)
+	s.a.NoError(err)
+
+	var note [8]byte
+	crypto.RandBytes(note[:])
+	tx.Note = note[:]
+
+	s.txns = append(s.txns, tx)
+
+	if len(s.txns) >= s.gs {
+		s.flush(false)
+	}
+}
+
+func (s *assetTxnGroupSender) flush(wait bool) {
+	wh, err := s.fixture.LibGoalClient.GetUnencryptedWalletHandle()
+	s.a.NoError(err)
+	flushThreshold := 48
+	txids := make(map[string]string, flushThreshold)
+	for len(s.txns) > 0 {
+		groupSize := min(s.gs, len(s.txns))
+		txns := s.txns[:groupSize]
+		if groupSize == 1 {
+			txid, err := s.fixture.LibGoalClient.SignAndBroadcastTransaction(wh, nil, txns[0])
+			s.a.NoError(err)
+			txids[txid] = txns[0].Sender.String()
+		} else {
+			gid, err := s.fixture.LibGoalClient.GroupID(txns)
+			s.a.NoError(err)
+			stxns := make([]transactions.SignedTxn, 0, groupSize)
+			for j := 0; j < len(txns); j++ {
+				txns[j].Group = gid
+				stxn, err := s.fixture.LibGoalClient.SignTransactionWithWallet(wh, nil, txns[j])
+				s.a.NoError(err)
+				stxns = append(stxns, stxn)
+				txids[stxn.ID().String()] = stxn.Txn.Sender.String()
+			}
+			err = s.fixture.LibGoalClient.BroadcastTransactionGroup(stxns)
+			s.a.NoError(err, fmt.Sprintf("%d ids, group %d", len(s.txids), len(s.txns)))
+		}
+		s.txns = s.txns[groupSize:]
+
+		if len(txids) >= flushThreshold {
+			status, err := s.fixture.LibGoalClient.Status()
+			s.a.NoError(err)
+			confirmed := s.fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
+			s.a.True(confirmed)
+			wh, err = s.fixture.LibGoalClient.GetUnencryptedWalletHandle()
+			s.a.NoError(err)
+			txids = make(map[string]string)
+		}
+	}
+	if len(txids) > 0 {
+		s.txids = append(s.txids, txids)
+	}
+
+	const txnSize = 300
+checkfee:
+	feePerByte, err := s.fixture.LibGoalClient.SuggestedFee()
+	s.a.NoError(err)
+	feeTooHigh := feePerByte*txnSize >= uint64(float64(s.fee)*0.3)
+
+	if len(s.txids) > 0 && (wait || feeTooHigh) {
+		txids = s.txids[len(s.txids)-1]
+		status, err := s.fixture.LibGoalClient.Status()
+		s.a.NoError(err)
+
+		timeoutRound := status.LastRound + 20
+		for txid, addr := range txids {
+			txn, err := s.fixture.WaitForConfirmedTxn(status.LastRound+20, addr, txid)
+			if err != nil {
+				fmt.Printf("Failed to confirm txn (%d, %d) at %d: %s", txn.FirstRound, txn.LastRound, timeoutRound, err.Error())
+			}
+		}
+		s.txids = s.txids[:len(s.txids)-1]
+		if feeTooHigh {
+			goto checkfee
+		}
+		// all confirmed, clean
+		s.txids = s.txids[:0]
+	}
+}
+
+func (s *assetTxnGroupLogger) addTxn(index uint64, amount uint64, from, to string) {
+	s.entries = append(s.entries, logEntry{index, amount, from, to})
+	if len(s.entries) > s.gs {
+		s.flush(false)
+	}
+}
+
+func (s *assetTxnGroupLogger) flush(wait bool) {
+	for _, entry := range s.entries {
+		fmt.Fprintf(s.file, "%d %d %s %s\n", entry.aidx, entry.amount, entry.from, entry.to)
+	}
+	s.entries = s.entries[:0]
+}
+
+// performRandomTransfers runs asset transactions according to the algorithm:
+// create maxAssets per account for a half of accounts
+// opt-in all accounts into all created assets
+// execute 10k * 1024 random transfers of these assets
+func performRandomTransfers(a *require.Assertions, r *rand.Rand, groupSize int, maxIterations int, maxAssets int, f *fixtures.RestClientFixture, addresses []string, txnProcessor txnProcessor) {
+	const (
+		escapeCursorUp   = string("\033[A") // Cursor Up
+		escapeDeleteLine = string("\033[M") // Delete Line
+		escapeSquare     = string("▪")
+		escapeDot        = string("·")
+
+		barWidth = 50
+	)
+
+	printProgress := func(progress int, barLength int, dld int64, status string) {
+		if barLength == 0 {
+			fmt.Printf(escapeCursorUp+escapeDeleteLine+"[ Done %s ]\n\n", status)
+			return
+		}
+
+		outString := "[" + strings.Repeat(escapeSquare, progress) + strings.Repeat(escapeDot, barLength-progress) + fmt.Sprintf("] %s...", status)
+		if dld > 0 {
+			outString = fmt.Sprintf(outString+" %d", dld)
+		}
+		fmt.Printf(escapeCursorUp + escapeDeleteLine + outString + "\n")
+	}
+
+	const numTransfers = 1024
+
+	client := f.LibGoalClient
+
+	for i := 0; i < len(addresses)/2; i++ {
+		addr := addresses[i]
+		createTestAssets(a, f, maxAssets, addr, addr, addr, addr, addr, "", []byte{}, groupSize, uint64(maxIterations*numTransfers*numTransfers))
+	}
+
+	assetCreators := make(map[uint64]string, maxAssets*len(addresses)/2)
+	creators := make(map[string]map[uint64]bool, len(addresses)/2)
+	holders := make(map[string]map[uint64]bool, len(addresses))
+	assetHolders := make(map[uint64][]string, maxAssets*len(addresses)/2)
+	assets := make([]uint64, 0, maxAssets*len(addresses)/2)
+
+	for i := 0; i < len(addresses)/2; i++ {
+		addr := addresses[i]
+		info, err := client.AccountInformation(addr)
+		a.NoError(err)
+		a.Equal(maxAssets, len(info.AssetParams))
+		a.Equal(maxAssets, len(info.Assets))
+		creators[addr] = make(map[uint64]bool, maxAssets)
+		for idx := range info.AssetParams {
+			assetCreators[idx] = addr
+			creators[addr][idx] = true
+			assets = append(assets, uint64(idx))
+		}
+	}
+	sort.Slice(assets, func(i, j int) bool { return assets[i] < assets[j] })
+
+	for i := len(addresses) / 2; i < len(addresses); i++ {
+		addr := addresses[i]
+		info, err := client.AccountInformation(addr)
+		a.NoError(err)
+		a.Equal(0, len(info.AssetParams))
+		a.Equal(0, len(info.Assets))
+	}
+
+	// opt-in all to some assets
+	for i := 0; i < len(addresses); i++ {
+		addr := addresses[i]
+		ownAssets := creators[addr]
+		if len(ownAssets) >= maxAssets {
+			// holding slots occupied by own holdings
+			continue
+		}
+		optedInAssets := make(map[uint64]bool, maxAssets)
+		s := makeAssetTxnGroupSender(a, f, groupSize)
+		for j := 0; j < maxAssets; j++ {
+		repeat:
+			idx := assets[r.Intn(len(assets))]
+			if ownAssets[idx] || optedInAssets[idx] {
+				goto repeat
+			}
+			s.addTxn(idx, 0, addr, addr)
+			optedInAssets[idx] = true
+		}
+		wait := false
+		if i == len(addresses)-1 {
+			wait = true
+		}
+		s.flush(wait)
+		holders[addr] = optedInAssets
+		for idx := range optedInAssets {
+			var list []string
+			var ok bool
+			if list, ok = assetHolders[idx]; !ok {
+				list = make([]string, 0, maxAssets)
+			}
+			list = append(list, addr)
+			assetHolders[idx] = list
+		}
+		ratio := float64(i*barWidth) / float64(len(addresses))
+		printProgress(int(ratio), barWidth, int64(i), "Opting-in")
+	}
+	printProgress(0, 0, 0, "Opting-in")
+
+	// for i := 0; i < len(addresses); i++ {
+	// 	addr := addresses[i]
+	// 	ownAssets := creators[addr]
+	// 	optedInAssets := holders[addr]
+	// 	fmt.Printf("%s %d %d\n", addr, len(ownAssets), len(optedInAssets))
+	// }
+
+	for i := 0; i < len(addresses)/2; i++ {
+		addr := addresses[i]
+		info, err := client.AccountInformation(addr)
+		a.NoError(err)
+		a.Equal(maxAssets, len(info.AssetParams))
+		a.Equal(maxAssets, len(info.Assets))
+	}
+	for i := len(addresses) / 2; i < len(addresses); i++ {
+		addr := addresses[i]
+		info, err := client.AccountInformation(addr)
+		a.NoError(err)
+		a.Equal(0, len(info.AssetParams))
+		a.LessOrEqual(len(info.Assets), maxAssets)
+	}
+
+	fmt.Printf("Opted in %d out of %d assets\n\n", len(assetHolders), len(assets))
+
+	acctHoldings := make([]int, len(addresses))
+	acctParams := make([]int, len(addresses))
+	for i := 0; i < len(addresses); i++ {
+		addr := addresses[i]
+		info, err := client.AccountInformation(addr)
+		if err != nil {
+			fmt.Printf("Failed at %s\n", addr)
+		}
+		a.NoError(err)
+		acctHoldings[i] = len(info.Assets)
+		acctParams[i] = len(info.AssetParams)
+	}
+
+	acctBelow := 0
+	acctEq := 0
+	acctAbove := 0
+	for _, count := range acctHoldings {
+		if count < maxAssets {
+			acctBelow++
+		} else if count == maxAssets {
+			acctEq++
+		} else {
+			acctAbove++
+		}
+	}
+
+	fmt.Printf("%d accounts with less than %d holdings\n", acctBelow, maxAssets)
+	fmt.Printf("%d accounts with eq to %d holdings\n", acctEq, maxAssets)
+	fmt.Printf("%d accounts with more than %d holdings\n", acctAbove, maxAssets)
+
+	acctBelow = 0
+	acctEq = 0
+	acctAbove = 0
+	for _, count := range acctParams {
+		if count < maxAssets {
+			acctBelow++
+		} else if count == maxAssets {
+			acctEq++
+		} else {
+			acctAbove++
+		}
+	}
+
+	fmt.Printf("%d accounts with less than %d params\n", acctBelow, maxAssets)
+	fmt.Printf("%d accounts with eq to %d params\n", acctEq, maxAssets)
+	fmt.Printf("%d accounts with more than %d params\n", acctAbove, maxAssets)
+
+	// run maxIterations series of random transfers
+	for i := 0; i < maxIterations; i++ {
+		for j := 0; j < numTransfers; j++ {
+		retry:
+			idx := assets[r.Intn(len(assets))]
+			sender, ok := assetCreators[idx]
+			a.True(ok)
+			holders, ok := assetHolders[idx]
+			if !ok || len(holders) < 2 {
+				goto retry
+			}
+			receiver := holders[r.Intn(len(holders))]
+			txnProcessor.addTxn(idx, 1, sender, receiver)
+			ratio := float64(((i)*numTransfers+(j))*barWidth) / float64(maxIterations*numTransfers)
+			printProgress(int(ratio), barWidth, int64(i), "Transfering")
+		}
+	}
+	txnProcessor.flush(true)
+	printProgress(0, 0, 0, "Transfering")
+
+	if _, ok := txnProcessor.(*assetTxnGroupSender); ok {
+		// grace period just in case for real sending
+		time.Sleep(5 * time.Minute)
+	}
+}
+
+func TestAsset2k(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+
+	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	// use a fixed seed
+	// generate random 32 uint8 numbers
+	// shuffle into 128 account keys
+
+	const seed = int64(100)
+	const keyLenBytes = 32
+	const groupSize = 16
+	const numAccounts = 128
+	const numIterations = 1000
+
+	maxAssets := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
+	maxProtoAssets := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
+	branch := "feature"
+
+	source := rand.NewSource(seed)
+	r := rand.New(source)
+	seq := make([]byte, keyLenBytes)
+	for i := 0; i < len(seq); i++ {
+		seq[i] = byte(r.Uint32())
+	}
+
+	keys := make([][]byte, numAccounts)
+	addresses := make([]string, numAccounts)
+	for i := 0; i < len(keys); i++ {
+		keys[i] = make([]byte, len(seq))
+		r.Shuffle(len(seq), func(i, j int) { seq[i], seq[j] = seq[j], seq[i] })
+		copy(keys[i], seq)
+		importedKey, err := client.ImportKey(wh, keys[i])
+		a.NoError(err)
+		addresses[i] = importedKey.Address
+	}
+
+	// fund these new accounts
+	const balance = 10000000000
+	for _, addr := range addresses {
+		_, err = client.SendPaymentFromUnencryptedWallet(account0, addr, 0, balance, nil)
+		a.NoError(err)
+	}
+	const maxRetries = 5
+	retry := 0
+	for retry < maxRetries {
+		rnd, err := client.CurrentRound()
+		a.NoError(err)
+		_, err = client.WaitForRound(rnd + 2)
+		a.NoError(err)
+		bal, err := client.GetBalance(addresses[len(addresses)-1])
+		a.NoError(err)
+		if bal == balance {
+			break
+		}
+		retry++
+	}
+
+	// create X assets per account for a half of accounts where X is a test parameter
+	// X = MaxAssetsPerAccount for limited assets and 2k for unlimited
+	// opt-in all accounts into all created accounts
+	// execute 1000 * 1024 random transfers of these assets
+
+	// txnLogFilename := fmt.Sprintf("%s-txn_log-branch_%s-assets_%d-proto_%d.txt", t.Name(), branch, maxAssets, maxProtoAssets)
+	// processor := makeAssetTxnGroupLogger(a, &fixture, groupSize, txnLogFilename)
+
+	processor := makeAssetTxnGroupSender(a, &fixture, groupSize)
+
+	var txnProcessor txnProcessor = &processor
+	performRandomTransfers(a, r, groupSize, numIterations, maxAssets, &fixture, addresses, txnProcessor)
+
+	// dump account db
+	if _, ok := txnProcessor.(*assetTxnGroupSender); ok {
+		all := make([]generatedV2.Account, len(addresses))
+		for i := 0; i < len(addresses); i++ {
+			info, err := client.AccountInformationV2(addresses[i])
+			a.NoError(err)
+			all[i] = info
+		}
+		blob, err := json.Marshal(all)
+		a.NoError(err)
+
+		balancesFilename := fmt.Sprintf("%s-branch_%s-assets_%d-proto_%d.json", t.Name(), branch, maxAssets, maxProtoAssets)
+		err = ioutil.WriteFile(balancesFilename, blob, 0644)
+		a.NoError(err)
+	} else if p, ok := txnProcessor.(*assetTxnGroupLogger); ok {
+		p.file.Close()
+	}
+
+	// repeat for
+	// master MaxAssetsPerAccount=1000 accounts vs feature branch
+	// master MaxAssetsPerAccount=2000 accounts vs feature branch vs feature branch MaxAssetsPerAccount=1000
 }
