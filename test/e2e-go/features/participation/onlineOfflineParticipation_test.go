@@ -25,11 +25,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/e2e-go/globals"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-
 )
 
 func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
@@ -124,7 +123,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 		shortPartKeysProtocol.AgreementFilterTimeout = 1 * time.Second
 	}
 	consensus[protocol.ConsensusVersion("shortpartkeysprotocol")] = shortPartKeysProtocol
-	
+
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
 	fixture.Setup(t, filepath.Join("nettemplates", "OneNode.json"))
@@ -192,8 +191,8 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	// Need to wait for funding to take effect on selection, then we can see if we're participating
 	// Stop before the account should become eligible for selection so we can ensure it wasn't
 	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting-1),
-		time.Duration(uint64(globals.MaxTimePerRound) * uint64(accountProposesStarting-1)))
-	err = fixture.WaitForRoundWithTimeout(uint64(accountProposesStarting-1))
+		time.Duration(uint64(globals.MaxTimePerRound)*uint64(accountProposesStarting-1)))
+	err = fixture.WaitForRoundWithTimeout(uint64(accountProposesStarting - 1))
 	a.NoError(err)
 
 	// Check if the account did not propose any blocks up to this round
@@ -201,15 +200,15 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 		int(accountProposesStarting)-1)
 	a.False(blockWasProposed, "account should not be selected until BalLookback (round %d) passes", int(accountProposesStarting-1))
 
-	// Now wait until the round where the funded account will be used. 
+	// Now wait until the round where the funded account will be used.
 	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting), 10*globals.MaxTimePerRound)
 	a.NoError(err)
-	
+
 	blockWasProposedByNewAccountRecently := fixture.VerifyBlockProposedRange(newAccount, int(accountProposesStarting), 1)
 	a.True(blockWasProposedByNewAccountRecently, "newly online account should be proposing blocks")
 }
 
 // Returns the earliest round which will have the balanceRound equal to r
 func balanceRoundOf(r basics.Round, cparams config.ConsensusParams) basics.Round {
-	return basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback) + r
+	return basics.Round(2*cparams.SeedRefreshInterval*cparams.SeedLookback) + r
 }
