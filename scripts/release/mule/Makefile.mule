@@ -8,7 +8,7 @@ ci-clean:
 	rm -rf tmp
 
 ci-deps:
-	scripts/configure_dev-deps.sh && \
+	scripts/buildtools/install_buildtools.sh && \
 	scripts/check_deps.sh
 
 ci-setup:
