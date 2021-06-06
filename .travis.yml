@@ -218,7 +218,7 @@ before_cache:
    docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
 
 after_success:
-  - scripts/travis/codecov || true
+  - scripts/travis/upload_coverage.sh || true
 
 addons:
   apt:
