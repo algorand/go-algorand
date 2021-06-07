@@ -50,7 +50,7 @@ type testLedger struct {
 	balances          map[basics.Address]balanceRecord
 	applications      map[basics.AppIndex]appParams
 	assets            map[basics.AssetIndex]basics.AssetParams
-	trackedCreatables map[int]basics.CreatableLocator
+	trackedCreatables map[int]basics.CreatableIndex
 	appID             basics.AppIndex
 	creatorAddr       basics.Address
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
@@ -82,7 +82,7 @@ func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 	}
 	l.applications = make(map[basics.AppIndex]appParams)
 	l.assets = make(map[basics.AssetIndex]basics.AssetParams)
-	l.trackedCreatables = make(map[int]basics.CreatableLocator)
+	l.trackedCreatables = make(map[int]basics.CreatableIndex)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
 	return l
 }
@@ -360,11 +360,11 @@ func (l *testLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool,
 }
 
 func (l *testLedger) setTrackedCreatable(groupIdx int, cl basics.CreatableLocator) {
-	l.trackedCreatables[groupIdx] = cl
+	l.trackedCreatables[groupIdx] = cl.Index
 }
 
 func (l *testLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
-	return l.trackedCreatables[groupIdx].Index
+	return l.trackedCreatables[groupIdx]
 }
 
 func (l *testLedger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (basics.AssetHolding, error) {

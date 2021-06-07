@@ -1539,25 +1539,22 @@ return
 	require.True(t, pass)
 }
 
-func TestTxnCreatableID(t *testing.T) {
+func TestGaid(t *testing.T) {
 	t.Parallel()
 	checkCreatableIDProg := `
-gtxn 0 CreatableID
+gaid 0
 int 0
 >
 `
 	ops := testProg(t, checkCreatableIDProg, 4)
-	sb := strings.Builder{}
-	err := Check(ops.Program, defaultEvalParams(&sb, nil))
-	if err != nil {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.NoError(t, err)
 	txn := makeSampleTxn()
+	txn.Txn.Type = protocol.ApplicationCallTx
 	txgroup := make([]transactions.SignedTxn, 3)
 	txgroup[1] = txn
-	sb = strings.Builder{}
+	targetTxn := makeSampleTxn()
+	targetTxn.Txn.Type = protocol.AssetConfigTx
+	txgroup[0] = targetTxn
+	sb := strings.Builder{}
 	ledger := makeTestLedger(nil)
 	ledger.setTrackedCreatable(0, basics.CreatableLocator{
 		Index: 100,
@@ -1565,7 +1562,8 @@ int 0
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Ledger = ledger
 	ep.TxnGroup = txgroup
-	pass, err := Eval(ops.Program, ep)
+	ep.GroupIndex = 1
+	pass, err := EvalStateful(ops.Program, ep)
 	if !pass || err != nil {
 		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
@@ -1575,16 +1573,37 @@ int 0
 
 	// should fail when accessing future transaction in group
 	futureCreatableIDProg := `
-gtxn 2 CreatableID
+gaid 2
 int 0
 >
 `
 
-	ops, err = AssembleStringWithVersion(futureCreatableIDProg, 4)
-	require.NoError(t, err)
-	_, err = Eval(ops.Program, ep)
+	ops = testProg(t, futureCreatableIDProg, 4)
+	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "can't get future creatable ID of txn with index 2")
+	require.Contains(t, err.Error(), "gaid can't get future creatable ID of txn with index 2")
+
+	// should fail when accessing self
+	ep.GroupIndex = 0
+	ops = testProg(t, checkCreatableIDProg, 4)
+	_, err = EvalStateful(ops.Program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "can't use gaid on self")
+	ep.GroupIndex = 1
+
+	// should fail on non-creatable
+	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
+	_, err = EvalStateful(ops.Program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "can't use gaid on txn that is not an app call nor an asset config txn")
+	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
+
+	// should fail when no creatable was created
+	var nilIndex basics.CreatableIndex
+	ledger.trackedCreatables[0] = nilIndex
+	_, err = EvalStateful(ops.Program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "the txn did not create anything")
 }
 
 func TestGtxn(t *testing.T) {
