@@ -20,7 +20,7 @@
 main:
         txn ApplicationArgs 1  // groupIndex
         btoi
-        gtxns CreatableID
+        gaids
         int 0
         >
         return

@@ -20,12 +20,6 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 APPID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog=${TEAL}/check_creatable_id.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0  --clear-prog=${TEAL}/approve-all.teal --app-arg=str:skipcreation | grep Created | awk '{ print $6 }')
 
 # ==============================
-# > Get own creatable ID test
-# ==============================
-
-${gcmd} app create --creator "${ACCOUNT}" --approval-prog=${TEAL}/check_creatable_id.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0  --clear-prog=${TEAL}/approve-all.teal --app-arg=str:dontskip --app-arg=int:0
-
-# ==============================
 # > Asset and application test
 # ==============================
 
