@@ -1538,8 +1538,8 @@ func TestGaid(t *testing.T) {
 	t.Parallel()
 	checkCreatableIDProg := `
 gaid 0
-int 0
->
+int 100
+==
 `
 	ops := testProg(t, checkCreatableIDProg, 4)
 	txn := makeSampleTxn()
