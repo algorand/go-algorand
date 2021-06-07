@@ -53,6 +53,23 @@ type labelReference struct {
 	label string
 }
 
+type constReference interface {
+	// get the referenced value
+	getValue() interface{}
+
+	// check if the referenced value equals other. Other must be the same type
+	valueEquals(other interface{}) bool
+
+	// get the index into ops.pending where the opcode for this reference is located
+	getPosition() int
+
+	// get the length of the op for this reference in ops.pending
+	length(ops *OpStream, assembled []byte) (int, error)
+
+	// create the opcode bytes for a new reference of the same value
+	makeNewReference(ops *OpStream, singleton bool, newIndex int) []byte
+}
+
 type intReference struct {
 	value uint64
 
@@ -60,11 +77,136 @@ type intReference struct {
 	position int
 }
 
+func (ref intReference) getValue() interface{} {
+	return ref.value
+}
+
+func (ref intReference) valueEquals(other interface{}) bool {
+	return ref.value == other.(uint64)
+}
+
+func (ref intReference) getPosition() int {
+	return ref.position
+}
+
+func (ref intReference) length(ops *OpStream, assembled []byte) (int, error) {
+	opIntc0 := OpsByName[ops.Version]["intc_0"].Opcode
+	opIntc1 := OpsByName[ops.Version]["intc_1"].Opcode
+	opIntc2 := OpsByName[ops.Version]["intc_2"].Opcode
+	opIntc3 := OpsByName[ops.Version]["intc_3"].Opcode
+	opIntc := OpsByName[ops.Version]["intc"].Opcode
+
+	switch assembled[ref.position] {
+	case opIntc0, opIntc1, opIntc2, opIntc3:
+		return 1, nil
+	case opIntc:
+		return 2, nil
+	default:
+		return 0, ops.lineErrorf(ops.OffsetToLine[ref.position], "Unexpected op at intReference: %d", assembled[ref.position])
+	}
+}
+
+func (ref intReference) makeNewReference(ops *OpStream, singleton bool, newIndex int) []byte {
+	opIntc0 := OpsByName[ops.Version]["intc_0"].Opcode
+	opIntc1 := OpsByName[ops.Version]["intc_1"].Opcode
+	opIntc2 := OpsByName[ops.Version]["intc_2"].Opcode
+	opIntc3 := OpsByName[ops.Version]["intc_3"].Opcode
+	opIntc := OpsByName[ops.Version]["intc"].Opcode
+	opPushInt := OpsByName[ops.Version]["pushint"].Opcode
+
+	if singleton {
+		var scratch [binary.MaxVarintLen64]byte
+		vlen := binary.PutUvarint(scratch[:], ref.value)
+
+		newBytes := make([]byte, 1+vlen)
+		newBytes[0] = opPushInt
+		copy(newBytes[1:], scratch[:vlen])
+
+		return newBytes
+	}
+
+	switch newIndex {
+	case 0:
+		return []byte{opIntc0}
+	case 1:
+		return []byte{opIntc1}
+	case 2:
+		return []byte{opIntc2}
+	case 3:
+		return []byte{opIntc3}
+	default:
+		return []byte{opIntc, uint8(newIndex)}
+	}
+}
+
 type byteReference struct {
 	value []byte
 
 	// position of the opcode start that declares the byte value
 	position int
+}
+
+func (ref byteReference) getValue() interface{} {
+	return ref.value
+}
+
+func (ref byteReference) valueEquals(other interface{}) bool {
+	return bytes.Equal(ref.value, other.([]byte))
+}
+
+func (ref byteReference) getPosition() int {
+	return ref.position
+}
+
+func (ref byteReference) length(ops *OpStream, assembled []byte) (int, error) {
+	opBytec0 := OpsByName[ops.Version]["bytec_0"].Opcode
+	opBytec1 := OpsByName[ops.Version]["bytec_1"].Opcode
+	opBytec2 := OpsByName[ops.Version]["bytec_2"].Opcode
+	opBytec3 := OpsByName[ops.Version]["bytec_3"].Opcode
+	opBytec := OpsByName[ops.Version]["bytec"].Opcode
+
+	switch assembled[ref.position] {
+	case opBytec0, opBytec1, opBytec2, opBytec3:
+		return 1, nil
+	case opBytec:
+		return 2, nil
+	default:
+		return 0, ops.lineErrorf(ops.OffsetToLine[ref.position], "Unexpected op at byteReference: %d", assembled[ref.position])
+	}
+}
+
+func (ref byteReference) makeNewReference(ops *OpStream, singleton bool, newIndex int) []byte {
+	opBytec0 := OpsByName[ops.Version]["bytec_0"].Opcode
+	opBytec1 := OpsByName[ops.Version]["bytec_1"].Opcode
+	opBytec2 := OpsByName[ops.Version]["bytec_2"].Opcode
+	opBytec3 := OpsByName[ops.Version]["bytec_3"].Opcode
+	opBytec := OpsByName[ops.Version]["bytec"].Opcode
+	opPushBytes := OpsByName[ops.Version]["pushbytes"].Opcode
+
+	if singleton {
+		var scratch [binary.MaxVarintLen64]byte
+		vlen := binary.PutUvarint(scratch[:], uint64(len(ref.value)))
+
+		newBytes := make([]byte, 1+vlen+len(ref.value))
+		newBytes[0] = opPushBytes
+		copy(newBytes[1:], scratch[:vlen])
+		copy(newBytes[1+vlen:], ref.value)
+
+		return newBytes
+	}
+
+	switch newIndex {
+	case 0:
+		return []byte{opBytec0}
+	case 1:
+		return []byte{opBytec1}
+	case 2:
+		return []byte{opBytec2}
+	case 3:
+		return []byte{opBytec3}
+	default:
+		return []byte{opBytec, uint8(newIndex)}
+	}
 }
 
 // OpStream is destination for program and scratch space
@@ -1208,8 +1350,7 @@ func (ops *OpStream) resolveLabels() {
 		raw[lr.position+1] = uint8(jump >> 8)
 		raw[lr.position+2] = uint8(jump & 0x0ff)
 	}
-	ops.pending.Reset()
-	ops.pending.Write(raw)
+	ops.pending = *bytes.NewBuffer(raw)
 	ops.sourceLine = saved
 }
 
@@ -1223,11 +1364,20 @@ const AssemblerDefaultVersion = 1
 const AssemblerMaxVersion = LogicVersion
 const assemblerNoVersion = (^uint64(0))
 
-// replaceBytes creates a new slice that is the same as s, except the range
-// starting at index with length originalLen is replaced by newBytes
+// replaceBytes returns a slice that is the same as s, except the range starting
+// at index with length originalLen is replaced by newBytes. The returned slice
+// may be the same as s, or it may be a new slice
 func replaceBytes(s []byte, index, originalLen int, newBytes []byte) []byte {
 	prefix := s[:index]
 	suffix := s[index+originalLen:]
+
+	// if we can fit the new bytes into the existing slice, no need to create a
+	// new one
+	if len(newBytes) <= originalLen {
+		copy(s[index:], newBytes)
+		copy(s[index+len(newBytes):], suffix)
+		return s[:len(s)+len(newBytes)-originalLen]
+	}
 
 	replaced := make([]byte, len(prefix)+len(newBytes)+len(suffix))
 	copy(replaced, prefix)
@@ -1247,156 +1397,35 @@ func replaceBytes(s []byte, index, originalLen int, newBytes []byte) []byte {
 // This function only optimizes constants introduces by the int pseudo-op, not
 // preexisting intcblocks in the code.
 func (ops *OpStream) optimizeIntcBlock() error {
-	type intFrequency struct {
-		value uint64
-		freq  int
-	}
-
 	if ops.hasIntcBlock {
 		// don't optimize an existing intcblock, only int pseudo-ops
 		return nil
 	}
 
-	freqs := make([]intFrequency, len(ops.intc))
-
+	constBlock := make([]interface{}, len(ops.intc))
 	for i, value := range ops.intc {
-		freqs[i].value = value
+		constBlock[i] = value
 	}
 
-	for _, ref := range ops.intcRefs {
-		found := false
-		for i := range freqs {
-			if ref.value == freqs[i].value {
-				freqs[i].freq++
-				found = true
-				break
-			}
-		}
-		if !found {
-			return ops.errorf("Value not found in intc block: %d", ref.value)
-		}
+	constRefs := make([]constReference, len(ops.intcRefs))
+	for i, ref := range ops.intcRefs {
+		constRefs[i] = ref
 	}
 
-	for _, f := range freqs {
-		if f.freq == 0 {
-			return ops.errorf("Member of intc block is not used: %d", f.value)
-		}
-	}
-
-	// sort values by greatest to smallest frequency
-	// since we're using a stable sort, constants with the same frequency
-	// will retain their current ordering (i.e. first referenced, first in int block)
-	sort.SliceStable(freqs, func(i, j int) bool {
-		return freqs[i].freq > freqs[j].freq
-	})
-
-	// sort refs from last to first in raw
-	// this way when we iterate through them and potentially change the size of raw,
-	// the later positions will not affect the indexes of the earlier positions
-	sort.Slice(ops.intcRefs, func(i, j int) bool {
-		return ops.intcRefs[i].position > ops.intcRefs[j].position
-	})
-
-	opIntc0 := OpsByName[ops.Version]["intc_0"].Opcode
-	opIntc1 := OpsByName[ops.Version]["intc_1"].Opcode
-	opIntc2 := OpsByName[ops.Version]["intc_2"].Opcode
-	opIntc3 := OpsByName[ops.Version]["intc_3"].Opcode
-	opIntc := OpsByName[ops.Version]["intc"].Opcode
-	opPushInt := OpsByName[ops.Version]["pushint"].Opcode
-
-	var scratch [binary.MaxVarintLen64]byte
-	raw := ops.pending.Bytes()
-	for _, ref := range ops.intcRefs {
-		singleton := false
-		newIndex := -1
-		for i, f := range freqs {
-			if ref.value == f.value {
-				singleton = f.freq == 1
-				newIndex = i
-				break
-			}
-		}
-		if newIndex == -1 {
-			return ops.errorf("Value not found in intc block: %d", ref.value)
-		}
-
-		var newBytes []byte
-		if singleton {
-			vlen := binary.PutUvarint(scratch[:], ref.value)
-			newBytes = make([]byte, 1+vlen)
-			newBytes[0] = opPushInt
-			copy(newBytes[1:], scratch[:vlen])
-		} else {
-			switch newIndex {
-			case 0:
-				newBytes = []byte{opIntc0}
-			case 1:
-				newBytes = []byte{opIntc1}
-			case 2:
-				newBytes = []byte{opIntc2}
-			case 3:
-				newBytes = []byte{opIntc3}
-			default:
-				newBytes = []byte{opIntc, uint8(newIndex)}
-			}
-		}
-
-		var currentBytesLen int
-		switch raw[ref.position] {
-		case opIntc0, opIntc1, opIntc2, opIntc3:
-			currentBytesLen = 1
-		case opIntc:
-			currentBytesLen = 2
-		default:
-			return ops.errorf("Unexpected op at intReference: %d, from source line %d", raw[ref.position], ops.OffsetToLine[ref.position])
-		}
-
-		raw = replaceBytes(raw, ref.position, currentBytesLen, newBytes)
-		positionDelta := len(newBytes) - currentBytesLen
-
-		for i := range ops.bytecRefs {
-			if ops.bytecRefs[i].position > ref.position {
-				ops.bytecRefs[i].position += positionDelta
-			}
-		}
-
-		for label := range ops.labels {
-			if ops.labels[label] > ref.position {
-				ops.labels[label] += positionDelta
-			}
-		}
-
-		for i := range ops.labelReferences {
-			if ops.labelReferences[i].position > ref.position {
-				ops.labelReferences[i].position += positionDelta
-			}
-		}
-
-		fixedOffsetsToLine := make(map[int]int, len(ops.OffsetToLine))
-		for pos, sourceLine := range ops.OffsetToLine {
-			if pos > ref.position {
-				fixedOffsetsToLine[pos+positionDelta] = sourceLine
-			} else {
-				fixedOffsetsToLine[pos] = sourceLine
-			}
-		}
-		ops.OffsetToLine = fixedOffsetsToLine
-	}
-
-	ops.pending.Reset()
-	ops.pending.Write(raw)
-
-	firstSingleton := len(ops.intc)
-	for i, f := range freqs {
-		ops.intc[i] = f.value
-		if f.freq == 1 {
-			firstSingleton = i
-			break
-		}
-	}
-
-	ops.intc = ops.intc[:firstSingleton]
+	// remove all intcRefs here so that optimizeConstants does not alter them
+	// when it fixes indexes into ops.pending
 	ops.intcRefs = nil
+
+	optimizedIntc, err := ops.optimizeConstants(constRefs, constBlock)
+
+	if err != nil {
+		return err
+	}
+
+	ops.intc = make([]uint64, len(optimizedIntc))
+	for i, value := range optimizedIntc {
+		ops.intc[i] = value.(uint64)
+	}
 
 	return nil
 }
@@ -1411,138 +1440,148 @@ func (ops *OpStream) optimizeIntcBlock() error {
 // This function only optimizes constants introduces by the byte or addr
 // pseudo-ops, not preexisting bytecblocks in the code.
 func (ops *OpStream) optimizeBytecBlock() error {
-	type byteFrequency struct {
-		value []byte
-		freq  int
-	}
-
 	if ops.hasBytecBlock {
 		// don't optimize an existing bytecblock, only byte/addr pseudo-ops
 		return nil
 	}
 
-	freqs := make([]byteFrequency, len(ops.bytec))
-
+	constBlock := make([]interface{}, len(ops.bytec))
 	for i, value := range ops.bytec {
+		constBlock[i] = value
+	}
+
+	constRefs := make([]constReference, len(ops.bytecRefs))
+	for i, ref := range ops.bytecRefs {
+		constRefs[i] = ref
+	}
+
+	// remove all bytecRefs here so that optimizeConstants does not alter them
+	// when it fixes indexes into ops.pending
+	ops.bytecRefs = nil
+
+	optimizedBytec, err := ops.optimizeConstants(constRefs, constBlock)
+
+	if err != nil {
+		return err
+	}
+
+	ops.bytec = make([][]byte, len(optimizedBytec))
+	for i, value := range optimizedBytec {
+		ops.bytec[i] = value.([]byte)
+	}
+
+	return nil
+}
+
+// optimizeConstants optimizes a given constant block and the ops that reference
+// it to reduce code size. This is achieved by ordering the constant block from
+// most frequently referenced constants to least frequently referenced, since
+// the first 4 constant can use a special opcode to save space. Additionally,
+// any constants with a reference of 1 are taken out of the constant block and
+// instead referenced with an immediate op.
+func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []interface{}) (optimizedConstBlock []interface{}, err error) {
+	type constFrequency struct {
+		value interface{}
+		freq  int
+	}
+
+	freqs := make([]constFrequency, len(constBlock))
+
+	for i, value := range constBlock {
 		freqs[i].value = value
 	}
 
-	for _, ref := range ops.bytecRefs {
+	for _, ref := range refs {
 		found := false
 		for i := range freqs {
-			if bytes.Compare(ref.value, freqs[i].value) == 0 {
+			if ref.valueEquals(freqs[i].value) {
 				freqs[i].freq++
 				found = true
 				break
 			}
 		}
 		if !found {
-			return ops.errorf("Value not found in bytec block: %v", ref.value)
+			err = ops.lineErrorf(ops.OffsetToLine[ref.getPosition()], "Value not found in constant block: %v", ref.getValue())
+			return
 		}
 	}
 
 	for _, f := range freqs {
 		if f.freq == 0 {
-			return ops.errorf("Member of bytec block is not used: %v", f.value)
+			err = ops.errorf("Member of constant block is not used: %v", f.value)
+			return
 		}
 	}
 
 	// sort values by greatest to smallest frequency
 	// since we're using a stable sort, constants with the same frequency
-	// will retain their current ordering (i.e. first referenced, first in byte block)
+	// will retain their current ordering (i.e. first referenced, first in constant block)
 	sort.SliceStable(freqs, func(i, j int) bool {
 		return freqs[i].freq > freqs[j].freq
 	})
 
-	// sort refs from last to first in raw
-	// this way when we iterate through them and potentially change the size of raw,
-	// the later positions will not affect the indexes of the earlier positions
-	sort.Slice(ops.bytecRefs, func(i, j int) bool {
-		return ops.bytecRefs[i].position > ops.bytecRefs[j].position
+	// sort refs from last to first
+	// this way when we iterate through them and potentially change the size of the assembled
+	// program, the later positions will not affect the indexes of the earlier positions
+	sort.Slice(refs, func(i, j int) bool {
+		return refs[i].getPosition() > refs[j].getPosition()
 	})
 
-	opBytec0 := OpsByName[ops.Version]["bytec_0"].Opcode
-	opBytec1 := OpsByName[ops.Version]["bytec_1"].Opcode
-	opBytec2 := OpsByName[ops.Version]["bytec_2"].Opcode
-	opBytec3 := OpsByName[ops.Version]["bytec_3"].Opcode
-	opBytec := OpsByName[ops.Version]["bytec"].Opcode
-	opPushBytes := OpsByName[ops.Version]["pushbytes"].Opcode
-
-	var scratch [binary.MaxVarintLen64]byte
 	raw := ops.pending.Bytes()
-	for _, ref := range ops.bytecRefs {
+	for _, ref := range refs {
 		singleton := false
 		newIndex := -1
 		for i, f := range freqs {
-			if bytes.Compare(ref.value, f.value) == 0 {
+			if ref.valueEquals(f.value) {
 				singleton = f.freq == 1
 				newIndex = i
 				break
 			}
 		}
 		if newIndex == -1 {
-			return ops.errorf("Value not found in bytec block: %v", ref.value)
+			return nil, ops.lineErrorf(ops.OffsetToLine[ref.getPosition()], "Value not found in constant block: %v", ref.getValue())
 		}
 
-		var newBytes []byte
-		if singleton {
-			vlen := binary.PutUvarint(scratch[:], uint64(len(ref.value)))
-			newBytes = make([]byte, 1+vlen+len(ref.value))
-			newBytes[0] = opPushBytes
-			copy(newBytes[1:], scratch[:vlen])
-			copy(newBytes[1+vlen:], ref.value)
-		} else {
-			switch newIndex {
-			case 0:
-				newBytes = []byte{opBytec0}
-			case 1:
-				newBytes = []byte{opBytec1}
-			case 2:
-				newBytes = []byte{opBytec2}
-			case 3:
-				newBytes = []byte{opBytec3}
-			default:
-				newBytes = []byte{opBytec, uint8(newIndex)}
-			}
-		}
-
+		newBytes := ref.makeNewReference(ops, singleton, newIndex)
 		var currentBytesLen int
-		switch raw[ref.position] {
-		case opBytec0, opBytec1, opBytec2, opBytec3:
-			currentBytesLen = 1
-		case opBytec:
-			currentBytesLen = 2
-		default:
-			return ops.errorf("Unexpected op at byteReference: %d, from source line %d", raw[ref.position], ops.OffsetToLine[ref.position])
+		currentBytesLen, err = ref.length(ops, raw)
+		if err != nil {
+			return
 		}
 
-		raw = replaceBytes(raw, ref.position, currentBytesLen, newBytes)
 		positionDelta := len(newBytes) - currentBytesLen
+		position := ref.getPosition()
+		raw = replaceBytes(raw, position, currentBytesLen, newBytes)
 
-		// this code mirrors the byteRefs correction in optimizeIntcBlock(), though technically this
-		// is a no-op because ints always get optimized before bytes, meaning ops.intcRefs is
-		// guaranteed to be nil at this point
+		// update all indexes into ops.pending that have been shifted by the above line
+
 		for i := range ops.intcRefs {
-			if ops.intcRefs[i].position > ref.position {
+			if ops.intcRefs[i].position > position {
 				ops.intcRefs[i].position += positionDelta
 			}
 		}
 
+		for i := range ops.bytecRefs {
+			if ops.bytecRefs[i].position > position {
+				ops.bytecRefs[i].position += positionDelta
+			}
+		}
+
 		for label := range ops.labels {
-			if ops.labels[label] > ref.position {
+			if ops.labels[label] > position {
 				ops.labels[label] += positionDelta
 			}
 		}
 
 		for i := range ops.labelReferences {
-			if ops.labelReferences[i].position > ref.position {
+			if ops.labelReferences[i].position > position {
 				ops.labelReferences[i].position += positionDelta
 			}
 		}
 
 		fixedOffsetsToLine := make(map[int]int, len(ops.OffsetToLine))
 		for pos, sourceLine := range ops.OffsetToLine {
-			if pos > ref.position {
+			if pos > position {
 				fixedOffsetsToLine[pos+positionDelta] = sourceLine
 			} else {
 				fixedOffsetsToLine[pos] = sourceLine
@@ -1551,22 +1590,17 @@ func (ops *OpStream) optimizeBytecBlock() error {
 		ops.OffsetToLine = fixedOffsetsToLine
 	}
 
-	ops.pending.Reset()
-	ops.pending.Write(raw)
+	ops.pending = *bytes.NewBuffer(raw)
 
-	firstSingleton := len(ops.bytec)
-	for i, f := range freqs {
-		ops.bytec[i] = f.value
+	optimizedConstBlock = make([]interface{}, 0)
+	for _, f := range freqs {
 		if f.freq == 1 {
-			firstSingleton = i
 			break
 		}
+		optimizedConstBlock = append(optimizedConstBlock, f.value)
 	}
 
-	ops.bytec = ops.bytec[:firstSingleton]
-	ops.bytecRefs = nil
-
-	return nil
+	return
 }
 
 // prependCBlocks completes the assembly by inserting cblocks if needed.
@@ -1620,14 +1654,18 @@ func (ops *OpStream) prependCBlocks() []byte {
 }
 
 func (ops *OpStream) error(problem interface{}) error {
+	return ops.lineError(ops.sourceLine, problem)
+}
+
+func (ops *OpStream) lineError(line int, problem interface{}) error {
 	var le *lineError
 	switch p := problem.(type) {
 	case string:
-		le = &lineError{Line: ops.sourceLine, Err: errors.New(p)}
+		le = &lineError{Line: line, Err: errors.New(p)}
 	case error:
-		le = &lineError{Line: ops.sourceLine, Err: p}
+		le = &lineError{Line: line, Err: p}
 	default:
-		le = &lineError{Line: ops.sourceLine, Err: fmt.Errorf("%#v", p)}
+		le = &lineError{Line: line, Err: fmt.Errorf("%#v", p)}
 	}
 	ops.Errors = append(ops.Errors, le)
 	return le
@@ -1635,6 +1673,10 @@ func (ops *OpStream) error(problem interface{}) error {
 
 func (ops *OpStream) errorf(format string, a ...interface{}) error {
 	return ops.error(fmt.Errorf(format, a...))
+}
+
+func (ops *OpStream) lineErrorf(line int, format string, a ...interface{}) error {
+	return ops.lineError(line, fmt.Errorf(format, a...))
 }
 
 func (ops *OpStream) warn(problem interface{}) error {
