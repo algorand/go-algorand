@@ -1246,11 +1246,6 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		}
 	}
 
-	// if the version was not fixed above (because there were no opcodes), fix it now
-	if ops.Version == assemblerNoVersion {
-		ops.Version = AssemblerDefaultVersion
-	}
-
 	// backward compatibility: do not allow jumps behind last instruction in TEAL v1
 	if ops.Version <= 1 {
 		for label, dest := range ops.labels {
