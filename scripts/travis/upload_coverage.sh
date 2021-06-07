@@ -12,4 +12,8 @@ if [[ "${UPSTREAM_VERSION}" != "${LOCAL_VERSION}" ]]; then
   echo "WARN: version ${UPSTREAM_VERSION} of the codecov upload script is available."
 fi
 
-/usr/bin/env bash scripts/travis/codecov
+# Ignore msgp_gen.go files
+cat coverage.txt | grep -v "msgp_gen.go" > coverage.txt.tmp
+mv coverage.txt.tmp coverage.txt
+
+/usr/bin/env bash scripts/travis/codecov -f coverage.txt
