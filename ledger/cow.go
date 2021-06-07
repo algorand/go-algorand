@@ -280,9 +280,6 @@ func (cb *roundCowState) commitToParent() {
 			}
 		}
 	}
-	for gidx, tc := range cb.trackedCreatables {
-		cb.commitParent.trackedCreatables[gidx] = tc
-	}
 	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
 }
 
