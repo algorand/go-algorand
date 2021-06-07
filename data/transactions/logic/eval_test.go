@@ -1546,10 +1546,9 @@ gtxn 0 CreatableID
 int 0
 >
 `
-	ops, err := AssembleStringWithVersion(checkCreatableIDProg, 4)
-	require.NoError(t, err)
+	ops := testProg(t, checkCreatableIDProg, 4)
 	sb := strings.Builder{}
-	err = Check(ops.Program, defaultEvalParams(&sb, nil))
+	err := Check(ops.Program, defaultEvalParams(&sb, nil))
 	if err != nil {
 		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())

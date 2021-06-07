@@ -56,7 +56,6 @@ type roundCowState struct {
 	commitParent *roundCowState
 	proto        config.ConsensusParams
 	mods         ledgercore.StateDelta
-	groupIdx     int
 
 	// storage deltas populated as side effects of AppCall transaction
 	// 1. Opt-in/Close actions (see Allocate/Deallocate)
@@ -70,8 +69,10 @@ type roundCowState struct {
 	// cache mainaining accountIdx used in getKey for local keys access
 	compatibilityGetKeyCache map[basics.Address]map[storagePtr]uint64
 
+	// index of a txn within a group; used in conjunction with trackedCreatables
+	groupIdx int
 	// track creatables created during each transaction in the round
-	trackedCreatables map[int]basics.CreatableLocator
+	trackedCreatables map[int]basics.CreatableIndex
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
@@ -81,7 +82,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		proto:             config.Consensus[hdr.CurrentProtocol],
 		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
 		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
-		trackedCreatables: make(map[int]basics.CreatableLocator),
+		trackedCreatables: make(map[int]basics.CreatableIndex),
 	}
 
 	// compatibilityMode retains producing application' eval deltas under the following rule:
@@ -138,7 +139,7 @@ func (cb *roundCowState) prevTimestamp() int64 {
 	return cb.mods.PrevTimestamp
 }
 
-func (cb *roundCowState) getCreatable(groupIdx int) basics.CreatableLocator {
+func (cb *roundCowState) getCreatableIndex(groupIdx int) basics.CreatableIndex {
 	return cb.trackedCreatables[groupIdx]
 }
 
@@ -213,8 +214,8 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 	}
 }
 
-func (cb *roundCowState) trackCreatable(creatable *basics.CreatableLocator) {
-	cb.trackedCreatables[cb.groupIdx] = *creatable
+func (cb *roundCowState) trackCreatable(creatable basics.CreatableLocator) {
+	cb.trackedCreatables[cb.groupIdx] = creatable.Index
 }
 
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
@@ -236,7 +237,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 	}
 
 	// clone tracked creatables
-	ch.trackedCreatables = make(map[int]basics.CreatableLocator)
+	ch.trackedCreatables = make(map[int]basics.CreatableIndex)
 	for i, tc := range cb.trackedCreatables {
 		ch.trackedCreatables[i] = tc
 	}

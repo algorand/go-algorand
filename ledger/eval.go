@@ -239,7 +239,7 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 }
 
 func (cs *roundCowState) GetCreatableID(groupIdx int) basics.CreatableIndex {
-	return cs.getCreatable(groupIdx).Index
+	return cs.getCreatableIndex(groupIdx)
 }
 
 func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -255,7 +255,7 @@ func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct basics.Accou
 
 	// store the creatable locator
 	if newCreatable != nil {
-		cs.trackCreatable(newCreatable)
+		cs.trackCreatable(*newCreatable)
 	}
 	return nil
 }
