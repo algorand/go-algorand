@@ -77,7 +77,7 @@ type CatchpointCatchupAccessor interface {
 	StoreBlock(ctx context.Context, blk *bookkeeping.Block) (err error)
 
 	// FinishBlocks concludes the catchup of the blocks database.
-	FinishBlocks(ctx context.Context, applyChanges bool) (err error)
+	FinishBlocks(ctx context.Context) (err error)
 
 	// EnsureFirstBlock ensure that we have a single block in the staging block table, and returns that block
 	EnsureFirstBlock(ctx context.Context) (blk bookkeeping.Block, err error)
@@ -711,15 +711,12 @@ func (c *CatchpointCatchupAccessorImpl) StoreBlock(ctx context.Context, blk *boo
 }
 
 // FinishBlocks concludes the catchup of the blocks database.
-func (c *CatchpointCatchupAccessorImpl) FinishBlocks(ctx context.Context, applyChanges bool) (err error) {
+func (c *CatchpointCatchupAccessorImpl) FinishBlocks(ctx context.Context) (err error) {
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
 	ledgerCatchpointFinishblocksCount.Inc(nil)
 	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		if applyChanges {
-			return blockCompleteCatchup(tx)
-		}
-		return blockAbortCatchup(tx)
+		return blockCompleteCatchup(tx)
 	})
 	ledgerCatchpointFinishblocksMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
@@ -747,7 +744,7 @@ func (c *CatchpointCatchupAccessorImpl) EnsureFirstBlock(ctx context.Context) (b
 // CompleteCatchup completes the catchpoint catchup process by switching the databases tables around
 // and reloading the ledger.
 func (c *CatchpointCatchupAccessorImpl) CompleteCatchup(ctx context.Context) (err error) {
-	err = c.FinishBlocks(ctx, true)
+	err = c.FinishBlocks(ctx)
 	if err != nil {
 		return err
 	}

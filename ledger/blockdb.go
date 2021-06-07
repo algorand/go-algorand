@@ -278,18 +278,6 @@ func blockCompleteCatchup(tx *sql.Tx) (err error) {
 	return nil
 }
 
-func blockAbortCatchup(tx *sql.Tx) error {
-	// delete the old catchpointblocks table, if there is such.
-	for _, stmt := range blockResetExprs {
-		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
-		_, err := tx.Exec(stmt)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func blockPutStaging(tx *sql.Tx, blk bookkeeping.Block) (err error) {
 	// insert the new entry
 	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata) VALUES (?, ?, ?, ?)",

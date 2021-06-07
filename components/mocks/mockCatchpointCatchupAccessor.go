@@ -89,7 +89,7 @@ func (m *MockCatchpointCatchupAccessor) StoreBlock(ctx context.Context, blk *boo
 }
 
 // FinishBlocks concludes the catchup of the blocks database.
-func (m *MockCatchpointCatchupAccessor) FinishBlocks(ctx context.Context, applyChanges bool) (err error) {
+func (m *MockCatchpointCatchupAccessor) FinishBlocks(ctx context.Context) (err error) {
 	return nil
 }
 
