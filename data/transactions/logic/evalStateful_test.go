@@ -2695,6 +2695,7 @@ func TestReturnTypes(t *testing.T) {
 	}
 	ledger.newAsset(txn.Txn.Sender, 1, params)
 	ledger.newApp(txn.Txn.Sender, 1, makeSchemas(0, 0, 0, 0))
+	ledger.setTrackedCreatable(0, basics.CreatableLocator{Index: 1})
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
 	ledger.balances[txn.Txn.Receiver].locals[1] = make(basics.TealKeyValue)
 	key, err := hex.DecodeString("33343536")
@@ -2715,6 +2716,7 @@ func TestReturnTypes(t *testing.T) {
 		"store":             "store 0",
 		"gload":             "gload 0 0",
 		"gloads":            "gloads 0",
+		"gaid":              "gaid 0",
 		"dig":               "dig 0",
 		"intc":              "intcblock 0; intc 0",
 		"intc_0":            "intcblock 0; intc_0",
