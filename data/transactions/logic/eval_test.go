@@ -1315,11 +1315,6 @@ txn AppProgramExtraPages
 int 2
 ==
 assert
-txn CreatableID
-int 0
-==
-assert
-
 
 int 1
 `
@@ -1685,10 +1680,6 @@ int 0
 gtxn 1 AppProgramExtraPages
 int 2
 ==
-&&
-gtxn 0 CreatableID
-int 0
->
 &&
 `
 

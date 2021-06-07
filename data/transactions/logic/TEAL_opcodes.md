@@ -426,7 +426,6 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 56 | AppProgramExtraPages | uint64 |  |
-| 57 | CreatableID | uint64 | The assigned creatable ID for an asset or application creation transaction, or 0 if the transaction does not create anything. LogicSigVersion >= 4. |
 
 
 TypeEnum mapping:
@@ -545,6 +544,24 @@ The `gload` opcode can only access scratch spaces of previous app calls containe
 - Mode: Application
 
 The `gloads` opcode can only access scratch spaces of previous app calls contained in the current group.
+
+## gaid t
+
+- Opcode: 0x3c
+- Pops: _None_
+- Pushes: uint64
+- push the creatable ID of the Tth transaction in the current group
+- LogicSigVersion >= 4
+- Mode: Application
+
+## gaids
+
+- Opcode: 0x3d
+- Pops: *... stack*, uint64
+- Pushes: uint64
+- push the creatable ID of the Ath transaction in the current group
+- LogicSigVersion >= 4
+- Mode: Application
 
 ## bnz target
 

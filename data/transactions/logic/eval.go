@@ -1826,15 +1826,6 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case TxID:
 		txid := cx.getTxID(txn, groupIndex)
 		sv.Bytes = txid[:]
-	case CreatableID:
-		if groupIndex > cx.GroupIndex {
-			err = fmt.Errorf("can't get future creatable ID of txn with index %d", groupIndex)
-		}
-		cid, err := cx.getCreatableID(groupIndex)
-		if err != nil {
-			return sv, err
-		}
-		sv.Uint = cid
 	case Lease:
 		sv.Bytes = txn.Lease[:]
 	case ApplicationID:

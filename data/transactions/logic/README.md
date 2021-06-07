@@ -214,6 +214,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `store i` | pop a value from the stack and store to scratch space |
 | `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
 | `gloads i` | push Ith scratch space index of the Ath transaction in the current group |
+| `gaid t` | push the creatable ID of the Tth transaction in the current group |
+| `gaids` | push the creatable ID of the Ath transaction in the current group |
 
 **Transaction Fields**
 
@@ -276,7 +278,6 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 56 | AppProgramExtraPages | uint64 |  |
-| 57 | CreatableID | uint64 | The assigned creatable ID for an asset or application creation transaction, or 0 if the transaction does not create anything. LogicSigVersion >= 4. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.

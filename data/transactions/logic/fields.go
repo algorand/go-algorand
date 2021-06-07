@@ -146,9 +146,6 @@ const (
 	// AppProgramExtraPages AppParams.ExtraProgramPages
 	AppProgramExtraPages
 
-	// CreatableID basics.CreatableIndex
-	CreatableID
-
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -235,7 +232,6 @@ var txnFieldSpecs = []txnFieldSpec{
 	{LocalNumUint, StackUint64, 3},
 	{LocalNumByteSlice, StackUint64, 3},
 	{AppProgramExtraPages, StackUint64, 4},
-	{CreatableID, StackUint64, 4},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode

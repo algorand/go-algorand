@@ -318,7 +318,6 @@ var txnFieldDocs = map[string]string{
 	"AssetCloseTo":             "32 byte address",
 	"GroupIndex":               "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
 	"TxID":                     "The computed ID for this transaction. 32 bytes.",
-	"CreatableID":              "The assigned creatable ID for an asset or application creation transaction, or 0 if the transaction does not create anything.",
 	"ApplicationID":            "ApplicationID from ApplicationCall transaction",
 	"OnCompletion":             "ApplicationCall transaction on completion action",
 	"ApplicationArgs":          "Arguments passed to the application in the ApplicationCall transaction",
