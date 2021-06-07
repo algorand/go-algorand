@@ -18,7 +18,7 @@ ENV GOROOT=/usr/local/go \
 RUN mkdir -p $GOPATH/src/github.com/algorand
 COPY . $GOPATH/src/github.com/algorand/go-algorand
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
-    https://proxy.golang.org,https://pkg.go.dev,https://goproxy.io,direct
+    GOPROXY=https://proxy.golang.org,https://pkg.go.dev,https://goproxy.io,direct
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
 RUN make clean
 RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
