@@ -2108,7 +2108,7 @@ func opGaidImpl(cx *evalContext, groupIdx int, opName string) (sv stackValue, er
 		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
 		return
 	} else if groupIdx > cx.GroupIndex {
-		err = fmt.Errorf("%s can't get future creatable ID of txn with index %d", opName, groupIdx)
+		err = fmt.Errorf("%s can't get creatable ID of txn ahead of the current one (index %d) in the transaction group", opName, groupIdx)
 		return
 	} else if groupIdx == cx.GroupIndex {
 		err = fmt.Errorf("can't use %s on self, use `global CurrentApplicationID` instead", opName)

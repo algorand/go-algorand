@@ -1576,7 +1576,7 @@ int 0
 	ops = testProg(t, futureCreatableIDProg, 4)
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "gaid can't get future creatable ID of txn with index 2")
+	require.Contains(t, err.Error(), "gaid can't get creatable ID of txn ahead of the current one")
 
 	// should fail when accessing self
 	ep.GroupIndex = 0
