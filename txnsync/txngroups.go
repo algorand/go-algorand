@@ -27,8 +27,8 @@ import (
 )
 
 // gzip performance constants measured by BenchmarkTxnGroupCompression
-const estimatedGzipCompressionSpeed = 23071093.0 // bytes per second of how fast gzip compresses data
-const estimatedGzipCompressionGains = 0.32       // fraction of data reduced by gzip on txnsync msgs
+const estimatedGzipCompressionSpeed = 140081994.0 // bytes per second of how fast gzip compresses data
+const estimatedGzipCompressionGains = 0.32        // fraction of data reduced by gzip on txnsync msgs
 
 const minEncodedTransactionGroupsCompressionThreshold = 1000
 
@@ -83,8 +83,8 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 		compressedBytes, err := compressTransactionGroupsBytes(encoded)
 		if err == nil {
 			return packedTransactionGroups{
-				Bytes: compressedBytes,
-				CompressionFormat: compressionFormatGzip,
+				Bytes:                compressedBytes,
+				CompressionFormat:    compressionFormatGzip,
 				LenDecompressedBytes: uint64(len(encoded)),
 			}, nil
 		}
@@ -92,7 +92,7 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 	}
 
 	return packedTransactionGroups{
-		Bytes: encoded,
+		Bytes:             encoded,
 		CompressionFormat: compressionFormatNone,
 	}, nil
 }
@@ -156,7 +156,10 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 }
 
 func decompressTransactionGroupsBytes(data []byte, lenDecompressedBytes uint64) (decoded []byte, err error) {
-	out := make([]byte, 0, lenDecompressedBytes) // make sure this is reasonable
+	if lenDecompressedBytes > maxEncodedTransactionGroupBytes || lenDecompressedBytes < uint64(len(data)) {
+		return nil, fmt.Errorf("invalid lenDecompressedBytes: %d, lenCompressedBytes: %d", lenDecompressedBytes, len(data))
+	}
+	out := make([]byte, 0, lenDecompressedBytes)
 	return compress.Decompress(data, out)
 }
 
