@@ -103,6 +103,11 @@ type ConsensusParams struct {
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
 
+	// EnableFeePooling specifies that the sum of the fees in a
+	// group must exceed one MinTxnFee per Txn, rather than check that
+	// each Txn has a MinFee.
+	EnableFeePooling bool
+
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -227,9 +232,15 @@ type ConsensusParams struct {
 	// max sum([len(arg) for arg in txn.ApplicationArgs])
 	MaxAppTotalArgLen int
 
-	// maximum length of application approval program or clear state
-	// program in bytes
+	// maximum byte len of application approval program or clear state
+	// When MaxExtraAppProgramPages > 0, this is the size of those pages.
+	// So two "extra pages" would mean 3*MaxAppProgramLen bytes are available.
 	MaxAppProgramLen int
+
+	// maximum total length of an application's programs (approval + clear state)
+	// When MaxExtraAppProgramPages > 0, this is the size of those pages.
+	// So two "extra pages" would mean 3*MaxAppTotalProgramLen bytes are available.
+	MaxAppTotalProgramLen int
 
 	// extra length for application program in pages. A page is MaxAppProgramLen bytes
 	MaxExtraAppProgramPages int
@@ -827,6 +838,7 @@ func initConsensusProtocols() {
 	v24.MaxAppArgs = 16
 	v24.MaxAppTotalArgLen = 2048
 	v24.MaxAppProgramLen = 1024
+	v24.MaxAppTotalProgramLen = 2048 // No effect until v28, when MaxAppProgramLen increased
 	v24.MaxAppKeyLen = 64
 	v24.MaxAppBytesValueLen = 64
 
@@ -932,6 +944,7 @@ func initConsensusProtocols() {
 
 	// Enable support for larger app program size
 	vFuture.MaxExtraAppProgramPages = 3
+	vFuture.MaxAppProgramLen = 2048
 
 	// enable the InitialRewardsRateCalculation fix
 	vFuture.InitialRewardsRateCalculation = true
@@ -943,6 +956,8 @@ func initConsensusProtocols() {
 
 	// Increase asset URL length to allow for IPFS URLs
 	vFuture.MaxAssetURLBytes = 96
+
+	vFuture.EnableFeePooling = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

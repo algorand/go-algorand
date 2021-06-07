@@ -1174,7 +1174,15 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		return ledgercore.StateDelta{}, err
 	}
 
-	paysetgroupsCh := loadAccounts(ctx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+	accountLoadingCtx, accountLoadingCancel := context.WithCancel(ctx)
+	paysetgroupsCh := loadAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+	// ensure that before we exit from this method, the account loading is no longer active.
+	defer func() {
+		accountLoadingCancel()
+		// wait for the paysetgroupsCh to get closed.
+		for range paysetgroupsCh {
+		}
+	}()
 
 	var txvalidator evalTxValidator
 	if validate {
