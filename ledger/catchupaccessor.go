@@ -719,6 +719,7 @@ func (c *CatchpointCatchupAccessorImpl) FinishBlocks(ctx context.Context, applyC
 		if applyChanges {
 			return blockCompleteCatchup(tx)
 		}
+		// TODO: unused, either actually implement cleanup on catchpoint failure, or delete this
 		return blockAbortCatchup(tx)
 	})
 	ledgerCatchpointFinishblocksMicros.AddMicrosecondsSince(start, nil)
