@@ -57,6 +57,7 @@ var txnPerSec uint64
 var teal string
 var groupSize uint32
 var numAsset uint32
+var numAssetHoldings uint32
 var numApp uint32
 var numAppOptIn uint32
 var appProgOps uint32
@@ -95,7 +96,8 @@ func init() {
 	runCmd.Flags().BoolVar(&randomNote, "randomnote", false, "generates a random byte array between 0-1024 bytes long")
 	runCmd.Flags().StringVar(&teal, "teal", "", "teal test scenario, can be light, normal, or heavy, this overrides --program")
 	runCmd.Flags().Uint32Var(&groupSize, "groupsize", 1, "The number of transactions in each group")
-	runCmd.Flags().Uint32Var(&numAsset, "numasset", 0, "The number of assets each account holds")
+	runCmd.Flags().Uint32Var(&numAsset, "numasset", 0, "The number of assets to create")
+	runCmd.Flags().Uint32Var(&numAssetHoldings, "numassethld", 0, "The number of assets to hold")
 	runCmd.Flags().Uint32Var(&numApp, "numapp", 0, "The total number of apps to create")
 	runCmd.Flags().Uint32Var(&numAppOptIn, "numappoptin", 0, "The number of apps each account opts in to")
 	runCmd.Flags().Uint32Var(&appProgOps, "appprogops", 0, "The approximate number of TEAL operations to perform in each ApplicationCall transaction")
@@ -261,12 +263,8 @@ var runCmd = &cobra.Command{
 			reportErrorf("Invalid group size: %v\n", groupSize)
 		}
 
-		if numAsset <= 1000 {
-			cfg.NumAsset = numAsset
-		} else {
-			reportErrorf("Invalid number of assets: %d, (valid number: 0 - 1000)\n", numAsset)
-		}
-
+		cfg.NumAsset = numAsset
+		cfg.NumAssetHoldings = numAssetHoldings
 		cfg.AppProgOps = appProgOps
 		cfg.AppProgHashes = appProgHashes
 		cfg.AppProgHashSize = appProgHashSize

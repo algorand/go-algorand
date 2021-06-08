@@ -187,10 +187,23 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client li
 				return
 			}
 
-			_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset creation failed with error %v\n", err)
-				return
+			broadcastRepeatCounter := 0
+			for {
+				_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
+				if err == nil {
+					break
+				}
+
+				if broadcastRepeatCounter >= 5 {
+					_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset creation failed with error %v\n", err)
+					return
+				}
+				// attempt to prevent a failure because of sending preparation txn too fast
+				// TransactionPool.checkPendingQueueSize: transaction pool have reached capacity
+				if strings.Contains(err.Error(), "checkPendingQueueSize") {
+					broadcastRepeatCounter++
+					time.Sleep(10 * time.Second)
+				}
 			}
 
 			totalSent++
@@ -258,7 +271,13 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client li
 			err = addrErr
 			return
 		}
-		numSlots := proto.MaxAssetsPerAccount - len(acct.Assets)
+
+		maxHoldings := proto.MaxAssetsPerAccount
+		if cfg.NumAssetHoldings > 0 {
+			maxHoldings = int(cfg.NumAssetHoldings)
+		}
+		numSlots := maxHoldings - len(acct.Assets)
+
 		i := 0
 		for k, creator := range allAssets {
 			if creator == addr {
@@ -279,10 +298,20 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client li
 				return
 			}
 
-			_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
-				return
+			broadcastRepeatCounter := 0
+			for {
+				_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
+				if err == nil {
+					break
+				}
+				if broadcastRepeatCounter >= 5 {
+					_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
+					return
+				}
+				if strings.Contains(err.Error(), "checkPendingQueueSize") {
+					broadcastRepeatCounter++
+					time.Sleep(10 * time.Second)
+				}
 			}
 			optIns[k] = append(optIns[k], addr)
 			if _, ok := optInsByAddr[addr]; !ok {
@@ -290,12 +319,12 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client li
 			}
 			optInsByAddr[addr][k] = true
 
+			totalSent++
 			if i >= numSlots-1 {
 				break
 			}
 			i++
 
-			totalSent++
 			throttleTransactionRate(startTime, cfg, totalSent)
 		}
 	}
@@ -322,7 +351,7 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client li
 				break
 			}
 			if time.Now().After(deadline) {
-				err = fmt.Errorf("asset opting in took too long")
+				err = fmt.Errorf("asset opting in took too long for %s: expecting %d vs actual %d", addr, expectedAssets, len(account.Assets))
 				fmt.Printf("Error: %s\n", err.Error())
 				return
 			}
@@ -362,10 +391,20 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client li
 				return
 			}
 
-			_, err = signAndBroadcastTransaction(accounts, creator, tx, client, cfg)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
-				return
+			broadcastRepeatCounter := 0
+			for {
+				_, err = signAndBroadcastTransaction(accounts, creator, tx, client, cfg)
+				if err == nil {
+					break
+				}
+				if broadcastRepeatCounter >= 5 {
+					_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
+					return
+				}
+				if strings.Contains(err.Error(), "checkPendingQueueSize") {
+					broadcastRepeatCounter++
+					time.Sleep(10 * time.Second)
+				}
 			}
 
 			totalSent++
@@ -418,7 +457,7 @@ func signAndBroadcastTransaction(accounts map[string]uint64, sender string, tx t
 	}
 	txID, err = client.BroadcastTransaction(signedTx)
 	if err != nil {
-		fmt.Printf("Cannot broadcast transaction %+v\nerror %v \n", signedTx, err)
+		fmt.Printf("Cannot broadcast %v transaction %+v\nerror %v \n", signedTx.ID(), signedTx, err)
 		return
 	}
 	if !cfg.Quiet {

@@ -170,10 +170,19 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (requiredBala
 
 	// add cost of assets
 	if cfg.NumAsset > 0 {
-		assetCost := minActiveAccountBalance*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // assets*accounts
-			(fee)*uint64(cfg.NumAsset) + // asset creations
-			(fee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // asset opt-ins
-			(fee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) // asset distributions
+		max := func(a uint32, b uint32) uint32 {
+			if a > b {
+				return a
+			}
+			return b
+		}
+		maxHoldings := max(uint32(proto.MaxAssetsPerAccount), cfg.NumAssetHoldings)
+		// each account has cfg.NumAsset created and maxHoldings holdings
+		// all these assets are either created or opted-in => maxHoldings transactions
+		// then the code makes at least maxHoldings transactions to distribute all of them
+		assetCost := minActiveAccountBalance*uint64(maxHoldings) + // assets*accounts
+			(fee)*uint64(maxHoldings) + // asset creations + opt-ins
+			(fee)*uint64(maxHoldings)*100 // 100 asset distribution cycles
 		requiredBalance += assetCost
 	}
 	if cfg.NumApp > 0 {
