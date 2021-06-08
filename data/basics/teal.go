@@ -112,7 +112,7 @@ func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
 				return fmt.Errorf("value too long for key 0x%x: length was %d", key, len(delta.Bytes))
 			}
 			if sum := len(key) + len(delta.Bytes); sum > proto.MaxAppSumKeyValueLens {
-				return fmt.Errorf("key/value too long for key 0x%x: sum was %d", key, sum)
+				return fmt.Errorf("key/value total too long for key 0x%x: sum was %d", key, sum)
 			}
 		case SetUintAction:
 		case DeleteAction:
