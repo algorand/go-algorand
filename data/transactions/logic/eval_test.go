@@ -1704,13 +1704,8 @@ int 2
 				txn.Txn.SelectionPK[:],
 				txn.Txn.Note,
 			}
-			ledger := makeTestLedger(nil)
-			ledger.setTrackedCreatable(0, basics.CreatableLocator{
-				Index: 100,
-			})
 			ep := defaultEvalParams(nil, &txn)
 			ep.TxnGroup = makeSampleTxnGroup(txn)
-			ep.Ledger = ledger
 			testLogic(t, source, v, ep)
 			if v >= 3 {
 				gtxnsProg := strings.ReplaceAll(source, "gtxn 0", "int 0; gtxns")
