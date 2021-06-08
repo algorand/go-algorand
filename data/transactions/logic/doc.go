@@ -350,6 +350,7 @@ var txnFieldDocs = map[string]string{
 	"FreezeAsset":              "Asset ID being frozen or un-frozen",
 	"FreezeAssetAccount":       "32 byte address of the account whose asset slot is being frozen or un-frozen",
 	"FreezeAssetFrozen":        "The new frozen value, 0 or 1",
+	"ExtraProgramPages":        "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn` with extra versioning info if any

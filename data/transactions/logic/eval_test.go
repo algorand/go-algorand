@@ -1311,7 +1311,7 @@ int 1
 
 const testTxnProgramTextV4 = testTxnProgramTextV3 + `
 assert
-txn AppProgramExtraPages
+txn ExtraProgramPages
 int 2
 ==
 assert
@@ -1673,11 +1673,11 @@ int 1
 ==
 &&
 `
-	gtxnText := gtxnTextV2 + ` gtxn 0 AppProgramExtraPages
+	gtxnText := gtxnTextV2 + ` gtxn 0 ExtraProgramPages
 int 0
 ==
 &&
-gtxn 1 AppProgramExtraPages
+gtxn 1 ExtraProgramPages
 int 2
 ==
 &&
