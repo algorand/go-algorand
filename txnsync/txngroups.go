@@ -27,10 +27,12 @@ import (
 )
 
 // gzip performance constants measured by BenchmarkTxnGroupCompression
-const estimatedGzipCompressionSpeed = 140081994.0 // bytes per second of how fast gzip compresses data
+const estimatedGzipCompressionSpeed = 121123260.0 // bytes per second of how fast gzip compresses data
 const estimatedGzipCompressionGains = 0.32        // fraction of data reduced by gzip on txnsync msgs
 
 const minEncodedTransactionGroupsCompressionThreshold = 1000
+
+const maxCompressionRatio = 20 // don't allow more than 95% compression
 
 func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxGroup, dataExchangeRate uint64) (packedTransactionGroups, error) {
 	txnCount := 0
@@ -100,6 +102,9 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 func compressTransactionGroupsBytes(data []byte) ([]byte, error) {
 	b := make([]byte, 0, len(data))
 	_, out, err := compress.Compress(data, b, 1)
+	if err == nil && len(data) > len(out)*maxCompressionRatio {
+		return nil, errors.New("compression exceeded compression ratio")
+	}
 	return out, err
 }
 
@@ -157,7 +162,7 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 
 func decompressTransactionGroupsBytes(data []byte, lenDecompressedBytes uint64) (decoded []byte, err error) {
 	compressionRatio := lenDecompressedBytes / uint64(len(data)) // data should have been compressed between 0 and 95%
-	if lenDecompressedBytes > maxEncodedTransactionGroupBytes || compressionRatio <= 0 || compressionRatio >= 20 {
+	if lenDecompressedBytes > maxEncodedTransactionGroupBytes || compressionRatio <= 0 || compressionRatio >= maxCompressionRatio {
 		return nil, fmt.Errorf("invalid lenDecompressedBytes: %d, lenCompressedBytes: %d", lenDecompressedBytes, len(data))
 	}
 	out := make([]byte, 0, lenDecompressedBytes)
