@@ -39,7 +39,7 @@ call write global $BIG64 ${BIG64}X && exit 1
 # These test some details of the checking, using the error message to
 # confirm which code path is being tested.  Details of strings are irrelevant
 set +o pipefail
-call write global $BIG64 ${BIG64}X 2>&1 | grep "value too long" | grep sum
+call write global $BIG64 ${BIG64}X 2>&1 | grep "key/value total too long"
 # This value so big that it fails before the sum is considered
 call write global $BIG64 ${BIG64}${BIG64}X 2>&1 | grep "value too long" | grep length
 set -o pipefail
@@ -65,7 +65,7 @@ call check local $BIG64 $BIG64
 # This should not work because the key 64 and the value is 65
 set +o pipefail
 call write local $BIG64 ${BIG64}X 2>&1 && exit 1
-call write local $BIG64 ${BIG64}X 2>&1 | grep "value too long"
+call write local $BIG64 ${BIG64}X 2>&1 | grep "key/value total too long"
 set -o pipefail
 
 
