@@ -235,15 +235,13 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 fulltest: build-race
-	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
-		$(GOTESTCOMMAND) $(GOTAGS) -race $$PACKAGE_DIRECTORY -timeout 2500s; \
-	done
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 shorttest: build-race
-	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 2500s
+	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
