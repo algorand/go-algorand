@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -167,6 +168,7 @@ func (e *emulator) initNodes() {
 			e.scenario.netConfig.nodes[i].isRelay,
 			"",
 			crypto.Digest{},
+			config.GetDefaultLocal(),
 		)
 		e.syncers = append(e.syncers, syncer)
 	}
