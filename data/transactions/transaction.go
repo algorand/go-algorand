@@ -385,6 +385,11 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
 		}
 
+		// Limit the sum of all types of references that bring in account records
+		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets) > proto.MaxAppTxnReferences {
+			return fmt.Errorf("tx has too many references, max is %d", proto.MaxAppTxnReferences)
+		}
+
 		if tx.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
 			return fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages)
 		}
