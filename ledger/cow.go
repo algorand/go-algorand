@@ -214,8 +214,8 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 	}
 }
 
-func (cb *roundCowState) trackCreatable(creatable basics.CreatableLocator) {
-	cb.trackedCreatables[cb.groupIdx] = creatable.Index
+func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {
+	cb.trackedCreatables[cb.groupIdx] = creatableIndex
 }
 
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {

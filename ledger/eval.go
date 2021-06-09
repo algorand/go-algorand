@@ -255,7 +255,7 @@ func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct basics.Accou
 
 	// store the creatable locator
 	if newCreatable != nil {
-		cs.trackCreatable(*newCreatable)
+		cs.trackCreatable(newCreatable.Index)
 	}
 	return nil
 }
