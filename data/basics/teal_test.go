@@ -47,25 +47,27 @@ func TestStateDeltaValid(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "proto.MaxAppKeyLen is 0")
 
-	// test proto with applications
+	// test vFuture proto with applications
 	sd = StateDelta{"key": ValueDelta{Action: SetBytesAction, Bytes: "val"}}
 	protoF := config.Consensus[protocol.ConsensusFuture]
 	err = sd.Valid(&protoF)
 	a.NoError(err)
 
+	// vFuture: key too long, short value
 	tooLongKey := strings.Repeat("a", protoF.MaxAppKeyLen+1)
-	sd[tooLongKey] = ValueDelta{Action: SetBytesAction, Bytes: "val"}
+	sd = StateDelta{tooLongKey: ValueDelta{Action: SetBytesAction, Bytes: "val"}}
 	err = sd.Valid(&protoF)
 	a.Error(err)
 	a.Contains(err.Error(), "key too long")
 	delete(sd, tooLongKey)
 
+	// vFuture: max size key, value too long: total size bigger than MaxAppSumKeyValueLens
 	longKey := tooLongKey[1:]
-	tooLongValue := strings.Repeat("b", protoF.MaxAppBytesValueLen+1)
-	sd[longKey] = ValueDelta{Action: SetBytesAction, Bytes: tooLongValue}
+	tooLongValue := strings.Repeat("b", protoF.MaxAppSumKeyValueLens-len(longKey)+1)
+	sd = StateDelta{longKey: ValueDelta{Action: SetBytesAction, Bytes: tooLongValue}}
 	err = sd.Valid(&protoF)
 	a.Error(err)
-	a.Contains(err.Error(), "cannot set value for key")
+	a.Contains(err.Error(), "key/value total too long for key")
 
 	sd[longKey] = ValueDelta{Action: SetBytesAction, Bytes: tooLongValue[1:]}
 	sd["intval"] = ValueDelta{Action: DeltaAction(10), Uint: 0}
@@ -77,6 +79,27 @@ func TestStateDeltaValid(t *testing.T) {
 	sd["delval"] = ValueDelta{Action: DeleteAction, Uint: 0, Bytes: tooLongValue}
 	err = sd.Valid(&protoF)
 	a.NoError(err)
+}
+
+func TestStateDeltaValidV24(t *testing.T) {
+	a := require.New(t)
+
+	// v24: short key, value too long: hits MaxAppBytesValueLen
+	protoV24 := config.Consensus[protocol.ConsensusV24]
+	shortKey := "k"
+	reallyLongValue := strings.Repeat("b", protoV24.MaxAppBytesValueLen+1)
+	sd := StateDelta{shortKey: ValueDelta{Action: SetBytesAction, Bytes: reallyLongValue}}
+	err := sd.Valid(&protoV24)
+	a.Error(err)
+	a.Contains(err.Error(), "value too long for key")
+
+	// v24: key too long, short value
+	tooLongKey := strings.Repeat("a", protoV24.MaxAppKeyLen+1)
+	sd = StateDelta{tooLongKey: ValueDelta{Action: SetBytesAction, Bytes: "val"}}
+	err = sd.Valid(&protoV24)
+	a.Error(err)
+	a.Contains(err.Error(), "key too long")
+	delete(sd, tooLongKey)
 }
 
 func TestStateDeltaEqual(t *testing.T) {
