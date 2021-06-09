@@ -386,8 +386,8 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 
 		// Limit the sum of all types of references that bring in account records
-		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets) > proto.MaxAppTxnReferences {
-			return fmt.Errorf("tx has too many references, max is %d", proto.MaxAppTxnReferences)
+		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets) > proto.MaxAppTotalTxnReferences {
+			return fmt.Errorf("tx has too many references, max is %d", proto.MaxAppTotalTxnReferences)
 		}
 
 		if tx.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {

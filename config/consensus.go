@@ -262,7 +262,7 @@ type ConsensusParams struct {
 
 	// maximum number of "foreign references" (accounts, asa, app)
 	// that can be attached to a single app call.
-	MaxAppTxnReferences int
+	MaxAppTotalTxnReferences int
 
 	// maximum cost of application approval program or clear state program
 	MaxAppProgramCost int
@@ -863,9 +863,10 @@ func initConsensusProtocols() {
 	// Can look up 2 assets to see asset parameters
 	v24.MaxAppTxnForeignAssets = 2
 
-	// Appears superfluous here in v24, but allows increasing the
-	// individual limits while maintaining max components in later vers.
-	v24.MaxAppTxnReferences = 8
+	// Intended to have no effect in v24 (it's set to accounts +
+	// asas + apps). In later vers, it allows increasing the
+	// individual limits while maintaining same max references.
+	v24.MaxAppTotalTxnReferences = 8
 
 	// 64 byte keys @ ~333 microAlgos/byte + delta
 	v24.SchemaMinBalancePerEntry = 25000
