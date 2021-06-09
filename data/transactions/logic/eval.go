@@ -2482,12 +2482,11 @@ func accountReference(cx *evalContext, account stackValue) (basics.Address, uint
 	if account.argType() == StackUint64 {
 		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
 		return addr, account.Uint, err
-	} else {
-		addr := basics.Address{}
-		copy(addr[:], account.Bytes)
-		idx, err := cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
-		return addr, idx, err
 	}
+	addr := basics.Address{}
+	copy(addr[:], account.Bytes)
+	idx, err := cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
+	return addr, idx, err
 }
 
 type opQuery func(basics.Address, *config.ConsensusParams) (basics.MicroAlgos, error)
