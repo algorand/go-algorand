@@ -33,7 +33,7 @@ const rekeyingEnabledVersion = 2
 // from being used with applications. Do not edit!
 const appsEnabledVersion = 2
 
-// backBranchEabledVersion is the version of TEAL where branches could
+// backBranchEnabledVersion is the first version of TEAL where branches could
 // go back (and cost accounting was done during execution)
 const backBranchEnabledVersion = 4
 

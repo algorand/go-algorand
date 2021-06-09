@@ -7,8 +7,9 @@ set -o pipefail
 
 export GOPATH=$(go env GOPATH)
 export GO111MODULE=on
+GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
 
-# If one or more -t <pattern> are specified, use go test -run <pattern> for each
+# If one or more -t <pattern> are specified, use GOTESTCOMMAND -run <pattern> for each
 
 TESTPATTERNS=()
 NORACEBUILD=""
@@ -81,42 +82,20 @@ cd ${SRCROOT}/test/e2e-go
 
 # ARM64 has some memory related issues with fork. Since we don't really care
 # about testing the forking capabilities, we're just run the tests one at a time.
-EXECUTE_TESTS_INDIVIDUALLY="false"
+PARALLEL_FLAG=""
 ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
 echo "ARCHTYPE:    ${ARCHTYPE}"
 if [[ "${ARCHTYPE}" = arm* ]]; then
-    EXECUTE_TESTS_INDIVIDUALLY="true"
+    PARALLEL_FLAG="-p 1"
 fi
 
-echo "EXECUTE_TEST_INDIVIDUALLY = ${EXECUTE_TESTS_INDIVIDUALLY}"
+echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
 
 if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
-    if [ "${EXECUTE_TESTS_INDIVIDUALLY}" = "true" ]; then
-        TESTS_DIRECTORIES=$(GO111MODULE=off go list ./...)
-        for TEST_DIR in ${TESTS_DIRECTORIES[@]}; do
-            TESTS=$(go test -list ".*" ${TEST_DIR} -vet=off | grep -v "github.com" || true)
-            for TEST_NAME in ${TESTS[@]}; do
-                go test ${RACE_OPTION} -timeout 1h -vet=off -v ${SHORTTEST} -run ${TEST_NAME} ${TEST_DIR} | logfilter
-                KMD_INSTANCES_COUNT=$(set +o pipefail; ps -Af | grep kmd | grep -v "grep" | wc -l | tr -d ' ')
-                if [ "${KMD_INSTANCES_COUNT}" != "0" ]; then
-                    echo "One or more than one KMD instances remains running:"
-                    ps -Af | grep kmd | grep -v "grep"
-                    exit 1
-                fi
-                ALGOD_INSTANCES_COUNT=$(set +o pipefail; ps -Af | grep algod | grep -v "grep" | wc -l | tr -d ' ')
-                if [ "${ALGOD_INSTANCES_COUNT}" != "0" ]; then
-                    echo "One or more than one algod instances remains running:"
-                    ps -Af | grep algod | grep -v "grep"
-                    exit 1
-                fi
-            done
-        done
-    else
-        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} ./... | logfilter
-    fi
+    ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ./...
 else
     for TEST in ${TESTPATTERNS[@]}; do
-        go test ${RACE_OPTION} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./... | logfilter
+        ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} -run ${TEST} ./...
     done
 fi
 

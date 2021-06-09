@@ -21,5 +21,5 @@ ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET} \
     NETWORK=${NETWORK}
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
-RUN scripts/configure_dev-deps.sh && make deps && make clean && find tmp && TMPDIR/deploy_linux_version_exec.sh
+RUN scripts/configure_dev-deps.sh && make clean && find tmp && TMPDIR/deploy_linux_version_exec.sh
 ENTRYPOINT ["/bin/bash"]

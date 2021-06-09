@@ -2830,10 +2830,11 @@ int 1`, v)
 		"bz done",
 		"b done",
 	}
-	template := `int 0
+	template := `intcblock 0 1
+intc_0
 %s
 done:
-int 1
+intc_1
 `
 	ep := defaultEvalParams(nil, nil)
 	for _, line := range branches {
@@ -3474,7 +3475,8 @@ func TestStackValues(t *testing.T) {
 func TestEvalVersions(t *testing.T) {
 	t.Parallel()
 
-	text := `int 1
+	text := `intcblock 1
+intc_0
 txna ApplicationArgs 0
 pop
 `
@@ -4003,6 +4005,9 @@ func TestBytes(t *testing.T) {
 	testPanics(t, `byte "john"; int 4; getbyte; int 1; ==`, 3)    // past end
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
+
+	testPanics(t, `global ZeroAddress; dup; concat; int 64; int 7; setbyte; int 1; return`, 3)
+	testAccepts(t, `global ZeroAddress; dup; concat; int 63; int 7; setbyte; int 1; return`, 3)
 
 	// These test that setbyte is not modifying a shared value.
 	// Since neither bytec nor dup copies, the first test is

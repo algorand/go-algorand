@@ -351,7 +351,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 				return fmt.Errorf("local and global state schemas are immutable")
 			}
 			if tx.ExtraProgramPages != 0 {
-				return fmt.Errorf("ExtraProgramPages field is immutable")
+				return fmt.Errorf("tx.ExtraProgramPages is immutable")
 			}
 		}
 
@@ -389,12 +389,17 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages)
 		}
 
-		if uint32(len(tx.ApprovalProgram)) > ((1 + tx.ExtraProgramPages) * uint32(proto.MaxAppProgramLen)) {
-			return fmt.Errorf("approval program too long. max len %d bytes", (1+tx.ExtraProgramPages)*uint32(proto.MaxAppProgramLen))
+		lap := len(tx.ApprovalProgram)
+		lcs := len(tx.ClearStateProgram)
+		pages := int(1 + tx.ExtraProgramPages)
+		if lap > pages*proto.MaxAppProgramLen {
+			return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
 		}
-
-		if uint32(len(tx.ClearStateProgram)) > ((1 + tx.ExtraProgramPages) * uint32(proto.MaxAppProgramLen)) {
-			return fmt.Errorf("clear state program too long. max len %d bytes", (1+tx.ExtraProgramPages)*uint32(proto.MaxAppProgramLen))
+		if lcs > pages*proto.MaxAppProgramLen {
+			return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+		}
+		if lap+lcs > pages*proto.MaxAppTotalProgramLen {
+			return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
@@ -472,7 +477,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 	}
 
-	if tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
+	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
 		if tx.Type == protocol.CompactCertTx {
 			// Zero fee allowed for compact cert txn.
 		} else {

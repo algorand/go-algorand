@@ -1302,18 +1302,19 @@ func TestAssets(t *testing.T) {
 	require.True(t, pass)
 
 	// check holdings bool value
-	source := `int 0  // account idx (txn.Sender)
-int 55
+	source := `intcblock 0 55 1
+intc_0  // 0, account idx (txn.Sender)
+intc_1  // 55
 asset_holding_get AssetFrozen
 !
 bnz error
-int 0
+intc_0 // 0
 ==
 bnz ok
 error:
 err
 ok:
-int 1
+intc_2 // 1
 `
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1332,17 +1333,18 @@ int 1
 	require.Contains(t, err.Error(), "invalid asset holding field 2")
 
 	// check holdings bool value
-	source = `int 0
+	source = `intcblock 0 1
+intc_0
 asset_params_get AssetDefaultFrozen
 !
 bnz error
-int 1
+intc_1
 ==
 bnz ok
 error:
 err
 ok:
-int 1
+intc_1
 `
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1359,18 +1361,19 @@ int 1
 	require.Contains(t, err.Error(), "invalid asset params field 32")
 
 	// check empty string
-	source = `int 0  // foreign asset idx (txn.ForeignAssets[0])
+	source = `intcblock 0 1
+intc_0  // foreign asset idx (txn.ForeignAssets[0])
 asset_params_get AssetURL
 !
 bnz error
 len
-int 0
+intc_0
 ==
 bnz ok
 error:
 err
 ok:
-int 1
+intc_1
 `
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1380,18 +1383,19 @@ int 1
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	source = `int 1  // foreign asset idx (txn.ForeignAssets[1])
+	source = `intcblock 1 9
+intc_0  // foreign asset idx (txn.ForeignAssets[1])
 asset_params_get AssetURL
 !
 bnz error
 len
-int 9
+intc_1
 ==
 bnz ok
 error:
 err
 ok:
-int 1
+intc_0
 `
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1401,17 +1405,18 @@ int 1
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	source = `int 0
+	source = `intcblock 0 1
+intc_0
 asset_params_get AssetURL
 !
 bnz error
-int 0
+intc_0
 ==
 bnz ok
 error:
 err
 ok:
-int 1
+intc_1
 `
 	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1428,39 +1433,45 @@ int 1
 func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
 	t.Parallel()
 
-	sourceRead := `int 0  // account idx (txn.Sender)
-int 100                   // app id
-byte 0x414c474f           // key "ALGO"
+	sourceRead := `intcblock 0 100 0x77 1
+bytecblock 0x414c474f 0x414c474f41
+intc_0                    // 0, account idx (txn.Sender)
+intc_1                    // 100, app id
+bytec_0                   // key "ALGO"
 app_local_get_ex
 !
 bnz error
-int 0x77
+intc_2                    // 0x77
 ==
-int 0
-int 100
-byte 0x414c474f41         // ALGOA
+intc_0                    // 0
+intc_1                    // 100
+bytec_1                   // ALGOA
 app_local_get_ex
 !
 bnz error
-int 1
+intc_3                    // 1
 ==
 &&
 bnz ok
 error:
 err
 ok:
-int 1
+intc_3                    // 1
 `
-	sourceWrite := `int 0  // account idx (txn.Sender)
-byte 0x414c474f            // key "ALGO"
-int 100
+	sourceWrite := `intcblock 0 100 1
+bytecblock 0x414c474f
+intc_0                     // 0, account idx (txn.Sender)
+bytec_0                    // key "ALGO"
+intc_1                     // 100
 app_local_put
-int 1
+intc_2                     // 1
 `
-	sourceDelete := `int 0   // account idx
-byte 0x414c474f              // key "ALGO"
+	sourceDelete := `intcblock 0 100
+bytecblock 0x414c474f
+intc_0                       // account idx
+bytec_0                      // key "ALGO"
 app_local_del
-int 100
+intc_1
 `
 	type test struct {
 		source       string
@@ -2149,6 +2160,40 @@ byte "myval"
 
 	delta = testApp(t, source, ep)
 	require.Empty(t, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
+}
+
+func TestBlankKey(t *testing.T) {
+	t.Parallel()
+	source := `
+byte ""
+app_global_get
+int 0
+==
+assert
+
+byte ""
+int 7
+app_global_put
+
+byte ""
+app_global_get
+int 7
+==
+`
+	ep := defaultEvalParams(nil, nil)
+	txn := makeSampleTxn()
+	txn.Txn.ApplicationID = 100
+	ep.Txn = &txn
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.Ledger = ledger
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+
+	delta := testApp(t, source, ep)
 	require.Empty(t, delta.LocalDeltas)
 }
 
