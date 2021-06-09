@@ -14,6 +14,9 @@ curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gim
 chmod +x ~/gimme
 eval "$(~/gimme "${GOLANG_VERSION}")"
 
+# If this command fails the Makefile will select 'go test' instead.
+"${SCRIPTPATH}/../buildtools/install_buildtools.sh" "gotest.tools/gotestsum" || true
+
 if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; then
      # for arm, no tests need to be invoked.
      # for now, disable tests on windows.

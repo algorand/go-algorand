@@ -351,6 +351,7 @@ func init() {
 	proto.MaxAppProgramCost = 700
 	proto.MaxAppKeyLen = 64
 	proto.MaxAppBytesValueLen = 64
+	proto.MaxAppSumKeyValueLens = 128
 
 	config.Consensus[dryrunProtoVersion] = proto
 }

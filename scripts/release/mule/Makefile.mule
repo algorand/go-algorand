@@ -2,14 +2,10 @@
 
 PKG_DIR = $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)
 
-.PHONY: ci-clean ci-deps ci-setup ci-build
+.PHONY: ci-clean ci-setup ci-build
 
 ci-clean:
 	rm -rf tmp
-
-ci-deps:
-	scripts/configure_dev-deps.sh && \
-	scripts/check_deps.sh
 
 ci-setup:
 	mkdir -p $(PKG_DIR)
