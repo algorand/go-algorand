@@ -2163,6 +2163,40 @@ byte "myval"
 	require.Empty(t, delta.LocalDeltas)
 }
 
+func TestBlankKey(t *testing.T) {
+	t.Parallel()
+	source := `
+byte ""
+app_global_get
+int 0
+==
+assert
+
+byte ""
+int 7
+app_global_put
+
+byte ""
+app_global_get
+int 7
+==
+`
+	ep := defaultEvalParams(nil, nil)
+	txn := makeSampleTxn()
+	txn.Txn.ApplicationID = 100
+	ep.Txn = &txn
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.Ledger = ledger
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+
+	delta := testApp(t, source, ep)
+	require.Empty(t, delta.LocalDeltas)
+}
+
 func TestAppGlobalDelete(t *testing.T) {
 	t.Parallel()
 
