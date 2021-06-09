@@ -370,6 +370,71 @@ func TestWellFormedErrors(t *testing.T) {
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", futureProto.MaxExtraAppProgramPages),
 		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11},
+				},
+			},
+			spec:  specialAddr,
+			proto: protoV27,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11, 12},
+				},
+			},
+			spec:          specialAddr,
+			proto:         protoV27,
+			expectedError: fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is 2"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11, 12, 13, 14, 15, 16, 17},
+				},
+			},
+			spec:  specialAddr,
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17, 18, 19, 20, 21, 22},
+				},
+			},
+			spec:          specialAddr,
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is 8"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Accounts:      []basics.Address{basics.Address{}, basics.Address{}, basics.Address{}},
+					ForeignApps:   []basics.AppIndex{14, 15, 16, 17},
+					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
+				},
+			},
+			spec:          specialAddr,
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx has too many references, max is 8"),
+		},
 	}
 	for _, usecase := range usecases {
 		err := usecase.tx.WellFormed(usecase.spec, usecase.proto)

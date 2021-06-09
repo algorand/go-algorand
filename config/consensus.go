@@ -260,6 +260,10 @@ type ConsensusParams struct {
 	// be read in the transaction
 	MaxAppTxnForeignAssets int
 
+	// maximum number of "foreign references" (accounts, asa, app)
+	// that can be attached to a single app call.
+	MaxAppTotalTxnReferences int
+
 	// maximum cost of application approval program or clear state program
 	MaxAppProgramCost int
 
@@ -859,6 +863,11 @@ func initConsensusProtocols() {
 	// Can look up 2 assets to see asset parameters
 	v24.MaxAppTxnForeignAssets = 2
 
+	// Intended to have no effect in v24 (it's set to accounts +
+	// asas + apps). In later vers, it allows increasing the
+	// individual limits while maintaining same max references.
+	v24.MaxAppTotalTxnReferences = 8
+
 	// 64 byte keys @ ~333 microAlgos/byte + delta
 	v24.SchemaMinBalancePerEntry = 25000
 
@@ -952,6 +961,16 @@ func initConsensusProtocols() {
 	// Enable support for larger app program size
 	vFuture.MaxExtraAppProgramPages = 3
 	vFuture.MaxAppProgramLen = 2048
+
+	// Individual limits raised
+	vFuture.MaxAppTxnForeignApps = 8
+	vFuture.MaxAppTxnForeignAssets = 8
+	// but MaxAppTxnReferences is unchanged.
+
+	// MaxAppTxnAccounts has not been raised yet.  It is already
+	// higher (4) and there is a multiplicative effect in
+	// "reachability" between accounts and creatables, so we
+	// retain 4 x 4 as worst case.
 
 	// enable the InitialRewardsRateCalculation fix
 	vFuture.InitialRewardsRateCalculation = true
