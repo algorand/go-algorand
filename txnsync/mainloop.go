@@ -382,6 +382,7 @@ func (s *syncState) updatePeersRequestParams(peers []*Peer) {
 		for _, peer := range peers {
 			peer.setLocalRequestParams(0, 0)
 		}
+		return
 	}
 	if s.isRelay {
 		for _, peer := range peers {
