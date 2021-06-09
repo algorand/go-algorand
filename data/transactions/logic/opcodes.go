@@ -33,7 +33,7 @@ const rekeyingEnabledVersion = 2
 // from being used with applications. Do not edit!
 const appsEnabledVersion = 2
 
-// backBranchEabledVersion is the version of TEAL where branches could
+// backBranchEnabledVersion is the first version of TEAL where branches could
 // go back (and cost accounting was done during execution)
 const backBranchEnabledVersion = 4
 
@@ -189,6 +189,9 @@ var OpSpecs = []OpSpec{
 	// Like gtxn, but gets txn index from stack, rather than immediate arg
 	{0x38, "gtxns", opGtxns, assembleGtxns, disTxn, oneInt, oneAny, 3, modeAny, immediates("f")},
 	{0x39, "gtxnsa", opGtxnsa, assembleGtxns, disTxna, oneInt, oneAny, 3, modeAny, immediates("f", "i")},
+	// Group scratch space access
+	{0x3a, "gload", opGload, asmDefault, disDefault, nil, oneAny, 4, runModeApplication, immediates("t", "i")},
+	{0x3b, "gloads", opGloads, asmDefault, disDefault, oneInt, oneAny, 4, runModeApplication, immediates("i")},
 
 	{0x40, "bnz", opBnz, assembleBranch, disBranch, oneInt, nil, 1, modeAny, opBranch},
 	{0x41, "bz", opBz, assembleBranch, disBranch, oneInt, nil, 2, modeAny, opBranch},

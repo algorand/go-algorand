@@ -107,11 +107,13 @@ int 2
 	a.NoError(err)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	pse := logic.MakePastSideEffects(1)
 	ep := logic.EvalParams{
-		Txn:        &txn,
-		Proto:      &proto,
-		TxnGroup:   []transactions.SignedTxn{txn},
-		GroupIndex: 0,
+		Txn:             &txn,
+		Proto:           &proto,
+		TxnGroup:        []transactions.SignedTxn{txn},
+		GroupIndex:      0,
+		PastSideEffects: pse,
 	}
 	pass, delta, err := ba.StatefulEval(ep, appIdx, program)
 	a.NoError(err)

@@ -232,7 +232,7 @@ type testUnicastPeer struct {
 	version          string
 	responseChannels map[uint64]chan *network.Response
 	t                *testing.T
-	responseOverride *network.Response 
+	responseOverride *network.Response
 }
 
 func (p *testUnicastPeer) GetAddress() string {
@@ -258,7 +258,7 @@ func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics 
 	if p.responseOverride != nil {
 		return p.responseOverride, nil
 	}
-	
+
 	// wait for the channel.
 	select {
 	case resp = <-responseChannel:

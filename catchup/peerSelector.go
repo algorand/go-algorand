@@ -155,16 +155,16 @@ func (hs *historicStats) updateRequestPenalty(counter uint64) float64 {
 		hs.gapSum -= 1.0 / float64(hs.requestGaps[0])
 		hs.requestGaps = hs.requestGaps[1:]
 	}
-	
+
 	hs.requestGaps = append(hs.requestGaps, newGap)
 	hs.gapSum += 1.0 / float64(newGap)
-	
+
 	return hs.computerPenalty()
 }
 
 // resetRequestPenalty removes steps least recent gaps and recomputes the new penalty.
 // Returns the new rank calculated with the new penalty.
-// If steps is 0, it is a full reset i.e. drops all gap values. 
+// If steps is 0, it is a full reset i.e. drops all gap values.
 func (hs *historicStats) resetRequestPenalty(steps int, initialRank int, class peerClass) (rank int) {
 	if len(hs.requestGaps) == 0 {
 		return initialRank

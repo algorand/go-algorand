@@ -208,7 +208,7 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
 	require.True(t, errors.As(err, &wrfe))
-	require.Equal(t, "Block data not found", err.(errWsFetcherRequestFailed).cause)	
+	require.Equal(t, "Block data not found", err.(errWsFetcherRequestFailed).cause)
 }
 
 type TestHTTPHandler struct {
@@ -272,14 +272,15 @@ func TestGetBlockBytesHTTPErrors(t *testing.T) {
 	require.Equal(t, 2, err.(errHTTPResponseContentType).contentTypeCount)
 }
 
-type ErrTest struct {}
+type ErrTest struct{}
+
 func (et ErrTest) Error() string {
 	return "test"
 }
 
 // TestErrorTypes tests the error types are implemented correctly
 func TestErrorTypes(t *testing.T) {
-	err1 := makeErrWrongCertFromPeer(1, 2, "somepeer1") 
+	err1 := makeErrWrongCertFromPeer(1, 2, "somepeer1")
 	require.Equal(t, "processBlockBytes: got wrong cert from peer somepeer1: wanted 1, got 2", err1.Error())
 
 	err2 := makeErrWrongBlockFromPeer(2, 3, "somepeer2")
@@ -288,7 +289,7 @@ func TestErrorTypes(t *testing.T) {
 	err3 := makeErrCannotDecodeBlock(3, "somepeer3", fmt.Errorf("WrappedError %w", ErrTest{}))
 	require.Equal(t, "processBlockBytes: cannot decode block 3 from peer somepeer3: WrappedError test", err3.Error())
 	var et ErrTest
-	require.True(t, errors.As(err3, &et))		
+	require.True(t, errors.As(err3, &et))
 
 	err4 := makeErrWsFetcherRequestFailed(4, "somepeer4", "somecause1")
 	require.Equal(t, "wsFetcherClient(somepeer4).requestBlock(4): Request failed: somecause1", err4.Error())
