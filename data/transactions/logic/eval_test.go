@@ -2830,10 +2830,11 @@ int 1`, v)
 		"bz done",
 		"b done",
 	}
-	template := `int 0
+	template := `intcblock 0 1
+intc_0
 %s
 done:
-int 1
+intc_1
 `
 	ep := defaultEvalParams(nil, nil)
 	for _, line := range branches {
@@ -3474,7 +3475,8 @@ func TestStackValues(t *testing.T) {
 func TestEvalVersions(t *testing.T) {
 	t.Parallel()
 
-	text := `int 1
+	text := `intcblock 1
+intc_0
 txna ApplicationArgs 0
 pop
 `
