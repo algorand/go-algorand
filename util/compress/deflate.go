@@ -102,7 +102,7 @@ func Compress(in, out []byte, compressLevel int) (int, []byte, error) {
 	inAddr := startMemAddr(in)
 	outAddr := startMemAddr(out)
 
-	written := int(C.libdeflate_gzip_compress(c, unsafe.Pointer(inAddr), C.ulong(len(in)), unsafe.Pointer(outAddr), C.ulong(cap(out))))
+	written := int(C.libdeflate_gzip_compress(c, unsafe.Pointer(inAddr), C.size_t(len(in)), unsafe.Pointer(outAddr), C.size_t(cap(out))))
 
 	if written == 0 {
 		return written, out, ErrShortBuffer
