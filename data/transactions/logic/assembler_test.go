@@ -1444,7 +1444,27 @@ func TestAssembleBalance(t *testing.T) {
 balance
 int 1
 ==`
-	testProg(t, source, AssemblerMaxVersion, expect{2, "balance arg 0 wanted type uint64 got []byte"})
+	for v := uint64(2); v < directRefEnabledVersion; v++ {
+		testProg(t, source, v, expect{2, "balance arg 0 wanted type uint64 got []byte"})
+	}
+	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
+		testProg(t, source, v)
+	}
+}
+
+func TestAssembleMinBalance(t *testing.T) {
+	t.Parallel()
+
+	source := `byte 0x00
+min_balance
+int 1
+==`
+	for v := uint64(3); v < directRefEnabledVersion; v++ {
+		testProg(t, source, v, expect{2, "min_balance arg 0 wanted type uint64 got []byte"})
+	}
+	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
+		testProg(t, source, v)
+	}
 }
 
 func TestAssembleAsset(t *testing.T) {

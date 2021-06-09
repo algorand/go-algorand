@@ -553,11 +553,8 @@ pop
 		},
 		runModeApplication: {
 			source: opcodesRunModeAny + opcodesRunModeApplication,
-			eval: func(program []byte, ep EvalParams) (bool, error) {
-				pass, err := EvalStateful(program, ep)
-				return pass, err
-			},
-			check: func(program []byte, ep EvalParams) error { return CheckStateful(program, ep) },
+			eval:   func(program []byte, ep EvalParams) (bool, error) { return EvalStateful(program, ep) },
+			check:  func(program []byte, ep EvalParams) error { return CheckStateful(program, ep) },
 		},
 	}
 
@@ -601,6 +598,8 @@ pop
 			ep.TxnGroup = txgroup
 			ep.Ledger = ledger
 			ep.Txn.Txn.ApplicationID = 100
+			ep.Txn.Txn.ForeignAssets = []basics.AssetIndex{5} // needed since v4
+
 			err := test.check(ops.Program, ep)
 			require.NoError(t, err)
 			_, err = test.eval(ops.Program, ep)
@@ -680,80 +679,71 @@ pop
 	require.True(t, modeAny.Any())
 }
 
-func TestBalance(t *testing.T) {
-	t.Parallel()
-
-	text := `int 2
-balance
-int 177
-==`
-	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
+func testStateful(t *testing.T, source string, ver uint64, ledger LedgerForLogic) (bool, error) {
+	ops := testProg(t, source, ver)
 
 	txn := makeSampleTxn()
-	txgroup := makeSampleTxnGroup(txn)
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &txn
-	ep.TxnGroup = txgroup
-	_, err = EvalStateful(ops.Program, ep)
+	ep := defaultEvalParams(nil, &txn)
+	ep.TxnGroup = makeSampleTxnGroup(txn)
+	_, err := EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
-	ep.Ledger = makeTestLedger(
+	ep.Ledger = ledger
+	return EvalStateful(ops.Program, ep)
+}
+
+func TestBalance(t *testing.T) {
+	t.Parallel()
+
+	text := "int 2; balance; int 177; =="
+	tl := makeTestLedger(
 		map[basics.Address]uint64{
-			txn.Txn.Receiver: 177,
+			makeSampleTxn().Txn.Receiver: 177,
 		},
 	)
-	_, err = EvalStateful(ops.Program, ep)
+	_, err := testStateful(t, text, AssemblerMaxVersion, tl)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot load account")
+	require.Contains(t, err.Error(), "invalid Account reference")
 
-	text = `int 1
-balance
-int 177
-==`
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err := EvalStateful(ops.Program, ep)
+	text = `int 1; balance; int 177; ==`
+	pass, err := testStateful(t, text, AssemblerMaxVersion, tl)
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	text = `int 0
-balance
-int 13
-==`
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	text = `txn Accounts 1; balance; int 177; ==;`
+	// won't assemble in old version teal
+	testProg(t, text, directRefEnabledVersion-1, expect{2, "balance arg 0 wanted type uint64..."})
+	// but legal after that
+	pass, err = testStateful(t, text, directRefEnabledVersion, tl)
 	require.NoError(t, err)
+	require.True(t, pass)
+
+	text = "int 0; balance; int 13; =="
 	var addr basics.Address
 	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
-	ep.Ledger = makeTestLedger(
+	tl = makeTestLedger(
 		map[basics.Address]uint64{
 			addr: 13,
 		},
 	)
-	pass, err = EvalStateful(ops.Program, ep)
+	pass, err = testStateful(t, text, AssemblerMaxVersion, tl)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch balance")
 	require.False(t, pass)
 
-	ep.Ledger = makeTestLedger(
+	tl = makeTestLedger(
 		map[basics.Address]uint64{
-			txn.Txn.Sender: 13,
+			makeSampleTxn().Txn.Sender: 13,
 		},
 	)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
+	pass, err = testStateful(t, text, AssemblerMaxVersion, tl)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
 
 func testApp(t *testing.T, program string, ep EvalParams, problems ...string) basics.EvalDelta {
-	ops := testProg(t, program, AssemblerMaxVersion)
-	sb := &strings.Builder{}
-	ep.Trace = sb
+	ops := testProg(t, program, ep.Proto.LogicSigVersion)
 	err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 
@@ -765,6 +755,8 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 	require.Contains(t, err.Error(), "not allowed in current mode")
 	require.False(t, pass)
 
+	sb := &strings.Builder{}
+	ep.Trace = sb
 	pass, err = EvalStateful(ops.Program, ep)
 	if len(problems) == 0 {
 		require.NoError(t, err, sb.String())
@@ -825,11 +817,15 @@ func TestMinBalance(t *testing.T) {
 	testApp(t, fmt.Sprintf("int 0; min_balance; int %d; ==", 2002+minb), ep)
 
 	testApp(t, "int 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
+	testProg(t, "txn Accounts 1; min_balance; int 1001; ==", directRefEnabledVersion-1,
+		expect{2, "min_balance arg 0 wanted type uint64..."})
+	testProg(t, "txn Accounts 1; min_balance; int 1001; ==", directRefEnabledVersion)
+	testApp(t, "txn Accounts 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
 	// Receiver opts in
 	ledger.setHolding(txn.Txn.Receiver, 7, 1, true)
 	testApp(t, "int 1; min_balance; int 2002; ==", ep) // 1 == Accounts[0]
 
-	testApp(t, "int 2; min_balance; int 1001; ==", ep, "cannot load account")
+	testApp(t, "int 2; min_balance; int 1001; ==", ep, "invalid Account reference 2")
 
 }
 
@@ -838,10 +834,13 @@ func TestAppCheckOptedIn(t *testing.T) {
 
 	txn := makeSampleTxn()
 	txgroup := makeSampleTxnGroup(txn)
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &txn
-	ep.TxnGroup = txgroup
-	testApp(t, "int 2; int 100; app_opted_in; int 1; ==", ep, "ledger not available")
+	now := defaultEvalParams(nil, nil)
+	now.Txn = &txn
+	now.TxnGroup = txgroup
+	pre := defaultEvalParamsWithVersion(nil, nil, directRefEnabledVersion-1)
+	pre.Txn = &txn
+	pre.TxnGroup = txgroup
+	testApp(t, "int 2; int 100; app_opted_in; int 1; ==", now, "ledger not available")
 
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{
@@ -849,22 +848,30 @@ func TestAppCheckOptedIn(t *testing.T) {
 			txn.Txn.Sender:   1,
 		},
 	)
-	ep.Ledger = ledger
-	testApp(t, "int 2; int 100; app_opted_in; int 1; ==", ep, "cannot load account")
+	now.Ledger = ledger
+	pre.Ledger = ledger
+	testApp(t, "int 2; int 100; app_opted_in; int 1; ==", now, "invalid Account reference")
 
 	// Receiver is not opted in
-	testApp(t, "int 1; int 100; app_opted_in; int 0; ==", ep)
+	testApp(t, "int 1; int 100; app_opted_in; int 0; ==", now)
+	//testApp(t, "int 1; int 3; app_opted_in; int 0; ==", now)
+	//testApp(t, "int 1; int 3; app_opted_in; int 0; ==", pre) // not an indirect reference though: app 3
 
 	// Sender is not opted in
-	testApp(t, "int 0; int 100; app_opted_in; int 0; ==", ep)
+	testApp(t, "int 0; int 100; app_opted_in; int 0; ==", now)
 
 	// Receiver opted in
 	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0))
-	testApp(t, "int 1; int 100; app_opted_in; int 1; ==", ep)
+	testApp(t, "int 1; int 100; app_opted_in; int 1; ==", now)
+	testApp(t, "int 1; int 2; app_opted_in; int 1; ==", now)
+	testApp(t, "int 1; int 2; app_opted_in; int 0; ==", pre) // in pre, int 2 is an actual app id
+	testApp(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", now)
+	testProg(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", directRefEnabledVersion-1,
+		expect{3, "app_opted_in arg 0 wanted type uint64..."})
 
 	// Sender opted in
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
-	testApp(t, "int 0; int 100; app_opted_in; int 1; ==", ep)
+	testApp(t, "int 0; int 100; app_opted_in; int 1; ==", now)
 }
 
 func TestAppReadLocalState(t *testing.T) {
@@ -886,20 +893,23 @@ int 1
 
 	txn := makeSampleTxn()
 	txgroup := makeSampleTxnGroup(txn)
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &txn
-	ep.Txn.Txn.ApplicationID = 100
-	ep.TxnGroup = txgroup
+	now := defaultEvalParams(nil, nil)
+	now.Txn = &txn
+	now.TxnGroup = txgroup
+	pre := defaultEvalParamsWithVersion(nil, nil, directRefEnabledVersion-1)
+	pre.Txn = &txn
+	pre.TxnGroup = txgroup
 
-	testApp(t, text, ep, "ledger not available")
+	testApp(t, text, now, "ledger not available")
 
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Receiver: 1,
 		},
 	)
-	ep.Ledger = ledger
-	testApp(t, text, ep, "cannot load account")
+	now.Ledger = ledger
+	pre.Ledger = ledger
+	testApp(t, text, now, "invalid Account reference")
 
 	text = `int 1  // account idx
 int 100 // app id
@@ -914,21 +924,21 @@ err
 exit:
 int 1`
 
-	testApp(t, text, ep, "no app for account")
+	testApp(t, text, now, "no app for account")
 
 	ledger = makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Receiver: 1,
 		},
 	)
-	ep.Ledger = ledger
+	now.Ledger = ledger
 	ledger.newApp(txn.Txn.Receiver, 9999, makeSchemas(0, 0, 0, 0))
 
-	testApp(t, text, ep, "no app for account")
+	testApp(t, text, now, "no app for account")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0))
-	testApp(t, text, ep)
+	testApp(t, text, now)
 
 	text = `int 1  // account idx
 int 100 // app id
@@ -941,7 +951,12 @@ byte 0x414c474f
 ==`
 	ledger.balances[txn.Txn.Receiver].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 
-	testApp(t, text, ep)
+	testApp(t, text, now)
+	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
+	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), now)
+	testApp(t, strings.Replace(text, "int 100 // app id", "int 9", -1), now, "invalid App reference 9")
+	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now,
+		"no such address")
 
 	// check special case account idx == 0 => sender
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
@@ -956,13 +971,16 @@ byte 0x414c474f
 ==`
 
 	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	testApp(t, text, ep)
+	testApp(t, text, now)
+	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
+	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02\"", -1), now,
+		"invalid Account reference")
 
 	// check reading state of other app
-	ledger.newApp(txn.Txn.Sender, 101, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 56, makeSchemas(0, 0, 0, 0))
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
 	text = `int 0  // account idx
-int 101 // app id
+int 56 // app id
 txn ApplicationArgs 0
 app_local_get_ex
 bnz exist
@@ -971,8 +989,8 @@ exist:
 byte 0x414c474f
 ==`
 
-	ledger.balances[txn.Txn.Sender].locals[101][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	testApp(t, text, ep)
+	ledger.balances[txn.Txn.Sender].locals[56][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	testApp(t, text, now)
 
 	// check app_local_get
 	text = `int 0  // account idx
@@ -982,7 +1000,11 @@ byte 0x414c474f
 ==`
 
 	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	testApp(t, text, ep)
+	testApp(t, text, now)
+	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
+	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
+	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02\"", -1), now,
+		"invalid Account reference")
 
 	// check app_local_get default value
 	text = `int 0  // account idx
@@ -992,7 +1014,7 @@ int 0
 ==`
 
 	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	testApp(t, text, ep)
+	testApp(t, text, now)
 }
 
 func TestAppReadGlobalState(t *testing.T) {
@@ -1021,73 +1043,51 @@ byte 0x414c474f
 ==
 &&
 `
-	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-
 	txn := makeSampleTxn()
 	txgroup := makeSampleTxnGroup(txn)
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &txn
-	ep.TxnGroup = txgroup
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
+	now := defaultEvalParams(nil, nil)
+	now.Txn = &txn
+	now.TxnGroup = txgroup
+	pre := defaultEvalParamsWithVersion(nil, nil, directRefEnabledVersion-1)
+	pre.Txn = &txn
+	pre.TxnGroup = txgroup
+
+	testApp(t, text, now, "ledger not available")
 
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
 	)
-	ep.Ledger = ledger
+	now.Ledger = ledger
+	pre.Ledger = ledger
 
-	ep.Txn.Txn.ApplicationID = 100
-	ep.Txn.Txn.ForeignApps = []basics.AppIndex{ep.Txn.Txn.ApplicationID}
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no such app")
+	now.Txn.Txn.ApplicationID = 100
+	now.Txn.Txn.ForeignApps = []basics.AppIndex{now.Txn.Txn.ApplicationID}
+	testApp(t, text, now, "no such app")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 1))
 
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "err opcode")
+	testApp(t, text, now, "err opcode")
 
 	ledger.applications[100].GlobalState[string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err := EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, text, now)
 
 	// check error on invalid app index for app_global_get_ex
-	text = `int 2
-txn ApplicationArgs 0
-app_global_get_ex
-`
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid ForeignApps index 2")
+	text = "int 2; txn ApplicationArgs 0; app_global_get_ex"
+	testApp(t, text, now, "invalid App reference 2")
+	// check that actual app id ok instead of indirect reference
+	text = "int 100; txn ApplicationArgs 0; app_global_get_ex; int 1; ==; assert; byte 0x414c474f; =="
+	testApp(t, text, now)
+	testApp(t, text, pre, "invalid App reference 100") // but not in old teal
 
 	// check app_local_get default value
-	text = `byte 0x414c474f55
-app_global_get
-int 0
-==`
-
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
+	text = "byte 0x414c474f55; app_global_get; int 0; =="
 
 	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, text, now)
 
 	text = `
 byte 0x41414141
@@ -1105,24 +1105,19 @@ int 4141
 	// check that even during application creation (Txn.ApplicationID == 0)
 	// we will use the the kvCow if the exact application ID (100) is
 	// specified in the transaction
-	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-	require.NoError(t, err)
-
-	ep.Txn.Txn.ApplicationID = 0
-	ep.Txn.Txn.ForeignApps = []basics.AppIndex{100}
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	now.Txn.Txn.ApplicationID = 0
+	now.Txn.Txn.ForeignApps = []basics.AppIndex{100}
+	testApp(t, text, now)
 }
 
-const assetsTestProgram = `int 0
+const assetsTestProgram = `int 0//account
 int 55
 asset_holding_get AssetBalance
 !
 bnz error
 int 123
 ==
-int 0
+int 0//account
 int 55
 asset_holding_get AssetFrozen
 !
@@ -1130,35 +1125,35 @@ bnz error
 int 1
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetTotal
 !
 bnz error
 int 1000
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetDecimals
 !
 bnz error
 int 2
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetDefaultFrozen
 !
 bnz error
 int 0
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetUnitName
 !
 bnz error
 byte 0x414c474f
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetName
 !
 bnz error
@@ -1166,42 +1161,42 @@ len
 int 0
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetURL
 !
 bnz error
 txna ApplicationArgs 0
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetMetadataHash
 !
 bnz error
 byte 0x0000000000000000000000000000000000000000000000000000000000000000
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetManager
 !
 bnz error
 txna Accounts 0
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetReserve
 !
 bnz error
 txna Accounts 1
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetFreeze
 !
 bnz error
 txna Accounts 1
 ==
 &&
-int 0
+int 0//params
 asset_params_get AssetClawback
 !
 bnz error
@@ -1228,52 +1223,38 @@ func TestAssets(t *testing.T) {
 		}
 	}
 
-	type sourceError struct {
-		src string
-		err string
-	}
-	// check generic errors
-	sources := []sourceError{
-		{"int 5\nint 55\nasset_holding_get AssetBalance", "cannot load account[5]"},
-		{"int 5\nasset_params_get AssetTotal", "invalid ForeignAssets index 5"},
-	}
-	for _, sourceErr := range sources {
-		ops, err := AssembleStringWithVersion(sourceErr.src, AssemblerMaxVersion)
-		require.NoError(t, err)
-
-		txn := makeSampleTxn()
-		ep := defaultEvalParams(nil, nil)
-		ep.Txn = &txn
-		err = CheckStateful(ops.Program, ep)
-		require.NoError(t, err)
-		_, err = EvalStateful(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "ledger not available")
-
-		ledger := makeTestLedger(
-			map[basics.Address]uint64{
-				txn.Txn.Sender: 1,
-			},
-		)
-		ep.Ledger = ledger
-
-		_, err = EvalStateful(ops.Program, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), sourceErr.err)
-	}
-
-	ops, err := AssembleStringWithVersion(assetsTestProgram, AssemblerMaxVersion)
-	require.NoError(t, err)
-	err = CheckStateful(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
-
 	txn := makeSampleTxn()
-	sb := strings.Builder{}
+	pre := defaultEvalParamsWithVersion(nil, &txn, directRefEnabledVersion-1)
+	now := defaultEvalParams(nil, &txn)
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
 		},
 	)
+	pre.Ledger = ledger
+	now.Ledger = ledger
+
+	// bear in mind: the sample transaction has ForeignAccounts{55,77}
+	testApp(t, "int 5; int 55; asset_holding_get AssetBalance", now, "invalid Account reference 5")
+	// was legal to get balance on a non-ForeignAsset
+	testApp(t, "int 0; int 54; asset_holding_get AssetBalance; ==", pre)
+	// but not since directRefEnabledVersion
+	testApp(t, "int 0; int 54; asset_holding_get AssetBalance", now, "invalid Asset reference 54")
+
+	// it wasn't legal to use a direct ref for account
+	testProg(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 54; asset_holding_get AssetBalance`,
+		directRefEnabledVersion-1, expect{3, "asset_holding_get arg 0 wanted type uint64..."})
+	// but it is now (empty asset yields 0,0 on stack)
+	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, now)
+	// This is receiver, who is in Assets array
+	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, now)
+	// But this is not in Assets, so illegal
+	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"; int 55; asset_holding_get AssetBalance; ==`, now, "invalid")
+
+	// for params get, presence in ForeignAssets has always be required
+	testApp(t, "int 5; asset_params_get AssetTotal", pre, "invalid Asset reference 5")
+	testApp(t, "int 5; asset_params_get AssetTotal", now, "invalid Asset reference 5")
+
 	params := basics.AssetParams{
 		Total:         1000,
 		Decimals:      2,
@@ -1286,20 +1267,28 @@ func TestAssets(t *testing.T) {
 		Freeze:        txn.Txn.Receiver,
 		Clawback:      txn.Txn.Receiver,
 	}
+
 	ledger.newAsset(txn.Txn.Sender, 55, params)
 	ledger.setHolding(txn.Txn.Sender, 55, 123, true)
+	// For consistency you can now use an indirect ref in holding_get
+	// (recall ForeignAssets[0] = 55, which has balance 123)
+	testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 1; ==; assert; int 123; ==", now)
+	// but previous code would still try to read ASA 0
+	testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 0; ==; assert; int 0; ==", pre)
 
-	ep := defaultEvalParams(&sb, &txn)
-	ep.Ledger = ledger
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err := EvalStateful(ops.Program, ep)
-	if !pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, assetsTestProgram, now)
+
+	// In current versions, can swap out the account index for the account
+	testApp(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
+	// Or an asset index for the asset id
+	testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), now)
+	// Or an index for the asset id
+	testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), now)
+
+	// but old code cannot
+	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, expect{3, "asset_holding_get arg 0 wanted type uint64..."})
+	testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), pre, "invalid Asset ref")
+	testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), pre, "err opcode")
 
 	// check holdings bool value
 	source := `intcblock 0 55 1
@@ -1316,19 +1305,14 @@ err
 ok:
 intc_2 // 1
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
 	ledger.setHolding(txn.Txn.Sender, 55, 123, false)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, source, now)
 
 	// check holdings invalid offsets
-	require.Equal(t, OpsByName[ep.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
+	ops := testProg(t, source, AssemblerMaxVersion)
+	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
 	ops.Program[9] = 0x02
-	_, err = EvalStateful(ops.Program, ep)
+	_, err := EvalStateful(ops.Program, now)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset holding field 2")
 
@@ -1346,17 +1330,14 @@ err
 ok:
 intc_1
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
 	params.DefaultFrozen = true
 	ledger.newAsset(txn.Txn.Sender, 55, params)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, source, now)
 	// check holdings invalid offsets
-	require.Equal(t, OpsByName[ep.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
+	ops = testProg(t, source, AssemblerMaxVersion)
+	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
 	ops.Program[7] = 0x20
-	_, err = EvalStateful(ops.Program, ep)
+	_, err = EvalStateful(ops.Program, now)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset params field 32")
 
@@ -1375,13 +1356,9 @@ err
 ok:
 intc_1
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
 	params.URL = ""
 	ledger.newAsset(txn.Txn.Sender, 55, params)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, source, now)
 
 	source = `intcblock 1 9
 intc_0  // foreign asset idx (txn.ForeignAssets[1])
@@ -1397,13 +1374,9 @@ err
 ok:
 intc_0
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
 	params.URL = "foobarbaz"
 	ledger.newAsset(txn.Txn.Sender, 77, params)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, source, now)
 
 	source = `intcblock 0 1
 intc_0
@@ -1418,16 +1391,9 @@ err
 ok:
 intc_1
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
 	params.URL = ""
 	ledger.newAsset(txn.Txn.Sender, 55, params)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot compare ([]byte to uint64)")
-	require.False(t, pass)
+	testApp(t, source, now, "cannot compare ([]byte to uint64)")
 }
 
 func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
@@ -1513,7 +1479,7 @@ intc_1
 			ops.Program[firstCmdOffset] = OpsByName[0]["intc_1"].Opcode
 			_, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "cannot load account[100]")
+			require.Contains(t, err.Error(), "invalid Account reference 100")
 
 			ops.Program[firstCmdOffset] = saved
 			_, err = EvalStateful(ops.Program, ep)
@@ -2358,7 +2324,7 @@ func TestAppLocalDelete(t *testing.T) {
 	t.Parallel()
 
 	// check write/delete/read
-	source := `int 0  // account
+	source := `int 0 // sender
 byte 0x414c474f       // key "ALGO"
 int 0x77              // value
 app_local_put
@@ -2366,14 +2332,14 @@ int 1
 byte 0x414c474f41     // key "ALGOA"
 byte 0x414c474f
 app_local_put
-int 0
+int 0 // sender
 byte 0x414c474f
 app_local_del
 int 1
 byte 0x414c474f41
 app_local_del
-int 0
-int 0
+int 0 // sender
+int 0 // app
 byte 0x414c474f
 app_local_get_ex
 bnz error
@@ -2406,18 +2372,16 @@ int 1
 	sb := strings.Builder{}
 	ep.Trace = &sb
 
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err := EvalStateful(ops.Program, ep)
-	if !pass {
-		t.Log(hex.EncodeToString(ops.Program))
-		t.Log(sb.String())
-	}
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, source, ep)
 	delta, err := ledger.GetDelta(&ep.Txn.Txn)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 2, len(delta.LocalDeltas))
+
+	ledger.reset()
+	// test that app_local_put and _app_local_del can use byte addresses
+	testApp(t, strings.Replace(source, "int 0 // sender", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), ep)
+	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 2, len(delta.LocalDeltas))
@@ -2442,13 +2406,7 @@ app_local_get_ex
 ==  // two zeros
 `
 
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, source, ep)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(delta.GlobalDelta))
@@ -2478,13 +2436,7 @@ byte 0x414c474f41
 int 0x78
 app_local_put
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, source, ep)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(delta.GlobalDelta))
@@ -2510,13 +2462,7 @@ int 0x78
 app_local_put
 int 1
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, source, ep)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(delta.GlobalDelta))
@@ -2545,13 +2491,7 @@ byte 0x414c474f
 app_local_del
 int 1
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, source, ep)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(delta.GlobalDelta))
@@ -2580,13 +2520,7 @@ byte 0x414c474f41
 app_local_del
 int 1
 `
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, source, ep)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(delta.GlobalDelta))
