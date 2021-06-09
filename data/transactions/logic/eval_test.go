@@ -1583,7 +1583,7 @@ int 0
 	ops = testProg(t, checkCreatableIDProg, 4)
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "can't use gaid on self")
+	require.Contains(t, err.Error(), "gaid is only for accessing creatable IDs of previous txns")
 	ep.GroupIndex = 1
 
 	// should fail on non-creatable

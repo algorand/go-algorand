@@ -2111,7 +2111,7 @@ func opGaidImpl(cx *evalContext, groupIdx int, opName string) (sv stackValue, er
 		err = fmt.Errorf("%s can't get creatable ID of txn ahead of the current one (index %d) in the transaction group", opName, groupIdx)
 		return
 	} else if groupIdx == cx.GroupIndex {
-		err = fmt.Errorf("can't use %s on self, use `global CurrentApplicationID` instead", opName)
+		err = fmt.Errorf("%s is only for accessing creatable IDs of previous txns, use `global CurrentApplicationID` instead to access the current app's creatable ID", opName)
 		return
 	} else if txn := cx.TxnGroup[groupIdx].Txn; !(txn.Type == protocol.ApplicationCallTx || txn.Type == protocol.AssetConfigTx) {
 		err = fmt.Errorf("can't use %s on txn that is not an app call nor an asset config txn with index %d", opName, groupIdx)
