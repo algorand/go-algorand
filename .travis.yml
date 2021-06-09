@@ -1,7 +1,6 @@
 os: linux
 dist: bionic
-go_import_path: github.com/algorand/go-algorand
-language: go
+language: minimal
 
 # Don't build tags
 if: tag IS blank
@@ -94,6 +93,11 @@ jobs:
 
     - stage: build_release
       os: linux
+      name: Ubuntu AMD64 CodeGen Verification
+      script:
+        - scripts/travis/codegen_verification.sh
+    - # same stage, parallel job
+      os: linux
       name: Ubuntu AMD64 Build
       script:
         - travis_retry ./scripts/travis/build_test.sh
@@ -103,11 +107,17 @@ jobs:
       script:
         - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
-      os: osx
-      osx_image: xcode11
-      name: MacOS AMD64 Build
+      name: External ARM64 Build
+      os: linux
+      env:
+        - BUILD_TYPE: "external_build"
+        - TARGET_PLATFORM: "linux-arm64"
+      addons:
+        apt:
+          packages:
+            - awscli
       script:
-        - travis_retry scripts/travis/build_test.sh
+        - travis_retry scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
       name: External ARM64 Integration Test
       os: linux
@@ -120,6 +130,18 @@ jobs:
             - awscli
       script:
         - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Build
+      script:
+        - travis_retry scripts/travis/build_test.sh
+    - # same stage, parallel job
+      os: osx
+      osx_image: xcode11
+      name: MacOS AMD64 Integration Test
+      script:
+        - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
        os: windows
        name: Windows x64 Build
@@ -147,18 +169,6 @@ jobs:
       env:
         - BUILD_TYPE: "external_build"
         - TARGET_PLATFORM: "linux-arm64"
-      addons:
-        apt:
-          packages:
-            - awscli
-      script:
-        - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
-    - # same stage, parallel job
-      name: External ARM Deploy
-      os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm"
       addons:
         apt:
           packages:
@@ -207,6 +217,9 @@ before_cache:
    esac
    docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
 
+after_success:
+  - scripts/travis/upload_coverage.sh || true
+
 addons:
   apt:
     packages:
@@ -224,3 +237,7 @@ addons:
 notifications:
   slack:
     secure: lBomhenfQvDzpUGxLadga188zavtGRr05GVWI6iI8ll/uwXewij8ginQ716Axg3pJvvRMNCuTNEmg0+fVlHf0JxTG3qWG35qOUexAHGcmimPD4ugmVkufua8Oc8Nl1LRSdWvbwIKvrAU1HDA37M5tCdEOm+Sf/OL72iVWbXhlHRvhdeiKHkbkcpI/15dOH4RpXuvPeYBrgcB2Ixs7gTSVyIAU458aT0JORu7expElQ+iBP9Kqze1V4dvjJyzHTgE01z2nyAm2Xpko447y//fYX2e20iDBE5S/GukaK/TeB3pD+FoC+Z2R7Gg1qA7a/gdGFbVgP12zWmzNaKVwY1YOvx8IIwP13XutioAE7bQbnHI1zGlQ+jxk3odWKZPhZSN/YvWD3i7g/xVksaTo++zwon2UlZ7x8LmKg1kOMeA3o2TUlzjQrwZZ4cB+4HqYHEqVdsSAadaMhKK82XE1OtGImdrIX1Y/02X2F/myJXwaE4Ap8smULHWGghCL/ALad+hdyE0K4/2SYDcoaOONgX9+VgaSEtYDO00Bt4/GMcuM+gwILsfCA9ZQuxCgIFEL1QWwDud8aGU1qF20yaimDlstlLnZXsv3Oli6r/CEEUVXltI5dkJyRd/jTlqWGjFGL8agGg34EPLP24Vn4h4QcIzoMfGWXkz2yrd6i0fvMAPXds=
+env:
+  global:
+    secure: YMLx+QaBPgg97tVn2efZJSqwPRxybX9oR6Xe9oXUD4fEiVbOIv2BAsLP+MzSJGaFC+VXKha83kyDbAZnatDXTJYsBPOUgmIZDObQnktueR1v3TCKn3aw14G+/w6S4eQL+c7uW3idPE+KP3VWixjrBpWTHEfnZdnH9+qWeIWzy8A8UEAYPY/HXyDmwt5ceCJoITtdsuiuZNO2o7NGN8q+NP5A3ii8f5UyDa9/krxuA+x1e193wSGRdGcqxexM7zIq0uMhBF+2nOk4RAsDsqU33NpQw+dB1VJMta1XF+P6A7m16UKUjllTyOfUPGD068jKobVyWzbvZ79G2FZXGZ7HGE0711JZco3YenwtxXP8oGLgaIds6McoJnn3rbxe1i+PjRX09IXNQM/dNp53uxrtyi1y8ZEjzHjbb6z3rSOZrzaBhdVxBFR9Oc1Ek7i8MS1tlRlH58+U+Z1WPTvbcIQtFA5HmmTcDdBRkZtPC8bpVLHOZTGUcple9k39VtOGuSCvAAfHKENhieCaw/bBXX4bxAHAfiI0NEmdDrULDJLApWjtRCrUIqIqkdsJmtiZhE+iX1FKR9CP5lBXCAwDlPB3XOe0bSmiiGQ1/sf/1CovqOBg/vLwCpjQE0IZPofCiDZZdZbv4n4aCOjiAqhS8MjJ/LfLyUuAtPmQG5g47FzS1K4=
+

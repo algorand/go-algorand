@@ -29,6 +29,13 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
+# If available, use gotestsum instead of 'go test'.
+ifeq (, $(shell which gotestsum))
+export GOTESTCOMMAND=go test
+else
+export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
+endif
+
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
 ifeq ($(ARCH), amd64)
@@ -228,17 +235,13 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s | logfilter
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 fulltest: build-race
-	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
-		go test $(GOTAGS) -timeout 2500s -race $$PACKAGE_DIRECTORY | logfilter; \
-	done
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
-shorttest: build-race $(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
-
-$(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
-	@go test $(GOTAGS) -short -timeout 2500s -race $(subst short_test_target_,,$@) | logfilter
+shorttest: build-race
+	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
