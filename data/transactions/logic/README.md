@@ -214,6 +214,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `store i` | pop a value from the stack and store to scratch space |
 | `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
 | `gloads i` | push Ith scratch space index of the Ath transaction in the current group |
+| `gaid t` | push the creatable ID of the Tth transaction in the current group |
+| `gaids` | push the creatable ID of the Ath transaction in the current group |
 
 **Transaction Fields**
 
@@ -275,6 +277,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 53 | GlobalNumByteSlice | uint64 | Number of global state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
+| 56 | ExtraProgramPages | uint64 | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. LogicSigVersion >= 4. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.

@@ -147,6 +147,7 @@ type LedgerForLogic interface {
 	ApplicationID() basics.AppIndex
 	CreatorAddress() basics.Address
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
+	GetCreatableID(groupIdx int) basics.CreatableIndex
 
 	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (value basics.TealValue, exists bool, err error)
 	SetLocal(addr basics.Address, key string, value basics.TealValue, accountIdx uint64) error
@@ -1924,7 +1925,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		sv.Bytes = txn.FreezeAccount[:]
 	case FreezeAssetFrozen:
 		sv.Uint = boolToUint(txn.AssetFrozen)
-	case AppProgramExtraPages:
+	case ExtraProgramPages:
 		sv.Uint = uint64(txn.ExtraProgramPages)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
@@ -2102,6 +2103,56 @@ func opGtxnsa(cx *evalContext) {
 	cx.stack[last] = sv
 }
 
+func opGaidImpl(cx *evalContext, groupIdx int, opName string) (sv stackValue, err error) {
+	if groupIdx >= len(cx.TxnGroup) {
+		err = fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, groupIdx, len(cx.TxnGroup))
+		return
+	} else if groupIdx > cx.GroupIndex {
+		err = fmt.Errorf("%s can't get creatable ID of txn ahead of the current one (index %d) in the transaction group", opName, groupIdx)
+		return
+	} else if groupIdx == cx.GroupIndex {
+		err = fmt.Errorf("%s is only for accessing creatable IDs of previous txns, use `global CurrentApplicationID` instead to access the current app's creatable ID", opName)
+		return
+	} else if txn := cx.TxnGroup[groupIdx].Txn; !(txn.Type == protocol.ApplicationCallTx || txn.Type == protocol.AssetConfigTx) {
+		err = fmt.Errorf("can't use %s on txn that is not an app call nor an asset config txn with index %d", opName, groupIdx)
+		return
+	}
+
+	cid, err := cx.getCreatableID(groupIdx)
+	if cid == 0 {
+		err = fmt.Errorf("%s can't read creatable ID from txn with group index %d because the txn did not create anything", opName, groupIdx)
+		return
+	}
+
+	sv = stackValue{
+		Uint: cid,
+	}
+	return
+}
+
+func opGaid(cx *evalContext) {
+	groupIdx := int(uint(cx.program[cx.pc+1]))
+	sv, err := opGaidImpl(cx, groupIdx, "gaid")
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack = append(cx.stack, sv)
+}
+
+func opGaids(cx *evalContext) {
+	last := len(cx.stack) - 1
+	groupIdx := int(cx.stack[last].Uint)
+	sv, err := opGaidImpl(cx, groupIdx, "gaids")
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[last] = sv
+}
+
 func (cx *evalContext) getRound() (rnd uint64, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
@@ -2129,6 +2180,14 @@ func (cx *evalContext) getApplicationID() (rnd uint64, err error) {
 		return
 	}
 	return uint64(cx.Ledger.ApplicationID()), nil
+}
+
+func (cx *evalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+	return uint64(cx.Ledger.GetCreatableID(groupIndex)), nil
 }
 
 func (cx *evalContext) getCreatorAddress() ([]byte, error) {
