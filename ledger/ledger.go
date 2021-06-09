@@ -474,6 +474,14 @@ func (l *Ledger) LookupFull(rnd basics.Round, addr basics.Address) (basics.Accou
 	return data.AccountData, nil
 }
 
+// LookupCreatableDataWithoutRewards returns account data containing asset or app params if any
+func (l *Ledger) LookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+	params := true
+	holdings := false
+	pad, err := l.lookupCreatableDataWithoutRewards(rnd, addr, []creatableDataLocator{{cidx: cidx, ctype: ctype, global: params, local: holdings}})
+	return pad.AccountData, err
+}
+
 func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.PersistedAccountData, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
@@ -486,12 +494,12 @@ func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (le
 	return pad, validThrough, nil
 }
 
-// lookupHoldingWithoutRewards is like lookupWithoutRewards but also loads the specified holding/local state
-func (l *Ledger) lookupHoldingWithoutRewards(rnd basics.Round, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.PersistedAccountData, error) {
+// lookupCreatableDataWithoutRewards is like lookupWithoutRewards but also loads the specified holding/local state
+func (l *Ledger) lookupCreatableDataWithoutRewards(rnd basics.Round, addr basics.Address, locators []creatableDataLocator) (ledgercore.PersistedAccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, err := l.accts.LookupHoldingWithoutRewards(rnd, addr, cidx, ctype)
+	data, err := l.accts.LookupCreatableDataWithoutRewards(rnd, addr, locators)
 	if err != nil {
 		return ledgercore.PersistedAccountData{}, err
 	}

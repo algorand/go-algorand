@@ -1089,6 +1089,125 @@ func TestListCreatables(t *testing.T) {
 	listAndCompareComb(t, au, expectedDbImage)
 }
 
+func TestLookupFull(t *testing.T) {
+	a := require.New(t)
+	inMemory := false
+	dbs, fn := dbOpenTest(t, inMemory)
+	setDbLogging(t, dbs)
+	defer cleanupTestDb(dbs, fn, inMemory)
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	a.NoError(err)
+	defer tx.Rollback()
+
+	protoParams := config.Consensus[protocol.ConsensusFuture]
+
+	accts := randomAccounts(20, true)
+	_, err = initTestAccountDB(tx, accts, protoParams)
+	a.NoError(err)
+
+	getAddrAD := func(map[basics.Address]basics.AccountData) (addr basics.Address, ad basics.AccountData) {
+		for addr, ad = range accts {
+			return addr, ad // take first and exit
+		}
+		return
+	}
+
+	getBlock := func(rnd basics.Round) bookkeeping.Block {
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(rnd),
+			},
+		}
+		blk.RewardsLevel = 0
+		blk.CurrentProtocol = protocol.ConsensusFuture
+		return blk
+	}
+
+	addr, ad := getAddrAD(accts)
+	au := &accountUpdates{}
+	cfg := config.GetDefaultLocal()
+	au.initialize(cfg, ".", protoParams, accts)
+	defer au.close()
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusFuture)
+	err = au.loadFromDisk(ml)
+	a.NoError(err)
+
+	// au.accountsq, err = accountsDbInit(tx, tx)
+	// a.NoError(err)
+
+	rnd := basics.Round(1)
+
+	// 1. generate an account with 2k assets, put it into deltas, call lookupFull
+	const numAssets = 2000
+	ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numAssets)
+	var deltas ledgercore.AccountDeltas
+	for aidx := basics.AssetIndex(1); aidx <= numAssets; aidx++ {
+		if _, ok := ad.Assets[aidx]; !ok {
+			ad.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
+			deltas.SetEntityDelta(addr, basics.CreatableIndex(aidx), ledgercore.ActionHoldingCreate)
+		}
+	}
+	deltas.Upsert(addr, ledgercore.PersistedAccountData{AccountData: ad})
+	accts[addr] = ad
+
+	blk := getBlock(rnd)
+	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, deltas.Len(), 0)
+	delta.Accts.MergeAccounts(deltas)
+	au.newBlock(blk, delta)
+	au.committedUpTo(rnd)
+
+	// lookupFull is lookupWithRewards(full=true)
+	pad, err := au.lookupWithRewards(rnd, addr, true)
+	a.NoError(err)
+	a.Equal(numAssets, len(pad.AccountData.Assets))
+	for aidx, holding := range pad.AccountData.Assets {
+		a.Equal(uint64(aidx), holding.Amount)
+	}
+
+	// 2. add another delta triggering looking up not in macct but in au.deltas
+	rnd = 2
+	deltas = ledgercore.AccountDeltas{}
+	addr1, ad1 := getAddrAD(accts)
+	deltas.Upsert(addr1, ledgercore.PersistedAccountData{AccountData: ad1})
+	blk = getBlock(rnd)
+	delta = ledgercore.MakeStateDelta(&blk.BlockHeader, 0, deltas.Len(), 0)
+	delta.Accts.MergeAccounts(deltas)
+	au.newBlock(blk, delta)
+	au.committedUpTo(rnd)
+	// trick lookupWithRewards to trigger au.deltas lookup
+	savedDbRound := au.dbRound
+	au.dbRound = 1
+	pad, err = au.lookupWithRewards(rnd, addr, true)
+	a.NoError(err)
+	a.Equal(numAssets, len(pad.AccountData.Assets))
+	for aidx, holding := range pad.AccountData.Assets {
+		a.Equal(uint64(aidx), holding.Amount)
+	}
+
+	au.dbRound = savedDbRound
+
+	// 3. save the account into DB, call lookupFull
+	au.accountsWriting.Add(1)
+	au.commitRound(2, 0, 0)
+	pad, err = au.lookupWithRewards(rnd, addr, true)
+	a.NoError(err)
+	a.Equal(numAssets, len(pad.AccountData.Assets))
+	for aidx, holding := range pad.AccountData.Assets {
+		a.Equal(uint64(aidx), holding.Amount)
+	}
+
+	// 4. Empty au.baseAccounts and ensure direct read from DB works as well
+	au.baseAccounts = lruAccounts{}
+	pad, err = au.lookupWithRewards(rnd, addr, true)
+	a.NoError(err)
+	a.Equal(numAssets, len(pad.AccountData.Assets))
+	for aidx, holding := range pad.AccountData.Assets {
+		a.Equal(uint64(aidx), holding.Amount)
+	}
+}
+
 func TestIsWritingCatchpointFile(t *testing.T) {
 
 	au := &accountUpdates{}
@@ -1212,6 +1331,12 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]ledgercore.PersistedAccoun
 		}
 		if pad.ExtendedAssetHolding.Count > 0 {
 			pad.AccountData.Assets, pad.ExtendedAssetHolding, err = loadHoldings(stmt, pad.ExtendedAssetHolding, 0)
+			if err != nil {
+				return
+			}
+		}
+		if pad.ExtendedAssetParams.Count > 0 {
+			pad.AccountData.AssetParams, pad.ExtendedAssetParams, err = loadParams(stmt, pad.ExtendedAssetParams, 0)
 			if err != nil {
 				return
 			}

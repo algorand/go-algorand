@@ -132,7 +132,7 @@ func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (basics
 	return ad, nil
 }
 
-func (b *testBalances) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+func (b *testBalances) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (basics.AccountData, error) {
 	ad, ok := b.balances[addr]
 	if !ok {
 		return basics.AccountData{}, fmt.Errorf("mock balance not found")
@@ -206,7 +206,7 @@ func (b *testBalancesPass) Get(addr basics.Address, withPendingRewards bool) (ba
 	return ad, nil
 }
 
-func (b *testBalancesPass) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+func (b *testBalancesPass) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (basics.AccountData, error) {
 	ad, ok := b.balances[addr]
 	if !ok {
 		return basics.AccountData{}, fmt.Errorf("mock balance not found")

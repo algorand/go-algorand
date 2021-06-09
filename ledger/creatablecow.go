@@ -26,7 +26,8 @@ import (
 // Allocate creates kv storage for a given {addr, aidx, global}. It is called on app creation (global) or opting in (local)
 // Allocate also registers an asset holding as created
 func (cb *roundCowState) Allocate(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, space basics.StateSchema) error {
-	if ctype == basics.AppCreatable {
+	switch ctype {
+	case basics.AppCreatable:
 		// Check that account is not already opted in
 		aidx := basics.AppIndex(cidx)
 		allocated, err := cb.allocated(addr, aidx, global)
@@ -34,7 +35,7 @@ func (cb *roundCowState) Allocate(addr basics.Address, cidx basics.CreatableInde
 			return err
 		}
 		if allocated {
-			err = fmt.Errorf("cannot allocate storage, %v", errAlreadyStorage(addr, aidx, global))
+			err = fmt.Errorf("cannot allocate storage, %w", errAlreadyStorage(addr, aidx, global))
 			return err
 		}
 
@@ -45,22 +46,20 @@ func (cb *roundCowState) Allocate(addr basics.Address, cidx basics.CreatableInde
 
 		lsd.action = allocAction
 		lsd.maxCounts = &space
-
-		return nil
+	case basics.AssetCreatable:
+		cb.mods.Accts.SetEntityDelta(addr, cidx, ledgercore.ActionHoldingCreate)
+	default:
+		return fmt.Errorf("not supported creatable type %v", ctype)
 	}
 
-	if ctype == basics.AssetCreatable {
-		cb.mods.Accts.SetHoldingDelta(addr, basics.AssetIndex(cidx), ledgercore.ActionCreate)
-		return nil
-	}
-
-	return fmt.Errorf("not supported creatable type %v", ctype)
+	return nil
 }
 
 // Deallocate clears storage for {addr, aidx, global}. It happens on app deletion (global) or closing out (local)
 // Deallocate also registers an asset holding as deleted
 func (cb *roundCowState) Deallocate(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool) error {
-	if ctype == basics.AppCreatable {
+	switch ctype {
+	case basics.AppCreatable:
 		// Check that account has allocated storage
 		aidx := basics.AppIndex(cidx)
 		allocated, err := cb.allocated(addr, aidx, global)
@@ -81,13 +80,11 @@ func (cb *roundCowState) Deallocate(addr basics.Address, cidx basics.CreatableIn
 		lsd.counts = &basics.StateSchema{}
 		lsd.maxCounts = &basics.StateSchema{}
 		lsd.kvCow = make(stateDelta)
-		return nil
+	case basics.AssetCreatable:
+		cb.mods.Accts.SetEntityDelta(addr, cidx, ledgercore.ActionHoldingDelete)
+	default:
+		return fmt.Errorf("not supported creatable type %v", ctype)
 	}
 
-	if ctype == basics.AssetCreatable {
-		cb.mods.Accts.SetHoldingDelta(addr, basics.AssetIndex(cidx), ledgercore.ActionDelete)
-		return nil
-	}
-
-	return fmt.Errorf("not supported creatable type %v", ctype)
+	return nil
 }

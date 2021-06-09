@@ -363,6 +363,10 @@ type ConsensusParams struct {
 	// 5. checking that in the case of going online the VoteFirst is less or equal to the LastValid+1.
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
+
+	// EnableUnlimitedAssets allows more than MaxAssetsPerAccount assets
+	// After enabling this MaxAssetsPerAccount defines a maximum numbers of assets stored directly in a balance record
+	EnableUnlimitedAssets bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -943,6 +947,11 @@ func initConsensusProtocols() {
 
 	// Increase asset URL length to allow for IPFS URLs
 	vFuture.MaxAssetURLBytes = 96
+
+	// Enable large asset holdings and params
+	vFuture.EnableUnlimitedAssets = true
+	// 100100 Algos (MinBalance for creating 1,000,000 assets)
+	vFuture.MaximumMinimumBalance = 100100000000
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

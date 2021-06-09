@@ -21,7 +21,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -157,10 +156,11 @@ type compactAccountDeltas struct {
 }
 
 type accountDelta struct {
-	old      dbAccountData
-	new      ledgercore.PersistedAccountData
-	holdings map[basics.AssetIndex]ledgercore.HoldingAction
-	ndeltas  int
+	old                    dbAccountData
+	new                    ledgercore.PersistedAccountData
+	createdDeletedHoldings ledgercore.EntityDelta
+	createdDeletedParams   ledgercore.EntityDelta
+	ndeltas                int
 }
 
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
@@ -226,20 +226,25 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 	for _, roundDelta := range accountDeltas {
 		for i := 0; i < roundDelta.Len(); i++ {
 			addr, acctDelta := roundDelta.GetByIdx(i)
-			hmap := roundDelta.GetHoldingDeltas(addr)
+			params := roundDelta.GetEntityParamsDeltas(addr)
+			holdings := roundDelta.GetEntityHoldingDeltas(addr)
 			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
+				params := prev.createdDeletedParams.Update(params)
+				holdings := prev.createdDeletedHoldings.Update(holdings)
 				outAccountDeltas.update(idx, accountDelta{ // update instead of upsert economizes one map lookup
-					old:      prev.old,
-					new:      acctDelta,
-					holdings: hmap,
-					ndeltas:  prev.ndeltas + 1,
+					old:                    prev.old,
+					new:                    acctDelta,
+					createdDeletedParams:   params,
+					createdDeletedHoldings: holdings,
+					ndeltas:                prev.ndeltas + 1,
 				})
 			} else {
 				// it's a new entry.
 				newEntry := accountDelta{
-					new:      acctDelta,
-					holdings: hmap,
-					ndeltas:  1,
+					new:                    acctDelta,
+					createdDeletedParams:   params,
+					createdDeletedHoldings: holdings,
+					ndeltas:                1,
 				}
 				if baseAccountData, has := baseAccounts.read(addr); has {
 					newEntry.old = baseAccountData
@@ -252,6 +257,109 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 		}
 	}
 	return
+}
+
+func loadCreatedDeletedGroups(agl ledgercore.AbstractAssetGroupList, entityDelta ledgercore.EntityDelta, create ledgercore.EntityAction, delete ledgercore.EntityAction, fetcher fetcher, adRound basics.Round) (err error) {
+	for cidx, action := range entityDelta {
+		gi := -1
+		if action == create {
+			// use FindGroup to find a possible matching group for insertion
+			gi = agl.FindGroup(basics.AssetIndex(cidx), 0)
+		} else if action == delete {
+			gi, _ = agl.FindAsset(basics.AssetIndex(cidx), 0)
+		}
+		if gi != -1 {
+			g := agl.Get(gi)
+			if !g.Loaded() {
+				var gdRound basics.Round
+				gdRound, err = g.Fetch(fetcher, nil)
+				if err != nil {
+					return
+				}
+				if gdRound != adRound {
+					return &MismatchingDatabaseRoundError{databaseRound: gdRound, memoryRound: adRound}
+				}
+			}
+		}
+	}
+	return
+}
+
+func loadOldHoldings(dbad dbAccountData, delta accountDelta, fetcher fetcher, adRound basics.Round) (dbAccountData, error) {
+	if len(delta.new.Assets) > 0 && len(dbad.pad.AccountData.Assets) == 0 {
+		dbad.pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(delta.new.Assets))
+	}
+
+	// load created and deleted asset holding groups
+	err := loadCreatedDeletedGroups(&dbad.pad.ExtendedAssetHolding, delta.createdDeletedHoldings, ledgercore.ActionHoldingCreate, ledgercore.ActionHoldingDelete, fetcher, adRound)
+	if err != nil {
+		return dbAccountData{}, err
+	}
+
+	// load updated assets
+	for aidx := range delta.new.Assets {
+		gi, ai := dbad.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
+		if gi != -1 {
+			g := &dbad.pad.ExtendedAssetHolding.Groups[gi]
+			if !g.Loaded() {
+				gdRound, err := g.Fetch(fetcher, nil)
+				if err != nil {
+					return dbAccountData{}, err
+				}
+				if gdRound != adRound {
+					// this should not never happen since accountsLoadOld is called as part of DB update procedure,
+					// so the DB cannot be changed
+					return dbAccountData{}, &MismatchingDatabaseRoundError{databaseRound: gdRound, memoryRound: adRound}
+				}
+			}
+			_, ai = dbad.pad.ExtendedAssetHolding.FindAsset(aidx, gi)
+			if ai != -1 {
+				// found!
+				dbad.pad.AccountData.Assets[aidx] = g.GetHolding(ai)
+			} else {
+				// no such asset => newly created
+			}
+		}
+	}
+	return dbad, nil
+}
+
+func loadOldParams(dbad dbAccountData, delta accountDelta, fetcher fetcher, adRound basics.Round) (dbAccountData, error) {
+	if len(delta.new.AssetParams) > 0 && len(dbad.pad.AccountData.AssetParams) == 0 {
+		dbad.pad.AccountData.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, len(delta.new.AssetParams))
+	}
+
+	err := loadCreatedDeletedGroups(&dbad.pad.ExtendedAssetParams, delta.createdDeletedParams, ledgercore.ActionParamsCreate, ledgercore.ActionParamsDelete, fetcher, adRound)
+	if err != nil {
+		return dbAccountData{}, err
+	}
+
+	// load updated assets
+	for aidx := range delta.new.AssetParams {
+		gi, ai := dbad.pad.ExtendedAssetParams.FindAsset(aidx, 0)
+		if gi != -1 {
+			g := &dbad.pad.ExtendedAssetParams.Groups[gi]
+			if !g.Loaded() {
+				gdRound, err := g.Fetch(fetcher, nil)
+				if err != nil {
+					return dbAccountData{}, err
+				}
+				if gdRound != adRound {
+					// this should not never happen since accountsLoadOld is called as part of DB update procedure,
+					// so the DB cannot be changed
+					return dbAccountData{}, &MismatchingDatabaseRoundError{databaseRound: gdRound, memoryRound: adRound}
+				}
+			}
+			_, ai = dbad.pad.ExtendedAssetParams.FindAsset(aidx, gi)
+			if ai != -1 {
+				// found!
+				dbad.pad.AccountData.AssetParams[aidx] = g.GetParams(ai)
+			} else {
+				// no such asset => newly created
+			}
+		}
+	}
+	return dbad, nil
 }
 
 // accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
@@ -276,6 +384,9 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 	defer func() {
 		a.misses = nil
 	}()
+
+	fetcher := makeAssetFetcher(loadStmt)
+
 	var rowid sql.NullInt64
 	var acctDataBuf []byte
 	for _, idx := range a.misses {
@@ -292,67 +403,23 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 					return err
 				}
 
-				// accountsLoadOld is called from commitRound as db.Atomic => safe to load data without additional sync
+				// accountsLoadOld is called from commitRound as db.Atomic => safe to load extension data without additional sync
+
+				// fetch holdings/params that are in new to simplify upcoming reconciliation.
+				// these are either new or modified, and needed to be written back later.
+
 				if dbad.pad.ExtendedAssetHolding.Count > 0 {
-					// fetch holdings that are in new
-					// these are either new or modified, and needed to be written back later.
-					// to simplify upcoming reconciliation load them now
 					_, delta := a.getByIdx(idx)
-					if len(delta.new.Assets) > 0 && len(dbad.pad.AccountData.Assets) == 0 {
-						dbad.pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(delta.new.Assets))
+					dbad, err = loadOldHoldings(dbad, delta, fetcher, adRound)
+					if err != nil {
+						return err
 					}
-
-					// load created and deleted asset holding groups
-					for aidx, action := range delta.holdings {
-						gi := -1
-						if action == ledgercore.ActionCreate {
-							// use FindGroup to find a possible matching group for insertion
-							gi = dbad.pad.ExtendedAssetHolding.FindGroup(aidx, 0)
-						} else if action == ledgercore.ActionDelete {
-							gi, _ = dbad.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
-						}
-						if gi != -1 {
-							g := &dbad.pad.ExtendedAssetHolding.Groups[gi]
-							if !g.Loaded() {
-								groupData, gdRound, err := loadHoldingGroupData(loadStmt, g.AssetGroupKey)
-								if err != nil {
-									return err
-								}
-								if gdRound != adRound {
-									// this should not never happen since accountsLoadOld is called as part of DB update procedure,
-									// so the DB cannot be changed
-									return &MismatchingDatabaseRoundError{databaseRound: gdRound, memoryRound: adRound}
-								}
-								g.Load(groupData)
-							}
-						}
-					}
-
-					// load updated assets
-					for aidx := range delta.new.Assets {
-						gi, ai := dbad.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
-						if gi != -1 {
-							g := &dbad.pad.ExtendedAssetHolding.Groups[gi]
-							if !g.Loaded() {
-								groupData, gdRound, err := loadHoldingGroupData(loadStmt, g.AssetGroupKey)
-								if err != nil {
-									return err
-								}
-								if gdRound != adRound {
-									// this should not never happen since accountsLoadOld is called as part of DB update procedure,
-									// so the DB cannot be changed
-									return &MismatchingDatabaseRoundError{databaseRound: gdRound, memoryRound: adRound}
-								}
-								g.Load(groupData)
-							}
-							_, ai = dbad.pad.ExtendedAssetHolding.FindAsset(aidx, gi)
-							if ai != -1 {
-								// found!
-								dbad.pad.AccountData.Assets[aidx] = g.GetHolding(ai)
-							} else {
-								// no such asset => newly created
-							}
-						}
+				}
+				if dbad.pad.ExtendedAssetParams.Count > 0 {
+					_, delta := a.getByIdx(idx)
+					dbad, err = loadOldParams(dbad, delta, fetcher, adRound)
+					if err != nil {
+						return err
 					}
 				}
 			} else {
@@ -1032,6 +1099,9 @@ func lookupFull(rdb db.Accessor, addr basics.Address) (dbad dbAccountData, err e
 			if dbad.pad.ExtendedAssetHolding.Count > 0 {
 				dbad.pad.Assets, dbad.pad.ExtendedAssetHolding, err = loadHoldings(loadStmt, dbad.pad.ExtendedAssetHolding, dbad.round)
 			}
+			if dbad.pad.ExtendedAssetParams.Count > 0 {
+				dbad.pad.AssetParams, dbad.pad.ExtendedAssetParams, err = loadParams(loadStmt, dbad.pad.ExtendedAssetParams, dbad.round)
+			}
 			return err
 		})
 		return err
@@ -1166,7 +1236,18 @@ func (qs *accountsDbQueries) close() {
 }
 
 func (qs *accountsDbQueries) loadHoldings(eah ledgercore.ExtendedAssetHolding, rnd basics.Round) (holdings map[basics.AssetIndex]basics.AssetHolding, result ledgercore.ExtendedAssetHolding, err error) {
-	holdings, result, err = loadHoldings(qs.loadAccountGroupDataStmt, eah, rnd)
+	err = db.Retry(func() error {
+		holdings, result, err = loadHoldings(qs.loadAccountGroupDataStmt, eah, rnd)
+		return err
+	})
+	return
+}
+
+func (qs *accountsDbQueries) loadParams(eap ledgercore.ExtendedAssetParams, rnd basics.Round) (params map[basics.AssetIndex]basics.AssetParams, result ledgercore.ExtendedAssetParams, err error) {
+	err = db.Retry(func() error {
+		params, result, err = loadParams(qs.loadAccountGroupDataStmt, eap, rnd)
+		return err
+	})
 	return
 }
 
@@ -1242,8 +1323,17 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 	return err
 }
 
-// loadHoldings initiates all holdings leading mentioned in ExtendedAssetHolding groups.
-// baseRound specified a round number records need satisfy to. If baseRound is zero any data are OK.
+type fetcher func(key int64) (buf []byte, rnd basics.Round, err error)
+
+func makeAssetFetcher(stmt *sql.Stmt) fetcher {
+	return func(key int64) (buf []byte, rnd basics.Round, err error) {
+		buf, rnd, err = loadGroupData(stmt, key)
+		return
+	}
+}
+
+// loadHoldings initiates all holdings mentioned in ExtendedAssetHolding groups.
+// baseRound specifies a round number records need satisfy to. If baseRound is zero any data are OK.
 func loadHoldings(stmt *sql.Stmt, eah ledgercore.ExtendedAssetHolding, baseRound basics.Round) (map[basics.AssetIndex]basics.AssetHolding, ledgercore.ExtendedAssetHolding, error) {
 	if len(eah.Groups) == 0 {
 		return nil, ledgercore.ExtendedAssetHolding{}, nil
@@ -1251,10 +1341,11 @@ func loadHoldings(stmt *sql.Stmt, eah ledgercore.ExtendedAssetHolding, baseRound
 	var err error
 	holdings := make(map[basics.AssetIndex]basics.AssetHolding, eah.Count)
 	groups := make([]ledgercore.AssetsHoldingGroup, len(eah.Groups), len(eah.Groups))
-
+	fetcher := makeAssetFetcher(stmt)
 	fetchedRound := basics.Round(0)
 	for gi := range eah.Groups {
-		holdings, groups[gi], fetchedRound, err = loadHoldingGroup(stmt, eah.Groups[gi], holdings)
+		groups[gi] = eah.Groups[gi]
+		fetchedRound, err = groups[gi].Fetch(fetcher, holdings)
 		if err != nil {
 			return nil, ledgercore.ExtendedAssetHolding{}, err
 		}
@@ -1266,35 +1357,36 @@ func loadHoldings(stmt *sql.Stmt, eah ledgercore.ExtendedAssetHolding, baseRound
 	return holdings, eah, nil
 }
 
-func loadHoldingGroup(stmt *sql.Stmt, g ledgercore.AssetsHoldingGroup, holdings map[basics.AssetIndex]basics.AssetHolding) (map[basics.AssetIndex]basics.AssetHolding, ledgercore.AssetsHoldingGroup, basics.Round, error) {
-	var groupData ledgercore.AssetsHoldingGroupData
-	var rnd basics.Round
-	var err error
-	err = db.Retry(func() error {
-		groupData, rnd, err = loadHoldingGroupData(stmt, g.AssetGroupKey)
-		return err
-	})
-	if err != nil {
-		return nil, ledgercore.AssetsHoldingGroup{}, 0, err
+// loadParams initiates all params mentioned in ExtendedAssetHolding groups.
+// baseRound specifies a round number records need satisfy to. If baseRound is zero any data are OK.
+func loadParams(stmt *sql.Stmt, eap ledgercore.ExtendedAssetParams, baseRound basics.Round) (map[basics.AssetIndex]basics.AssetParams, ledgercore.ExtendedAssetParams, error) {
+	if len(eap.Groups) == 0 {
+		return nil, ledgercore.ExtendedAssetParams{}, nil
 	}
-
-	if holdings != nil {
-		aidx := g.MinAssetIndex
-		for i := 0; i < len(groupData.AssetOffsets); i++ {
-			aidx += groupData.AssetOffsets[i]
-			holdings[aidx] = groupData.GetHolding(i)
+	var err error
+	params := make(map[basics.AssetIndex]basics.AssetParams, eap.Count)
+	groups := make([]ledgercore.AssetsParamsGroup, len(eap.Groups), len(eap.Groups))
+	fetcher := makeAssetFetcher(stmt)
+	fetchedRound := basics.Round(0)
+	for gi := range eap.Groups {
+		groups[gi] = eap.Groups[gi]
+		fetchedRound, err = groups[gi].Fetch(fetcher, params)
+		if err != nil {
+			return nil, ledgercore.ExtendedAssetParams{}, err
+		}
+		if baseRound != 0 && baseRound != fetchedRound {
+			return nil, ledgercore.ExtendedAssetParams{}, &MismatchingDatabaseRoundError{databaseRound: fetchedRound, memoryRound: baseRound}
 		}
 	}
-	g.Load(groupData)
-	return holdings, g, rnd, nil
+	eap.Groups = groups
+	return params, eap, nil
 }
 
-// loadHoldingGroupData loads a single holdings group data
-func loadHoldingGroupData(stmt *sql.Stmt, key int64) (group ledgercore.AssetsHoldingGroupData, rnd basics.Round, err error) {
-	var buf []byte
+// loadGroupData loads a single holdings group data
+func loadGroupData(stmt *sql.Stmt, key int64) (buf []byte, rnd basics.Round, err error) {
 	err = stmt.QueryRow(key).Scan(&rnd, &buf)
 	if err == sql.ErrNoRows {
-		err = fmt.Errorf("loadHoldingGroupData failed to retrive data for key %d", key)
+		err = fmt.Errorf("loadGroupData failed to retrive data for key %d", key)
 		return
 	}
 
@@ -1302,38 +1394,141 @@ func loadHoldingGroupData(stmt *sql.Stmt, key int64) (group ledgercore.AssetsHol
 	if err != nil {
 		return
 	}
-
-	err = protocol.Decode(buf, &group)
 	return
 }
 
-func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, pad ledgercore.PersistedAccountData, genesisProto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
+func modifyAssetGroup(query *sql.Stmt, agl ledgercore.AbstractAssetGroupList) (err error) {
+	var result sql.Result
+	for i := 0; i < agl.Len(); i++ {
+		result, err = query.Exec(agl.Get(i).Encode())
+		if err != nil {
+			break
+		}
+		key, err := result.LastInsertId()
+		if err != nil {
+			break
+		}
+		agl.Get(i).SetKey(key)
+	}
+	return err
+}
+
+func deleteAssetGroup(query *sql.Stmt, agl ledgercore.AbstractAssetGroupList) (err error) {
+	for i := 0; i < agl.Len(); i++ {
+		_, err = query.Exec(agl.Get(i).Key())
+		if err != nil {
+			break
+		}
+	}
+	return err
+}
+
+// collapseAssetHoldings moves all assets from ExtendedAssetHolding groups to Assets field
+func collapseAssetHoldings(qabq, qaed *sql.Stmt, eah ledgercore.ExtendedAssetHolding, updated map[basics.AssetIndex]basics.AssetHolding, deleted []basics.AssetIndex, rnd basics.Round) (assets map[basics.AssetIndex]basics.AssetHolding, err error) {
+	// 1. load all
+	assets, _, err = loadHoldings(qabq, eah, rnd)
+	if err != nil {
+		return nil, err
+	}
+	// 2. remove deleted
+	for _, aidx := range deleted {
+		delete(assets, aidx)
+	}
+	// 3. add created and modified from delta.new
+	for aidx, holding := range updated {
+		assets[aidx] = holding
+	}
+
+	// 4. delete all groups
+	for _, g := range eah.Groups {
+		qaed.Exec(g.AssetGroupKey)
+	}
+	return assets, nil
+}
+
+// collapseAssetParams moves all assets from ExtendedAssetParams groups to Assets field
+func collapseAssetParams(qabq, qaed *sql.Stmt, eap ledgercore.ExtendedAssetParams, updated map[basics.AssetIndex]basics.AssetParams, deleted []basics.AssetIndex, rnd basics.Round) (assets map[basics.AssetIndex]basics.AssetParams, err error) {
+	// 1. load all
+	assets, _, err = loadParams(qabq, eap, rnd)
+	if err != nil {
+		return nil, err
+	}
+	// 2. remove deleted
+	for _, aidx := range deleted {
+		delete(assets, aidx)
+	}
+	// 3. add created and modified from delta.new
+	for aidx, param := range updated {
+		assets[aidx] = param
+	}
+
+	// 4. delete all groups
+	for _, g := range eap.Groups {
+		qaed.Exec(g.AssetGroupKey)
+	}
+	return assets, nil
+}
+
+func assetsUpdateGroupDataDB(qaei, qaeu, qaed *sql.Stmt, agl ledgercore.AbstractAssetGroupList, loadedGroups []int, deletedKeys []int64) (err error) {
+	for _, key := range deletedKeys {
+		if _, err = qaed.Exec(key); err != nil {
+			return err
+		}
+	}
+
+	var result sql.Result
+	for _, i := range loadedGroups {
+		ag := agl.Get(i)
+		if ag.Key() != 0 { // existing entry, update
+			if _, err = qaeu.Exec(ag.Encode(), ag.Key()); err != nil {
+				break
+			}
+		} else {
+			// new entry, insert
+			if result, err = qaei.Exec(ag.Encode()); err != nil {
+				break
+			}
+			var key int64
+			if key, err = result.LastInsertId(); err != nil {
+				break
+			}
+			ag.SetKey(key)
+		}
+	}
+	return
+}
+
+func accountsNewCreate(qabi *sql.Stmt, qaei *sql.Stmt, addr basics.Address, pad ledgercore.PersistedAccountData, proto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
 	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 	if len(pad.Assets) > assetsThreshold {
 		pad.ExtendedAssetHolding.ConvertToGroups(pad.Assets)
 		pad.AccountData.Assets = nil
 	}
 
-	var result sql.Result
-	var err error
-	for i := 0; i < len(pad.ExtendedAssetHolding.Groups); i++ {
-		result, err = qaei.Exec(pad.ExtendedAssetHolding.Groups[i].Encode())
-		if err != nil {
-			break
-		}
-		pad.ExtendedAssetHolding.Groups[i].AssetGroupKey, err = result.LastInsertId()
-		if err != nil {
-			break
-		}
+	if len(pad.AssetParams) > assetsThreshold {
+		pad.ExtendedAssetParams.ConvertToGroups(pad.AssetParams)
+		pad.AccountData.AssetParams = nil
 	}
 
+	// save holdings
+	var result sql.Result
+	var err error
+	err = modifyAssetGroup(qaei, &pad.ExtendedAssetHolding)
+	if err != nil {
+		return updatedAccounts, err
+	}
+
+	// save params
+	err = modifyAssetGroup(qaei, &pad.ExtendedAssetParams)
+	if err != nil {
+		return updatedAccounts, err
+	}
+
+	normBalance := pad.AccountData.NormalizedOnlineBalance(proto)
+	result, err = qabi.Exec(addr[:], normBalance, protocol.Encode(&pad))
 	if err == nil {
-		normBalance := pad.AccountData.NormalizedOnlineBalance(genesisProto)
-		result, err = qabi.Exec(addr[:], normBalance, protocol.Encode(&pad))
-		if err == nil {
-			updatedAccounts[updateIdx].rowid, err = result.LastInsertId()
-			updatedAccounts[updateIdx].pad = pad
-		}
+		updatedAccounts[updateIdx].rowid, err = result.LastInsertId()
+		updatedAccounts[updateIdx].pad = pad
 	}
 	return updatedAccounts, err
 }
@@ -1352,15 +1547,27 @@ func accountsNewDelete(qabd *sql.Stmt, qaed *sql.Stmt, addr basics.Address, dbad
 	if rowsAffected != 1 {
 		err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, dbad.rowid)
 	} else {
-		// if no error delete extension records
-		for _, g := range dbad.pad.ExtendedAssetHolding.Groups {
-			result, err = qaed.Exec(g.AssetGroupKey)
-			if err != nil {
-				break
-			}
+		// if no error => delete extension records
+		err = deleteAssetGroup(qaed, &dbad.pad.ExtendedAssetHolding)
+		if err == nil {
+			err = deleteAssetGroup(qaed, &dbad.pad.ExtendedAssetParams)
 		}
 	}
 	return updatedAccounts, err
+}
+
+func filterCreatedDeleted(assets ledgercore.EntityDelta, cr ledgercore.EntityAction, dl ledgercore.EntityAction) (created, deleted []basics.AssetIndex) {
+	created = make([]basics.AssetIndex, 0, len(assets)/2)
+	deleted = make([]basics.AssetIndex, 0, len(assets)/2)
+
+	for cidx, action := range assets {
+		if action == cr {
+			created = append(created, basics.AssetIndex(cidx))
+		} else if action == dl {
+			deleted = append(deleted, basics.AssetIndex(cidx))
+		}
+	}
+	return
 }
 
 // accountsNewUpdate reconciles old and new AccountData in delta.
@@ -1373,7 +1580,7 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 		return updatedAccounts, fmt.Errorf("extended holdings count mismatch (old) %d != %d (new)", delta.old.pad.ExtendedAssetHolding.Count, delta.new.ExtendedAssetHolding.Count)
 	}
 
-	// Reconciliation asset holdings logic:
+	// Reconciliation asset holdings (and asset params) logic:
 	// old.Assets must always have the assets modified in new (see accountsLoadOld)
 	// PersistedAccountData stores the data either in Assets field or as ExtendedHoldings
 	// this means:
@@ -1385,61 +1592,44 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 	//  - if the result is above the threshold then merge in changes into group data
 	var pad ledgercore.PersistedAccountData
 	var err error
+	pad.AccountData = delta.new.AccountData
+
 	if delta.old.pad.NumAssetHoldings() <= assetsThreshold && len(delta.new.Assets) <= assetsThreshold {
-		pad.AccountData = delta.new.AccountData
+		// AccountData assigned above
+		// Do not use delta.assets map of deleted/created since entire Assets is being replaced
 	} else if delta.old.pad.NumAssetHoldings() <= assetsThreshold && len(delta.new.Assets) > assetsThreshold {
-		pad.ExtendedAssetHolding.ConvertToGroups(delta.new.Assets)
-		pad.AccountData = delta.new.AccountData
+		_, deleted := filterCreatedDeleted(delta.createdDeletedHoldings, ledgercore.ActionHoldingCreate, ledgercore.ActionHoldingDelete)
+		assets := make(map[basics.AssetIndex]basics.AssetHolding, len(delta.old.pad.Assets)+len(delta.new.Assets)-len(deleted))
+		for aidx, holding := range delta.old.pad.Assets {
+			assets[aidx] = holding
+		}
+		for _, aidx := range deleted {
+			delete(assets, aidx)
+		}
+		for aidx, holding := range delta.new.Assets {
+			assets[aidx] = holding
+		}
+
+		pad.ExtendedAssetHolding.ConvertToGroups(assets)
 		pad.AccountData.Assets = nil
 
 		// update group data DB table
-		var result sql.Result
-		for i := 0; i < len(pad.ExtendedAssetHolding.Groups); i++ {
-			result, err = qaei.Exec(pad.ExtendedAssetHolding.Groups[i].Encode())
-			if err != nil {
-				break
-			}
-			pad.ExtendedAssetHolding.Groups[i].AssetGroupKey, err = result.LastInsertId()
-			if err != nil {
-				break
-			}
-		}
+		err = modifyAssetGroup(qaei, &pad.ExtendedAssetHolding)
 	} else { // default case: delta.old.pad.NumAssetHoldings() > assetsThreshold
-		deleted := make([]basics.AssetIndex, 0, len(delta.holdings))
-		created := make([]basics.AssetIndex, 0, len(delta.holdings))
 
-		for aidx, action := range delta.holdings {
-			if action == ledgercore.ActionDelete {
-				deleted = append(deleted, aidx)
-			} else {
-				created = append(created, aidx)
-			}
-		}
-
-		pad = delta.new
+		created, deleted := filterCreatedDeleted(delta.createdDeletedHoldings, ledgercore.ActionHoldingCreate, ledgercore.ActionHoldingDelete)
+		pad.ExtendedAssetHolding = delta.new.ExtendedAssetHolding
 		oldPad := delta.old.pad
 		oldPadRound := delta.old.round
 
 		newCount := oldPad.NumAssetHoldings() + len(created) - len(deleted)
 		if newCount < assetsThreshold {
 			// Move all assets from groups to Assets field
-			assets, _, err := loadHoldings(qabq, oldPad.ExtendedAssetHolding, oldPadRound)
+			assets, err := collapseAssetHoldings(qabq, qaed, oldPad.ExtendedAssetHolding, delta.new.Assets, deleted, oldPadRound)
 			if err != nil {
 				return updatedAccounts, err
 			}
-			for _, aidx := range deleted {
-				delete(assets, aidx)
-			}
-			// copy created + deleted from delta.new
-			for aidx, holding := range delta.new.Assets {
-				assets[aidx] = holding
-			}
 			pad.AccountData.Assets = assets
-
-			// now delete all old groups
-			for _, g := range oldPad.ExtendedAssetHolding.Groups {
-				qaed.Exec(g.AssetGroupKey)
-			}
 			pad.ExtendedAssetHolding = ledgercore.ExtendedAssetHolding{}
 		} else {
 			// Reconcile groups data:
@@ -1447,89 +1637,128 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 
 			updated := make([]basics.AssetIndex, 0, len(delta.new.Assets))
 			for aidx := range delta.new.Assets {
-				if _, ok := delta.holdings[aidx]; !ok {
+				if _, ok := delta.createdDeletedHoldings[basics.CreatableIndex(aidx)]; !ok {
 					updated = append(updated, aidx)
 				}
 			}
 
 			pad.ExtendedAssetHolding = oldPad.ExtendedAssetHolding
 			if len(updated) > 0 {
-				sort.SliceStable(updated, func(i, j int) bool { return updated[i] < updated[j] })
-				gi, ai := 0, 0
-				for _, aidx := range updated {
-					gi, ai = pad.ExtendedAssetHolding.FindAsset(aidx, gi)
-					if gi == -1 || ai == -1 {
-						return updatedAccounts, fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
-					}
-					// group data is loaded in accountsLoadOld
-					pad.ExtendedAssetHolding.Groups[gi].Update(ai, delta.new.Assets[aidx])
+				err = pad.ExtendedAssetHolding.Update(updated, delta.new.Assets)
+				if err != nil {
+					return updatedAccounts, err
 				}
 			}
 
 			if len(deleted) > 0 {
-				// TODO: possible optimizations:
-				// 1. pad.NumAssetHoldings() == len(deleted)
-				// 2. deletion of entire group
-				sort.SliceStable(deleted, func(i, j int) bool { return deleted[i] < deleted[j] })
-				gi, ai := 0, 0
-				for _, aidx := range deleted {
-					gi, ai = pad.ExtendedAssetHolding.FindAsset(aidx, gi)
-					if gi == -1 || ai == -1 {
-						return updatedAccounts, fmt.Errorf("failed to find asset group for %d: (%d, %d)", aidx, gi, ai)
-					}
-					// group data is loaded in accountsLoadOld
-					key := pad.ExtendedAssetHolding.Groups[gi].AssetGroupKey
-					if pad.ExtendedAssetHolding.Delete(gi, ai) {
-						// the only one asset was in the group, delete the group
-						_, err = qaed.Exec(key)
-						if err != nil {
-							return updatedAccounts, err
-						}
+				keysToDelete, err := pad.ExtendedAssetHolding.Delete(deleted)
+				if err != nil {
+					return updatedAccounts, err
+				}
+				for _, key := range keysToDelete {
+					_, err = qaed.Exec(key)
+					if err != nil {
+						return updatedAccounts, err
 					}
 				}
 			}
 
 			if len(created) > 0 {
-				// sort created, they do not exist in old
-				sort.SliceStable(created, func(i, j int) bool { return created[i] < created[j] })
 				pad.ExtendedAssetHolding.Insert(created, delta.new.Assets)
 			}
 
 			loaded, deletedKeys := pad.ExtendedAssetHolding.Merge()
 
 			// update DB
-			for _, key := range deletedKeys {
-				_, err = qaed.Exec(key)
+			err = assetsUpdateGroupDataDB(qaei, qaeu, qaed, &pad.ExtendedAssetHolding, loaded, deletedKeys)
+			pad.AccountData.Assets = nil
+		}
+	}
+
+	// same logic as above but for asset params
+	if delta.old.pad.NumAssetParams() <= assetsThreshold && len(delta.new.AssetParams) <= assetsThreshold {
+		// AccountData assigned above
+		// Do not use delta.assets map of deleted/created since entire AssetParams is being replaced
+	} else if delta.old.pad.NumAssetParams() <= assetsThreshold && len(delta.new.AssetParams) > assetsThreshold {
+		_, deleted := filterCreatedDeleted(delta.createdDeletedParams, ledgercore.ActionParamsCreate, ledgercore.ActionParamsDelete)
+		assets := make(map[basics.AssetIndex]basics.AssetParams, len(delta.old.pad.AssetParams)+len(delta.new.AssetParams)-len(deleted))
+		for aidx, params := range delta.old.pad.AssetParams {
+			assets[aidx] = params
+		}
+		for _, aidx := range deleted {
+			delete(assets, aidx)
+		}
+		for aidx, params := range delta.new.AssetParams {
+			assets[aidx] = params
+		}
+
+		pad.ExtendedAssetParams.ConvertToGroups(assets)
+		pad.AccountData.AssetParams = nil
+
+		// update group data DB table
+		err = modifyAssetGroup(qaei, &pad.ExtendedAssetParams)
+	} else { // default case: delta.old.pad.NumAssetHoldings() > assetsThreshold
+
+		created, deleted := filterCreatedDeleted(delta.createdDeletedParams, ledgercore.ActionParamsCreate, ledgercore.ActionParamsDelete)
+
+		pad.ExtendedAssetParams = delta.new.ExtendedAssetParams
+		oldPad := delta.old.pad
+		oldPadRound := delta.old.round
+
+		newCount := oldPad.NumAssetParams() + len(created) - len(deleted)
+		if newCount < assetsThreshold {
+			// Move all assets from groups to Assets field
+			assets, err := collapseAssetParams(qabq, qaed, oldPad.ExtendedAssetParams, delta.new.AssetParams, deleted, oldPadRound)
+			if err != nil {
+				return updatedAccounts, err
+			}
+			pad.AccountData.AssetParams = assets
+			pad.ExtendedAssetParams = ledgercore.ExtendedAssetParams{}
+		} else {
+			// Reconcile groups data:
+			// identify groups, load, update, then delete and insert, dump to the disk
+
+			updated := make([]basics.AssetIndex, 0, len(delta.new.AssetParams))
+			for aidx := range delta.new.AssetParams {
+				if _, ok := delta.createdDeletedParams[basics.CreatableIndex(aidx)]; !ok {
+					updated = append(updated, aidx)
+				}
+			}
+
+			pad.ExtendedAssetParams = oldPad.ExtendedAssetParams
+			if len(updated) > 0 {
+				err = pad.ExtendedAssetParams.Update(updated, delta.new.AssetParams)
 				if err != nil {
 					return updatedAccounts, err
 				}
 			}
 
-			var result sql.Result
-			for _, i := range loaded {
-				if pad.ExtendedAssetHolding.Groups[i].AssetGroupKey != 0 { // existing entry, update
-					_, err = qaeu.Exec(
-						pad.ExtendedAssetHolding.Groups[i].Encode(),
-						pad.ExtendedAssetHolding.Groups[i].AssetGroupKey)
+			if len(deleted) > 0 {
+				keysToDelete, err := pad.ExtendedAssetParams.Delete(deleted)
+				if err != nil {
+					return updatedAccounts, err
+				}
+				for _, key := range keysToDelete {
+					_, err = qaed.Exec(key)
 					if err != nil {
-						break
-					}
-				} else {
-					// new entry, insert
-					result, err = qaei.Exec(pad.ExtendedAssetHolding.Groups[i].Encode())
-					if err != nil {
-						break
-					}
-					pad.ExtendedAssetHolding.Groups[i].AssetGroupKey, err = result.LastInsertId()
-					if err != nil {
-						break
+						return updatedAccounts, err
 					}
 				}
 			}
-			// reset the cache in old.pad
-			pad.AccountData.Assets = nil
+
+			if len(created) > 0 {
+				pad.ExtendedAssetParams.Insert(created, delta.new.AssetParams)
+			}
+
+			loaded, deletedKeys := pad.ExtendedAssetParams.Merge()
+
+			// update DB
+			err = assetsUpdateGroupDataDB(qaei, qaeu, qaed, &pad.ExtendedAssetParams, loaded, deletedKeys)
+			pad.AccountData.AssetParams = nil
 		}
 	}
+
+	// update accountbase
 	if err == nil {
 		var rowsAffected int64
 		normBalance := delta.new.NormalizedOnlineBalance(genesisProto)

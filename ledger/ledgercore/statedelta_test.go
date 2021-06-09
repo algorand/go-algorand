@@ -149,3 +149,44 @@ func BenchmarkTxLeases(b *testing.B) {
 		}
 	}
 }
+
+func TestEntityDeltaUpdate(t *testing.T) {
+	a := require.New(t)
+
+	o := EntityDelta{
+		1: ActionHoldingCreate,
+		2: ActionHoldingCreate,
+		3: ActionHoldingCreate,
+	}
+
+	n := EntityDelta{
+		1: ActionHoldingDelete,
+		4: ActionHoldingDelete,
+	}
+
+	r := o.Update(n)
+
+	a.Equal(
+		EntityDelta{
+			1: ActionHoldingCreate,
+			2: ActionHoldingCreate,
+			3: ActionHoldingCreate,
+		},
+		o)
+
+	a.Equal(
+		EntityDelta{
+			1: ActionHoldingDelete,
+			4: ActionHoldingDelete,
+		},
+		n)
+
+	a.Equal(
+		EntityDelta{
+			1: ActionHoldingDelete,
+			2: ActionHoldingCreate,
+			3: ActionHoldingCreate,
+			4: ActionHoldingDelete,
+		},
+		r)
+}

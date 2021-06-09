@@ -69,7 +69,7 @@ func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (
 	return balances.b[addr], nil
 }
 
-func (balances mockBalances) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.AccountData, error) {
+func (balances mockBalances) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, global bool, local bool) (basics.AccountData, error) {
 	return balances.b[addr], nil
 }
 

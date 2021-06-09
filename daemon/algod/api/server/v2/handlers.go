@@ -98,7 +98,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 
 	myLedger := v2.Node.Ledger()
 	lastRound := myLedger.Latest()
-	record, err := myLedger.Lookup(lastRound, addr)
+	record, err := myLedger.LookupFull(lastRound, addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -713,7 +713,7 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 	}
 
 	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, creator)
+	record, err := ledger.LookupCreatableDataWithoutRewards(lastRound, creator, basics.CreatableIndex(assetID), basics.AssetCreatable)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
