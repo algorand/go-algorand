@@ -29,7 +29,7 @@ const (
 	vrfSuite = 0x04 // ECVRF-ED25519-SHA512-Elligator2
 )
 
-// VrfKeygenFromSeed deterministically generates a VRF keypair from 32 bytes of (secret) entropy.
+// VrfKeygenFromSeedGo deterministically generates a VRF keypair from 32 bytes of (secret) entropy.
 func VrfKeygenFromSeedGo(seed [32]byte) (VrfPubkey, VrfPrivkey) {
 	var pk VrfPubkey
 	var sk VrfPrivkey
@@ -53,18 +53,14 @@ func VrfKeygenFromSeedGo(seed [32]byte) (VrfPubkey, VrfPrivkey) {
 
 func (pk VrfPubkey) verifyBytesGo(proof VrfProof, msg []byte) (bool, VrfOutput) {
 	var out VrfOutput
-	h, err := crypto_vrf_verify(pk[:], proof[:], msg)
+	h, err := vrfVerifyAndHash(pk[:], proof[:], msg)
 	if err != nil {
-		// TODO: this method should return an error.
+		// TODO: this method should probably return an error.
 		// fmt.Println("issue verifying:", err)
 		return false, out
 	}
 	copy(out[:], h)
 	return true, out
-}
-
-func crypto_vrf_verify(pk []byte, proof []byte, msg []byte) ([]byte, error) {
-	return crypto_vrf_ietfdraft03_verify(pk, proof, msg)
 }
 
 /* Verify a VRF proof (for a given a public key and message) and validate the
@@ -74,8 +70,7 @@ func crypto_vrf_verify(pk []byte, proof []byte, msg []byte) ([]byte, error) {
  * For a given public key and message, there are many possible proofs but only
  * one possible output hash.
  */
-func crypto_vrf_ietfdraft03_verify(pk []byte, proof []byte, msg []byte) ([]byte, error) {
-	// var Y ge25519_p3
+func vrfVerifyAndHash(pk []byte, proof []byte, msg []byte) ([]byte, error) {
 	Y := &edwards25519.Point{}
 	// validate key
 	if _, err := Y.SetBytes(pk); err != nil {
@@ -86,7 +81,7 @@ func crypto_vrf_ietfdraft03_verify(pk []byte, proof []byte, msg []byte) ([]byte,
 		return nil, fmt.Errorf("expected key to have small order")
 	}
 	// vrf_verify
-	ok, err := vrf_verify(Y, proof, msg)
+	ok, err := vrfVerify(Y, proof, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +89,7 @@ func crypto_vrf_ietfdraft03_verify(pk []byte, proof []byte, msg []byte) ([]byte,
 		return nil, fmt.Errorf("issue verifying proof")
 	}
 	// proof to hash
-	return crypto_vrf_ietfdraft03_proof_to_hash(proof)
+	return cryptoVrfIetfdraft03ProofToHash(proof)
 }
 
 /* Utility function to convert a "secret key" (32-byte seed || 32-byte PK)
@@ -120,22 +115,19 @@ func (sk VrfPrivkey) expand() (*edwards25519.Point, *edwards25519.Scalar, []byte
 }
 
 func (sk VrfPrivkey) proveBytesGo(msg []byte) (proof VrfProof, ok bool) {
-
 	// inlined vrf_expand_sk
-	Y_point, x_scalar, truncated_hashed_sk_string, err := sk.expand()
+	Y, xScalar, truncatedHashedSkString, err := sk.expand()
 	if err != nil {
 		// TODO: this method should return an error.
 		// fmt.Println("issue expanding:", err)
 		return proof, false
 	}
-
-	proof, err = vrf_prove(Y_point, x_scalar, truncated_hashed_sk_string, msg)
+	proof, err = pureGoVrfProve(Y, xScalar, truncatedHashedSkString, msg)
 	if err != nil {
 		// TODO: this method should return an error.
 		// fmt.Println("issue proving:", err)
 		return proof, false
 	}
-
 	return proof, err == nil
 }
 
@@ -143,61 +135,31 @@ func (sk VrfPrivkey) proveBytesGo(msg []byte) (proof VrfProof, ok bool) {
  * Takes in a secret scalar x, a public point Y, and a secret string
  * truncated_hashed_sk that is used in nonce generation.
  * These are computed from the secret key using the expand_sk function.
- * Constant time in everything except alphalen (the length of the message)
+ * Constant time in everything except the length of alpha.
  */
-func vrf_prove(Y_point *edwards25519.Point, x_scalar *edwards25519.Scalar, trunc_hashed_sk []byte, alpha []byte) (VrfProof, error) {
+func pureGoVrfProve(Y *edwards25519.Point, xScalar *edwards25519.Scalar, truncHashedSk []byte, alpha []byte) (VrfProof, error) {
 	var pi VrfProof
-	//var h_string, k_scalar, c_scalar []byte
-	//	var H_point, Gamma_point, kB_point, kH_point *edwards25519.Point
-
-	h_string, err := _vrf_ietfdraft03_hash_to_curve_elligator2_25519(Y_point, alpha)
+	H, err := vrfHashToCurveElligator225519(Y, alpha)
 	if err != nil {
 		return VrfProof{}, err
 	}
-	//spew.Dump("x_scalar", x_scalar.Bytes())
-	H_point := edwards25519.NewIdentityPoint()
-	H_point.SetBytes(h_string)
-	// fmt.Printf("h string: %x\n", h_string)
-	// fmt.Printf("h poitn: %x\n", H_point.Bytes())
-	Gamma_point := edwards25519.NewIdentityPoint()
-	Gamma_point.ScalarMult(x_scalar, H_point)
-	//fmt.Println(h_string)
+	Gamma := edwards25519.NewIdentityPoint()
+	Gamma.ScalarMult(xScalar, H)
 
-	/*
-		vrf_nonce_generation(k_scalar, truncated_hashed_sk_string, h_string)
-		ge25519_scalarmult_base(&kB_point, k_scalar)      // compute k*B
-		ge25519_scalarmult(&kH_point, k_scalar, &H_point) // compute k*H
-	*/
-	k_scalar := vrf_nonce_generation(trunc_hashed_sk, H_point)
-	// fmt.Printf("g k_scalar: %x\n", k_scalar.Bytes())
-	// fmt.Printf("g h_point: %x\n", H_point.Bytes())
-	// fmt.Printf("g trunc_hash: %x\n", trunc_hashed_sk)
-	kB_point := edwards25519.NewIdentityPoint()
-	kB_point.ScalarBaseMult(k_scalar)
-	kH_point := edwards25519.NewIdentityPoint()
-	kH_point.ScalarMult(k_scalar, H_point)
-	// fmt.Printf("g kB_point: %x\n", kB_point.Bytes())
-	// fmt.Printf("g kH_point: %x\n", kH_point.Bytes())
+	kScalar := vrfNonceGeneration(truncHashedSk, H)
+	kB := edwards25519.NewIdentityPoint()
+	kB.ScalarBaseMult(kScalar)
+	kH := edwards25519.NewIdentityPoint()
+	kH.ScalarMult(kScalar, H)
 
-	c_scalar := _vrf_ietfdraft03_hash_points(H_point, Gamma_point, kB_point, kH_point)
-	// fmt.Printf("g c_scalar: %x\n", c_scalar)
+	cScalar := vrfHashPoints(H, Gamma, kB, kH)
 	s := edwards25519.NewScalar()
-	s.MultiplyAdd(c_scalar, x_scalar, k_scalar)
+	s.MultiplyAdd(cScalar, xScalar, kScalar)
 
 	// output pi
-	copy(pi[:], Gamma_point.Bytes())
-	copy(pi[32:], c_scalar.Bytes()[:16])
+	copy(pi[:], Gamma.Bytes())
+	copy(pi[32:], cScalar.Bytes()[:16])
 	copy(pi[48:], s.Bytes())
-	/*
-		// c = ECVRF_hash_points(h, gamma, k*B, k*H)
-		_vrf_ietfdraft03_hash_points(c_scalar, &H_point, &Gamma_point, &kB_point, &kH_point)
-		memset(c_scalar+16, 0, 16) // zero the remaining 16 bytes of c_scalar
-
-		// output pi
-		_vrf_ietfdraft03_point_to_string(pi, &Gamma_point)  // pi[0:32] = point_to_string(Gamma)
-		memmove(pi+32, c_scalar, 16)                        // pi[32:48] = c (16 bytes)
-		sc25519_muladd(pi+48, c_scalar, x_scalar, k_scalar) // pi[48:80] = s = c*x + k (mod q)
-	*/
 	return pi, nil
 }
 
@@ -206,54 +168,40 @@ func vrf_prove(Y_point *edwards25519.Point, x_scalar *edwards25519.Scalar, trunc
  * The actual elligator2 implementation is ge25519_from_uniform.
  * Runtime depends only on alphalen (the message length)
  */
-func _vrf_ietfdraft03_hash_to_curve_elligator2_25519(Y_point *edwards25519.Point, alpha []byte) ([]byte, error) {
+func vrfHashToCurveElligator225519(Y *edwards25519.Point, alpha []byte) (*edwards25519.Point, error) {
 	hs := sha512.New()
 
 	hs.Write([]byte{vrfSuite})
 	hs.Write([]byte{1})
-	hs.Write(Y_point.Bytes())
+	hs.Write(Y.Bytes())
 	hs.Write(alpha)
-	r_string := hs.Sum(nil)
-	r_string[31] &= 0x7f // clear sign bit
+	rString := hs.Sum(nil)
+	rString[31] &= 0x7f // clear sign bit
 
-	/*
-	   crypto_hash_sha512_state hs;
-	   unsigned char            Y_string[32], r_string[64];
-
-	   _vrf_ietfdraft03_point_to_string(Y_string, Y_point);
-
-	   // r = first 32 bytes of SHA512(suite || 0x01 || Y || alpha)
-	   crypto_hash_sha512_init(&hs);
-	   crypto_hash_sha512_update(&hs, &SUITE, 1);
-	   crypto_hash_sha512_update(&hs, &ONE, 1);
-	   crypto_hash_sha512_update(&hs, Y_string, 32);
-	   crypto_hash_sha512_update(&hs, alpha, alphalen);
-	   crypto_hash_sha512_final(&hs, r_string);
-
-	   r_string[31] &= 0x7f; // clear sign bit
-	   ge25519_from_uniform(H_string, r_string); // elligator2
-	*/
-	h, err := ge25519_from_uniform(r_string)
-	return h, err
+	hBytes, err := ge25519FromUniform(rString)
+	if err != nil {
+		return nil, err
+	}
+	result := &edwards25519.Point{}
+	result.SetBytes(hBytes[:]) // ge25519_frombytes(&H_point, h_string);
+	return result, nil
 }
 
 // elligator2
-func ge25519_from_uniform(r []byte) ([]byte, error) {
+func ge25519FromUniform(r []byte) ([]byte, error) {
 	s := make([]byte, 32)
 	var e, negx, rr2, x, x2, x3 *field.Element
 	var p3 *edwards25519.Point
-	var e_is_minus_1 int
-	var x_sign byte
+	var eIsMinus1 int
+	var xSign byte
 
 	copy(s, r)
-	x_sign = s[31] & 0x80
+	xSign = s[31] & 0x80
 	s[31] &= 0x7f
-	// fmt.Println("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 
 	rr2 = &field.Element{}
 	rr2.SetBytes(s) // fe25519_frombytes(rr2, s);
 
-	//rr2a := &field.Element{}.One().Mult32
 	// elligator
 	rr2.Square(rr2) // fe25519_sq2(rr2, rr2);
 	rr2.Add(rr2, rr2)
@@ -269,7 +217,6 @@ func ge25519_from_uniform(r []byte) ([]byte, error) {
 
 	x.Mult32(rr2, curve25519A) // fe25519_mul(x, curve25519_A, rr2);
 	x.Negate(x)                // fe25519_neg(x, x);
-	// fmt.Printf("g rr2: %x\n", rr2.Bytes())
 
 	x2 = &field.Element{}
 	x2.Multiply(x, x) // fe25519_sq(x2, x);
@@ -282,41 +229,30 @@ func ge25519_from_uniform(r []byte) ([]byte, error) {
 	e.Add(x2, e)               // fe25519_add(e, x2, e);
 
 	e = chi25519(e) // chi25519(e, e);
-	// fmt.Printf("g  e1: %x\n", e.Bytes())
-	s = e.Bytes() // fe25519_tobytes(s, e);
+	s = e.Bytes()   // fe25519_tobytes(s, e);
 
-	e_is_minus_1 = int(s[1] & 1) // e_is_minus_1 = s[1] & 1;
-	e_is_not_minus_1 := e_is_minus_1 ^ 1
+	eIsMinus1 = int(s[1] & 1) // e_is_minus_1 = s[1] & 1;
+	eIsNotMinus1 := eIsMinus1 ^ 1
 	negx = (&field.Element{}).Set(x)
-	negx.Negate(negx)                   // fe25519_neg(negx, x);
-	x.Select(x, negx, e_is_not_minus_1) // fe25519_cmov(x, negx, e_is_minus_1);
-	// fmt.Printf("x: %x\n", x.Bytes())
-	// fmt.Printf("negx: %x\n", x.Bytes())
-	x2.Zero() // fe25519_0(x2);
-	// fmt.Printf("curve: %x\n", curve25519AElement.Bytes())
-	// fmt.Printf("x2: %x\n", x2.Bytes())
-	// fmt.Printf("e_is_minus_1: %+v\n", e_is_minus_1)
-	x2.Select(x2, curve25519AElement, e_is_not_minus_1) // fe25519_cmov(x2, curve25519_A, e_is_minus_1);
-	x.Subtract(x, x2)                                   // fe25519_sub(x, x, x2);
+	negx.Negate(negx)                               // fe25519_neg(negx, x);
+	x.Select(x, negx, eIsNotMinus1)                 // fe25519_cmov(x, negx, e_is_minus_1);
+	x2.Zero()                                       // fe25519_0(x2);
+	x2.Select(x2, curve25519AElement, eIsNotMinus1) // fe25519_cmov(x2, curve25519_A, e_is_minus_1);
+	x.Subtract(x, x2)                               // fe25519_sub(x, x, x2);
 	// yed = (x-1)/(x+1)
 	{
-		var one, x_plus_one, x_plus_one_inv, x_minus_one, yed *field.Element
-		// fe25519 one;
-		// fe25519 x_plus_one;
-		// fe25519 x_plus_one_inv;
-		// fe25519 x_minus_one;
-		// fe25519 yed;
+		var one, xPlusOne, xPlusOneInv, xMinusOne, yed *field.Element
 
-		one = (&field.Element{}).One()                                 // fe25519_1(one);
-		x_plus_one = (&field.Element{}).Add(x, one)                    // fe25519_add(x_plus_one, x, one);
-		x_minus_one = (&field.Element{}).Subtract(x, one)              // fe25519_sub(x_minus_one, x, one);
-		x_plus_one_inv = (&field.Element{}).Invert(x_plus_one)         // fe25519_invert(x_plus_one_inv, x_plus_one);
-		yed = (&field.Element{}).Multiply(x_minus_one, x_plus_one_inv) // fe25519_mul(yed, x_minus_one, x_plus_one_inv);
-		s = yed.Bytes()                                                // fe25519_tobytes(s, yed);
+		one = (&field.Element{}).One()                            // fe25519_1(one);
+		xPlusOne = (&field.Element{}).Add(x, one)                 // fe25519_add(x_plus_one, x, one);
+		xMinusOne = (&field.Element{}).Subtract(x, one)           // fe25519_sub(x_minus_one, x, one);
+		xPlusOneInv = (&field.Element{}).Invert(xPlusOne)         // fe25519_invert(x_plus_one_inv, x_plus_one);
+		yed = (&field.Element{}).Multiply(xMinusOne, xPlusOneInv) // fe25519_mul(yed, x_minus_one, x_plus_one_inv);
+		s = yed.Bytes()                                           // fe25519_tobytes(s, yed);
 	}
 
 	// recover x
-	s[31] |= x_sign
+	s[31] |= xSign
 
 	p3 = &edwards25519.Point{}
 	_, err := p3.SetBytes(s) // ge25519_frombytes(&p3, s) != 0
@@ -327,28 +263,19 @@ func ge25519_from_uniform(r []byte) ([]byte, error) {
 
 	// // multiply by the cofactor
 	p3.MultByCofactor(p3)
-	// ge25519_p3_dbl(&p1, &p3);
-	// ge25519_p1p1_to_p2(&p2, &p1);
-	// ge25519_p2_dbl(&p1, &p2);
-	// ge25519_p1p1_to_p2(&p2, &p1);
-	// ge25519_p2_dbl(&p1, &p2);
-	// ge25519_p1p1_to_p3(&p3, &p1);
 
 	s = p3.Bytes() // ge25519_p3_tobytes(s, &p3);
-	// fmt.Printf("g elligator 2: %x\n", s)
 	return s, nil
 }
 
-func vrf_nonce_generation(trunc_hashed_sk []byte, H_point *edwards25519.Point) *edwards25519.Scalar {
+func vrfNonceGeneration(truncHashedSk []byte, H *edwards25519.Point) *edwards25519.Scalar {
 	result := edwards25519.NewScalar()
 
 	hs := sha512.New()
-	hs.Write(trunc_hashed_sk)
-	hs.Write(H_point.Bytes())
-	k_string := hs.Sum(nil)[:64]
-	result.SetUniformBytes(k_string)
-	// fmt.Printf("g k_string: %x\n", k_string)
-	// fmt.Printf("g k_string2: %x\n", result.Bytes())
+	hs.Write(truncHashedSk)
+	hs.Write(H.Bytes())
+	kString := hs.Sum(nil)[:64]
+	result.SetUniformBytes(kString)
 
 	return result
 }
@@ -356,7 +283,7 @@ func vrf_nonce_generation(trunc_hashed_sk []byte, H_point *edwards25519.Point) *
 /* Subroutine specified in draft spec section 5.4.3.
  * Hashes four points to a 16-byte string.
  * Constant time. */
-func _vrf_ietfdraft03_hash_points(P1, P2, P3, P4 *edwards25519.Point) *edwards25519.Scalar {
+func vrfHashPoints(P1, P2, P3, P4 *edwards25519.Point) *edwards25519.Scalar {
 	result := make([]byte, 32)
 	var str [2 + (32 * 4)]byte
 
@@ -367,30 +294,10 @@ func _vrf_ietfdraft03_hash_points(P1, P2, P3, P4 *edwards25519.Point) *edwards25
 	copy(str[2+(32*2):], P3.Bytes())
 	copy(str[2+(32*3):], P4.Bytes())
 	h := sha512.New()
-	//var c1 [32]byte
-	// fmt.Printf("gPN %x\n", P4.Bytes())
 	h.Write(str[:])
 	sum := h.Sum(nil)
-	// fmt.Printf("g sum %x\n", sum)
 
 	copy(result[:], sum[:16])
-	// sum := h.Sum(str[:])
-	// fmt.Println("sum:", sum)
-	// result.SetBytes(c1[:])
-	// result.SetBytes(c1[:])
-	/*
-	   unsigned char str[2r32*4], c1[64];
-
-	   str[0] = SUITE;
-	   str[1] = TWO;
-	   _vrf_ietfdraft03_point_to_string(str+2+32*0, P1);
-	   _vrf_ietfdraft03_point_to_string(str+2+32*1, P2);
-	   _vrf_ietfdraft03_point_to_string(str+2+32*2, P3);
-	   _vrf_ietfdraft03_point_to_string(str+2+32*3, P4);
-	   crypto_hash_sha512(c1, str, sizeof str);
-	   memmove(c, c1, 16);
-	   sodium_memzero(c1, 64);
-	*/
 	r := edwards25519.NewScalar()
 	r.SetCanonicalBytes(result)
 	return r
@@ -474,66 +381,47 @@ func chi25519(z *field.Element) *field.Element {
  * Assuming verification succeeds, runtime does not depend on the message alpha
  * (but does depend on its length alphalen)
  */
-func vrf_verify(Y *edwards25519.Point, pi []byte, alpha []byte) (bool, error) {
-	// // Note: c fits in 16 bytes, but ge25519_scalarmult expects a 32-byte scalar.
-	//  // Similarly, s_scalar fits in 32 bytes but sc25519_reduce takes in 64 bytes.
-	// unsigned char h_string[32], c_scalar[32], s_scalar[64], cprime[16];
-
-	var H_point, U_point, V_point *edwards25519.Point // ge25519_p3     H_point, Gamma_point, U_point, V_point, tmp_p3_point;
+func vrfVerify(Y *edwards25519.Point, pi []byte, alpha []byte) (bool, error) {
+	var U, V *edwards25519.Point // ge25519_p3     H_point, Gamma_point, U_point, V_point, tmp_p3_point;
 	var tmp1, tmp2 *edwards25519.Point
-	// ge25519_p1p1   tmp_p1p1_point;
-	// ge25519_cached tmp_cached_point;
 
-	Gamma_point, c_scalar, s_scalar, err := _vrf_ietfdraft03_decode_proof(pi) // _vrf_ietfdraft03_decode_proof(&Gamma_point, c_scalar, s_scalar, pi) != 0
-
-	// // vrf_decode_proof writes to the first 16 bytes of c_scalar; we zero the
-	// // second 16 bytes ourselves, as ge25519_scalarmult expects a 32-byte scalar.
-	// memset(c_scalar+16, 0, 16);
-
-	// // vrf_decode_proof sets only the first 32 bytes of s_scalar; we zero the
-	// // second 32 bytes ourselves, as sc25519_reduce expects a 64-byte scalar.
-	// // Reducing the scalar s mod q ensures the high order bit of s is 0, which
-	// // ref10's scalarmult functions require.
-	// memset(s_scalar+32, 0, 32);
-	// sc25519_reduce(s_scalar);
-
-	_ = s_scalar // TODO
-
-	h_string, err := _vrf_ietfdraft03_hash_to_curve_elligator2_25519(Y, alpha)
+	Gamma, cScalar, sScalar, err := vrfIetfdraft03DecodeProof(pi) // _vrf_ietfdraft03_decode_proof(&Gamma_point, c_scalar, s_scalar, pi) != 0
 	if err != nil {
 		return false, err
 	}
-	H_point = &edwards25519.Point{}
-	H_point.SetBytes(h_string[:]) // ge25519_frombytes(&H_point, h_string);
+	H, err := vrfHashToCurveElligator225519(Y, alpha)
+	if err != nil {
+		return false, err
+	}
 
 	// // calculate U = s*B - c*Y
 	tmp1 = &edwards25519.Point{}
 	// SetBytes needs 32 bytes while c_scalar is only 16 bytes long.
-	c_scalar_bytes := make([]byte, 64)
-	copy(c_scalar_bytes, c_scalar)
+	cScalarBytes := make([]byte, 64)
+	copy(cScalarBytes, cScalar)
 	c := edwards25519.NewScalar()
-	c.SetUniformBytes(c_scalar_bytes)
+	c.SetUniformBytes(cScalarBytes)
 	tmp1.ScalarMult(c, Y)
 	tmp2 = (&edwards25519.Point{}).Set(tmp1)
 	s := edwards25519.NewScalar()
-	s_scalar_bytes := make([]byte, 64)
-	copy(s_scalar_bytes, s_scalar)
-	s.SetUniformBytes(s_scalar_bytes)
+	sScalarBytes := make([]byte, 64)
+	copy(sScalarBytes, sScalar)
+	s.SetUniformBytes(sScalarBytes)
 	tmp1.ScalarBaseMult(s)
-	U_point = &edwards25519.Point{}
-	U_point.Subtract(tmp1, tmp2)
+	U = &edwards25519.Point{}
+	U.Subtract(tmp1, tmp2)
 
 	// // calculate V = s*H -  c*Gamma
 	tmp1 = &edwards25519.Point{}
-	tmp1.ScalarMult(s, H_point)
+	tmp1.ScalarMult(s, H)
 	tmp2 = &edwards25519.Point{}
-	tmp2.ScalarMult(c, Gamma_point)
-	V_point = &edwards25519.Point{}
-	V_point.Subtract(tmp1, tmp2)
+	tmp2.ScalarMult(c, Gamma)
+	V = &edwards25519.Point{}
+	V.Subtract(tmp1, tmp2)
 
-	cprime := _vrf_ietfdraft03_hash_points(H_point, Gamma_point, U_point, V_point) // _vrf_ietfdraft03_hash_points(cprime, &H_point, &Gamma_point, &U_point, &V_point);
+	cprime := vrfHashPoints(H, Gamma, U, V) // _vrf_ietfdraft03_hash_points(cprime, &H_point, &Gamma_point, &U_point, &V_point);
 
-	cmp := subtle.ConstantTimeCompare(c_scalar[:], cprime.Bytes()) // return crypto_verify_16(c_scalar, cprime);
+	cmp := subtle.ConstantTimeCompare(cScalar[:], cprime.Bytes()) // return crypto_verify_16(c_scalar, cprime);
 	return cmp == 1, nil
 }
 
@@ -542,19 +430,19 @@ func vrf_verify(Y *edwards25519.Point, pi []byte, alpha []byte) (bool, error) {
  * crypto_vrf_ietfdraft03_verify, which will output the hash if verification
  * succeeds.
  */
-func crypto_vrf_ietfdraft03_proof_to_hash(pi []byte) ([]byte, error) {
-	var hash_input [34]byte // unsigned char hash_input[2+32];
-	Gamma_point, _, _, err := _vrf_ietfdraft03_decode_proof(pi)
+func cryptoVrfIetfdraft03ProofToHash(pi []byte) ([]byte, error) {
+	var hashInput [34]byte // unsigned char hash_input[2+32];
+	Gamma, _, _, err := vrfIetfdraft03DecodeProof(pi)
 	if err != nil {
 		return nil, err
 	}
 	// beta_string = Hash(suite_string || three_string || point_to_string(cofactor * Gamma))
-	hash_input[0] = vrfSuite
-	hash_input[1] = 0x03
-	Gamma_point.MultByCofactor(Gamma_point)
-	copy(hash_input[2:], Gamma_point.Bytes())
+	hashInput[0] = vrfSuite
+	hashInput[1] = 0x03
+	Gamma.MultByCofactor(Gamma)
+	copy(hashInput[2:], Gamma.Bytes())
 	h := sha512.New()
-	h.Write(hash_input[:])
+	h.Write(hashInput[:])
 	return h.Sum(nil), nil
 }
 
@@ -562,7 +450,7 @@ func crypto_vrf_ietfdraft03_proof_to_hash(pi []byte) ([]byte, error) {
  * 32-byte scalar s, as specified in IETF draft section 5.4.4.
  * Returns 0 on success, nonzero on failure.
  */
-func _vrf_ietfdraft03_decode_proof(pi []byte) (gamma *edwards25519.Point, c []byte, s []byte, err error) {
+func vrfIetfdraft03DecodeProof(pi []byte) (gamma *edwards25519.Point, c []byte, s []byte, err error) {
 	if len(pi) != 80 {
 		return nil, nil, nil, fmt.Errorf("unexpected length of pi (must be 80)")
 	}
