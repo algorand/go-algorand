@@ -215,7 +215,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 			s.log.Infof("Incoming Txsync #%d late round %d", seq, peer.lastRound)
 			continue
 		}
-		txnGroups, err := decodeTransactionGroups(txMsg.TransactionGroups.Bytes, txMsg.TransactionGroups.CompressionFormat, s.genesisID, s.genesisHash)
+		txnGroups, err := decodeTransactionGroups(txMsg.TransactionGroups, s.genesisID, s.genesisHash)
 		if err != nil {
 			s.log.Warnf("failed to decode received transactions groups: %v\n", err)
 			continue

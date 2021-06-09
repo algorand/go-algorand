@@ -26112,8 +26112,8 @@ func (z *encodedTxns) MsgIsZero() bool {
 func (z *packedTransactionGroups) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 3 bits */
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
 	if (*z).CompressionFormat == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -26121,6 +26121,10 @@ func (z *packedTransactionGroups) MarshalMsg(b []byte) (o []byte) {
 	if len((*z).Bytes) == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
+	}
+	if (*z).LenDecompressedBytes == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -26134,6 +26138,11 @@ func (z *packedTransactionGroups) MarshalMsg(b []byte) (o []byte) {
 			// string "g"
 			o = append(o, 0xa1, 0x67)
 			o = msgp.AppendBytes(o, (*z).Bytes)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "l"
+			o = append(o, 0xa1, 0x6c)
+			o = msgp.AppendUint64(o, (*z).LenDecompressedBytes)
 		}
 	}
 	return
@@ -26184,6 +26193,14 @@ func (z *packedTransactionGroups) UnmarshalMsg(bts []byte) (o []byte, err error)
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			(*z).LenDecompressedBytes, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LenDecompressedBytes")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -26228,6 +26245,12 @@ func (z *packedTransactionGroups) UnmarshalMsg(bts []byte) (o []byte, err error)
 					err = msgp.WrapError(err, "CompressionFormat")
 					return
 				}
+			case "l":
+				(*z).LenDecompressedBytes, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "LenDecompressedBytes")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -26248,13 +26271,13 @@ func (_ *packedTransactionGroups) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *packedTransactionGroups) Msgsize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).Bytes) + 2 + msgp.ByteSize
+	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).Bytes) + 2 + msgp.ByteSize + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *packedTransactionGroups) MsgIsZero() bool {
-	return (len((*z).Bytes) == 0) && ((*z).CompressionFormat == 0)
+	return (len((*z).Bytes) == 0) && ((*z).CompressionFormat == 0) && ((*z).LenDecompressedBytes == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -26768,7 +26791,7 @@ func (z *transactionBlockMessage) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (len((*z).TransactionGroups.Bytes) == 0) && ((*z).TransactionGroups.CompressionFormat == 0) {
+	if (*z).TransactionGroups.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -26799,52 +26822,30 @@ func (z *transactionBlockMessage) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "g"
 			o = append(o, 0xa1, 0x67)
+			o = (*z).TransactionGroups.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "p"
+			o = append(o, 0xa1, 0x70)
 			// omitempty: check for empty values
 			zb0002Len := uint32(2)
 			var zb0002Mask uint8 /* 3 bits */
-			if (*z).TransactionGroups.CompressionFormat == 0 {
+			if (*z).UpdatedRequestParams.Modulator == 0 {
 				zb0002Len--
 				zb0002Mask |= 0x2
 			}
-			if len((*z).TransactionGroups.Bytes) == 0 {
+			if (*z).UpdatedRequestParams.Offset == 0 {
 				zb0002Len--
 				zb0002Mask |= 0x4
 			}
 			// variable map header, size zb0002Len
 			o = append(o, 0x80|uint8(zb0002Len))
 			if (zb0002Mask & 0x2) == 0 { // if not empty
-				// string "c"
-				o = append(o, 0xa1, 0x63)
-				o = msgp.AppendByte(o, (*z).TransactionGroups.CompressionFormat)
-			}
-			if (zb0002Mask & 0x4) == 0 { // if not empty
-				// string "g"
-				o = append(o, 0xa1, 0x67)
-				o = msgp.AppendBytes(o, (*z).TransactionGroups.Bytes)
-			}
-		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "p"
-			o = append(o, 0xa1, 0x70)
-			// omitempty: check for empty values
-			zb0003Len := uint32(2)
-			var zb0003Mask uint8 /* 3 bits */
-			if (*z).UpdatedRequestParams.Modulator == 0 {
-				zb0003Len--
-				zb0003Mask |= 0x2
-			}
-			if (*z).UpdatedRequestParams.Offset == 0 {
-				zb0003Len--
-				zb0003Mask |= 0x4
-			}
-			// variable map header, size zb0003Len
-			o = append(o, 0x80|uint8(zb0003Len))
-			if (zb0003Mask & 0x2) == 0 { // if not empty
 				// string "m"
 				o = append(o, 0xa1, 0x6d)
 				o = msgp.AppendByte(o, (*z).UpdatedRequestParams.Modulator)
 			}
-			if (zb0003Mask & 0x4) == 0 { // if not empty
+			if (zb0002Mask & 0x4) == 0 { // if not empty
 				// string "o"
 				o = append(o, 0xa1, 0x6f)
 				o = msgp.AppendByte(o, (*z).UpdatedRequestParams.Offset)
@@ -26985,94 +26986,10 @@ func (z *transactionBlockMessage) UnmarshalMsg(bts []byte) (o []byte, err error)
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0005 int
-			var zb0006 bool
-			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if _, ok := err.(msgp.TypeError); ok {
-				zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "TransactionGroups")
-					return
-				}
-				if zb0005 > 0 {
-					zb0005--
-					var zb0007 int
-					zb0007, err = msgp.ReadBytesBytesHeader(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "TransactionGroups", "struct-from-array", "Bytes")
-						return
-					}
-					if zb0007 > maxEncodedTransactionGroupBytes {
-						err = msgp.ErrOverflow(uint64(zb0007), uint64(maxEncodedTransactionGroupBytes))
-						return
-					}
-					(*z).TransactionGroups.Bytes, bts, err = msgp.ReadBytesBytes(bts, (*z).TransactionGroups.Bytes)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "TransactionGroups", "struct-from-array", "Bytes")
-						return
-					}
-				}
-				if zb0005 > 0 {
-					zb0005--
-					(*z).TransactionGroups.CompressionFormat, bts, err = msgp.ReadByteBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "TransactionGroups", "struct-from-array", "CompressionFormat")
-						return
-					}
-				}
-				if zb0005 > 0 {
-					err = msgp.ErrTooManyArrayFields(zb0005)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "TransactionGroups", "struct-from-array")
-						return
-					}
-				}
-			} else {
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "TransactionGroups")
-					return
-				}
-				if zb0006 {
-					(*z).TransactionGroups = packedTransactionGroups{}
-				}
-				for zb0005 > 0 {
-					zb0005--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "TransactionGroups")
-						return
-					}
-					switch string(field) {
-					case "g":
-						var zb0008 int
-						zb0008, err = msgp.ReadBytesBytesHeader(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "TransactionGroups", "Bytes")
-							return
-						}
-						if zb0008 > maxEncodedTransactionGroupBytes {
-							err = msgp.ErrOverflow(uint64(zb0008), uint64(maxEncodedTransactionGroupBytes))
-							return
-						}
-						(*z).TransactionGroups.Bytes, bts, err = msgp.ReadBytesBytes(bts, (*z).TransactionGroups.Bytes)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "TransactionGroups", "Bytes")
-							return
-						}
-					case "c":
-						(*z).TransactionGroups.CompressionFormat, bts, err = msgp.ReadByteBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "TransactionGroups", "CompressionFormat")
-							return
-						}
-					default:
-						err = msgp.ErrNoField(string(field))
-						if err != nil {
-							err = msgp.WrapError(err, "struct-from-array", "TransactionGroups")
-							return
-						}
-					}
-				}
+			bts, err = (*z).TransactionGroups.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TransactionGroups")
+				return
 			}
 		}
 		if zb0001 > 0 {
@@ -27125,33 +27042,33 @@ func (z *transactionBlockMessage) UnmarshalMsg(bts []byte) (o []byte, err error)
 					return
 				}
 			case "p":
-				var zb0009 int
-				var zb0010 bool
-				zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0005 int
+				var zb0006 bool
+				zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "UpdatedRequestParams")
 						return
 					}
-					if zb0009 > 0 {
-						zb0009--
+					if zb0005 > 0 {
+						zb0005--
 						(*z).UpdatedRequestParams.Offset, bts, err = msgp.ReadByteBytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "UpdatedRequestParams", "struct-from-array", "Offset")
 							return
 						}
 					}
-					if zb0009 > 0 {
-						zb0009--
+					if zb0005 > 0 {
+						zb0005--
 						(*z).UpdatedRequestParams.Modulator, bts, err = msgp.ReadByteBytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "UpdatedRequestParams", "struct-from-array", "Modulator")
 							return
 						}
 					}
-					if zb0009 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0009)
+					if zb0005 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0005)
 						if err != nil {
 							err = msgp.WrapError(err, "UpdatedRequestParams", "struct-from-array")
 							return
@@ -27162,11 +27079,11 @@ func (z *transactionBlockMessage) UnmarshalMsg(bts []byte) (o []byte, err error)
 						err = msgp.WrapError(err, "UpdatedRequestParams")
 						return
 					}
-					if zb0010 {
+					if zb0006 {
 						(*z).UpdatedRequestParams = requestParams{}
 					}
-					for zb0009 > 0 {
-						zb0009--
+					for zb0005 > 0 {
+						zb0005--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "UpdatedRequestParams")
@@ -27195,94 +27112,10 @@ func (z *transactionBlockMessage) UnmarshalMsg(bts []byte) (o []byte, err error)
 					}
 				}
 			case "g":
-				var zb0011 int
-				var zb0012 bool
-				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
-				if _, ok := err.(msgp.TypeError); ok {
-					zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "TransactionGroups")
-						return
-					}
-					if zb0011 > 0 {
-						zb0011--
-						var zb0013 int
-						zb0013, err = msgp.ReadBytesBytesHeader(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "TransactionGroups", "struct-from-array", "Bytes")
-							return
-						}
-						if zb0013 > maxEncodedTransactionGroupBytes {
-							err = msgp.ErrOverflow(uint64(zb0013), uint64(maxEncodedTransactionGroupBytes))
-							return
-						}
-						(*z).TransactionGroups.Bytes, bts, err = msgp.ReadBytesBytes(bts, (*z).TransactionGroups.Bytes)
-						if err != nil {
-							err = msgp.WrapError(err, "TransactionGroups", "struct-from-array", "Bytes")
-							return
-						}
-					}
-					if zb0011 > 0 {
-						zb0011--
-						(*z).TransactionGroups.CompressionFormat, bts, err = msgp.ReadByteBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "TransactionGroups", "struct-from-array", "CompressionFormat")
-							return
-						}
-					}
-					if zb0011 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0011)
-						if err != nil {
-							err = msgp.WrapError(err, "TransactionGroups", "struct-from-array")
-							return
-						}
-					}
-				} else {
-					if err != nil {
-						err = msgp.WrapError(err, "TransactionGroups")
-						return
-					}
-					if zb0012 {
-						(*z).TransactionGroups = packedTransactionGroups{}
-					}
-					for zb0011 > 0 {
-						zb0011--
-						field, bts, err = msgp.ReadMapKeyZC(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "TransactionGroups")
-							return
-						}
-						switch string(field) {
-						case "g":
-							var zb0014 int
-							zb0014, err = msgp.ReadBytesBytesHeader(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "TransactionGroups", "Bytes")
-								return
-							}
-							if zb0014 > maxEncodedTransactionGroupBytes {
-								err = msgp.ErrOverflow(uint64(zb0014), uint64(maxEncodedTransactionGroupBytes))
-								return
-							}
-							(*z).TransactionGroups.Bytes, bts, err = msgp.ReadBytesBytes(bts, (*z).TransactionGroups.Bytes)
-							if err != nil {
-								err = msgp.WrapError(err, "TransactionGroups", "Bytes")
-								return
-							}
-						case "c":
-							(*z).TransactionGroups.CompressionFormat, bts, err = msgp.ReadByteBytes(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "TransactionGroups", "CompressionFormat")
-								return
-							}
-						default:
-							err = msgp.ErrNoField(string(field))
-							if err != nil {
-								err = msgp.WrapError(err, "TransactionGroups")
-								return
-							}
-						}
-					}
+				bts, err = (*z).TransactionGroups.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TransactionGroups")
+					return
 				}
 			case "t":
 				bts, err = (*z).MsgSync.UnmarshalMsg(bts)
@@ -27310,13 +27143,13 @@ func (_ *transactionBlockMessage) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *transactionBlockMessage) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Int32Size + 2 + (*z).Round.Msgsize() + 2 + (*z).TxnBloomFilter.Msgsize() + 2 + 1 + 2 + msgp.ByteSize + 2 + msgp.ByteSize + 2 + 1 + 2 + msgp.BytesPrefixSize + len((*z).TransactionGroups.Bytes) + 2 + msgp.ByteSize + 2 + (*z).MsgSync.Msgsize()
+	s = 1 + 2 + msgp.Int32Size + 2 + (*z).Round.Msgsize() + 2 + (*z).TxnBloomFilter.Msgsize() + 2 + 1 + 2 + msgp.ByteSize + 2 + msgp.ByteSize + 2 + (*z).TransactionGroups.Msgsize() + 2 + (*z).MsgSync.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *transactionBlockMessage) MsgIsZero() bool {
-	return ((*z).Version == 0) && ((*z).Round.MsgIsZero()) && ((*z).TxnBloomFilter.MsgIsZero()) && (((*z).UpdatedRequestParams.Offset == 0) && ((*z).UpdatedRequestParams.Modulator == 0)) && ((len((*z).TransactionGroups.Bytes) == 0) && ((*z).TransactionGroups.CompressionFormat == 0)) && ((*z).MsgSync.MsgIsZero())
+	return ((*z).Version == 0) && ((*z).Round.MsgIsZero()) && ((*z).TxnBloomFilter.MsgIsZero()) && (((*z).UpdatedRequestParams.Offset == 0) && ((*z).UpdatedRequestParams.Modulator == 0)) && ((*z).TransactionGroups.MsgIsZero()) && ((*z).MsgSync.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

@@ -60,8 +60,9 @@ const (
 type packedTransactionGroups struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Bytes             []byte `codec:"g,allocbound=maxEncodedTransactionGroupBytes"`
-	CompressionFormat byte   `codec:"c"`
+	Bytes                []byte `codec:"g,allocbound=maxEncodedTransactionGroupBytes"`
+	CompressionFormat    byte   `codec:"c"`
+	LenDecompressedBytes uint64 `codec:"l"`
 }
 
 type timingParams struct {
