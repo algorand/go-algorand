@@ -926,14 +926,8 @@ int 1`
 
 	testApp(t, text, now, "no app for account")
 
-	ledger = makeTestLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Receiver: 1,
-		},
-	)
-	now.Ledger = ledger
+	// Make a different app (not 100)
 	ledger.newApp(txn.Txn.Receiver, 9999, makeSchemas(0, 0, 0, 0))
-
 	testApp(t, text, now, "no app for account")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
@@ -953,7 +947,10 @@ byte 0x414c474f
 
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
+	testProg(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), directRefEnabledVersion-1,
+		expect{4, "app_local_get_ex arg 0 wanted type uint64..."})
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), now)
+	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), pre, "no app for account")
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 9", -1), now, "invalid App reference 9")
 	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now,
 		"no such address")
@@ -1002,6 +999,8 @@ byte 0x414c474f
 	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
+	testProg(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1,
+		expect{3, "app_local_get arg 0 wanted type uint64..."})
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02\"", -1), now,
 		"invalid Account reference")
@@ -1083,7 +1082,7 @@ byte 0x414c474f
 	testApp(t, text, now)
 	testApp(t, text, pre, "invalid App reference 100") // but not in old teal
 
-	// check app_local_get default value
+	// check app_global_get default value
 	text = "byte 0x414c474f55; app_global_get; int 0; =="
 
 	ledger.balances[txn.Txn.Sender].locals[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
@@ -2381,6 +2380,10 @@ int 1
 	ledger.reset()
 	// test that app_local_put and _app_local_del can use byte addresses
 	testApp(t, strings.Replace(source, "int 0 // sender", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), ep)
+	// But won't compile in old teal
+	testProg(t, strings.Replace(source, "int 0 // sender", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1,
+		expect{4, "app_local_put arg 0 wanted..."}, expect{11, "app_local_del arg 0 wanted..."})
+
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(delta.GlobalDelta))

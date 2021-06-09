@@ -419,6 +419,9 @@ func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpSt
 						break
 					}
 				}
+				if found == nil {
+					t.Log(fmt.Sprintf("Errors: %v", errors))
+				}
 				require.NotNil(t, found, "No error on line %d", exp.l)
 				msg := found.Unwrap().Error()
 				testMatch(t, msg, exp.s)
