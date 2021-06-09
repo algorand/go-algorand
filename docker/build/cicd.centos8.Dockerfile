@@ -1,11 +1,11 @@
 ARG ARCH="amd64"
 
-FROM ${ARCH}/centos:8
+FROM quay.io/centos/centos:stream8
 ARG GOLANG_VERSION
 ARG ARCH="amd64"
-RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
-    yum update -y && \
-    yum install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel boost-devel expect jq \
+RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+    dnf update -y && \
+    dnf install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel boost-devel expect jq \
     libtool gcc-c++ libstdc++-devel rpmdevtools createrepo rpm-sign bzip2 which \
     libffi-devel openssl-devel
 RUN dnf install -y epel-release && \
