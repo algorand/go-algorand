@@ -1380,7 +1380,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	copy(txn.Txn.FreezeAccount[:], freezeAccAddr)
 	txn.Txn.AssetFrozen = true
 	txn.Txn.ForeignAssets = []basics.AssetIndex{55, 77}
-	txn.Txn.ForeignApps = []basics.AppIndex{56, 78, 111}
+	txn.Txn.ForeignApps = []basics.AppIndex{56, 100, 111} // 100 must be 2nd, 111 must be present
 	txn.Txn.GlobalStateSchema = basics.StateSchema{NumUint: 3, NumByteSlice: 0}
 	txn.Txn.LocalStateSchema = basics.StateSchema{NumUint: 1, NumByteSlice: 2}
 	return txn
