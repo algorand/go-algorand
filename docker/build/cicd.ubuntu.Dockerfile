@@ -22,4 +22,3 @@ RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
     mkdir -p $GOPATH/src/github.com/algorand/go-algorand
 RUN echo "vm.max_map_count = 262144" >> /etc/sysctl.conf
 CMD ["/bin/bash"]
-
