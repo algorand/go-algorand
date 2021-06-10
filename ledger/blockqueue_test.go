@@ -79,4 +79,3 @@ func TestGetEncodedBlockCert(t *testing.T) {
 	_, _, err = l.blockQ.getEncodedBlockCert(100) // should not be entry for this round
 	require.Error(t, err)
 }
-
