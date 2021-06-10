@@ -51,20 +51,12 @@ jobs:
       name: ARM64 Build
       os: linux
       arch: arm64
-      addons:
-        apt:
-          packages:
-            - awscli
       script:
         - travis_retry ./scripts/travis/build_test.sh
     - # same stage, parallel job
       name: ARM64 Integration Test
       os: linux
       arch: arm64
-      addons:
-        apt:
-          packages:
-            - awscli
       script:
         - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
@@ -111,20 +103,12 @@ jobs:
       name: ARM64 Build
       os: linux
       arch: arm64
-      addons:
-        apt:
-          packages:
-            - awscli
       script:
         - travis_retry ./scripts/travis/build_test.sh
     - # same stage, parallel job
       name: ARM64 Integration Test
       os: linux
       arch: arm64
-      addons:
-        apt:
-          packages:
-            - awscli
       script:
         - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
@@ -165,10 +149,6 @@ jobs:
       name: ARM64 Deploy
       os: linux
       arch: arm64
-      addons:
-        apt:
-          packages:
-            - awscli
       script:
         - ./scripts/travis/deploy_packages.sh
 
