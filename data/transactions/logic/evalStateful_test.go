@@ -47,12 +47,13 @@ type appParams struct {
 }
 
 type testLedger struct {
-	balances     map[basics.Address]balanceRecord
-	applications map[basics.AppIndex]appParams
-	assets       map[basics.AssetIndex]basics.AssetParams
-	appID        basics.AppIndex
-	creatorAddr  basics.Address
-	mods         map[basics.AppIndex]map[string]basics.ValueDelta
+	balances          map[basics.Address]balanceRecord
+	applications      map[basics.AppIndex]appParams
+	assets            map[basics.AssetIndex]basics.AssetParams
+	trackedCreatables map[int]basics.CreatableIndex
+	appID             basics.AppIndex
+	creatorAddr       basics.Address
+	mods              map[basics.AppIndex]map[string]basics.ValueDelta
 }
 
 func makeSchemas(li uint64, lb uint64, gi uint64, gb uint64) basics.StateSchemas {
@@ -81,6 +82,7 @@ func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 	}
 	l.applications = make(map[basics.AppIndex]appParams)
 	l.assets = make(map[basics.AssetIndex]basics.AssetParams)
+	l.trackedCreatables = make(map[int]basics.CreatableIndex)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
 	return l
 }
@@ -355,6 +357,14 @@ func (l *testLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool,
 	}
 	_, ok = br.locals[appIdx]
 	return ok, nil
+}
+
+func (l *testLedger) setTrackedCreatable(groupIdx int, cl basics.CreatableLocator) {
+	l.trackedCreatables[groupIdx] = cl.Index
+}
+
+func (l *testLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
+	return l.trackedCreatables[groupIdx]
 }
 
 func (l *testLedger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (basics.AssetHolding, error) {
@@ -2163,6 +2173,40 @@ byte "myval"
 	require.Empty(t, delta.LocalDeltas)
 }
 
+func TestBlankKey(t *testing.T) {
+	t.Parallel()
+	source := `
+byte ""
+app_global_get
+int 0
+==
+assert
+
+byte ""
+int 7
+app_global_put
+
+byte ""
+app_global_get
+int 7
+==
+`
+	ep := defaultEvalParams(nil, nil)
+	txn := makeSampleTxn()
+	txn.Txn.ApplicationID = 100
+	ep.Txn = &txn
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.Ledger = ledger
+	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+
+	delta := testApp(t, source, ep)
+	require.Empty(t, delta.LocalDeltas)
+}
+
 func TestAppGlobalDelete(t *testing.T) {
 	t.Parallel()
 
@@ -2696,6 +2740,7 @@ func TestReturnTypes(t *testing.T) {
 	}
 	ledger.newAsset(txn.Txn.Sender, 1, params)
 	ledger.newApp(txn.Txn.Sender, 1, makeSchemas(0, 0, 0, 0))
+	ledger.setTrackedCreatable(0, basics.CreatableLocator{Index: 1})
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
 	ledger.balances[txn.Txn.Receiver].locals[1] = make(basics.TealKeyValue)
 	key, err := hex.DecodeString("33343536")
@@ -2716,6 +2761,7 @@ func TestReturnTypes(t *testing.T) {
 		"store":             "store 0",
 		"gload":             "gload 0 0",
 		"gloads":            "gloads 0",
+		"gaid":              "gaid 0",
 		"dig":               "dig 0",
 		"intc":              "intcblock 0; intc 0",
 		"intc_0":            "intcblock 0; intc_0",

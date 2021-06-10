@@ -165,8 +165,6 @@ The following packages allow developers to interface with the Algorand system:
   - `libgoal` exports a Go interface useful for developers of Algorand clients.
   - `debug` holds secondary commands which assist developers during debugging.
 
-The `auction` package implements the Algorand auctions.
-
 The following packages contain tools to help Algorand developers deploy networks
 of their own:
 
