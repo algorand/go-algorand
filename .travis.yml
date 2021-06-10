@@ -19,56 +19,54 @@ stages:
 
 jobs:
   allow_failures:
-    - name: External ARM64 Deploy
-    - name: External ARM64 Integration Test
-    - name: External ARM Build
-    - name: External ARM Deploy
+    - name: ARM64 Deploy
+    - name: ARM64 Integration Test
     - name: Test Release Builds
   include:
     - stage: build_commit
       os: linux
+      arch: amd64
       script:
         - travis_retry scripts/travis/build_test.sh
 
     - stage: build_pr
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 CodeGen Verification
       script:
         - scripts/travis/codegen_verification.sh
     - # same stage, parallel job
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 Build
       script:
         - travis_retry scripts/travis/build_test.sh
     - # same stage, parallel job
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 Integration Test
       script:
         - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
-      name: External ARM64 Build
+      name: ARM64 Build
       os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
+      arch: arm64
       addons:
         apt:
           packages:
             - awscli
       script:
-        - travis_retry scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+        - travis_retry ./scripts/travis/build_test.sh
     - # same stage, parallel job
-      name: External ARM64 Integration Test
+      name: ARM64 Integration Test
       os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
+      arch: arm64
       addons:
         apt:
           packages:
             - awscli
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+        - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
@@ -93,43 +91,42 @@ jobs:
 
     - stage: build_release
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 CodeGen Verification
       script:
         - scripts/travis/codegen_verification.sh
     - # same stage, parallel job
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 Build
       script:
         - travis_retry ./scripts/travis/build_test.sh
     - # same stage, parallel job
       os: linux
+      arch: amd64
       name: Ubuntu AMD64 Integration Test
       script:
         - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
-      name: External ARM64 Build
+      name: ARM64 Build
       os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
+      arch: arm64
       addons:
         apt:
           packages:
             - awscli
       script:
-        - travis_retry scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+        - travis_retry ./scripts/travis/build_test.sh
     - # same stage, parallel job
-      name: External ARM64 Integration Test
+      name: ARM64 Integration Test
       os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
+      arch: arm64
       addons:
         apt:
           packages:
             - awscli
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/integration_test.sh
+        - ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
@@ -155,6 +152,7 @@ jobs:
     - stage: deploy
       name: Ubuntu Deploy
       os: linux
+      arch: amd64
       script:
         - scripts/travis/deploy_packages.sh
         - scripts/travis/test_release.sh
@@ -164,17 +162,15 @@ jobs:
       osx_image: xcode11
       script: scripts/travis/deploy_packages.sh
     - # same stage, parallel job
-      name: External ARM64 Deploy
+      name: ARM64 Deploy
       os: linux
-      env:
-        - BUILD_TYPE: "external_build"
-        - TARGET_PLATFORM: "linux-arm64"
+      arch: arm64
       addons:
         apt:
           packages:
             - awscli
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/deploy_packages.sh
+        - ./scripts/travis/deploy_packages.sh
 
 # Don't rebuild libsodium every time
 cache:
