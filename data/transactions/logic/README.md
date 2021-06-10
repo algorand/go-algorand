@@ -36,9 +36,9 @@ Starting from version 2 TEAL evaluator can run programs in two modes:
 2. Application run (stateful)
 
 Differences between modes include:
-1. Max program length (consensus parameters LogicSigMaxSize, MaxApprovalProgramLen and MaxClearStateProgramLen)
+1. Max program length (consensus parameters LogicSigMaxSize, MaxAppProgramLen & MaxExtraAppProgramPages)
 2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
-3. Opcodes availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
+3. Opcode availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
 
 ## Constants
 
@@ -345,19 +345,19 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 
 | Op | Description |
 | --- | --- |
-| `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
-| `min_balance` | get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
-| `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
-| `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the current application key B => value |
-| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C => [*... stack*, value, 0 or 1] |
+| `balance` | get balance account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
+| `min_balance` | get minimum required balance account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
+| `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
+| `app_local_get` | read from account A from local state of the current application key B => value |
+| `app_local_get_ex` | read from account A from local state of the application B key C => [*... stack*, value, 0 or 1] |
 | `app_global_get` | read key A from global state of a current application => value |
-| `app_global_get_ex` | read from application Txn.ForeignApps[A] global state key B => [*... stack*, value, 0 or 1]. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app |
-| `app_local_put` | write to account specified by Txn.Accounts[A] to local state of a current application key B with value C |
+| `app_global_get_ex` | read from application A global state key B => [*... stack*, value, 0 or 1] |
+| `app_local_put` | write to account specified by A to local state of a current application key B with value C |
 | `app_global_put` | write key A and value B to global state of the current application |
-| `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |
+| `app_local_del` | delete from account A local state key B of the current application |
 | `app_global_del` | delete key A from a global state of the current application |
-| `asset_holding_get i` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value} |
-| `asset_params_get i` | read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value} |
+| `asset_holding_get i` | read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value} |
+| `asset_params_get i` | read from asset A params field X (imm arg) => {0 or 1 (top), value} |
 
 # Assembler Syntax
 

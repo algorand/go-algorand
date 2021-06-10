@@ -702,44 +702,46 @@ bit indexing begins with low-order bits in integers. Setting bit 4 to 1 on the i
 ## balance
 
 - Opcode: 0x60
-- Pops: *... stack*, uint64
+- Pops: *... stack*, any
 - Pushes: uint64
-- get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.
+- get balance account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.
 - LogicSigVersion >= 2
 - Mode: Application
+
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender). Return: value.
 
 ## app_opted_in
 
 - Opcode: 0x61
-- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pops: *... stack*, {any A}, {uint64 B}
 - Pushes: uint64
-- check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1}
+- check if account A opted in for the application B => {0 or 1}
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise.
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.
 
 ## app_local_get
 
 - Opcode: 0x62
-- Pops: *... stack*, {uint64 A}, {[]byte B}
+- Pops: *... stack*, {any A}, {[]byte B}
 - Pushes: any
-- read from account specified by Txn.Accounts[A] from local state of the current application key B => value
+- read from account A from local state of the current application key B => value
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key. Return: value. The value is zero (of type uint64) if the key does not exist.
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key. Return: value. The value is zero (of type uint64) if the key does not exist.
 
 ## app_local_get_ex
 
 - Opcode: 0x63
-- Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
+- Pops: *... stack*, {any A}, {uint64 B}, {[]byte C}
 - Pushes: *... stack*, any, uint64
-- read from account specified by Txn.Accounts[A] from local state of the application B key C => [*... stack*, value, 0 or 1]
+- read from account A from local state of the application B key C => [*... stack*, value, 0 or 1]
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
 
 ## app_global_get
 
@@ -757,22 +759,22 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 - Opcode: 0x65
 - Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: *... stack*, any, uint64
-- read from application Txn.ForeignApps[A] global state key B => [*... stack*, value, 0 or 1]. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app
+- read from application A global state key B => [*... stack*, value, 0 or 1]
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: application index, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
+params: Txn.ForeignApps offset (or, since v4, an application id that appears in Txn.ForeignApps or is the CurrentApplicationID), state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
 
 ## app_local_put
 
 - Opcode: 0x66
-- Pops: *... stack*, {uint64 A}, {[]byte B}, {any C}
+- Pops: *... stack*, {any A}, {[]byte B}, {any C}
 - Pushes: _None_
-- write to account specified by Txn.Accounts[A] to local state of a current application key B with value C
+- write to account specified by A to local state of a current application key B with value C
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key, value.
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key, value.
 
 ## app_global_put
 
@@ -786,13 +788,13 @@ params: account index, state key, value.
 ## app_local_del
 
 - Opcode: 0x68
-- Pops: *... stack*, {uint64 A}, {[]byte B}
+- Pops: *... stack*, {any A}, {[]byte B}
 - Pushes: _None_
-- delete from account specified by Txn.Accounts[A] local state key B of the current application
+- delete from account A local state key B of the current application
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key.
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key.
 
 Deleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)
 
@@ -812,9 +814,9 @@ Deleting a key which is already absent has no effect on the application global s
 ## asset_holding_get i
 
 - Opcode: 0x70 {uint8 asset holding field index}
-- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pops: *... stack*, {any A}, {uint64 B}
 - Pushes: *... stack*, any, uint64
-- read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}
+- read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -826,14 +828,14 @@ Deleting a key which is already absent has no effect on the application global s
 | 1 | AssetFrozen | uint64 | Is the asset frozen or not |
 
 
-params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value.
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## asset_params_get i
 
 - Opcode: 0x71 {uint8 asset params field index}
 - Pops: *... stack*, uint64
 - Pushes: *... stack*, any, uint64
-- read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value}
+- read from asset A params field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -854,16 +856,18 @@ params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherw
 | 10 | AssetClawback | []byte | Clawback address |
 
 
-params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 otherwise), value.
+params: Txn.ForeignAssets offset (or, since v4, an asset id that appears in Txn.ForeignAssets) . Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## min_balance
 
 - Opcode: 0x78
-- Pops: *... stack*, uint64
+- Pops: *... stack*, any
 - Pushes: uint64
-- get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.
+- get minimum required balance account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.
 - LogicSigVersion >= 3
 - Mode: Application
+
+params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender). Return: value.
 
 ## pushbytes bytes
 
