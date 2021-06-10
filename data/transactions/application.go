@@ -102,19 +102,22 @@ type ApplicationCallTxnFields struct {
 	// ApprovalProgram or ClearStateProgram.
 	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs"`
 
-	// Accounts are accounts whose balance records are accessible by the
-	// executing ApprovalProgram or ClearStateProgram. To access LocalState
-	// for an account besides the sender, that account's address must be
-	// listed here.
+	// Accounts are accounts whose balance records are accessible
+	// by the executing ApprovalProgram or ClearStateProgram. To
+	// access LocalState or an ASA balance for an account besides
+	// the sender, that account's address must be listed here (and
+	// since v4, the ForeignApp or ForeignAsset must also include
+	// the app or asset id).
 	Accounts []basics.Address `codec:"apat,allocbound=encodedMaxAccounts"`
 
-	// ForeignApps are application IDs for applications besides this one
-	// whose GlobalState may be read by the executing ApprovalProgram or
-	// ClearStateProgram.
+	// ForeignApps are application IDs for applications besides
+	// this one whose GlobalState (or Local, since v4) may be read
+	// by the executing ApprovalProgram or ClearStateProgram.
 	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
 
-	// ForeignAssets are asset IDs for assets whose AssetParams may be read
-	// by the executing ApprovalProgram or ClearStateProgram.
+	// ForeignAssets are asset IDs for assets whose AssetParams
+	// (and since v4, Holdings) may be read by the executing
+	// ApprovalProgram or ClearStateProgram.
 	ForeignAssets []basics.AssetIndex `codec:"apas,allocbound=encodedMaxForeignAssets"`
 
 	// LocalStateSchema specifies the maximum number of each type that may
