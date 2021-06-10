@@ -831,8 +831,8 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 		return
 	}
 
-	// the transaction pool already update it's transactions, dumping out old and invalid transactions. At this point,
-	// we need to let the txsync know about the size of the transaction pool.
+	// the transaction pool already updated its transactions (dumping out old and invalid transactions). At this point,
+	// we need to let the txnsync know about the size of the transaction pool.
 	node.txnSyncConnector.onNewTransactionPoolEntry(node.transactionPool.PendingCount())
 
 	node.syncStatusMu.Lock()

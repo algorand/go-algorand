@@ -160,7 +160,8 @@ func (tsnc *transcationSyncNodeConnector) onNewTransactionPoolEntry(transcationP
 }
 
 // OnNewBlock receives a notification that we've moved to a new round from the ledger.
-// This notification would be sent before the transaction pool gets a similar notification
+// This notification would be received before the transaction pool get a similar notification, due
+// the ordering of the block notifier registration.
 func (tsnc *transcationSyncNodeConnector) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	blkRound := block.Round()
 	fetchTransactions := tsnc.node.accountManager.HasLiveKeys(blkRound, blkRound)
