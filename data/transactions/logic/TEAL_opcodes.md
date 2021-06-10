@@ -550,18 +550,22 @@ The `gloads` opcode can only access scratch spaces of previous app calls contain
 - Opcode: 0x3c
 - Pops: _None_
 - Pushes: uint64
-- push the creatable ID of the Tth transaction in the current group
+- push the ID of the asset or application created in the Tth transaction of the current group
 - LogicSigVersion >= 4
 - Mode: Application
+
+The `gaid` opcode can only access the ID of assets or applications created by previous txns in the current group.
 
 ## gaids
 
 - Opcode: 0x3d
 - Pops: *... stack*, uint64
 - Pushes: uint64
-- push the creatable ID of the Ath transaction in the current group
+- push the ID of the asset or application created in the Ath transaction of the current group
 - LogicSigVersion >= 4
 - Mode: Application
+
+The `gaids` opcode can only access the ID of assets or applications created by previous txns in the current group.
 
 ## bnz target
 
