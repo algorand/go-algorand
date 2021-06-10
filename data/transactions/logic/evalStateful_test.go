@@ -950,6 +950,11 @@ byte 0x414c474f
 	testProg(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), directRefEnabledVersion-1,
 		expect{4, "app_local_get_ex arg 0 wanted type uint64..."})
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), now)
+	// Next we're testing if the use of the current app's id works
+	// as a direct reference. The error is because the sender
+	// account is not opted into 123.
+	ledger.appID = basics.AppIndex(123)
+	testApp(t, strings.Replace(text, "int 100 // app id", "int 123", -1), now, "no app for account")
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), pre, "no app for account")
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 9", -1), now, "invalid App reference 9")
 	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now,
@@ -1107,6 +1112,12 @@ int 4141
 	now.Txn.Txn.ApplicationID = 0
 	now.Txn.Txn.ForeignApps = []basics.AppIndex{100}
 	testApp(t, text, now)
+
+	// Direct reference to the current app also works
+	ledger.appID = basics.AppIndex(100)
+	now.Txn.Txn.ForeignApps = []basics.AppIndex{}
+	testApp(t, strings.Replace(text, "int 1  // ForeignApps index", "int 100", -1), now)
+	testApp(t, strings.Replace(text, "int 1  // ForeignApps index", "global CurrentApplicationID", -1), now)
 }
 
 const assetsTestProgram = `int 0//account

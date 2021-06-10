@@ -2804,6 +2804,15 @@ func appReference(cx *evalContext, ref uint64, foreign bool) (basics.AppIndex, e
 				return appID, nil
 			}
 		}
+		// It should be legal to use your own app id, which
+		// can't be in ForeignApps during creation, because it
+		// is unknown then.  But it can be discovered in the
+		// app code.  It's tempting to combine this with the
+		// == 0 test, above, but it must come after the check
+		// for being below len(ForeignApps)
+		if ref == uint64(cx.Ledger.ApplicationID()) {
+			return cx.Ledger.ApplicationID(), nil
+		}
 	} else {
 		// Old rules
 		if foreign {
