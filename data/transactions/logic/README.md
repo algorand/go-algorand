@@ -36,9 +36,9 @@ Starting from version 2 TEAL evaluator can run programs in two modes:
 2. Application run (stateful)
 
 Differences between modes include:
-1. Max program length (consensus parameters LogicSigMaxSize, MaxApprovalProgramLen and MaxClearStateProgramLen)
+1. Max program length (consensus parameters LogicSigMaxSize, MaxAppProgramLen & MaxExtraAppProgramPages)
 2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
-3. Opcodes availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
+3. Opcode availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
 
 ## Constants
 
@@ -214,8 +214,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `store i` | pop a value from the stack and store to scratch space |
 | `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
 | `gloads i` | push Ith scratch space index of the Ath transaction in the current group |
-| `gaid t` | push the creatable ID of the Tth transaction in the current group |
-| `gaids` | push the creatable ID of the Ath transaction in the current group |
+| `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |
+| `gaids` | push the ID of the asset or application created in the Ath transaction of the current group |
 
 **Transaction Fields**
 
