@@ -209,15 +209,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log)
 
-	blockListeners := []ledger.BlockListener{
-		node.transactionPool,
-		node,
-	}
-
-	if node.config.EnableTopAccountsReporting {
-		blockListeners = append(blockListeners, &accountListener)
-	}
-	node.ledger.RegisterBlockListeners(blockListeners)
 	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
 
 	// Indexer setup
@@ -261,8 +252,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
+	node.txnSyncService = txnsync.MakeTranscationSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash, node.config)
 	node.txnSyncConnector = makeTranscationSyncNodeConnector(node)
-	node.txnSyncService = txnsync.MakeTranscationSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash)
 
 	err = node.loadParticipationKeys()
 	if err != nil {
@@ -295,6 +286,17 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 	node.compactCert = compactcert.NewWorker(compactCertAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+
+	blockListeners := []ledger.BlockListener{
+		&node.txnSyncConnector,
+		node.transactionPool,
+		node,
+	}
+
+	if node.config.EnableTopAccountsReporting {
+		blockListeners = append(blockListeners, &accountListener)
+	}
+	node.ledger.RegisterBlockListeners(blockListeners)
 
 	return node, err
 }
@@ -822,12 +824,16 @@ func (node *AlgorandFullNode) IsArchival() bool {
 }
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
+// The method is being called *after* the transaction pool received it's OnNewBlock call.
 func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	blkRound := block.Round()
 	if node.ledger.Latest() > blkRound {
 		return
 	}
-	node.txnSyncConnector.onNewRound(blkRound, node.accountManager.HasLiveKeys(blkRound, blkRound))
+
+	// the transaction pool already update it's transactions, dumping out old and invalid transactions. At this point,
+	// we need to let the txsync know about the size of the transaction pool.
+	node.txnSyncConnector.onNewTransactionPoolEntry(node.transactionPool.PendingCount())
 
 	node.syncStatusMu.Lock()
 	node.lastRoundTimestamp = time.Now()
