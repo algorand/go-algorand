@@ -856,7 +856,7 @@ params: Txn.Accounts offset (or, since v4, an account address that appears in Tx
 | 10 | AssetClawback | []byte | Clawback address |
 
 
-params: Txn.ForeignAssets offset (or, since v4, an asset id that appears in Txn.ForeignAssets) . Return: did_exist flag (1 if exist and 0 otherwise), value.
+params: Txn.ForeignAssets offset (or, since v4, an asset id that appears in Txn.ForeignAssets). Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## min_balance
 

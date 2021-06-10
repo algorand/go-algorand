@@ -215,7 +215,7 @@ var opDocExtras = map[string]string{
 	"app_local_del":     "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
 	"app_global_del":    "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)",
 	"asset_holding_get": "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if exist and 0 otherwise), value.",
-	"asset_params_get":  "params: Txn.ForeignAssets offset (or, since v4, an asset id that appears in Txn.ForeignAssets) . Return: did_exist flag (1 if exist and 0 otherwise), value.",
+	"asset_params_get":  "params: Txn.ForeignAssets offset (or, since v4, an asset id that appears in Txn.ForeignAssets). Return: did_exist flag (1 if exist and 0 otherwise), value.",
 }
 
 // OpDocExtra returns extra documentation text about an op
