@@ -90,7 +90,11 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 				LenDecompressedBytes: uint64(len(encoded)),
 			}, nil
 		}
-		s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(encoded), err)
+		if errors.Is(err, compress.ErrShortBuffer) {
+			s.log.Warnf("compression had negative effect, made message bigger: original msg length: %v", len(encoded))
+		} else {
+			s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(encoded), err)
+		}
 	}
 
 	return packedTransactionGroups{
@@ -103,7 +107,7 @@ func compressTransactionGroupsBytes(data []byte) ([]byte, error) {
 	b := make([]byte, 0, len(data))
 	_, out, err := compress.Compress(data, b, 1)
 	if err == nil && len(data) > len(out)*maxCompressionRatio {
-		return nil, errors.New("compression exceeded compression ratio")
+		return nil, fmt.Errorf("compression exceeded compression ratio: compressed data len: %d", len(out))
 	}
 	return out, err
 }
