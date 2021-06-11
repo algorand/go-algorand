@@ -94,7 +94,7 @@ type Peer struct {
 	// lastRound is the latest round reported by the peer.
 	lastRound basics.Round
 
-	// incomingMessages contains the incoming messages from this peer. This heap help us to reorder the imcoming messages so that
+	// incomingMessages contains the incoming messages from this peer. This heap help us to reorder the incoming messages so that
 	// we could process them in the tcp-transport order.
 	incomingMessages messageOrderingHeap
 

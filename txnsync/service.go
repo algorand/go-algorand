@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 // Service is the transaction sync main service object.
@@ -35,7 +36,7 @@ type Service struct {
 }
 
 // MakeTranscationSyncService creates a new Service object
-func MakeTranscationSyncService(log logging.Logger, conn NodeConnector, isRelay bool, genesisID string, genesisHash crypto.Digest, cfg config.Local) *Service {
+func MakeTranscationSyncService(log logging.Logger, conn NodeConnector, isRelay bool, genesisID string, genesisHash crypto.Digest, cfg config.Local, threadpool execpool.BacklogPool) *Service {
 	s := &Service{
 		state: syncState{
 			node:        conn,
@@ -44,6 +45,7 @@ func MakeTranscationSyncService(log logging.Logger, conn NodeConnector, isRelay 
 			genesisID:   genesisID,
 			genesisHash: genesisHash,
 			config:      cfg,
+			threadpool:  threadpool,
 		},
 	}
 	s.state.service = s
