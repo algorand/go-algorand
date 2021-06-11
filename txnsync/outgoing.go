@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"time"
@@ -30,6 +31,9 @@ const messageTimeWindow = 20 * time.Millisecond
 var errTransactionSyncOutgoingMessageQueueFull = errors.New("transaction sync outgoing message queue is full")
 var errTransactionSyncOutgoingMessageSendFailed = errors.New("transaction sync failed to send message")
 
+// sentMessageMetadata is the message metadata for a message that is being sent. It includes some extra
+// pieces of information about the message itself, used for tracking the "content" of the message beyond
+// the point where it's being encoded.
 type sentMessageMetadata struct {
 	encodedMessageSize  int
 	sentTranscationsIDs []transactions.Txid
@@ -39,31 +43,64 @@ type sentMessageMetadata struct {
 	sequenceNumber      uint64
 	partialMessage      bool
 	filter              bloomFilter
+	transactionGroups   []transactions.SignedTxGroup
 }
 
-type messageSentCallback struct {
-	state       *syncState
-	messageData sentMessageMetadata
-	roundClock  timers.WallClock
+// messageAsyncEncoder structure encapsulates the encoding and sending of a given message to the network. The encoding
+// could be a lengthy operation which does't need to be blocking the main loop. Moving the actual encoding into an
+// execution pool thread frees up the main loop, allowing smoother operation.
+type messageAsyncEncoder struct {
+	state                *syncState
+	messageData          sentMessageMetadata
+	roundClock           timers.WallClock
+	peerDataExchangeRate uint64
 }
 
 // asyncMessageSent called via the network package to inform the txsync that a message was enqueued, and the associated sequence number.
-func (msc *messageSentCallback) asyncMessageSent(enqueued bool, sequenceNumber uint64) error {
+func (encoder *messageAsyncEncoder) asyncMessageSent(enqueued bool, sequenceNumber uint64) error {
 	if !enqueued {
-		msc.state.log.Infof("unable to send message to peer. disconnecting from peer.")
+		encoder.state.log.Infof("unable to send message to peer. disconnecting from peer.")
 		return errTransactionSyncOutgoingMessageSendFailed
 	}
 	// record the timestamp here, before placing the entry on the queue
-	msc.messageData.sentTimestamp = msc.roundClock.Since()
-	msc.messageData.sequenceNumber = sequenceNumber
+	encoder.messageData.sentTimestamp = encoder.roundClock.Since()
+	encoder.messageData.sequenceNumber = sequenceNumber
 
 	select {
-	case msc.state.outgoingMessagesCallbackCh <- msc:
+	case encoder.state.outgoingMessagesCallbackCh <- encoder.messageData:
 		return nil
 	default:
 		// if we can't place it on the channel, return an error so that the node could disconnect from this peer.
-		msc.state.log.Infof("unable to enqueue outgoing message confirmation; outgoingMessagesCallbackCh is full. disconnecting from peer.")
+		encoder.state.log.Infof("unable to enqueue outgoing message confirmation; outgoingMessagesCallbackCh is full. disconnecting from peer.")
 		return errTransactionSyncOutgoingMessageQueueFull
+	}
+}
+func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} {
+	defer encoder.state.messageSendWaitGroup.Done()
+
+	var err error
+	encoder.messageData.message.TransactionGroups, err = encoder.state.encodeTransactionGroups(encoder.messageData.transactionGroups, encoder.peerDataExchangeRate)
+	if err != nil {
+		encoder.state.log.Warnf("unable to encode transaction groups : %v", err)
+	}
+	encoder.messageData.transactionGroups = nil // clear out to allow GC to reclaim
+
+	encodedMessage := encoder.messageData.message.MarshalMsg([]byte{})
+	encoder.messageData.encodedMessageSize = len(encodedMessage)
+
+	encoder.state.node.SendPeerMessage(encoder.messageData.peer.networkPeer, encodedMessage, encoder.asyncMessageSent)
+
+	// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
+	releaseEncodedTransactionGroups(encoder.messageData.message.TransactionGroups.Bytes)
+	encoder.messageData.message.TransactionGroups.Bytes = nil
+	return nil
+}
+
+// enqueue add the given message encoding task to the execution pool, and increase the waitgroup as needed.
+func (encoder *messageAsyncEncoder) enqueue() {
+	encoder.state.messageSendWaitGroup.Add(1)
+	if err := encoder.state.threadpool.EnqueueBacklog(context.Background(), encoder.asyncEncodeAndSend, nil, nil); err != nil {
+		encoder.state.messageSendWaitGroup.Done()
 	}
 }
 
@@ -83,29 +120,22 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	var pendingTransactions pendingTransactionGroupsSnapshot
 	profGetTxnsGroups := s.profiler.getElement(profElementGetTxnsGroups)
 	profAssembleMessage := s.profiler.getElement(profElementAssembleMessage)
-	profSendMessage := s.profiler.getElement(profElementSendMessage)
 	profGetTxnsGroups.start()
 	pendingTransactions.pendingTransactionsGroups, pendingTransactions.latestLocallyOriginatedGroupCounter = s.node.GetPendingTransactionGroups()
 	profGetTxnsGroups.end()
 	for _, peer := range peers {
-		msgCallback := &messageSentCallback{state: s, roundClock: s.clock}
+		msgEncoder := &messageAsyncEncoder{state: s, roundClock: s.clock, peerDataExchangeRate: peer.dataExchangeRate}
 		profAssembleMessage.start()
 		var err error
-		msgCallback.messageData, err = s.assemblePeerMessage(peer, &pendingTransactions)
+		msgEncoder.messageData, err = s.assemblePeerMessage(peer, &pendingTransactions)
 		if err != nil {
 			s.log.Errorf("failed to send peer msg: %v", err)
 		}
 		profAssembleMessage.end()
-		encodedMessage := msgCallback.messageData.message.MarshalMsg([]byte{})
-		msgCallback.messageData.encodedMessageSize = len(encodedMessage)
-		profSendMessage.start()
-		s.node.SendPeerMessage(peer.networkPeer, encodedMessage, msgCallback.asyncMessageSent)
-		profSendMessage.end()
-		// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
-		releaseEncodedTransactionGroups(msgCallback.messageData.message.TransactionGroups.Bytes)
-		msgCallback.messageData.message.TransactionGroups.Bytes = nil
+		isPartialMessage := msgEncoder.messageData.partialMessage
+		msgEncoder.enqueue()
 
-		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, msgCallback.messageData.partialMessage, currentTime)
+		scheduleOffset, ops := peer.getNextScheduleOffset(s.isRelay, s.lastBeta, isPartialMessage, currentTime)
 		if (ops & peerOpsSetInterruptible) == peerOpsSetInterruptible {
 			if _, has := s.interruptablePeersMap[peer]; !has {
 				s.interruptablePeers = append(s.interruptablePeers, peer)
@@ -181,15 +211,16 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 			// non-relays to send transcation that they received via the transaction sync back.
 			transactionGroups = s.locallyGeneratedTransactions(pendingTransactions)
 		}
-		var txnGroups []transactions.SignedTxGroup
+		//var txnGroups []transactions.SignedTxGroup
 		profTxnsSelection := s.profiler.getElement(profElementTxnsSelection)
 		profTxnsSelection.start()
-		txnGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
+		metaMessage.transactionGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
 		profTxnsSelection.end()
-		metaMessage.message.TransactionGroups, err = s.encodeTransactionGroups(txnGroups, peer.dataExchangeRate)
-		if err != nil {
-			return
-		}
+		/*
+			metaMessage.message.TransactionGroups, err = s.encodeTransactionGroups(txnGroups, peer.dataExchangeRate)
+			if err != nil {
+				return
+			}*/
 
 		// clear the last sent bloom filter on the end of a series of partial messages.
 		// this would ensure we generate a new bloom filter every beta, which is needed
@@ -214,11 +245,9 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 	return
 }
 
-func (s *syncState) evaluateOutgoingMessage(msg *messageSentCallback) {
-	msgData := msg.messageData
-
+func (s *syncState) evaluateOutgoingMessage(msgData sentMessageMetadata) {
 	msgData.peer.updateMessageSent(msgData.message, msgData.sentTranscationsIDs, msgData.sentTimestamp, msgData.sequenceNumber, msgData.encodedMessageSize, msgData.filter)
-	s.log.outgoingMessage(msgStats{msgData.sequenceNumber, msgData.message.Round, len(msgData.sentTranscationsIDs), msgData.message.UpdatedRequestParams, len(msgData.message.TxnBloomFilter.BloomFilter), msgData.message.MsgSync.NextMsgMinDelay, msg.messageData.peer.networkAddress()})
+	s.log.outgoingMessage(msgStats{msgData.sequenceNumber, msgData.message.Round, len(msgData.sentTranscationsIDs), msgData.message.UpdatedRequestParams, len(msgData.message.TxnBloomFilter.BloomFilter), msgData.message.MsgSync.NextMsgMinDelay, msgData.peer.networkAddress()})
 }
 
 // locallyGeneratedTransactions return a subset of the given transactionGroups array by filtering out transactions that are not locally generated.

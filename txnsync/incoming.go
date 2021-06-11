@@ -21,17 +21,25 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/data/transactions"
 )
 
-var errUnsupportedTransactionSyncMessageVersion = errors.New("unsupported transaction sync message version")
-var errTransactionSyncIncomingMessageQueueFull = errors.New("transaction sync incoming message queue is full")
+var (
+	errUnsupportedTransactionSyncMessageVersion = errors.New("unsupported transaction sync message version")
+	errTransactionSyncIncomingMessageQueueFull  = errors.New("transaction sync incoming message queue is full")
+	errInvalidBloomFilter                       = errors.New("invalid bloom filter")
+	errDecodingReceivedTransactionGroupsFailed  = errors.New("failed to decode incoming transaction groups")
+)
 
 type incomingMessage struct {
-	networkPeer    interface{}
-	message        transactionBlockMessage
-	sequenceNumber uint64
-	peer           *Peer
-	encodedSize    int
+	networkPeer       interface{}
+	message           transactionBlockMessage
+	sequenceNumber    uint64
+	peer              *Peer
+	encodedSize       int
+	bloomFilter       bloomFilter
+	transactionGroups []transactions.SignedTxGroup
 }
 
 // incomingMessageQueue manages the global incoming message queue across all the incoming peers.
@@ -61,7 +69,7 @@ func (imq *incomingMessageQueue) getIncomingMessageChannel() <-chan incomingMess
 }
 
 // enqueue places the given message on the queue, if and only if it's associated peer doesn't
-// appear on the imcoming message queue already. In the case there is no peer, the message
+// appear on the incoming message queue already. In the case there is no peer, the message
 // would be placed on the queue as is.
 func (imq *incomingMessageQueue) enqueue(m incomingMessage) bool {
 	if m.peer != nil {
@@ -99,22 +107,41 @@ func (imq *incomingMessageQueue) clear(m incomingMessage) {
 // incomingMessageHandler
 // note - this message is called by the network go-routine dispatch pool, and is not syncronized with the rest of the transaction syncronizer
 func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64) error {
-	var txMsg transactionBlockMessage
-	_, err := txMsg.UnmarshalMsg(message)
+	incomingMessage := incomingMessage{networkPeer: networkPeer, sequenceNumber: sequenceNumber, encodedSize: len(message), peer: peer}
+	_, err := incomingMessage.message.UnmarshalMsg(message)
 	if err != nil {
 		// if we recieved a message that we cannot parse, disconnect.
 		s.log.Infof("received unparsable transaction sync message from peer. disconnecting from peer.")
 		return err
 	}
-	if txMsg.Version != txnBlockMessageVersion {
+
+	if incomingMessage.message.Version != txnBlockMessageVersion {
 		// we receive a message from a version that we don't support, disconnect.
 		s.log.Infof("received unsupported transaction sync message version from peer. disconnecting from peer.")
 		return errUnsupportedTransactionSyncMessageVersion
 	}
+
+	// if the peer sent us a bloom filter, decode it
+	if incomingMessage.message.TxnBloomFilter.BloomFilterType != 0 {
+		bloomFilter, err := decodeBloomFilter(incomingMessage.message.TxnBloomFilter)
+		if err != nil {
+			s.log.Infof("Invalid bloom filter received from peer : %v", err)
+			return errInvalidBloomFilter
+		}
+		incomingMessage.bloomFilter = bloomFilter
+	}
+
+	// if the peer sent us any transactions, decode these.
+	incomingMessage.transactionGroups, err = decodeTransactionGroups(incomingMessage.message.TransactionGroups, s.genesisID, s.genesisHash)
+	if err != nil {
+		s.log.Infof("failed to decode received transactions groups: %v\n", err)
+		return errDecodingReceivedTransactionGroupsFailed
+	}
+
 	if peer == nil {
 		// if we don't have a peer, then we need to enqueue this task to be handled by the main loop since we want to ensure that
 		// all the peer objects are created synchronously.
-		enqueued := s.incomingMessagesQ.enqueue(incomingMessage{networkPeer: networkPeer, message: txMsg, sequenceNumber: sequenceNumber, encodedSize: len(message)})
+		enqueued := s.incomingMessagesQ.enqueue(incomingMessage)
 		if !enqueued {
 			// if we can't enqueue that, return an error, which would disconnect the peer.
 			// ( we have to disconnect, since otherwise, we would have no way to syncronize the sequence number)
@@ -124,7 +151,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 		return nil
 	}
 	// place the incoming message on the *peer* heap, allowing us to dequeue it in the correct sequence order.
-	err = peer.incomingMessages.enqueue(txMsg, sequenceNumber, len(message))
+	err = peer.incomingMessages.enqueue(incomingMessage)
 	if err != nil {
 		// if the incoming message queue for this peer is full, disconnect from this peer.
 		s.log.Infof("unable to enqueue incoming message into peer incoming message backlog. disconnecting from peer.")
@@ -132,7 +159,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	}
 
 	// (maybe) place the peer message on the main queue. This would get skipped if the peer is already on the queue.
-	enqueued := s.incomingMessagesQ.enqueue(incomingMessage{peer: peer})
+	enqueued := s.incomingMessagesQ.enqueue(incomingMessage)
 	if !enqueued {
 		// if we can't enqueue that, return an error, which would disconnect the peer.
 		s.log.Infof("unable to enqueue incoming message from a peer with txsync allocated data; incoming messages queue is full. disconnecting from peer.")
@@ -158,7 +185,8 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		} else {
 			peer = peerInfo.TxnSyncPeer
 		}
-		err := peer.incomingMessages.enqueue(message.message, message.sequenceNumber, message.encodedSize)
+		message.peer = peer
+		err := peer.incomingMessages.enqueue(message)
 		if err != nil {
 			// this is not really likely, since we won't saturate the peer heap right after creating it..
 			return
@@ -177,10 +205,11 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		}
 		if seq != peer.nextReceivedMessageSeq {
 			// if we recieve a message which wasn't in-order, just let it go.
-			//fmt.Printf("received message out of order; seq = %d, expecting seq = %d\n", seq, peer.nextReceivedMessageSeq)
+			s.log.Debugf("received message out of order; seq = %d, expecting seq = %d\n", seq, peer.nextReceivedMessageSeq)
 			break
 		}
-		txMsg, encodedSize, err := peer.incomingMessages.pop()
+
+		incomingMsg, err := peer.incomingMessages.pop()
 		if err != nil {
 			// if the queue is empty ( not expected, since we peek'ed into it before ), then we can't do much here.
 			return
@@ -190,26 +219,20 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		peer.nextReceivedMessageSeq++
 
 		// update the round number if needed.
-		if txMsg.Round > peer.lastRound {
-			peer.lastRound = txMsg.Round
-		} else if txMsg.Round < peer.lastRound {
+		if incomingMsg.message.Round > peer.lastRound {
+			peer.lastRound = incomingMsg.message.Round
+		} else if incomingMsg.message.Round < peer.lastRound {
 			// peer sent us message for an older round, *after* a new round ?!
 			continue
 		}
 
 		// if the peer sent us a bloom filter, store this.
-		if txMsg.TxnBloomFilter.BloomFilterType != 0 {
-			bloomFilter, err := decodeBloomFilter(txMsg.TxnBloomFilter)
-			if err == nil {
-				peer.addIncomingBloomFilter(txMsg.Round, bloomFilter, s.round)
-			} else {
-				s.log.Infof("Invalid bloom filter received from peer : %v", err)
-				// for now we can ignore that - but a better handling would be to disconnect
-				// from such a peer.
-			}
+		if (incomingMsg.bloomFilter != bloomFilter{}) {
+			peer.addIncomingBloomFilter(incomingMsg.message.Round, incomingMsg.bloomFilter, s.round)
 		}
-		peer.updateRequestParams(txMsg.UpdatedRequestParams.Modulator, txMsg.UpdatedRequestParams.Offset)
-		peer.updateIncomingMessageTiming(txMsg.MsgSync, s.round, s.clock.Since(), encodedSize)
+
+		peer.updateRequestParams(incomingMsg.message.UpdatedRequestParams.Modulator, incomingMsg.message.UpdatedRequestParams.Offset)
+		peer.updateIncomingMessageTiming(incomingMsg.message.MsgSync, s.round, s.clock.Since(), incomingMsg.encodedSize)
 
 		// if the peer's round is more than a single round behind the local node, then we don't want to
 		// try and load the transactions. The other peer should first catch up before getting transactions.
@@ -217,25 +240,20 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 			s.log.Infof("Incoming Txsync #%d late round %d", seq, peer.lastRound)
 			continue
 		}
-		txnGroups, err := decodeTransactionGroups(txMsg.TransactionGroups, s.genesisID, s.genesisHash)
-		if err != nil {
-			s.log.Warnf("failed to decode received transactions groups: %v\n", err)
-			continue
-		}
 
 		// add the received transaction groups to the peer's recentSentTransactions so that we won't be sending these back to the peer.
-		peer.updateIncomingTransactionGroups(txnGroups)
+		peer.updateIncomingTransactionGroups(incomingMsg.transactionGroups)
 
 		// before enqueing more data to the transaction pool, make sure we flush the ack channel
 		peer.dequeuePendingTransactionPoolAckMessages()
 
 		// if we recieved at least a single transaction group, then forward it to the transaction handler.
-		if len(txnGroups) > 0 {
+		if len(incomingMsg.transactionGroups) > 0 {
 			// send the incoming transaction group to the node last, so that the txhandler could modify the underlaying array if needed.
-			transacationPoolSize = s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, txnGroups)
+			transacationPoolSize = s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
 		}
 
-		s.log.incomingMessage(msgStats{seq, txMsg.Round, len(txnGroups), txMsg.UpdatedRequestParams, len(txMsg.TxnBloomFilter.BloomFilter), txMsg.MsgSync.NextMsgMinDelay, peer.networkAddress()})
+		s.log.incomingMessage(msgStats{seq, incomingMsg.message.Round, len(incomingMsg.transactionGroups), incomingMsg.message.UpdatedRequestParams, len(incomingMsg.message.TxnBloomFilter.BloomFilter), incomingMsg.message.MsgSync.NextMsgMinDelay, peer.networkAddress()})
 		messageProcessed = true
 	}
 	// if we're a relay, this is an outgoing peer and we've processed a valid message,

@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -50,12 +51,13 @@ const (
 )
 
 type syncState struct {
-	service *Service
-	log     Logger
-	node    NodeConnector
-	isRelay bool
-	clock   timers.WallClock
-	config  config.Local
+	service    *Service
+	log        Logger
+	node       NodeConnector
+	isRelay    bool
+	clock      timers.WallClock
+	config     config.Local
+	threadpool execpool.BacklogPool
 
 	genesisID   string
 	genesisHash crypto.Digest
@@ -67,7 +69,7 @@ type syncState struct {
 	interruptablePeers         []*Peer
 	interruptablePeersMap      map[*Peer]int // map a peer into the index of interruptablePeers
 	incomingMessagesQ          incomingMessageQueue
-	outgoingMessagesCallbackCh chan *messageSentCallback
+	outgoingMessagesCallbackCh chan sentMessageMetadata
 	nextOffsetRollingCh        <-chan time.Time
 	requestsOffset             uint64
 
@@ -83,17 +85,20 @@ type syncState struct {
 	// transactionPoolFull indicates whether the transaction pool is currently in "full" state or not. While the transaction
 	// pool is full, a node would not ask any of the other peers for additional transactions.
 	transactionPoolFull bool
+
+	messageSendWaitGroup sync.WaitGroup
 }
 
 func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
+	defer s.messageSendWaitGroup.Wait()
 
 	// The following would allow the emulator to start the service in a "stopped" mode.
 	s.node.NotifyMonitor()
 
 	s.clock = s.node.Clock()
 	s.incomingMessagesQ = makeIncomingMessageQueue()
-	s.outgoingMessagesCallbackCh = make(chan *messageSentCallback, 1024)
+	s.outgoingMessagesCallbackCh = make(chan sentMessageMetadata, 1024)
 	s.interruptablePeersMap = make(map[*Peer]int)
 	s.scheduler.node = s.node
 	s.lastBeta = beta(0)

@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"context"
 	"sort"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 const roundDuration = 4 * time.Second
@@ -169,6 +171,7 @@ func (e *emulator) initNodes() {
 			"",
 			crypto.Digest{},
 			config.GetDefaultLocal(),
+			e,
 		)
 		e.syncers = append(e.syncers, syncer)
 	}
@@ -223,4 +226,30 @@ func (e *emulator) collectResult() (result emulatorResult) {
 		result.nodes[i] = txns
 	}
 	return result
+}
+
+// Dummy implementation of execpool.BacklogPool
+func (e *emulator) EnqueueBacklog(enqueueCtx context.Context, t execpool.ExecFunc, arg interface{}, out chan interface{}) error {
+	t(arg)
+	return nil
+}
+
+// Dummy implementation of execpool.BacklogPool
+func (e *emulator) Enqueue(enqueueCtx context.Context, t execpool.ExecFunc, arg interface{}, i execpool.Priority, out chan interface{}) error {
+	return nil
+}
+
+// Dummy implementation of execpool.BacklogPool
+func (e *emulator) GetOwner() interface{} {
+	return nil
+}
+
+// Dummy implementation of execpool.BacklogPool
+func (e *emulator) Shutdown() {
+
+}
+
+// Dummy implementation of execpool.BacklogPool
+func (e *emulator) GetParallelism() int {
+	return 0
 }
