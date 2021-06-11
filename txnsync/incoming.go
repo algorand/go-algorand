@@ -203,7 +203,9 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 			if err == nil {
 				peer.addIncomingBloomFilter(txMsg.Round, bloomFilter, s.round)
 			} else {
-				panic(err)
+				s.log.Infof("Invalid bloom filter received from peer : %v", err)
+				// for now we can ignore that - but a better handling would be to disconnect
+				// from such a peer.
 			}
 		}
 		peer.updateRequestParams(txMsg.UpdatedRequestParams.Modulator, txMsg.UpdatedRequestParams.Offset)
