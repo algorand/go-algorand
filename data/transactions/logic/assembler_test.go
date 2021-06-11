@@ -421,6 +421,9 @@ func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpSt
 						break
 					}
 				}
+				if found == nil {
+					t.Log(fmt.Sprintf("Errors: %v", errors))
+				}
 				require.NotNil(t, found, "No error on line %d", exp.l)
 				msg := found.Unwrap().Error()
 				testMatch(t, msg, exp.s)
@@ -1446,7 +1449,27 @@ func TestAssembleBalance(t *testing.T) {
 balance
 int 1
 ==`
-	testProg(t, source, AssemblerMaxVersion, expect{2, "balance arg 0 wanted type uint64 got []byte"})
+	for v := uint64(2); v < directRefEnabledVersion; v++ {
+		testProg(t, source, v, expect{2, "balance arg 0 wanted type uint64 got []byte"})
+	}
+	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
+		testProg(t, source, v)
+	}
+}
+
+func TestAssembleMinBalance(t *testing.T) {
+	t.Parallel()
+
+	source := `byte 0x00
+min_balance
+int 1
+==`
+	for v := uint64(3); v < directRefEnabledVersion; v++ {
+		testProg(t, source, v, expect{2, "min_balance arg 0 wanted type uint64 got []byte"})
+	}
+	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
+		testProg(t, source, v)
+	}
 }
 
 func TestAssembleAsset(t *testing.T) {

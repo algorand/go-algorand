@@ -36,19 +36,19 @@ Starting from version 2 TEAL evaluator can run programs in two modes:
 2. Application run (stateful)
 
 Differences between modes include:
-1. Max program length (consensus parameters LogicSigMaxSize, MaxApprovalProgramLen and MaxClearStateProgramLen)
+1. Max program length (consensus parameters LogicSigMaxSize, MaxAppProgramLen & MaxExtraAppProgramPages)
 2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
-3. Opcodes availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
+3. Opcode availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
 
 ## Constants
 
-Constants are loaded into the environment into storage separate from the stack. They can then be pushed onto the stack by referring to the type and index. This makes for efficient re-use of byte constants used for account addresses, etc.
+Constants are loaded into the environment into storage separate from the stack. They can then be pushed onto the stack by referring to the type and index. This makes for efficient re-use of byte constants used for account addresses, etc. Constants that are not reused can be pushed with `pushint` or `pushbytes`.
 
 The assembler will hide most of this, allowing simple use of `int 1234` and `byte 0xcafed00d`. These constants will automatically get assembled into int and byte pages of constants, de-duplicated, and operations to load them from constant storage space inserted.
 
 Constants are loaded into the environment by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings. This should efficiently load 32 and 64 byte constants which will be common as addresses, hashes, and signatures.
 
-Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
+Constants are pushed onto the stack by `intc`, `intc_[0123]`, `pushint`, `bytec`, `bytec_[0123]`, and `pushbytes`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
 
 ### Named Integer Constants
 
@@ -80,6 +80,8 @@ An application transaction must indicate the action to be taken following the ex
 ## Operations
 
 Most operations work with only one type of argument, uint64 or bytes, and panic if the wrong type value is on the stack.
+
+Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with TEAL v4, these values may always be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a bytes address for Accounts, or a uint64 id). The values, however, must still be present in the Txn fields. Before TEAL v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in they corresponding _Foreign_ array.  See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
 
 Many programs need only a few dozen instructions. The instruction set has some optimization built in. `intc`, `bytec`, and `arg` take an immediate value byte, making a 2-byte op to load a value onto the stack, but they also have single byte versions for loading the most common constant values. Any program will benefit from having a few common values loaded with a smaller one byte opcode. Cryptographic hashes and `ed25519verify` are single byte opcodes with powerful libraries behind them. These operations still take more time than other ops (and this is reflected in the cost of each op and the cost limit of a program) but are efficient in compiled code space.
 
@@ -214,8 +216,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `store i` | pop a value from the stack and store to scratch space |
 | `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
 | `gloads i` | push Ith scratch space index of the Ath transaction in the current group |
-| `gaid t` | push the creatable ID of the Tth transaction in the current group |
-| `gaids` | push the creatable ID of the Ath transaction in the current group |
+| `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |
+| `gaids` | push the ID of the asset or application created in the Ath transaction of the current group |
 
 **Transaction Fields**
 
@@ -348,19 +350,19 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 
 | Op | Description |
 | --- | --- |
-| `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
-| `min_balance` | get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
-| `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
-| `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the current application key B => value |
-| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C => [*... stack*, value, 0 or 1] |
+| `balance` | get balance account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
+| `min_balance` | get minimum required balance account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
+| `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
+| `app_local_get` | read from account A from local state of the current application key B => value |
+| `app_local_get_ex` | read from account A from local state of the application B key C => [*... stack*, value, 0 or 1] |
 | `app_global_get` | read key A from global state of a current application => value |
-| `app_global_get_ex` | read from application Txn.ForeignApps[A] global state key B => [*... stack*, value, 0 or 1]. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app |
-| `app_local_put` | write to account specified by Txn.Accounts[A] to local state of a current application key B with value C |
+| `app_global_get_ex` | read from application A global state key B => [*... stack*, value, 0 or 1] |
+| `app_local_put` | write to account specified by A to local state of a current application key B with value C |
 | `app_global_put` | write key A and value B to global state of the current application |
-| `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |
+| `app_local_del` | delete from account A local state key B of the current application |
 | `app_global_del` | delete key A from a global state of the current application |
-| `asset_holding_get i` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value} |
-| `asset_params_get i` | read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value} |
+| `asset_holding_get i` | read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value} |
+| `asset_params_get i` | read from asset A params field X (imm arg) => {0 or 1 (top), value} |
 
 # Assembler Syntax
 
