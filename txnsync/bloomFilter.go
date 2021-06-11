@@ -116,7 +116,9 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 	default:
 		// we want subset.
 		result.containedTxnsRange.firstCounter = math.MaxUint64
-		filtedTransactionsIDs := make([]transactions.Txid, 0, len(txnGroups))
+		filtedTransactionsIDs := getTxIDSliceBuffer(len(txnGroups))
+		defer releaseTxIDSliceBuffer(filtedTransactionsIDs)
+
 		for _, group := range txnGroups {
 			txID := group.FirstTransactionID
 			if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {

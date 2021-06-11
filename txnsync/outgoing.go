@@ -79,19 +79,22 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 	defer encoder.state.messageSendWaitGroup.Done()
 
 	var err error
-	encoder.messageData.message.TransactionGroups, err = encoder.state.encodeTransactionGroups(encoder.messageData.transactionGroups, encoder.peerDataExchangeRate)
-	if err != nil {
-		encoder.state.log.Warnf("unable to encode transaction groups : %v", err)
+	if len(encoder.messageData.transactionGroups) > 0 {
+		encoder.messageData.message.TransactionGroups, err = encoder.state.encodeTransactionGroups(encoder.messageData.transactionGroups, encoder.peerDataExchangeRate)
+		if err != nil {
+			encoder.state.log.Warnf("unable to encode transaction groups : %v", err)
+		}
+		encoder.messageData.transactionGroups = nil // clear out to allow GC to reclaim
 	}
-	encoder.messageData.transactionGroups = nil // clear out to allow GC to reclaim
 
-	encodedMessage := encoder.messageData.message.MarshalMsg([]byte{})
+	encodedMessage := encoder.messageData.message.MarshalMsg(getMessageBuffer())
 	encoder.messageData.encodedMessageSize = len(encodedMessage)
-
-	encoder.state.node.SendPeerMessage(encoder.messageData.peer.networkPeer, encodedMessage, encoder.asyncMessageSent)
-
 	// now that the message is ready, we can discard the encoded transcation group slice to allow the GC to collect it.
 	releaseEncodedTransactionGroups(encoder.messageData.message.TransactionGroups.Bytes)
+
+	encoder.state.node.SendPeerMessage(encoder.messageData.peer.networkPeer, encodedMessage, encoder.asyncMessageSent)
+	releaseMessageBuffer(encodedMessage)
+
 	encoder.messageData.message.TransactionGroups.Bytes = nil
 	return nil
 }
@@ -211,16 +214,11 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 			// non-relays to send transcation that they received via the transaction sync back.
 			transactionGroups = s.locallyGeneratedTransactions(pendingTransactions)
 		}
-		//var txnGroups []transactions.SignedTxGroup
+
 		profTxnsSelection := s.profiler.getElement(profElementTxnsSelection)
 		profTxnsSelection.start()
 		metaMessage.transactionGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
 		profTxnsSelection.end()
-		/*
-			metaMessage.message.TransactionGroups, err = s.encodeTransactionGroups(txnGroups, peer.dataExchangeRate)
-			if err != nil {
-				return
-			}*/
 
 		// clear the last sent bloom filter on the end of a series of partial messages.
 		// this would ensure we generate a new bloom filter every beta, which is needed
