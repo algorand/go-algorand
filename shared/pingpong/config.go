@@ -30,37 +30,38 @@ const ConfigFilename = "ppconfig.json"
 
 // PpConfig defines configuration structure for
 type PpConfig struct {
-	SrcAccount      string
-	DelayBetweenTxn time.Duration
-	RandomizeFee    bool
-	RandomizeAmt    bool
-	RandomizeDst    bool
-	MaxFee          uint64
-	MinFee          uint64
-	MaxAmt          uint64
-	TxnPerSec       uint64
-	NumPartAccounts uint32
-	RunTime         time.Duration
-	RestTime        time.Duration
-	RefreshTime     time.Duration
-	MinAccountFunds uint64
-	Quiet           bool
-	RandomNote      bool
-	RandomLease     bool
-	Program         []byte
-	LogicArgs       [][]byte
-	GroupSize       uint32
-	NumAsset        uint32
-	MinAccountAsset uint64
-	NumApp          uint32
-	NumAppOptIn     uint32
-	AppProgOps      uint32
-	AppProgHashes   uint32
-	AppProgHashSize string
-	AppGlobKeys     uint32
-	AppLocalKeys    uint32
-	Rekey           bool
-	MaxRuntime      time.Duration
+	SrcAccount       string
+	DelayBetweenTxn  time.Duration
+	RandomizeFee     bool
+	RandomizeAmt     bool
+	RandomizeDst     bool
+	MaxFee           uint64
+	MinFee           uint64
+	MaxAmt           uint64
+	TxnPerSec        uint64
+	NumPartAccounts  uint32
+	RunTime          time.Duration
+	RestTime         time.Duration
+	RefreshTime      time.Duration
+	MinAccountFunds  uint64
+	Quiet            bool
+	RandomNote       bool
+	RandomLease      bool
+	Program          []byte
+	LogicArgs        [][]byte
+	GroupSize        uint32
+	NumAsset         uint32
+	NumAssetHoldings uint32
+	MinAccountAsset  uint64
+	NumApp           uint32
+	NumAppOptIn      uint32
+	AppProgOps       uint32
+	AppProgHashes    uint32
+	AppProgHashSize  string
+	AppGlobKeys      uint32
+	AppLocalKeys     uint32
+	Rekey            bool
+	MaxRuntime       time.Duration
 
 	// asset spam; make lots of NFT ASAs
 	NftAsaPerSecond       uint32 // e.g. 100

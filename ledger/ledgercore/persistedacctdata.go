@@ -1133,13 +1133,13 @@ func (e *ExtendedAssetHolding) appendNewGroup(aidx basics.AssetIndex, data inter
 	e.Count++
 }
 
-// insertAfter adds a new group after idx (at newly allocated position idx+1)
 func (e *ExtendedAssetHolding) insertNewGroupAfter(gi int, aidx basics.AssetIndex, data interface{}) {
 	g := makeAssetHoldingGroup(aidx, data)
 	e.insertAfter(gi, g)
 	e.Count++
 }
 
+// insertAfter adds a new group after idx (at newly allocated position idx+1)
 func (e *ExtendedAssetHolding) insertAfter(gi int, group interface{}) {
 	e.Groups = append(e.Groups, AssetsHoldingGroup{})
 	copy(e.Groups[gi+1:], e.Groups[gi:])
@@ -1203,14 +1203,12 @@ func (e *ExtendedAssetParams) Insert(input []basics.AssetIndex, data map[basics.
 	insert(flatten, e)
 }
 
-// func insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetHolding, agl AbstractAssetGroupList) {
 func insert(assets []flattenAsset, agl AbstractAssetGroupList) {
 	gi := 0
 	for _, asset := range assets {
 		result := findGroup(asset.aidx, gi, agl)
 		if result.found {
 			if result.split {
-				// e.splitInsert(result.gi, aidx, data[aidx])
 				pos := agl.split(result.gi, asset.aidx)
 				agl.insertInto(pos, asset.aidx, asset.data)
 			} else {
