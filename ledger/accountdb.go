@@ -1675,6 +1675,10 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 		}
 	}
 
+	if err != nil {
+		return updatedAccounts, err
+	}
+
 	// same logic as above but for asset params
 	if delta.old.pad.NumAssetParams() <= assetsThreshold && len(delta.new.AssetParams) <= assetsThreshold {
 		// AccountData assigned above
@@ -1761,8 +1765,9 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 	// update accountbase
 	if err == nil {
 		var rowsAffected int64
+		var result sql.Result
 		normBalance := delta.new.NormalizedOnlineBalance(genesisProto)
-		result, err := qabu.Exec(normBalance, protocol.Encode(&pad), delta.old.rowid)
+		result, err = qabu.Exec(normBalance, protocol.Encode(&pad), delta.old.rowid)
 		if err == nil {
 			// rowid doesn't change on update.
 			updatedAccounts[updateIdx].rowid = delta.old.rowid
