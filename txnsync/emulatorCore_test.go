@@ -176,6 +176,7 @@ func (e *emulator) initNodes() {
 		e.syncers = append(e.syncers, syncer)
 	}
 	randCounter := 0
+	encodingBuf := protocol.GetEncodingBuf()
 	for _, initAlloc := range e.scenario.initialAlloc {
 		node := e.nodes[initAlloc.node]
 		for i := 0; i < initAlloc.transactionsCount; i++ {
@@ -199,6 +200,8 @@ func (e *emulator) initNodes() {
 				randCounter++
 			}
 			group.FirstTransactionID = group.Transactions[0].ID()
+			encodingBuf = encodingBuf[:0]
+			group.EncodedLength = len(group.Transactions[0].MarshalMsg(encodingBuf))
 			node.txpoolIds[group.FirstTransactionID] = true
 			node.txpoolEntries = append(node.txpoolEntries, group)
 		}
@@ -207,6 +210,7 @@ func (e *emulator) initNodes() {
 		node.txpoolGroupCounter += uint64(initAlloc.transactionsCount)
 		node.onNewTransactionPoolEntry()
 	}
+	protocol.PutEncodingBuf(encodingBuf)
 }
 
 func (e *emulator) collectResult() (result emulatorResult) {

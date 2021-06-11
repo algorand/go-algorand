@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -258,7 +259,10 @@ func (n *emulatedNode) enqueueMessage(from int, msg queuedMessage) {
 			baseTime = n.peers[from].messageQ[len(n.peers[from].messageQ)-1].readyAt
 		}
 	}
-	n.peers[from].messageQ = append(n.peers[from].messageQ, queuedMessage{bytes: msg.bytes, readyAt: baseTime + msg.readyAt})
+	// the message bytes need to be copied, so that the originating bytes could be safely deleted.
+	msgBytes := make([]byte, len(msg.bytes))
+	copy(msgBytes[:], msg.bytes[:])
+	n.peers[from].messageQ = append(n.peers[from].messageQ, queuedMessage{bytes: msgBytes, readyAt: baseTime + msg.readyAt})
 	n.peers[from].mu.Unlock()
 }
 
@@ -280,6 +284,7 @@ func (n *emulatedNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, 
 	// add to transaction pool.
 	duplicateMessage := 0
 	duplicateMessageSize := 0
+	encodingBuf := protocol.GetEncodingBuf()
 	for _, group := range txGroups {
 		if group.Transactions[0].Txn.LastValid < n.emulator.currentRound {
 			continue
@@ -294,8 +299,13 @@ func (n *emulatedNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, 
 		group.GroupCounter = n.txpoolGroupCounter
 		n.txpoolGroupCounter++
 		group.FirstTransactionID = txID
+		for _, txn := range group.Transactions {
+			encodingBuf = encodingBuf[:0]
+			group.EncodedLength += len(txn.MarshalMsg(encodingBuf))
+		}
 		n.txpoolEntries = append(n.txpoolEntries, group)
 	}
+	protocol.PutEncodingBuf(encodingBuf)
 	if duplicateMessage > 0 {
 		fmt.Printf("%s : %d duplicate messages recieved\n", n.name, duplicateMessage)
 	}

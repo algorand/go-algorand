@@ -86,6 +86,9 @@ type syncState struct {
 	// pool is full, a node would not ask any of the other peers for additional transactions.
 	transactionPoolFull bool
 
+	// messageSendWaitGroup coordinates the messages that are being sent to the network. Before aborting the mainloop, we want to make
+	// sure there are no outbound messages that are waiting to be sent to the network ( i.e. that all the tasks that we enqueued to the
+	// execution pool were completed ). This does not include the time where the message spent while waiting on the network queue itself.
 	messageSendWaitGroup sync.WaitGroup
 }
 

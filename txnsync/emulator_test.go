@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -629,6 +630,130 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 		step:         1 * time.Millisecond / 10,
 		testDuration: 2000 * time.Millisecond,
 	}
+	// update the expected results to have the correct number of entries.
+	for j := range testScenario.initialAlloc {
+		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
+			for n := range testScenario.expectedResults.nodes {
+				testScenario.expectedResults.nodes[n] = append(testScenario.expectedResults.nodes[n], nodeTransaction{expirationRound: testScenario.initialAlloc[j].expirationRound, transactionSize: testScenario.initialAlloc[j].transactionSize})
+			}
+		}
+	}
+
+	emulateScenario(t, testScenario)
+}
+
+func TestEmulatedTwentyNodesFourRelays(t *testing.T) {
+	if testing.Short() {
+		t.Skip("TestEmulatedTwentyNodesFourRelays is a long test and therefore was skipped")
+	}
+	testScenario := scenario{
+		netConfig: networkConfiguration{
+			nodes: []nodeConfiguration{
+				{
+					name:    "relay-1",
+					isRelay: true,
+				},
+				{
+					name:    "relay-2",
+					isRelay: true,
+					outgoingConnections: []connectionSettings{
+						{
+							uploadSpeed:   1000000,
+							downloadSpeed: 1000000,
+							target:        0,
+						},
+						{
+							uploadSpeed:   1000000,
+							downloadSpeed: 1000000,
+							target:        3,
+						},
+					},
+				},
+				{
+					name:    "relay-3",
+					isRelay: true,
+					outgoingConnections: []connectionSettings{
+						{
+							uploadSpeed:   1000000,
+							downloadSpeed: 1000000,
+							target:        1,
+						},
+						{
+							uploadSpeed:   1000000,
+							downloadSpeed: 1000000,
+							target:        0,
+						},
+					},
+				},
+				{
+					name:    "relay-4",
+					isRelay: true,
+					outgoingConnections: []connectionSettings{
+						{
+							uploadSpeed:   1000000,
+							downloadSpeed: 1000000,
+							target:        2,
+						},
+						{
+							uploadSpeed:   1000000,
+							downloadSpeed: 1000000,
+							target:        0,
+						},
+					},
+				},
+			},
+		},
+		initialAlloc: []initialTransactionsAllocation{},
+		expectedResults: emulatorResult{
+			nodes: []nodeTransactions{
+				{},
+				{},
+				{},
+				{},
+			},
+		},
+		step:         1 * time.Millisecond / 10,
+		testDuration: 2000 * time.Millisecond,
+	}
+
+	// add nodes.
+	for i := 0; i < 20; i++ {
+		testScenario.netConfig.nodes = append(testScenario.netConfig.nodes, nodeConfiguration{
+			name: fmt.Sprintf("node-%d", i+1),
+			outgoingConnections: []connectionSettings{
+				{
+					uploadSpeed:   1000000,
+					downloadSpeed: 1000000,
+					target:        0,
+				},
+				{
+					uploadSpeed:   1000000,
+					downloadSpeed: 1000000,
+					target:        1,
+				},
+				{
+					uploadSpeed:   1000000,
+					downloadSpeed: 1000000,
+					target:        2,
+				},
+				{
+					uploadSpeed:   1000000,
+					downloadSpeed: 1000000,
+					target:        3,
+				},
+			},
+		})
+
+		testScenario.initialAlloc = append(testScenario.initialAlloc, initialTransactionsAllocation{
+			node:              4 + i, // i.e. node-1 + i
+			transactionsCount: 250,
+			transactionSize:   270,
+			expirationRound:   basics.Round(5),
+		})
+
+		testScenario.expectedResults.nodes = append(testScenario.expectedResults.nodes, nodeTransactions{})
+	}
+
 	// update the expected results to have the correct number of entries.
 	for j := range testScenario.initialAlloc {
 		for i := 0; i < testScenario.initialAlloc[j].transactionsCount; i++ {
