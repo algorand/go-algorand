@@ -91,9 +91,9 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 			}, nil
 		}
 		if errors.Is(err, compress.ErrShortBuffer) {
-			s.log.Warnf("compression had negative effect, made message bigger: original msg length: %v", len(encoded))
+			s.log.Infof("compression had negative effect, made message bigger: original msg length: %v", len(encoded))
 		} else {
-			s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(encoded), err)
+			s.log.Warnf("failed to compress %d bytes txnsync msg: %d", len(encoded), err)
 		}
 	}
 
