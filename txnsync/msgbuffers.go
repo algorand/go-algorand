@@ -24,8 +24,6 @@ import (
 
 const messageBufferDefaultInitialSize = 10240
 
-//const txidSliceBufferDefaultInitialSize = 128
-
 // msgBuffersPool holds temporary byte slice buffers used for encoding messages.
 var msgBuffersPool = sync.Pool{
 	New: func() interface{} {
