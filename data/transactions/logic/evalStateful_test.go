@@ -35,21 +35,26 @@ type balanceRecord struct {
 	addr     basics.Address
 	balance  uint64
 	locals   map[basics.AppIndex]basics.TealKeyValue
-	holdings map[uint64]basics.AssetHolding
+	holdings map[basics.AssetIndex]basics.AssetHolding
 	mods     map[basics.AppIndex]map[string]basics.ValueDelta
 }
 
-// In our test ledger, we don't store the AppParams with its creator,
-// so we need to carry the creator around with the params,
+// In our test ledger, we don't store the creatables with their
+// creators, so we need to carry the creator around with them.
 type appParams struct {
 	basics.AppParams
+	Creator basics.Address
+}
+
+type asaParams struct {
+	basics.AssetParams
 	Creator basics.Address
 }
 
 type testLedger struct {
 	balances          map[basics.Address]balanceRecord
 	applications      map[basics.AppIndex]appParams
-	assets            map[basics.AssetIndex]basics.AssetParams
+	assets            map[basics.AssetIndex]asaParams
 	trackedCreatables map[int]basics.CreatableIndex
 	appID             basics.AppIndex
 	creatorAddr       basics.Address
@@ -68,7 +73,7 @@ func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
 		addr:     addr,
 		balance:  balance,
 		locals:   make(map[basics.AppIndex]basics.TealKeyValue),
-		holdings: make(map[uint64]basics.AssetHolding),
+		holdings: make(map[basics.AssetIndex]basics.AssetHolding),
 		mods:     make(map[basics.AppIndex]map[string]basics.ValueDelta),
 	}
 	return br
@@ -81,7 +86,7 @@ func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 		l.balances[addr] = makeBalanceRecord(addr, balance)
 	}
 	l.applications = make(map[basics.AppIndex]appParams)
-	l.assets = make(map[basics.AssetIndex]basics.AssetParams)
+	l.assets = make(map[basics.AssetIndex]asaParams)
 	l.trackedCreatables = make(map[int]basics.CreatableIndex)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
 	return l
@@ -95,28 +100,34 @@ func (l *testLedger) reset() {
 	}
 }
 
-func (l *testLedger) newApp(addr basics.Address, appID basics.AppIndex, schemas basics.StateSchemas) {
+func (l *testLedger) newApp(creator basics.Address, appID basics.AppIndex, schemas basics.StateSchemas) {
 	l.appID = appID
-	appIdx := appID
-	l.applications[appIdx] = appParams{
-		Creator: addr,
+	l.applications[appID] = appParams{
+		Creator: creator,
 		AppParams: basics.AppParams{
 			StateSchemas: schemas,
 			GlobalState:  make(basics.TealKeyValue),
 		},
 	}
-	br, ok := l.balances[addr]
+	br, ok := l.balances[creator]
 	if !ok {
-		br = makeBalanceRecord(addr, 0)
+		br = makeBalanceRecord(creator, 0)
 	}
-	br.locals[appIdx] = make(map[string]basics.TealValue)
-	l.balances[addr] = br
+	br.locals[appID] = make(map[string]basics.TealValue)
+	l.balances[creator] = br
 }
 
-func (l *testLedger) newAsset(creator basics.Address, assetID uint64, params basics.AssetParams) {
-	l.assets[basics.AssetIndex(assetID)] = params
-	// We're not simulating details of ReserveAddress yet.
-	l.setHolding(creator, assetID, params.Total, params.DefaultFrozen)
+func (l *testLedger) newAsset(creator basics.Address, assetID basics.AssetIndex, params basics.AssetParams) {
+	l.assets[assetID] = asaParams{
+		Creator:     creator,
+		AssetParams: params,
+	}
+	br, ok := l.balances[creator]
+	if !ok {
+		br = makeBalanceRecord(creator, 0)
+	}
+	br.holdings[assetID] = basics.AssetHolding{Amount: params.Total, Frozen: params.DefaultFrozen}
+	l.balances[creator] = br
 }
 
 func (l *testLedger) setHolding(addr basics.Address, assetID uint64, amount uint64, frozen bool) {
@@ -124,7 +135,7 @@ func (l *testLedger) setHolding(addr basics.Address, assetID uint64, amount uint
 	if !ok {
 		br = makeBalanceRecord(addr, 0)
 	}
-	br.holdings[assetID] = basics.AssetHolding{Amount: amount, Frozen: frozen}
+	br.holdings[basics.AssetIndex(assetID)] = basics.AssetHolding{Amount: amount, Frozen: frozen}
 	l.balances[addr] = br
 }
 
@@ -369,7 +380,7 @@ func (l *testLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
 
 func (l *testLedger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (basics.AssetHolding, error) {
 	if br, ok := l.balances[addr]; ok {
-		if asset, ok := br.holdings[uint64(assetID)]; ok {
+		if asset, ok := br.holdings[assetID]; ok {
 			return asset, nil
 		}
 		return basics.AssetHolding{}, fmt.Errorf("No asset for account")
@@ -377,11 +388,18 @@ func (l *testLedger) AssetHolding(addr basics.Address, assetID basics.AssetIndex
 	return basics.AssetHolding{}, fmt.Errorf("no such address")
 }
 
-func (l *testLedger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams, error) {
+func (l *testLedger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams, basics.Address, error) {
 	if asset, ok := l.assets[assetID]; ok {
-		return asset, nil
+		return asset.AssetParams, asset.Creator, nil
 	}
-	return basics.AssetParams{}, fmt.Errorf("no such asset")
+	return basics.AssetParams{}, basics.Address{}, fmt.Errorf("no such asset")
+}
+
+func (l *testLedger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Address, error) {
+	if app, ok := l.applications[appID]; ok {
+		return app.AppParams, app.Creator, nil
+	}
+	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no such app")
 }
 
 func (l *testLedger) ApplicationID() basics.AppIndex {
@@ -1227,6 +1245,12 @@ bnz ok
 error:
 err
 ok:
+int 0//params
+asset_params_get AssetCreator
+pop
+txn Sender
+==
+assert
 int 1
 `
 
@@ -2729,6 +2753,7 @@ func TestReturnTypes(t *testing.T) {
 		"gtxnsa":            "gtxnsa ApplicationArgs 0",
 		"pushint":           "pushint 7272",
 		"pushbytes":         `pushbytes "jojogoodgorilla"`,
+		"app_params_get":    "app_params_get AppGlobalNumUint",
 	}
 
 	byName := OpsByName[LogicVersion]

@@ -961,11 +961,11 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 
 func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("global expects one argument")
+		return ops.errorf("%s expects one argument", spec.Name)
 	}
 	fs, ok := globalFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("global unknown field: %#v", args[0])
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
 	if fs.version > ops.Version {
 		// no return here. we may as well continue to maintain typestack
@@ -982,11 +982,11 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 
 func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("asset_holding_get expects one argument")
+		return ops.errorf("%s expects one argument", spec.Name)
 	}
 	val, ok := assetHoldingFields[args[0]]
 	if !ok {
-		return ops.errorf("asset_holding_get unknown arg: %#v", args[0])
+		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
@@ -996,15 +996,29 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 
 func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("asset_params_get expects one argument")
+		return ops.errorf("%s expects one argument", spec.Name)
 	}
 	val, ok := assetParamsFields[args[0]]
 	if !ok {
-		return ops.errorf("asset_params_get unknown arg: %#v", args[0])
+		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
 	ops.returns(AssetParamsFieldTypes[val], StackUint64)
+	return nil
+}
+
+func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return ops.errorf("%s expects one argument", spec.Name)
+	}
+	val, ok := appParamsFields[args[0]]
+	if !ok {
+		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	ops.returns(AppParamsFieldTypes[val], StackUint64)
 	return nil
 }
 
@@ -2134,7 +2148,7 @@ func disGlobal(dis *disassembleState, spec *OpSpec) (string, error) {
 	if int(garg) >= len(GlobalFieldNames) {
 		return "", fmt.Errorf("invalid global arg index %d at pc=%d", garg, dis.pc)
 	}
-	return fmt.Sprintf("global %s", GlobalFieldNames[garg]), nil
+	return fmt.Sprintf("%s %s", spec.Name, GlobalFieldNames[garg]), nil
 }
 
 func disBranch(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -2176,7 +2190,7 @@ func disAssetHolding(dis *disassembleState, spec *OpSpec) (string, error) {
 	if int(arg) >= len(AssetHoldingFieldNames) {
 		return "", fmt.Errorf("invalid asset holding arg index %d at pc=%d", arg, dis.pc)
 	}
-	return fmt.Sprintf("asset_holding_get %s", AssetHoldingFieldNames[arg]), nil
+	return fmt.Sprintf("%s %s", spec.Name, AssetHoldingFieldNames[arg]), nil
 }
 
 func disAssetParams(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -2190,7 +2204,21 @@ func disAssetParams(dis *disassembleState, spec *OpSpec) (string, error) {
 	if int(arg) >= len(AssetParamsFieldNames) {
 		return "", fmt.Errorf("invalid asset params arg index %d at pc=%d", arg, dis.pc)
 	}
-	return fmt.Sprintf("asset_params_get %s", AssetParamsFieldNames[arg]), nil
+	return fmt.Sprintf("%s %s", spec.Name, AssetParamsFieldNames[arg]), nil
+}
+
+func disAppParams(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+	}
+	dis.nextpc = dis.pc + 2
+	arg := dis.program[dis.pc+1]
+	if int(arg) >= len(AppParamsFieldNames) {
+		return "", fmt.Errorf("invalid app params arg index %d at pc=%d", arg, dis.pc)
+	}
+	return fmt.Sprintf("%s %s", spec.Name, AssetParamsFieldNames[arg]), nil
 }
 
 type disInfo struct {

@@ -106,32 +106,32 @@ func (al *logicLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIn
 	return holding, nil
 }
 
-func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error) {
+func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, basics.Address, error) {
 	// Find asset creator
 	creator, ok, err := al.cow.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
 	if err != nil {
-		return basics.AssetParams{}, err
+		return basics.AssetParams{}, creator, err
 	}
 
 	// Ensure asset exists
 	if !ok {
-		return basics.AssetParams{}, fmt.Errorf("asset %d does not exist", assetIdx)
+		return basics.AssetParams{}, creator, fmt.Errorf("asset %d does not exist", assetIdx)
 	}
 
 	// Fetch the requested balance record
 	record, err := al.cow.Get(creator, false)
 	if err != nil {
-		return basics.AssetParams{}, err
+		return basics.AssetParams{}, creator, err
 	}
 
 	// Ensure account created the requested asset
 	params, ok := record.AssetParams[assetIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not created asset %d", creator, assetIdx)
-		return basics.AssetParams{}, err
+		return basics.AssetParams{}, creator, err
 	}
 
-	return params, nil
+	return params, creator, nil
 }
 
 func (al *logicLedger) Round() basics.Round {

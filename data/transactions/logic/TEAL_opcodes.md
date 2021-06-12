@@ -374,17 +374,17 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 2 | FirstValid | uint64 | round number |
 | 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 | round number |
-| 5 | Note | []byte |  |
-| 6 | Lease | []byte |  |
+| 5 | Note | []byte | Any data up to 1024 bytes |
+| 6 | Lease | []byte | 32 byte lease value |
 | 7 | Receiver | []byte | 32 byte address |
 | 8 | Amount | uint64 | micro-Algos |
 | 9 | CloseRemainderTo | []byte | 32 byte address |
 | 10 | VotePK | []byte | 32 byte address |
 | 11 | SelectionPK | []byte | 32 byte address |
-| 12 | VoteFirst | uint64 |  |
-| 13 | VoteLast | uint64 |  |
-| 14 | VoteKeyDilution | uint64 |  |
-| 15 | Type | []byte |  |
+| 12 | VoteFirst | uint64 | The first round that the participation key is valid. |
+| 13 | VoteLast | uint64 | The last round that the participation key is valid. |
+| 14 | VoteKeyDilution | uint64 | Dilution for the 2-level participation key |
+| 15 | Type | []byte | Transaction type as bytes |
 | 16 | TypeEnum | uint64 | See table below |
 | 17 | XferAsset | uint64 | Asset ID |
 | 18 | AssetAmount | uint64 | value in Asset's units |
@@ -877,9 +877,21 @@ params: Txn.Accounts offset (or, since v4, an account address that appears in Tx
 | 8 | AssetReserve | []byte | Reserve address |
 | 9 | AssetFreeze | []byte | Freeze address |
 | 10 | AssetClawback | []byte | Clawback address |
+| 11 | AssetCreator | []byte | Creator address |
 
 
 params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.
+
+## app_params_get i
+
+- Opcode: 0x72 {uint8 app params field index}
+- Pops: *... stack*, uint64
+- Pushes: *... stack*, any, uint64
+- read from app A params field X (imm arg) => {0 or 1 (top), value}
+- LogicSigVersion >= 4
+- Mode: Application
+
+params: Txn.ForeignApps offset (or, since v4, an app id that appears in Txn.ForeignApps). Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## min_balance
 
