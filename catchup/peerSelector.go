@@ -65,6 +65,13 @@ const (
 
 var errPeerSelectorNoPeerPoolsAvailable = errors.New("no peer pools available")
 
+// peerSelectorPeer is a peer wrapper, adding to it the peerClass information
+// There can be multiple peer elements with the same address but different peer classes, and it is important to distinguish between them.
+type peerSelectorPeer struct {
+	network.Peer
+	peerClass network.PeerOption
+}
+
 // peerClass defines the type of peer we want to have in a particular "class",
 // and define the network.PeerOption that would be used to retrieve that type of
 // peer
@@ -112,18 +119,19 @@ type peerSelector struct {
 // peer in the past, and to be forgiving of occasional performance
 // variations which may not be representative of the peer's overall
 // performance. It also stores the penalty history in the form or peer
-// selection gaps.
+// selection gaps, and the count of peerRankDownloadFailed incidents.
 type historicStats struct {
-	windowSize  int
-	rankSamples []int
-	rankSum     uint64
-	requestGaps []uint64
-	gapSum      float64
-	counter     uint64
+	windowSize       int
+	rankSamples      []int
+	rankSum          uint64
+	requestGaps      []uint64
+	gapSum           float64
+	counter          uint64
+	downloadFailures int
 }
 
-func makeHistoricStatus(windowSize int) *historicStats {
-	// Initialize the window (rankSamples) with zeros.
+func makeHistoricStatus(windowSize int, class peerClass) *historicStats {
+	// Initialize the window (rankSamples) with zeros but rankSum with the equivalent sum of class initial rank.
 	// This way, every peer will slowly build up its profile.
 	// Otherwise, if the best peer gets a bad download the first time,
 	// that will determine the rank of the peer.
@@ -131,8 +139,11 @@ func makeHistoricStatus(windowSize int) *historicStats {
 		windowSize:  windowSize,
 		rankSamples: make([]int, windowSize, windowSize),
 		requestGaps: make([]uint64, 0, windowSize),
-		rankSum:     0,
+		rankSum:     uint64(class.initialRank) * uint64(windowSize),
 		gapSum:      0.0}
+	for i := 0; i < windowSize; i++ {
+		hs.rankSamples[i] = class.initialRank
+	}
 	return &hs
 }
 
@@ -146,7 +157,7 @@ func (hs *historicStats) computerPenalty() float64 {
 // counter for ranking a peer. It calculates newGap, which is the
 // number of counter ticks since it last was updated (i.e. last ranked
 // after being selected). The number of gaps stored is bounded by the
-// windowSize. Calculages and returns the new penalty.
+// windowSize. Calculates and returns the new penalty.
 func (hs *historicStats) updateRequestPenalty(counter uint64) float64 {
 	newGap := counter - hs.counter
 	hs.counter = counter
@@ -188,7 +199,7 @@ func (hs *historicStats) resetRequestPenalty(steps int, initialRank int, class p
 		hs.gapSum -= 1.0 / float64(hs.requestGaps[s])
 	}
 	hs.requestGaps = hs.requestGaps[steps:]
-	return int(hs.computerPenalty() * (float64(hs.rankSum) / float64(len(hs.rankSamples))))
+	return boundRankByClass(int(hs.computerPenalty()*(float64(hs.rankSum)/float64(len(hs.rankSamples)))), class)
 }
 
 // push pushes a new rank to the historicStats, and returns the new
@@ -213,13 +224,20 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	// Download may fail for various reasons. Give it additional tries
 	// and see if it recovers/improves.
 	if value == peerRankDownloadFailed {
-		// Set the rank to 10 + the class upper bound, to evict
-		// the peer from the class if it is repeatedly
-		// failing. This is to make sure to switch to the next
-		// class when all peers in this class are failing.
-		// Here, +10 is added. This is of little consequence, and the
-		// purpose is to avoid rounding errors.
-		value = upperBound(class) + 10
+		hs.downloadFailures++
+		// - Set the rank to the class upper bound multiplied
+		//   by the number of downloadFailures.
+		// - Each downloadFailure increments the counter, and
+		//   each non-failure decrements it, until it gets to 0.
+		// - When the peer is consistently failing to
+		//   download, the value added to rankSum will
+		//   increase at an increasing rate to evict the peer
+		//   from the class sooner.
+		value = upperBound(class) * hs.downloadFailures
+	} else {
+		if hs.downloadFailures > 0 {
+			hs.downloadFailures--
+		}
 	}
 
 	hs.rankSamples = append(hs.rankSamples, value)
@@ -259,10 +277,10 @@ func makePeerSelector(net peersRetriever, initialPeersClasses []peerClass) *peer
 	return selector
 }
 
-// GetNextPeer returns the next peer. It randomally selects a peer from a pool that has
+// getNextPeer returns the next peer. It randomally selects a peer from a pool that has
 // the lowest rank value. Given that the peers are grouped by their ranks, allow us to
 // prioritize peers based on their class and/or performance.
-func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
+func (ps *peerSelector) getNextPeer() (psp *peerSelectorPeer, err error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.refreshAvailablePeers()
@@ -273,25 +291,24 @@ func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
 			// provide the needed test.
 			// pick one of the peers from this pool at random
 			peerIdx := crypto.RandUint64() % uint64(len(pool.peers))
-			peer = pool.peers[peerIdx].peer
+			psp = &peerSelectorPeer{pool.peers[peerIdx].peer, pool.peers[peerIdx].class.peerClass}
 			return
 		}
 	}
-
 	return nil, errPeerSelectorNoPeerPoolsAvailable
 }
 
 // RankPeer ranks a given peer.
 // return the old value and the new updated value.
 // updated value could be different from the input rank.
-func (ps *peerSelector) RankPeer(peer network.Peer, rank int) (int, int) {
-	if peer == nil {
+func (ps *peerSelector) RankPeer(psp *peerSelectorPeer, rank int) (int, int) {
+	if psp == nil {
 		return -1, -1
 	}
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	poolIdx, peerIdx := ps.findPeer(peer)
+	poolIdx, peerIdx := ps.findPeer(psp)
 	if poolIdx < 0 || peerIdx < 0 {
 		return -1, -1
 	}
@@ -313,7 +330,7 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) (int, int) {
 			ps.pools = append(ps.pools[:poolIdx], ps.pools[poolIdx+1:]...)
 		}
 
-		sortNeeded = ps.addToPool(peer, rank, class, peerHistory)
+		sortNeeded = ps.addToPool(psp.Peer, rank, class, peerHistory)
 	}
 
 	// Update the ranks of the peers by reducing the penalty for not beeing selected
@@ -321,7 +338,7 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) (int, int) {
 		pool := ps.pools[pl]
 		for pr := len(pool.peers) - 1; pr >= 0; pr-- {
 			localPeer := pool.peers[pr]
-			if pool.peers[pr].peer == peer {
+			if pool.peers[pr].peer == psp.Peer {
 				continue
 			}
 			// make the removal of penalty at a faster rate than adding it, so that the
@@ -351,10 +368,10 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) (int, int) {
 }
 
 // PeerDownloadDurationToRank calculates the rank for a peer given a peer and the block download time.
-func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownloadDuration time.Duration) (rank int) {
+func (ps *peerSelector) PeerDownloadDurationToRank(psp *peerSelectorPeer, blockDownloadDuration time.Duration) (rank int) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	poolIdx, peerIdx := ps.findPeer(peer)
+	poolIdx, peerIdx := ps.findPeer(psp)
 	if poolIdx < 0 || peerIdx < 0 {
 		return peerRankInvalidDownload
 	}
@@ -409,11 +426,15 @@ func peerAddress(peer network.Peer) string {
 // refreshAvailablePeers reload the available peers from the network package, add new peers along with their
 // corresponding initial rank, and deletes peers that have been dropped by the network package.
 func (ps *peerSelector) refreshAvailablePeers() {
-	existingPeers := make(map[string]network.Peer)
+	existingPeers := make(map[network.PeerOption]map[string]bool)
 	for _, pool := range ps.pools {
 		for _, localPeer := range pool.peers {
 			if peerAddress := peerAddress(localPeer.peer); peerAddress != "" {
-				existingPeers[peerAddress] = localPeer.peer
+				// Init the existingPeers map
+				if _, has := existingPeers[localPeer.class.peerClass]; !has {
+					existingPeers[localPeer.class.peerClass] = make(map[string]bool)
+				}
+				existingPeers[localPeer.class.peerClass][peerAddress] = true
 			}
 		}
 	}
@@ -425,12 +446,13 @@ func (ps *peerSelector) refreshAvailablePeers() {
 			if peerAddress == "" {
 				continue
 			}
-			if _, has := existingPeers[peerAddress]; has {
-				delete(existingPeers, peerAddress)
+			if _, has := existingPeers[initClass.peerClass][peerAddress]; has {
+				// Setting to false instead of deleting the element to be safe against duplicate peer addresses.
+				existingPeers[initClass.peerClass][peerAddress] = false
 				continue
 			}
 			// it's an entry which we did not have before.
-			sortNeeded = ps.addToPool(peer, initClass.initialRank, initClass, makeHistoricStatus(peerHistoryWindowSize)) || sortNeeded
+			sortNeeded = ps.addToPool(peer, initClass.initialRank, initClass, makeHistoricStatus(peerHistoryWindowSize, initClass)) || sortNeeded
 		}
 	}
 
@@ -440,7 +462,7 @@ func (ps *peerSelector) refreshAvailablePeers() {
 		for peerIdx := len(pool.peers) - 1; peerIdx >= 0; peerIdx-- {
 			peer := pool.peers[peerIdx].peer
 			if peerAddress := peerAddress(peer); peerAddress != "" {
-				if _, has := existingPeers[peerAddress]; has {
+				if toRemove, _ := existingPeers[pool.peers[peerIdx].class.peerClass][peerAddress]; toRemove {
 					// need to be removed.
 					pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
 				}
@@ -461,14 +483,16 @@ func (ps *peerSelector) refreshAvailablePeers() {
 
 // findPeer look into the peer pool and find the given peer.
 // The method returns the pool and peer indices if a peer was found, or (-1, -1) otherwise.
-func (ps *peerSelector) findPeer(peer network.Peer) (poolIdx, peerIdx int) {
-	peerAddr := peerAddress(peer)
-	if peerAddr != "" {
-		for i, pool := range ps.pools {
-			for j, localPeerEntry := range pool.peers {
-				if peerAddress(localPeerEntry.peer) == peerAddr {
-					return i, j
-				}
+func (ps *peerSelector) findPeer(psp *peerSelectorPeer) (poolIdx, peerIdx int) {
+	peerAddr := peerAddress(psp.Peer)
+	if peerAddr == "" {
+		return -1, -1
+	}
+	for i, pool := range ps.pools {
+		for j, localPeerEntry := range pool.peers {
+			if peerAddress(localPeerEntry.peer) == peerAddr &&
+				localPeerEntry.class.peerClass == psp.peerClass {
+				return i, j
 			}
 		}
 	}
