@@ -26,9 +26,9 @@ import (
 	"github.com/algorand/go-algorand/util/compress"
 )
 
-// gzip performance constants measured by BenchmarkTxnGroupCompression
-const estimatedGzipCompressionSpeed = 121123260.0 // bytes per second of how fast gzip compresses data
-const estimatedGzipCompressionGains = 0.32        // fraction of data reduced by gzip on txnsync msgs
+// Deflate performance constants measured by BenchmarkTxnGroupCompression
+const estimatedDeflateCompressionSpeed = 121123260.0 // bytes per second of how fast Deflate compresses data
+const estimatedDeflateCompressionGains = 0.32        // fraction of data reduced by Deflate on txnsync msgs
 
 const minEncodedTransactionGroupsCompressionThreshold = 1000
 
@@ -79,21 +79,16 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 
 	encoded := stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
 
-	// check if time saved by compression: estimatedGzipCompressionGains * len(msg) / dataExchangeRate
-	// is greater than by time spent during compression: len(msg) / estimatedGzipCompressionSpeed
-	if len(encoded) > minEncodedTransactionGroupsCompressionThreshold && float32(dataExchangeRate) < (estimatedGzipCompressionGains*estimatedGzipCompressionSpeed) {
-		compressedBytes, err := compressTransactionGroupsBytes(encoded)
-		if err == nil {
+	// check if time saved by compression: estimatedDeflateCompressionGains * len(msg) / dataExchangeRate
+	// is greater than by time spent during compression: len(msg) / estimatedDeflateCompressionSpeed
+	if len(encoded) > minEncodedTransactionGroupsCompressionThreshold && float32(dataExchangeRate) < (estimatedDeflateCompressionGains*estimatedDeflateCompressionSpeed) {
+		compressedBytes, compressionFormat := s.compressTransactionGroupsBytes(encoded)
+		if compressionFormat != compressionFormatNone {
 			return packedTransactionGroups{
 				Bytes:                compressedBytes,
-				CompressionFormat:    compressionFormatGzip,
+				CompressionFormat:    compressionFormat,
 				LenDecompressedBytes: uint64(len(encoded)),
 			}, nil
-		}
-		if errors.Is(err, compress.ErrShortBuffer) {
-			s.log.Infof("compression had negative effect, made message bigger: original msg length: %d", len(encoded))
-		} else {
-			s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(encoded), err)
 		}
 	}
 
@@ -103,13 +98,22 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 	}, nil
 }
 
-func compressTransactionGroupsBytes(data []byte) ([]byte, error) {
+func (s *syncState) compressTransactionGroupsBytes(data []byte) ([]byte, byte) {
 	b := make([]byte, 0, len(data))
 	_, out, err := compress.Compress(data, b, 1)
-	if err == nil && len(data) > len(out)*maxCompressionRatio {
-		return nil, fmt.Errorf("compression exceeded compression ratio: compressed data len: %d", len(out))
+	if err != nil {
+		if errors.Is(err, compress.ErrShortBuffer) {
+			s.log.Infof("compression had negative effect, made message bigger: original msg length: %d", len(data))
+		} else {
+			s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(data), err)
+		}
+		return data, compressionFormatNone
 	}
-	return out, err
+	if err == nil && len(data) > len(out)*maxCompressionRatio {
+		s.log.Infof("compression exceeded compression ratio: compressed data len: %d", len(out))
+		return data, compressionFormatNone
+	}
+	return out, compressionFormatDeflate
 }
 
 func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, genesisHash crypto.Digest) (txnGroups []transactions.SignedTxGroup, err error) {
@@ -120,7 +124,7 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 
 	switch ptg.CompressionFormat {
 	case compressionFormatNone:
-	case compressionFormatGzip:
+	case compressionFormatDeflate:
 		data, err = decompressTransactionGroupsBytes(data, ptg.LenDecompressedBytes)
 		if err != nil {
 			return
