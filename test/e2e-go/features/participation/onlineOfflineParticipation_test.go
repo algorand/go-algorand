@@ -192,7 +192,6 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	// Stop before the account should become eligible for selection so we can ensure it wasn't
 	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting-1),
 		time.Duration(uint64(globals.MaxTimePerRound)*uint64(accountProposesStarting-1)))
-	err = fixture.WaitForRoundWithTimeout(uint64(accountProposesStarting - 1))
 	a.NoError(err)
 
 	// Check if the account did not propose any blocks up to this round
