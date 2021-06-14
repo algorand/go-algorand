@@ -212,7 +212,7 @@ type AbstractAssetGroupList interface {
 	appendNewGroup(aidx basics.AssetIndex, data interface{})
 	insertNewGroupAfter(gi int, aidx basics.AssetIndex, data interface{})
 	// insertInto adds new asset data into group at index gi
-	insertInto(gi int, aidx basics.AssetIndex, data interface{})
+	insertInto(gi int, aidx basics.AssetIndex, data interface{}) error
 	// insertAfter inserts a group into position gi+1
 	insertAfter(gi int, group interface{})
 	// split group at index gi into two groups, and returns group index suitable for asset aidx insertion
@@ -450,7 +450,7 @@ func (g AssetsParamsGroup) GetParams(ai int) basics.AssetParams {
 }
 
 // insert asset aidx into current group. It should not exist in the group
-func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.AssetHolding) {
+func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.AssetHolding) error {
 	if aidx < g.MinAssetIndex {
 		// prepend
 		g.groupData.Amounts = append([]uint64{holding.Amount}, g.groupData.Amounts...)
@@ -478,6 +478,9 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 				g.groupData.AssetOffsets = append(g.groupData.AssetOffsets, 0)
 				copy(g.groupData.AssetOffsets[ai:], g.groupData.AssetOffsets[ai-1:])
 				prev := cur - d
+				if prev == aidx {
+					return fmt.Errorf("logic error: attempt to insert an existing asset idx %d at pos %d", aidx, ai)
+				}
 				g.groupData.AssetOffsets[ai] = aidx - prev
 				g.groupData.AssetOffsets[ai+1] = cur - aidx
 
@@ -494,9 +497,10 @@ func (g *AssetsHoldingGroup) insert(aidx basics.AssetIndex, holding basics.Asset
 		}
 	}
 	g.Count++
+	return nil
 }
 
-func (g *AssetsParamsGroup) insert(aidx basics.AssetIndex, params basics.AssetParams) {
+func (g *AssetsParamsGroup) insert(aidx basics.AssetIndex, params basics.AssetParams) error {
 	if aidx < g.MinAssetIndex {
 		// prepend
 		g.groupData.Totals = append([]uint64{params.Total}, g.groupData.Totals...)
@@ -542,6 +546,9 @@ func (g *AssetsParamsGroup) insert(aidx basics.AssetIndex, params basics.AssetPa
 				g.groupData.AssetOffsets = append(g.groupData.AssetOffsets, 0)
 				copy(g.groupData.AssetOffsets[ai:], g.groupData.AssetOffsets[ai-1:])
 				prev := cur - d
+				if prev == aidx {
+					return fmt.Errorf("logic error: attempt to insert an existing asset idx %d at pos %d", aidx, ai)
+				}
 				g.groupData.AssetOffsets[ai] = aidx - prev
 				g.groupData.AssetOffsets[ai+1] = cur - aidx
 
@@ -594,7 +601,7 @@ func (g *AssetsParamsGroup) insert(aidx basics.AssetIndex, params basics.AssetPa
 		}
 	}
 	g.Count++
-
+	return nil
 }
 
 func (g *AssetsHoldingGroup) mergeIn(other AbstractAssetGroup, pos uint32) (delta basics.AssetIndex) {
@@ -1146,9 +1153,13 @@ func (e *ExtendedAssetHolding) insertAfter(gi int, group interface{}) {
 	e.Groups[gi+1] = group.(AssetsHoldingGroup)
 }
 
-func (e *ExtendedAssetHolding) insertInto(idx int, aidx basics.AssetIndex, data interface{}) {
-	e.Groups[idx].insert(aidx, data.(basics.AssetHolding))
+func (e *ExtendedAssetHolding) insertInto(idx int, aidx basics.AssetIndex, data interface{}) error {
+	err := e.Groups[idx].insert(aidx, data.(basics.AssetHolding))
+	if err != nil {
+		return err
+	}
 	e.Count++
+	return nil
 }
 
 func (e *ExtendedAssetParams) prependNewGroup(aidx basics.AssetIndex, data interface{}) {
@@ -1176,43 +1187,53 @@ func (e *ExtendedAssetParams) insertAfter(gi int, group interface{}) {
 	e.Groups[gi+1] = group.(AssetsParamsGroup)
 }
 
-func (e *ExtendedAssetParams) insertInto(idx int, aidx basics.AssetIndex, data interface{}) {
-	e.Groups[idx].insert(aidx, data.(basics.AssetParams))
+func (e *ExtendedAssetParams) insertInto(idx int, aidx basics.AssetIndex, data interface{}) error {
+	err := e.Groups[idx].insert(aidx, data.(basics.AssetParams))
+	if err != nil {
+		return err
+	}
 	e.Count++
+	return nil
 }
 
 // Insert takes an array of asset holdings into ExtendedAssetHolding.
 // The input sequence must be sorted.
-func (e *ExtendedAssetHolding) Insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetHolding) {
+func (e *ExtendedAssetHolding) Insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetHolding) error {
 	flatten := make([]flattenAsset, len(input), len(input))
 	for i, aidx := range input {
 		flatten[i] = flattenAsset{aidx, data[aidx]}
 	}
 	sort.SliceStable(flatten, func(i, j int) bool { return flatten[i].aidx < flatten[j].aidx })
-	insert(flatten, e)
+	return insert(flatten, e)
 }
 
 // Insert takes an array of asset params into ExtendedAssetParams.
 // The input sequence must be sorted.
-func (e *ExtendedAssetParams) Insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetParams) {
+func (e *ExtendedAssetParams) Insert(input []basics.AssetIndex, data map[basics.AssetIndex]basics.AssetParams) error {
 	flatten := make([]flattenAsset, len(input), len(input))
 	for i, aidx := range input {
 		flatten[i] = flattenAsset{aidx, data[aidx]}
 	}
 	sort.SliceStable(flatten, func(i, j int) bool { return flatten[i].aidx < flatten[j].aidx })
-	insert(flatten, e)
+	return insert(flatten, e)
 }
 
-func insert(assets []flattenAsset, agl AbstractAssetGroupList) {
+func insert(assets []flattenAsset, agl AbstractAssetGroupList) error {
 	gi := 0
 	for _, asset := range assets {
 		result := findGroup(asset.aidx, gi, agl)
 		if result.found {
 			if result.split {
 				pos := agl.split(result.gi, asset.aidx)
-				agl.insertInto(pos, asset.aidx, asset.data)
+				err := agl.insertInto(pos, asset.aidx, asset.data)
+				if err != nil {
+					return err
+				}
 			} else {
-				agl.insertInto(result.gi, asset.aidx, asset.data)
+				err := agl.insertInto(result.gi, asset.aidx, asset.data)
+				if err != nil {
+					return err
+				}
 			}
 			gi = result.gi // advance group search offset (input is ordered, it is safe to search from the last match)
 		} else {
@@ -1227,7 +1248,7 @@ func insert(assets []flattenAsset, agl AbstractAssetGroupList) {
 			gi = result.gi + 1
 		}
 	}
-	return
+	return nil
 }
 
 // fgres structure describes result value of findGroup function
@@ -1627,6 +1648,14 @@ func mergeInternal(agl AbstractAssetGroupList, start int, size int, hint int, as
 			num = rg.AssetCount()
 		}
 
+		if _, ok := lg.(*AssetsHoldingGroup); ok {
+			if lg.AssetCount() != uint32(len(lg.(*AssetsHoldingGroup).groupData.AssetOffsets)) {
+				panic(fmt.Sprintf("mismatch1: %d %d\n", lg.AssetCount(), len(rg.(*AssetsHoldingGroup).groupData.AssetOffsets)))
+			}
+			if rg.AssetCount() != uint32(len(rg.(*AssetsHoldingGroup).groupData.AssetOffsets)) {
+				panic(fmt.Sprintf("mismatch2: %d %d\n", rg.AssetCount(), len(rg.(*AssetsHoldingGroup).groupData.AssetOffsets)))
+			}
+		}
 		delta := lg.mergeIn(rg, num)
 		if num != rg.AssetCount() {
 			// src group survived, update it and repeat

@@ -268,8 +268,8 @@ func genExtendedAsset(spec []groupSpec, agl AbstractAssetGroupList, maker func(A
 	return count
 }
 
-// test for AssetsHoldingGroup.insert
-func TestAssetHoldingGroupInsert(t *testing.T) {
+// test for AssetsHoldingGroup/AssetsParamsGroup.insert
+func TestAssetGroupInsert(t *testing.T) {
 	a := require.New(t)
 
 	spec := []groupSpec{
@@ -396,6 +396,32 @@ func TestAssetHoldingGroupInsert(t *testing.T) {
 	a.Equal(oldAssetOffsets[len(oldAssetOffsets)-1]-delta, e2.Groups[0].groupData.AssetOffsets[e2.Groups[0].Count-2])
 	a.Equal(delta, e2.Groups[0].groupData.AssetOffsets[e2.Groups[0].Count-1])
 
+	spec = []groupSpec{
+		{1, MaxHoldingGroupSize, MaxHoldingGroupSize},
+		{MaxHoldingGroupSize, 2 * MaxHoldingGroupSize, MaxHoldingGroupSize},
+		{2 * MaxHoldingGroupSize, 3 * MaxHoldingGroupSize, MaxHoldingGroupSize},
+	}
+
+	e = genExtendedHolding(t, spec)
+	err := e.Insert([]basics.AssetIndex{2}, map[basics.AssetIndex]basics.AssetHolding{2: {}})
+	a.Error(err)
+	a.Contains(err.Error(), "existing asset")
+	a.Equal(e.Count, uint32(MaxHoldingGroupSize*3))
+	err = e.Insert([]basics.AssetIndex{1000}, map[basics.AssetIndex]basics.AssetHolding{1000: {}})
+	a.NoError(err)
+
+	spec = []groupSpec{
+		{1, MaxParamsGroupSize, MaxParamsGroupSize},
+		{MaxParamsGroupSize, 2 * MaxParamsGroupSize, MaxParamsGroupSize},
+		{2 * MaxParamsGroupSize, 3 * MaxParamsGroupSize, MaxParamsGroupSize},
+	}
+	e2 = genExtendedParams(t, spec)
+	err = e2.Insert([]basics.AssetIndex{2}, map[basics.AssetIndex]basics.AssetParams{2: {}})
+	a.Error(err)
+	a.Contains(err.Error(), "existing asset")
+	a.Equal(e2.Count, uint32(MaxParamsGroupSize*3))
+	err = e2.Insert([]basics.AssetIndex{100}, map[basics.AssetIndex]basics.AssetParams{100: {}})
+	a.NoError(err)
 }
 
 func checkGroup(t *testing.T, group interface{}) {

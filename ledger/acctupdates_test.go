@@ -1207,7 +1207,30 @@ func TestLookupFull(t *testing.T) {
 	}
 }
 
-func TestLookupFullEdgeCase(t *testing.T) {
+type lookupFullTestSpec struct {
+	numAssets uint64
+	params    bool
+	holdings  bool
+}
+
+func lookupFullTest(t *testing.T, spec []lookupFullTestSpec) {
+
+	cloneAssetHoldings := func(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
+		res := make(map[basics.AssetIndex]basics.AssetHolding, len(m))
+		for id, val := range m {
+			res[id] = val
+		}
+		return res
+	}
+
+	cloneAssetParams := func(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
+		res := make(map[basics.AssetIndex]basics.AssetParams, len(m))
+		for id, val := range m {
+			res[id] = val
+		}
+		return res
+	}
+
 	a := require.New(t)
 	inMemory := false
 	dbs, fn := dbOpenTest(t, inMemory)
@@ -1220,13 +1243,23 @@ func TestLookupFullEdgeCase(t *testing.T) {
 
 	protoParams := config.Consensus[protocol.ConsensusFuture]
 
-	accts := randomAccounts(20, true)
+	maxAccounts := 20
+	if maxAccounts < len(spec) {
+		maxAccounts = 2 * len(spec)
+	}
+	accts := randomAccounts(maxAccounts, true)
 	_, err = initTestAccountDB(tx, accts, protoParams)
 	a.NoError(err)
 
-	addr1, ad1 := getAddrAD(accts, nil)
-	addr2, ad2 := getAddrAD(accts, map[basics.Address]bool{addr1: true})
-	addr3, ad3 := getAddrAD(accts, map[basics.Address]bool{addr1: true, addr2: true})
+	addresses := make([]basics.Address, len(spec))
+	ads := make([]basics.AccountData, len(spec))
+	for i := 0; i < len(spec); i++ {
+		seen := make(map[basics.Address]bool, i)
+		for j := 0; j < i; j++ {
+			seen[addresses[j]] = true
+		}
+		addresses[i], ads[i] = getAddrAD(accts, seen)
+	}
 	au := &accountUpdates{}
 	cfg := config.GetDefaultLocal()
 	au.initialize(cfg, ".", protoParams, accts)
@@ -1238,24 +1271,43 @@ func TestLookupFullEdgeCase(t *testing.T) {
 
 	rnd := basics.Round(1)
 
-	const numAssets = 1000
-	ad1.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numAssets)
-	ad1.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, numAssets)
-	ad2.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numAssets)
-	ad3.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numAssets)
-	for aidx := basics.AssetIndex(1); aidx <= numAssets; aidx++ {
+	numAssets := uint64(testAssetsThreshold)
+	for i := 0; i < len(spec); i++ {
+		if spec[i].numAssets > numAssets {
+			numAssets = spec[i].numAssets
+		}
+		if spec[i].holdings {
+			ads[i].Assets = make(map[basics.AssetIndex]basics.AssetHolding, spec[i].numAssets)
+		}
+		if spec[i].params {
+			ads[i].AssetParams = make(map[basics.AssetIndex]basics.AssetParams, spec[i].numAssets)
+		}
+	}
+
+	for aidx := uint64(1); aidx <= numAssets; aidx++ {
 		var deltas ledgercore.AccountDeltas
-		ad1.AssetParams[aidx] = basics.AssetParams{Total: uint64(aidx), DefaultFrozen: true, AssetName: "test"}
-		ad1.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
-		ad2.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
-		ad3.Assets[aidx%(numAssets-1)] = basics.AssetHolding{Amount: uint64(aidx) % (numAssets - 1), Frozen: true}
-		deltas.SetEntityDelta(addr1, basics.CreatableIndex(aidx), ledgercore.ActionParamsCreate)
-		deltas.SetEntityDelta(addr1, basics.CreatableIndex(aidx), ledgercore.ActionHoldingCreate)
-		deltas.SetEntityDelta(addr2, basics.CreatableIndex(aidx), ledgercore.ActionHoldingCreate)
-		deltas.SetEntityDelta(addr3, basics.CreatableIndex(aidx%(numAssets-1)), ledgercore.ActionHoldingCreate)
-		deltas.Upsert(addr1, ledgercore.PersistedAccountData{AccountData: ad1})
-		deltas.Upsert(addr2, ledgercore.PersistedAccountData{AccountData: ad2})
-		deltas.Upsert(addr3, ledgercore.PersistedAccountData{AccountData: ad3})
+		for i := 0; i < len(spec); i++ {
+			cidx := basics.CreatableIndex(uint64(aidx) % spec[i].numAssets)
+			pad, err := au.lookupWithRewards(rnd-1, addresses[i], true)
+			a.NoError(err)
+			if spec[i].params {
+				if spec[i].numAssets > uint64(testAssetsThreshold) && pad.NumAssetParams() > testAssetsThreshold {
+					ads[i].AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+				}
+				ads[i].AssetParams[basics.AssetIndex(cidx)] = basics.AssetParams{Total: uint64(cidx), DefaultFrozen: true, AssetName: "test"}
+				pad.AccountData.AssetParams = cloneAssetParams(ads[i].AssetParams)
+				deltas.SetEntityDelta(addresses[i], cidx, ledgercore.ActionParamsCreate)
+			}
+			if spec[i].holdings {
+				if spec[i].numAssets > uint64(testAssetsThreshold) && pad.NumAssetHoldings() > testAssetsThreshold {
+					ads[i].Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+				}
+				ads[i].Assets[basics.AssetIndex(cidx)] = basics.AssetHolding{Amount: uint64(cidx), Frozen: true}
+				pad.AccountData.Assets = cloneAssetHoldings(ads[i].Assets)
+				deltas.SetEntityDelta(addresses[i], cidx, ledgercore.ActionHoldingCreate)
+			}
+			deltas.Upsert(addresses[i], pad)
+		}
 
 		blk := getBlock(rnd)
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, deltas.Len(), 0)
@@ -1265,38 +1317,54 @@ func TestLookupFullEdgeCase(t *testing.T) {
 		au.commitRound(1, rnd-1, 0)
 		rnd++
 	}
-	accts[addr1] = ad1
-	accts[addr2] = ad2
-	accts[addr3] = ad3
+	for i := 0; i < len(spec); i++ {
+		accts[addresses[i]] = ads[i]
+	}
 
 	au.baseAccounts = lruAccounts{}
-	pad, err := au.lookupWithRewards(rnd-1, addr1, true)
-	a.NoError(err)
-	a.Equal(numAssets, len(pad.AccountData.Assets))
-	a.Equal(numAssets, len(pad.AccountData.AssetParams))
-	for aidx, holding := range pad.AccountData.Assets {
-		a.Equal(uint64(aidx), holding.Amount)
-	}
-	for aidx, holding := range pad.AccountData.AssetParams {
-		a.Equal(uint64(aidx), holding.Total)
-	}
 
-	pad, err = au.lookupWithRewards(rnd-1, addr2, true)
-	a.NoError(err)
-	a.Equal(numAssets, len(pad.AccountData.Assets))
-	a.Equal(0, len(pad.AccountData.AssetParams))
-	for aidx, holding := range pad.AccountData.Assets {
-		a.Equal(uint64(aidx), holding.Amount)
-	}
+	for i := 0; i < len(spec); i++ {
+		pad, err := au.lookupWithRewards(rnd-1, addresses[i], true)
+		a.NoError(err)
+		if spec[i].params {
+			a.Equal(int(spec[i].numAssets), len(pad.AccountData.AssetParams))
+			for aidx, holding := range pad.AccountData.AssetParams {
+				a.Equal(uint64(aidx), holding.Total)
+			}
+		} else {
+			a.Equal(0, len(pad.AccountData.AssetParams))
+		}
 
-	pad, err = au.lookupWithRewards(rnd-1, addr3, true)
-	a.NoError(err)
-	a.Equal(numAssets-1, len(pad.AccountData.Assets))
-	a.Equal(0, len(pad.AccountData.AssetParams))
-	for aidx, holding := range pad.AccountData.Assets {
-		a.Equal(uint64(aidx)%(numAssets-1), holding.Amount)
+		if spec[i].holdings {
+			a.Equal(int(spec[i].numAssets), len(pad.AccountData.Assets))
+			for aidx, holding := range pad.AccountData.Assets {
+				a.Equal(uint64(aidx), holding.Amount)
+			}
+		}
 	}
+}
 
+func TestLookupFullEdgeCase(t *testing.T) {
+	spec := []lookupFullTestSpec{
+		{1000, true, true},
+		{1000, false, true},
+		{999, false, true},
+		{1001, false, true},
+	}
+	lookupFullTest(t, spec)
+}
+
+func TestLookupFullAssets2k(t *testing.T) {
+	spec := []lookupFullTestSpec{
+		{2000, true, true},
+	}
+	lookupFullTest(t, spec)
+
+	spec = []lookupFullTestSpec{
+		{20, true, true},
+		{3000, false, true},
+	}
+	lookupFullTest(t, spec)
 }
 
 func TestIsWritingCatchpointFile(t *testing.T) {

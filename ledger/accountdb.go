@@ -1664,7 +1664,10 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 			}
 
 			if len(created) > 0 {
-				pad.ExtendedAssetHolding.Insert(created, delta.new.Assets)
+				err = pad.ExtendedAssetHolding.Insert(created, delta.new.Assets)
+				if err != nil {
+					return updatedAccounts, err
+				}
 			}
 
 			loaded, deletedKeys := pad.ExtendedAssetHolding.Merge()
