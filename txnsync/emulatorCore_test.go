@@ -176,6 +176,9 @@ func (e *emulator) initNodes() {
 		e.syncers = append(e.syncers, syncer)
 	}
 	randCounter := 0
+	// we want to place a sender on all transaction so that they would be *somewhat* compressible.
+	defaultSender := basics.Address{1, 2, 3, 4}
+	const senderEncodingSize = 35
 	encodingBuf := protocol.GetEncodingBuf()
 	for _, initAlloc := range e.scenario.initialAlloc {
 		node := e.nodes[initAlloc.node]
@@ -188,13 +191,14 @@ func (e *emulator) initNodes() {
 					Txn: transactions.Transaction{
 						Type: protocol.PaymentTx,
 						Header: transactions.Header{
-							Note:      make([]byte, initAlloc.transactionSize, initAlloc.transactionSize),
+							Note:      make([]byte, initAlloc.transactionSize-senderEncodingSize, initAlloc.transactionSize-senderEncodingSize),
 							LastValid: initAlloc.expirationRound,
+							Sender:    defaultSender,
 						},
 					},
 				},
 			}
-			for i := 0; i < 1+(initAlloc.transactionSize)/32; i++ {
+			for i := 0; i < 1+(initAlloc.transactionSize-senderEncodingSize)/32; i++ {
 				digest := crypto.Hash([]byte{byte(randCounter), byte(randCounter >> 8), byte(randCounter >> 16), byte(randCounter >> 24)})
 				copy(group.Transactions[0].Txn.Note[i*32:], digest[:])
 				randCounter++
@@ -215,17 +219,18 @@ func (e *emulator) initNodes() {
 
 func (e *emulator) collectResult() (result emulatorResult) {
 	result.nodes = make([]nodeTransactions, len(e.nodes))
+	const senderEncodingSize = 35
 	for i, node := range e.nodes {
 		var txns nodeTransactions
 		for _, txnGroup := range node.txpoolEntries {
 			size := len(txnGroup.Transactions[0].Txn.Note)
 			exp := txnGroup.Transactions[0].Txn.LastValid
-			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size})
+			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
 		}
 		for _, txnGroup := range node.expiredTx {
 			size := len(txnGroup.Transactions[0].Txn.Note)
 			exp := txnGroup.Transactions[0].Txn.LastValid
-			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size})
+			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
 		}
 		result.nodes[i] = txns
 	}
