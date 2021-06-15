@@ -119,15 +119,15 @@ func TestPeerSelector(t *testing.T) {
 	)
 
 	psp, err := peerSelector.getNextPeer()
-	peer := psp.Peer
 	require.NoError(t, err)
+	peer := psp.Peer
 	require.Equal(t, "12345", peerAddress(peer))
 
 	// replace peer.
 	peers = []network.Peer{&mockHTTPPeer{address: "54321"}}
 	psp, err = peerSelector.getNextPeer()
-	peer = psp.Peer
 	require.NoError(t, err)
+	peer = psp.Peer
 	require.Equal(t, "54321", peerAddress(peer))
 
 	// add another peer
@@ -136,16 +136,16 @@ func TestPeerSelector(t *testing.T) {
 	require.True(t, r1 != r2)
 
 	psp, err = peerSelector.getNextPeer()
-	peer = psp.Peer
 	require.NoError(t, err)
+	peer = psp.Peer
 	require.Equal(t, "abcde", peerAddress(peer))
 
 	r1, r2 = peerSelector.rankPeer(psp, 200)
 	require.True(t, r1 != r2)
 
 	psp, err = peerSelector.getNextPeer()
-	peer = psp.Peer
 	require.NoError(t, err)
+	peer = psp.Peer
 	require.Equal(t, "54321", peerAddress(peer))
 
 	peers = []network.Peer{t} // include a non-peer object, to test the refreshAvailablePeers handling of empty addresses.
