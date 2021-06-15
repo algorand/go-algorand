@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func TestPutOldBlock(t *testing.T) {
+func TestPutBlockTooOld(t *testing.T) {
 	genesisInitState, _, _ := genesis(10)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
