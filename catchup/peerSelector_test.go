@@ -422,8 +422,8 @@ func TestPenalty(t *testing.T) {
 	require.Equal(t, counters[4], 0)
 }
 
-// TestpeerDownloadDurationToRank tests all the cases handled by peerDownloadDurationToRank
-func TestpeerDownloadDurationToRank(t *testing.T) {
+// TestPeerDownloadDurationToRank tests all the cases handled by peerDownloadDurationToRank
+func TestPeerDownloadDurationToRank(t *testing.T) {
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
