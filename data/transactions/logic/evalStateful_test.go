@@ -689,6 +689,7 @@ pop
 		"byte 0x01\napp_global_del",
 		"int 0\nint 0\nasset_holding_get AssetFrozen",
 		"int 0\nint 0\nasset_params_get AssetManager",
+		"int 0\nint 0\napp_params_get AppApprovalProgram",
 	}
 
 	for _, source := range statefulOpcodeCalls {
