@@ -233,7 +233,7 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 		//   download, the value added to rankSum will
 		//   increase at an increasing rate to evict the peer
 		//   from the class sooner.
-		value = upperBound(class) * hs.downloadFailures
+		value = upperBound(class) * int(math.Exp2(float64(hs.downloadFailures)))
 	} else {
 		if hs.downloadFailures > 0 {
 			hs.downloadFailures--
@@ -298,10 +298,10 @@ func (ps *peerSelector) getNextPeer() (psp *peerSelectorPeer, err error) {
 	return nil, errPeerSelectorNoPeerPoolsAvailable
 }
 
-// RankPeer ranks a given peer.
+// rankPeer ranks a given peer.
 // return the old value and the new updated value.
 // updated value could be different from the input rank.
-func (ps *peerSelector) RankPeer(psp *peerSelectorPeer, rank int) (int, int) {
+func (ps *peerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int, int) {
 	if psp == nil {
 		return -1, -1
 	}
@@ -367,8 +367,8 @@ func (ps *peerSelector) RankPeer(psp *peerSelectorPeer, rank int) (int, int) {
 	return initialRank, rank
 }
 
-// PeerDownloadDurationToRank calculates the rank for a peer given a peer and the block download time.
-func (ps *peerSelector) PeerDownloadDurationToRank(psp *peerSelectorPeer, blockDownloadDuration time.Duration) (rank int) {
+// peerDownloadDurationToRank calculates the rank for a peer given a peer and the block download time.
+func (ps *peerSelector) peerDownloadDurationToRank(psp *peerSelectorPeer, blockDownloadDuration time.Duration) (rank int) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	poolIdx, peerIdx := ps.findPeer(psp)
