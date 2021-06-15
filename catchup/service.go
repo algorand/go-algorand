@@ -220,7 +220,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 
 		if err != nil {
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
-			peerSelector.RankPeer(psp, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, peerRankDownloadFailed)
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exists and we're making many requests down the chain
 			// for no reason.
@@ -246,7 +246,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		// Check that the block's contents match the block header (necessary with an untrusted block because b.Hash() only hashes the header)
 		if s.cfg.CatchupVerifyPaysetHash() {
 			if !block.ContentsMatchHeader() {
-				peerSelector.RankPeer(psp, peerRankInvalidDownload)
+				peerSelector.rankPeer(psp, peerRankInvalidDownload)
 				// Check if this mismatch is due to an unsupported protocol version
 				if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
 					s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
@@ -275,13 +275,13 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 			err = s.auth.Authenticate(block, cert)
 			if err != nil {
 				s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
-				peerSelector.RankPeer(psp, peerRankInvalidDownload)
+				peerSelector.rankPeer(psp, peerRankInvalidDownload)
 				continue // retry the fetch
 			}
 		}
 
-		peerRank := peerSelector.PeerDownloadDurationToRank(psp, blockDownloadDuration)
-		r1, r2 := peerSelector.RankPeer(psp, peerRank)
+		peerRank := peerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
+		r1, r2 := peerSelector.rankPeer(psp, peerRank)
 		s.log.Debugf("fetchAndWrite(%d): ranked peer with %d from %d to %d", r, peerRank, r1, r2)
 
 		// Write to ledger, noting that ledger writes must be in order
@@ -622,7 +622,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			default:
 			}
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
-			peerSelector.RankPeer(psp, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, peerRankDownloadFailed)
 			continue
 		}
 
@@ -632,7 +632,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		}
 		// Otherwise, fetcher gave us the wrong block
 		logging.Base().Warnf("fetcher gave us bad/wrong block (for round %d): fetched hash %v; want hash %v", cert.Round, block.Hash(), blockHash)
-		peerSelector.RankPeer(psp, peerRankInvalidDownload)
+		peerSelector.rankPeer(psp, peerRankInvalidDownload)
 
 		// As a failsafe, if the cert we fetched is valid but for the wrong block, panic as loudly as possible
 		if cert.Round == fetchedCert.Round &&
