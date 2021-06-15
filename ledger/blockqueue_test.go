@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -44,17 +46,17 @@ func TestPutBlockTooOld(t *testing.T) {
 	blk := bookkeeping.Block{}
 	var cert agreement.Certificate
 	err = l.blockQ.putBlock(blk, cert)
-	require.Error(t, err)
+
+	expectedErr := &ledgercore.BlockInLedgerError{}
+	require.True(t, errors.As(err, expectedErr))
 }
 
 func TestGetEncodedBlockCert(t *testing.T) {
 	genesisInitState, _, _ := genesis(10)
 
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	const inMem = true
 	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -77,5 +79,7 @@ func TestGetEncodedBlockCert(t *testing.T) {
 	require.NoError(t, err)
 
 	_, _, err = l.blockQ.getEncodedBlockCert(100) // should not be entry for this round
-	require.Error(t, err)
+
+	expectedErr := &ledgercore.ErrNoEntry{}
+	require.True(t, errors.As(err, expectedErr))
 }
