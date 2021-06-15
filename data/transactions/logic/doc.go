@@ -201,7 +201,7 @@ var opDocExtras = map[string]string{
 	"gload":             "`gload` fails unless the requested transaction is an ApplicationCall and T < GroupIndex.",
 	"gloads":            "`gloads` fails unless the requested transaction is an ApplicationCall and X < GroupIndex.",
 	"gaid":              "`gaid` fails unless the requested transaction created an asset or application and T < GroupIndex.",
-	"gaids":             "`gaidx` fails unless the requested transaction created an asset or application and X < GroupIndex.",
+	"gaids":             "`gaids` fails unless the requested transaction created an asset or application and X < GroupIndex.",
 	"btoi":              "`btoi` panics if the input is longer than 8 bytes.",
 	"concat":            "`concat` panics if the result would be greater than 4096 bytes.",
 	"pushbytes":         "pushbytes args are not added to the bytecblock during assembly processes",
