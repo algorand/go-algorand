@@ -628,7 +628,7 @@ func TestEmulatedTwoNodesFourRelays(t *testing.T) {
 			},
 		},
 		step:         1 * time.Millisecond / 10,
-		testDuration: 2000 * time.Millisecond,
+		testDuration: 2100 * time.Millisecond,
 	}
 	// update the expected results to have the correct number of entries.
 	for j := range testScenario.initialAlloc {
