@@ -747,7 +747,10 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
-	asmDefault(ops, spec, args)
+	err := asmDefault(ops, spec, args)
+	if err != nil {
+		return err
+	}
 	// Having run asmDefault, only need to check extra constraints.
 	start, _ := strconv.ParseUint(args[0], 0, 64)
 	end, _ := strconv.ParseUint(args[1], 0, 64)
@@ -1010,7 +1013,7 @@ type assembleFunc func(*OpStream, *OpSpec, []string) error
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != spec.Details.Size-1 {
-		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.Size-1)
+		return ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.Size-1)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i := 0; i < spec.Details.Size-1; i++ {
