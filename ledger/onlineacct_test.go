@@ -126,12 +126,13 @@ func TestOnlineTopHeap_Pop(t *testing.T) {
 		},
 	}
 
-	acct0 := h.accts[0]
-	acct1 := h.accts[1]
+	originalAccounts := h.accts
 
 	h.Pop()
 
 	require.Equal(t, 2, h.Len())
-	require.Equal(t, acct0, h.accts[0])
-	require.Equal(t, acct1, h.accts[1])
+	require.Equal(t, 3, cap(h.accts))
+	require.Equal(t, originalAccounts[0], h.accts[0])
+	require.Equal(t, originalAccounts[1], h.accts[1])
+	require.Nil(t, originalAccounts[2])
 }
