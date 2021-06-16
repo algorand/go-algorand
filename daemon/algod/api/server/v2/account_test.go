@@ -49,6 +49,10 @@ func TestAccount(t *testing.T) {
 			GlobalStateSchema: basics.StateSchema{NumUint: 2},
 		},
 	}
+
+	totalAppSchema := basics.StateSchema{NumUint: 3}
+	totalAppExtraPages := uint32(1)
+
 	assetParams1 := basics.AssetParams{
 		Total:         100,
 		DefaultFrozen: false,
@@ -69,6 +73,8 @@ func TestAccount(t *testing.T) {
 		RewardedMicroAlgos: basics.MicroAlgos{Raw: ^uint64(0)},
 		RewardsBase:        0,
 		AppParams:          map[basics.AppIndex]basics.AppParams{appIdx1: appParams1, appIdx2: appParams2},
+		TotalAppSchema:     totalAppSchema,
+		TotalExtraAppPages: totalAppExtraPages,
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{
 			appIdx1: {
 				Schema: basics.StateSchema{NumUint: 10},
@@ -95,6 +101,11 @@ func TestAccount(t *testing.T) {
 	require.Equal(t, addr, conv.Address)
 	require.Equal(t, b.MicroAlgos.Raw, conv.Amount)
 	require.Equal(t, a.MicroAlgos.Raw, conv.AmountWithoutPendingRewards)
+	require.NotNil(t, conv.AppsTotalSchema)
+	require.Equal(t, totalAppSchema.NumUint, conv.AppsTotalSchema.NumUint)
+	require.Equal(t, totalAppSchema.NumByteSlice, conv.AppsTotalSchema.NumByteSlice)
+	require.NotNil(t, conv.AppsTotalExtraPages)
+	require.Equal(t, uint64(totalAppExtraPages), *conv.AppsTotalExtraPages)
 
 	verifyCreatedApp := func(index int, appIdx basics.AppIndex, params basics.AppParams) {
 		require.Equal(t, uint64(appIdx), (*conv.CreatedApps)[index].Id)
