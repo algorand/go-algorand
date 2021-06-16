@@ -1069,7 +1069,7 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 	return validatedBlock{vb: lvb}, nil
 }
 
-// VotingKeys implements the key maanger's VotingKeys method, and provides additional validation with the ledger.
+// VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.
 // that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
 func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.Participation {
 	keys := node.accountManager.Keys(votingRound)
