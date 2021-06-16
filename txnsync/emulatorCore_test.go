@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"context"
 	"sort"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 const roundDuration = 4 * time.Second
@@ -169,10 +171,15 @@ func (e *emulator) initNodes() {
 			"",
 			crypto.Digest{},
 			config.GetDefaultLocal(),
+			e,
 		)
 		e.syncers = append(e.syncers, syncer)
 	}
 	randCounter := 0
+	// we want to place a sender on all transaction so that they would be *somewhat* compressible.
+	defaultSender := basics.Address{1, 2, 3, 4}
+	const senderEncodingSize = 35
+	encodingBuf := protocol.GetEncodingBuf()
 	for _, initAlloc := range e.scenario.initialAlloc {
 		node := e.nodes[initAlloc.node]
 		for i := 0; i < initAlloc.transactionsCount; i++ {
@@ -184,18 +191,21 @@ func (e *emulator) initNodes() {
 					Txn: transactions.Transaction{
 						Type: protocol.PaymentTx,
 						Header: transactions.Header{
-							Note:      make([]byte, initAlloc.transactionSize, initAlloc.transactionSize),
+							Note:      make([]byte, initAlloc.transactionSize-senderEncodingSize, initAlloc.transactionSize-senderEncodingSize),
 							LastValid: initAlloc.expirationRound,
+							Sender:    defaultSender,
 						},
 					},
 				},
 			}
-			for i := 0; i < 1+(initAlloc.transactionSize)/32; i++ {
+			for i := 0; i < 1+(initAlloc.transactionSize-senderEncodingSize)/32; i++ {
 				digest := crypto.Hash([]byte{byte(randCounter), byte(randCounter >> 8), byte(randCounter >> 16), byte(randCounter >> 24)})
 				copy(group.Transactions[0].Txn.Note[i*32:], digest[:])
 				randCounter++
 			}
 			group.FirstTransactionID = group.Transactions[0].ID()
+			encodingBuf = encodingBuf[:0]
+			group.EncodedLength = len(group.Transactions[0].MarshalMsg(encodingBuf))
 			node.txpoolIds[group.FirstTransactionID] = true
 			node.txpoolEntries = append(node.txpoolEntries, group)
 		}
@@ -204,23 +214,51 @@ func (e *emulator) initNodes() {
 		node.txpoolGroupCounter += uint64(initAlloc.transactionsCount)
 		node.onNewTransactionPoolEntry()
 	}
+	protocol.PutEncodingBuf(encodingBuf)
 }
 
 func (e *emulator) collectResult() (result emulatorResult) {
 	result.nodes = make([]nodeTransactions, len(e.nodes))
+	const senderEncodingSize = 35
 	for i, node := range e.nodes {
 		var txns nodeTransactions
 		for _, txnGroup := range node.txpoolEntries {
 			size := len(txnGroup.Transactions[0].Txn.Note)
 			exp := txnGroup.Transactions[0].Txn.LastValid
-			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size})
+			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
 		}
 		for _, txnGroup := range node.expiredTx {
 			size := len(txnGroup.Transactions[0].Txn.Note)
 			exp := txnGroup.Transactions[0].Txn.LastValid
-			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size})
+			txns = append(txns, nodeTransaction{expirationRound: exp, transactionSize: size + senderEncodingSize})
 		}
 		result.nodes[i] = txns
 	}
 	return result
+}
+
+// Dummy implementation of execpool.BacklogPool
+func (e *emulator) EnqueueBacklog(enqueueCtx context.Context, t execpool.ExecFunc, arg interface{}, out chan interface{}) error {
+	t(arg)
+	return nil
+}
+
+// Dummy implementation of execpool.BacklogPool
+func (e *emulator) Enqueue(enqueueCtx context.Context, t execpool.ExecFunc, arg interface{}, i execpool.Priority, out chan interface{}) error {
+	return nil
+}
+
+// Dummy implementation of execpool.BacklogPool
+func (e *emulator) GetOwner() interface{} {
+	return nil
+}
+
+// Dummy implementation of execpool.BacklogPool
+func (e *emulator) Shutdown() {
+
+}
+
+// Dummy implementation of execpool.BacklogPool
+func (e *emulator) GetParallelism() int {
+	return 0
 }
