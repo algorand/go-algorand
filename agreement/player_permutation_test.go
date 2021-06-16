@@ -42,17 +42,29 @@ func makeRandomProposalPayload(r round) *proposal {
 
 var errTestVerifyFailed = makeSerErrStr("test error")
 
+type playerPermutation int
+
+const (
+	playerSameRound = iota
+	playerNextRound
+	playerPrevRound_PendingPayloadPresent
+	playerSameRound_ProcessedProposalVote
+	playerSameRound_ReachedSoftThreshold
+	playerSameRound_ReachedCertThreshold
+	playerSameRound_ProcessedProposal
+)
+
 func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper) {
 	const r = round(209)
 	const p = period(0)
 	var payload = makeRandomProposalPayload(r)
 	var pV = payload.value()
 	switch n {
-	case 0: // same round and period as proposal
+	case playerSameRound: // same round and period as proposal
 		return setupP(t, r, p, soft)
-	case 1: // one round ahead of proposal
+	case playerNextRound: // one round ahead of proposal
 		return setupP(t, r+1, p, soft)
-	case 2:
+	case playerPrevRound_PendingPayloadPresent:
 		plyr, pMachine, helper = setupP(t, r-1, p, soft)
 		plyr.Pending.push(&messageEvent{
 			T: payloadPresent,
@@ -61,7 +73,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 				UnauthenticatedProposal: payload.u(),
 			},
 		})
-	case 3: // already processed proposal vote
+	case playerSameRound_ProcessedProposalVote: // already processed proposal vote
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
@@ -73,7 +85,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.Children[r].Children[p].ProposalTracker.Duplicate[helper.addresses[0]] = true
 		pM.Children[r].Children[p].ProposalTrackerContract.SawOneVote = true
 		pM.Children[r].Children[p].update(0)
-	case 4: // already reached soft threshold
+	case playerSameRound_ReachedSoftThreshold: // already reached soft threshold
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
@@ -86,7 +98,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.Children[r].Children[p].ProposalTracker.Staging = pV
 		pM.Children[r].Children[p].ProposalTrackerContract.SawOneVote = true
 		pM.Children[r].Children[p].update(0)
-	case 5: // already reached cert threshold
+	case playerSameRound_ReachedCertThreshold: // already reached cert threshold
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
@@ -101,7 +113,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.Children[r].Children[p].ProposalTracker.Staging = pV
 		pM.Children[r].Children[p].ProposalTrackerContract.SawOneVote = true
 		pM.Children[r].Children[p].update(0)
-	case 6: // already processed proposal
+	case playerSameRound_ProcessedProposal: // already processed proposal
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
@@ -358,7 +370,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 	var payload = makeRandomProposalPayload(r)
 	var pV = payload.value()
 	switch playerN {
-	case 0:
+	case playerSameRound:
 		switch eventN {
 		case softVoteVerifiedEvent_SamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
@@ -429,7 +441,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 1:
+	case playerNextRound:
 		switch eventN {
 		case softVoteVerifiedEvent_SamePeriod, softVotePresentEvent_SamePeriod, proposeVoteVerifiedEvent_NextPeriod, proposeVoteVerifiedEvent_SamePeriod, proposeVotePresentEvent_SamePeriod, payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle, bundleVerifiedEvent_SamePeriod, bundlePresentEvent_SamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
@@ -445,7 +457,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 2:
+	case playerPrevRound_PendingPayloadPresent:
 		switch eventN {
 		case softVoteVerifiedEvent_SamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
@@ -496,7 +508,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 3:
+	case playerSameRound_ProcessedProposalVote:
 		switch eventN {
 		case softVoteVerifiedEvent_SamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
@@ -568,7 +580,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 4:
+	case playerSameRound_ReachedSoftThreshold:
 		switch eventN {
 		case softVoteVerifiedEvent_SamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
@@ -644,7 +656,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 5:
+	case playerSameRound_ReachedCertThreshold:
 		switch eventN {
 		case softVoteVerifiedEvent_SamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
@@ -720,7 +732,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 6:
+	case playerSameRound_ProcessedProposal:
 		switch eventN {
 		case softVoteVerifiedEvent_SamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
