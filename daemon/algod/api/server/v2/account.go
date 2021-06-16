@@ -370,6 +370,12 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) (basics.AppP
 		ApprovalProgram:   gap.ApprovalProgram,
 		ClearStateProgram: gap.ClearStateProgram,
 	}
+	if gap.ExtraProgramPages != nil {
+		if *gap.ExtraProgramPages > math.MaxUint32 {
+			return basics.AppParams{}, errors.New("ExtraProgramPages exceeds maximum decodable value")
+		}
+		ap.ExtraProgramPages = uint32(*gap.ExtraProgramPages)
+	}
 	if gap.LocalStateSchema != nil {
 		ap.LocalStateSchema = basics.StateSchema{
 			NumUint:      gap.LocalStateSchema.NumUint,
@@ -394,12 +400,14 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) (basics.AppP
 // AppParamsToApplication converts basics.AppParams to generated.Application
 func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *basics.AppParams) generated.Application {
 	globalState := convertTKVToGenerated(&appParams.GlobalState)
+	extraProgramPages := uint64(appParams.ExtraProgramPages)
 	return generated.Application{
 		Id: uint64(appIdx),
 		Params: generated.ApplicationParams{
 			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,
 			ClearStateProgram: appParams.ClearStateProgram,
+			ExtraProgramPages: &extraProgramPages,
 			GlobalState:       globalState,
 			LocalStateSchema: &generated.ApplicationStateSchema{
 				NumByteSlice: appParams.LocalStateSchema.NumByteSlice,

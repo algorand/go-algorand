@@ -905,6 +905,10 @@
             "type": "string",
             "x-algorand-format": "Address"
           },
+          "extra-program-pages": {
+            "description": "\\[epp\\] the amount of extra program pages available to this app.",
+            "type": "integer"
+          },
           "global-state": {
             "$ref": "#/components/schemas/TealKeyValueStore"
           },

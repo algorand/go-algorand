@@ -1630,6 +1630,10 @@
           "format": "byte",
           "x-algorand-format": "TEALProgram"
         },
+        "extra-program-pages": {
+          "description": "\\[epp\\] the amount of extra program pages available to this app.",
+          "type": "integer"
+        },
         "local-state-schema": {
           "description": "[\\lsch\\] local schema",
           "$ref": "#/definitions/ApplicationStateSchema"
