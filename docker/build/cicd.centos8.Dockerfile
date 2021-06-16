@@ -1,13 +1,21 @@
 ARG ARCH="amd64"
 
-FROM ${ARCH}/centos:7
+FROM quay.io/centos/centos:stream8
 ARG GOLANG_VERSION
 ARG ARCH="amd64"
-RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm && \
-    yum update -y && \
-    yum install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel sqlite3 boost-devel expect jq \
-    libtool gcc-c++ libstdc++-devel libstdc++-static rpmdevtools createrepo rpm-sign bzip2 which ShellCheck \
+RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+    dnf update -y && \
+    dnf install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel boost-devel expect jq \
+    libtool gcc-c++ libstdc++-devel rpmdevtools createrepo rpm-sign bzip2 which \
     libffi-devel openssl-devel
+RUN dnf install -y epel-release && \
+    dnf update && \
+    dnf -y install sqlite && \
+    dnf -y --enablerepo=powertools install libstdc++-static && \
+    dnf -y install make
+RUN echo "${BOLD}Downloading and installing binaries...${RESET}" && \
+    curl -Of https://shellcheck.storage.googleapis.com/shellcheck-v0.7.0.linux.x86_64.tar.xz && \
+    tar -C /usr/local/bin/ -xf shellcheck-v0.7.0.linux.x86_64.tar.xz --no-anchored 'shellcheck' --strip=1
 WORKDIR /root
 RUN wget https://dl.google.com/go/go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz \
     && tar -xvf go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz && \

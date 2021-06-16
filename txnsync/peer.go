@@ -94,7 +94,7 @@ type Peer struct {
 	// lastRound is the latest round reported by the peer.
 	lastRound basics.Round
 
-	// incomingMessages contains the incoming messages from this peer. This heap help us to reorder the imcoming messages so that
+	// incomingMessages contains the incoming messages from this peer. This heap help us to reorder the incoming messages so that
 	// we could process them in the tcp-transport order.
 	incomingMessages messageOrderingHeap
 
@@ -558,14 +558,16 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 		if p.isOutgoing {
 			switch p.state {
 			case peerStateLateBloom:
-				ops |= messageConstBloomFilter
+				if p.localTransactionsModulator != 0 {
+					ops |= messageConstBloomFilter
+				}
 			case peerStateHoldsoff:
 				ops |= messageConstTransactions
 			}
 		} else {
 			if p.requestedTransactionsModulator != 0 {
 				ops |= messageConstTransactions
-				if p.nextStateTimestamp == 0 {
+				if p.nextStateTimestamp == 0 && p.localTransactionsModulator != 0 {
 					ops |= messageConstBloomFilter
 				}
 			}
@@ -577,7 +579,10 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 	} else {
 		ops |= messageConstTransactions // send transactions to the other peer
 		if fetchTransactions {
-			if p.localTransactionsModulator == 1 {
+			switch p.localTransactionsModulator {
+			case 0:
+				// don't send bloom filter.
+			case 1:
 				// special optimization if we have just one relay that we're connected to:
 				// generate the bloom filter only once per 2*beta message.
 				// this would reduce the number of unneeded bloom filters generation dramatically.
@@ -586,7 +591,7 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 				if p.nextStateTimestamp == 0 {
 					ops |= messageConstBloomFilter
 				}
-			} else {
+			default:
 				ops |= messageConstBloomFilter
 			}
 			ops |= messageConstUpdateRequestParams

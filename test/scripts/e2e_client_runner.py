@@ -13,7 +13,10 @@
 # Usage:
 #  ./e2e_client_runner.py e2e_subs/*.sh
 #
-# Reads each bash script for `# TIMEOUT=N` line to configure timeout to N seconds. (default timeout is 200 seconds)
+# Reads each bash script for `# TIMEOUT=N` line to configure timeout
+# to N seconds. The default is 10 seconds less than the timeout
+# associated with the entire set of tests, which defaults to 500, but
+# can be controlled with --timeout
 
 import argparse
 import atexit
@@ -67,7 +70,7 @@ def read_script_for_timeout(fname):
                     return int(m.group(1))
         except:
             logger.debug('read timeout match err', exc_info=True)
-    return 200
+    return None
 
 
 def create_kmd_config_with_unsafe_scrypt(working_dir):
@@ -94,9 +97,8 @@ def create_kmd_config_with_unsafe_scrypt(working_dir):
         json.dump(kmd_conf_data,f)
 
 
-    
 
-def _script_thread_inner(runset, scriptname):
+def _script_thread_inner(runset, scriptname, timeout):
     start = time.time()
     algod, kmd = runset.connect()
     pubw, maxpubaddr = runset.get_pub_wallet()
@@ -138,7 +140,9 @@ def _script_thread_inner(runset, scriptname):
     p = subprocess.Popen([scriptname, walletname], env=env, cwd=repodir, stdout=cmdlog, stderr=subprocess.STDOUT)
     cmdlog.close()
     runset.running(scriptname, p)
-    timeout = read_script_for_timeout(scriptname)
+    script_timeout = read_script_for_timeout(scriptname)
+    if script_timeout:
+        timeout = script_timeout
     try:
         retcode = p.wait(timeout)
     except subprocess.TimeoutExpired as te:
@@ -175,10 +179,10 @@ def _script_thread_inner(runset, scriptname):
     runset.done(scriptname, retcode == 0, dt)
     return
 
-def script_thread(runset, scriptname):
+def script_thread(runset, scriptname, to):
     start = time.time()
     try:
-        _script_thread_inner(runset, scriptname)
+        _script_thread_inner(runset, scriptname, to)
     except Exception as e:
         logger.error('error in e2e_client_runner.py', exc_info=True)
         runset.done(scriptname, False, time.time() - start)
@@ -218,10 +222,9 @@ class RunSet:
         if self.algod and self.kmd:
             return
 
-
         # should run from inside self.lock
         algodata = self.env['ALGORAND_DATA']
-        
+
         xrun(['goal', 'kmd', 'start', '-t', '3600','-d', algodata], env=self.env, timeout=5)
         self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
@@ -250,11 +253,11 @@ class RunSet:
                 self.maxpubaddr = maxpubaddr
             return self.pubw, self.maxpubaddr
 
-    def start(self, scriptname):
+    def start(self, scriptname, timeout):
         with self.lock:
             if not self.ok:
                 return
-        t = threading.Thread(target=script_thread, args=(self, scriptname,))
+        t = threading.Thread(target=script_thread, args=(self, scriptname, timeout))
         t.start()
         with self.lock:
             self.threads[scriptname] = t
@@ -450,7 +453,7 @@ def main():
 
     rs = RunSet(env)
     for scriptname in args.scripts:
-        rs.start(scriptname)
+        rs.start(scriptname, args.timeout-10)
     rs.wait(args.timeout)
     if rs.errors:
         retcode = 1

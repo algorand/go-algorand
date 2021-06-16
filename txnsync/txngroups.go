@@ -22,7 +22,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/compress"
 )
 
@@ -77,18 +76,20 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 	}
 	stub.finishDeconstructSignedTransactions()
 
-	encoded := stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
+	encoded := stub.MarshalMsg(getMessageBuffer())
 
 	// check if time saved by compression: estimatedDeflateCompressionGains * len(msg) / dataExchangeRate
 	// is greater than by time spent during compression: len(msg) / estimatedDeflateCompressionSpeed
 	if len(encoded) > minEncodedTransactionGroupsCompressionThreshold && float32(dataExchangeRate) < (estimatedDeflateCompressionGains*estimatedDeflateCompressionSpeed) {
 		compressedBytes, compressionFormat := s.compressTransactionGroupsBytes(encoded)
 		if compressionFormat != compressionFormatNone {
-			return packedTransactionGroups{
+			packedGroups := packedTransactionGroups{
 				Bytes:                compressedBytes,
 				CompressionFormat:    compressionFormat,
 				LenDecompressedBytes: uint64(len(encoded)),
-			}, nil
+			}
+			releaseMessageBuffer(encoded)
+			return packedGroups, nil
 		}
 	}
 
@@ -99,7 +100,11 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 }
 
 func (s *syncState) compressTransactionGroupsBytes(data []byte) ([]byte, byte) {
-	b := make([]byte, 0, len(data))
+	b := getMessageBuffer()
+	if cap(b) < len(data) {
+		releaseMessageBuffer(b)
+		b = make([]byte, 0, len(data))
+	}
 	_, out, err := compress.Compress(data, b, 1)
 	if err != nil {
 		if errors.Is(err, compress.ErrShortBuffer) {
@@ -107,10 +112,12 @@ func (s *syncState) compressTransactionGroupsBytes(data []byte) ([]byte, byte) {
 		} else {
 			s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(data), err)
 		}
+		releaseMessageBuffer(b)
 		return data, compressionFormatNone
 	}
-	if err == nil && len(data) > len(out)*maxCompressionRatio {
+	if len(data) > len(out)*maxCompressionRatio {
 		s.log.Infof("compression exceeded compression ratio: compressed data len: %d", len(out))
+		releaseMessageBuffer(b)
 		return data, compressionFormatNone
 	}
 	return out, compressionFormatDeflate
@@ -129,6 +136,7 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 		if err != nil {
 			return
 		}
+		defer releaseMessageBuffer(data)
 	default:
 		return nil, fmt.Errorf("invalid compressionFormat, %d", ptg.CompressionFormat)
 	}
@@ -173,12 +181,22 @@ func decompressTransactionGroupsBytes(data []byte, lenDecompressedBytes uint64) 
 	if lenDecompressedBytes > maxEncodedTransactionGroupBytes || compressionRatio <= 0 || compressionRatio >= maxCompressionRatio {
 		return nil, fmt.Errorf("invalid lenDecompressedBytes: %d, lenCompressedBytes: %d", lenDecompressedBytes, len(data))
 	}
-	out := make([]byte, 0, lenDecompressedBytes)
+
+	out := getMessageBuffer()
+	if uint64(cap(out)) < lenDecompressedBytes {
+		releaseMessageBuffer(out)
+		out = make([]byte, 0, lenDecompressedBytes)
+	}
+
 	decoded, err = compress.Decompress(data, out)
 	if err != nil {
+		releaseMessageBuffer(out)
+		decoded = nil
 		return
 	}
 	if uint64(len(decoded)) != lenDecompressedBytes {
+		releaseMessageBuffer(out)
+		decoded = nil
 		return nil, fmt.Errorf("lenDecompressedBytes didn't match: expected %d, actual %d", lenDecompressedBytes, len(decoded))
 	}
 	return
@@ -189,5 +207,5 @@ func releaseEncodedTransactionGroups(buffer []byte) {
 		return
 	}
 
-	protocol.PutEncodingBuf(buffer[:0])
+	releaseMessageBuffer(buffer)
 }

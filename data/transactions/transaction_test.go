@@ -19,6 +19,7 @@ package transactions
 import (
 	"flag"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
@@ -228,6 +229,12 @@ func TestWellFormedErrors(t *testing.T) {
 	protoV27 := config.Consensus[protocol.ConsensusV27]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
+	okHeader := Header{
+		Sender:     addr1,
+		Fee:        basics.MicroAlgos{Raw: 1000},
+		LastValid:  105,
+		FirstValid: 100,
+	}
 	usecases := []struct {
 		tx            Transaction
 		spec          SpecialAddresses
@@ -262,15 +269,10 @@ func TestWellFormedErrors(t *testing.T) {
 		},
 		{
 			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID: 0,
+					ApplicationID: 0, // creation
 					ApplicationArgs: [][]byte{
 						[]byte("write"),
 					},
@@ -279,17 +281,67 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			spec:          specialAddr,
 			proto:         protoV27,
-			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", curProto.MaxExtraAppProgramPages),
+			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", protoV27.MaxExtraAppProgramPages),
 		},
 		{
 			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // creation
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte("junk"),
 				},
+			},
+			spec:          specialAddr,
+			proto:         protoV27,
+			expectedError: fmt.Errorf("approval program too long. max len 1024 bytes"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // creation
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte("junk"),
+				},
+			},
+			spec:  specialAddr,
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // creation
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+				},
+			},
+			spec:          specialAddr,
+			proto:         futureProto,
+			expectedError: fmt.Errorf("app programs too long. max total len 2048 bytes"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // creation
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+					ExtraProgramPages: 1,
+				},
+			},
+			spec:  specialAddr,
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
 					ApplicationID: 1,
 					ApplicationArgs: [][]byte{
@@ -300,17 +352,12 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			spec:          specialAddr,
 			proto:         futureProto,
-			expectedError: fmt.Errorf("ExtraProgramPages field is immutable"),
+			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
 		},
 		{
 			tx: Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: Header{
-					Sender:     addr1,
-					Fee:        basics.MicroAlgos{Raw: 1000},
-					LastValid:  105,
-					FirstValid: 100,
-				},
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
 					ApplicationID: 0,
 					ApplicationArgs: [][]byte{
@@ -322,6 +369,71 @@ func TestWellFormedErrors(t *testing.T) {
 			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", futureProto.MaxExtraAppProgramPages),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11},
+				},
+			},
+			spec:  specialAddr,
+			proto: protoV27,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11, 12},
+				},
+			},
+			spec:          specialAddr,
+			proto:         protoV27,
+			expectedError: fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is 2"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11, 12, 13, 14, 15, 16, 17},
+				},
+			},
+			spec:  specialAddr,
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17, 18, 19, 20, 21, 22},
+				},
+			},
+			spec:          specialAddr,
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is 8"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Accounts:      []basics.Address{basics.Address{}, basics.Address{}, basics.Address{}},
+					ForeignApps:   []basics.AppIndex{14, 15, 16, 17},
+					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
+				},
+			},
+			spec:          specialAddr,
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx has too many references, max is 8"),
 		},
 	}
 	for _, usecase := range usecases {
