@@ -565,7 +565,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - LogicSigVersion >= 4
 - Mode: Application
 
-`gaidx` fails unless the requested transaction created an asset or application and X < GroupIndex.
+`gaids` fails unless the requested transaction created an asset or application and X < GroupIndex.
 
 ## bnz target
 
