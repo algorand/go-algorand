@@ -25,6 +25,9 @@ type Account struct {
 	// Note the raw object uses `map[int] -> AppLocalState` for this type.
 	AppsLocalState *[]ApplicationLocalState `json:"apps-local-state,omitempty"`
 
+	// \[teap\] the sum of all extra application program pages for this account.
+	AppsTotalExtraPages *uint64 `json:"apps-total-extra-pages,omitempty"`
+
 	// Specifies maximums on the number of each type that may be stored.
 	AppsTotalSchema *ApplicationStateSchema `json:"apps-total-schema,omitempty"`
 

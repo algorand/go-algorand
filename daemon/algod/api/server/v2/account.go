@@ -19,6 +19,7 @@ package v2
 import (
 	"encoding/base64"
 	"errors"
+	"math"
 	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -99,6 +100,7 @@ func AccountDataToAccount(
 		NumByteSlice: record.TotalAppSchema.NumByteSlice,
 		NumUint:      record.TotalAppSchema.NumUint,
 	}
+	totalExtraPages := uint64(record.TotalExtraAppPages)
 
 	amount := record.MicroAlgos
 	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
@@ -123,6 +125,7 @@ func AccountDataToAccount(
 		AuthAddr:                    addrOrNil(record.AuthAddr),
 		AppsLocalState:              &appsLocalState,
 		AppsTotalSchema:             &totalAppSchema,
+		AppsTotalExtraPages:         &totalExtraPages,
 	}, nil
 }
 
@@ -308,6 +311,14 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		totalSchema.NumByteSlice = a.AppsTotalSchema.NumByteSlice
 	}
 
+	var totalExtraPages uint32
+	if a.AppsTotalExtraPages != nil {
+		if *a.AppsTotalExtraPages > math.MaxUint32 {
+			return basics.AccountData{}, errors.New("AppsTotalExtraPages exceeds maximum decodable value")
+		}
+		totalExtraPages = uint32(*a.AppsTotalExtraPages)
+	}
+
 	status, err := basics.UnmarshalStatus(a.Status)
 	if err != nil {
 		return basics.AccountData{}, err
@@ -327,6 +338,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		AppLocalStates:     appLocalStates,
 		AppParams:          appParams,
 		TotalAppSchema:     totalSchema,
+		TotalExtraAppPages: totalExtraPages,
 	}
 
 	if a.AuthAddr != nil {

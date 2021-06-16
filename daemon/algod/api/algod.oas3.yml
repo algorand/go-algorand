@@ -716,6 +716,10 @@
             },
             "type": "array"
           },
+          "apps-total-extra-pages": {
+            "description": "\\[teap\\] the sum of all extra application program pages for this account.",
+            "type": "integer"
+          },
           "apps-total-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
           },
