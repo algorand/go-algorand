@@ -129,7 +129,6 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 			return errInvalidBloomFilter
 		}
 		incomingMessage.bloomFilter = bloomFilter
-		incomingMessage.bloomFilter.encodingParams = incomingMessage.message.TxnBloomFilter.EncodingParams
 	}
 
 	// if the peer sent us any transactions, decode these.
