@@ -7,17 +7,9 @@ set -ex
 
 . "${HOME}"/build_env
 
-# TODO: The following error happens on centos:8
-#
-# Error:
-#  Problem: conflicting requests
-#    - nothing provides yum-cron needed by algorand-2.0.4-1.x86_64
-# (try to add '--skip-broken' to skip uninstallable packages or '--nobest' to use not only best candidate packages)
-# smoke_test.sh: line 47: algod: command not found
-
 OS_LIST=(
     centos:7
-#    centos:8
+    centos:8
     fedora:28
     ubuntu:16.04
     ubuntu:18.04

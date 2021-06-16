@@ -11,7 +11,7 @@ CHANNEL=${1:-stable}
 NAME=${2:-algorand}
 
 if [ -z ${PACKAGE_NAME_EXTENSION} ]; then
-  NAME = ${NAME}-${PACKAGE_NAME_EXTENSION}
+  NAME=${NAME}-${PACKAGE_NAME_EXTENSION}
 fi
 
 if [ "$CHANNEL" = beta ]; then

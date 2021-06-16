@@ -33,6 +33,7 @@ if [ "${CHANNEL}" = "" ]; then
 fi
 
 VARIATION_ARRAY=(${VARIATIONS})
+echo "Variation Array: ${VARIATION_ARRAY}"
 
 # Set the TIMESTAMP to use for the genesis.json file - set here so all packages use the same number
 TIMESTAMP=
