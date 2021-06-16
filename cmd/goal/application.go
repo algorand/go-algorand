@@ -402,6 +402,10 @@ var createAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
 
 		if outFilename == "" {
 			// Broadcast
@@ -480,6 +484,10 @@ var updateAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -552,6 +560,10 @@ var optInAppCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		// Broadcast or write transaction to file
@@ -626,6 +638,10 @@ var closeOutAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -698,6 +714,10 @@ var clearAppCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		// Broadcast or write transaction to file
@@ -772,6 +792,10 @@ var callAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -844,6 +868,10 @@ var deleteAppCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		// Broadcast or write transaction to file
