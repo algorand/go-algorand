@@ -19,6 +19,7 @@ package v2
 import (
 	"encoding/base64"
 	"errors"
+	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -45,12 +46,18 @@ func AccountDataToAccount(
 
 		assets = append(assets, holding)
 	}
+	sort.Slice(assets, func(i, j int) bool {
+		return assets[i].AssetId < assets[j].AssetId
+	})
 
 	createdAssets := make([]generated.Asset, 0, len(record.AssetParams))
 	for idx, params := range record.AssetParams {
 		asset := AssetParamsToAsset(address, idx, &params)
 		createdAssets = append(createdAssets, asset)
 	}
+	sort.Slice(createdAssets, func(i, j int) bool {
+		return createdAssets[i].Index < createdAssets[j].Index
+	})
 
 	var apiParticipation *generated.AccountParticipation
 	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
@@ -68,6 +75,9 @@ func AccountDataToAccount(
 		app := AppParamsToApplication(address, appIdx, &appParams)
 		createdApps = append(createdApps, app)
 	}
+	sort.Slice(createdApps, func(i, j int) bool {
+		return createdApps[i].Id < createdApps[j].Id
+	})
 
 	appsLocalState := make([]generated.ApplicationLocalState, 0, len(record.AppLocalStates))
 	for appIdx, state := range record.AppLocalStates {
@@ -81,6 +91,9 @@ func AccountDataToAccount(
 			},
 		})
 	}
+	sort.Slice(appsLocalState, func(i, j int) bool {
+		return appsLocalState[i].Id < appsLocalState[j].Id
+	})
 
 	totalAppSchema := generated.ApplicationStateSchema{
 		NumByteSlice: record.TotalAppSchema.NumByteSlice,
@@ -118,7 +131,8 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *generated.TealKeyValueStor
 		return nil
 	}
 
-	var converted generated.TealKeyValueStore
+	converted := make(generated.TealKeyValueStore, 0, len(*tkv))
+	rawKeyBytes := make([]string, 0, len(*tkv))
 	for k, v := range *tkv {
 		converted = append(converted, generated.TealKeyValue{
 			Key: base64.StdEncoding.EncodeToString([]byte(k)),
@@ -128,7 +142,11 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *generated.TealKeyValueStor
 				Uint:  v.Uint,
 			},
 		})
+		rawKeyBytes = append(rawKeyBytes, k)
 	}
+	sort.Slice(converted, func(i, j int) bool {
+		return rawKeyBytes[i] < rawKeyBytes[j]
+	})
 	return &converted
 }
 

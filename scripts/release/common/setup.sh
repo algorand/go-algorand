@@ -105,6 +105,7 @@ fi
 
 sudo usermod -a -G docker ubuntu
 sg docker "docker pull centos:7"
+sg docker "docker pull quay.io/centos/centos:stream8"
 sg docker "docker pull ubuntu:18.04"
 
 cat << EOF >> "${HOME}/.bashrc"
