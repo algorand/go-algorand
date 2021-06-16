@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -144,7 +145,7 @@ type Peer struct {
 
 	// lastTransactionSelectionGroupCounter is the last transaction group counter that we've evaluated on the selectPendingTransactions method.
 	// it used to ensure that on subsequent calls, we won't need to scan the entire pending transactions array from the begining.
-	lastTransactionSelectionGroupCounter uint64
+	lastTransactionSelectionTracker transactionGroupCounterTracker
 
 	// nextStateTimestamp indicates the next timestamp where the peer state would need to be changed.
 	// it used to allow sending partial message while retaining the "next-beta time", or, in the case of outgoing relays,
@@ -165,6 +166,68 @@ type Peer struct {
 	// used by the selectPendingTransactions method, the lastSelectedTransactionsCount contains the number of entries selected on the previous iteration.
 	// this value is used to optimize the memory preallocation for the selection IDs array.
 	lastSelectedTransactionsCount int
+}
+
+const bloomFilterRetryCount = 5
+const maxTransactionGroupTrackers = 15
+
+type transactionGroupCounterState struct {
+	offset                               byte
+	modulator                            byte
+	lastTransactionSelectionGroupCounter []uint64
+}
+
+type transactionGroupCounterTracker []transactionGroupCounterState
+
+func (t *transactionGroupCounterTracker) get(offset, modulator byte) uint64 {
+	i := t.index(offset, modulator)
+	if i >= 0 {
+		return (*t)[i].lastTransactionSelectionGroupCounter[0]
+	}
+	return 0
+}
+
+func (t *transactionGroupCounterTracker) set(offset, modulator byte, counter uint64) {
+	i := t.index(offset, modulator)
+	if i >= 0 {
+		(*t)[i].lastTransactionSelectionGroupCounter[0] = counter
+		return
+	}
+	// if it doesn't exists -
+	state := transactionGroupCounterState{
+		offset:                               offset,
+		modulator:                            modulator,
+		lastTransactionSelectionGroupCounter: make([]uint64, bloomFilterRetryCount),
+	}
+	state.lastTransactionSelectionGroupCounter[0] = counter
+
+	if len(*t) == maxTransactionGroupTrackers {
+		// shift all entries by one.
+		copy((*t)[0:], (*t)[1:])
+		(*t)[maxTransactionGroupTrackers-1] = state
+	} else {
+		*t = append(*t, state)
+	}
+}
+
+func (t *transactionGroupCounterTracker) roll(offset, modulator byte) {
+	i := t.index(offset, modulator)
+	if i < 0 {
+		return
+	}
+	if (*t)[i].lastTransactionSelectionGroupCounter[1] >= (*t)[i].lastTransactionSelectionGroupCounter[0] {
+		return
+	}
+	(*t)[i].lastTransactionSelectionGroupCounter = append((*t)[i].lastTransactionSelectionGroupCounter[1:], (*t)[i].lastTransactionSelectionGroupCounter[0])
+}
+
+func (t *transactionGroupCounterTracker) index(offset, modulator byte) int {
+	for i := range *t {
+		if (*t)[i].offset == offset && (*t)[i].modulator == modulator {
+			return i
+		}
+	}
+	return -1
 }
 
 func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *Peer {
@@ -238,7 +301,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	if p.recentSentTransactionsRound != round {
 		p.recentSentTransactions.reset()
 		p.recentSentTransactionsRound = round
-		p.lastTransactionSelectionGroupCounter = 0
+		//p.lastTransactionSelectionGroupCounter = 0
 	}
 
 	windowLengthBytes := int(uint64(sendWindow) * p.dataExchangeRate / uint64(time.Second))
@@ -246,8 +309,10 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 
 	accumulatedSize := 0
 
+	lastTransactionSelectionGroupCounter := p.lastTransactionSelectionTracker.get(p.requestedTransactionsOffset, p.requestedTransactionsModulator)
+
 	startIndex := sort.Search(len(pendingTransactions), func(i int) bool {
-		return pendingTransactions[i].GroupCounter >= p.lastTransactionSelectionGroupCounter
+		return pendingTransactions[i].GroupCounter >= lastTransactionSelectionGroupCounter
 	})
 
 	selectedIDsSliceLength := len(pendingTransactions) - startIndex
@@ -260,6 +325,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	windowSizedReached := false
 	hasMorePendingTransactions := false
 
+	start := time.Now()
 	//removedTxn := 0
 	grpIdx := startIndex
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
@@ -323,16 +389,20 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	if grpIdx >= 0 && startIndex < len(pendingTransactions) {
 		if grpIdx == len(pendingTransactions) {
 			if grpIdx > 0 {
-				p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx-1].GroupCounter + 1
+				p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, pendingTransactions[grpIdx-1].GroupCounter+1)
 			}
 		} else {
-			p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx].GroupCounter
+			p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, pendingTransactions[grpIdx].GroupCounter)
 		}
 	}
 
 	if !hasMorePendingTransactions {
 		// we're done with the current sequence.
 		p.messageSeriesPendingTransactions = nil
+	}
+	duration := time.Now().Sub(start)
+	if duration > time.Millisecond {
+		fmt.Printf("selectPendingTransactions took %v for %d entries\n", duration, grpIdx-startIndex)
 	}
 
 	//fmt.Printf("selectPendingTransactions : selected %d transactions, %d not needed and aborted after exceeding data length %d/%d more = %v\n", len(selectedTxnIDs), removedTxn, accumulatedSize, windowLengthBytes, hasMorePendingTransactions)
@@ -403,7 +473,7 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter bloomFi
 			// replace.
 			p.recentIncomingBloomFilters[idx] = bf
 			// reset the counter, since we might need to re-evaluate some of the transaction group with the new bloom filter.
-			p.lastTransactionSelectionGroupCounter = 0
+			p.lastTransactionSelectionTracker.roll(incomingFilter.encodingParams.Offset, incomingFilter.encodingParams.Modulator)
 			return
 		}
 	}
@@ -422,7 +492,7 @@ func (p *Peer) updateRequestParams(modulator, offset byte) {
 
 	// if we've changed the request params for this peer, we need to reset the lastTransactionSelectionGroupCounter since we might have
 	// skipped entries that need to be re-evaluated.
-	p.lastTransactionSelectionGroupCounter = 0
+	p.lastTransactionSelectionTracker.roll(p.requestedTransactionsOffset, p.requestedTransactionsModulator)
 }
 
 // update the recentSentTransactions with the incoming transaction groups. This would prevent us from sending the received transactions back to the
