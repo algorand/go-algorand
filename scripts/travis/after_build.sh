@@ -8,18 +8,10 @@
 #
 # Examples: scripts/travis/after_build.sh
 
-SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-OS=$("${SCRIPTPATH}/../ostype.sh")
-if [[ "${OS}" == "darwin" ]]; then
-    # do not run these on darwin
-    exit;
-fi;
-
 if [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
     if [ "${BUILD_TYPE}" != "integration" ]; then
         cd "$(dirname "$0")"/../.. || exit 1
         make prof
-        make cover
         rm ./node/node.test
     fi;
 fi;
