@@ -278,6 +278,7 @@ func blockCompleteCatchup(tx *sql.Tx) (err error) {
 	return nil
 }
 
+// TODO: unused, either actually implement cleanup on catchpoint failure, or delete this
 func blockAbortCatchup(tx *sql.Tx) error {
 	// delete the old catchpointblocks table, if there is such.
 	for _, stmt := range blockResetExprs {

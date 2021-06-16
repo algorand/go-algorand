@@ -102,20 +102,23 @@ type ApplicationCallTxnFields struct {
 	// ApprovalProgram or ClearStateProgram.
 	ApplicationArgs [][]byte `codec:"apaa,allocbound=EncodedMaxApplicationArgs"`
 
-	// Accounts are accounts whose balance records are accessible by the
-	// executing ApprovalProgram or ClearStateProgram. To access LocalState
-	// for an account besides the sender, that account's address must be
-	// listed here.
-	Accounts []basics.Address `codec:"apat,allocbound=EncodedMaxAccounts"`
+	// Accounts are accounts whose balance records are accessible
+	// by the executing ApprovalProgram or ClearStateProgram. To
+	// access LocalState or an ASA balance for an account besides
+	// the sender, that account's address must be listed here (and
+	// since v4, the ForeignApp or ForeignAsset must also include
+	// the app or asset id).
+	Accounts []basics.Address `codec:"apat,allocbound=encodedMaxAccounts"`
 
-	// ForeignApps are application IDs for applications besides this one
-	// whose GlobalState may be read by the executing ApprovalProgram or
-	// ClearStateProgram.
-	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=EncodedMaxForeignApps"`
-
-	// ForeignAssets are asset IDs for assets whose AssetParams may be read
+	// ForeignApps are application IDs for applications besides
+	// this one whose GlobalState (or Local, since v4) may be read
 	// by the executing ApprovalProgram or ClearStateProgram.
-	ForeignAssets []basics.AssetIndex `codec:"apas,allocbound=EncodedMaxForeignAssets"`
+	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
+
+	// ForeignAssets are asset IDs for assets whose AssetParams
+	// (and since v4, Holdings) may be read by the executing
+	// ApprovalProgram or ClearStateProgram.
+	ForeignAssets []basics.AssetIndex `codec:"apas,allocbound=encodedMaxForeignAssets"`
 
 	// LocalStateSchema specifies the maximum number of each type that may
 	// appear in the local key/value store of users who opt in to this
@@ -204,7 +207,7 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 	// An index > 0 corresponds to an offset into txn.Accounts. Check to
 	// make sure the index is valid.
 	if accountIdx > uint64(len(ac.Accounts)) {
-		err := fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(ac.Accounts))
+		err := fmt.Errorf("invalid Account reference %d", accountIdx)
 		return basics.Address{}, err
 	}
 
@@ -228,5 +231,5 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 		}
 	}
 
-	return 0, fmt.Errorf("could not find offset of address %s", target)
+	return 0, fmt.Errorf("invalid Account reference %s", target)
 }

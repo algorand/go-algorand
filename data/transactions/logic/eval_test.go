@@ -1311,11 +1311,10 @@ int 1
 
 const testTxnProgramTextV4 = testTxnProgramTextV3 + `
 assert
-txn AppProgramExtraPages
+txn ExtraProgramPages
 int 2
 ==
 assert
-
 
 int 1
 `
@@ -1381,7 +1380,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	copy(txn.Txn.FreezeAccount[:], freezeAccAddr)
 	txn.Txn.AssetFrozen = true
 	txn.Txn.ForeignAssets = []basics.AssetIndex{55, 77}
-	txn.Txn.ForeignApps = []basics.AppIndex{56, 78, 111}
+	txn.Txn.ForeignApps = []basics.AppIndex{56, 100, 111} // 100 must be 2nd, 111 must be present
 	txn.Txn.GlobalStateSchema = basics.StateSchema{NumUint: 3, NumByteSlice: 0}
 	txn.Txn.LocalStateSchema = basics.StateSchema{NumUint: 1, NumByteSlice: 2}
 	return txn
@@ -1451,6 +1450,7 @@ func TestTxn(t *testing.T) {
 			}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
+			ep.Ledger = makeTestLedger(nil)
 			ep.GroupIndex = 3
 			pass, err := Eval(ops.Program, ep)
 			if !pass {
@@ -1534,6 +1534,73 @@ return
 	require.True(t, pass)
 }
 
+func TestGaid(t *testing.T) {
+	t.Parallel()
+	checkCreatableIDProg := `
+gaid 0
+int 100
+==
+`
+	ops := testProg(t, checkCreatableIDProg, 4)
+	txn := makeSampleTxn()
+	txn.Txn.Type = protocol.ApplicationCallTx
+	txgroup := make([]transactions.SignedTxn, 3)
+	txgroup[1] = txn
+	targetTxn := makeSampleTxn()
+	targetTxn.Txn.Type = protocol.AssetConfigTx
+	txgroup[0] = targetTxn
+	sb := strings.Builder{}
+	ledger := makeTestLedger(nil)
+	ledger.setTrackedCreatable(0, basics.CreatableLocator{
+		Index: 100,
+	})
+	ep := defaultEvalParams(&sb, &txn)
+	ep.Ledger = ledger
+	ep.TxnGroup = txgroup
+	ep.GroupIndex = 1
+	pass, err := EvalStateful(ops.Program, ep)
+	if !pass || err != nil {
+		t.Log(hex.EncodeToString(ops.Program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// should fail when accessing future transaction in group
+	futureCreatableIDProg := `
+gaid 2
+int 0
+>
+`
+
+	ops = testProg(t, futureCreatableIDProg, 4)
+	_, err = EvalStateful(ops.Program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gaid can't get creatable ID of txn ahead of the current one")
+
+	// should fail when accessing self
+	ep.GroupIndex = 0
+	ops = testProg(t, checkCreatableIDProg, 4)
+	_, err = EvalStateful(ops.Program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gaid is only for accessing creatable IDs of previous txns")
+	ep.GroupIndex = 1
+
+	// should fail on non-creatable
+	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
+	_, err = EvalStateful(ops.Program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "can't use gaid on txn that is not an app call nor an asset config txn")
+	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
+
+	// should fail when no creatable was created
+	var nilIndex basics.CreatableIndex
+	ledger.trackedCreatables[0] = nilIndex
+	_, err = EvalStateful(ops.Program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "the txn did not create anything")
+}
+
 func TestGtxn(t *testing.T) {
 	t.Parallel()
 	gtxnTextV1 := `gtxn 1 Amount
@@ -1606,11 +1673,11 @@ int 1
 ==
 &&
 `
-	gtxnText := gtxnTextV2 + ` gtxn 0 AppProgramExtraPages
+	gtxnText := gtxnTextV2 + ` gtxn 0 ExtraProgramPages
 int 0
 ==
 &&
-gtxn 1 AppProgramExtraPages
+gtxn 1 ExtraProgramPages
 int 2
 ==
 &&
@@ -2830,10 +2897,11 @@ int 1`, v)
 		"bz done",
 		"b done",
 	}
-	template := `int 0
+	template := `intcblock 0 1
+intc_0
 %s
 done:
-int 1
+intc_1
 `
 	ep := defaultEvalParams(nil, nil)
 	for _, line := range branches {
@@ -3474,7 +3542,8 @@ func TestStackValues(t *testing.T) {
 func TestEvalVersions(t *testing.T) {
 	t.Parallel()
 
-	text := `int 1
+	text := `intcblock 1
+intc_0
 txna ApplicationArgs 0
 pop
 `
@@ -4003,6 +4072,9 @@ func TestBytes(t *testing.T) {
 	testPanics(t, `byte "john"; int 4; getbyte; int 1; ==`, 3)    // past end
 
 	testAccepts(t, `byte "john"; int 2; int 105; setbyte; byte "join"; ==`, 3)
+
+	testPanics(t, `global ZeroAddress; dup; concat; int 64; int 7; setbyte; int 1; return`, 3)
+	testAccepts(t, `global ZeroAddress; dup; concat; int 63; int 7; setbyte; int 1; return`, 3)
 
 	// These test that setbyte is not modifying a shared value.
 	// Since neither bytec nor dup copies, the first test is
