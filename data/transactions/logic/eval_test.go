@@ -1983,6 +1983,16 @@ func TestSubstringFlop(t *testing.T) {
 	t.Parallel()
 	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
+substring
+len`, 2, expect{2, "substring expects 2 immediate arguments"})
+
+	// fails in compiler
+	testProg(t, `byte 0xf000000000000000
+substring 1
+len`, 2, expect{2, "substring expects 2 immediate arguments"})
+
+	// fails in compiler
+	testProg(t, `byte 0xf000000000000000
 substring 4 2
 len`, 2, expect{2, "substring end is before start"})
 
