@@ -17,7 +17,6 @@
 package txnsync
 
 import (
-	"fmt"
 	"sort"
 	"time"
 
@@ -52,6 +51,8 @@ const minDataExchangeRateThreshold = 100 * 1024            // 100KB/s, which is 
 const maxDataExchangeRateThreshold = 100 * 1024 * 1024 / 8 // 100Mbps
 const defaultDataExchangeRate = minDataExchangeRateThreshold
 const defaultRelayToRelayDataExchangeRate = 10 * 1024 * 1024 / 8 // 10Mbps
+const bloomFilterRetryCount = 3                                  // number of bloom filters we would try against each transaction group before skipping it.
+const maxTransactionGroupTrackers = 15                           // number of different bloom filter parameters we store before rolling over
 
 const (
 	// peerStateStartup is before the timeout for the sending the first message to the peer has reached.
@@ -143,8 +144,10 @@ type Peer struct {
 	localTransactionsModulator  byte
 	localTransactionsBaseOffset byte
 
-	// lastTransactionSelectionGroupCounter is the last transaction group counter that we've evaluated on the selectPendingTransactions method.
+	// lastTransactionSelectionTracker tracks the last transaction group counter that we've evaluated on the selectPendingTransactions method.
 	// it used to ensure that on subsequent calls, we won't need to scan the entire pending transactions array from the begining.
+	// the implementation here is breaking it up per request params, so that we can apply the above logic per request params ( i.e. different
+	// offset/modulator ), as well as add retry attempts for multiple bloom filters.
 	lastTransactionSelectionTracker transactionGroupCounterTracker
 
 	// nextStateTimestamp indicates the next timestamp where the peer state would need to be changed.
@@ -168,38 +171,44 @@ type Peer struct {
 	lastSelectedTransactionsCount int
 }
 
-const bloomFilterRetryCount = 5
-const maxTransactionGroupTrackers = 15
-
-type transactionGroupCounterState struct {
-	offset                               byte
-	modulator                            byte
-	lastTransactionSelectionGroupCounter []uint64
+// requestParamsGroupCounterState stores the latest group counters for a given set of request params.
+// we use this to ensure we can have multiple iteration of bloom filter scanning over each individual
+// transaction group. This method allow us to reduce the bloom filter errors while avoid scanning the
+// list of transactions redundently.
+//msgp:ignore transactionGroupCounterState
+type requestParamsGroupCounterState struct {
+	offset        byte
+	modulator     byte
+	groupCounters [bloomFilterRetryCount]uint64
 }
 
-type transactionGroupCounterTracker []transactionGroupCounterState
+// transactionGroupCounterTracker manages the group counter state for each request param.
+//msgp:ignore transactionGroupCounterTracker
+type transactionGroupCounterTracker []requestParamsGroupCounterState
 
+// get returns the group counter for a given set of request param.
 func (t *transactionGroupCounterTracker) get(offset, modulator byte) uint64 {
 	i := t.index(offset, modulator)
 	if i >= 0 {
-		return (*t)[i].lastTransactionSelectionGroupCounter[0]
+		return (*t)[i].groupCounters[0]
 	}
 	return 0
 }
 
+// set updates the group counter for a given set of request param. If no such request
+// param currently exists, it create it.
 func (t *transactionGroupCounterTracker) set(offset, modulator byte, counter uint64) {
 	i := t.index(offset, modulator)
 	if i >= 0 {
-		(*t)[i].lastTransactionSelectionGroupCounter[0] = counter
+		(*t)[i].groupCounters[0] = counter
 		return
 	}
 	// if it doesn't exists -
-	state := transactionGroupCounterState{
-		offset:                               offset,
-		modulator:                            modulator,
-		lastTransactionSelectionGroupCounter: make([]uint64, bloomFilterRetryCount),
+	state := requestParamsGroupCounterState{
+		offset:    offset,
+		modulator: modulator,
 	}
-	state.lastTransactionSelectionGroupCounter[0] = counter
+	state.groupCounters[0] = counter
 
 	if len(*t) == maxTransactionGroupTrackers {
 		// shift all entries by one.
@@ -210,17 +219,24 @@ func (t *transactionGroupCounterTracker) set(offset, modulator byte, counter uin
 	}
 }
 
+// roll the counters for a given requests params, so that we would go back and
+// rescan some of the previous transaction groups ( but not all !) when selectPendingTransactionGroups is called.
 func (t *transactionGroupCounterTracker) roll(offset, modulator byte) {
 	i := t.index(offset, modulator)
 	if i < 0 {
 		return
 	}
-	if (*t)[i].lastTransactionSelectionGroupCounter[1] >= (*t)[i].lastTransactionSelectionGroupCounter[0] {
+	if (*t)[i].groupCounters[1] >= (*t)[i].groupCounters[0] {
 		return
 	}
-	(*t)[i].lastTransactionSelectionGroupCounter = append((*t)[i].lastTransactionSelectionGroupCounter[1:], (*t)[i].lastTransactionSelectionGroupCounter[0])
+	firstGroupCounter := (*t)[i].groupCounters[0]
+	copy((*t)[i].groupCounters[0:], (*t)[i].groupCounters[1:])
+	(*t)[i].groupCounters[len((*t)[i].groupCounters)-1] = firstGroupCounter
 }
 
+// index is a helper method for the transactionGroupCounterTracker, helping to locate the index of
+// a requestParamsGroupCounterState in the array that matches the provided request params. The method
+// uses a linear search, which works best against small arrays.
 func (t *transactionGroupCounterTracker) index(offset, modulator byte) int {
 	for i := range *t {
 		if (*t)[i].offset == offset && (*t)[i].modulator == modulator {
@@ -301,7 +317,6 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	if p.recentSentTransactionsRound != round {
 		p.recentSentTransactions.reset()
 		p.recentSentTransactionsRound = round
-		//p.lastTransactionSelectionGroupCounter = 0
 	}
 
 	windowLengthBytes := int(uint64(sendWindow) * p.dataExchangeRate / uint64(time.Second))
@@ -325,7 +340,6 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	windowSizedReached := false
 	hasMorePendingTransactions := false
 
-	start := time.Now()
 	//removedTxn := 0
 	grpIdx := startIndex
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
@@ -399,10 +413,6 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	if !hasMorePendingTransactions {
 		// we're done with the current sequence.
 		p.messageSeriesPendingTransactions = nil
-	}
-	duration := time.Now().Sub(start)
-	if duration > time.Millisecond {
-		fmt.Printf("selectPendingTransactions took %v for %d entries\n", duration, grpIdx-startIndex)
 	}
 
 	//fmt.Printf("selectPendingTransactions : selected %d transactions, %d not needed and aborted after exceeding data length %d/%d more = %v\n", len(selectedTxnIDs), removedTxn, accumulatedSize, windowLengthBytes, hasMorePendingTransactions)
