@@ -2218,7 +2218,7 @@ func disAppParams(dis *disassembleState, spec *OpSpec) (string, error) {
 	if int(arg) >= len(AppParamsFieldNames) {
 		return "", fmt.Errorf("invalid app params arg index %d at pc=%d", arg, dis.pc)
 	}
-	return fmt.Sprintf("%s %s", spec.Name, AssetParamsFieldNames[arg]), nil
+	return fmt.Sprintf("%s %s", spec.Name, AppParamsFieldNames[arg]), nil
 }
 
 type disInfo struct {

@@ -61,10 +61,16 @@ type testLedger struct {
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
 }
 
-func makeSchemas(li uint64, lb uint64, gi uint64, gb uint64) basics.StateSchemas {
-	return basics.StateSchemas{
-		LocalStateSchema:  basics.StateSchema{NumUint: li, NumByteSlice: lb},
-		GlobalStateSchema: basics.StateSchema{NumUint: gi, NumByteSlice: gb},
+func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
+	return basics.AppParams{
+		ApprovalProgram:   []byte{},
+		ClearStateProgram: []byte{},
+		GlobalState:       map[string]basics.TealValue{},
+		StateSchemas: basics.StateSchemas{
+			LocalStateSchema:  basics.StateSchema{NumUint: li, NumByteSlice: lb},
+			GlobalStateSchema: basics.StateSchema{NumUint: gi, NumByteSlice: gb},
+		},
+		ExtraProgramPages: 0,
 	}
 }
 
@@ -79,11 +85,20 @@ func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
 	return br
 }
 
+func makeSampleEnv() (EvalParams, *testLedger) {
+	txn := makeSampleTxn()
+	ep := defaultEvalParams(nil, &txn)
+	ep.TxnGroup = makeSampleTxnGroup(txn)
+	ledger := makeTestLedger(map[basics.Address]uint64{})
+	ep.Ledger = ledger
+	return ep, ledger
+}
+
 func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 	l := new(testLedger)
 	l.balances = make(map[basics.Address]balanceRecord)
 	for addr, balance := range balances {
-		l.balances[addr] = makeBalanceRecord(addr, balance)
+		l.newAccount(addr, balance)
 	}
 	l.applications = make(map[basics.AppIndex]appParams)
 	l.assets = make(map[basics.AssetIndex]asaParams)
@@ -100,14 +115,19 @@ func (l *testLedger) reset() {
 	}
 }
 
-func (l *testLedger) newApp(creator basics.Address, appID basics.AppIndex, schemas basics.StateSchemas) {
+func (l *testLedger) newAccount(addr basics.Address, balance uint64) {
+	l.balances[addr] = makeBalanceRecord(addr, balance)
+}
+
+func (l *testLedger) newApp(creator basics.Address, appID basics.AppIndex, params basics.AppParams) {
 	l.appID = appID
+	params = params.Clone()
+	if params.GlobalState == nil {
+		params.GlobalState = make(basics.TealKeyValue)
+	}
 	l.applications[appID] = appParams{
-		Creator: creator,
-		AppParams: basics.AppParams{
-			StateSchemas: schemas,
-			GlobalState:  make(basics.TealKeyValue),
-		},
+		Creator:   creator,
+		AppParams: params.Clone(),
 	}
 	br, ok := l.balances[creator]
 	if !ok {
@@ -614,7 +634,7 @@ pop
 			txn.Txn.Sender: 1,
 		},
 	)
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 	ledger.balances[txn.Txn.Sender].locals[100]["ALGO"] = algoValue
 	ledger.newAsset(txn.Txn.Sender, 5, params)
 
@@ -832,7 +852,7 @@ func TestMinBalance(t *testing.T) {
 	// Sender makes an asset, min balance goes up
 	ledger.newAsset(txn.Txn.Sender, 7, basics.AssetParams{Total: 1000})
 	testApp(t, "int 0; min_balance; int 2002; ==", ep)
-	schemas := makeSchemas(1, 2, 3, 4)
+	schemas := makeApp(1, 2, 3, 4)
 	ledger.newApp(txn.Txn.Sender, 77, schemas)
 	// create + optin + 10 schema base + 4 ints + 6 bytes (local
 	// and global count b/c newApp opts the creator in)
@@ -890,7 +910,7 @@ func TestAppCheckOptedIn(t *testing.T) {
 	testApp(t, "int 0; int 100; app_opted_in; int 0; ==", now)
 
 	// Receiver opted in
-	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Receiver, 100, basics.AppParams{})
 	testApp(t, "int 1; int 100; app_opted_in; int 1; ==", now)
 	testApp(t, "int 1; int 2; app_opted_in; int 1; ==", now)
 	testApp(t, "int 1; int 2; app_opted_in; int 0; ==", pre) // in pre, int 2 is an actual app id
@@ -899,7 +919,7 @@ func TestAppCheckOptedIn(t *testing.T) {
 		expect{3, "app_opted_in arg 0 wanted type uint64..."})
 
 	// Sender opted in
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 	testApp(t, "int 0; int 100; app_opted_in; int 1; ==", now)
 }
 
@@ -956,11 +976,11 @@ int 1`
 	testApp(t, text, now, "no app for account")
 
 	// Make a different app (not 100)
-	ledger.newApp(txn.Txn.Receiver, 9999, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Receiver, 9999, basics.AppParams{})
 	testApp(t, text, now, "no app for account")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
-	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Receiver, 100, basics.AppParams{})
 	testApp(t, text, now)
 
 	text = `int 1  // account idx
@@ -990,7 +1010,7 @@ byte 0x414c474f
 		"no such address")
 
 	// check special case account idx == 0 => sender
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 	text = `int 0  // account idx
 int 100 // app id
 txn ApplicationArgs 0
@@ -1008,8 +1028,8 @@ byte 0x414c474f
 		"invalid Account reference")
 
 	// check reading state of other app
-	ledger.newApp(txn.Txn.Sender, 56, makeSchemas(0, 0, 0, 0))
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 56, basics.AppParams{})
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 	text = `int 0  // account idx
 int 56 // app id
 txn ApplicationArgs 0
@@ -1100,7 +1120,7 @@ byte 0x414c474f
 	testApp(t, text, now, "no such app")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 1))
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 
 	testApp(t, text, now, "err opcode")
 
@@ -1441,6 +1461,20 @@ intc_1
 	testApp(t, source, now, "cannot compare ([]byte to uint64)")
 }
 
+func TestAppParams(t *testing.T) {
+	t.Parallel()
+	ep, ledger := makeSampleEnv()
+	ledger.newAccount(ep.Txn.Txn.Sender, 1)
+	ledger.newApp(ep.Txn.Txn.Sender, 100, basics.AppParams{})
+
+	/* app id is in ForeignApps, but does not exist */
+	source := "int 56; app_params_get AppExtraProgramPages; int 0; ==; assert; int 0; =="
+	testApp(t, source, ep)
+	/* app id is in ForeignApps, but has zero ExtraProgramPages */
+	source = "int 100; app_params_get AppExtraProgramPages; int 1; ==; assert; int 0; =="
+	testApp(t, source, ep)
+}
+
 func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
 	t.Parallel()
 
@@ -1531,7 +1565,7 @@ intc_1
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no app for account")
 
-			ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+			ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 
 			if name == "read" {
 				_, err = EvalStateful(ops.Program, ep)
@@ -1571,7 +1605,7 @@ func TestAppLocalStateReadWrite(t *testing.T) {
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 
 	// write int and bytes values
 	source := `int 0 // account
@@ -1890,7 +1924,7 @@ int 1
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no such app")
 
-			ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 1, 0))
+			ledger.newApp(txn.Txn.Sender, 100, makeApp(0, 0, 1, 0))
 
 			// a special test for read
 			if name == "read" {
@@ -1985,7 +2019,7 @@ int 0x77
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 
 	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -2158,14 +2192,14 @@ byte "myval"
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 
 	delta := testApp(t, source, ep, "no such app")
 	require.Empty(t, delta.GlobalDelta)
 	require.Empty(t, delta.LocalDeltas)
 
-	ledger.newApp(txn.Txn.Receiver, 101, makeSchemas(0, 0, 0, 0))
-	ledger.newApp(txn.Txn.Receiver, 100, makeSchemas(0, 0, 0, 0)) // this keeps current app id = 100
+	ledger.newApp(txn.Txn.Receiver, 101, basics.AppParams{})
+	ledger.newApp(txn.Txn.Receiver, 100, basics.AppParams{}) // this keeps current app id = 100
 	algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
 	ledger.applications[101].GlobalState["mykey"] = algoValue
 
@@ -2202,7 +2236,7 @@ int 7
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 
 	delta := testApp(t, source, ep)
 	require.Empty(t, delta.LocalDeltas)
@@ -2247,7 +2281,7 @@ int 1
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 
 	delta := testApp(t, source, ep)
 	require.Len(t, delta.GlobalDelta, 2)
@@ -2410,7 +2444,7 @@ int 1
 		},
 	)
 	ep.Ledger = ledger
-	ledger.newApp(txn.Txn.Sender, 100, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
 	ledger.balances[txn.Txn.Receiver].locals[100] = make(basics.TealKeyValue)
 
@@ -2712,7 +2746,7 @@ func TestReturnTypes(t *testing.T) {
 		Clawback:      txn.Txn.Receiver,
 	}
 	ledger.newAsset(txn.Txn.Sender, 1, params)
-	ledger.newApp(txn.Txn.Sender, 1, makeSchemas(0, 0, 0, 0))
+	ledger.newApp(txn.Txn.Sender, 1, basics.AppParams{})
 	ledger.setTrackedCreatable(0, basics.CreatableLocator{Index: 1})
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)
 	ledger.balances[txn.Txn.Receiver].locals[1] = make(basics.TealKeyValue)

@@ -134,6 +134,34 @@ func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetPara
 	return params, creator, nil
 }
 
+func (al *logicLedger) AppParams(appIdx basics.AppIndex) (basics.AppParams, basics.Address, error) {
+	// Find app creator
+	creator, ok, err := al.cow.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
+	if err != nil {
+		return basics.AppParams{}, creator, err
+	}
+
+	// Ensure app exists
+	if !ok {
+		return basics.AppParams{}, creator, fmt.Errorf("app %d does not exist", appIdx)
+	}
+
+	// Fetch the requested balance record
+	record, err := al.cow.Get(creator, false)
+	if err != nil {
+		return basics.AppParams{}, creator, err
+	}
+
+	// Ensure account created the requested app
+	params, ok := record.AppParams[appIdx]
+	if !ok {
+		err = fmt.Errorf("account %s has not created app %d", creator, appIdx)
+		return basics.AppParams{}, creator, err
+	}
+
+	return params, creator, nil
+}
+
 func (al *logicLedger) Round() basics.Round {
 	return al.cow.round()
 }

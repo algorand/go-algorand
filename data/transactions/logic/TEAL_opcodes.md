@@ -18,7 +18,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA256 hash of value X, yields [32]byte
 - **Cost**:
    - 7 (LogicSigVersion = 1)
-   - 35 (2 <= LogicSigVersion <= 4)
+   - 35 (2 <= LogicSigVersion <= 5)
 
 ## keccak256
 
@@ -28,7 +28,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Keccak256 hash of value X, yields [32]byte
 - **Cost**:
    - 26 (LogicSigVersion = 1)
-   - 130 (2 <= LogicSigVersion <= 4)
+   - 130 (2 <= LogicSigVersion <= 5)
 
 ## sha512_256
 
@@ -38,7 +38,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA512_256 hash of value X, yields [32]byte
 - **Cost**:
    - 9 (LogicSigVersion = 1)
-   - 45 (2 <= LogicSigVersion <= 4)
+   - 45 (2 <= LogicSigVersion <= 5)
 
 ## ed25519verify
 
@@ -888,10 +888,24 @@ params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset 
 - Pops: *... stack*, uint64
 - Pushes: *... stack*, any, uint64
 - read from app A params field X (imm arg) => {0 or 1 (top), value}
-- LogicSigVersion >= 4
+- LogicSigVersion >= 5
 - Mode: Application
 
-params: Txn.ForeignApps offset (or, since v4, an app id that appears in Txn.ForeignApps). Return: did_exist flag (1 if exist and 0 otherwise), value.
+`app_params_get` Fields:
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AppApprovalProgram | []byte | Bytecode of Approval Program |
+| 1 | AppClearStateProgram | []byte | Bytecode of Clear State Program |
+| 2 | AppGlobalNumUint | uint64 | Number of uint64 values allowed in Global State |
+| 3 | AppGlobalNumByteSlice | uint64 | Number of byte array values allowed in Global State |
+| 4 | AppLocalNumUint | uint64 | Number of uint64 values allowed in Local State |
+| 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
+| 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
+| 7 | AppCreator | []byte | Creator address |
+
+
+params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## min_balance
 

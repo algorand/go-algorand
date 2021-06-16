@@ -309,7 +309,7 @@ Global fields are fields that are common to all the transactions in the group. I
 
 **Asset Fields**
 
-Asset fields include `AssetHolding` and `AssetParam` fields that are used in `asset_read_*` opcodes
+Asset fields include `AssetHolding` and `AssetParam` fields that are used in the `asset_hold_get` and `asset_params_get` opcodes.
 
 | Index | Name | Type | Notes |
 | --- | --- | --- | --- |
@@ -331,6 +331,22 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | 9 | AssetFreeze | []byte | Freeze address |
 | 10 | AssetClawback | []byte | Clawback address |
 | 11 | AssetCreator | []byte | Creator address |
+
+
+**App Fields**
+
+App fields used in the `app_params_get` opcode.
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AppApprovalProgram | []byte | Bytecode of Approval Program |
+| 1 | AppClearStateProgram | []byte | Bytecode of Clear State Program |
+| 2 | AppGlobalNumUint | uint64 | Number of uint64 values allowed in Global State |
+| 3 | AppGlobalNumByteSlice | uint64 | Number of byte array values allowed in Global State |
+| 4 | AppLocalNumUint | uint64 | Number of uint64 values allowed in Local State |
+| 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
+| 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
+| 7 | AppCreator | []byte | Creator address |
 
 
 ### Flow Control

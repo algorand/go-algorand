@@ -105,6 +105,11 @@ func assetParamsFieldsMarkdown(out io.Writer) {
 	fieldTableMarkdown(out, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs)
 }
 
+func appParamsFieldsMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "\n`app_params_get` Fields:\n\n")
+	fieldTableMarkdown(out, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs)
+}
+
 func immediateMarkdown(op *logic.OpSpec) string {
 	markdown := ""
 	for _, imm := range op.Details.Immediates {
@@ -179,6 +184,8 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		assetHoldingFieldsMarkdown(out)
 	} else if op.Name == "asset_params_get" {
 		assetParamsFieldsMarkdown(out)
+	} else if op.Name == "app_params_get" {
+		appParamsFieldsMarkdown(out)
 	}
 	ode := logic.OpDocExtra(op.Name)
 	if ode != "" {
@@ -240,6 +247,9 @@ func argEnum(name string) []string {
 	if name == "asset_params_get" {
 		return logic.AssetParamsFieldNames
 	}
+	if name == "app" {
+		return logic.AppParamsFieldNames
+	}
 	return nil
 }
 
@@ -280,6 +290,9 @@ func argEnumTypes(name string) string {
 	}
 	if name == "asset_params_get" {
 		return typeString(logic.AssetParamsFieldTypes)
+	}
+	if name == "app_params_get" {
+		return typeString(logic.AppParamsFieldTypes)
 	}
 
 	return ""
@@ -343,6 +356,10 @@ func main() {
 	assetparams, _ := os.Create("asset_params_fields.md")
 	fieldTableMarkdown(assetparams, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs)
 	assetparams.Close()
+
+	appparams, _ := os.Create("app_params_fields.md")
+	fieldTableMarkdown(appparams, logic.AppParamsFieldNames, logic.AppParamsFieldTypes, logic.AppParamsFieldDocs)
+	appparams.Close()
 
 	langspecjs, _ := os.Create("langspec.json")
 	enc := json.NewEncoder(langspecjs)
