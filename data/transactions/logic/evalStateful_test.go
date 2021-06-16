@@ -2803,89 +2803,46 @@ func TestReturnTypes(t *testing.T) {
 }
 
 func TestRound(t *testing.T) {
-	source := `global Round
-int 1
->=
-`
-	ledger := makeTestLedger(
-		map[basics.Address]uint64{},
-	)
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-
+	source := "global Round; int 1; >="
 	ep := defaultEvalParams(nil, nil)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
-
-	pass, err := Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "not allowed in current mode")
-	require.False(t, pass)
-
-	ep.Ledger = ledger
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	ep.Ledger = makeTestLedger(map[basics.Address]uint64{})
+	testApp(t, source, ep)
 }
 
 func TestLatestTimestamp(t *testing.T) {
-	source := `global LatestTimestamp
-int 1
->=
-`
-	ledger := makeTestLedger(
-		map[basics.Address]uint64{},
-	)
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-
+	source := "global LatestTimestamp; int 1; >="
 	ep := defaultEvalParams(nil, nil)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
-
-	pass, err := Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "not allowed in current mode")
-	require.False(t, pass)
-
-	ep.Ledger = ledger
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	ep.Ledger = makeTestLedger(map[basics.Address]uint64{})
+	testApp(t, source, ep)
 }
 
 func TestCurrentApplicationID(t *testing.T) {
-	source := `global CurrentApplicationID
-int 42
-==
-`
-	ledger := makeTestLedger(
+	source := "global CurrentApplicationID; int 42; =="
+	ep := defaultEvalParams(nil, nil)
+	ledger := makeTestLedger(map[basics.Address]uint64{})
+	ledger.appID = basics.AppIndex(42)
+	ep.Ledger = ledger
+	testApp(t, source, ep)
+}
+
+func TestAppLoop(t *testing.T) {
+	t.Parallel()
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	ep := defaultEvalParams(nil, nil)
+	ep.Txn = &txn
+	ep.TxnGroup = txgroup
+	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{},
 	)
-	ledger.appID = basics.AppIndex(42)
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
 
-	ep := defaultEvalParams(nil, nil)
-	err = CheckStateful(ops.Program, ep)
-	require.NoError(t, err)
-	_, err = EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
+	stateful := "global CurrentApplicationID; pop;"
 
-	pass, err := Eval(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "not allowed in current mode")
-	require.False(t, pass)
+	// Double until > 10. Should be 16
+	testApp(t, stateful+"int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", ep)
 
-	ep.Ledger = ledger
-	pass, err = EvalStateful(ops.Program, ep)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, stateful+"int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", ep)
+
+	// Infinite loop because multiply by one instead of two
+	testApp(t, stateful+"int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", ep, "dynamic cost")
 }
