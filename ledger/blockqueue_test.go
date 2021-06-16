@@ -49,6 +49,15 @@ func TestPutBlockTooOld(t *testing.T) {
 
 	expectedErr := &ledgercore.BlockInLedgerError{}
 	require.True(t, errors.As(err, expectedErr))
+
+	blkent := randomBlock(1)
+	blk = blkent.block
+	cert = blkent.cert
+	err = l.blockQ.putBlock(blk, cert) // add block for round 1 to blockQueue
+	require.NoError(t, err)
+
+	err = l.blockQ.putBlock(blk, cert) // try adding same block again (should fail)
+	require.True(t, errors.As(err, expectedErr))
 }
 
 // TestGetEncodedBlockCert tests getEncodedBlockCert with valid and invalid round numbers.
