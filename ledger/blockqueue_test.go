@@ -45,12 +45,13 @@ func TestPutBlockTooOld(t *testing.T) {
 
 	blk := bookkeeping.Block{}
 	var cert agreement.Certificate
-	err = l.blockQ.putBlock(blk, cert)
+	err = l.blockQ.putBlock(blk, cert) // try putBlock for a block in a previous round
 
 	expectedErr := &ledgercore.BlockInLedgerError{}
 	require.True(t, errors.As(err, expectedErr))
 }
 
+// TestGetEncodedBlockCert tests getEncodedBlockCert with valid and invalid round numbers.
 func TestGetEncodedBlockCert(t *testing.T) {
 	genesisInitState, _, _ := genesis(10)
 
@@ -60,8 +61,9 @@ func TestGetEncodedBlockCert(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	blk := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: 1}}
-	cert := agreement.Certificate{Round: 1}
+	blkent := randomBlock(1)
+	blk := blkent.block
+	cert := blkent.cert
 	err = l.blockQ.putBlock(blk, cert)
 	require.NoError(t, err)
 
