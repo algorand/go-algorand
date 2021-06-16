@@ -24,6 +24,7 @@ import (
 	"os"
 	"runtime/pprof"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -177,8 +178,17 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	proto := config.Consensus[lastBlock.CurrentProtocol]
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
-	for _, acctdata := range initAccounts {
-		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+	if l.Latest() == 0 {
+		require.NotNil(t, initAccounts)
+		for _, acctdata := range initAccounts {
+			if acctdata.Status != basics.NotParticipating {
+				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+			}
+		}
+	} else {
+		totals, err := l.Totals(l.Latest())
+		require.NoError(t, err)
+		totalRewardUnits = totals.RewardUnits()
 	}
 	poolBal, err := l.Lookup(l.Latest(), poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
@@ -1705,6 +1715,110 @@ func TestLedgerMemoryLeak(t *testing.T) {
 			fmt.Printf("Profile %s created\n", memprofile)
 		}
 	}
+}
+
+func TestLedgerAssetHoldingsLargeBlock(t *testing.T) {
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
+	protoParams := config.Consensus[protocol.ConsensusFuture]
+	protoParams.MaxBalLookback = 32
+	protoParams.SeedLookback = 2
+	protoParams.SeedRefreshInterval = 8
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState, initKeys := testGenerateInitState(t, testProtocolVersion, 10000000000)
+	const inMem = false
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer testLedgerCleanup(l, dbName, inMem)
+
+	lastBlock, err := l.Block(l.Latest())
+	proto := config.Consensus[lastBlock.CurrentProtocol]
+
+	addr, err := basics.UnmarshalChecksumAddress("FQVGZ2NJU7BIYIUV7UZE655FASFUFQVXVBKIJNUAWHQT2WM35M3BKL5JPY")
+	require.NoError(t, err)
+	require.Contains(t, genesisInitState.Accounts, addr)
+
+	makeAssetCreateTxns := func(start, end uint64) []transactions.SignedTxn {
+		size := end - start + 1
+		stxns := make([]transactions.SignedTxn, 0, size)
+		for j := start; j <= end; j++ {
+			txHeader := transactions.Header{
+				Sender:      addr,
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+				FirstValid:  l.Latest() + 1,
+				LastValid:   l.Latest() + 10,
+				GenesisID:   t.Name(),
+				GenesisHash: crypto.Hash([]byte(t.Name())),
+			}
+
+			assetCreateFields := transactions.AssetConfigTxnFields{
+				AssetParams: basics.AssetParams{
+					Total:     j,
+					AssetName: fmt.Sprintf("asset_%d", j),
+				},
+			}
+
+			tx := transactions.Transaction{
+				Type:                 protocol.AssetConfigTx,
+				Header:               txHeader,
+				AssetConfigTxnFields: assetCreateFields,
+			}
+			stxns = append(stxns, sign(initKeys, tx))
+		}
+		return stxns
+	}
+	for i := uint64(0); i < protoParams.MaxBalLookback; i++ {
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+	}
+
+	numAssets := uint64(2000)
+	margin := uint64(1400)
+
+	stxns := makeAssetCreateTxns(1, margin)
+	err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
+	require.NoError(t, err)
+	l.WaitForCommit(l.Latest())
+
+	for i := uint64(0); i < 2*protoParams.MaxBalLookback; i++ {
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+	}
+
+	stxns = makeAssetCreateTxns(1+margin, numAssets)
+	// Clear the timer to ensure a flush (well, not always works but needed)
+	l.accts.lastFlushTime = time.Time{}
+	err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
+	require.NoError(t, err)
+	l.WaitForCommit(l.Latest())
+
+	for i := uint64(0); i < 2*protoParams.MaxBalLookback+2; i++ {
+		l.accts.lastFlushTime = time.Time{}
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+	}
+
+	l.WaitForCommit(l.Latest())
+	pad, err := l.accts.lookupWithRewards(l.Latest(), addr, true)
+	require.NoError(t, err)
+	require.Equal(t, int(numAssets), len(pad.Assets))
+	require.Equal(t, int(numAssets), len(pad.AssetParams))
+
+	for i := uint64(0); i < 2*protoParams.MaxBalLookback+2; i++ {
+		l.accts.lastFlushTime = time.Time{}
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+		// syncer may not be fast enough and delay so it a chance to trigger committedUpTo
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	pad, err = l.accts.lookupWithRewards(l.Latest(), addr, true)
+	require.NoError(t, err)
+	require.Equal(t, uint32(numAssets), pad.ExtendedAssetHolding.Count)
+	require.Equal(t, uint32(numAssets), pad.ExtendedAssetParams.Count)
 }
 
 func BenchmarkLedgerStartup(b *testing.B) {

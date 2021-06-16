@@ -1339,9 +1339,10 @@ type assetTxnGroupLogger struct {
 
 type assetTxnGroupSender struct {
 	assetTxnGroupSenderInfo
-	txns  []transactions.Transaction
-	txids []map[string]string
-	fee   uint64
+	txns    []transactions.Transaction
+	txids   []map[string]string
+	fee     uint64
+	txnSize int
 }
 
 func makeAssetTxnGroupSender(a *require.Assertions, f *fixtures.RestClientFixture, groupSize int) assetTxnGroupSender {
@@ -1351,9 +1352,10 @@ func makeAssetTxnGroupSender(a *require.Assertions, f *fixtures.RestClientFixtur
 			fixture: f,
 			gs:      groupSize,
 		},
-		txns:  make([]transactions.Transaction, 0, groupSize),
-		txids: []map[string]string{},
-		fee:   100000,
+		txns:    make([]transactions.Transaction, 0, groupSize),
+		txids:   []map[string]string{},
+		fee:     100000,
+		txnSize: 300, // serialized txn size, recalculated later
 	}
 
 	return sender
@@ -1413,13 +1415,17 @@ func (s *assetTxnGroupSender) flush(wait bool) {
 			gid, err := s.fixture.LibGoalClient.GroupID(txns)
 			s.a.NoError(err)
 			stxns := make([]transactions.SignedTxn, 0, groupSize)
+			size := 0
 			for j := 0; j < len(txns); j++ {
 				txns[j].Group = gid
 				stxn, err := s.fixture.LibGoalClient.SignTransactionWithWallet(wh, nil, txns[j])
 				s.a.NoError(err)
+				blob := protocol.Encode(&stxn)
+				size += len(blob)
 				stxns = append(stxns, stxn)
 				txids[stxn.ID().String()] = stxn.Txn.Sender.String()
 			}
+			s.txnSize = size / len(stxns)
 			err = s.fixture.LibGoalClient.BroadcastTransactionGroup(stxns)
 			s.a.NoError(err, fmt.Sprintf("%d ids, group %d", len(s.txids), len(s.txns)))
 		}
@@ -1459,9 +1465,15 @@ checkfee:
 		}
 		s.txids = s.txids[:len(s.txids)-1]
 		if feeTooHigh {
-			goto checkfee
+			r, err := s.fixture.LibGoalClient.GetPendingTransactions(0)
+			s.a.NoError(err)
+			if r.TotalTxns != 0 {
+				err = s.fixture.WaitForRoundWithTimeout(status.LastRound + 3)
+				s.a.NoError(err)
+				goto checkfee
+			}
 		}
-		// all confirmed, clean
+		// latest confirmed, most likely all other went through as well
 		s.txids = s.txids[:0]
 	}
 }
@@ -1584,13 +1596,6 @@ func performRandomTransfers(a *require.Assertions, r *rand.Rand, groupSize int, 
 	}
 	printProgress(0, 0, 0, "Opting-in")
 
-	// for i := 0; i < len(addresses); i++ {
-	// 	addr := addresses[i]
-	// 	ownAssets := creators[addr]
-	// 	optedInAssets := holders[addr]
-	// 	fmt.Printf("%s %d %d\n", addr, len(ownAssets), len(optedInAssets))
-	// }
-
 	for i := 0; i < len(addresses)/2; i++ {
 		addr := addresses[i]
 		info, err := client.AccountInformation(addr)
@@ -1613,9 +1618,6 @@ func performRandomTransfers(a *require.Assertions, r *rand.Rand, groupSize int, 
 	for i := 0; i < len(addresses); i++ {
 		addr := addresses[i]
 		info, err := client.AccountInformation(addr)
-		if err != nil {
-			fmt.Printf("Failed at %s\n", addr)
-		}
 		a.NoError(err)
 		acctHoldings[i] = len(info.Assets)
 		acctParams[i] = len(info.AssetParams)
@@ -1682,10 +1684,8 @@ func performRandomTransfers(a *require.Assertions, r *rand.Rand, groupSize int, 
 }
 
 func TestAsset2k(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
+	t.Skip() // only for manual run
+
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
@@ -1708,9 +1708,10 @@ func TestAsset2k(t *testing.T) {
 	const keyLenBytes = 32
 	const groupSize = 16
 	const numAccounts = 128
-	const numIterations = 1000
+	const numIterations = 500
 
-	maxAssets := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
+	// maxAssets := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
+	maxAssets := 2000
 	maxProtoAssets := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
 	branch := "feature"
 
@@ -1733,7 +1734,7 @@ func TestAsset2k(t *testing.T) {
 	}
 
 	// fund these new accounts
-	const balance = 10000000000
+	const balance = 100000000000
 	for _, addr := range addresses {
 		_, err = client.SendPaymentFromUnencryptedWallet(account0, addr, 0, balance, nil)
 		a.NoError(err)

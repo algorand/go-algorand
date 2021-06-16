@@ -2513,14 +2513,14 @@ func TestAccountsNewCRUD(t *testing.T) {
 	}
 
 	// case 3.1)
-	// len(old.Assets) > assetsThreshold
+	// old.ExtendedAssetHolding.Count > assetsThreshold
 	// new count > assetsThreshold => delete, update, create few
 	a.GreaterOrEqual(testAssetsThreshold, 1000)
 	del := []basics.AssetIndex{1, 2, 3, 10, 2900}
 	upd := []basics.AssetIndex{4, 5, 2999}
 	crt := []basics.AssetIndex{9001, 9501}
 	loaded := make(map[int]bool, numRowsExpected)
-	old.pad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(del)+len(upd))
+	assets := make(map[basics.AssetIndex]basics.AssetHolding, len(del)+len(upd))
 	for _, aidx := range append(del, upd...) {
 		gi, ai := old.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
 		a.NotEqual(-1, gi, aidx)
@@ -2537,7 +2537,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 		gi, ai = old.pad.ExtendedAssetHolding.FindAsset(aidx, gi)
 		a.NotEqual(-1, gi)
 		a.NotEqual(-1, ai)
-		old.pad.Assets[aidx] = g.GetHolding(ai)
+		assets[aidx] = g.GetHolding(ai)
 	}
 
 	deltaHoldings := make(ledgercore.EntityDelta, len(del)+len(crt))
@@ -2553,7 +2553,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 	updated = basics.AccountData{}
 	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(upd)+len(crt))
 	for _, aidx := range upd {
-		updated.Assets[aidx] = old.pad.Assets[aidx]
+		updated.Assets[aidx] = assets[aidx]
 	}
 	for _, aidx := range crt {
 		updated.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
@@ -2647,7 +2647,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 	}
 
 	// case 3.2)
-	// len(old.Assets) > assetsThreshold
+	// old.ExtendedAssetHolding.Count > assetsThreshold
 	// new count > assetsThreshold => delete most and update, create some
 
 	holdingMap, _, err := loadHoldings(qs.loadAccountGroupDataStmt, old.pad.ExtendedAssetHolding, 0)
@@ -2656,7 +2656,6 @@ func TestAccountsNewCRUD(t *testing.T) {
 		a.Contains(holdingMap, k)
 	}
 
-	old.pad.Assets = holdingMap // cache all the modifed
 	holdings := make([]basics.AssetIndex, 0, len(holdingMap))
 	for k := range holdingMap {
 		holdings = append(holdings, k)

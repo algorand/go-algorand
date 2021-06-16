@@ -2014,34 +2014,38 @@ func lookupExtendedGroup(loadStmt *sql.Stmt, aidx basics.AssetIndex, agl ledgerc
 	return gi, ai, rnd, err
 }
 
-func lookupAssetHolding(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgercore.PersistedAccountData) (basics.Round, error) {
+func lookupAssetHolding(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgercore.PersistedAccountData) (basics.Round, bool, error) {
 	gi, ai, rnd, err := lookupExtendedGroup(loadStmt, aidx, &pad.ExtendedAssetHolding)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
+	exist := false
 	if gi != -1 && ai != -1 {
 		if pad.AccountData.Assets == nil {
 			// pad.AccountData.Assets might not be nil because looks up into deltas cache
 			pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, 1)
 		}
 		pad.AccountData.Assets[aidx] = pad.ExtendedAssetHolding.Groups[gi].GetHolding(ai)
+		exist = true
 	}
-	return rnd, nil
+	return rnd, exist, nil
 }
 
-func lookupAssetParams(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgercore.PersistedAccountData) (basics.Round, error) {
+func lookupAssetParams(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgercore.PersistedAccountData) (basics.Round, bool, error) {
 	gi, ai, rnd, err := lookupExtendedGroup(loadStmt, aidx, &pad.ExtendedAssetParams)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
+	exist := false
 	if gi != -1 && ai != -1 {
 		if pad.AccountData.Assets == nil {
 			// pad.AccountData.AssetParams might not be nil because looks up into deltas cache
 			pad.AccountData.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 1)
 		}
 		pad.AccountData.AssetParams[aidx] = pad.ExtendedAssetParams.Groups[gi].GetParams(ai)
+		exist = true
 	}
-	return rnd, nil
+	return rnd, exist, nil
 }
 
 // lookupCreatableDataWithoutRewards returns the full account data for a given address at a given round.
@@ -2060,22 +2064,22 @@ func (au *accountUpdates) lookupCreatableDataWithoutRewards(rnd basics.Round, ad
 			for _, loc := range assetLocators {
 				// if not extended params then all the params in pad.AccountData.AssetParams
 				if loc.global && pad.ExtendedAssetParams.Count != 0 {
-					round, err := lookupAssetParams(loadStmt, basics.AssetIndex(loc.cidx), pad)
+					round, exist, err := lookupAssetParams(loadStmt, basics.AssetIndex(loc.cidx), pad)
 					if err != nil {
 						return err
 					}
-					if round != rnd {
+					if exist && round != rnd {
 						au.log.Errorf("accountUpdates.lookupCreatableDataWithoutRewards: database round %d mismatching in-memory round %d", round, rnd)
 						return &MismatchingDatabaseRoundError{databaseRound: round, memoryRound: rnd}
 					}
 
 				}
 				if loc.local && pad.ExtendedAssetHolding.Count != 0 {
-					round, err := lookupAssetHolding(loadStmt, basics.AssetIndex(loc.cidx), pad)
+					round, exist, err := lookupAssetHolding(loadStmt, basics.AssetIndex(loc.cidx), pad)
 					if err != nil {
 						return err
 					}
-					if round != rnd {
+					if exist && round != rnd {
 						au.log.Errorf("accountUpdates.lookupCreatableDataWithoutRewards: database round %d mismatching in-memory round %d", round, rnd)
 						return &MismatchingDatabaseRoundError{databaseRound: round, memoryRound: rnd}
 					}
