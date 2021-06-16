@@ -685,10 +685,9 @@ pop
 		"arg_3",
 	}
 	for _, source := range disallowed {
-		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-		require.NoError(t, err)
+		ops := testProg(t, source, AssemblerMaxVersion)
 		ep := defaultEvalParams(nil, nil)
-		err = CheckStateful(ops.Program, ep)
+		err := CheckStateful(ops.Program, ep)
 		require.Error(t, err)
 		_, err = EvalStateful(ops.Program, ep)
 		require.Error(t, err)
@@ -728,67 +727,31 @@ pop
 	require.True(t, modeAny.Any())
 }
 
-func testStateful(t *testing.T, source string, ver uint64, ledger LedgerForLogic) (bool, error) {
-	ops := testProg(t, source, ver)
-
-	txn := makeSampleTxn()
-	ep := defaultEvalParams(nil, &txn)
-	ep.TxnGroup = makeSampleTxnGroup(txn)
-	_, err := EvalStateful(ops.Program, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
-
-	ep.Ledger = ledger
-	return EvalStateful(ops.Program, ep)
-}
-
 func TestBalance(t *testing.T) {
 	t.Parallel()
 
+	ep, ledger := makeSampleEnv()
 	text := "int 2; balance; int 177; =="
-	tl := makeTestLedger(
-		map[basics.Address]uint64{
-			makeSampleTxn().Txn.Receiver: 177,
-		},
-	)
-	_, err := testStateful(t, text, AssemblerMaxVersion, tl)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid Account reference")
+	ledger.newAccount(ep.Txn.Txn.Receiver, 177)
+	testApp(t, text, ep, "invalid Account reference")
 
 	text = `int 1; balance; int 177; ==`
-	pass, err := testStateful(t, text, AssemblerMaxVersion, tl)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, text, ep)
 
 	text = `txn Accounts 1; balance; int 177; ==;`
 	// won't assemble in old version teal
 	testProg(t, text, directRefEnabledVersion-1, expect{2, "balance arg 0 wanted type uint64..."})
 	// but legal after that
-	pass, err = testStateful(t, text, directRefEnabledVersion, tl)
-	require.NoError(t, err)
-	require.True(t, pass)
+	testApp(t, text, ep)
 
 	text = "int 0; balance; int 13; =="
 	var addr basics.Address
 	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
-	tl = makeTestLedger(
-		map[basics.Address]uint64{
-			addr: 13,
-		},
-	)
-	pass, err = testStateful(t, text, AssemblerMaxVersion, tl)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to fetch balance")
-	require.False(t, pass)
+	ledger.newAccount(addr, 13)
+	testApp(t, text, ep, "failed to fetch balance")
 
-	tl = makeTestLedger(
-		map[basics.Address]uint64{
-			makeSampleTxn().Txn.Sender: 13,
-		},
-	)
-	pass, err = testStateful(t, text, AssemblerMaxVersion, tl)
-	require.NoError(t, err)
-	require.True(t, pass)
+	ledger.newAccount(ep.Txn.Txn.Sender, 13)
+	testApp(t, text, ep)
 }
 
 func testApp(t *testing.T, program string, ep EvalParams, problems ...string) basics.EvalDelta {
@@ -832,28 +795,17 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 func TestMinBalance(t *testing.T) {
 	t.Parallel()
 
-	txn := makeSampleTxn()
-	txgroup := makeSampleTxnGroup(txn)
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &txn
-	ep.TxnGroup = txgroup
+	ep, ledger := makeSampleEnv()
 
-	testApp(t, "int 0; min_balance; int 1001; ==", ep, "ledger not available")
-
-	ledger := makeTestLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Sender:   234, // min_balance 0 is Sender
-			txn.Txn.Receiver: 123, // Accounts[0] has been packed with the Receiver
-		},
-	)
-	ep.Ledger = ledger
+	ledger.newAccount(ep.Txn.Txn.Sender, 234)
+	ledger.newAccount(ep.Txn.Txn.Receiver, 123)
 
 	testApp(t, "int 0; min_balance; int 1001; ==", ep)
 	// Sender makes an asset, min balance goes up
-	ledger.newAsset(txn.Txn.Sender, 7, basics.AssetParams{Total: 1000})
+	ledger.newAsset(ep.Txn.Txn.Sender, 7, basics.AssetParams{Total: 1000})
 	testApp(t, "int 0; min_balance; int 2002; ==", ep)
 	schemas := makeApp(1, 2, 3, 4)
-	ledger.newApp(txn.Txn.Sender, 77, schemas)
+	ledger.newApp(ep.Txn.Txn.Sender, 77, schemas)
 	// create + optin + 10 schema base + 4 ints + 6 bytes (local
 	// and global count b/c newApp opts the creator in)
 	minb := 2*1002 + 10*1003 + 4*1004 + 6*1005
@@ -871,7 +823,7 @@ func TestMinBalance(t *testing.T) {
 	testProg(t, "txn Accounts 1; min_balance; int 1001; ==", directRefEnabledVersion)
 	testApp(t, "txn Accounts 1; min_balance; int 1001; ==", ep) // 1 == Accounts[0]
 	// Receiver opts in
-	ledger.setHolding(txn.Txn.Receiver, 7, 1, true)
+	ledger.setHolding(ep.Txn.Txn.Receiver, 7, 1, true)
 	testApp(t, "int 1; min_balance; int 2002; ==", ep) // 1 == Accounts[0]
 
 	testApp(t, "int 2; min_balance; int 1001; ==", ep, "invalid Account reference 2")
@@ -2837,38 +2789,30 @@ func TestReturnTypes(t *testing.T) {
 }
 
 func TestRound(t *testing.T) {
+	t.Parallel()
+	ep, _ := makeSampleEnv()
 	source := "global Round; int 1; >="
-	ep := defaultEvalParams(nil, nil)
-	ep.Ledger = makeTestLedger(map[basics.Address]uint64{})
 	testApp(t, source, ep)
 }
 
 func TestLatestTimestamp(t *testing.T) {
+	t.Parallel()
+	ep, _ := makeSampleEnv()
 	source := "global LatestTimestamp; int 1; >="
-	ep := defaultEvalParams(nil, nil)
-	ep.Ledger = makeTestLedger(map[basics.Address]uint64{})
 	testApp(t, source, ep)
 }
 
 func TestCurrentApplicationID(t *testing.T) {
-	source := "global CurrentApplicationID; int 42; =="
-	ep := defaultEvalParams(nil, nil)
-	ledger := makeTestLedger(map[basics.Address]uint64{})
+	t.Parallel()
+	ep, ledger := makeSampleEnv()
 	ledger.appID = basics.AppIndex(42)
-	ep.Ledger = ledger
+	source := "global CurrentApplicationID; int 42; =="
 	testApp(t, source, ep)
 }
 
 func TestAppLoop(t *testing.T) {
 	t.Parallel()
-	txn := makeSampleTxn()
-	txgroup := makeSampleTxnGroup(txn)
-	ep := defaultEvalParams(nil, nil)
-	ep.Txn = &txn
-	ep.TxnGroup = txgroup
-	ep.Ledger = makeTestLedger(
-		map[basics.Address]uint64{},
-	)
+	ep, _ := makeSampleEnv()
 
 	stateful := "global CurrentApplicationID; pop;"
 
