@@ -35,6 +35,7 @@ agents:
       - NETWORK=$NETWORK
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
+      - PACKAGE_NAME_EXTENSION=centos-stream8
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
