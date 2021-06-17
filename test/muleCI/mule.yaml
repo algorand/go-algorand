@@ -237,7 +237,6 @@ jobs:
     tasks:
       - stash.Unstash.packages
       - docker.Make.archive.amd64
-      - docker.Make.archive.amd64.centos8
 #  package-docker:
 #    tasks:
 #      - docker.Make.docker-image
