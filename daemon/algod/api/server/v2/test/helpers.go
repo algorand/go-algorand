@@ -61,6 +61,7 @@ var poolAddrAssetsGolden = make([]generatedV2.AssetHolding, 0)
 var poolAddrCreatedAssetsGolden = make([]generatedV2.Asset, 0)
 var appLocalStates = make([]generatedV2.ApplicationLocalState, 0)
 var appsTotalSchema = generatedV2.ApplicationStateSchema{}
+var appsTotalExtraPages = uint64(0)
 var appCreatedApps = make([]generatedV2.Application, 0)
 var poolAddrResponseGolden = generatedV2.AccountResponse{
 	Address:                     poolAddr.String(),
@@ -72,6 +73,7 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	Status:                      "Not Participating",
 	AppsLocalState:              &appLocalStates,
 	AppsTotalSchema:             &appsTotalSchema,
+	AppsTotalExtraPages:         &appsTotalExtraPages,
 	CreatedApps:                 &appCreatedApps,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)

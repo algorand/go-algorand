@@ -404,7 +404,7 @@ func TestConsensusVersion(t *testing.T) {
 		blk.BlockHeader.NextProtocolApprovals++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
-		l.WaitForCommit(rnd)
+		l.WaitForCommit(rnd + 1)
 	}
 
 	ver, err = l.ConsensusVersion(blk.BlockHeader.NextProtocolSwitchOn)
