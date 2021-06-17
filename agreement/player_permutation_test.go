@@ -420,8 +420,6 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(ca), playerN, eventN)
-			//ea := ensureAction{Certificate: Certificate(bun), Payload: *payload}
-			//requireTraceContains(t, trace, ev(ea), playerN, eventN)
 		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
 			requireActionCount(t, trace, 1, playerN, eventN)
 			expectDisconnect(t, trace, "Player should disconnect malformed vote/bundle, player: %v, event: %v", playerN, eventN)
