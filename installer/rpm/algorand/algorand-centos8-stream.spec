@@ -4,7 +4,7 @@ Release:       1
 Summary:       Algorand node software
 URL:           https://www.algorand.com
 License:       AGPL-3+
-Requires:      yum-cron
+Requires:      dnf-cron
 
 Requires:      systemd
 Requires(pre): shadow-utils
@@ -45,14 +45,17 @@ install -m 644 ${REPO_DIR}/installer/algorand@.service %{buildroot}/lib/systemd/
 mkdir -p %{buildroot}/etc/cron.hourly
 install -m 755 ${REPO_DIR}/installer/rpm/algorand/0yum-algorand-hourly.cron %{buildroot}/etc/cron.hourly/0yum-algorand-hourly.cron
 
-mkdir -p %{buildroot}/etc/yum
-install -m 644 ${REPO_DIR}/installer/rpm/algorand/yum-cron-algorand.conf %{buildroot}/etc/yum/yum-cron-algorand.conf
+
+mkdir -p %{buildroot}/etc/dnf
+install -m 644 ${REPO_DIR}/installer/rpm/algorand/dnf-cron-algorand.conf %{buildroot}/etc/dnf/dnf-cron-algorand.conf
+
 
 mkdir -p %{buildroot}/etc/pki/rpm-gpg
 install -m 644 ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand %{buildroot}/etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
 
-mkdir -p %{buildroot}/usr/lib/algorand/yum.repos.d
-install -m 644 ${REPO_DIR}/installer/rpm/algorand/algorand.repo %{buildroot}/usr/lib/algorand/yum.repos.d/algorand.repo
+mkdir -p %{buildroot}/usr/lib/algorand/dnf.repos.d
+install -m 644 ${REPO_DIR}/installer/rpm/algorand/algorand-centos8-stream.repo %{buildroot}/usr/lib/algorand/dnf.repos.d/algorand-centos8-stream.repo
+
 
 mkdir -p %{buildroot}/var/lib/algorand/genesis
 if [ "%{RELEASE_GENESIS_PROCESS}" != "x" ]; then
@@ -89,11 +92,16 @@ fi
 %endif
 /lib/systemd/system/algorand.service
 /lib/systemd/system/algorand@.service
+%if $(rpm --eval '%{centos_ver}') = 7
 %config(noreplace) /etc/cron.hourly/0yum-algorand-hourly.cron
 %config(noreplace) /etc/yum/yum-cron-algorand.conf
+%else
+%config(noreplace) /etc/cron.hourly/0dnf-algorand-hourly.cron
+%config(noreplace) /etc/dnf/dnf-cron-algorand.conf
+%endif
 
 /etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
-/usr/lib/algorand/yum.repos.d/algorand.repo
+/usr/lib/algorand/dnf.repos.d/algorand-centos8-stream.repo
 
 %changelog
 
