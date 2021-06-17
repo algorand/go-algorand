@@ -51,7 +51,7 @@ type Balances interface {
 	DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error
 
 	// StatefulEval executes a TEAL program in stateful mode on the balances.
-	// It returns whether the program passed and its error.  It alo returns
+	// It returns whether the program passed and its error.  It also returns
 	// an EvalDelta that contains the changes made by the program.
 	StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error)
 

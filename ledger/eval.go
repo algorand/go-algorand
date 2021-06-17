@@ -668,7 +668,7 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 
 // prepareEvalParams creates a logic.EvalParams for each ApplicationCall
 // transaction in the group
-func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) (res []*logic.EvalParams) {
+func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD, spec *transactions.SpecialAddresses) (res []*logic.EvalParams) {
 	var groupNoAD []transactions.SignedTxn
 	var pastSideEffects []logic.EvalSideEffects
 	var minTealVersion uint64
@@ -728,7 +728,11 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	cow := eval.state.child(len(txgroup))
 
 	// Prepare eval params for any ApplicationCall transactions in the group
-	evalParams := eval.prepareEvalParams(txgroup)
+	spec := transactions.SpecialAddresses{
+		FeeSink:     eval.block.BlockHeader.FeeSink,
+		RewardsPool: eval.block.BlockHeader.RewardsPool,
+	}
+	evalParams := eval.prepareEvalParams(txgroup, &spec)
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
@@ -736,7 +740,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		var txib transactions.SignedTxnInBlock
 
 		cow.setGroupIdx(gi)
-		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, evalParams[gi], spec, txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -827,7 +831,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, spec transactions.SpecialAddresses, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	// Only compute the TxID once
@@ -858,11 +862,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		if txn.Authorizer() != correctAuthorizer {
 			return fmt.Errorf("transaction %v: should have been authorized by %v but was actually authorized by %v", txn.ID(), correctAuthorizer, txn.Authorizer())
 		}
-	}
-
-	spec := transactions.SpecialAddresses{
-		FeeSink:     eval.block.BlockHeader.FeeSink,
-		RewardsPool: eval.block.BlockHeader.RewardsPool,
 	}
 
 	// Apply the transaction, updating the cow balances

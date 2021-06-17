@@ -386,7 +386,7 @@ func (ops *OpStream) ByteLiteral(val []byte) {
 	found := false
 	var constIndex uint
 	for i, cv := range ops.bytec {
-		if bytes.Compare(cv, val) == 0 {
+		if bytes.Equal(cv, val) {
 			found = true
 			constIndex = uint(i)
 			break
@@ -1043,6 +1043,23 @@ func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+func asmTxField(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return ops.errorf("%s expects one argument", spec.Name)
+	}
+	fs, ok := txnFieldSpecByName[args[0]]
+	if !ok {
+		return ops.errorf("txn unknown field: %#v", args[0])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if ok {
+		return ops.errorf("found array field %#v in %s op", args[0], spec.Name)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(fs.field))
+	return nil
+}
+
 type assembleFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
@@ -1205,6 +1222,17 @@ func typeUncover(ops *OpStream, args []string) (StackTypes, StackTypes) {
 		returns[len(returns)-1] = sv
 	}
 	return anys, returns
+}
+
+func typeTxField(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	if len(args) != 1 {
+		return oneAny, nil
+	}
+	fs, ok := txnFieldSpecByName[args[0]]
+	if !ok {
+		return oneAny, nil
+	}
+	return StackTypes{fs.ftype}, nil
 }
 
 // keywords handle parsing and assembling special asm language constructs like 'addr'
@@ -1940,7 +1968,6 @@ type disassembleState struct {
 	pendingLabels  map[int]string
 
 	nextpc int
-	err    error
 
 	intc  []uint64
 	bytec [][]byte
@@ -2405,6 +2432,20 @@ func disAppParams(dis *disassembleState, spec *OpSpec) (string, error) {
 		return "", fmt.Errorf("invalid app params arg index %d at pc=%d", arg, dis.pc)
 	}
 	return fmt.Sprintf("%s %s", spec.Name, AppParamsFieldNames[arg]), nil
+}
+
+func disTxField(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+	}
+	dis.nextpc = dis.pc + 2
+	arg := dis.program[dis.pc+1]
+	if int(arg) >= len(TxnFieldNames) {
+		return "", fmt.Errorf("invalid txfield arg index %d at pc=%d", arg, dis.pc)
+	}
+	return fmt.Sprintf("%s %s", spec.Name, TxnFieldNames[arg]), nil
 }
 
 type disInfo struct {

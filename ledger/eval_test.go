@@ -415,7 +415,11 @@ func TestPrepareEvalParams(t *testing.T) {
 		for j, testCase := range cases {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				eval.proto = param
-				res := eval.prepareEvalParams(testCase.group)
+				spec := transactions.SpecialAddresses{
+					FeeSink:     eval.block.BlockHeader.FeeSink,
+					RewardsPool: eval.block.BlockHeader.RewardsPool,
+				}
+				res := eval.prepareEvalParams(testCase.group, &spec)
 				require.Equal(t, len(res), len(testCase.group))
 
 				// Compute the expected transaction group without ApplyData for

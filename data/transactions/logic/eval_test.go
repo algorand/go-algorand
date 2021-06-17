@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logictest"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -42,10 +43,6 @@ import (
 // we check that TEAL v1 and v2 programs are compatible with the latest evaluator
 func defaultEvalProto() config.ConsensusParams {
 	return defaultEvalProtoWithVersion(LogicVersion)
-}
-
-func defaultEvalProtoV1() config.ConsensusParams {
-	return defaultEvalProtoWithVersion(1)
 }
 
 func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
@@ -59,11 +56,19 @@ func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
 		// These must be identical to keep an old backward compat test working
 		MinTxnFee:  1001,
 		MinBalance: 1001,
+		// Our sample txn is 42-1066 (and that's used as default in tx_begin)
+		MaxTxnLife: 1500,
 		// Strange choices below so that we test against conflating them
 		AppFlatParamsMinBalance:  1002,
 		SchemaMinBalancePerEntry: 1003,
 		SchemaUintMinBalance:     1004,
 		SchemaBytesMinBalance:    1005,
+
+		// With the addition of tx_perform, which relies on
+		// machinery outside logic package for validity
+		// checking, we need a more realistic set of consenus
+		// paramaters.
+		Asset: true,
 	}
 }
 
@@ -88,14 +93,14 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 	if txn != nil {
 		pt = txn
 	} else {
-		var at transactions.SignedTxn
-		pt = &at
+		pt = &transactions.SignedTxn{}
 	}
 
 	ep := EvalParams{}
 	ep.Proto = &proto
 	ep.Txn = pt
 	ep.PastSideEffects = MakePastSideEffects(5)
+	ep.Specials = &transactions.SpecialAddresses{}
 	if sb != nil { // have to do this since go's nil semantics: https://golang.org/doc/faq#nil_error
 		ep.Trace = sb
 	}
@@ -1024,6 +1029,11 @@ const globalV4TestProgram = globalV3TestProgram + `
 
 const globalV5TestProgram = globalV4TestProgram + `
 // No new globals in v5
+global CurrentApplicationAddress
+len
+int 32
+==
+&&
 `
 
 func TestGlobal(t *testing.T) {
@@ -1052,17 +1062,17 @@ func TestGlobal(t *testing.T) {
 			EvalStateful, CheckStateful,
 		},
 		5: {
-			CreatorAddress, globalV5TestProgram,
+			CurrentApplicationAddress, globalV5TestProgram,
 			EvalStateful, CheckStateful,
 		},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
-	ledger := makeTestLedger(nil)
-	ledger.appID = 42
+
+	ledger := logictest.MakeLedger(nil)
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)
 	require.NoError(t, err)
-	ledger.creatorAddr = addr
+	ledger.NewApp(addr, basics.AppIndex(42), basics.AppParams{})
 	for v := uint64(0); v <= AssemblerMaxVersion; v++ {
 		_, ok := tests[v]
 		require.True(t, ok)
@@ -1145,9 +1155,8 @@ txn TypeEnum
 int %s
 ==
 &&`, symbol, string(tt))
-					ops, err := AssembleStringWithVersion(text, v)
-					require.NoError(t, err)
-					err = Check(ops.Program, defaultEvalParams(nil, nil))
+					ops := testProg(t, text, v)
+					err := Check(ops.Program, defaultEvalParams(nil, nil))
 					require.NoError(t, err)
 					var txn transactions.SignedTxn
 					txn.Txn.Type = tt
@@ -1582,7 +1591,7 @@ func TestTxn(t *testing.T) {
 			}
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
-			ep.Ledger = makeTestLedger(nil)
+			ep.Ledger = logictest.MakeLedger(nil)
 			ep.GroupIndex = 3
 			pass, err := Eval(ops.Program, ep)
 			if !pass {
@@ -1638,10 +1647,9 @@ fail:
 int 0
 return
 `
-	ops, err := AssembleStringWithVersion(cachedTxnProg, 2)
-	require.NoError(t, err)
+	ops := testProg(t, cachedTxnProg, 2)
 	sb := strings.Builder{}
-	err = Check(ops.Program, defaultEvalParams(&sb, nil))
+	err := Check(ops.Program, defaultEvalParams(&sb, nil))
 	if err != nil {
 		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
@@ -1686,10 +1694,8 @@ int 100
 	targetTxn.Txn.Type = protocol.AssetConfigTx
 	txgroup[0] = targetTxn
 	sb := strings.Builder{}
-	ledger := makeTestLedger(nil)
-	ledger.setTrackedCreatable(0, basics.CreatableLocator{
-		Index: 100,
-	})
+	ledger := logictest.MakeLedger(nil)
+	ledger.SetTrackedCreatable(0, basics.CreatableLocator{Index: 100})
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Ledger = ledger
 	ep.TxnGroup = txgroup
@@ -1730,8 +1736,7 @@ int 0
 	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
 
 	// should fail when no creatable was created
-	var nilIndex basics.CreatableIndex
-	ledger.trackedCreatables[0] = nilIndex
+	ledger.SetTrackedCreatable(0, basics.CreatableLocator{})
 	_, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "the txn did not create anything")
@@ -3499,20 +3504,9 @@ func evalLoop(b *testing.B, runs int, program []byte) {
 }
 
 func benchmarkBasicProgram(b *testing.B, source string) {
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops := testProg(b, source, AssemblerMaxVersion)
+	err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(b, err)
-	err = Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(b, err)
-	evalLoop(b, b.N, ops.Program)
-}
-
-func benchmarkExpensiveProgram(b *testing.B, source string) {
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(b, err)
-	err = Check(ops.Program, defaultEvalParams(nil, nil))
-	require.NoError(b, err)
-	_, err = Eval(ops.Program, defaultEvalParams(nil, nil))
-	require.Error(b, err) // excessive cost
 	evalLoop(b, b.N, ops.Program)
 }
 
@@ -3527,9 +3521,8 @@ func benchmarkOperation(b *testing.B, prefix string, operation string, suffix st
 	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
 	source := prefix + ";" + strings.Repeat(operation+";", 2000) + ";" + suffix
 	source = strings.ReplaceAll(source, ";", "\n")
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(b, err)
-	err = Check(ops.Program, defaultEvalParams(nil, nil))
+	ops := testProg(b, source, AssemblerMaxVersion)
+	err := Check(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(b, err)
 	evalLoop(b, runs, ops.Program)
 	b.ReportMetric(float64(inst)*15.0, "waste/op")
@@ -4774,8 +4767,8 @@ func TestLog(t *testing.T) {
 			Type: protocol.ApplicationCallTx,
 		},
 	}
-	ledger := makeTestLedger(nil)
-	ledger.newApp(txn.Txn.Receiver, 0, basics.AppParams{})
+	ledger := logictest.MakeLedger(nil)
+	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
 	sb := strings.Builder{}
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Proto = &proto
@@ -4818,11 +4811,11 @@ func TestLog(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, pass)
 		count += s.loglen
-		require.Equal(t, len(ledger.logs), count)
+		require.Len(t, ledger.Logs, count)
 		if i == len(testCases)-1 {
-			require.Equal(t, strings.Repeat("a", MaxLogSize), ledger.logs[count-1].Message)
+			require.Equal(t, strings.Repeat("a", MaxLogSize), ledger.Logs[count-1].Message)
 		} else {
-			for _, l := range ledger.logs[count-s.loglen:] {
+			for _, l := range ledger.Logs[count-s.loglen:] {
 				require.Equal(t, "a logging message", l.Message)
 			}
 		}

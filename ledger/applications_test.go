@@ -242,6 +242,7 @@ func TestLogicLedgerAsset(t *testing.T) {
 	c.brs = map[basics.Address]basics.AccountData{
 		addr1: {AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}}},
 	}
+
 	ap, creator, err := l.AssetParams(assetIdx)
 	a.NoError(err)
 	a.Equal(addr1, creator)

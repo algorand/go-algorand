@@ -22,6 +22,7 @@ type HashID string
 
 // Hash IDs for specific object types, in lexicographic order to avoid dups.
 const (
+	AppIndex          HashID = "app"
 	AuctionBid        HashID = "aB"
 	AuctionDeposit    HashID = "aD"
 	AuctionOutcomes   HashID = "aO"

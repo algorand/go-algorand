@@ -22,6 +22,8 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type logicLedger struct {
@@ -85,6 +87,15 @@ func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusPa
 	}
 
 	return record.MinBalance(proto), nil
+}
+
+func (al *logicLedger) Authorizer(addr basics.Address) basics.Address {
+	record, err := al.cow.Get(addr, false) // pending rewards unneeded
+	if err != nil || record.AuthAddr.IsZero() {
+		return addr
+	}
+
+	return record.AuthAddr
 }
 
 func (al *logicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
@@ -247,4 +258,48 @@ func (al *logicLedger) AppendLog(txn *transactions.Transaction, value string) er
 		return err
 	}
 	return al.cow.AppendLog(idx, value)
+}
+
+func (al *logicLedger) balances() (apply.Balances, error) {
+	balances, ok := al.cow.(apply.Balances)
+	if !ok {
+		return nil, fmt.Errorf("cannot get a Balances object from %v", al)
+	}
+	return balances, nil
+}
+
+func (l *logicLedger) Perform(tx *transactions.Transaction, spec transactions.SpecialAddresses) error {
+	balances, err := l.balances()
+	if err != nil {
+		return err
+	}
+
+	var ad transactions.ApplyData
+	// move fee to pool
+	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	if err != nil {
+		return err
+	}
+
+	switch tx.Type {
+	case protocol.PaymentTx:
+		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, spec, &ad)
+	case protocol.AssetTransferTx:
+		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, balances, spec, &ad)
+	default:
+		err = fmt.Errorf("%s tx in AVM", tx.Type)
+	}
+	if err != nil {
+		return err
+	}
+
+	// Need to check min balances here.  That's not done in the apply.* calls
+	// func (eval *BlockEvaluator) checkMinBalance is the model, but we have to ensure we
+	// check all touched accounts.
+
+	if !ad.Equal(transactions.ApplyData{}) {
+		return fmt.Errorf("Perform caused ad change %v", ad)
+	}
+	return nil
+
 }

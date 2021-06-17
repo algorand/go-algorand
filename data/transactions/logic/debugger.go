@@ -204,12 +204,12 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 		ds.Error = cx.err.Error()
 	}
 
-	stack := make([]basics.TealValue, len(cx.stack), len(cx.stack))
+	stack := make([]basics.TealValue, len(cx.stack))
 	for i, sv := range cx.stack {
 		stack[i] = stackValueToTealValue(&sv)
 	}
 
-	scratch := make([]basics.TealValue, len(cx.scratch), len(cx.scratch))
+	scratch := make([]basics.TealValue, len(cx.scratch))
 	for i, sv := range cx.scratch {
 		scratch[i] = stackValueToTealValue(&sv)
 	}

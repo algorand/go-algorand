@@ -463,6 +463,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
 | 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
 | 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
+| 10 | CurrentApplicationAddress | []byte | Address that the current application controls. Fails if no such application is executing. LogicSigVersion >= 5. |
 
 
 ## gtxn t f
@@ -1212,3 +1213,30 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Mode: Application
 
 `log` can be called up to MaxLogCalls times in a program, and log up to a total of 1k bytes.
+
+## tx_begin
+
+- Opcode: 0xb1
+- Pops: _None_
+- Pushes: _None_
+- Prepare a new application action
+- LogicSigVersion >= 5
+- Mode: Application
+
+## tx_field f
+
+- Opcode: 0xb2 {uint8 transaction field index}
+- Pops: *... stack*, any
+- Pushes: _None_
+- Set field F of the current application action
+- LogicSigVersion >= 5
+- Mode: Application
+
+## tx_submit
+
+- Opcode: 0xb3
+- Pops: _None_
+- Pushes: _None_
+- Execute the current application action. Panic on any failure.
+- LogicSigVersion >= 5
+- Mode: Application

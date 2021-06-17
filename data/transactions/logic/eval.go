@@ -99,6 +99,21 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
+func (sv *stackValue) address() (addr basics.Address, err error) {
+	if len(sv.Bytes) != len(addr) {
+		return basics.Address{}, errors.New("not an address")
+	}
+	copy(addr[:], sv.Bytes)
+	return
+}
+
+func (sv *stackValue) uint() (uint64, error) {
+	if sv.Bytes != nil {
+		return 0, errors.New("not a uint64")
+	}
+	return sv.Uint, nil
+}
+
 func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 	switch tv.Type {
 	case basics.TealBytesType:
@@ -145,6 +160,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (basics.MicroAlgos, error)
 	MinBalance(addr basics.Address, proto *config.ConsensusParams) (basics.MicroAlgos, error)
+	Authorizer(addr basics.Address) basics.Address
 	Round() basics.Round
 	LatestTimestamp() int64
 
@@ -152,7 +168,6 @@ type LedgerForLogic interface {
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
 	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
 	ApplicationID() basics.AppIndex
-	CreatorAddress() basics.Address
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
 	GetCreatableID(groupIdx int) basics.CreatableIndex
 
@@ -167,6 +182,7 @@ type LedgerForLogic interface {
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
 
 	AppendLog(txn *transactions.Transaction, value string) error
+	Perform(txn *transactions.Transaction, spec transactions.SpecialAddresses) error
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -221,6 +237,14 @@ type EvalParams struct {
 	// The program must reject if its version is less than this version. If
 	// MinTealVersion is nil, we will compute it ourselves
 	MinTealVersion *uint64
+
+	// Amount "overpaid" by the top-level transactions of the
+	// group.  Often 0.  When positive, it is spent by application
+	// actions.  Shared value across a group's txns, so that it
+	// can be updated. nil is interpretted as 0.
+	OverpaidFee *uint64
+
+	Specials *transactions.SpecialAddresses
 
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
@@ -286,7 +310,8 @@ type evalContext struct {
 
 	stack     []stackValue
 	callstack []int
-	program   []byte // txn.Lsig.Logic ?
+	subtxn    transactions.Transaction // place to build for tx_submit
+	program   []byte
 	pc        int
 	nextpc    int
 	err       error
@@ -311,6 +336,7 @@ type evalContext struct {
 
 	programHashCached crypto.Digest
 	txidCache         map[int]transactions.Txid
+	appAddrCache      map[basics.AppIndex]basics.Address
 
 	// Stores state & disassembly for the optional debugger
 	debugState DebugState
@@ -691,7 +717,7 @@ func (cx *evalContext) step() {
 		// perhaps we could have an interface that allows
 		// disassembly to use the cx directly.  But for now,
 		// we don't want to worry about the dissassembly
-		// routines mucking about in the excution context
+		// routines mucking about in the execution context
 		// (changing the pc, for example) and this gives a big
 		// improvement of dryrun readability
 		dstate := &disassembleState{program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec}
@@ -2259,12 +2285,32 @@ func (cx *evalContext) getLatestTimestamp() (timestamp uint64, err error) {
 	return uint64(ts), nil
 }
 
-func (cx *evalContext) getApplicationID() (rnd uint64, err error) {
+func (cx *evalContext) getApplicationID() (uint64, error) {
 	if cx.Ledger == nil {
-		err = fmt.Errorf("ledger not available")
-		return
+		return 0, fmt.Errorf("ledger not available")
 	}
 	return uint64(cx.Ledger.ApplicationID()), nil
+}
+
+func (cx *evalContext) getApplicationAddress() ([]byte, error) {
+	if cx.Ledger == nil {
+		return nil, fmt.Errorf("ledger not available")
+	}
+
+	// Initialize appAddrCache if necessary
+	if cx.appAddrCache == nil {
+		cx.appAddrCache = make(map[basics.AppIndex]basics.Address)
+	}
+
+	appId := cx.Ledger.ApplicationID()
+	// Hashes are expensive, so we cache computed app addrs
+	appAddr, ok := cx.appAddrCache[appId]
+	if !ok {
+		appAddr = appId.Address()
+		cx.appAddrCache[appId] = appAddr
+	}
+
+	return appAddr[:], nil
 }
 
 func (cx *evalContext) getCreatableID(groupIndex int) (cid uint64, err error) {
@@ -2279,8 +2325,11 @@ func (cx *evalContext) getCreatorAddress() ([]byte, error) {
 	if cx.Ledger == nil {
 		return nil, fmt.Errorf("ledger not available")
 	}
-	addr := cx.Ledger.CreatorAddress()
-	return addr[:], nil
+	_, creator, err := cx.Ledger.AppParams(cx.Ledger.ApplicationID())
+	if err != nil {
+		return nil, fmt.Errorf("No params for current app")
+	}
+	return creator[:], nil
 }
 
 var zeroAddress basics.Address
@@ -2305,6 +2354,8 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 		sv.Uint, err = cx.getLatestTimestamp()
 	case CurrentApplicationID:
 		sv.Uint, err = cx.getApplicationID()
+	case CurrentApplicationAddress:
+		sv.Bytes, err = cx.getApplicationAddress()
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
 	default:
@@ -3197,4 +3248,166 @@ func opLog(cx *evalContext) {
 		return
 	}
 	cx.stack = cx.stack[:last]
+}
+
+func authorizedSender(cx *evalContext, addr basics.Address) bool {
+	appAddrBytes, err := cx.getApplicationAddress()
+	if err != nil {
+		return false
+	}
+	var appAddr basics.Address
+	copy(appAddr[:], appAddrBytes)
+	auth := cx.Ledger.Authorizer(addr)
+	return appAddr == auth
+}
+
+func opTxBegin(cx *evalContext) {
+	// Start fresh
+	cx.subtxn = transactions.Transaction{}
+	// Fill in defaults.
+	bytes, err := cx.getApplicationAddress()
+	if err != nil {
+		cx.err = err
+		return
+	}
+	var addr basics.Address
+	copy(addr[:], bytes)
+
+	fee := cx.Proto.MinTxnFee
+	if cx.OverpaidFee != nil {
+		if fee < *cx.OverpaidFee {
+			fee = 0
+		} else {
+			// Use up the overpay to shrink the fee
+			fee -= *cx.OverpaidFee
+		}
+		// We don't change OverpiadFee here, because they
+		// might never tx_submit, or they might change the fee
+		// (if we decide to allow that).  Do it in tx_submit.
+	}
+	cx.subtxn.Header = transactions.Header{
+		Sender:     addr, // Default, to simplify usage
+		Fee:        basics.MicroAlgos{Raw: fee},
+		FirstValid: cx.Txn.Txn.FirstValid,
+		LastValid:  cx.Txn.Txn.LastValid,
+	}
+}
+
+func (cx *evalContext) available_address(sv stackValue) (basics.Address, error) {
+	addr, err := sv.address()
+	if err != nil {
+		return basics.Address{}, err
+	}
+	// Ensure that addr from Accounts.
+	_, err = cx.Txn.Txn.IndexByAddress(addr, cx.Txn.Txn.Sender)
+	if err != nil {
+		return basics.Address{}, err
+	}
+	return addr, nil
+}
+
+func (cx *evalContext) available_asset(sv stackValue) (basics.AssetIndex, error) {
+	aid, err := sv.uint()
+	if err != nil {
+		return basics.AssetIndex(0), err
+	}
+	// Ensure that aid is in Foreign Assets
+	for _, assetID := range cx.Txn.Txn.ForeignAssets {
+		if assetID == basics.AssetIndex(aid) {
+			return basics.AssetIndex(aid), nil
+		}
+	}
+	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
+}
+
+func opTxField(cx *evalContext) {
+	last := len(cx.stack) - 1
+	field := TxnField(uint64(cx.program[cx.pc+1]))
+	sv := cx.stack[last]
+	var i uint64
+	switch field {
+	case Sender:
+		cx.subtxn.Sender, cx.err = cx.available_address(sv)
+	case Receiver:
+		cx.subtxn.Receiver, cx.err = cx.available_address(sv)
+	case Amount:
+		cx.subtxn.Amount.Raw, cx.err = sv.uint()
+	case CloseRemainderTo:
+		cx.subtxn.CloseRemainderTo, cx.err = cx.available_address(sv)
+	case Type:
+		cx.subtxn.Type = protocol.TxType(sv.Bytes)
+	case TypeEnum:
+		i, cx.err = sv.uint()
+		if i < uint64(len(TxnTypeNames)) {
+			cx.subtxn.Type = protocol.TxType(TxnTypeNames[i])
+		}
+	case XferAsset:
+		cx.subtxn.XferAsset, cx.err = cx.available_asset(sv)
+	case AssetReceiver:
+		cx.subtxn.AssetReceiver, cx.err = cx.available_address(sv)
+	case AssetAmount:
+		cx.subtxn.AssetAmount, cx.err = sv.uint()
+	case AssetCloseTo:
+		cx.subtxn.AssetCloseTo, cx.err = cx.available_address(sv)
+	// Keeping things buttoned up for now
+	// Disallow rekey, explicit fee, fv, lv, lease (and everything outside pay, axfr)
+	default:
+		cx.err = fmt.Errorf("invalid txfield %s", field)
+	}
+
+	cx.stack = cx.stack[:last] // pop
+}
+
+func opTxSubmit(cx *evalContext) {
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	// Error out on anything unusual.  Allow pay, axfer.
+	switch cx.subtxn.Type {
+	case protocol.PaymentTx, protocol.AssetTransferTx:
+		// only pay and axfer for now
+	default:
+		cx.err = fmt.Errorf("Invalid action type %s", cx.subtxn.Type)
+		return
+	}
+
+	// The goal is to follow the same invariants used by the
+	// transaction pool. Namely that any transaction that makes it
+	// to Perform (which is equivalent to eval.applyTransaction)
+	// is authorized, and WellFormed.
+	if !authorizedSender(cx, cx.subtxn.Sender) {
+		cx.err = fmt.Errorf("unauthorized")
+		return
+	}
+
+	// Recall that WellFormed does not care about individual
+	// transaction fees because of fee pooling. So we check below.
+	cx.err = cx.subtxn.WellFormed(*cx.Specials, *cx.Proto)
+	if cx.err != nil {
+		return
+	}
+
+	paid := cx.subtxn.Fee.Raw
+	if paid >= cx.Proto.MinTxnFee {
+		// Over paying - accumulate into OverpaidFee
+		overpaid := paid - cx.Proto.MinTxnFee
+		if cx.OverpaidFee == nil {
+			cx.OverpaidFee = new(uint64)
+		}
+		*cx.OverpaidFee = basics.AddSaturate(*cx.OverpaidFee, overpaid)
+	} else {
+		underpaid := cx.Proto.MinTxnFee - paid
+		// Try to pay with OverpaidFee, else fail.
+		if cx.OverpaidFee != nil && *cx.OverpaidFee > underpaid {
+			*cx.OverpaidFee -= underpaid
+		} else {
+			// This should be impossible until we allow changing the Fee
+			cx.err = fmt.Errorf("fee too small")
+			return
+		}
+	}
+
+	cx.err = cx.Ledger.Perform(&cx.subtxn, *cx.Specials)
 }
