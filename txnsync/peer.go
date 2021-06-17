@@ -220,12 +220,13 @@ func (t *transactionGroupCounterTracker) set(offset, modulator byte, counter uin
 }
 
 // roll the counters for a given requests params, so that we would go back and
-// rescan some of the previous transaction groups ( but not all !) when selectPendingTransactionGroups is called.
+// rescan some of the previous transaction groups ( but not all !) when selectPendingTransactions is called.
 func (t *transactionGroupCounterTracker) roll(offset, modulator byte) {
 	i := t.index(offset, modulator)
 	if i < 0 {
 		return
 	}
+
 	if (*t)[i].groupCounters[1] >= (*t)[i].groupCounters[0] {
 		return
 	}
@@ -340,8 +341,20 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	windowSizedReached := false
 	hasMorePendingTransactions := false
 
+	// create a list of all the bloom filters that might need to be tested. This list excludes bloom filters
+	// which has the same modulator and a different offset.
+	var effectiveBloomFilters []int
+	effectiveBloomFilters = make([]int, 0, len(p.recentIncomingBloomFilters))
+	for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
+		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == p.requestedTransactionsModulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
+			continue
+		}
+		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
+	}
+
 	//removedTxn := 0
 	grpIdx := startIndex
+scanLoop:
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
 		txID := pendingTransactions[grpIdx].FirstTransactionID
 
@@ -359,16 +372,11 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		}
 
 		// check if the peer alrady received these messages from a different source other than us.
-		alreadyReceived := false
-		for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
+		for _, filterIdx := range effectiveBloomFilters {
 			if p.recentIncomingBloomFilters[filterIdx].filter.test(txID) {
 				//removedTxn++
-				alreadyReceived = true
-				break
+				continue scanLoop
 			}
-		}
-		if alreadyReceived {
-			continue
 		}
 
 		if windowSizedReached {
@@ -476,14 +484,15 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter bloomFi
 		// delete some of the old entries.
 		p.recentIncomingBloomFilters = p.recentIncomingBloomFilters[firstValidEntry:]
 	}
+	// reset the counter, since we might need to re-evaluate some of the transaction group with the new bloom filter.
+	p.lastTransactionSelectionTracker.roll(incomingFilter.encodingParams.Offset, incomingFilter.encodingParams.Modulator)
+
 	// scan the existing bloom filter, and ensure we have only one bloom filter for every
 	// set of encoding paramters. this would allow us to accumulate false positive
 	for idx, bloomFltr := range p.recentIncomingBloomFilters {
 		if bloomFltr.filter.encodingParams == incomingFilter.encodingParams {
 			// replace.
 			p.recentIncomingBloomFilters[idx] = bf
-			// reset the counter, since we might need to re-evaluate some of the transaction group with the new bloom filter.
-			p.lastTransactionSelectionTracker.roll(incomingFilter.encodingParams.Offset, incomingFilter.encodingParams.Modulator)
 			return
 		}
 	}
@@ -499,10 +508,6 @@ func (p *Peer) updateRequestParams(modulator, offset byte) {
 		return
 	}
 	p.requestedTransactionsModulator, p.requestedTransactionsOffset = modulator, offset
-
-	// if we've changed the request params for this peer, we need to reset the lastTransactionSelectionGroupCounter since we might have
-	// skipped entries that need to be re-evaluated.
-	p.lastTransactionSelectionTracker.roll(p.requestedTransactionsOffset, p.requestedTransactionsModulator)
 }
 
 // update the recentSentTransactions with the incoming transaction groups. This would prevent us from sending the received transactions back to the
