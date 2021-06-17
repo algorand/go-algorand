@@ -177,8 +177,17 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	proto := config.Consensus[lastBlock.CurrentProtocol]
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
-	for _, acctdata := range initAccounts {
-		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+	if l.Latest() == 0 {
+		require.NotNil(t, initAccounts)
+		for _, acctdata := range initAccounts {
+			if acctdata.Status != basics.NotParticipating {
+				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+			}
+		}
+	} else {
+		totals, err := l.Totals(l.Latest())
+		require.NoError(t, err)
+		totalRewardUnits = totals.RewardUnits()
 	}
 	poolBal, err := l.Lookup(l.Latest(), poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
