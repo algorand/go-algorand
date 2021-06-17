@@ -68,11 +68,12 @@ func generateDummyGoNonparticpatingTransaction(addr basics.Address) (tx Transact
 			FirstValid: 1,
 			LastValid:  300,
 		},
-		KeyregTxnFields: KeyregTxnFields{Nonparticipation: true},
+		KeyregTxnFields: KeyregTxnFields{
+			Nonparticipation: true,
+			VoteFirst:        0,
+			VoteLast:         0,
+		},
 	}
-	tx.KeyregTxnFields.VoteFirst = 1
-	tx.KeyregTxnFields.VoteLast = 300
-	tx.KeyregTxnFields.VoteKeyDilution = 1
 
 	tx.KeyregTxnFields.Nonparticipation = true
 	return tx
@@ -250,8 +251,19 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 			},
 			spec:          specialAddr,
-			proto:         curProto,
+			proto:         protoV27,
 			expectedError: makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", 100, curProto.MinTxnFee),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender: addr1,
+					Fee:    basics.MicroAlgos{Raw: 100},
+				},
+			},
+			spec:  specialAddr,
+			proto: curProto,
 		},
 		{
 			tx: Transaction{
@@ -426,7 +438,7 @@ func TestWellFormedErrors(t *testing.T) {
 				Header: okHeader,
 				ApplicationCallTxnFields: ApplicationCallTxnFields{
 					ApplicationID: 1,
-					Accounts:      []basics.Address{basics.Address{}, basics.Address{}, basics.Address{}},
+					Accounts:      []basics.Address{{}, {}, {}},
 					ForeignApps:   []basics.AppIndex{14, 15, 16, 17},
 					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
 				},
