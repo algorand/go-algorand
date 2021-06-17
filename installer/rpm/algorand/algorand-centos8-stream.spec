@@ -92,13 +92,8 @@ fi
 %endif
 /lib/systemd/system/algorand.service
 /lib/systemd/system/algorand@.service
-%if $(rpm --eval '%{centos_ver}') = 7
-%config(noreplace) /etc/cron.hourly/0yum-algorand-hourly.cron
-%config(noreplace) /etc/yum/yum-cron-algorand.conf
-%else
 %config(noreplace) /etc/cron.hourly/0dnf-algorand-hourly.cron
 %config(noreplace) /etc/dnf/dnf-cron-algorand.conf
-%endif
 
 /etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
 /usr/lib/algorand/dnf.repos.d/algorand-centos8-stream.repo
