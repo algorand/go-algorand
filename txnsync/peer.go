@@ -239,8 +239,8 @@ func (t *transactionGroupCounterTracker) roll(offset, modulator byte) {
 // a requestParamsGroupCounterState in the array that matches the provided request params. The method
 // uses a linear search, which works best against small arrays.
 func (t *transactionGroupCounterTracker) index(offset, modulator byte) int {
-	for i := range *t {
-		if (*t)[i].offset == offset && (*t)[i].modulator == modulator {
+	for i, counter := range *t {
+		if counter.offset == offset && counter.modulator == modulator {
 			return i
 		}
 	}
