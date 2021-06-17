@@ -27,11 +27,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/basics"
 )
+
+// optimizeConstantsEnabledVersion is the first version of TEAL where the
+// assembler optimizes constants introduced by pseudo-ops
+const optimizeConstantsEnabledVersion = 4
 
 // Writer is what we want here. Satisfied by bufio.Buffer
 type Writer interface {
@@ -48,6 +53,162 @@ type labelReference struct {
 	label string
 }
 
+type constReference interface {
+	// get the referenced value
+	getValue() interface{}
+
+	// check if the referenced value equals other. Other must be the same type
+	valueEquals(other interface{}) bool
+
+	// get the index into ops.pending where the opcode for this reference is located
+	getPosition() int
+
+	// get the length of the op for this reference in ops.pending
+	length(ops *OpStream, assembled []byte) (int, error)
+
+	// create the opcode bytes for a new reference of the same value
+	makeNewReference(ops *OpStream, singleton bool, newIndex int) []byte
+}
+
+type intReference struct {
+	value uint64
+
+	// position of the opcode start that declares the int value
+	position int
+}
+
+func (ref intReference) getValue() interface{} {
+	return ref.value
+}
+
+func (ref intReference) valueEquals(other interface{}) bool {
+	return ref.value == other.(uint64)
+}
+
+func (ref intReference) getPosition() int {
+	return ref.position
+}
+
+func (ref intReference) length(ops *OpStream, assembled []byte) (int, error) {
+	opIntc0 := OpsByName[ops.Version]["intc_0"].Opcode
+	opIntc1 := OpsByName[ops.Version]["intc_1"].Opcode
+	opIntc2 := OpsByName[ops.Version]["intc_2"].Opcode
+	opIntc3 := OpsByName[ops.Version]["intc_3"].Opcode
+	opIntc := OpsByName[ops.Version]["intc"].Opcode
+
+	switch assembled[ref.position] {
+	case opIntc0, opIntc1, opIntc2, opIntc3:
+		return 1, nil
+	case opIntc:
+		return 2, nil
+	default:
+		return 0, ops.lineErrorf(ops.OffsetToLine[ref.position], "Unexpected op at intReference: %d", assembled[ref.position])
+	}
+}
+
+func (ref intReference) makeNewReference(ops *OpStream, singleton bool, newIndex int) []byte {
+	opIntc0 := OpsByName[ops.Version]["intc_0"].Opcode
+	opIntc1 := OpsByName[ops.Version]["intc_1"].Opcode
+	opIntc2 := OpsByName[ops.Version]["intc_2"].Opcode
+	opIntc3 := OpsByName[ops.Version]["intc_3"].Opcode
+	opIntc := OpsByName[ops.Version]["intc"].Opcode
+	opPushInt := OpsByName[ops.Version]["pushint"].Opcode
+
+	if singleton {
+		var scratch [binary.MaxVarintLen64]byte
+		vlen := binary.PutUvarint(scratch[:], ref.value)
+
+		newBytes := make([]byte, 1+vlen)
+		newBytes[0] = opPushInt
+		copy(newBytes[1:], scratch[:vlen])
+
+		return newBytes
+	}
+
+	switch newIndex {
+	case 0:
+		return []byte{opIntc0}
+	case 1:
+		return []byte{opIntc1}
+	case 2:
+		return []byte{opIntc2}
+	case 3:
+		return []byte{opIntc3}
+	default:
+		return []byte{opIntc, uint8(newIndex)}
+	}
+}
+
+type byteReference struct {
+	value []byte
+
+	// position of the opcode start that declares the byte value
+	position int
+}
+
+func (ref byteReference) getValue() interface{} {
+	return ref.value
+}
+
+func (ref byteReference) valueEquals(other interface{}) bool {
+	return bytes.Equal(ref.value, other.([]byte))
+}
+
+func (ref byteReference) getPosition() int {
+	return ref.position
+}
+
+func (ref byteReference) length(ops *OpStream, assembled []byte) (int, error) {
+	opBytec0 := OpsByName[ops.Version]["bytec_0"].Opcode
+	opBytec1 := OpsByName[ops.Version]["bytec_1"].Opcode
+	opBytec2 := OpsByName[ops.Version]["bytec_2"].Opcode
+	opBytec3 := OpsByName[ops.Version]["bytec_3"].Opcode
+	opBytec := OpsByName[ops.Version]["bytec"].Opcode
+
+	switch assembled[ref.position] {
+	case opBytec0, opBytec1, opBytec2, opBytec3:
+		return 1, nil
+	case opBytec:
+		return 2, nil
+	default:
+		return 0, ops.lineErrorf(ops.OffsetToLine[ref.position], "Unexpected op at byteReference: %d", assembled[ref.position])
+	}
+}
+
+func (ref byteReference) makeNewReference(ops *OpStream, singleton bool, newIndex int) []byte {
+	opBytec0 := OpsByName[ops.Version]["bytec_0"].Opcode
+	opBytec1 := OpsByName[ops.Version]["bytec_1"].Opcode
+	opBytec2 := OpsByName[ops.Version]["bytec_2"].Opcode
+	opBytec3 := OpsByName[ops.Version]["bytec_3"].Opcode
+	opBytec := OpsByName[ops.Version]["bytec"].Opcode
+	opPushBytes := OpsByName[ops.Version]["pushbytes"].Opcode
+
+	if singleton {
+		var scratch [binary.MaxVarintLen64]byte
+		vlen := binary.PutUvarint(scratch[:], uint64(len(ref.value)))
+
+		newBytes := make([]byte, 1+vlen+len(ref.value))
+		newBytes[0] = opPushBytes
+		copy(newBytes[1:], scratch[:vlen])
+		copy(newBytes[1+vlen:], ref.value)
+
+		return newBytes
+	}
+
+	switch newIndex {
+	case 0:
+		return []byte{opBytec0}
+	case 1:
+		return []byte{opBytec1}
+	case 2:
+		return []byte{opBytec2}
+	case 3:
+		return []byte{opBytec3}
+	default:
+		return []byte{opBytec, uint8(newIndex)}
+	}
+}
+
 // OpStream is destination for program and scratch space
 type OpStream struct {
 	Version  uint64
@@ -60,11 +221,13 @@ type OpStream struct {
 	// and cblocks added before these bytes become a legal program.
 	pending bytes.Buffer
 
-	intc        []uint64 // observed ints in code. We'll put them into a intcblock
-	noIntcBlock bool     // prevent prepending intcblock because asm has one
+	intc         []uint64       // observed ints in code. We'll put them into a intcblock
+	intcRefs     []intReference // references to int pseudo-op constants, used for optimization
+	hasIntcBlock bool           // prevent prepending intcblock because asm has one
 
-	bytec        [][]byte // observed bytes in code. We'll put them into a bytecblock
-	noBytecBlock bool     // prevent prepending bytecblock because asm has one
+	bytec         [][]byte        // observed bytes in code. We'll put them into a bytecblock
+	bytecRefs     []byteReference // references to byte/addr pseudo-op constants, used for optimization
+	hasBytecBlock bool            // prevent prepending bytecblock because asm has one
 
 	// Keep a stack of the types of what we would push and pop to typecheck a program
 	typeStack []StackType
@@ -182,6 +345,10 @@ func (ops *OpStream) Uint(val uint64) {
 		constIndex = uint(len(ops.intc))
 		ops.intc = append(ops.intc, val)
 	}
+	ops.intcRefs = append(ops.intcRefs, intReference{
+		value:    val,
+		position: ops.pending.Len(),
+	})
 	ops.Intc(constIndex)
 }
 
@@ -226,6 +393,10 @@ func (ops *OpStream) ByteLiteral(val []byte) {
 		constIndex = uint(len(ops.bytec))
 		ops.bytec = append(ops.bytec, val)
 	}
+	ops.bytecRefs = append(ops.bytecRefs, byteReference{
+		value:    val,
+		position: ops.pending.Len(),
+	})
 	ops.Bytec(constIndex)
 }
 
@@ -477,6 +648,7 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
 	ops.pending.Write(scratch[:l])
+	ops.intcRefs = nil
 	ops.intc = make([]uint64, len(args))
 	for i, xs := range args {
 		cu, err := strconv.ParseUint(xs, 0, 64)
@@ -487,7 +659,7 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		ops.pending.Write(scratch[:l])
 		ops.intc[i] = cu
 	}
-	ops.noIntcBlock = true
+	ops.hasIntcBlock = true
 	return nil
 }
 
@@ -516,8 +688,9 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 		ops.pending.Write(scratch[:l])
 		ops.pending.Write(bv)
 	}
+	ops.bytecRefs = nil
 	ops.bytec = bvals
-	ops.noBytecBlock = true
+	ops.hasBytecBlock = true
 	return nil
 }
 
@@ -574,7 +747,10 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
-	asmDefault(ops, spec, args)
+	err := asmDefault(ops, spec, args)
+	if err != nil {
+		return err
+	}
 	// Having run asmDefault, only need to check extra constraints.
 	start, _ := strconv.ParseUint(args[0], 0, 64)
 	end, _ := strconv.ParseUint(args[1], 0, 64)
@@ -837,7 +1013,7 @@ type assembleFunc func(*OpStream, *OpSpec, []string) error
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != spec.Details.Size-1 {
-		ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.Size-1)
+		return ops.errorf("%s expects %d immediate arguments", spec.Name, spec.Details.Size-1)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i := 0; i < spec.Details.Size-1; i++ {
@@ -1082,6 +1258,11 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		}
 	}
 
+	if ops.Version >= optimizeConstantsEnabledVersion {
+		ops.optimizeIntcBlock()
+		ops.optimizeBytecBlock()
+	}
+
 	// TODO: warn if expected resulting stack is not len==1 ?
 	ops.resolveLabels()
 	program := ops.prependCBlocks()
@@ -1167,8 +1348,7 @@ func (ops *OpStream) resolveLabels() {
 		raw[lr.position+1] = uint8(jump >> 8)
 		raw[lr.position+2] = uint8(jump & 0x0ff)
 	}
-	ops.pending.Reset()
-	ops.pending.Write(raw)
+	ops.pending = *bytes.NewBuffer(raw)
 	ops.sourceLine = saved
 }
 
@@ -1182,13 +1362,252 @@ const AssemblerDefaultVersion = 1
 const AssemblerMaxVersion = LogicVersion
 const assemblerNoVersion = (^uint64(0))
 
+// replaceBytes returns a slice that is the same as s, except the range starting
+// at index with length originalLen is replaced by newBytes. The returned slice
+// may be the same as s, or it may be a new slice
+func replaceBytes(s []byte, index, originalLen int, newBytes []byte) []byte {
+	prefix := s[:index]
+	suffix := s[index+originalLen:]
+
+	// if we can fit the new bytes into the existing slice, no need to create a
+	// new one
+	if len(newBytes) <= originalLen {
+		copy(s[index:], newBytes)
+		copy(s[index+len(newBytes):], suffix)
+		return s[:len(s)+len(newBytes)-originalLen]
+	}
+
+	replaced := make([]byte, len(prefix)+len(newBytes)+len(suffix))
+	copy(replaced, prefix)
+	copy(replaced[index:], newBytes)
+	copy(replaced[index+len(newBytes):], suffix)
+
+	return replaced
+}
+
+// optimizeIntcBlock rewrites the existing intcblock and the ops that reference
+// it to reduce code size. This is achieved by ordering the intcblock from most
+// frequently referenced constants to least frequently referenced, since the
+// first 4 constant can use the intc_X ops to save space. Additionally, any
+// ints with a reference of 1 are taken out of the intcblock and instead created
+// with the pushint op.
+//
+// This function only optimizes constants introduces by the int pseudo-op, not
+// preexisting intcblocks in the code.
+func (ops *OpStream) optimizeIntcBlock() error {
+	if ops.hasIntcBlock {
+		// don't optimize an existing intcblock, only int pseudo-ops
+		return nil
+	}
+
+	constBlock := make([]interface{}, len(ops.intc))
+	for i, value := range ops.intc {
+		constBlock[i] = value
+	}
+
+	constRefs := make([]constReference, len(ops.intcRefs))
+	for i, ref := range ops.intcRefs {
+		constRefs[i] = ref
+	}
+
+	// remove all intcRefs here so that optimizeConstants does not alter them
+	// when it fixes indexes into ops.pending
+	ops.intcRefs = nil
+
+	optimizedIntc, err := ops.optimizeConstants(constRefs, constBlock)
+
+	if err != nil {
+		return err
+	}
+
+	ops.intc = make([]uint64, len(optimizedIntc))
+	for i, value := range optimizedIntc {
+		ops.intc[i] = value.(uint64)
+	}
+
+	return nil
+}
+
+// optimizeBytecBlock rewrites the existing bytecblock and the ops that
+// reference it to reduce code size. This is achieved by ordering the bytecblock
+// from most frequently referenced constants to least frequently referenced,
+// since the first 4 constant can use the bytec_X ops to save space.
+// Additionally, any bytes with a reference of 1 are taken out of the bytecblock
+// and instead created with the pushbytes op.
+//
+// This function only optimizes constants introduces by the byte or addr
+// pseudo-ops, not preexisting bytecblocks in the code.
+func (ops *OpStream) optimizeBytecBlock() error {
+	if ops.hasBytecBlock {
+		// don't optimize an existing bytecblock, only byte/addr pseudo-ops
+		return nil
+	}
+
+	constBlock := make([]interface{}, len(ops.bytec))
+	for i, value := range ops.bytec {
+		constBlock[i] = value
+	}
+
+	constRefs := make([]constReference, len(ops.bytecRefs))
+	for i, ref := range ops.bytecRefs {
+		constRefs[i] = ref
+	}
+
+	// remove all bytecRefs here so that optimizeConstants does not alter them
+	// when it fixes indexes into ops.pending
+	ops.bytecRefs = nil
+
+	optimizedBytec, err := ops.optimizeConstants(constRefs, constBlock)
+
+	if err != nil {
+		return err
+	}
+
+	ops.bytec = make([][]byte, len(optimizedBytec))
+	for i, value := range optimizedBytec {
+		ops.bytec[i] = value.([]byte)
+	}
+
+	return nil
+}
+
+// optimizeConstants optimizes a given constant block and the ops that reference
+// it to reduce code size. This is achieved by ordering the constant block from
+// most frequently referenced constants to least frequently referenced, since
+// the first 4 constant can use a special opcode to save space. Additionally,
+// any constants with a reference of 1 are taken out of the constant block and
+// instead referenced with an immediate op.
+func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []interface{}) (optimizedConstBlock []interface{}, err error) {
+	type constFrequency struct {
+		value interface{}
+		freq  int
+	}
+
+	freqs := make([]constFrequency, len(constBlock))
+
+	for i, value := range constBlock {
+		freqs[i].value = value
+	}
+
+	for _, ref := range refs {
+		found := false
+		for i := range freqs {
+			if ref.valueEquals(freqs[i].value) {
+				freqs[i].freq++
+				found = true
+				break
+			}
+		}
+		if !found {
+			err = ops.lineErrorf(ops.OffsetToLine[ref.getPosition()], "Value not found in constant block: %v", ref.getValue())
+			return
+		}
+	}
+
+	for _, f := range freqs {
+		if f.freq == 0 {
+			err = ops.errorf("Member of constant block is not used: %v", f.value)
+			return
+		}
+	}
+
+	// sort values by greatest to smallest frequency
+	// since we're using a stable sort, constants with the same frequency
+	// will retain their current ordering (i.e. first referenced, first in constant block)
+	sort.SliceStable(freqs, func(i, j int) bool {
+		return freqs[i].freq > freqs[j].freq
+	})
+
+	// sort refs from last to first
+	// this way when we iterate through them and potentially change the size of the assembled
+	// program, the later positions will not affect the indexes of the earlier positions
+	sort.Slice(refs, func(i, j int) bool {
+		return refs[i].getPosition() > refs[j].getPosition()
+	})
+
+	raw := ops.pending.Bytes()
+	for _, ref := range refs {
+		singleton := false
+		newIndex := -1
+		for i, f := range freqs {
+			if ref.valueEquals(f.value) {
+				singleton = f.freq == 1
+				newIndex = i
+				break
+			}
+		}
+		if newIndex == -1 {
+			return nil, ops.lineErrorf(ops.OffsetToLine[ref.getPosition()], "Value not found in constant block: %v", ref.getValue())
+		}
+
+		newBytes := ref.makeNewReference(ops, singleton, newIndex)
+		var currentBytesLen int
+		currentBytesLen, err = ref.length(ops, raw)
+		if err != nil {
+			return
+		}
+
+		positionDelta := len(newBytes) - currentBytesLen
+		position := ref.getPosition()
+		raw = replaceBytes(raw, position, currentBytesLen, newBytes)
+
+		// update all indexes into ops.pending that have been shifted by the above line
+
+		for i := range ops.intcRefs {
+			if ops.intcRefs[i].position > position {
+				ops.intcRefs[i].position += positionDelta
+			}
+		}
+
+		for i := range ops.bytecRefs {
+			if ops.bytecRefs[i].position > position {
+				ops.bytecRefs[i].position += positionDelta
+			}
+		}
+
+		for label := range ops.labels {
+			if ops.labels[label] > position {
+				ops.labels[label] += positionDelta
+			}
+		}
+
+		for i := range ops.labelReferences {
+			if ops.labelReferences[i].position > position {
+				ops.labelReferences[i].position += positionDelta
+			}
+		}
+
+		fixedOffsetsToLine := make(map[int]int, len(ops.OffsetToLine))
+		for pos, sourceLine := range ops.OffsetToLine {
+			if pos > position {
+				fixedOffsetsToLine[pos+positionDelta] = sourceLine
+			} else {
+				fixedOffsetsToLine[pos] = sourceLine
+			}
+		}
+		ops.OffsetToLine = fixedOffsetsToLine
+	}
+
+	ops.pending = *bytes.NewBuffer(raw)
+
+	optimizedConstBlock = make([]interface{}, 0)
+	for _, f := range freqs {
+		if f.freq == 1 {
+			break
+		}
+		optimizedConstBlock = append(optimizedConstBlock, f.value)
+	}
+
+	return
+}
+
 // prependCBlocks completes the assembly by inserting cblocks if needed.
 func (ops *OpStream) prependCBlocks() []byte {
 	var scratch [binary.MaxVarintLen64]byte
 	prebytes := bytes.Buffer{}
 	vlen := binary.PutUvarint(scratch[:], ops.GetVersion())
 	prebytes.Write(scratch[:vlen])
-	if len(ops.intc) > 0 && !ops.noIntcBlock {
+	if len(ops.intc) > 0 && !ops.hasIntcBlock {
 		prebytes.WriteByte(0x20) // intcblock
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.intc)))
 		prebytes.Write(scratch[:vlen])
@@ -1197,7 +1616,7 @@ func (ops *OpStream) prependCBlocks() []byte {
 			prebytes.Write(scratch[:vlen])
 		}
 	}
-	if len(ops.bytec) > 0 && !ops.noBytecBlock {
+	if len(ops.bytec) > 0 && !ops.hasBytecBlock {
 		prebytes.WriteByte(0x26) // bytecblock
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.bytec)))
 		prebytes.Write(scratch[:vlen])
@@ -1233,14 +1652,18 @@ func (ops *OpStream) prependCBlocks() []byte {
 }
 
 func (ops *OpStream) error(problem interface{}) error {
+	return ops.lineError(ops.sourceLine, problem)
+}
+
+func (ops *OpStream) lineError(line int, problem interface{}) error {
 	var le *lineError
 	switch p := problem.(type) {
 	case string:
-		le = &lineError{Line: ops.sourceLine, Err: errors.New(p)}
+		le = &lineError{Line: line, Err: errors.New(p)}
 	case error:
-		le = &lineError{Line: ops.sourceLine, Err: p}
+		le = &lineError{Line: line, Err: p}
 	default:
-		le = &lineError{Line: ops.sourceLine, Err: fmt.Errorf("%#v", p)}
+		le = &lineError{Line: line, Err: fmt.Errorf("%#v", p)}
 	}
 	ops.Errors = append(ops.Errors, le)
 	return le
@@ -1248,6 +1671,10 @@ func (ops *OpStream) error(problem interface{}) error {
 
 func (ops *OpStream) errorf(format string, a ...interface{}) error {
 	return ops.error(fmt.Errorf(format, a...))
+}
+
+func (ops *OpStream) lineErrorf(line int, format string, a ...interface{}) error {
+	return ops.lineError(line, fmt.Errorf(format, a...))
 }
 
 func (ops *OpStream) warn(problem interface{}) error {
@@ -1627,7 +2054,7 @@ func disPushBytes(dis *disassembleState, spec *OpSpec) (string, error) {
 	}
 	bytes := dis.program[pos:end]
 	dis.nextpc = int(end)
-	return fmt.Sprintf("%s 0x%s", spec.Name, hex.EncodeToString(bytes)), nil
+	return fmt.Sprintf("%s 0x%s // %s", spec.Name, hex.EncodeToString(bytes), guessByteFormat(bytes)), nil
 }
 func checkPushBytes(cx *evalContext) error {
 	opPushBytes(cx)

@@ -344,11 +344,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
-		// Schemas may only be set during application creation
+		// Schemas and ExtraProgramPages may only be set during application creation
 		if tx.ApplicationID != 0 {
 			if tx.LocalStateSchema != (basics.StateSchema{}) ||
 				tx.GlobalStateSchema != (basics.StateSchema{}) {
 				return fmt.Errorf("local and global state schemas are immutable")
+			}
+			if tx.ExtraProgramPages != 0 {
+				return fmt.Errorf("tx.ExtraProgramPages is immutable")
 			}
 		}
 
@@ -382,12 +385,26 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
 		}
 
-		if len(tx.ApprovalProgram) > proto.MaxAppProgramLen {
-			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxAppProgramLen)
+		// Limit the sum of all types of references that bring in account records
+		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets) > proto.MaxAppTotalTxnReferences {
+			return fmt.Errorf("tx has too many references, max is %d", proto.MaxAppTotalTxnReferences)
 		}
 
-		if len(tx.ClearStateProgram) > proto.MaxAppProgramLen {
-			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxAppProgramLen)
+		if tx.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
+			return fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages)
+		}
+
+		lap := len(tx.ApprovalProgram)
+		lcs := len(tx.ClearStateProgram)
+		pages := int(1 + tx.ExtraProgramPages)
+		if lap > pages*proto.MaxAppProgramLen {
+			return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+		}
+		if lcs > pages*proto.MaxAppProgramLen {
+			return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+		}
+		if lap+lcs > pages*proto.MaxAppTotalProgramLen {
+			return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
@@ -465,7 +482,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 	}
 
-	if tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
+	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
 		if tx.Type == protocol.CompactCertTx {
 			// Zero fee allowed for compact cert txn.
 		} else {

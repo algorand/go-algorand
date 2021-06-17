@@ -7,10 +7,15 @@
 # python3 test/scripts/heapWatch.py -o /tmp/heaps --period 60s private_network_root/*
 
 import argparse
+import base64
+import configparser
+import fnmatch
 import json
 import logging
 import os
+import re
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -18,6 +23,7 @@ import urllib.request
 
 # pip install py-algorand-sdk
 import algosdk
+from algosdk.encoding import msgpack
 import algosdk.v2client
 import algosdk.v2client.algod
 
@@ -64,12 +70,21 @@ def do_graceful_stop(signum, frame):
 signal.signal(signal.SIGTERM, do_graceful_stop)
 signal.signal(signal.SIGINT, do_graceful_stop)
 
+def jsonable(ob):
+    if isinstance(ob, bytes):
+        return base64.b64encode(ob).decode()
+    if isinstance(ob, list):
+        return [jsonable(x) for x in ob]
+    if isinstance(ob, dict):
+        return {jsonable(k):jsonable(v) for k,v in ob.items()}
+    return ob
 
 class algodDir:
-    def __init__(self, path):
+    def __init__(self, path, net=None, token=None, admin_token=None):
         self.path = path
         self.nick = os.path.basename(self.path)
-        net, token, admin_token = read_algod_dir(self.path)
+        if net is None:
+            net, token, admin_token = read_algod_dir(self.path)
         self.net = net
         self.token = token
         self.admin_token = admin_token
@@ -127,13 +142,14 @@ class algodDir:
     def get_blockinfo(self, snapshot_name=None, outdir=None):
         algod = self.algod()
         status = algod.status()
-        bi = algod.block_info(status['last-round'])
+        bi = msgpack.loads(algod.block_info(status['last-round'], response_format='msgpack'), strict_map_key=False)
         if snapshot_name is None:
             snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
         outpath = os.path.join(outdir or '.', self.nick + '.' + snapshot_name + '.blockinfo.json')
         bi['block'].pop('txns', None)
+        bi['block'].pop('cert', None)
         with open(outpath, 'wt') as fout:
-            json.dump(bi, fout)
+            json.dump(jsonable(bi), fout)
         return bi
         #txncount = bi['block']['tc']
 
@@ -157,6 +173,25 @@ class watcher:
         self.args = args
         self.prevsnapshots = {}
         self.they = []
+        self.netseen = set()
+        os.makedirs(self.args.out, exist_ok=True)
+        if not args.data_dirs and os.path.exists(args.tf_inventory):
+            cp = configparser.ConfigParser(allow_no_value=True)
+            cp.read(args.tf_inventory)
+            shutil.copy2(args.tf_inventory, self.args.out)
+            for role in args.tf_roles.split(','):
+                role_name = 'role_' + role
+                for net in cp[role_name].keys():
+                    logger.debug('addnet role %s %s', role, net)
+                    self._addnet(net)
+            for nre in args.tf_name_re:
+                namere = re.compile(nre)
+                for k,v in cp.items():
+                    if not namere.match(k):
+                        continue
+                    for net in v.keys():
+                        logger.debug('addnet re %s %s', nre, net)
+                        self._addnet(net)
         for path in args.data_dirs:
             if not os.path.isdir(path):
                 continue
@@ -169,6 +204,18 @@ class watcher:
             else:
                 logger.debug('not a datadir: %r', path)
         logger.debug('data dirs: %r', self.they)
+
+    def _addnet(self, net):
+        if net in self.netseen:
+            return
+        self.netseen.add(net)
+        net = net + ':8580'
+        try:
+            ad = algodDir(net, net=net, token=self.args.token, admin_token=self.args.admin_token)
+            self.they.append(ad)
+        except:
+            logger.error('bad algod: %r', net, exc_info=True)
+
 
     def do_snap(self, now):
         snapshot_name = time.strftime('%Y%m%d_%H%M%S', time.gmtime(now))
@@ -215,6 +262,12 @@ def main():
     ap.add_argument('--metrics', default=False, action='store_true', help='also capture /metrics counts')
     ap.add_argument('--blockinfo', default=False, action='store_true', help='also capture block header info')
     ap.add_argument('--period', default=None, help='seconds between automatically capturing')
+    ap.add_argument('--runtime', default=None, help='(\d+)[hm]? time in hour/minute (default second) to gather info then exit')
+    ap.add_argument('--tf-inventory', default='terraform-inventory.host', help='terraform inventory file to use if no data_dirs specified')
+    ap.add_argument('--token', default='', help='default algod api token to use')
+    ap.add_argument('--admin-token', default='', help='default algod admin-api token to use')
+    ap.add_argument('--tf-roles', default='relay', help='comma separated list of terraform roles to follow')
+    ap.add_argument('--tf-name-re', action='append', default=[], help='regexp to match terraform node names, may be repeated')
     ap.add_argument('-o', '--out', default=None, help='directory to write to')
     ap.add_argument('--verbose', default=False, action='store_true')
     args = ap.parse_args()
@@ -224,6 +277,14 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
+    for nre in args.tf_name_re:
+        try:
+            # do re.compile just to check
+            re.compile(nre)
+        except Exception as e:
+            sys.stderr.write('bad --tf-name-re %r: %s', nre, e)
+            return 1
+
     app = watcher(args)
 
     # get a first snapshot immediately
@@ -231,6 +292,18 @@ def main():
     now = start
 
     app.do_snap(now)
+    endtime = None
+    if args.runtime:
+        rts = args.runtime
+        if rts.endswith('h'):
+            mult = 3600
+            rts = rts[:-1]
+        elif rts.endswith('m'):
+            mult = 60
+            rts = rts[:-1]
+        else:
+            mult = 1
+        endtime = (float(rts) * mult) + start
 
     if args.period:
         lastc = args.period.lower()[-1:]
@@ -257,6 +330,8 @@ def main():
             periodi += 1
             nextt += periodSecs
             app.do_snap(now)
+            if (endtime is not None) and (now > endtime):
+                return
     return 0
 
 if __name__ == '__main__':

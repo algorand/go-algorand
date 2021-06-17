@@ -481,6 +481,9 @@ func (s *Service) periodicSync() {
 	defer close(s.done)
 	// if the catchup is disabled in the config file, just skip it.
 	if s.parallelBlocks != 0 && !s.cfg.DisableNetworking {
+		// The following request might be redundent, but it ensures we wait long enough for the DNS records to be loaded,
+		// which are required for the sync operation.
+		s.net.RequestConnectOutgoing(false, s.ctx.Done())
 		s.sync()
 	}
 	stuckInARow := 0

@@ -94,6 +94,8 @@ func TestKeyregApply(t *testing.T) {
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:      crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
 			SelectionPK: vrfSecrets.PK,
+			VoteFirst:   0,
+			VoteLast:    100,
 		},
 	}
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
