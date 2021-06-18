@@ -31,7 +31,7 @@ var opDocByName = map[string]string{
 	"ed25519verify":     "for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}",
 	"+":                 "A plus B. Panic on overflow.",
 	"-":                 "A minus B. Panic if B > A.",
-	"/":                 "A divided by B. Panic if B == 0.",
+	"/":                 "A divided by B (truncated division). Panic if B == 0.",
 	"*":                 "A times B. Panic on overflow.",
 	"<":                 "A less than B => {0 or 1}",
 	">":                 "A greater than B => {0 or 1}",
@@ -128,7 +128,7 @@ var opDocByName = map[string]string{
 
 	"b+":  "A plus B, where A and B are byte-arrays interpreted as big-endian unsigned integers",
 	"b-":  "A minus B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic on underflow.",
-	"b/":  "A divided by B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.",
+	"b/":  "A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.",
 	"b*":  "A times B, where A and B are byte-arrays interpreted as big-endian unsigned integers.",
 	"b<":  "A is less than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
 	"b>":  "A is greater than B, where A and B are byte-arrays interpreted as big-endian unsigned integers => { 0 or 1}",
