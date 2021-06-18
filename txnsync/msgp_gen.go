@@ -264,8 +264,8 @@ func (z addresses) MarshalMsg(b []byte) (o []byte) {
 	} else {
 		o = msgp.AppendArrayHeader(o, uint32(len(z)))
 	}
-	for za0004 := range z {
-		o = z[za0004].MarshalMsg(o)
+	for za0005 := range z {
+		o = z[za0005].MarshalMsg(o)
 	}
 	return
 }
@@ -318,8 +318,8 @@ func (_ *addresses) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z addresses) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
-	for za0004 := range z {
-		s += z[za0004].Msgsize()
+	for za0005 := range z {
+		s += z[za0005].Msgsize()
 	}
 	return
 }
@@ -26473,16 +26473,16 @@ func (z revealMap) MarshalMsg(b []byte) (o []byte) {
 	} else {
 		o = msgp.AppendMapHeader(o, uint32(len(z)))
 	}
-	za0001_keys := make([]uint64, 0, len(z))
-	for za0001 := range z {
-		za0001_keys = append(za0001_keys, za0001)
+	za0002_keys := make([]uint64, 0, len(z))
+	for za0002 := range z {
+		za0002_keys = append(za0002_keys, za0002)
 	}
-	sort.Sort(SortUint64(za0001_keys))
-	for _, za0001 := range za0001_keys {
-		za0002 := z[za0001]
-		_ = za0002
-		o = msgp.AppendUint64(o, za0001)
-		o = za0002.MarshalMsg(o)
+	sort.Sort(SortUint64(za0002_keys))
+	for _, za0002 := range za0002_keys {
+		za0003 := z[za0002]
+		_ = za0003
+		o = msgp.AppendUint64(o, za0002)
+		o = za0003.MarshalMsg(o)
 	}
 	return
 }
@@ -26543,10 +26543,10 @@ func (_ *revealMap) CanUnmarshalMsg(z interface{}) bool {
 func (z revealMap) Msgsize() (s int) {
 	s = msgp.MapHeaderSize
 	if z != nil {
-		for za0001, za0002 := range z {
-			_ = za0001
+		for za0002, za0003 := range z {
 			_ = za0002
-			s += 0 + msgp.Uint64Size + za0002.Msgsize()
+			_ = za0003
+			s += 0 + msgp.Uint64Size + za0003.Msgsize()
 		}
 	}
 	return

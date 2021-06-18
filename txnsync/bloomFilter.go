@@ -61,6 +61,7 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error
 	if err != nil {
 		return bloomFilter{}, err
 	}
+	outFilter.encodingParams = enc.EncodingParams
 	return outFilter, nil
 }
 
