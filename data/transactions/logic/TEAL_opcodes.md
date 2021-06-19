@@ -72,7 +72,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Opcode: 0x0a
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- A divided by B. Panic if B == 0.
+- A divided by B (truncated division). Panic if B == 0.
 
 `divmodw` is available to divide the two-element values produced by `mulw` and `addw`.
 
@@ -1007,7 +1007,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Opcode: 0xa2
 - Pops: *... stack*, {[]byte A}, {[]byte B}
 - Pushes: []byte
-- A divided by B, where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
+- A divided by B (truncated division), where A and B are byte-arrays interpreted as big-endian unsigned integers. Panic if B is zero.
 - **Cost**: 20
 - LogicSigVersion >= 4
 
