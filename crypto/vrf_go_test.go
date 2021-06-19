@@ -91,18 +91,11 @@ func BenchmarkVrfVerifyGo(b *testing.B) {
 	strs := make([][]byte, b.N)
 	proofs := make([]VrfProof, b.N)
 	for i := 0; i < b.N; i++ {
-		validPoint := false
-		var sk VrfPrivkey
-		for !validPoint {
-			pks[i], sk = VrfKeygen()
-			strs[i] = make([]byte, 100)
-			_, err := rand.Read(strs[i])
-			if err != nil {
-				panic(err)
-			}
-			var ok bool
-			proofs[i], ok = sk.proveBytesGo(strs[i])
-			validPoint = ok == true
+		pks[i], _ = VrfKeygen()
+		strs[i] = make([]byte, 100)
+		_, err := rand.Read(strs[i])
+		if err != nil {
+			panic(err)
 		}
 	}
 
