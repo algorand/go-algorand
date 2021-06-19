@@ -695,6 +695,35 @@ int 1
 	}
 }
 
+func TestMulDiv(t *testing.T) {
+	// Demonstrate a "function" that expects three u64s on stack,
+	// and calculates B*C/A. (Following opcode documentaion
+	// convention, C is top-of-stack, B is below it, and A is
+	// below B.
+
+	muldiv := `
+muldiv:
+mulw				// multiply B*C. puts TWO u64s on stack
+int 0				// high word of C as a double-word
+dig 3				// pull C to TOS
+divmodw
+pop				// pop unneeded remainder low word
+pop                             // pop unneeded remainder high word
+swap
+int 0
+==
+assert				// ensure high word of quotient was 0
+swap				// bring C to surface
+pop				// in order to get rid of it
+retsub
+`
+	testAccepts(t, "int 5; int 8; int 10; callsub muldiv; int 16; ==; return;"+muldiv, 4)
+
+	testRejects(t, "int 5; int 8; int 10; callsub muldiv; int 15; ==; return;"+muldiv, 4)
+
+	testAccepts(t, "int 500000000000; int 80000000000; int 100000000000; callsub muldiv; int 16000000000; ==; return;"+muldiv, 4)
+}
+
 func TestDivZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

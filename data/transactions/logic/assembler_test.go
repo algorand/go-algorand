@@ -303,11 +303,11 @@ extract 0 8
 int 0
 int 8
 extract3
-int 0 
+int 0
 extract64bits
 int 0
 extract32bits
-int 0 
+int 0
 extract16bits
 log
 `

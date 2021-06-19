@@ -2900,8 +2900,6 @@ func TestAppLoop(t *testing.T) {
 	// Double until > 10. Should be 16
 	testApp(t, stateful+"int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", ep)
 
-	testApp(t, stateful+"int 1; loop: int 2; *; dup; int 10; <; bnz loop; int 16; ==", ep)
-
 	// Infinite loop because multiply by one instead of two
 	testApp(t, stateful+"int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", ep, "dynamic cost")
 }
