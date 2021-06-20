@@ -78,7 +78,7 @@ func vrfVerifyAndHash(pk []byte, proof []byte, msg []byte) ([]byte, error) {
 	}
 	isSmallOrder := (&edwards25519.Point{}).MultByCofactor(Y).Equal(edwards25519.NewIdentityPoint()) == 1
 	if isSmallOrder {
-		return nil, fmt.Errorf("expected key to have small order")
+		return nil, fmt.Errorf("public key is a small order point")
 	}
 	// vrf_verify
 	ok, err := vrfVerify(Y, proof, msg)
@@ -213,7 +213,8 @@ func ge25519FromUniform(r []byte) ([]byte, error) {
 	x = &field.Element{}
 
 	const curve25519A = 486662
-	curve25519AElement := (&field.Element{}).One().Mult32((&field.Element{}).One(), curve25519A)
+	one := new(field.Element).One()
+	curve25519AElement := new(field.Element).Mult32(one, curve25519A)
 
 	x.Mult32(rr2, curve25519A) // fe25519_mul(x, curve25519_A, rr2);
 	x.Negate(x)                // fe25519_neg(x, x);
@@ -234,7 +235,7 @@ func ge25519FromUniform(r []byte) ([]byte, error) {
 	eIsMinus1 = int(s[1] & 1) // e_is_minus_1 = s[1] & 1;
 	eIsNotMinus1 := eIsMinus1 ^ 1
 	negx = (&field.Element{}).Set(x)
-	negx.Negate(negx)                               // fe25519_neg(negx, x);
+	negx := new(field.Element).Negate(x)                               // fe25519_neg(negx, x);
 	x.Select(x, negx, eIsNotMinus1)                 // fe25519_cmov(x, negx, e_is_minus_1);
 	x2.Zero()                                       // fe25519_0(x2);
 	x2.Select(x2, curve25519AElement, eIsNotMinus1) // fe25519_cmov(x2, curve25519_A, e_is_minus_1);
@@ -299,7 +300,7 @@ func vrfHashPoints(P1, P2, P3, P4 *edwards25519.Point) *edwards25519.Scalar {
 
 	copy(result[:], sum[:16])
 	r := edwards25519.NewScalar()
-	r.SetCanonicalBytes(result)
+	if _, err := r.SetCanonicalBytes(result); err != nil { panic(err) }
 	return r
 
 }
