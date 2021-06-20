@@ -186,6 +186,7 @@ func ge25519FromUniform(r []byte) ([]byte, error) {
 	var eIsMinus1 int
 	var xSign byte
 
+	one := new(field.Element).One()
 	copy(s, r)
 	xSign = s[31] & 0x80
 	s[31] &= 0x7f
@@ -196,15 +197,12 @@ func ge25519FromUniform(r []byte) ([]byte, error) {
 	// elligator
 	rr2.Square(rr2) // fe25519_sq2(rr2, rr2);
 	rr2.Add(rr2, rr2)
-	rr2Bytes := rr2.Bytes()
-	rr2Bytes[0]++
-	rr2.SetBytes(rr2Bytes) // rr2[0]++;
-	rr2.Invert(rr2)        // fe25519_invert(rr2, rr2);
+	rr2.Add(rr2, one)
+	rr2.Invert(rr2) // fe25519_invert(rr2, rr2);
 
 	x = &field.Element{}
 
 	const curve25519A = 486662
-	one := new(field.Element).One()
 	curve25519AElement := new(field.Element).Mult32(one, curve25519A)
 
 	x.Mult32(rr2, curve25519A) // fe25519_mul(x, curve25519_A, rr2);
