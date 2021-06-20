@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"encoding/binary"
 	"testing"
 	"time"
 
@@ -193,5 +194,33 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 		acct, has := baseAcct.read(addr)
 		require.False(t, has)
 		require.Equal(t, persistedAccountData{}, acct)
+	}
+}
+
+func BenchmarkLRUAccountsWrite(b *testing.B) {
+	accounts := make([]persistedAccountData, 5000)
+	for i := range accounts {
+		digest := crypto.Hash([]byte{byte(i)})
+		microAlgos := binary.BigEndian.Uint64(digest.MarshalMsg(nil))
+
+		accounts[i] = persistedAccountData{
+			addr:        basics.Address(digest),
+			round:       basics.Round(i),
+			rowid:       int64(i),
+			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: microAlgos}},
+		}
+	}
+
+	baseAccts := make([]lruAccounts, b.N)
+	for i := 0; i < b.N; i++ {
+		baseAccts[i].init(logging.TestingLog(b), 10, 5)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		baseAcct := baseAccts[i]
+		for _, account := range accounts {
+			baseAcct.write(account)
+		}
 	}
 }
