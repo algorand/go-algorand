@@ -372,7 +372,7 @@ func chi25519(z *field.Element) *field.Element {
 /* Verify a proof per draft section 5.3.
  * We assume Y_point has passed public key validation already.
  * Assuming verification succeeds, runtime does not depend on the message alpha
- * (but does depend on its length alphalen)
+ * (but does depend on its length)
  */
 func vrfVerify(Y *edwards25519.Point, pi []byte, alpha []byte) (bool, error) {
 	var U, V *edwards25519.Point // ge25519_p3     H_point, Gamma_point, U_point, V_point, tmp_p3_point;
@@ -420,8 +420,7 @@ func vrfVerify(Y *edwards25519.Point, pi []byte, alpha []byte) (bool, error) {
 
 /* Convert a VRF proof pi into a VRF output hash beta per draft spec section 5.2.
  * This function does not verify the proof! For an untrusted proof, instead call
- * crypto_vrf_ietfdraft03_verify, which will output the hash if verification
- * succeeds.
+ * vrfVerifyAndHash, which will output the hash if verification succeeds.
  */
 func cryptoVrfIetfdraft03ProofToHash(pi []byte) ([]byte, error) {
 	var hashInput [34]byte // unsigned char hash_input[2+32];
@@ -441,7 +440,6 @@ func cryptoVrfIetfdraft03ProofToHash(pi []byte) ([]byte, error) {
 
 /* Decode an 80-byte proof pi into a point gamma, a 16-byte scalar c, and a
  * 32-byte scalar s, as specified in IETF draft section 5.4.4.
- * Returns 0 on success, nonzero on failure.
  */
 func vrfIetfdraft03DecodeProof(pi []byte) (gamma *edwards25519.Point, c []byte, s []byte, err error) {
 	if len(pi) != 80 {
