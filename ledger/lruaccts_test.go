@@ -200,6 +200,7 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 func BenchmarkLRUAccountsWrite(b *testing.B) {
 	accounts := generatePersistedAccountData(0, 5000)
 	fillerAccounts := generatePersistedAccountData(5000, 100000)
+
 	baseAccts := make([]lruAccounts, b.N)
 	for i := 0; i < b.N; i++ {
 		baseAccts[i].init(logging.TestingLog(b), 10, 5)
@@ -219,16 +220,17 @@ func BenchmarkLRUAccountsWrite(b *testing.B) {
 
 func generatePersistedAccountData(startRound, endRound int) []persistedAccountData {
 	accounts := make([]persistedAccountData, endRound-startRound)
-	for i := startRound; i < endRound; i++ {
+	buffer := make([]byte, 4)
 
-		digest := crypto.Hash([]byte{byte(i)})
-		microAlgos := binary.BigEndian.Uint64(digest.MarshalMsg(nil))
+	for i := startRound; i < endRound; i++ {
+		binary.BigEndian.PutUint32(buffer, uint32(i))
+		digest := crypto.Hash(buffer)
 
 		accounts[i-startRound] = persistedAccountData{
 			addr:        basics.Address(digest),
 			round:       basics.Round(i),
 			rowid:       int64(i),
-			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: microAlgos}},
+			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
 	}
 	return accounts
