@@ -26,7 +26,7 @@ import (
 )
 
 // ECVRF-ED25519-SHA512-Elligator2 test vectors from: https://www.ietf.org/id/draft-irtf-cfrg-vrf-03.txt appendix A.4
-func TestVRFTestVectorsGo(t *testing.T) {
+func TestPureGoVRFTestVectors(t *testing.T) {
 	testVectorGo(t,
 		"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", //sk
 		"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", //pk
@@ -241,4 +241,22 @@ func TestPureGoVrfVerify(t *testing.T) {
 		fmt.Printf("pgo: %x\n", out)
 		t.Error("go and cgo implementations differ:", ok, cgoOk)
 	}
+}
+
+// Test additional vectors to ensure the c and go implementations match.
+func TestPureGoAdditionalVectors(t *testing.T) {
+	testVector(t,
+		"879a0117c5a21784c1842b94c2ebfe24396ec1dae09374a8eacc5971ed8dba2d", //sk
+		"600d940760d4688c135d2e9137c8f2300f6497d9c3db527cbe4bcc1d49097fef", //pk
+		"1673af80c55179bc43dc5547a2f61d6f4081164c65ded70e0ff0749088d487976e3a815c40211cd1a764140396b8edae30698a57b301e04d6756d1a1665a3d1445641e33eb5b3985aa047ef8bdec648c2acb9f4413ddea17dc86d923e472259e3f3f797d", // alpha
+		"c70ab42559dc6bfc66c14c07fd2c075d9049968845521b4211ff33cdfb2617e29c32f265750bd76c5f625d5202d11375778c6ec43c4af86924c63b367f637bf4df2df39db504e053faffc09ac773f20d",                                         // pi
+		"4dff4bc2a74f34073e963c7e266fc6532780834a41a17200d476f80aa3829fa796f8be0ef1dc2f9a02884e4f10a08a717e2859f4f8e57d7ab9cd9a7c1366cf2b",                                                                         // beta
+	)
+	testVectorGo(t,
+		"879a0117c5a21784c1842b94c2ebfe24396ec1dae09374a8eacc5971ed8dba2d", //sk
+		"600d940760d4688c135d2e9137c8f2300f6497d9c3db527cbe4bcc1d49097fef", //pk
+		"1673af80c55179bc43dc5547a2f61d6f4081164c65ded70e0ff0749088d487976e3a815c40211cd1a764140396b8edae30698a57b301e04d6756d1a1665a3d1445641e33eb5b3985aa047ef8bdec648c2acb9f4413ddea17dc86d923e472259e3f3f797d", // alpha
+		"c70ab42559dc6bfc66c14c07fd2c075d9049968845521b4211ff33cdfb2617e29c32f265750bd76c5f625d5202d11375778c6ec43c4af86924c63b367f637bf4df2df39db504e053faffc09ac773f20d",                                         // pi
+		"4dff4bc2a74f34073e963c7e266fc6532780834a41a17200d476f80aa3829fa796f8be0ef1dc2f9a02884e4f10a08a717e2859f4f8e57d7ab9cd9a7c1366cf2b",                                                                         // beta
+	)
 }
