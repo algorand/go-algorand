@@ -36,14 +36,8 @@ func VrfKeygenFromSeedGo(seed [32]byte) (VrfPubkey, VrfPrivkey) {
 	h := sha512.New()
 	h.Write(seed[:])
 	hSum := h.Sum(nil)
-	copy(sk[:], hSum[:32])
-	sk[0] &= 248
-	sk[31] &= 127
-	sk[31] |= 64
 	p := edwards25519.NewScalar()
-	skBytes := make([]byte, 64)
-	copy(skBytes, sk[:32])
-	p.SetUniformBytes(skBytes)
+	p.SetBytesWithClamping(hSum[:32])
 	A := edwards25519.NewIdentityPoint().ScalarBaseMult(p)
 	copy(pk[:], A.Bytes())
 	copy(sk[:], seed[:])
@@ -98,19 +92,17 @@ func vrfVerifyAndHash(pk []byte, proof []byte, msg []byte) ([]byte, error) {
  * Return 0 on success, -1 on failure decoding the public point Y.
  */
 func (sk VrfPrivkey) expand() (*edwards25519.Point, *edwards25519.Scalar, []byte, error) {
-	var tmp [64]byte
 	h := sha512.New()
 	h.Write(sk[:32])
 	hSum := h.Sum(nil)
-	copy(tmp[:], hSum[:64])
 	xScaler := edwards25519.NewScalar()
-	tmpBytes := make([]byte, 64)
-	copy(tmpBytes, tmp[:32])
-	xScaler.SetBytesWithClamping(tmp[:32])
+	xScaler.SetBytesWithClamping(hSum[:32])
 
-	truncatedHashedSKString := tmp[32:]
+	truncatedHashedSKString := hSum[32:]
 	Y := edwards25519.NewIdentityPoint()
-	Y.SetBytes(sk[32:])
+	if _, err := Y.SetBytes(sk[32:]); err != nil {
+		panic(err)
+	}
 	return Y, xScaler, truncatedHashedSKString, nil
 }
 
@@ -143,8 +135,7 @@ func pureGoVrfProve(Y *edwards25519.Point, xScalar *edwards25519.Scalar, truncHa
 	if err != nil {
 		return VrfProof{}, err
 	}
-	Gamma := edwards25519.NewIdentityPoint()
-	Gamma.ScalarMult(xScalar, H)
+	Gamma := new(edwards25519.Point).ScalarMult(xScalar, H)
 
 	kScalar := vrfNonceGeneration(truncHashedSk, H)
 	kB := edwards25519.NewIdentityPoint()
@@ -234,8 +225,7 @@ func ge25519FromUniform(r []byte) ([]byte, error) {
 
 	eIsMinus1 = int(s[1] & 1) // e_is_minus_1 = s[1] & 1;
 	eIsNotMinus1 := eIsMinus1 ^ 1
-	negx = (&field.Element{}).Set(x)
-	negx := new(field.Element).Negate(x)                               // fe25519_neg(negx, x);
+	negx = new(field.Element).Negate(x)             // fe25519_neg(negx, x);
 	x.Select(x, negx, eIsNotMinus1)                 // fe25519_cmov(x, negx, e_is_minus_1);
 	x2.Zero()                                       // fe25519_0(x2);
 	x2.Select(x2, curve25519AElement, eIsNotMinus1) // fe25519_cmov(x2, curve25519_A, e_is_minus_1);
@@ -300,7 +290,9 @@ func vrfHashPoints(P1, P2, P3, P4 *edwards25519.Point) *edwards25519.Scalar {
 
 	copy(result[:], sum[:16])
 	r := edwards25519.NewScalar()
-	if _, err := r.SetCanonicalBytes(result); err != nil { panic(err) }
+	if _, err := r.SetCanonicalBytes(result); err != nil {
+		panic(err)
+	}
 	return r
 
 }
