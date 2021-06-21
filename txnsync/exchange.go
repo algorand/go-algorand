@@ -54,7 +54,7 @@ type requestParams struct {
 
 const (
 	compressionFormatNone byte = iota
-	compressionFormatGzip
+	compressionFormatDeflate
 )
 
 type packedTransactionGroups struct {

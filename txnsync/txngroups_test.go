@@ -320,7 +320,7 @@ func TestTxnGroupEncodingLarge(t *testing.T) {
 	var s syncState
 	ptg, err := s.encodeTransactionGroups(txnGroups, 0)
 	require.NoError(t, err)
-	require.Equal(t, ptg.CompressionFormat, compressionFormatGzip)
+	require.Equal(t, ptg.CompressionFormat, compressionFormatDeflate)
 	out, err := decodeTransactionGroups(ptg, genesisID, genesisHash)
 	require.NoError(t, err)
 	require.ElementsMatch(t, txnGroups, out)
@@ -388,8 +388,8 @@ func BenchmarkTxnGroupCompression(b *testing.B) {
 	b.ResetTimer()
 	loopStartTime := time.Now()
 	for i := 0; i < b.N; i++ {
-		compressedGroupBytes, err := compressTransactionGroupsBytes(ptg.Bytes)
-		require.NoError(b, err)
+		compressedGroupBytes, compressionFormat := s.compressTransactionGroupsBytes(ptg.Bytes)
+		require.Equal(b, compressionFormat, compressionFormatDeflate)
 		size = len(compressedGroupBytes)
 	}
 	loopDuration := time.Now().Sub(loopStartTime)
@@ -423,7 +423,7 @@ func BenchmarkTxnGroupDecompression(b *testing.B) {
 	var s syncState
 	ptg, err := s.encodeTransactionGroups(txnGroups, 0)
 	require.NoError(b, err)
-	require.Equal(b, ptg.CompressionFormat, compressionFormatGzip)
+	require.Equal(b, ptg.CompressionFormat, compressionFormatDeflate)
 
 	b.ReportAllocs()
 	b.ResetTimer()
