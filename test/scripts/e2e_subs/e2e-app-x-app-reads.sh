@@ -21,7 +21,7 @@ APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs
 
 # Creating an app that attempts to read APPID's global state without setting
 # foreignapps should fail
-EXPERR="invalid ForeignApps index"
+EXPERR="invalid App reference 1"
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 2\nint 1') 2>&1 || true)
 if [[ $RES != *"$EXPERR"* ]]; then
     date '+x-app-reads FAIL expected disallowed foreign global read to fail %Y%m%d_%H%M%S'

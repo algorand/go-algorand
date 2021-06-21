@@ -8,7 +8,7 @@ elif [[ "${ARCH}" = "armv6l" ]]; then
     echo "arm"
 elif [[ "${ARCH}" = "armv7l" ]]; then
     echo "arm"
-elif [[ "${ARCH}" = "aarch64" ]]; then
+elif [[ "${ARCH}" = "aarch64" ]] || [[ "${ARCH}" = "arm64" ]]; then
     echo "arm64"
 else
     # Anything else needs to be specifically added...

@@ -93,3 +93,23 @@ func TestTxTailCheckdup(t *testing.T) {
 		}
 	}
 }
+
+func TestGetRoundTxIds(t *testing.T) {
+	r := basics.Round(100)
+	txids := make(map[transactions.Txid]basics.Round)
+	txids[transactions.Txid(crypto.Hash([]byte("a")))] = r
+	txids[transactions.Txid(crypto.Hash([]byte("b")))] = r
+	recent := make(map[basics.Round]roundTxMembers)
+	recent[r] = roundTxMembers{
+		txids: txids,
+	}
+
+	tt := txTail{
+		recent: recent,
+	}
+
+	txMap := tt.getRoundTxIds(100)
+	require.Equal(t, 2, len(txMap))
+	require.True(t, txMap[transactions.Txid(crypto.Hash([]byte("a")))])
+	require.True(t, txMap[transactions.Txid(crypto.Hash([]byte("b")))])
+}

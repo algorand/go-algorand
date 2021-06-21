@@ -50,9 +50,9 @@ This section briefly describes the expected outcomes of the current build pipeli
 
 1. build
 
-    1. Build (compile) the binaries in a Centos 7 docker container that will then be used by both `deb` and `rpm` packaging.
+    1. Build (compile) the binaries in a Centos 7 & 8 docker container that will then be used by both `deb` and `rpm` packaging.
 
-    1. Docker containers will package `deb` and `rpm` artifacts inside of Ubuntu 18.04 and Centos 7, respectively.
+    1. Docker containers will package `deb` and `rpm` artifacts inside of Ubuntu 18.04 and Centos 7 & 8, respectively.
 
     1. Jenkins will then pause to wait for [the only manual part of the build/package/test phase], which is to forward the `gpg-agent` that establishes a direct between the local machine that contains the signing keys and the remote ec2 instance.
 
@@ -70,6 +70,7 @@ This section briefly describes the expected outcomes of the current build pipeli
     - The packages are built from the correct branch and channel and are the correct version.  This done by running `algod -v`.
         + This is done for the following docker containers:
             - centos:7
+            - centos:8
             - fedora:28
             - ubuntu:16.04
             - ubuntu:18.04

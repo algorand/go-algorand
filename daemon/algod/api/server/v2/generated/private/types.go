@@ -25,6 +25,9 @@ type Account struct {
 	// Note the raw object uses `map[int] -> AppLocalState` for this type.
 	AppsLocalState *[]ApplicationLocalState `json:"apps-local-state,omitempty"`
 
+	// \[teap\] the sum of all extra application program pages for this account.
+	AppsTotalExtraPages *uint64 `json:"apps-total-extra-pages,omitempty"`
+
 	// Specifies maximums on the number of each type that may be stored.
 	AppsTotalSchema *ApplicationStateSchema `json:"apps-total-schema,omitempty"`
 
@@ -135,6 +138,9 @@ type ApplicationParams struct {
 
 	// The address that created this application. This is the address where the parameters and global state for this application can be found.
 	Creator string `json:"creator"`
+
+	// \[epp\] the amount of extra program pages available to this app.
+	ExtraProgramPages *uint64 `json:"extra-program-pages,omitempty"`
 
 	// Represents a key-value store for use in an application.
 	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`

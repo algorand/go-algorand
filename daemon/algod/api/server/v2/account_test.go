@@ -40,6 +40,7 @@ func TestAccount(t *testing.T) {
 		ApprovalProgram: []byte{1},
 		StateSchemas: basics.StateSchemas{
 			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+			LocalStateSchema:  basics.StateSchema{NumByteSlice: 5},
 		},
 	}
 	appParams2 := basics.AppParams{
@@ -47,16 +48,27 @@ func TestAccount(t *testing.T) {
 		StateSchemas: basics.StateSchemas{
 			GlobalStateSchema: basics.StateSchema{NumUint: 2},
 		},
+		ExtraProgramPages: 1,
 	}
+
+	totalAppSchema := basics.StateSchema{
+		NumUint:      appParams1.GlobalStateSchema.NumUint + appParams2.GlobalStateSchema.NumUint,
+		NumByteSlice: appParams1.GlobalStateSchema.NumByteSlice + appParams2.GlobalStateSchema.NumByteSlice,
+	}
+	totalAppExtraPages := appParams1.ExtraProgramPages + appParams2.ExtraProgramPages
+
 	assetParams1 := basics.AssetParams{
 		Total:         100,
 		DefaultFrozen: false,
 		UnitName:      "unit1",
+		Decimals:      0,
 	}
 	assetParams2 := basics.AssetParams{
 		Total:         200,
 		DefaultFrozen: true,
 		UnitName:      "unit2",
+		Decimals:      6,
+		MetadataHash:  [32]byte{1},
 	}
 	copy(assetParams2.MetadataHash[:], []byte("test2"))
 	a := basics.AccountData{
@@ -65,6 +77,8 @@ func TestAccount(t *testing.T) {
 		RewardedMicroAlgos: basics.MicroAlgos{Raw: ^uint64(0)},
 		RewardsBase:        0,
 		AppParams:          map[basics.AppIndex]basics.AppParams{appIdx1: appParams1, appIdx2: appParams2},
+		TotalAppSchema:     totalAppSchema,
+		TotalExtraAppPages: totalAppExtraPages,
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{
 			appIdx1: {
 				Schema: basics.StateSchema{NumUint: 10},
@@ -88,28 +102,33 @@ func TestAccount(t *testing.T) {
 	addr := basics.Address{}.String()
 	conv, err := AccountDataToAccount(addr, &b, map[basics.AssetIndex]string{}, round, a.MicroAlgos)
 	require.NoError(t, err)
-	require.Equal(t, conv.Address, addr)
-	require.Equal(t, conv.Amount, b.MicroAlgos.Raw)
-	require.Equal(t, conv.AmountWithoutPendingRewards, a.MicroAlgos.Raw)
+	require.Equal(t, addr, conv.Address)
+	require.Equal(t, b.MicroAlgos.Raw, conv.Amount)
+	require.Equal(t, a.MicroAlgos.Raw, conv.AmountWithoutPendingRewards)
+	require.NotNil(t, conv.AppsTotalSchema)
+	require.Equal(t, totalAppSchema.NumUint, conv.AppsTotalSchema.NumUint)
+	require.Equal(t, totalAppSchema.NumByteSlice, conv.AppsTotalSchema.NumByteSlice)
+	require.NotNil(t, conv.AppsTotalExtraPages)
+	require.Equal(t, uint64(totalAppExtraPages), *conv.AppsTotalExtraPages)
+
+	verifyCreatedApp := func(index int, appIdx basics.AppIndex, params basics.AppParams) {
+		require.Equal(t, uint64(appIdx), (*conv.CreatedApps)[index].Id)
+		require.Equal(t, params.ApprovalProgram, (*conv.CreatedApps)[index].Params.ApprovalProgram)
+		require.NotNil(t, (*conv.CreatedApps)[index].Params.ExtraProgramPages)
+		require.Equal(t, uint64(params.ExtraProgramPages), *(*conv.CreatedApps)[index].Params.ExtraProgramPages)
+		require.NotNil(t, (*conv.CreatedApps)[index].Params.GlobalStateSchema)
+		require.Equal(t, params.GlobalStateSchema.NumUint, (*conv.CreatedApps)[index].Params.GlobalStateSchema.NumUint)
+		require.Equal(t, params.GlobalStateSchema.NumByteSlice, (*conv.CreatedApps)[index].Params.GlobalStateSchema.NumByteSlice)
+		require.NotNil(t, (*conv.CreatedApps)[index].Params.LocalStateSchema)
+		require.Equal(t, params.LocalStateSchema.NumUint, (*conv.CreatedApps)[index].Params.LocalStateSchema.NumUint)
+		require.Equal(t, params.LocalStateSchema.NumByteSlice, (*conv.CreatedApps)[index].Params.LocalStateSchema.NumByteSlice)
+	}
 
 	require.NotNil(t, conv.CreatedApps)
 	require.Equal(t, 2, len(*conv.CreatedApps))
-	for _, app := range *conv.CreatedApps {
-		var params basics.AppParams
-		if app.Id == uint64(appIdx1) {
-			params = appParams1
-		} else if app.Id == uint64(appIdx2) {
-			params = appParams2
-		} else {
-			require.Fail(t, fmt.Sprintf("app idx %d not in [%d, %d]", app.Id, appIdx1, appIdx2))
-		}
-		require.Equal(t, params.ApprovalProgram, app.Params.ApprovalProgram)
-		require.Equal(t, params.GlobalStateSchema.NumUint, app.Params.GlobalStateSchema.NumUint)
-		require.Equal(t, params.GlobalStateSchema.NumByteSlice, app.Params.GlobalStateSchema.NumByteSlice)
-	}
+	verifyCreatedApp(0, appIdx1, appParams1)
+	verifyCreatedApp(1, appIdx2, appParams2)
 
-	require.NotNil(t, conv.AppsLocalState)
-	require.Equal(t, 2, len(*conv.AppsLocalState))
 	makeTKV := func(k string, v interface{}) generated.TealKeyValue {
 		value := generated.TealValue{}
 		switch v.(type) {
@@ -127,47 +146,54 @@ func TestAccount(t *testing.T) {
 			Value: value,
 		}
 	}
-	for _, ls := range *conv.AppsLocalState {
-		require.Equal(t, uint64(10), ls.Schema.NumUint)
-		require.Equal(t, uint64(0), ls.Schema.NumByteSlice)
-		require.Equal(t, 2, len(*ls.KeyValue))
-		var value1 generated.TealKeyValue
-		var value2 generated.TealKeyValue
-		if ls.Id == uint64(appIdx1) {
-			value1 = makeTKV("uint", 1)
-			value2 = makeTKV("bytes", "value1")
-		} else if ls.Id == uint64(appIdx2) {
-			value1 = makeTKV("uint", 2)
-			value2 = makeTKV("bytes", "value2")
-		} else {
-			require.Fail(t, fmt.Sprintf("local state app idx %d not in [%d, %d]", ls.Id, appIdx1, appIdx2))
+
+	verifyAppLocalState := func(index int, appIdx basics.AppIndex, numUints, numByteSlices uint64, keyValues generated.TealKeyValueStore) {
+		require.Equal(t, uint64(appIdx), (*conv.AppsLocalState)[index].Id)
+		require.Equal(t, numUints, (*conv.AppsLocalState)[index].Schema.NumUint)
+		require.Equal(t, numByteSlices, (*conv.AppsLocalState)[index].Schema.NumByteSlice)
+		require.Equal(t, len(keyValues), len(*(*conv.AppsLocalState)[index].KeyValue))
+		for i, keyValue := range keyValues {
+			require.Equal(t, keyValue, (*(*conv.AppsLocalState)[index].KeyValue)[i])
 		}
-		require.Contains(t, *ls.KeyValue, value1)
-		require.Contains(t, *ls.KeyValue, value2)
+	}
+
+	require.NotNil(t, conv.AppsLocalState)
+	require.Equal(t, 2, len(*conv.AppsLocalState))
+	verifyAppLocalState(0, appIdx1, 10, 0, generated.TealKeyValueStore{makeTKV("bytes", "value1"), makeTKV("uint", 1)})
+	verifyAppLocalState(1, appIdx2, 10, 0, generated.TealKeyValueStore{makeTKV("bytes", "value2"), makeTKV("uint", 2)})
+
+	verifyCreatedAsset := func(index int, assetIdx basics.AssetIndex, params basics.AssetParams) {
+		require.Equal(t, uint64(assetIdx), (*conv.CreatedAssets)[index].Index)
+		require.Equal(t, params.Total, (*conv.CreatedAssets)[index].Params.Total)
+		require.NotNil(t, (*conv.CreatedAssets)[index].Params.DefaultFrozen)
+		require.Equal(t, params.DefaultFrozen, *(*conv.CreatedAssets)[index].Params.DefaultFrozen)
+		require.NotNil(t, (*conv.CreatedAssets)[index].Params.UnitName)
+		require.Equal(t, params.UnitName, *(*conv.CreatedAssets)[index].Params.UnitName)
+		if params.MetadataHash == ([32]byte{}) {
+			require.Nil(t, (*conv.CreatedAssets)[index].Params.MetadataHash)
+		} else {
+			require.NotNil(t, (*conv.CreatedAssets)[index].Params.MetadataHash)
+			require.Equal(t, params.MetadataHash[:], *(*conv.CreatedAssets)[index].Params.MetadataHash)
+		}
 	}
 
 	require.NotNil(t, conv.CreatedAssets)
 	require.Equal(t, 2, len(*conv.CreatedAssets))
-	for _, asset := range *conv.CreatedAssets {
-		var params basics.AssetParams
-		if asset.Index == uint64(assetIdx1) {
-			params = assetParams1
-		} else if asset.Index == uint64(assetIdx2) {
-			params = assetParams2
-		} else {
-			require.Fail(t, fmt.Sprintf("asset idx %d not in [%d, %d]", asset.Index, assetIdx1, assetIdx2))
-		}
-		require.Equal(t, params.Total, asset.Params.Total)
-		require.NotNil(t, asset.Params.DefaultFrozen)
-		require.Equal(t, params.DefaultFrozen, *asset.Params.DefaultFrozen)
-		require.NotNil(t, asset.Params.UnitName)
-		require.Equal(t, params.UnitName, *asset.Params.UnitName)
-		if asset.Params.MetadataHash != nil {
-			require.Equal(t, params.MetadataHash[:], *asset.Params.MetadataHash)
-		}
-	}
+	verifyCreatedAsset(0, assetIdx1, assetParams1)
+	verifyCreatedAsset(1, assetIdx2, assetParams2)
 
 	c, err := AccountToAccountData(&conv)
 	require.NoError(t, err)
 	require.Equal(t, b, c)
+
+	t.Run("IsDeterministic", func(t *testing.T) {
+		// convert the same account a few more times to make sure we always
+		// produce the same generated.Account
+		for i := 0; i < 10; i++ {
+			anotherConv, err := AccountDataToAccount(addr, &b, map[basics.AssetIndex]string{}, round, a.MicroAlgos)
+			require.NoError(t, err)
+
+			require.Equal(t, protocol.EncodeJSON(conv), protocol.EncodeJSON(anotherConv))
+		}
+	})
 }
