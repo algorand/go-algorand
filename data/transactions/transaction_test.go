@@ -68,11 +68,12 @@ func generateDummyGoNonparticpatingTransaction(addr basics.Address) (tx Transact
 			FirstValid: 1,
 			LastValid:  300,
 		},
-		KeyregTxnFields: KeyregTxnFields{Nonparticipation: true},
+		KeyregTxnFields: KeyregTxnFields{
+			Nonparticipation: true,
+			VoteFirst:        0,
+			VoteLast:         0,
+		},
 	}
-	tx.KeyregTxnFields.VoteFirst = 1
-	tx.KeyregTxnFields.VoteLast = 300
-	tx.KeyregTxnFields.VoteKeyDilution = 1
 
 	tx.KeyregTxnFields.Nonparticipation = true
 	return tx
@@ -250,8 +251,19 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 			},
 			spec:          specialAddr,
-			proto:         curProto,
+			proto:         protoV27,
 			expectedError: makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", 100, curProto.MinTxnFee),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender: addr1,
+					Fee:    basics.MicroAlgos{Raw: 100},
+				},
+			},
+			spec:  specialAddr,
+			proto: curProto,
 		},
 		{
 			tx: Transaction{
@@ -369,6 +381,71 @@ func TestWellFormedErrors(t *testing.T) {
 			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", futureProto.MaxExtraAppProgramPages),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11},
+				},
+			},
+			spec:  specialAddr,
+			proto: protoV27,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11, 12},
+				},
+			},
+			spec:          specialAddr,
+			proto:         protoV27,
+			expectedError: fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is 2"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11, 12, 13, 14, 15, 16, 17},
+				},
+			},
+			spec:  specialAddr,
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17, 18, 19, 20, 21, 22},
+				},
+			},
+			spec:          specialAddr,
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is 8"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Accounts:      []basics.Address{{}, {}, {}},
+					ForeignApps:   []basics.AppIndex{14, 15, 16, 17},
+					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
+				},
+			},
+			spec:          specialAddr,
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx has too many references, max is 8"),
 		},
 	}
 	for _, usecase := range usecases {

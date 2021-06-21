@@ -1,8 +1,7 @@
 # Transaction Execution Approval Language (TEAL)
 
-TEAL is a bytecode based stack language that executes inside Algorand transactions to check the parameters of the transaction and approve the transaction as if by a signature. Programs have read-only access to the transaction they are attached to, transactions in their atomic transaction group, and a few global values. Programs cannot modify or create transactions, only reject or approve them. Approval is signaled by finishing with the stack containing a single non-zero uint64 value.
-
-TEAL programs should be short and run fast as they are run in-line along with signature checking, transaction balance rule checking, and other checks during block assembly and validation. Many useful programs are less than 100 instructions.
+TEAL is a bytecode based stack language that executes inside Algorand transactions. TEAL programs can be used to check the parameters of the transaction and approve the transaction as if by a signature. This use of TEAL is called a _LogicSig_. Starting with v2, TEAL programs may
+also execute as _Applications_ which are invoked with explicit application call transactions. Programs have read-only access to the transaction they are attached to, transactions in their atomic transaction group, and a few global values. In addition, _Application_ programs have access to limited state that is global to the application and per-account local state for each account that has opted-in to the application. Programs cannot modify or create transactions, only reject or approve them. For both types of program, approval is signaled by finishing with the stack containing a single non-zero uint64 value.
 
 ## The Stack
 
@@ -14,9 +13,20 @@ The maximum stack depth is currently 1000.
 
 In addition to the stack there are 256 positions of scratch space, also uint64-bytes union values, accessed by the `load` and `store` ops moving data from or to scratch space, respectively.
 
-## Execution Environment
+## Execution Modes
 
-TEAL runs in Algorand nodes as part of testing a proposed transaction to see if it is valid and authorized to be committed into a block.
+Starting from version 2 TEAL evaluator can run programs in two modes:
+1. LogicSig (stateless)
+2. Application run (stateful)
+
+Differences between modes include:
+1. Max program length (consensus parameters LogicSigMaxSize, MaxAppTotalProgramLen & MaxExtraAppProgramPages)
+2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
+3. Opcode availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
+
+## Execution Environment for LogicSigs
+
+TEAL LogicSigs run in Algorand nodes as part of testing a proposed transaction to see if it is valid and authorized to be committed into a block.
 
 If an authorized program executes and finishes with a single non-zero uint64 value on the stack then that program has validated the transaction it is attached to.
 
@@ -27,28 +37,17 @@ A program can either authorize some delegated action on a normal private key sig
 * If the account has signed the program (an ed25519 signature on "Program" concatenated with the program bytes) then if the program returns true the transaction is authorized as if the account had signed it. This allows an account to hand out a signed program so that other users can carry out delegated actions which are approved by the program.
 * If the SHA512_256 hash of the program (prefixed by "Program") is equal to the transaction Sender address then this is a contract account wholly controlled by the program. No other signature is necessary or possible. The only way to execute a transaction against the contract account is for the program to approve it.
 
-The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, program costs was estimated as the static sum of all opcode costs in a program (ignoring conditionals that might skip some code). Beginning with v4, a program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
-
-## Execution modes
-
-Starting from version 2 TEAL evaluator can run programs in two modes:
-1. Signature verification (stateless)
-2. Application run (stateful)
-
-Differences between modes include:
-1. Max program length (consensus parameters LogicSigMaxSize, MaxApprovalProgramLen and MaxClearStateProgramLen)
-2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
-3. Opcodes availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
+The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost and the program cost must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have a cost of 1, but a few slow crypto ops are much higher. Prior to v4, the program's cost was estimated as the static sum of all the opcode costs in the program (whether they were actually executed or not). Beginning with v4, the program's cost is tracked dynamically, while being evaluated. If the program exceeds its budget, it fails.
 
 ## Constants
 
-Constants are loaded into the environment into storage separate from the stack. They can then be pushed onto the stack by referring to the type and index. This makes for efficient re-use of byte constants used for account addresses, etc.
+Constants are loaded into the environment into storage separate from the stack. They can then be pushed onto the stack by referring to the type and index. This makes for efficient re-use of byte constants used for account addresses, etc. Constants that are not reused can be pushed with `pushint` or `pushbytes`.
 
 The assembler will hide most of this, allowing simple use of `int 1234` and `byte 0xcafed00d`. These constants will automatically get assembled into int and byte pages of constants, de-duplicated, and operations to load them from constant storage space inserted.
 
 Constants are loaded into the environment by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings. This should efficiently load 32 and 64 byte constants which will be common as addresses, hashes, and signatures.
 
-Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
+Constants are pushed onto the stack by `intc`, `intc_[0123]`, `pushint`, `bytec`, `bytec_[0123]`, and `pushbytes`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
 
 ### Named Integer Constants
 
@@ -81,6 +80,8 @@ An application transaction must indicate the action to be taken following the ex
 
 Most operations work with only one type of argument, uint64 or bytes, and panic if the wrong type value is on the stack.
 
+Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with TEAL v4, these values may always be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a bytes address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before TEAL v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in they corresponding _Foreign_ array. (Note that beginning with TEAL v4, those ID are required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
+
 Many programs need only a few dozen instructions. The instruction set has some optimization built in. `intc`, `bytec`, and `arg` take an immediate value byte, making a 2-byte op to load a value onto the stack, but they also have single byte versions for loading the most common constant values. Any program will benefit from having a few common values loaded with a smaller one byte opcode. Cryptographic hashes and `ed25519verify` are single byte opcodes with powerful libraries behind them. These operations still take more time than other ops (and this is reflected in the cost of each op and the cost limit of a program) but are efficient in compiled code space.
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
@@ -93,7 +94,9 @@ A contract account governed by a buggy program might not have a way to get asset
 
 For one-argument ops, `X` is the last element on the stack, which is typically replaced by a new value.
 
-For two-argument ops, `A` is the previous element on the stack and `B` is the last element on the stack. These typically result in popping A and B from the stack and pushing the result.
+For two-argument ops, `A` is the penultimate element on the stack and `B` is the top of the stack. These typically result in popping A and B from the stack and pushing the result.
+
+For three-argument ops, `A` is the element two below the top, `B` is the penultimate stack element and `C` is the top of the stack. These operatiosn typically pop A, B, and C from the stack and push the result.
 
 | Op | Description |
 | --- | --- |
@@ -113,8 +116,8 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `\|\|` | A is not zero or B is not zero => {0 or 1} |
 | `shl` | A times 2^B, modulo 2^64 |
 | `shr` | A divided by 2^B |
-| `sqrt` | The largest integer X such that X^2 <= A |
-| `bitlen` | The index of the highest bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer |
+| `sqrt` | The largest integer B such that B^2 <= X |
+| `bitlen` | The highest set bit in X. If X is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4 |
 | `exp` | A raised to the Bth power. Panic if A == B == 0 and on overflow |
 | `==` | A is equal to B => {0 or 1} |
 | `!=` | A is not equal to B => {0 or 1} |
@@ -139,13 +142,17 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
 
-These opcodes take and return byte-array values that are interpreted
-as big-endian unsigned integers.  Returned values are the shortest
-byte-array that can represent the returned value.  For example, the
-zero value is the empty byte-array.
+These opcodes take byte-array values that are interpreted as
+big-endian unsigned integers.  For mathematical operators, the
+returned values are the shortest byte-array that can represent the
+returned value.  For example, the zero value is the empty
+byte-array. For comparison operators, the returned value is a uint64
 
-Input lengths are limited to maximum length 64, which represents a 512
-bit unsigned integer.
+Input lengths are limited to a maximum length 64 bytes, which
+represents a 512 bit unsigned integer. Output lengths are not
+explicitly restricted, though only `b*` and `b+` can produce a larger
+output than their inputs, so there is an implicit length limit of 128
+bytes on outputs.
 
 | Op | Description |
 | --- | --- |
@@ -172,7 +179,7 @@ these results may contain leading zero bytes.
 | `b\|` | A bitwise-or B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
 | `b&` | A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
 | `b^` | A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths |
-| `b~` | A with all bits inverted |
+| `b~` | X with all bits inverted |
 
 
 ### Loading Values
@@ -197,7 +204,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `bytec_2` | push constant 2 from bytecblock to stack |
 | `bytec_3` | push constant 3 from bytecblock to stack |
 | `pushbytes bytes` | push the following program bytes to the stack |
-| `bzero` | push a byte-array of length A, containing all zero bytes |
+| `bzero` | push a byte-array of length X, containing all zero bytes |
 | `arg n` | push Nth LogicSig argument to stack |
 | `arg_0` | push LogicSig argument 0 to stack |
 | `arg_1` | push LogicSig argument 1 to stack |
@@ -207,13 +214,15 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `gtxn t f` | push field F of the Tth transaction in the current group |
 | `txna f i` | push Ith value of the array field F of the current transaction |
 | `gtxna t f i` | push Ith value of the array field F from the Tth transaction in the current group |
-| `gtxns f` | push field F of the Ath transaction in the current group |
-| `gtxnsa f i` | push Ith value of the array field F from the Ath transaction in the current group |
+| `gtxns f` | push field F of the Xth transaction in the current group |
+| `gtxnsa f i` | push Ith value of the array field F from the Xth transaction in the current group |
 | `global f` | push value from globals to stack |
 | `load i` | copy a value from scratch space to the stack |
 | `store i` | pop a value from the stack and store to scratch space |
 | `gload t i` | push Ith scratch space index of the Tth transaction in the current group |
-| `gloads i` | push Ith scratch space index of the Ath transaction in the current group |
+| `gloads i` | push Ith scratch space index of the Xth transaction in the current group |
+| `gaid t` | push the ID of the asset or application created in the Tth transaction of the current group |
+| `gaids` | push the ID of the asset or application created in the Xth transaction of the current group |
 
 **Transaction Fields**
 
@@ -275,6 +284,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 53 | GlobalNumByteSlice | uint64 | Number of global state byteslices in ApplicationCall. LogicSigVersion >= 3. |
 | 54 | LocalNumUint | uint64 | Number of local state integers in ApplicationCall. LogicSigVersion >= 3. |
 | 55 | LocalNumByteSlice | uint64 | Number of local state byteslices in ApplicationCall. LogicSigVersion >= 3. |
+| 56 | ExtraProgramPages | uint64 | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. LogicSigVersion >= 4. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -345,19 +355,19 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 
 | Op | Description |
 | --- | --- |
-| `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
-| `min_balance` | get minimum required balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
-| `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
-| `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the current application key B => value |
-| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C => [*... stack*, value, 0 or 1] |
+| `balance` | get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. |
+| `min_balance` | get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. |
+| `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
+| `app_local_get` | read from account A from local state of the current application key B => value |
+| `app_local_get_ex` | read from account A from local state of the application B key C => [*... stack*, value, 0 or 1] |
 | `app_global_get` | read key A from global state of a current application => value |
-| `app_global_get_ex` | read from application Txn.ForeignApps[A] global state key B => [*... stack*, value, 0 or 1]. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app |
-| `app_local_put` | write to account specified by Txn.Accounts[A] to local state of a current application key B with value C |
+| `app_global_get_ex` | read from application A global state key B => [*... stack*, value, 0 or 1] |
+| `app_local_put` | write to account specified by A to local state of a current application key B with value C |
 | `app_global_put` | write key A and value B to global state of the current application |
-| `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |
+| `app_local_del` | delete from account A local state key B of the current application |
 | `app_global_del` | delete key A from a global state of the current application |
-| `asset_holding_get i` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value} |
-| `asset_params_get i` | read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value} |
+| `asset_holding_get i` | read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value} |
+| `asset_params_get i` | read from asset A params field X (imm arg) => {0 or 1 (top), value} |
 
 # Assembler Syntax
 

@@ -404,7 +404,7 @@ func TestCowBuildDelta(t *testing.T) {
 
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.Error(err)
-	a.Contains(err.Error(), "could not find offset")
+	a.Contains(err.Error(), "invalid Account reference ")
 	a.Empty(ed)
 
 	// check v26 behavior for empty deltas

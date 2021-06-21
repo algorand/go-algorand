@@ -333,7 +333,7 @@ func TestAppCallAddressByIndex(t *testing.T) {
 
 	addr, err = ac.AddressByIndex(1, sender)
 	a.Error(err)
-	a.Contains(err.Error(), "cannot load account[1]")
+	a.Contains(err.Error(), "invalid Account reference 1")
 	a.Equal(0, len(ac.Accounts))
 
 	acc0 := getRandomAddress(a)
@@ -344,7 +344,7 @@ func TestAppCallAddressByIndex(t *testing.T) {
 
 	addr, err = ac.AddressByIndex(2, sender)
 	a.Error(err)
-	a.Contains(err.Error(), "cannot load account[2]")
+	a.Contains(err.Error(), "invalid Account reference 2")
 }
 
 func TestAppCallCheckPrograms(t *testing.T) {
