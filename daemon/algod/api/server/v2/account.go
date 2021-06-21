@@ -125,7 +125,7 @@ func AccountDataToAccount(
 		AuthAddr:                    addrOrNil(record.AuthAddr),
 		AppsLocalState:              &appsLocalState,
 		AppsTotalSchema:             &totalAppSchema,
-		AppsTotalExtraPages:         &totalExtraPages,
+		AppsTotalExtraPages:         numOrNil(totalExtraPages),
 	}, nil
 }
 
@@ -401,13 +401,13 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) (basics.AppP
 func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *basics.AppParams) generated.Application {
 	globalState := convertTKVToGenerated(&appParams.GlobalState)
 	extraProgramPages := uint64(appParams.ExtraProgramPages)
-	return generated.Application{
+	app := generated.Application{
 		Id: uint64(appIdx),
 		Params: generated.ApplicationParams{
 			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,
 			ClearStateProgram: appParams.ClearStateProgram,
-			ExtraProgramPages: &extraProgramPages,
+			ExtraProgramPages: numOrNil(extraProgramPages),
 			GlobalState:       globalState,
 			LocalStateSchema: &generated.ApplicationStateSchema{
 				NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
@@ -419,6 +419,7 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 			},
 		},
 	}
+	return app
 }
 
 // AssetParamsToAsset converts basics.AssetParams to generated.Asset
