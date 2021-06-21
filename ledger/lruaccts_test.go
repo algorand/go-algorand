@@ -198,8 +198,10 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 }
 
 func BenchmarkLRUAccountsWrite(b *testing.B) {
-	accounts := generatePersistedAccountData(0, 5000)
-	fillerAccounts := generatePersistedAccountData(5000, 100000)
+	numTestAccounts := 5000
+	// there are 2500 accounts that overlap
+	fillerAccounts := generatePersistedAccountData(0, 97500)
+	accounts := generatePersistedAccountData(97500-numTestAccounts/2, 97500+numTestAccounts/2)
 
 	b.ResetTimer()
 	b.StopTimer()
@@ -231,7 +233,7 @@ func generatePersistedAccountData(startRound, endRound int) []persistedAccountDa
 
 		accounts[i-startRound] = persistedAccountData{
 			addr:        basics.Address(digest),
-			round:       basics.Round(i),
+			round:       basics.Round(i + startRound),
 			rowid:       int64(i),
 			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
