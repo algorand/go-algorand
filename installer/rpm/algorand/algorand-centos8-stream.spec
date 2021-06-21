@@ -43,7 +43,7 @@ install -m 644 ${REPO_DIR}/installer/algorand.service %{buildroot}/lib/systemd/s
 install -m 644 ${REPO_DIR}/installer/algorand@.service %{buildroot}/lib/systemd/system/algorand@.service
 
 mkdir -p %{buildroot}/etc/cron.hourly
-install -m 755 ${REPO_DIR}/installer/rpm/algorand/0yum-algorand-hourly.cron %{buildroot}/etc/cron.hourly/0yum-algorand-hourly.cron
+install -m 755 ${REPO_DIR}/installer/rpm/algorand/0dnf-algorand-hourly.cron %{buildroot}/etc/cron.hourly/0dnf-algorand-hourly.cron
 
 
 mkdir -p %{buildroot}/etc/dnf
