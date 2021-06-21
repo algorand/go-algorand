@@ -201,21 +201,24 @@ func BenchmarkLRUAccountsWrite(b *testing.B) {
 	accounts := generatePersistedAccountData(0, 5000)
 	fillerAccounts := generatePersistedAccountData(5000, 100000)
 
-	baseAccts := make([]lruAccounts, b.N)
-	for i := 0; i < b.N; i++ {
-		baseAccts[i].init(logging.TestingLog(b), 10, 5)
-		for _, account := range fillerAccounts {
-			baseAccts[i].write(account)
-		}
-	}
-
 	b.ResetTimer()
+	b.StopTimer()
 	for i := 0; i < b.N; i++ {
-		baseAcct := baseAccts[i]
-		for _, account := range accounts {
-			baseAcct.write(account)
-		}
+		var baseAcct lruAccounts
+		baseAcct.init(logging.TestingLog(b), 10, 5)
+		baseAcct = fillLRUAccounts(baseAcct, fillerAccounts)
+
+		b.StartTimer()
+		fillLRUAccounts(baseAcct, accounts)
+		b.StopTimer()
 	}
+}
+
+func fillLRUAccounts(baseAcct lruAccounts, fillerAccounts []persistedAccountData) lruAccounts {
+	for _, account := range fillerAccounts {
+		baseAcct.write(account)
+	}
+	return baseAcct
 }
 
 func generatePersistedAccountData(startRound, endRound int) []persistedAccountData {
