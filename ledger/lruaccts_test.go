@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"encoding/binary"
 	"testing"
 	"time"
 
@@ -194,4 +195,48 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 		require.False(t, has)
 		require.Equal(t, persistedAccountData{}, acct)
 	}
+}
+
+func BenchmarkLRUAccountsWrite(b *testing.B) {
+	numTestAccounts := 5000
+	// there are 2500 accounts that overlap
+	fillerAccounts := generatePersistedAccountData(0, 97500)
+	accounts := generatePersistedAccountData(97500-numTestAccounts/2, 97500+numTestAccounts/2)
+
+	b.ResetTimer()
+	b.StopTimer()
+	for i := 0; i < b.N; i++ {
+		var baseAcct lruAccounts
+		baseAcct.init(logging.TestingLog(b), 10, 5)
+		baseAcct = fillLRUAccounts(baseAcct, fillerAccounts)
+
+		b.StartTimer()
+		fillLRUAccounts(baseAcct, accounts)
+		b.StopTimer()
+	}
+}
+
+func fillLRUAccounts(baseAcct lruAccounts, fillerAccounts []persistedAccountData) lruAccounts {
+	for _, account := range fillerAccounts {
+		baseAcct.write(account)
+	}
+	return baseAcct
+}
+
+func generatePersistedAccountData(startRound, endRound int) []persistedAccountData {
+	accounts := make([]persistedAccountData, endRound-startRound)
+	buffer := make([]byte, 4)
+
+	for i := startRound; i < endRound; i++ {
+		binary.BigEndian.PutUint32(buffer, uint32(i))
+		digest := crypto.Hash(buffer)
+
+		accounts[i-startRound] = persistedAccountData{
+			addr:        basics.Address(digest),
+			round:       basics.Round(i + startRound),
+			rowid:       int64(i),
+			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+		}
+	}
+	return accounts
 }

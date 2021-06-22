@@ -10,7 +10,7 @@ decentralization, scalability, security, and transaction finality.
 ## Getting Started ##
 
 Our [developer website][developer site url] has the most up to date information
-about using and installing the algorand platform.
+about using and installing the Algorand platform.
 
 ## Building from source ##
 
@@ -21,7 +21,7 @@ the [official Go documentation website](https://golang.org/doc/).
 
 ### Linux / OSX ###
 
-We currently strive to support Debian based distributions with Ubuntu 18.04
+We currently strive to support Debian-based distributions with Ubuntu 18.04
 being our official release target.
 Building on Arch Linux works as well.
 Our core engineering team uses Linux and OSX, so both environments are well
@@ -39,7 +39,7 @@ cd go-algorand
 ./scripts/buildtools/install_buildtools.sh
 ```
 
-At this point you are ready to build go-algorand. We use `make` and have a
+At this point, you are ready to build go-algorand. We use `make` and have a
 number of targets to automate common tasks.
 
 #### build
@@ -108,17 +108,17 @@ daemons, as well as other tools and commands:
     locally by the node as well as parameters which must be agreed upon by the
     protocol.
   - `data` defines various types used throughout the codebase.
-     - `basics` holds basic types such as MicroAlgos, account data, and
+     - `basics` hold basic types such as MicroAlgos, account data, and
        addresses.
      - `account` defines accounts, including "root" accounts (which can
        spend money) and "participation" accounts (which can participate in
        the agreement protocol).
-     - `transactions` defines transactions that accounts can issue against
+     - `transactions` define transactions that accounts can issue against
        the Algorand state.  These include standard payments and also
        participation key registration transactions.
      - `bookkeeping` defines blocks, which are batches of transactions
        atomically committed to Algorand.
-     - `pools` implements the transaction pool.  The transaction pool holds
+     - `pools` implement the transaction pool.  The transaction pool holds
        transactions seen by a node in memory before they are proposed in a
        block.
      - `committee` implements the credentials that authenticate a
@@ -132,7 +132,7 @@ daemons, as well as other tools and commands:
     routing network messages, and prefixes for domain separation of
     cryptographic inputs.  It also implements the canonical encoder.
   - `network` contains the code for participating in a mesh network based on
-    websockets. Maintains connection to some number of peers, (optionally)
+    WebSockets. Maintains connection to some number of peers, (optionally)
     accepts connections from peers, sends point to point and broadcast messages,
     and receives messages routing them to various handler code
     (e.g. agreement/gossip/network.go registers three handlers).
@@ -179,7 +179,7 @@ of their own:
 A number of packages provide utilities for the various components:
 
   - `logging` is a wrapper around `logrus`.
-  - `util` contains a variety of utilities, including a codec, a sqlite wrapper,
+  - `util` contains a variety of utilities, including a codec, a SQLite wrapper,
     a goroutine pool, a timer interface, node metrics, and more.
 
 `test` ([README](test/README.md)) contains end-to-end tests and utilities for the above components.
