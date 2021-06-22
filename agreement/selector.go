@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
@@ -34,6 +35,7 @@ type selector struct {
 	Round  basics.Round   `codec:"rnd"`
 	Period period         `codec:"per"`
 	Step   step           `codec:"step"`
+	Branch crypto.Digest  `codec:"prev"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.

@@ -34,6 +34,7 @@ type unauthenticatedBundle struct {
 	Round    basics.Round  `codec:"rnd"`
 	Period   period        `codec:"per"`
 	Step     step          `codec:"step"`
+	Branch   crypto.Digest `codec:"prev"`
 	Proposal proposalValue `codec:"prop"`
 
 	Votes             []voteAuthenticator             `codec:"vote,allocbound=config.MaxVoteThreshold"`

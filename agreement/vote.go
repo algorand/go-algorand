@@ -34,6 +34,7 @@ type (
 		Round    basics.Round   `codec:"rnd"`
 		Period   period         `codec:"per"`
 		Step     step           `codec:"step"`
+		Branch   crypto.Digest  `codec:"prev"`
 		Proposal proposalValue  `codec:"prop"`
 	}
 
@@ -61,6 +62,7 @@ type (
 		Round     basics.Round                        `codec:"rnd"`
 		Period    period                              `codec:"per"`
 		Step      step                                `codec:"step"`
+		Branch    crypto.Digest                       `codec:"prev"`
 		Cred      committee.UnauthenticatedCredential `codec:"cred"`
 		Proposals [2]proposalValue                    `codec:"props"`
 		Sigs      [2]crypto.OneTimeSignature          `codec:"sigs"`
@@ -79,6 +81,7 @@ type (
 		Round     basics.Round               `codec:"rnd"`
 		Period    period                     `codec:"per"`
 		Step      step                       `codec:"step"`
+		Branch    crypto.Digest              `codec:"prev"`
 		Cred      committee.Credential       `codec:"cred"`
 		Proposals [2]proposalValue           `codec:"props"`
 		Sigs      [2]crypto.OneTimeSignature `codec:"sigs"`
