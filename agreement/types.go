@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -43,9 +44,14 @@ func DeadlineTimeout() time.Duration {
 	return deadlineTimeout
 }
 
+type branchRound struct {
+	roundNumber basics.Round
+	branch      crypto.Digest
+}
+
 type (
 	// round denotes a single round of the agreement protocol
-	round = basics.Round
+	round = branchRound
 
 	// step is a sequence number denoting distinct stages in Algorand
 	step uint64
