@@ -340,7 +340,7 @@ type solicitedTxHandler struct {
 func (handler *solicitedTxHandler) Handle(txgroup []transactions.SignedTxn) error {
 	outmsg, _ := handler.txHandler.processDecoded(txgroup)
 	if outmsg.Action == network.Disconnect {
-		return fmt.Errorf("invlid transaction")
+		return fmt.Errorf("invalid transaction")
 	}
 	return nil
 }
