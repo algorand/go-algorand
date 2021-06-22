@@ -43,7 +43,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
         INSTALLER_DIR=algorand
     fi
     trap 'rm -rf $TEMPDIR' 0
-    < "./installer/rpm/$INSTALLER_DIR/$INSTALLER_DIR.spec" \
+    < "./installer/rpm/$INSTALLER_DIR/$ALGORAND_PACKAGE_NAME.spec" \
         sed -e "s,@PKG_NAME@,$ALGORAND_PACKAGE_NAME," \
             -e "s,@VER@,$VERSION," \
             -e "s,@ARCH@,$ARCH_UNAME," \
