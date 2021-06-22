@@ -96,7 +96,7 @@ else
     if [[ $(rpm --eval '%{centos_ver}') = 7 ]]; then
        yum install yum-cron -y
     else
-       dnf install dnf-cron -y
+       dnf install dnf-automatic -y
     fi
     #
     # Note that the RPM package DOES NOT have the CHANNEL in its filename (unlike DEB),

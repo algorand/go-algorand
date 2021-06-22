@@ -4,7 +4,7 @@ Release:       1
 Summary:       Algorand node software
 URL:           https://www.algorand.com
 License:       AGPL-3+
-Requires:      dnf-cron
+Requires:      dnf-automatic
 
 Requires:      systemd
 Requires(pre): shadow-utils
