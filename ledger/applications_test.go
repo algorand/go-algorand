@@ -926,7 +926,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCallFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
+	err = l.appendUnvalidatedTx(t, nil, initKeys, appCall, transactions.ApplyData{
 		EvalDelta: basics.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{
 				Action: basics.SetBytesAction,
@@ -974,6 +974,8 @@ return`
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
+
+	l.WaitForCommit(3)
 
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)

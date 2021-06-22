@@ -119,9 +119,6 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	errorsCollector := nodeExitErrorCollector{t: fixtures.SynchronizedTest(t)}
 	defer errorsCollector.Print()
 
-	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
-	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
-	// distribution for catchup so this is fine.
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
 
 	// Get primary node
@@ -217,8 +214,8 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	log.Infof("primary node latest catchpoint - %s!\n", *primaryNodeStatus.LastCatchpoint)
 	secondNodeRestClient.Catchup(*primaryNodeStatus.LastCatchpoint)
 
-	currentRound = uint64(36)
-	targetRound = uint64(37)
+	currentRound = primaryNodeStatus.LastRound
+	targetRound = currentRound + 1
 	log.Infof("Second node catching up to round 36")
 	for {
 		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)

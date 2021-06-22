@@ -48,7 +48,15 @@ func TestAccount(t *testing.T) {
 		StateSchemas: basics.StateSchemas{
 			GlobalStateSchema: basics.StateSchema{NumUint: 2},
 		},
+		ExtraProgramPages: 1,
 	}
+
+	totalAppSchema := basics.StateSchema{
+		NumUint:      appParams1.GlobalStateSchema.NumUint + appParams2.GlobalStateSchema.NumUint,
+		NumByteSlice: appParams1.GlobalStateSchema.NumByteSlice + appParams2.GlobalStateSchema.NumByteSlice,
+	}
+	totalAppExtraPages := appParams1.ExtraProgramPages + appParams2.ExtraProgramPages
+
 	assetParams1 := basics.AssetParams{
 		Total:         100,
 		DefaultFrozen: false,
@@ -69,6 +77,8 @@ func TestAccount(t *testing.T) {
 		RewardedMicroAlgos: basics.MicroAlgos{Raw: ^uint64(0)},
 		RewardsBase:        0,
 		AppParams:          map[basics.AppIndex]basics.AppParams{appIdx1: appParams1, appIdx2: appParams2},
+		TotalAppSchema:     totalAppSchema,
+		TotalExtraAppPages: totalAppExtraPages,
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{
 			appIdx1: {
 				Schema: basics.StateSchema{NumUint: 10},
@@ -95,12 +105,25 @@ func TestAccount(t *testing.T) {
 	require.Equal(t, addr, conv.Address)
 	require.Equal(t, b.MicroAlgos.Raw, conv.Amount)
 	require.Equal(t, a.MicroAlgos.Raw, conv.AmountWithoutPendingRewards)
+	require.NotNil(t, conv.AppsTotalSchema)
+	require.Equal(t, totalAppSchema.NumUint, conv.AppsTotalSchema.NumUint)
+	require.Equal(t, totalAppSchema.NumByteSlice, conv.AppsTotalSchema.NumByteSlice)
+	require.NotNil(t, conv.AppsTotalExtraPages)
+	require.Equal(t, uint64(totalAppExtraPages), *conv.AppsTotalExtraPages)
 
 	verifyCreatedApp := func(index int, appIdx basics.AppIndex, params basics.AppParams) {
 		require.Equal(t, uint64(appIdx), (*conv.CreatedApps)[index].Id)
 		require.Equal(t, params.ApprovalProgram, (*conv.CreatedApps)[index].Params.ApprovalProgram)
+		if params.ExtraProgramPages != 0 {
+			require.NotNil(t, (*conv.CreatedApps)[index].Params.ExtraProgramPages)
+			require.Equal(t, uint64(params.ExtraProgramPages), *(*conv.CreatedApps)[index].Params.ExtraProgramPages)
+		} else {
+			require.Nil(t, (*conv.CreatedApps)[index].Params.ExtraProgramPages)
+		}
+		require.NotNil(t, (*conv.CreatedApps)[index].Params.GlobalStateSchema)
 		require.Equal(t, params.GlobalStateSchema.NumUint, (*conv.CreatedApps)[index].Params.GlobalStateSchema.NumUint)
 		require.Equal(t, params.GlobalStateSchema.NumByteSlice, (*conv.CreatedApps)[index].Params.GlobalStateSchema.NumByteSlice)
+		require.NotNil(t, (*conv.CreatedApps)[index].Params.LocalStateSchema)
 		require.Equal(t, params.LocalStateSchema.NumUint, (*conv.CreatedApps)[index].Params.LocalStateSchema.NumUint)
 		require.Equal(t, params.LocalStateSchema.NumByteSlice, (*conv.CreatedApps)[index].Params.LocalStateSchema.NumByteSlice)
 	}
