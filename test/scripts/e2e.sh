@@ -50,10 +50,10 @@ echo "Test output can be found in ${TEMPDIR}"
 # Run kmd with scrypt() configured to run less secure and fast to go through the motions for test.
 # thus, on those platforms we launch kmd with unsafe_scrypt = true to speed up the tests.
 RUN_KMD_WITH_UNSAFE_SCRYPT=""
-PLATFORM_ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
+PLATFORM_ARCHETYPE=$("${SRCROOT}/scripts/archtype.sh")
 
-echo "ARCHTYPE:    ${PLATFORM_ARCHTYPE}"
-if [[ "${PLATFORM_ARCHTYPE}" = arm* ]]; then
+echo "ARCHETYPE:    ${PLATFORM_ARCHETYPE}"
+if [[ "${PLATFORM_ARCHETYPE}" = arm* ]]; then
     RUN_KMD_WITH_UNSAFE_SCRYPT="--unsafe_scrypt"
 fi
 

@@ -82,7 +82,7 @@ func (v *Validator) CheckNetworkRecovery() {
 		v.runResult.PostRecoveryLowRound, v.runResult.PostRecoveryHighRound,
 	)
 	if v.runResult.PreRecoveryHighRound != v.runResult.PreRecoveryLowRound {
-		// network got disupted by the filters.
+		// network got disputed by the filters.
 		fmt.Printf("%v partitioned the network ( %d - %d ), but recovered correctly reaching round %d\n", v.tb.Name(), v.runResult.PreRecoveryLowRound, v.runResult.PreRecoveryHighRound, v.runResult.PostRecoveryHighRound)
 	} else {
 		if v.runResult.PreRecoveryHighRound == v.runResult.StartLowRound {

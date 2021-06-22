@@ -352,7 +352,7 @@ func (n *NetworkFacade) Zero() timers.Clock {
 	n.zeroClock = n.fuzzer.WallClock()
 
 	// we don't want to expire all the pending clocks here.
-	// this callback is coming *only* from the agreement sevice.
+	// this callback is coming *only* from the agreement service.
 	// it also means that we're not in the demux loop, so no one is blocking
 	// on any of the clocks.
 

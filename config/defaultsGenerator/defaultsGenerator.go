@@ -43,7 +43,7 @@ var autoGenHeader = `
 `
 
 // printExit prints the given formatted string ( i.e. just like fmt.Printf ), with the defaultGenerator executable program name
-// at the begining, and exit the process with a error code of 1.
+// at the beginning, and exit the process with a error code of 1.
 func printExit(fmtStr string, args ...interface{}) {
 	fmt.Printf("%s: "+fmtStr, append([]interface{}{filepath.Base(os.Args[0])}, args...)...)
 	os.Exit(1)
