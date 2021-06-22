@@ -83,9 +83,9 @@ cd ${SRCROOT}/test/e2e-go
 # ARM64 has some memory related issues with fork. Since we don't really care
 # about testing the forking capabilities, we're just run the tests one at a time.
 PARALLEL_FLAG=""
-ARCHETYPE=$("${SRCROOT}/scripts/archtype.sh")
-echo "ARCHETYPE:    ${ARCHETYPE}"
-if [[ "${ARCHETYPE}" = arm* ]]; then
+ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
+echo "ARCHTYPE:    ${ARCHTYPE}"
+if [[ "${ARCHTYPE}" = arm* ]]; then
     PARALLEL_FLAG="-p 1"
 fi
 
