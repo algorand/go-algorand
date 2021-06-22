@@ -287,7 +287,7 @@ func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassw
 	return
 }
 
-// VerifyBlockProposed checks the rounds starting at fromRounds and moving backwards checking countDownNumRounds rounds if any
+// VerifyBlockProposedRange checks the rounds starting at fromRounds and moving backwards checking countDownNumRounds rounds if any
 // blocks were proposed by address
 func (f *RestClientFixture) VerifyBlockProposedRange(account string, fromRound, countDownNumRounds int) (blockWasProposed bool) {
 	c := f.LibGoalClient
