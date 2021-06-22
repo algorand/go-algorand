@@ -293,7 +293,7 @@ func (f *RestClientFixture) VerifyBlockProposedRange(account string, fromRound, 
 	c := f.LibGoalClient
 	for i := 0; i < countDownNumRounds; i++ {
 		block, err := c.Block(uint64(fromRound - i))
-		require.NoError(f.t, err, "client failed to get block %d", fromRound - i)
+		require.NoError(f.t, err, "client failed to get block %d", fromRound-i)
 		if block.Proposer == account {
 			blockWasProposed = true
 			break
