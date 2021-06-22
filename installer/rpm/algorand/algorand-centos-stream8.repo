@@ -1,5 +1,5 @@
 [algorand]
-name=Algorand-centos8-stream
+name=Algorand-centos-stream8
 baseurl=https://releases.algorand.com/rpm/stable/
 enabled=1
 gpgcheck=1
