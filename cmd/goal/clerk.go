@@ -375,6 +375,14 @@ var sendCmd = &cobra.Command{
 			payment.RekeyTo = rekeyTo
 		}
 
+		// ConstructPayment fills in the suggested fee when fee=0. But if the user actually used --fee=0 on the
+		// commandline, we ought to do what they asked (especially now that zero or low fees make sense in
+		// combination with other txns that cover the groups's fee.
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			payment.Fee = basics.MicroAlgos{Raw: fee}
+		}
+
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {
 
@@ -924,8 +932,8 @@ func assembleFile(fname string) (program []byte) {
 	}
 	_, params := getProto(protoVersion)
 	if ops.HasStatefulOps {
-		if len(ops.Program) > params.MaxAppProgramLen {
-			reportErrorf(tealAppSize, fname, len(ops.Program), params.MaxAppProgramLen)
+		if len(ops.Program) > config.MaxAvailableAppProgramLen {
+			reportErrorf(tealAppSize, fname, len(ops.Program), config.MaxAvailableAppProgramLen)
 		}
 	} else {
 		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
@@ -1080,12 +1088,9 @@ var dryrunCmd = &cobra.Command{
 				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
 			}
 			ep := logic.EvalParams{Txn: &txn, Proto: &params, GroupIndex: i, TxnGroup: txgroup}
-			cost, err := logic.Check(txn.Lsig.Logic, ep)
+			err := logic.Check(txn.Lsig.Logic, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
-			}
-			if uint64(cost) > params.LogicSigMaxCost {
-				reportErrorf("program cost too large: %d > %d", cost, params.LogicSigMaxCost)
 			}
 			sb := strings.Builder{}
 			ep = logic.EvalParams{
@@ -1097,7 +1102,7 @@ var dryrunCmd = &cobra.Command{
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?
-			fmt.Fprintf(os.Stdout, "tx[%d] cost=%d trace:\n%s\n", i, cost, sb.String())
+			fmt.Fprintf(os.Stdout, "tx[%d] trace:\n%s\n", i, sb.String())
 			if pass {
 				fmt.Fprintf(os.Stdout, " - pass -\n")
 			} else {

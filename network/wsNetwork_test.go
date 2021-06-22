@@ -424,7 +424,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 		mbytes := make([]byte, len(tbytes)+len(msg))
 		copy(mbytes, tbytes)
 		copy(mbytes[len(tbytes):], msg)
-		msgs = append(msgs, sendMessage{data: mbytes, enqueued: time.Now(), peerEnqueued: enqueueTime, hash: crypto.Hash(mbytes), ctx: context.Background()})
+		msgs = append(msgs, sendMessage{data: mbytes, enqueued: time.Now(), peerEnqueued: enqueueTime, ctx: context.Background()})
 	}
 
 	msgs[50].ctx = ctx

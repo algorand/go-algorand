@@ -69,6 +69,7 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error
 	if err != nil {
 		return bloomFilter{}, err
 	}
+	outFilter.encodingParams = enc.EncodingParams
 	return outFilter, nil
 }
 
@@ -152,7 +153,9 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 	default:
 		// we want subset.
 		result.containedTxnsRange.firstCounter = math.MaxUint64
-		filtedTransactionsIDs := make([]transactions.Txid, 0, len(txnGroups))
+		filtedTransactionsIDs := getTxIDSliceBuffer(len(txnGroups))
+		defer releaseTxIDSliceBuffer(filtedTransactionsIDs)
+
 		for _, group := range txnGroups {
 			txID := group.FirstTransactionID
 			if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {

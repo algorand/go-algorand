@@ -22,9 +22,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/util/bloom"
+	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -32,14 +34,31 @@ const (
 	kickoffTime      = 200 * time.Millisecond
 	randomRange      = 100 * time.Millisecond
 	sendMessagesTime = 10 * time.Millisecond
+
+	// transacationPoolLowWatermark is the low watermark for the transaction pool, relative
+	// to the transaction pool size. When the number of transactions in the transaction pool
+	// drops below this value, the transactionPoolFull flag would get cleared.
+	transacationPoolLowWatermark = float32(0.8)
+
+	// transacationPoolHighWatermark is the low watermark for the transaction pool, relative
+	// to the transaction pool size. When the number of transactions in the transaction pool
+	// grows beyond this value, the transactionPoolFull flag would get set.
+	transacationPoolHighWatermark = float32(0.9)
+
+	// betaGranularChangeThreshold defined the difference threshold for changing the beta value.
+	// Changes to the beta value only takes effect once the difference is sufficiently big enough
+	// comared to the current beta value.
+	betaGranularChangeThreshold = 0.1
 )
 
 type syncState struct {
-	service *Service
-	log     Logger
-	node    NodeConnector
-	isRelay bool
-	clock   timers.WallClock
+	service    *Service
+	log        Logger
+	node       NodeConnector
+	isRelay    bool
+	clock      timers.WallClock
+	config     config.Local
+	threadpool execpool.BacklogPool
 
 	genesisID   string
 	genesisHash crypto.Digest
@@ -51,7 +70,7 @@ type syncState struct {
 	interruptablePeers         []*Peer
 	interruptablePeersMap      map[*Peer]int // map a peer into the index of interruptablePeers
 	incomingMessagesQ          incomingMessageQueue
-	outgoingMessagesCallbackCh chan *messageSentCallback
+	outgoingMessagesCallbackCh chan sentMessageMetadata
 	nextOffsetRollingCh        <-chan time.Time
 	requestsOffset             uint64
 
@@ -64,18 +83,28 @@ type syncState struct {
 	// to the telemetry.
 	profiler *profiler
 
+	// transactionPoolFull indicates whether the transaction pool is currently in "full" state or not. While the transaction
+	// pool is full, a node would not ask any of the other peers for additional transactions.
+	transactionPoolFull bool
+
+	// messageSendWaitGroup coordinates the messages that are being sent to the network. Before aborting the mainloop, we want to make
+	// sure there are no outbound messages that are waiting to be sent to the network ( i.e. that all the tasks that we enqueued to the
+	// execution pool were completed ). This does not include the time where the message spent while waiting on the network queue itself.
+	messageSendWaitGroup sync.WaitGroup
+
 	xorBuilder bloom.XorBuilder
 }
 
 func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
+	defer s.messageSendWaitGroup.Wait()
 
 	// The following would allow the emulator to start the service in a "stopped" mode.
 	s.node.NotifyMonitor()
 
 	s.clock = s.node.Clock()
 	s.incomingMessagesQ = makeIncomingMessageQueue()
-	s.outgoingMessagesCallbackCh = make(chan *messageSentCallback, 1024)
+	s.outgoingMessagesCallbackCh = make(chan sentMessageMetadata, 1024)
 	s.interruptablePeersMap = make(map[*Peer]int)
 	s.scheduler.node = s.node
 	s.lastBeta = beta(0)
@@ -184,9 +213,21 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 }
 
 func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
+	if s.transactionPoolFull {
+		// the transaction pool is currently full.
+		if float32(ent.transactionPoolSize) < float32(s.config.TxPoolSize)*transacationPoolLowWatermark {
+			s.transactionPoolFull = false
+		}
+	} else {
+		if float32(ent.transactionPoolSize) > float32(s.config.TxPoolSize)*transacationPoolHighWatermark {
+			s.transactionPoolFull = true
+		}
+	}
+
 	newBeta := beta(ent.transactionPoolSize)
-	// see if the newBeta is at least 20% smaller than the current one.
-	if (s.lastBeta * 9 / 10) <= newBeta {
+
+	// see if the newBeta is at least 10% smaller or bigger than the current one
+	if (float32(s.lastBeta)*(1.0-betaGranularChangeThreshold)) <= float32(newBeta) || (float32(s.lastBeta)*(1.0+betaGranularChangeThreshold)) >= float32(newBeta) {
 		// no, it's not.
 		return
 	}
@@ -200,8 +241,8 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 		}
 		peers = append(peers, peer)
 		peer.state = peerStateHoldsoff
-
 	}
+
 	// reset the interruptablePeers array, since all it's members were made into holdsoff
 	s.interruptablePeers = nil
 	s.interruptablePeersMap = make(map[*Peer]int)
@@ -348,14 +389,22 @@ func (s *syncState) getPeers() (result []*Peer) {
 }
 
 func (s *syncState) updatePeersRequestParams(peers []*Peer) {
+	if s.transactionPoolFull {
+		for _, peer := range peers {
+			peer.setLocalRequestParams(0, 0)
+		}
+		return
+	}
 	if s.isRelay {
 		for _, peer := range peers {
 			peer.setLocalRequestParams(0, 1)
 		}
 	} else {
-		for i, peer := range peers {
-			// on non-relay, ask for offset/modulator
-			peer.setLocalRequestParams(uint64(i)+s.requestsOffset, uint64(len(peers)))
+		if s.fetchTransactions {
+			for i, peer := range peers {
+				// on non-relay, ask for offset/modulator
+				peer.setLocalRequestParams(uint64(i)+s.requestsOffset, uint64(len(peers)))
+			}
 		}
 	}
 }

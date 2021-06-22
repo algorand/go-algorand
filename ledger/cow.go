@@ -68,15 +68,21 @@ type roundCowState struct {
 	compatibilityMode bool
 	// cache mainaining accountIdx used in getKey for local keys access
 	compatibilityGetKeyCache map[basics.Address]map[storagePtr]uint64
+
+	// index of a txn within a group; used in conjunction with trackedCreatables
+	groupIdx int
+	// track creatables created during each transaction in the round
+	trackedCreatables map[int]basics.CreatableIndex
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
 	cb := roundCowState{
-		lookupParent: b,
-		commitParent: nil,
-		proto:        config.Consensus[hdr.CurrentProtocol],
-		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
-		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
+		lookupParent:      b,
+		commitParent:      nil,
+		proto:             config.Consensus[hdr.CurrentProtocol],
+		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
+		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
+		trackedCreatables: make(map[int]basics.CreatableIndex),
 	}
 
 	// compatibilityMode retains producing application' eval deltas under the following rule:
@@ -131,6 +137,10 @@ func (cb *roundCowState) round() basics.Round {
 
 func (cb *roundCowState) prevTimestamp() int64 {
 	return cb.mods.PrevTimestamp
+}
+
+func (cb *roundCowState) getCreatableIndex(groupIdx int) basics.CreatableIndex {
+	return cb.trackedCreatables[groupIdx]
 }
 
 func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
@@ -204,6 +214,10 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 	}
 }
 
+func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {
+	cb.trackedCreatables[cb.groupIdx] = creatableIndex
+}
+
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
 	cb.mods.Txids[txid] = txn.LastValid
 	cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
@@ -222,11 +236,22 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 
+	// clone tracked creatables
+	ch.trackedCreatables = make(map[int]basics.CreatableIndex)
+	for i, tc := range cb.trackedCreatables {
+		ch.trackedCreatables[i] = tc
+	}
+
 	if cb.compatibilityMode {
 		ch.compatibilityMode = cb.compatibilityMode
 		ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
 	}
 	return &ch
+}
+
+// setGroupIdx sets this transaction's index within its group
+func (cb *roundCowState) setGroupIdx(txnIdx int) {
+	cb.groupIdx = txnIdx
 }
 
 func (cb *roundCowState) commitToParent() {

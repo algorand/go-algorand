@@ -36,6 +36,7 @@ Initial environment setup:
 git clone https://github.com/algorand/go-algorand
 cd go-algorand
 ./scripts/configure_dev.sh
+./scripts/buildtools/install_buildtools.sh
 ```
 
 At this point you are ready to build go-algorand. We use `make` and have a
@@ -163,8 +164,6 @@ The following packages allow developers to interface with the Algorand system:
        assist with processing historic blocks on a new node.
   - `libgoal` exports a Go interface useful for developers of Algorand clients.
   - `debug` holds secondary commands which assist developers during debugging.
-
-The `auction` package implements the Algorand auctions.
 
 The following packages contain tools to help Algorand developers deploy networks
 of their own:

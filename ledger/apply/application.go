@@ -105,6 +105,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 			LocalStateSchema:  ac.LocalStateSchema,
 			GlobalStateSchema: ac.GlobalStateSchema,
 		},
+		ExtraProgramPages: ac.ExtraProgramPages,
 	}
 
 	// Update the cached TotalStateSchema for this account, used
@@ -113,6 +114,12 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	totalSchema := record.TotalAppSchema
 	totalSchema = totalSchema.AddSchema(ac.GlobalStateSchema)
 	record.TotalAppSchema = totalSchema
+
+	// Update the cached TotalExtraAppPages for this account, used
+	// when computing MinBalance
+	totalExtraPages := record.TotalExtraAppPages
+	totalExtraPages += ac.ExtraProgramPages
+	record.TotalExtraAppPages = totalExtraPages
 
 	// Tell the cow what app we created
 	created := &basics.CreatableLocator{
@@ -153,6 +160,14 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	// Delete the AppParams
 	record.AppParams = cloneAppParams(record.AppParams)
 	delete(record.AppParams, appIdx)
+
+	// Delete app's extra program pages
+	totalExtraPages := record.TotalExtraAppPages
+	if totalExtraPages > 0 {
+		extraPages := record.AppParams[appIdx].ExtraProgramPages
+		totalExtraPages -= extraPages
+		record.TotalExtraAppPages = totalExtraPages
+	}
 
 	// Tell the cow what app we deleted
 	deleted := &basics.CreatableLocator{
@@ -274,23 +289,15 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	return nil
 }
 
-func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams, maxCost int) error {
-	cost, err := logic.CheckStateful(ac.ApprovalProgram, *evalParams)
+func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams) error {
+	err := logic.CheckStateful(ac.ApprovalProgram, *evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
 	}
 
-	if cost > maxCost {
-		return fmt.Errorf("ApprovalProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
-	}
-
-	cost, err = logic.CheckStateful(ac.ClearStateProgram, *evalParams)
+	err = logic.CheckStateful(ac.ClearStateProgram, *evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
-	}
-
-	if cost > maxCost {
-		return fmt.Errorf("ClearStateProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
 	}
 
 	return nil
@@ -344,8 +351,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// If this txn is going to set new programs (either for creation or
 	// update), check that the programs are valid and not too expensive
 	if ac.ApplicationID == 0 || ac.OnCompletion == transactions.UpdateApplicationOC {
-		maxCost := balances.ConsensusParams().MaxAppProgramCost
-		err = checkPrograms(&ac, evalParams, maxCost)
+		err = checkPrograms(&ac, evalParams)
 		if err != nil {
 			return err
 		}

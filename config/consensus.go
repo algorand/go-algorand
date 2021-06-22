@@ -103,6 +103,11 @@ type ConsensusParams struct {
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
 
+	// EnableFeePooling specifies that the sum of the fees in a
+	// group must exceed one MinTxnFee per Txn, rather than check that
+	// each Txn has a MinFee.
+	EnableFeePooling bool
+
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -227,9 +232,18 @@ type ConsensusParams struct {
 	// max sum([len(arg) for arg in txn.ApplicationArgs])
 	MaxAppTotalArgLen int
 
-	// maximum length of application approval program or clear state
-	// program in bytes
+	// maximum byte len of application approval program or clear state
+	// When MaxExtraAppProgramPages > 0, this is the size of those pages.
+	// So two "extra pages" would mean 3*MaxAppProgramLen bytes are available.
 	MaxAppProgramLen int
+
+	// maximum total length of an application's programs (approval + clear state)
+	// When MaxExtraAppProgramPages > 0, this is the size of those pages.
+	// So two "extra pages" would mean 3*MaxAppTotalProgramLen bytes are available.
+	MaxAppTotalProgramLen int
+
+	// extra length for application program in pages. A page is MaxAppProgramLen bytes
+	MaxExtraAppProgramPages int
 
 	// maximum number of accounts in the ApplicationCall Accounts field.
 	// this determines, in part, the maximum number of balance records
@@ -246,6 +260,10 @@ type ConsensusParams struct {
 	// be read in the transaction
 	MaxAppTxnForeignAssets int
 
+	// maximum number of "foreign references" (accounts, asa, app)
+	// that can be attached to a single app call.
+	MaxAppTotalTxnReferences int
+
 	// maximum cost of application approval program or clear state program
 	MaxAppProgramCost int
 
@@ -256,6 +274,9 @@ type ConsensusParams struct {
 	// maximum length of a bytes value used in an application's global or
 	// local key/value store
 	MaxAppBytesValueLen int
+
+	// maximum sum of the lengths of the key and value of one app state entry
+	MaxAppSumKeyValueLens int
 
 	// maximum number of applications a single account can create and store
 	// AppParams for at once
@@ -351,6 +372,15 @@ type ConsensusParams struct {
 
 	// NoEmptyLocalDeltas updates how ApplyDelta.EvalDelta.LocalDeltas are stored
 	NoEmptyLocalDeltas bool
+
+	// EnableKeyregCoherencyCheck enable the following extra checks on key registration transactions:
+	// 1. checking that [VotePK/SelectionPK/VoteKeyDilution] are all set or all clear.
+	// 2. checking that the VoteFirst is less or equal to VoteLast.
+	// 3. checking that in the case of going offline, both the VoteFirst and VoteLast are clear.
+	// 4. checking that in the case of going online the VoteLast is non-zero and greater then the current network round.
+	// 5. checking that in the case of going online the VoteFirst is less or equal to the LastValid+1.
+	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
+	EnableKeyregCoherencyCheck bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -410,6 +440,14 @@ var MaxAppProgramLen int
 // used for decoding purposes.
 var MaxBytesKeyValueLen int
 
+// MaxExtraAppProgramLen is the maximum extra app program length supported by any
+// of the consensus protocols. used for decoding purposes.
+var MaxExtraAppProgramLen int
+
+// MaxAvailableAppProgramLen is the largest supported app program size include the extra pages
+//supported supported by any of the consensus protocols. used for decoding purposes.
+var MaxAvailableAppProgramLen int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -439,6 +477,9 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
 	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
 	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
+	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
+	// MaxAvailableAppProgramLen is the max of supported app program size
+	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -804,8 +845,10 @@ func initConsensusProtocols() {
 	v24.MaxAppArgs = 16
 	v24.MaxAppTotalArgLen = 2048
 	v24.MaxAppProgramLen = 1024
+	v24.MaxAppTotalProgramLen = 2048 // No effect until v28, when MaxAppProgramLen increased
 	v24.MaxAppKeyLen = 64
 	v24.MaxAppBytesValueLen = 64
+	v24.MaxAppSumKeyValueLens = 128 // Set here to have no effect until MaxAppBytesValueLen increases
 
 	// 0.1 Algos (Same min balance cost as an Asset)
 	v24.AppFlatParamsMinBalance = 100000
@@ -819,6 +862,11 @@ func initConsensusProtocols() {
 
 	// Can look up 2 assets to see asset parameters
 	v24.MaxAppTxnForeignAssets = 2
+
+	// Intended to have no effect in v24 (it's set to accounts +
+	// asas + apps). In later vers, it allows increasing the
+	// individual limits while maintaining same max references.
+	v24.MaxAppTotalTxnReferences = 8
 
 	// 64 byte keys @ ~333 microAlgos/byte + delta
 	v24.SchemaMinBalancePerEntry = 25000
@@ -895,6 +943,9 @@ func initConsensusProtocols() {
 	vFuture := v27
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
+	// Let the bytes value take more space. Key+Value is still limited to 128
+	vFuture.MaxAppBytesValueLen = 128
+
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
 
@@ -905,10 +956,34 @@ func initConsensusProtocols() {
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
+	vFuture.EnableKeyregCoherencyCheck = true
+
+	// Enable support for larger app program size
+	vFuture.MaxExtraAppProgramPages = 3
+	vFuture.MaxAppProgramLen = 2048
+
+	// Individual limits raised
+	vFuture.MaxAppTxnForeignApps = 8
+	vFuture.MaxAppTxnForeignAssets = 8
+	// but MaxAppTxnReferences is unchanged.
+
+	// MaxAppTxnAccounts has not been raised yet.  It is already
+	// higher (4) and there is a multiplicative effect in
+	// "reachability" between accounts and creatables, so we
+	// retain 4 x 4 as worst case.
+
 	// enable the InitialRewardsRateCalculation fix
 	vFuture.InitialRewardsRateCalculation = true
 	// Enable transaction Merkle tree.
 	vFuture.PaysetCommit = PaysetCommitMerkle
+
+	// Enable TEAL 4
+	vFuture.LogicSigVersion = 4
+
+	// Increase asset URL length to allow for IPFS URLs
+	vFuture.MaxAssetURLBytes = 96
+
+	vFuture.EnableFeePooling = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

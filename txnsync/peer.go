@@ -34,11 +34,25 @@ type peersOps int
 type messageConstructionOps int
 
 const maxIncomingBloomFilterHistory = 20
-const recentTransactionsSentBufferLength = 10000
+
+// shortTermRecentTransactionsSentBufferLength is the size of the short term storage for the recently sent transaction ids.
+// it should be configured sufficiently high so that any number of transaction sent would not exceed that number before
+// the other peer has a chance of sending a feedback. ( when the feedback is received, we will store these IDs into the long-term cache )
+const shortTermRecentTransactionsSentBufferLength = 5000
+
+// pendingUnconfirmedRemoteMessages is the number of messages we would cache before receiving a feedback from the other
+// peer that these message have been accepted. The general guideline here is that if we have a message every 200ms on one side
+// and a message every 20ms on the other, then the ratio of 200/20 = 10, should be the number of required messages (min).
+const pendingUnconfirmedRemoteMessages = 20
+
+// longTermRecentTransactionsSentBufferLength is the size of the long term transaction id cache.
+const longTermRecentTransactionsSentBufferLength = 15000
 const minDataExchangeRateThreshold = 100 * 1024            // 100KB/s, which is ~0.8Mbps
 const maxDataExchangeRateThreshold = 100 * 1024 * 1024 / 8 // 100Mbps
 const defaultDataExchangeRate = minDataExchangeRateThreshold
 const defaultRelayToRelayDataExchangeRate = 10 * 1024 * 1024 / 8 // 10Mbps
+const bloomFilterRetryCount = 3                                  // number of bloom filters we would try against each transaction group before skipping it.
+const maxTransactionGroupTrackers = 15                           // number of different bloom filter parameters we store before rolling over
 
 const (
 	// peerStateStartup is before the timeout for the sending the first message to the peer has reached.
@@ -82,7 +96,7 @@ type Peer struct {
 	// lastRound is the latest round reported by the peer.
 	lastRound basics.Round
 
-	// incomingMessages contains the incoming messages from this peer. This heap help us to reorder the imcoming messages so that
+	// incomingMessages contains the incoming messages from this peer. This heap help us to reorder the incoming messages so that
 	// we could process them in the tcp-transport order.
 	incomingMessages messageOrderingHeap
 
@@ -130,9 +144,11 @@ type Peer struct {
 	localTransactionsModulator  byte
 	localTransactionsBaseOffset byte
 
-	// lastTransactionSelectionGroupCounter is the last transaction group counter that we've evaluated on the selectPendingTransactions method.
+	// lastTransactionSelectionTracker tracks the last transaction group counter that we've evaluated on the selectPendingTransactions method.
 	// it used to ensure that on subsequent calls, we won't need to scan the entire pending transactions array from the begining.
-	lastTransactionSelectionGroupCounter uint64
+	// the implementation here is breaking it up per request params, so that we can apply the above logic per request params ( i.e. different
+	// offset/modulator ), as well as add retry attempts for multiple bloom filters.
+	lastTransactionSelectionTracker transactionGroupCounterTracker
 
 	// nextStateTimestamp indicates the next timestamp where the peer state would need to be changed.
 	// it used to allow sending partial message while retaining the "next-beta time", or, in the case of outgoing relays,
@@ -141,26 +157,147 @@ type Peer struct {
 	// messageSeriesPendingTransactions contain the transactions we are sending in the current "message-series". It allows us to pick a given
 	// "snapshot" from the transaction pool, and send that "snapshot" to completion before attempting to re-iterate.
 	messageSeriesPendingTransactions []transactions.SignedTxGroup
+
+	// transactionPoolAckCh is passed to the transaction handler when incoming transaction arrives. The channel is passed upstream, so that once
+	// a transaction is added to the transaction pool, we can get some feedback for that.
+	transactionPoolAckCh chan uint64
+
+	// transactionPoolAckMessages maintain a list of the recent incoming messages sequence numbers whose transactions were added fully to the transaction
+	// pool. This list is being flushed out every time we send a message to the peer.
+	transactionPoolAckMessages []uint64
+
+	// used by the selectPendingTransactions method, the lastSelectedTransactionsCount contains the number of entries selected on the previous iteration.
+	// this value is used to optimize the memory preallocation for the selection IDs array.
+	lastSelectedTransactionsCount int
+}
+
+// requestParamsGroupCounterState stores the latest group counters for a given set of request params.
+// we use this to ensure we can have multiple iteration of bloom filter scanning over each individual
+// transaction group. This method allow us to reduce the bloom filter errors while avoid scanning the
+// list of transactions redundently.
+//msgp:ignore transactionGroupCounterState
+type requestParamsGroupCounterState struct {
+	offset        byte
+	modulator     byte
+	groupCounters [bloomFilterRetryCount]uint64
+}
+
+// transactionGroupCounterTracker manages the group counter state for each request param.
+//msgp:ignore transactionGroupCounterTracker
+type transactionGroupCounterTracker []requestParamsGroupCounterState
+
+// get returns the group counter for a given set of request param.
+func (t *transactionGroupCounterTracker) get(offset, modulator byte) uint64 {
+	i := t.index(offset, modulator)
+	if i >= 0 {
+		return (*t)[i].groupCounters[0]
+	}
+	return 0
+}
+
+// set updates the group counter for a given set of request param. If no such request
+// param currently exists, it create it.
+func (t *transactionGroupCounterTracker) set(offset, modulator byte, counter uint64) {
+	i := t.index(offset, modulator)
+	if i >= 0 {
+		(*t)[i].groupCounters[0] = counter
+		return
+	}
+	// if it doesn't exists -
+	state := requestParamsGroupCounterState{
+		offset:    offset,
+		modulator: modulator,
+	}
+	state.groupCounters[0] = counter
+
+	if len(*t) == maxTransactionGroupTrackers {
+		// shift all entries by one.
+		copy((*t)[0:], (*t)[1:])
+		(*t)[maxTransactionGroupTrackers-1] = state
+	} else {
+		*t = append(*t, state)
+	}
+}
+
+// roll the counters for a given requests params, so that we would go back and
+// rescan some of the previous transaction groups ( but not all !) when selectPendingTransactions is called.
+func (t *transactionGroupCounterTracker) roll(offset, modulator byte) {
+	i := t.index(offset, modulator)
+	if i < 0 {
+		return
+	}
+
+	if (*t)[i].groupCounters[1] >= (*t)[i].groupCounters[0] {
+		return
+	}
+	firstGroupCounter := (*t)[i].groupCounters[0]
+	copy((*t)[i].groupCounters[0:], (*t)[i].groupCounters[1:])
+	(*t)[i].groupCounters[len((*t)[i].groupCounters)-1] = firstGroupCounter
+}
+
+// index is a helper method for the transactionGroupCounterTracker, helping to locate the index of
+// a requestParamsGroupCounterState in the array that matches the provided request params. The method
+// uses a linear search, which works best against small arrays.
+func (t *transactionGroupCounterTracker) index(offset, modulator byte) int {
+	for i, counter := range *t {
+		if counter.offset == offset && counter.modulator == modulator {
+			return i
+		}
+	}
+	return -1
 }
 
 func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *Peer {
 	p := &Peer{
-		networkPeer:            networkPeer,
-		isOutgoing:             isOutgoing,
-		recentSentTransactions: makeTransactionCache(recentTransactionsSentBufferLength),
-		dataExchangeRate:       defaultDataExchangeRate,
+		networkPeer:                networkPeer,
+		isOutgoing:                 isOutgoing,
+		recentSentTransactions:     makeTransactionCache(shortTermRecentTransactionsSentBufferLength, longTermRecentTransactionsSentBufferLength, pendingUnconfirmedRemoteMessages),
+		dataExchangeRate:           defaultDataExchangeRate,
+		transactionPoolAckCh:       make(chan uint64, maxAcceptedMsgSeq),
+		transactionPoolAckMessages: make([]uint64, 0, maxAcceptedMsgSeq),
 	}
-	if isOutgoing {
-		// outgoing implies it's a relay, which means that it would want to receive all messages.
+	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
-		if isLocalNodeRelay {
-			p.dataExchangeRate = defaultRelayToRelayDataExchangeRate
-		}
+		p.dataExchangeRate = defaultRelayToRelayDataExchangeRate
 	}
 	return p
 }
 
+// GetNetworkPeer returns the network peer associated with this particular peer.
+func (p *Peer) GetNetworkPeer() interface{} {
+	return p.networkPeer
+}
+
+// GetTransactionPoolAckChannel returns the transaction pool ack channel
+func (p *Peer) GetTransactionPoolAckChannel() chan uint64 {
+	return p.transactionPoolAckCh
+}
+
+// dequeuePendingTransactionPoolAckMessages removed the pending entries from transactionPoolAckCh and add them to transactionPoolAckMessages
+func (p *Peer) dequeuePendingTransactionPoolAckMessages() {
+	for {
+		select {
+		case msgSeq := <-p.transactionPoolAckCh:
+			if len(p.transactionPoolAckMessages) == maxAcceptedMsgSeq {
+				p.transactionPoolAckMessages = append(p.transactionPoolAckMessages[1:], msgSeq)
+			} else {
+				p.transactionPoolAckMessages = append(p.transactionPoolAckMessages, msgSeq)
+			}
+		default:
+			return
+		}
+	}
+}
+
 // outgoing related methods :
+
+// getAcceptedMessages returns the content of the transactionPoolAckMessages and clear the existing buffer.
+func (p *Peer) getAcceptedMessages() []uint64 {
+	p.dequeuePendingTransactionPoolAckMessages()
+	acceptedMessages := p.transactionPoolAckMessages
+	p.transactionPoolAckMessages = make([]uint64, 0, maxAcceptedMsgSeq)
+	return acceptedMessages
+}
 
 func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTranscationsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )
@@ -181,24 +318,43 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	if p.recentSentTransactionsRound != round {
 		p.recentSentTransactions.reset()
 		p.recentSentTransactionsRound = round
-		p.lastTransactionSelectionGroupCounter = 0
 	}
 
 	windowLengthBytes := int(uint64(sendWindow) * p.dataExchangeRate / uint64(time.Second))
 	windowLengthBytes -= bloomFilterSize
 
 	accumulatedSize := 0
-	selectedTxnIDs = make([]transactions.Txid, 0, len(pendingTransactions))
+
+	lastTransactionSelectionGroupCounter := p.lastTransactionSelectionTracker.get(p.requestedTransactionsOffset, p.requestedTransactionsModulator)
 
 	startIndex := sort.Search(len(pendingTransactions), func(i int) bool {
-		return pendingTransactions[i].GroupCounter >= p.lastTransactionSelectionGroupCounter
+		return pendingTransactions[i].GroupCounter >= lastTransactionSelectionGroupCounter
 	})
+
+	selectedIDsSliceLength := len(pendingTransactions) - startIndex
+	if selectedIDsSliceLength > p.lastSelectedTransactionsCount*2 {
+		selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
+	}
+	selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
+	selectedTxns = make([]transactions.SignedTxGroup, 0, selectedIDsSliceLength)
 
 	windowSizedReached := false
 	hasMorePendingTransactions := false
 
+	// create a list of all the bloom filters that might need to be tested. This list excludes bloom filters
+	// which has the same modulator and a different offset.
+	var effectiveBloomFilters []int
+	effectiveBloomFilters = make([]int, 0, len(p.recentIncomingBloomFilters))
+	for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
+		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == p.requestedTransactionsModulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
+			continue
+		}
+		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
+	}
+
 	//removedTxn := 0
 	grpIdx := startIndex
+scanLoop:
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
 		txID := pendingTransactions[grpIdx].FirstTransactionID
 
@@ -216,16 +372,11 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		}
 
 		// check if the peer alrady received these messages from a different source other than us.
-		alreadyReceived := false
-		for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
+		for _, filterIdx := range effectiveBloomFilters {
 			if p.recentIncomingBloomFilters[filterIdx].filter.test(txID) {
 				//removedTxn++
-				alreadyReceived = true
-				break
+				continue scanLoop
 			}
-		}
-		if alreadyReceived {
-			continue
 		}
 
 		if windowSizedReached {
@@ -243,6 +394,16 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		}
 	}
 
+	p.lastSelectedTransactionsCount = len(selectedTxnIDs)
+
+	// if we've over-allocated, resize the buffer; This becomes important on relays,
+	// as storing these arrays can consume considerable amount of memory.
+	if len(selectedTxnIDs)*2 < cap(selectedTxnIDs) {
+		exactBuffer := make([]transactions.Txid, len(selectedTxnIDs))
+		copy(exactBuffer, selectedTxnIDs)
+		selectedTxnIDs = exactBuffer
+	}
+
 	// update the lastTransactionSelectionGroupCounter if needed -
 	// if we selected any transaction to be sent, update the lastTransactionSelectionGroupCounter with the latest
 	// group counter. If the startIndex was *after* the last pending transaction, it means that we don't
@@ -250,10 +411,10 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	if grpIdx >= 0 && startIndex < len(pendingTransactions) {
 		if grpIdx == len(pendingTransactions) {
 			if grpIdx > 0 {
-				p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx-1].GroupCounter + 1
+				p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, pendingTransactions[grpIdx-1].GroupCounter+1)
 			}
 		} else {
-			p.lastTransactionSelectionGroupCounter = pendingTransactions[grpIdx].GroupCounter
+			p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, pendingTransactions[grpIdx].GroupCounter)
 		}
 	}
 
@@ -274,9 +435,7 @@ func (p *Peer) getLocalRequestParams() (offset, modulator byte) {
 
 // update the peer once the message was sent successfully.
 func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs []transactions.Txid, timestamp time.Duration, sequenceNumber uint64, messageSize int, filter bloomFilter) {
-	for _, txid := range selectedTxnIDs {
-		p.recentSentTransactions.add(txid)
-	}
+	p.recentSentTransactions.addSlice(selectedTxnIDs, sequenceNumber, timestamp)
 	p.lastSentMessageSequenceNumber = sequenceNumber
 	p.lastSentMessageRound = txMsg.Round
 	p.lastSentMessageTimestamp = timestamp
@@ -325,14 +484,15 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter bloomFi
 		// delete some of the old entries.
 		p.recentIncomingBloomFilters = p.recentIncomingBloomFilters[firstValidEntry:]
 	}
+	// reset the counter, since we might need to re-evaluate some of the transaction group with the new bloom filter.
+	p.lastTransactionSelectionTracker.roll(incomingFilter.encodingParams.Offset, incomingFilter.encodingParams.Modulator)
+
 	// scan the existing bloom filter, and ensure we have only one bloom filter for every
 	// set of encoding paramters. this would allow us to accumulate false positive
 	for idx, bloomFltr := range p.recentIncomingBloomFilters {
 		if bloomFltr.filter.encodingParams == incomingFilter.encodingParams {
 			// replace.
 			p.recentIncomingBloomFilters[idx] = bf
-			// reset the counter, since we might need to re-evaluate some of the transaction group with the new bloom filter.
-			p.lastTransactionSelectionGroupCounter = 0
 			return
 		}
 	}
@@ -348,10 +508,6 @@ func (p *Peer) updateRequestParams(modulator, offset byte) {
 		return
 	}
 	p.requestedTransactionsModulator, p.requestedTransactionsOffset = modulator, offset
-
-	// if we've changed the request params for this peer, we need to reset the lastTransactionSelectionGroupCounter since we might have
-	// skipped entries that need to be re-evaluated.
-	p.lastTransactionSelectionGroupCounter = 0
 }
 
 // update the recentSentTransactions with the incoming transaction groups. This would prevent us from sending the received transactions back to the
@@ -389,6 +545,7 @@ func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound ba
 	p.lastReceivedMessageTimestamp = currentTime
 	p.lastReceivedMessageSize = incomingMessageSize
 	p.lastReceivedMessageNextMsgMinDelay = time.Duration(timings.NextMsgMinDelay) * time.Nanosecond
+	p.recentSentTransactions.acknowledge(timings.AcceptedMsgSeq)
 }
 
 // advancePeerState is called when a peer schedule arrives, before we're doing any operation.
@@ -474,20 +631,30 @@ func (p *Peer) advancePeerState(currenTime time.Duration, isRelay bool) (ops pee
 	return
 }
 
+// getMessageConstructionOps constructs the messageConstructionOps that would be needed when
+// sending a message back to the peer. The two arguments are:
+// - isRelay defines whether the local node is a relay.
+// - fetchTransactions defines whether the local node is interested in receiving transactions from
+//   the peer ( this is essentially allow us to skip receiving transactions for non-relays that aren't going
+//   to make any proposals )
 func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (ops messageConstructionOps) {
 	// on outgoing peers of relays, we want have some custom logic.
 	if isRelay {
 		if p.isOutgoing {
 			switch p.state {
 			case peerStateLateBloom:
-				ops |= messageConstBloomFilter
+				if p.localTransactionsModulator != 0 {
+					ops |= messageConstBloomFilter
+				}
 			case peerStateHoldsoff:
 				ops |= messageConstTransactions
 			}
 		} else {
-			ops |= messageConstTransactions
-			if p.nextStateTimestamp == 0 {
-				ops |= messageConstBloomFilter
+			if p.requestedTransactionsModulator != 0 {
+				ops |= messageConstTransactions
+				if p.nextStateTimestamp == 0 && p.localTransactionsModulator != 0 {
+					ops |= messageConstBloomFilter
+				}
 			}
 			if p.nextStateTimestamp == 0 {
 				ops |= messageConstNextMinDelay
@@ -495,9 +662,12 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 		}
 		ops |= messageConstUpdateRequestParams
 	} else {
-		ops |= messageConstTransactions
+		ops |= messageConstTransactions // send transactions to the other peer
 		if fetchTransactions {
-			if p.localTransactionsModulator == 1 {
+			switch p.localTransactionsModulator {
+			case 0:
+				// don't send bloom filter.
+			case 1:
 				// special optimization if we have just one relay that we're connected to:
 				// generate the bloom filter only once per 2*beta message.
 				// this would reduce the number of unneeded bloom filters generation dramatically.
@@ -506,7 +676,7 @@ func (p *Peer) getMessageConstructionOps(isRelay bool, fetchTransactions bool) (
 				if p.nextStateTimestamp == 0 {
 					ops |= messageConstBloomFilter
 				}
-			} else {
+			default:
 				ops |= messageConstBloomFilter
 			}
 			ops |= messageConstUpdateRequestParams
