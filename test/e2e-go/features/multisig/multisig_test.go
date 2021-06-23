@@ -68,7 +68,7 @@ func TestBasicMultisig(t *testing.T) {
 	// fund account with enough Algos to allow for 3 transactions and still keep a minBalance in the account
 	amountToFund := 4*minAcctBalance + 3*minTxnFee
 	curStatus, err := client.Status()
-	fixture.SendMoneyAndWait(curStatus.LastRound, amountToFund, minTxnFee, fundingAddr, multisigAddr)
+	fixture.SendMoneyAndWait(curStatus.LastRound, amountToFund, minTxnFee, fundingAddr, multisigAddr, "")
 	// try to transact with 1 of 3
 	amountToSend := minAcctBalance
 	unsignedTransaction, err := client.ConstructPayment(multisigAddr, addrs[0], minTxnFee, amountToSend, nil, "", [32]byte{}, 0, 0)
@@ -193,7 +193,7 @@ func TestDuplicateKeys(t *testing.T) {
 	amountToFund := 3 * minAcctBalance
 	txnFee := minTxnFee
 	curStatus, _ := client.Status()
-	fixture.SendMoneyAndWait(curStatus.LastRound, amountToFund, txnFee, fundingAddr, multisigAddr)
+	fixture.SendMoneyAndWait(curStatus.LastRound, amountToFund, txnFee, fundingAddr, multisigAddr, "")
 	// try to transact with "1" signature (though, this is a signature from "every" member of the multisig)
 	amountToSend := minAcctBalance
 	unsignedTransaction, err := client.ConstructPayment(multisigAddr, addrs[0], txnFee, amountToSend, nil, "", [32]byte{}, 0, 0)
