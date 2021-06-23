@@ -50,6 +50,11 @@ load_4(const unsigned char *in)
 # include "fe_25_5/fe.h"
 #endif
 
+const ge25519_p3 ge25519_basepoint = 
+{
+#include "fe_51/base_ge25519.h"
+};
+
 void
 fe25519_invert(fe25519 out, const fe25519 z)
 {
@@ -491,7 +496,7 @@ ge25519_p3_tobytes(unsigned char *s, const ge25519_p3 *h)
  r = 2 * p
  */
 
-static void
+void
 ge25519_p3_dbl(ge25519_p1p1 *r, const ge25519_p3 *p)
 {
     ge25519_p2 q;

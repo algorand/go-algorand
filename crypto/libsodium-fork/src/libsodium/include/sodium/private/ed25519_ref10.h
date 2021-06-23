@@ -73,6 +73,8 @@ typedef struct {
     fe25519 T2d;
 } ge25519_cached;
 
+extern const ge25519_p3 ge25519_basepoint;
+
 void ge25519_tobytes(unsigned char *s, const ge25519_p2 *h);
 
 void ge25519_p3_tobytes(unsigned char *s, const ge25519_p3 *h);
@@ -96,6 +98,8 @@ void ge25519_sub(ge25519_p1p1 *r, const ge25519_p3 *p, const ge25519_cached *q);
 void ge25519_scalarmult_base(ge25519_p3 *h, const unsigned char *a);
 
 void ge25519_p2_dbl(ge25519_p1p1 *r, const ge25519_p2 *p);
+
+void ge25519_p3_dbl(ge25519_p1p1 *r, const ge25519_p3 *p);
 
 void ge25519_double_scalarmult_vartime(ge25519_p3 *r, const unsigned char *a,
                                        const ge25519_p3 *A,

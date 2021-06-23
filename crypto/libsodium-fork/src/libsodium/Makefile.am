@@ -13,6 +13,7 @@ libsodium_la_SOURCES = \
 	crypto_box/crypto_box_seal.c \
 	crypto_box/curve25519xsalsa20poly1305/box_curve25519xsalsa20poly1305.c \
 	crypto_core/ed25519/ref10/ed25519_ref10.c \
+	crypto_core/ed25519/ref10/ed25519_ref10_sc.c \
 	crypto_core/hchacha20/core_hchacha20.c \
 	crypto_core/hsalsa20/ref2/core_hsalsa20_ref2.c \
 	crypto_core/hsalsa20/core_hsalsa20.c \
@@ -71,8 +72,10 @@ libsodium_la_SOURCES = \
 	crypto_sign/ed25519/sign_ed25519.c \
 	crypto_sign/ed25519/ref10/keypair.c \
 	crypto_sign/ed25519/ref10/open.c \
+	crypto_sign/ed25519/ref10/batch.c \
 	crypto_sign/ed25519/ref10/sign.c \
 	crypto_sign/ed25519/ref10/sign_ed25519_ref10.h \
+	crypto_sign/ed25519/ref10/sign_ed25519_ref10_sc.h \
 	crypto_stream/chacha20/stream_chacha20.c \
 	crypto_stream/chacha20/stream_chacha20.h \
 	crypto_stream/chacha20/ref/chacha20_ref.h \
