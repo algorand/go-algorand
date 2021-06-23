@@ -402,6 +402,12 @@ type WebsocketNetwork struct {
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
 	messagesOfInterestMu deadlock.Mutex
+
+	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
+	// are still transmitting or receiving information. The channel produced by this ticker
+	// is consumed by any of the messageHandlerThread(s). The ticker itself is created during
+	// Start(), and being shut down when Stop() is called.
+	peersConnectivityCheckTicker *time.Ticker
 }
 
 type broadcastRequest struct {
@@ -789,9 +795,15 @@ func (wn *WebsocketNetwork) Start() {
 		wn.wg.Add(1)
 		go wn.pingThread()
 	}
+	// we shouldn't have any ticker here.. but in case we do - just stop it.
+	if wn.peersConnectivityCheckTicker != nil {
+		wn.peersConnectivityCheckTicker.Stop()
+	}
+	wn.peersConnectivityCheckTicker = time.NewTicker(connectionActivityMonitorInterval)
 	for i := 0; i < incomingThreads; i++ {
 		wn.wg.Add(1)
-		go wn.messageHandlerThread()
+		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
+		go wn.messageHandlerThread(wn.peersConnectivityCheckTicker.C)
 	}
 	wn.wg.Add(1)
 	go wn.broadcastThread()
@@ -832,6 +844,12 @@ func (wn *WebsocketNetwork) innerStop() {
 func (wn *WebsocketNetwork) Stop() {
 	wn.handlers.ClearHandlers([]Tag{})
 
+	// if we have a working ticker, just stop it and clear it out. The access to this variable is safe since the Start()/Stop() are synced by the
+	// caller, and the WebsocketNetwork doesn't access wn.peersConnectivityCheckTicker directly.
+	if wn.peersConnectivityCheckTicker != nil {
+		wn.peersConnectivityCheckTicker.Stop()
+		wn.peersConnectivityCheckTicker = nil
+	}
 	wn.innerStop()
 	var listenAddr string
 	if wn.listener != nil {
@@ -1126,10 +1144,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
 }
 
-func (wn *WebsocketNetwork) messageHandlerThread() {
+func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan time.Time) {
 	defer wn.wg.Done()
-	inactivityCheckTicker := time.NewTicker(connectionActivityMonitorInterval)
-	defer inactivityCheckTicker.Stop()
+
 	for {
 		select {
 		case <-wn.ctx.Done():
@@ -1172,7 +1189,7 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 				}
 			default:
 			}
-		case <-inactivityCheckTicker.C:
+		case <-peersConnectivityCheckCh:
 			// go over the peers and ensure we have some type of communication going on.
 			wn.checkPeersConnectivity()
 		}
