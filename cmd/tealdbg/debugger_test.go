@@ -129,7 +129,7 @@ func TestSession(t *testing.T) {
 	require.NoError(t, err)
 
 	// create a sample disassembly line to pc mapping
-	// this simple source is similar to disassembly except intcblock at the begining
+	// this simple source is similar to disassembly except intcblock at the beginning
 	pcOffset := make(map[int]int, len(ops.OffsetToLine))
 	for pc, line := range ops.OffsetToLine {
 		pcOffset[line+1] = pc

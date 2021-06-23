@@ -99,7 +99,7 @@ func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
 	require.NoError(t, err)
 	require.NoErrorf(t, res, "Expected threshold event not relayed")
 
-	// now, given that a bottom threshold was emmited, make sure private state was set (so we can appropriately respond to queries)
+	// now, given that a bottom threshold was emitted, make sure private state was set (so we can appropriately respond to queries)
 	vt := perRouter.voteRoot.underlying().(*voteTrackerPeriod)
 	require.Truef(t, vt.Cached.Bottom, "VoteTrackerPeriod didn't set bottom to true")
 

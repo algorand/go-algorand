@@ -131,7 +131,7 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 	}
 
 	if val.Type().Name() != "" {
-		// does any of the go files in the package directroy has the msgp:allocbound defined for that datatype ?
+		// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
 		gopath := os.Getenv("GOPATH")
 		packageFilesPath := path.Join(gopath, "src", val.Type().PkgPath())
 		packageFiles := []string{}

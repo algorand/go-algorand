@@ -577,7 +577,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 }
 
 func BenchmarkCalibrateNodesPerPage(b *testing.B) {
-	b.Skip("This benchmark was used to tune up the NodesPerPage; it's not really usefull otherwise")
+	b.Skip("This benchmark was used to tune up the NodesPerPage; it's not really useful otherwise")
 	defaultNodesPerPage := merkleCommitterNodesPerPage
 	for nodesPerPage := 32; nodesPerPage < 300; nodesPerPage++ {
 		b.Run(fmt.Sprintf("Test_merkleCommitterNodesPerPage_%d", nodesPerPage), func(b *testing.B) {
@@ -589,7 +589,7 @@ func BenchmarkCalibrateNodesPerPage(b *testing.B) {
 }
 
 func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
-	//b.Skip("This benchmark was used to tune up the trieCachedNodesCount; it's not really usefull otherwise")
+	//b.Skip("This benchmark was used to tune up the trieCachedNodesCount; it's not really useful otherwise")
 	defaultTrieCachedNodesCount := trieCachedNodesCount
 	for cacheSize := 3000; cacheSize < 50000; cacheSize += 1000 {
 		b.Run(fmt.Sprintf("Test_cacheSize_%d", cacheSize), func(b *testing.B) {
@@ -601,7 +601,7 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 }
 
 // TestLargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
-// and attempts to have the accountUpdates create the associated catchpoint. It's designed precisly around setting an
+// and attempts to have the accountUpdates create the associated catchpoint. It's designed precisely around setting an
 // environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
 func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
@@ -1048,7 +1048,7 @@ func TestListCreatables(t *testing.T) {
 
 	// ******* All results are obtained from the cache. Empty database *******
 	// ******* No deletes                                              *******
-	// get random data. Inital batch, no deletes
+	// get random data. Initial batch, no deletes
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
@@ -1750,7 +1750,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 }
 
 // TestSplittingConsensusVersionCommitsBoundry tests the a sequence of commits that spans over multiple consensus versions works correctly, and
-// in particular, complements TestSplittingConsensusVersionCommits by testing the commit boundry.
+// in particular, complements TestSplittingConsensusVersionCommits by testing the commit boundary.
 func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 	initProtocolVersion := protocol.ConsensusV20
 	initialProtoParams := config.Consensus[initProtocolVersion]

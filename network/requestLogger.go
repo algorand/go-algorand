@@ -30,7 +30,7 @@ import (
 
 // RequestLogger is a middleware helps logging all the incoming http requests.
 // The intended use is to place it at the bottom of the http processing. It will capture the status codes
-// set by the upsteam handlers and write the request info/response to the logger.
+// set by the upstream handlers and write the request info/response to the logger.
 type RequestLogger struct {
 	downsteamHandler    http.Handler
 	trackingWritersPool sync.Pool

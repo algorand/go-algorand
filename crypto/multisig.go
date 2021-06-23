@@ -99,7 +99,7 @@ func MultisigAddrGen(version, threshold uint8, pk []PublicKey) (addr Digest, err
 	return Hash(buffer), nil
 }
 
-// MultisigAddrGenWithSubsigs is similiar to MultisigAddrGen
+// MultisigAddrGenWithSubsigs is similar to MultisigAddrGen
 // except the input is []Subsig rather than []PublicKey
 func MultisigAddrGenWithSubsigs(version uint8, threshold uint8,
 	subsigs []MultisigSubsig) (addr Digest, err error) {
@@ -317,7 +317,7 @@ func MultisigAdd(unisig []MultisigSig, msig *MultisigSig) (err error) {
 		for j := 0; j < len(msig.Subsigs); j++ {
 			if (unisig[i].Subsigs[j].Sig != Signature{}) {
 				if (msig.Subsigs[j].Sig == Signature{}) {
-					// add the siganture
+					// add the signature
 					msig.Subsigs[j].Sig = unisig[i].Subsigs[j].Sig
 				} else if msig.Subsigs[j].Sig != unisig[i].Subsigs[j].Sig {
 					// invalid duplicates

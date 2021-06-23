@@ -51,7 +51,7 @@ type BlockValidator interface {
 	Validate(context.Context, bookkeeping.Block) (ValidatedBlock, error)
 }
 
-// A ValidatedBlock represents an Block that has been successfuly validated
+// A ValidatedBlock represents an Block that has been successfully validated
 // and can now be recorded in the ledger.  This is an optimized version of
 // calling EnsureBlock() on the Ledger.
 type ValidatedBlock interface {

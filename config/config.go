@@ -324,7 +324,7 @@ type Local struct {
 	CatchupBlockDownloadRetryAttempts int `version[9]:"1000"`
 
 	// EnableDeveloperAPI enables teal/compile, teal/dryrun API endpoints.
-	// This functionlity is disabled by default.
+	// This functionality is disabled by default.
 	EnableDeveloperAPI bool `version[9]:"false"`
 
 	// OptimizeAccountsDatabaseOnStartup controls whether the accounts database would be optimized

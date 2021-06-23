@@ -92,7 +92,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	// Let it run for 37 rounds.
 	// create a web proxy, and connect it to the primary node, blocking all requests for round #1. ( and allowing everything else )
 	// start a secondary node, and instuct it to catchpoint catchup from the proxy. ( which would be for round 36 )
-	// wait until the clone node cought up, skipping the "impossibe" hole of round #1.
+	// wait until the clone node cought up, skipping the "impossible" hole of round #1.
 
 	consensus := make(config.ConsensusProtocols)
 	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
