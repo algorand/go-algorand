@@ -42,7 +42,7 @@ type lruAccounts struct {
 // init initializes the lruAccounts for use.
 // thread locking semantics : write lock
 func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
-	m.accountsList = newPersistentAccountList()
+	m.accountsList = newPersistedAccountList()
 	m.accounts = make(map[basics.Address]*persistedAccountDataListNode, pendingWrites)
 	m.pendingAccounts = make(chan persistedAccountData, pendingWrites)
 	m.log = log
@@ -98,10 +98,10 @@ func (m *lruAccounts) write(acctData persistedAccountData) {
 			// we update with a newer version.
 			el.Value = &acctData
 		}
-		m.accountsList.MoveToFront(el)
+		m.accountsList.moveToFront(el)
 	} else {
 		// new entry.
-		m.accounts[acctData.addr] = m.accountsList.PushFront(&acctData)
+		m.accounts[acctData.addr] = m.accountsList.pushFront(&acctData)
 	}
 }
 
@@ -113,9 +113,9 @@ func (m *lruAccounts) prune(newSize int) (removed int) {
 		if len(m.accounts) <= newSize {
 			break
 		}
-		back := m.accountsList.Back()
+		back := m.accountsList.back()
 		delete(m.accounts, back.Value.addr)
-		m.accountsList.Remove(back)
+		m.accountsList.remove(back)
 		removed++
 	}
 	return

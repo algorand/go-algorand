@@ -23,7 +23,7 @@ func testRemove(t *testing.T) {
 }
 
 func checkListLen(t *testing.T, l *persistedAccountDataList, len int) bool {
-	if n := l.Len(); n != len {
+	if n := l.len; n != len {
 		t.Errorf("l.Len() = %d, want %d", n, len)
 		return true
 	}
@@ -79,62 +79,62 @@ func pointerInspection(t *testing.T, es []*persistedAccountDataListNode, root *p
 }
 
 func testMultielementListPositioning(t *testing.T) {
-	l := newPersistentAccountList()
+	l := newPersistedAccountList()
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 	// test elements
-	e2 := l.PushFront(&persistedAccountData{addr: basics.Address{2}})
-	e1 := l.PushFront(&persistedAccountData{addr: basics.Address{1}})
-	e3 := l.PushFront(&persistedAccountData{addr: basics.Address{3}})
-	e4 := l.PushFront(&persistedAccountData{addr: basics.Address{4}})
+	e2 := l.pushFront(&persistedAccountData{addr: basics.Address{2}})
+	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
+	e3 := l.pushFront(&persistedAccountData{addr: basics.Address{3}})
+	e4 := l.pushFront(&persistedAccountData{addr: basics.Address{4}})
 
 	checkListPointers(t, l, []*persistedAccountDataListNode{e4, e3, e1, e2})
 
-	l.Remove(e2)
+	l.remove(e2)
 	checkListPointers(t, l, []*persistedAccountDataListNode{e4, e3, e1})
 
-	l.MoveToFront(e3) // move from middle
+	l.moveToFront(e3) // move from middle
 	checkListPointers(t, l, []*persistedAccountDataListNode{e3, e4, e1})
 
-	l.MoveToFront(e1) // move from end
+	l.moveToFront(e1) // move from end
 	checkListPointers(t, l, []*persistedAccountDataListNode{e1, e3, e4})
 
-	l.MoveToFront(e1) // no movement
+	l.moveToFront(e1) // no movement
 	checkListPointers(t, l, []*persistedAccountDataListNode{e1, e3, e4})
 
-	e2 = l.PushFront(&persistedAccountData{addr: basics.Address{2}})
+	e2 = l.pushFront(&persistedAccountData{addr: basics.Address{2}})
 	checkListPointers(t, l, []*persistedAccountDataListNode{e2, e1, e3, e4})
 
-	l.Remove(e3) // removing from middle
+	l.remove(e3) // removing from middle
 	checkListPointers(t, l, []*persistedAccountDataListNode{e2, e1, e4})
 
-	l.Remove(e4) // removing from end
+	l.remove(e4) // removing from end
 	checkListPointers(t, l, []*persistedAccountDataListNode{e2, e1})
 
-	l.Remove(e2) // removing front
+	l.remove(e2) // removing front
 	checkListPointers(t, l, []*persistedAccountDataListNode{e1})
 
-	l.Remove(e1) // remove last one
+	l.remove(e1) // remove last one
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 
 }
 
 func testSingleElementListPositioning(t *testing.T) {
-	l := newPersistentAccountList()
+	l := newPersistedAccountList()
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
-	e := l.PushFront(&persistedAccountData{addr: basics.Address{1}})
+	e := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
 	checkListPointers(t, l, []*persistedAccountDataListNode{e})
-	l.MoveToFront(e)
+	l.moveToFront(e)
 	checkListPointers(t, l, []*persistedAccountDataListNode{e})
-	l.Remove(e)
+	l.remove(e)
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 }
 
 func attemptToRemoveFromWrongList(t *testing.T) {
 	l1, l2 := createTwoLists()
 
-	e := l1.Back()
-	l2.Remove(e) // l2 should not change because e is not an element of l2
-	if n := l2.Len(); n != 2 {
+	e := l1.back()
+	l2.remove(e) // l2 should not change because e is not an element of l2
+	if n := l2.len; n != 2 {
 		t.Errorf("l2.Len() = %d, want 2", n)
 	}
 }
@@ -142,27 +142,27 @@ func attemptToRemoveFromWrongList(t *testing.T) {
 func attemptToRemoveFromWrongListAndAddToOtherList(t *testing.T) {
 	l1, l2 := createTwoLists()
 
-	e := l1.Back()
-	l2.Remove(e) // l2 should not change because e is not an element of l2
-	if n := l2.Len(); n != 2 {
+	e := l1.back()
+	l2.remove(e) // l2 should not change because e is not an element of l2
+	if n := l2.len; n != 2 {
 		t.Errorf("l2.Len() = %d, want 2", n)
 	}
 
-	l1.PushFront(l2.Back().Value)
-	if n := l1.Len(); n != 3 {
+	l1.pushFront(l2.back().Value)
+	if n := l1.len; n != 3 {
 		t.Errorf("l1.Len() = %d, want 3", n)
 	}
 }
 
 func testRemovedNodeContainsValueButNoLinks(t *testing.T) {
-	l := newPersistentAccountList()
-	e1 := l.PushFront(&persistedAccountData{addr: basics.Address{1}})
-	e2 := l.PushFront(&persistedAccountData{addr: basics.Address{2}})
+	l := newPersistedAccountList()
+	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
+	e2 := l.pushFront(&persistedAccountData{addr: basics.Address{2}})
 
 	checkListPointers(t, l, []*persistedAccountDataListNode{e2, e1})
 
-	e := l.Back()
-	l.Remove(e)
+	e := l.back()
+	l.remove(e)
 	if e.Value.addr == e2.Value.addr {
 		t.Errorf("\nhave %v\nwant %v", e.Value.addr, e1.Value.addr)
 	}
@@ -178,12 +178,12 @@ func testRemovedNodeContainsValueButNoLinks(t *testing.T) {
 	}
 }
 func createTwoLists() (*persistedAccountDataList, *persistedAccountDataList) {
-	l1 := newPersistentAccountList()
-	l1.PushFront(&persistedAccountData{addr: basics.Address{1}})
-	l1.PushFront(&persistedAccountData{addr: basics.Address{2}})
+	l1 := newPersistedAccountList()
+	l1.pushFront(&persistedAccountData{addr: basics.Address{1}})
+	l1.pushFront(&persistedAccountData{addr: basics.Address{2}})
 
-	l2 := newPersistentAccountList()
-	l2.PushFront(&persistedAccountData{addr: basics.Address{3}})
-	l2.PushFront(&persistedAccountData{addr: basics.Address{4}})
+	l2 := newPersistedAccountList()
+	l2.pushFront(&persistedAccountData{addr: basics.Address{3}})
+	l2.pushFront(&persistedAccountData{addr: basics.Address{4}})
 	return l1, l2
 }
