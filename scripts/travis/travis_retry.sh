@@ -24,4 +24,4 @@ travis_retry() {
   return "${result}"
 }
 
-travis_retry $@
+travis_retry "$@"
