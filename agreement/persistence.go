@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -63,10 +62,11 @@ func encode(t timers.Clock, rr rootRouter, p player, a []action) []byte {
 }
 
 // persist atomically writes state to the crash database.
-func persist(log serviceLogger, crash db.Accessor, Round basics.Round, Period period, Step step, raw []byte) (err error) {
+func persist(log serviceLogger, crash db.Accessor, Round round, Period period, Step step, raw []byte) (err error) {
 	logEvent := logspec.AgreementEvent{
 		Type:   logspec.Persisted,
-		Round:  uint64(Round),
+		Round:  uint64(Round.number),
+		Branch: Round.branch.String(),
 		Period: uint64(Period),
 		Step:   uint64(Step),
 	}
@@ -222,7 +222,7 @@ func decode(raw []byte, t0 timers.Clock) (t timers.Clock, rr rootRouter, p playe
 }
 
 type persistentRequest struct {
-	round  basics.Round
+	round  round
 	period period
 	step   step
 	raw    []byte
@@ -249,7 +249,7 @@ func makeAsyncPersistenceLoop(log serviceLogger, crash db.Accessor, ledger Ledge
 	}
 }
 
-func (p *asyncPersistenceLoop) Enqueue(clock timers.Clock, round basics.Round, period period, step step, raw []byte, done chan error) (events <-chan externalEvent) {
+func (p *asyncPersistenceLoop) Enqueue(clock timers.Clock, round round, period period, step step, raw []byte, done chan error) (events <-chan externalEvent) {
 	eventsChannel := make(chan externalEvent, 1)
 	p.pending <- persistentRequest{
 		round:  round,
@@ -289,7 +289,7 @@ func (p *asyncPersistenceLoop) loop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-p.ledger.Wait(s.round.SubSaturate(1)):
+		case <-p.ledger.Wait(s.round.number.SubSaturate(1)): // XXXX need ledger.Wait to be branch-aware
 		}
 
 		// store the state.

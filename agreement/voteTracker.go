@@ -236,7 +236,7 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 		// overThreshold is gurentee to return a valid proposal when overAfter is true
 		proposalVote := tracker.Counts[prop]
 
-		round := e.Vote.R.Round
+		round := e.Vote.R.branchRound()
 		period := e.Vote.R.Period
 		step := e.Vote.R.Step
 		switch {

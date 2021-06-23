@@ -267,14 +267,14 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 	case certThreshold:
 		// for future periods, fast-forwarding below will ensure correct staging
 		// for past periods, having a freshest certThreshold will prevent losing the block
-		r.dispatch(*p, e, proposalMachine, 0, 0, 0)
+		r.dispatch(*p, e, proposalMachine, roundZero, 0, 0) // XXX what does proposalManager RPS 0,0,0 mean for certThreshold events?
 		// Now, also check if we have the block.
 		res := stagedValue(*p, r, e.Round, e.Period)
 		if res.Committable {
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
-			as := p.enterRound(r, e, p.Round+1)
+			as := p.enterRound(r, e, round{number: p.Round.number + 1, branch: cert.Proposal.BlockDigest})
 			return append(actions, as...)
 		}
 		// we don't have the block! We need to ensure we will be able to receive the block.
@@ -447,7 +447,7 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 	switch {
 	case bundleResponse.Ok && bundleResponse.Event.Bundle.Proposal != bottom:
 		b := bundleResponse.Event.Bundle
-		bundleRound = b.Round
+		bundleRound = b.branchRound()
 		bundlePeriod = b.Period
 		fallthrough
 	case p.Period == 0:
@@ -514,7 +514,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			actions = append(actions, suffix...)
 		}()
 
-		ef := r.dispatch(*p, delegatedE, proposalMachine, 0, 0, 0)
+		ef := r.dispatch(*p, delegatedE, proposalMachine, roundZero, 0, 0)
 		switch ef.t() {
 		case voteMalformed:
 			err := ef.(filteredEvent).Err
@@ -528,7 +528,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			doneProcessing = false
 			seq := p.Pending.push(e.Tail)
 			uv := e.Input.UnauthenticatedVote
-			return append(actions, verifyVoteAction(e, uv.R.Round, uv.R.Period, seq))
+			return append(actions, verifyVoteAction(e, uv.R.branchRound(), uv.R.Period, seq))
 		}
 		v := e.Input.Vote
 		a := relayAction(e, protocol.AgreementVoteTag, v.u())
@@ -545,7 +545,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 
 	switch e.t() {
 	case payloadPresent, payloadVerified:
-		ef := r.dispatch(*p, delegatedE, proposalMachine, 0, 0, 0)
+		ef := r.dispatch(*p, delegatedE, proposalMachine, roundZero, 0, 0)
 		switch ef.t() {
 		case payloadMalformed:
 			err := makeSerErrf("rejected message since it was invalid: %v", ef.(filteredEvent).Err)
@@ -593,7 +593,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				as := p.enterRound(r, delegatedE, cert.Round+1)
+				as := p.enterRound(r, delegatedE, round{number: cert.Round + 1, branch: cert.Proposal.BlockDigest})
 				return append(actions, as...)
 			}
 		}
@@ -604,7 +604,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		return actions
 
 	case votePresent, voteVerified:
-		ef := r.dispatch(*p, delegatedE, voteMachine, 0, 0, 0)
+		ef := r.dispatch(*p, delegatedE, voteMachine, roundZero, 0, 0)
 		switch ef.t() {
 		case voteMalformed:
 			// TODO Add Metrics here to capture telemetryspec.VoteRejectedEvent details
@@ -617,7 +617,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		}
 		if e.t() == votePresent {
 			uv := e.Input.UnauthenticatedVote
-			return append(actions, verifyVoteAction(e, uv.R.Round, uv.R.Period, 0))
+			return append(actions, verifyVoteAction(e, uv.R.branchRound(), uv.R.Period, 0))
 		} // else e.t() == voteVerified
 		v := e.Input.Vote
 		actions = append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
@@ -625,7 +625,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		return append(actions, a1...)
 
 	case bundlePresent, bundleVerified:
-		ef := r.dispatch(*p, delegatedE, voteMachine, 0, 0, 0)
+		ef := r.dispatch(*p, delegatedE, voteMachine, roundZero, 0, 0)
 		switch ef.t() {
 		case bundleMalformed:
 			err := makeSerErrf("rejected message since it was invalid: %v", ef.(filteredEvent).Err)
@@ -636,7 +636,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		}
 		if e.t() == bundlePresent {
 			ub := e.Input.UnauthenticatedBundle
-			return append(actions, verifyBundleAction(e, ub.Round, ub.Period, ub.Step))
+			return append(actions, verifyBundleAction(e, ub.branchRound(), ub.Period, ub.Step))
 		}
 		a0 := relayAction(e, protocol.VoteBundleTag, ef.(thresholdEvent).Bundle)
 		a1 := p.handle(r, ef)

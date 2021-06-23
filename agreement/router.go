@@ -128,7 +128,7 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 	if gc {
 		children := make(map[round]*roundRouter)
 		for r, c := range router.Children {
-			if r >= state.Round {
+			if r.number >= state.Round.number { // XXXXX handle gc along branches
 				children[r] = c
 			}
 		}
@@ -141,13 +141,13 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 func (router *rootRouter) submitTop(t *tracer, state player, e event) (player, []action) {
 	// TODO move cadaver calls to somewhere cleaner
 	t.traceInput(state.Round, state.Period, state, e) // cadaver
-	t.ainTop(demultiplexer, playerMachine, state, e, 0, 0, 0)
+	t.ainTop(demultiplexer, playerMachine, state, e, roundZero, 0, 0)
 
-	router.update(state, 0, true)
+	router.update(state, roundZero, true)
 	handle := routerHandle{t: t, r: router, src: playerMachine}
 	a := router.root.handle(handle, e)
 
-	t.aoutTop(demultiplexer, playerMachine, a, 0, 0, 0)
+	t.aoutTop(demultiplexer, playerMachine, a, roundZero, 0, 0)
 	t.traceOutput(state.Round, state.Period, state, a) // cadaver
 
 	p := router.root.underlying().(*player)

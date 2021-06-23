@@ -69,7 +69,7 @@ func (c playerContract) call(aold, anew actor, in event, out []action) (pre, pos
 		}
 
 	case roundInterruptionEvent:
-		if e.Round <= pold.Round {
+		if e.Round.number <= pold.Round.number { // XXX need branch-aware or is this handled by caller?
 			pre = append(pre, fmt.Errorf("stale round interruption event delivered: e.Round <= pold.Round: %v <= %v", e.Round, pold.Round))
 		}
 

@@ -133,7 +133,10 @@ type AgreementEvent struct {
 	// Step represents the current period of the source.
 	Step uint64
 
-	// Hash represents a context-dependent value.
+	// Branch represents the digest of the previous block committed in the previous round.
+	Branch string
+
+	// Hash represents a context-dependent value.git
 	// - RoundConcluded: the block hash on which consensus was reached
 	// - PeriodConcluded: the starting value of the next round
 	// - ThresholdReached: the hash for which a vote threshold was reached
@@ -154,6 +157,9 @@ type AgreementEvent struct {
 	// or the round at which a value obtained a threshold.
 	// It is set when Sender is set or when a threshold is met.
 	ObjectRound uint64
+
+	// ObjectBranch contains the (alleged) prev branch of the sender.
+	ObjectBranch string
 
 	// ObjectPeriod contains the (alleged) period of the sender.
 	// or the period at which a value obtained a threshold.

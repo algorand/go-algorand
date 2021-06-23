@@ -154,19 +154,19 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 			return filteredEvent{T: voteFiltered, Err: err}
 		}
 
-		if v.R.Round == p.Round {
+		if v.R.Round == p.Round.number { // XXX timing for round/branch
 			r.t.timeR().RecVoteReceived(v)
-		} else if v.R.Round == p.Round+1 {
+		} else if v.R.Round == p.Round.number+1 { // XXX
 			r.t.timeRPlus1().RecVoteReceived(v)
 		}
 
-		return r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.Round, v.R.Period, 0)
+		return r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.branchRound(), v.R.Period, 0)
 
 	case payloadPresent:
-		propRound := e.Input.UnauthenticatedProposal.Round()
+		propRound := e.Input.UnauthenticatedProposal.branchRound()
 		in := e.messageEvent
 
-		if p.Round == propRound {
+		if p.Round == propRound { // XXX branch check correct?
 			pipelinedRound = p.Round
 			pipelinedPeriod = p.Period
 			e1 := r.dispatch(p, in, proposalMachineRound, p.Round, p.Period, 0)
@@ -184,14 +184,18 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 		}
 
 		// pipeline for next round
-		e2 := r.dispatch(p, in, proposalMachineRound, p.Round+1, 0, 0)
+		// XXX or other branch on same round? don't assume p.Round+1
+		//e2 := r.dispatch(p, in, proposalMachineRound, p.Round+1, 0, 0)
+		e2 := r.dispatch(p, in, proposalMachineRound, p.Round, 0, 0)
 		if e2.t() == payloadRejected {
 			return e2
 		}
 		ep := e2.(payloadProcessedEvent) // e2.t() == payloadPipelined
-		ep.Round = p.Round + 1
+		//ep.Round = p.Round + 1
+		ep.Round = p.Round
 
-		pipelinedRound = p.Round + 1
+		//pipelinedRound = p.Round + 1
+		pipelinedRound = p.Round
 		pipelinedPeriod = 0
 
 		r.t.timeRPlus1().RecPayload(ep.Proposal.OriginalPeriod, propose, ep.Proposal)
@@ -222,7 +226,7 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 	}
 
 	qe := voteFilterRequestEvent{RawVote: uv.R}
-	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
+	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.branchRound(), uv.R.Period, 0)
 	if sawVote.t() == voteFiltered {
 		return fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", uv.R.Sender, uv.R.Round, uv.R.Period)
 	}
@@ -232,14 +236,14 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 // voteFresh determines whether a proposal satisfies freshness rules.
 func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
 	switch vote.R.Round {
-	case freshData.PlayerRound:
+	case freshData.PlayerRound.number: // XXX check branch
 		if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > vote.R.Period {
 			return fmt.Errorf("filtered stale proposal: period %d - 1 > %d", freshData.PlayerPeriod, vote.R.Period)
 		}
 		if freshData.PlayerPeriod+1 < vote.R.Period {
 			return fmt.Errorf("filtered premature proposal: period %d + 1 < %d", freshData.PlayerPeriod, vote.R.Period)
 		}
-	case freshData.PlayerRound + 1:
+	case freshData.PlayerRound.number + 1: // XXX check branch
 		if vote.R.Period != 0 {
 			return fmt.Errorf("filtered premature proposal from next round: period %d > 0", vote.R.Period)
 		}

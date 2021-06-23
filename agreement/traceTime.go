@@ -53,7 +53,7 @@ func (tG *timingInfoGenerator) StartRound(r round) {
 	if !tG.enabled {
 		return
 	}
-	tG.i.Round = uint64(r)
+	tG.i.Round = uint64(r.number) // XXX timing doesn't know about branches
 	tG.i.LRoundStart = time.Now()
 }
 

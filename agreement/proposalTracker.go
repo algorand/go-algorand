@@ -122,7 +122,7 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 	case voteFilterRequest:
 		v := e.(voteFilterRequestEvent).RawVote
 		if t.Duplicate[v.Sender] {
-			err := errProposalTrackerSenderDup{Sender: v.Sender, Round: v.Round, Period: v.Period}
+			err := errProposalTrackerSenderDup{Sender: v.Sender, Round: v.branchRound(), Period: v.Period}
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
 		}
 		return emptyEvent{}
@@ -135,7 +135,7 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		e := e.(messageEvent)
 		v := e.Input.Vote
 		if t.Duplicate[v.R.Sender] {
-			err := errProposalTrackerSenderDup{Sender: v.R.Sender, Round: v.R.Round, Period: v.R.Period}
+			err := errProposalTrackerSenderDup{Sender: v.R.Sender, Round: v.R.branchRound(), Period: v.R.Period}
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
 		}
 		t.Duplicate[v.R.Sender] = true
@@ -153,7 +153,7 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		}
 
 		return proposalAcceptedEvent{
-			Round:    v.R.Round,
+			Round:    v.R.branchRound(),
 			Period:   v.R.Period,
 			Proposal: v.R.Proposal,
 		}

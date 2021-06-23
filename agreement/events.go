@@ -246,7 +246,7 @@ func (e emptyEvent) ComparableStr() string {
 }
 
 func (e emptyEvent) ConsensusRound() round {
-	return 0
+	return roundZero
 }
 
 func (e emptyEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent {
@@ -295,13 +295,13 @@ func (e messageEvent) ComparableStr() string {
 func (e messageEvent) ConsensusRound() round {
 	switch e.T {
 	case votePresent, voteVerified:
-		return e.Input.UnauthenticatedVote.R.Round
+		return e.Input.UnauthenticatedVote.R.branchRound()
 	case payloadPresent, payloadVerified:
-		return e.Input.UnauthenticatedProposal.Round()
+		return e.Input.UnauthenticatedProposal.branchRound()
 	case bundlePresent, bundleVerified:
-		return e.Input.UnauthenticatedBundle.Round
+		return e.Input.UnauthenticatedBundle.branchRound()
 	default:
-		return 0
+		return roundZero
 	}
 }
 
@@ -926,7 +926,7 @@ func (e checkpointEvent) ComparableStr() string {
 }
 
 func (e checkpointEvent) ConsensusRound() round {
-	return 0
+	return roundZero
 }
 
 func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent {

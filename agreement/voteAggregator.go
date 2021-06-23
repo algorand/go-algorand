@@ -103,20 +103,20 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		if err != nil {
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
 		}
-		if v.R.Round == pr.Round {
+		if v.R.Round == pr.Round.number { // XXX timer doesn't know branches
 			r.t.timeR().RecVoteReceived(v)
-		} else if v.R.Round == pr.Round+1 {
+		} else if v.R.Round == pr.Round.number+1 { // XXX
 			r.t.timeRPlus1().RecVoteReceived(v)
 		}
 
 		deliver := voteAcceptedEvent{Vote: v, Proto: e.Proto.Version}
-		tE := r.dispatch(pr, deliver, voteMachineRound, v.R.Round, v.R.Period, v.R.Step)
+		tE := r.dispatch(pr, deliver, voteMachineRound, v.R.branchRound(), v.R.Period, v.R.Step)
 		if tE.t() == none {
 			return tE
 		}
 		if tE.(thresholdEvent).Round == e.FreshnessData.PlayerRound {
 			return tE
-		} else if tE.(thresholdEvent).Round == e.FreshnessData.PlayerRound+1 {
+		} else if tE.(thresholdEvent).Round.number == e.FreshnessData.PlayerRound.number+1 { // XXX freshness data R+1 check not branch-aware
 			return emptyEvent{}
 		}
 		logging.Base().Panicf("bad round (%v, %v)", tE.(thresholdEvent).Round, e.FreshnessData.PlayerRound) // TODO this should be a postcondition check; move it
@@ -166,7 +166,7 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		var threshEvent event
 		for _, vote := range votes {
 			deliver := voteAcceptedEvent{Vote: vote, Proto: e.Proto.Version}
-			e := r.dispatch(pr, deliver, voteMachineRound, vote.R.Round, vote.R.Period, vote.R.Step)
+			e := r.dispatch(pr, deliver, voteMachineRound, vote.R.branchRound(), vote.R.Period, vote.R.Step)
 			switch e.t() {
 			case softThreshold, certThreshold, nextThreshold:
 				threshEvent = e
@@ -193,7 +193,7 @@ func (agg *voteAggregator) filterVote(proto protocol.ConsensusVersion, p player,
 		return fmt.Errorf("voteAggregator: rejected vote due to age: %v", err)
 	}
 	filterReq := voteFilterRequestEvent{RawVote: uv.R}
-	filterRes := r.dispatch(p, filterReq, voteMachineStep, uv.R.Round, uv.R.Period, uv.R.Step)
+	filterRes := r.dispatch(p, filterReq, voteMachineStep, uv.R.branchRound(), uv.R.Period, uv.R.Step)
 	switch filterRes.t() {
 	case voteFilteredStep:
 		// we'll rebuild the filtered event later
@@ -242,13 +242,19 @@ func voteStepFresh(descr string, proto protocol.ConsensusVersion, mine, vote ste
 	return nil
 }
 
+const alwaysFresh = true
+
 // voteFresh determines whether a vote satisfies freshness rules.
 func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote unauthenticatedVote) error {
-	if freshData.PlayerRound != vote.R.Round && freshData.PlayerRound+1 != vote.R.Round {
+	if alwaysFresh { // XXX for now
+		return nil
+	}
+
+	if freshData.PlayerRound != vote.R.branchRound() && freshData.PlayerRound.number+1 != vote.R.Round { // XXX ignores branch for r+1 check
 		return fmt.Errorf("filtered vote from bad round: player.Round=%v; vote.Round=%v", freshData.PlayerRound, vote.R.Round)
 	}
 
-	if freshData.PlayerRound+1 == vote.R.Round {
+	if freshData.PlayerRound.number+1 == vote.R.Round { // XXX ignores branch
 		if vote.R.Period > 0 {
 			return fmt.Errorf("filtered future vote from bad period: player.Round=%v; vote.(Round,Period,Step)=(%v,%v,%v)", freshData.PlayerRound, vote.R.Round, vote.R.Period, vote.R.Step)
 		}
@@ -274,7 +280,11 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 
 // bundleFresh determines whether a bundle satisfies freshness rules.
 func bundleFresh(freshData freshnessData, b unauthenticatedBundle) error {
-	if freshData.PlayerRound != b.Round {
+	if alwaysFresh { // XXX for now
+		return nil
+	}
+
+	if freshData.PlayerRound != b.branchRound() { // only allows one branch+round
 		return fmt.Errorf("filtered bundle from different round: round %d != %d", freshData.PlayerRound, b.Round)
 	}
 

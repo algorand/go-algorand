@@ -196,7 +196,7 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 	case voteVerified:
 		v := e.(messageEvent).Input.Vote
 
-		ev := r.dispatch(p, e, proposalMachinePeriod, v.R.Round, v.R.Period, 0)
+		ev := r.dispatch(p, e, proposalMachinePeriod, v.R.branchRound(), v.R.Period, 0)
 		if ev.t() == proposalAccepted {
 			e := ev.(proposalAcceptedEvent)
 			ea := store.Assemblers[e.Proposal]

@@ -45,9 +45,11 @@ func DeadlineTimeout() time.Duration {
 }
 
 type branchRound struct {
-	roundNumber basics.Round
-	branch      crypto.Digest
+	number basics.Round
+	branch crypto.Digest
 }
+
+var roundZero = round{number: 0}
 
 type (
 	// round denotes a single round of the agreement protocol

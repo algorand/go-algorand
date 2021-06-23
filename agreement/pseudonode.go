@@ -266,9 +266,9 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 }
 
 // makeProposals creates a slice of block proposals for the given round and period.
-func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.Participation) ([]proposal, []unauthenticatedVote) {
+func (n asyncPseudonode) makeProposals(round round, period period, accounts []account.Participation) ([]proposal, []unauthenticatedVote) {
 	deadline := time.Now().Add(config.ProposalAssemblyTime)
-	ve, err := n.factory.AssembleBlock(round, deadline)
+	ve, err := n.factory.AssembleBlock(round.number, deadline) // XXXX needs branch-aware
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
 			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
@@ -286,7 +286,7 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 		}
 
 		// attempt to make the vote
-		rv := rawVote{Sender: account.Address(), Round: round, Period: period, Step: propose, Proposal: proposal}
+		rv := rawVote{Sender: account.Address(), Round: round.number, Branch: round.branch, Period: period, Step: propose, Proposal: proposal}
 		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), n.ledger)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", err)
@@ -303,10 +303,10 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 
 // makeVotes creates a slice of votes for a given proposal value in a given
 // round, period, and step.
-func (n asyncPseudonode) makeVotes(round basics.Round, period period, step step, proposal proposalValue, participation []account.Participation) []unauthenticatedVote {
+func (n asyncPseudonode) makeVotes(round round, period period, step step, proposal proposalValue, participation []account.Participation) []unauthenticatedVote {
 	votes := make([]unauthenticatedVote, 0)
 	for _, account := range participation {
-		rv := rawVote{Sender: account.Address(), Round: round, Period: period, Step: step, Proposal: proposal}
+		rv := rawVote{Sender: account.Address(), Round: round.number, Branch: round.branch, Period: period, Step: step, Proposal: proposal}
 		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), n.ledger)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeVotes: could not create vote: %v", err)
@@ -344,7 +344,7 @@ func (pv *pseudonodeVerifier) verifierLoop(n *asyncPseudonode) {
 // task with the loaded participation keys. It returns whether we have any participation keys
 // for the given round.
 func (t *pseudonodeBaseTask) populateParticipationKeys(r round) bool {
-	t.participation = t.node.loadRoundParticipationKeys(r)
+	t.participation = t.node.loadRoundParticipationKeys(r.number) // XXX likely OK to ignore branch?
 	return len(t.participation) > 0
 }
 

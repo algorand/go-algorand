@@ -282,6 +282,10 @@ func (b unauthenticatedBundle) Certificate() Certificate {
 	return Certificate(b)
 }
 
+func (b unauthenticatedBundle) branchRound() round {
+	return round{number: b.Round, branch: b.Branch}
+}
+
 func (b bundle) u() unauthenticatedBundle {
 	return b.U
 }

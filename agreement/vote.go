@@ -190,6 +190,10 @@ func (rv rawVote) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Vote, protocol.Encode(&rv)
 }
 
+func (rv rawVote) branchRound() round {
+	return round{number: rv.Round, branch: rv.Branch}
+}
+
 func (v vote) u() unauthenticatedVote {
 	return unauthenticatedVote{R: v.R, Cred: v.Cred.UnauthenticatedCredential, Sig: v.Sig}
 }
