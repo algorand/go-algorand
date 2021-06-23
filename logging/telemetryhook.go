@@ -33,13 +33,17 @@ func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth i
 }
 
 func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int, levels []logrus.Level) *asyncTelemetryHook {
+	// one time check to see if the wrappedHook is ready (true for mocked telemetry)
+	tfh, ok := wrappedHook.(*telemetryFilteredHook)
+	ready := ok && tfh.wrappedHook != nil
+
 	hook := &asyncTelemetryHook{
 		wrappedHook:   wrappedHook,
 		entries:       make(chan *logrus.Entry, channelDepth),
 		quit:          make(chan struct{}),
 		maxQueueDepth: maxQueueDepth,
 		levels:        levels,
-		ready:         false,
+		ready:         ready,
 		urlUpdate:     make(chan bool),
 	}
 
