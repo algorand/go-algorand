@@ -1113,7 +1113,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 
 	vb := ValidatedBlock{
 		blk:   eval.block,
-		delta: eval.state.deltas(),
+		state: eval.state,
 	}
 	eval.blockGenerated = true
 	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader, eval.prevHeader.TimeStamp, len(eval.block.Payset))
@@ -1165,10 +1165,10 @@ func (validator *evalTxValidator) run() {
 // Validate: eval(ctx, l, blk, true, txcache, executionPool, true)
 // AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
 // tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (*roundCowState, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
-		return ledgercore.StateDelta{}, err
+		return nil, err
 	}
 
 	validationCtx, validationCancel := context.WithCancel(ctx)
@@ -1181,7 +1181,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
-		return ledgercore.StateDelta{}, err
+		return nil, err
 	}
 
 	accountLoadingCtx, accountLoadingCancel := context.WithCancel(ctx)
@@ -1198,7 +1198,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	if validate {
 		_, ok := config.Consensus[blk.CurrentProtocol]
 		if !ok {
-			return ledgercore.StateDelta{}, protocol.Error(blk.CurrentProtocol)
+			return nil, protocol.Error(blk.CurrentProtocol)
 		}
 		txvalidator.txcache = txcache
 		txvalidator.block = blk
@@ -1220,7 +1220,7 @@ transactionGroupLoop:
 			if !ok {
 				break transactionGroupLoop
 			} else if txgroup.err != nil {
-				return ledgercore.StateDelta{}, err
+				return nil, err
 			}
 
 			for _, br := range txgroup.balances {
@@ -1228,14 +1228,14 @@ transactionGroupLoop:
 			}
 			err = eval.TransactionGroup(txgroup.group)
 			if err != nil {
-				return ledgercore.StateDelta{}, err
+				return nil, err
 			}
 		case <-ctx.Done():
-			return ledgercore.StateDelta{}, ctx.Err()
+			return nil, ctx.Err()
 		case err, open := <-txvalidator.done:
 			// if we're not validating, then `txvalidator.done` would be nil, in which case this case statement would never be executed.
 			if open && err != nil {
-				return ledgercore.StateDelta{}, err
+				return nil, err
 			}
 		}
 	}
@@ -1243,7 +1243,7 @@ transactionGroupLoop:
 	// Finally, procees any pending end-of-block state changes
 	err = eval.endOfBlock()
 	if err != nil {
-		return ledgercore.StateDelta{}, err
+		return nil, err
 	}
 
 	// If validating, do final block checks that depend on our new state
@@ -1251,22 +1251,22 @@ transactionGroupLoop:
 		// wait for the validation to complete.
 		select {
 		case <-ctx.Done():
-			return ledgercore.StateDelta{}, ctx.Err()
+			return nil, ctx.Err()
 		case err, open := <-txvalidator.done:
 			if !open {
 				break
 			}
 			if err != nil {
-				return ledgercore.StateDelta{}, err
+				return nil, err
 			}
 		}
 		err = eval.finalValidation()
 		if err != nil {
-			return ledgercore.StateDelta{}, err
+			return nil, err
 		}
 	}
 
-	return eval.state.deltas(), nil
+	return eval.state, nil
 }
 
 // loadedTransactionGroup is a helper struct to allow asyncronious loading of the account data needed by the transaction groups
@@ -1453,14 +1453,14 @@ func loadAccounts(ctx context.Context, l ledgerForEvaluator, rnd basics.Round, g
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
+	state, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
 		return nil, err
 	}
 
 	vb := ValidatedBlock{
 		blk:   blk,
-		delta: delta,
+		state: state,
 	}
 	return &vb, nil
 }
@@ -1470,7 +1470,7 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 // the work of applying the block's changes to the ledger state.
 type ValidatedBlock struct {
 	blk   bookkeeping.Block
-	delta ledgercore.StateDelta
+	state *roundCowState
 }
 
 // Block returns the underlying Block for a ValidatedBlock.
@@ -1485,6 +1485,6 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 
 	return ValidatedBlock{
 		blk:   newblock,
-		delta: vb.delta,
+		state: vb.state,
 	}
 }

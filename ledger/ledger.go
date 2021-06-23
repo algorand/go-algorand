@@ -535,14 +535,14 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 
-	updates, err := eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
+	state, err := eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
 		return err
 	}
 
 	vb := ValidatedBlock{
 		blk:   blk,
-		delta: updates,
+		state: state,
 	}
 
 	return l.AddValidatedBlock(vb, cert)
@@ -563,7 +563,7 @@ func (l *Ledger) AddValidatedBlock(vb ValidatedBlock, cert agreement.Certificate
 		return err
 	}
 	l.headerCache.Put(vb.blk.Round(), vb.blk.BlockHeader)
-	l.trackers.newBlock(vb.blk, vb.delta)
+	l.trackers.newBlock(vb.blk, vb.state.deltas())
 	l.log.Debugf("added blk %d", vb.blk.Round())
 	return nil
 }
@@ -638,7 +638,11 @@ func (l *Ledger) trackerLog() logging.Logger {
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
-	return eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
+	state, err := eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
+	if err != nil {
+		return ledgercore.StateDelta{}, err
+	}
+	return state.deltas(), err
 }
 
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
