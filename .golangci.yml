@@ -1,0 +1,30 @@
+run:
+  timeout: 5m
+  tests: false
+  
+linters:
+  enable:
+    - golint
+    - misspell
+    - govet
+
+  disable:
+    - deadcode
+    - errcheck
+    - gosimple
+    - ineffassign
+    - staticcheck
+    - structcheck
+    - unused
+    - varcheck
+    
+linters-settings:
+#  govet:
+#    check-shadowing: true
+
+issues:
+  exclude-rules:
+    # ignore govet false positive fixed in https://github.com/golang/go/issues/45043
+    - linters:
+        - govet
+      text: "sigchanyzer: misuse of unbuffered os.Signal channel as argument to signal.Notify"
