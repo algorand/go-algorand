@@ -106,6 +106,8 @@ void ge25519_scalarmult(ge25519_p3 *h, const unsigned char *a,
 
 int ge25519_is_canonical(const unsigned char *s);
 
+int ge25519_is_canonical_vartime(const unsigned char *s);
+
 int ge25519_is_on_curve(const ge25519_p3 *p);
 
 int ge25519_is_on_main_subgroup(const ge25519_p3 *p);
@@ -127,5 +129,7 @@ void sc25519_muladd(unsigned char s[32], const unsigned char a[32],
                     const unsigned char b[32], const unsigned char c[32]);
 
 int sc25519_is_canonical(const unsigned char s[32]);
+
+int sc25519_is_canonical_vartime(const unsigned char s[32]);
 
 #endif
