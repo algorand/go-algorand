@@ -203,7 +203,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	if nr, _ := s.Ledger.NextRound(); err != nil || status.Round.number < nr { // XXX double-check with branch
 		// in this case, we don't have fresh and valid state
 		// pretend a new round has just started, and propose a block
-		nextRound := makeBranchRound(s.Ledger.NextRound())                                // XXX handle Ledger.NextRound() returning prev/branch
+		nextRound := makeRoundBranch(s.Ledger.NextRound())                                // XXX handle Ledger.NextRound() returning prev/branch
 		nextVersion, err := s.Ledger.ConsensusVersion(nextRound.number, nextRound.branch) // XXX correct?
 		if err != nil {
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
@@ -212,7 +212,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		status = player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
 		router = makeRootRouter(status)
 
-		a1 := pseudonodeAction{T: assemble, Round: makeBranchRound(s.Ledger.NextRound())}
+		a1 := pseudonodeAction{T: assemble, Round: makeRoundBranch(s.Ledger.NextRound())}
 		a2 := rezeroAction{}
 
 		a = make([]action, 0)

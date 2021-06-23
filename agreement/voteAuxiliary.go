@@ -61,7 +61,7 @@ func (t *voteTrackerPeriod) handle(r routerHandle, p player, e event) event {
 	switch e.t() {
 	case voteAccepted:
 		// forward voteAccepted event
-		round := e.(voteAcceptedEvent).Vote.R.branchRound()
+		round := e.(voteAcceptedEvent).Vote.R.roundBranch()
 		period := e.(voteAcceptedEvent).Vote.R.Period
 		step := e.(voteAcceptedEvent).Vote.R.Step
 		e = r.dispatch(p, e, voteMachineStep, round, period, step)
@@ -133,7 +133,7 @@ func (t *voteTrackerRound) underlying() listener {
 func (t *voteTrackerRound) handle(r routerHandle, p player, e event) event {
 	switch e.t() {
 	case voteAccepted:
-		round := e.(voteAcceptedEvent).Vote.R.branchRound()
+		round := e.(voteAcceptedEvent).Vote.R.roundBranch()
 		period := e.(voteAcceptedEvent).Vote.R.Period
 		e = r.dispatch(p, e, voteMachinePeriod, round, period, 0)
 		// dispatch to self to handle freshest bundle

@@ -164,9 +164,9 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 		return termFmtErrorFn("unauthenticatedBundle.verify: b.Step = %v", propose)
 	}
 
-	proto, err := l.ConsensusParams(paramsRoundBranch(b.branchRound()))
+	proto, err := l.ConsensusParams(paramsRoundBranch(b.roundBranch()))
 	if err != nil {
-		return termFmtErrorFn("unauthenticatedBundle.verify: could not get consensus params for round %d from round %+v: %v", ParamsRound(b.Round), b.branchRound(), err)
+		return termFmtErrorFn("unauthenticatedBundle.verify: could not get consensus params for round %d from round %+v: %v", ParamsRound(b.Round), b.roundBranch(), err)
 	}
 
 	numVotes := uint64(len(b.Votes))
@@ -282,7 +282,7 @@ func (b unauthenticatedBundle) Certificate() Certificate {
 	return Certificate(b)
 }
 
-func (b unauthenticatedBundle) branchRound() round {
+func (b unauthenticatedBundle) roundBranch() round {
 	return round{number: b.Round, branch: b.Branch}
 }
 

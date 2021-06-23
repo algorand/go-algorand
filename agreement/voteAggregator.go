@@ -110,7 +110,7 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		}
 
 		deliver := voteAcceptedEvent{Vote: v, Proto: e.Proto.Version}
-		tE := r.dispatch(pr, deliver, voteMachineRound, v.R.branchRound(), v.R.Period, v.R.Step)
+		tE := r.dispatch(pr, deliver, voteMachineRound, v.R.roundBranch(), v.R.Period, v.R.Step)
 		if tE.t() == none {
 			return tE
 		}
@@ -166,7 +166,7 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		var threshEvent event
 		for _, vote := range votes {
 			deliver := voteAcceptedEvent{Vote: vote, Proto: e.Proto.Version}
-			e := r.dispatch(pr, deliver, voteMachineRound, vote.R.branchRound(), vote.R.Period, vote.R.Step)
+			e := r.dispatch(pr, deliver, voteMachineRound, vote.R.roundBranch(), vote.R.Period, vote.R.Step)
 			switch e.t() {
 			case softThreshold, certThreshold, nextThreshold:
 				threshEvent = e
@@ -193,7 +193,7 @@ func (agg *voteAggregator) filterVote(proto protocol.ConsensusVersion, p player,
 		return fmt.Errorf("voteAggregator: rejected vote due to age: %v", err)
 	}
 	filterReq := voteFilterRequestEvent{RawVote: uv.R}
-	filterRes := r.dispatch(p, filterReq, voteMachineStep, uv.R.branchRound(), uv.R.Period, uv.R.Step)
+	filterRes := r.dispatch(p, filterReq, voteMachineStep, uv.R.roundBranch(), uv.R.Period, uv.R.Step)
 	switch filterRes.t() {
 	case voteFilteredStep:
 		// we'll rebuild the filtered event later
@@ -250,7 +250,7 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 		return nil
 	}
 
-	if freshData.PlayerRound != vote.R.branchRound() && freshData.PlayerRound.number+1 != vote.R.Round { // XXX ignores branch for r+1 check
+	if freshData.PlayerRound != vote.R.roundBranch() && freshData.PlayerRound.number+1 != vote.R.Round { // XXX ignores branch for r+1 check
 		return fmt.Errorf("filtered vote from bad round: player.Round=%v; vote.Round=%v", freshData.PlayerRound, vote.R.Round)
 	}
 
@@ -284,7 +284,7 @@ func bundleFresh(freshData freshnessData, b unauthenticatedBundle) error {
 		return nil
 	}
 
-	if freshData.PlayerRound != b.branchRound() { // only allows one branch+round
+	if freshData.PlayerRound != b.roundBranch() { // only allows one branch+round
 		return fmt.Errorf("filtered bundle from different round: round %d != %d", freshData.PlayerRound, b.Round)
 	}
 

@@ -452,7 +452,7 @@ func (p *player) partitionPolicy(r routerHandle) (actions []action) {
 	switch {
 	case bundleResponse.Ok && bundleResponse.Event.Bundle.Proposal != bottom:
 		b := bundleResponse.Event.Bundle
-		bundleRound = b.branchRound()
+		bundleRound = b.roundBranch()
 		bundlePeriod = b.Period
 		fallthrough
 	case p.Period == 0:
@@ -533,7 +533,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			doneProcessing = false
 			seq := p.Pending.push(e.Tail)
 			uv := e.Input.UnauthenticatedVote
-			return append(actions, verifyVoteAction(e, uv.R.branchRound(), uv.R.Period, seq))
+			return append(actions, verifyVoteAction(e, uv.R.roundBranch(), uv.R.Period, seq))
 		}
 		v := e.Input.Vote
 		a := relayAction(e, protocol.AgreementVoteTag, v.u())
@@ -622,7 +622,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		}
 		if e.t() == votePresent {
 			uv := e.Input.UnauthenticatedVote
-			return append(actions, verifyVoteAction(e, uv.R.branchRound(), uv.R.Period, 0))
+			return append(actions, verifyVoteAction(e, uv.R.roundBranch(), uv.R.Period, 0))
 		} // else e.t() == voteVerified
 		v := e.Input.Vote
 		actions = append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
@@ -641,7 +641,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		}
 		if e.t() == bundlePresent {
 			ub := e.Input.UnauthenticatedBundle
-			return append(actions, verifyBundleAction(e, ub.branchRound(), ub.Period, ub.Step))
+			return append(actions, verifyBundleAction(e, ub.roundBranch(), ub.Period, ub.Step))
 		}
 		a0 := relayAction(e, protocol.VoteBundleTag, ef.(thresholdEvent).Bundle)
 		a1 := p.handle(r, ef)

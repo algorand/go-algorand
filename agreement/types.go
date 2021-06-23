@@ -44,20 +44,20 @@ func DeadlineTimeout() time.Duration {
 	return deadlineTimeout
 }
 
-type branchRound struct {
+type roundBranch struct {
 	number basics.Round
 	branch crypto.Digest
 }
 
 var roundZero = round{number: 0}
 
-func makeBranchRound(n basics.Round, b crypto.Digest) round {
+func makeRoundBranch(n basics.Round, b crypto.Digest) round {
 	return round{number: n, branch: b}
 }
 
 type (
 	// round denotes a single round of the agreement protocol
-	round = branchRound
+	round = roundBranch
 
 	// step is a sequence number denoting distinct stages in Algorand
 	step uint64

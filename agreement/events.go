@@ -295,11 +295,11 @@ func (e messageEvent) ComparableStr() string {
 func (e messageEvent) ConsensusRound() round {
 	switch e.T {
 	case votePresent, voteVerified:
-		return e.Input.UnauthenticatedVote.R.branchRound()
+		return e.Input.UnauthenticatedVote.R.roundBranch()
 	case payloadPresent, payloadVerified:
-		return e.Input.UnauthenticatedProposal.branchRound()
+		return e.Input.UnauthenticatedProposal.roundBranch()
 	case bundlePresent, bundleVerified:
-		return e.Input.UnauthenticatedBundle.branchRound()
+		return e.Input.UnauthenticatedBundle.roundBranch()
 	default:
 		return roundZero
 	}

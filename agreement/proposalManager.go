@@ -160,10 +160,10 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 			r.t.timeRPlus1().RecVoteReceived(v)
 		}
 
-		return r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.branchRound(), v.R.Period, 0)
+		return r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.roundBranch(), v.R.Period, 0)
 
 	case payloadPresent:
-		propRound := e.Input.UnauthenticatedProposal.branchRound()
+		propRound := e.Input.UnauthenticatedProposal.roundBranch()
 		in := e.messageEvent
 
 		if p.Round == propRound { // XXX branch check correct?
@@ -230,7 +230,7 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 	}
 
 	qe := voteFilterRequestEvent{RawVote: uv.R}
-	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.branchRound(), uv.R.Period, 0)
+	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.roundBranch(), uv.R.Period, 0)
 	if sawVote.t() == voteFiltered {
 		return fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", uv.R.Sender, uv.R.Round, uv.R.Period)
 	}

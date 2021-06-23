@@ -91,7 +91,7 @@ type (
 // verify verifies that a vote that was received from the network is valid.
 func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	rv := uv.R
-	m, err := membership(l, rv.Sender, rv.branchRound(), rv.Period, rv.Step)
+	m, err := membership(l, rv.Sender, rv.roundBranch(), rv.Period, rv.Step)
 	if err != nil {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get membership parameters: %w", err)
 	}
@@ -114,7 +114,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 		}
 	}
 
-	proto, err := l.ConsensusParams(paramsRoundBranch(rv.branchRound()))
+	proto, err := l.ConsensusParams(paramsRoundBranch(rv.roundBranch()))
 	if err != nil {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
@@ -145,12 +145,12 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 //
 // makeVote returns an error it it fails.
 func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecrets, l Ledger) (unauthenticatedVote, error) {
-	m, err := membership(l, rv.Sender, rv.branchRound(), rv.Period, rv.Step)
+	m, err := membership(l, rv.Sender, rv.roundBranch(), rv.Period, rv.Step)
 	if err != nil {
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: could not get membership parameters: %v", err)
 	}
 
-	proto, err := l.ConsensusParams(paramsRoundBranch(rv.branchRound()))
+	proto, err := l.ConsensusParams(paramsRoundBranch(rv.roundBranch()))
 	if err != nil {
 		return unauthenticatedVote{}, fmt.Errorf("makeVote: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
 	}
@@ -190,7 +190,7 @@ func (rv rawVote) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Vote, protocol.Encode(&rv)
 }
 
-func (rv rawVote) branchRound() round {
+func (rv rawVote) roundBranch() round {
 	return round{number: rv.Round, branch: rv.Branch}
 }
 

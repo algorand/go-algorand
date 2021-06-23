@@ -282,7 +282,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		// since we don't know how long we've been waiting in this select statement and we don't really know
 		// if the current next round has been increased by 1 or more, we need to sample it again.
 		previousRound := nextRound
-		nextRound = makeBranchRound(s.Ledger.NextRound())
+		nextRound = makeRoundBranch(s.Ledger.NextRound())
 
 		logEvent := logspec.AgreementEvent{
 			Type:   logspec.RoundInterrupted,

@@ -65,7 +65,7 @@ func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Payload, protocol.Encode(&p)
 }
 
-func (p unauthenticatedProposal) branchRound() round {
+func (p unauthenticatedProposal) roundBranch() round {
 	return round{number: p.Round(), branch: crypto.Digest(p.Branch)}
 }
 
@@ -182,7 +182,7 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 
 func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	value := p.value()
-	rnd := p.branchRound()
+	rnd := p.roundBranch()
 	cparams, err := ledger.ConsensusParams(paramsRoundBranch(rnd))
 	if err != nil {
 		return fmt.Errorf("failed to obtain consensus parameters in round %d from round %+v: %v", ParamsRound(rnd.number), rnd, err)
