@@ -122,35 +122,51 @@ type LedgerReader interface {
 	// bias. It is used to select committees for participation in
 	// sortition.
 	//
+	// If leafBranch is specified, the ledger will look up the seed for
+	// the round of a speculative chain of blocks ending at that leaf branch
+	// value. If it is not specified, it will only look for confirmed Round data.
+	//
 	// This method returns an error if the given Round has not yet been
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	Seed(basics.Round, crypto.Digest) (committee.Seed, error)
+	Seed(round basics.Round, leafBranch crypto.Digest) (committee.Seed, error)
 
 	// Lookup returns the AccountData associated with some Address
 	// at the conclusion of a given round.
 	//
-	// This method returns an error if the given Round has not yet been
-	// confirmed. It may also return an error if the given Round is
-	// unavailable by the storage device. In that case, the agreement
-	// protocol may lose liveness.
-	Lookup(basics.Round, crypto.Digest, basics.Address) (basics.AccountData, error)
-
-	// Circulation returns the total amount of money in circulation at the
-	// conclusion of a given round.
+	// If branch is provided, Lookup will return speculative pipelined
+	// account data for the round corresponding to that branch. If branch
+	// is empty and the given Round is not confirmed, it will return an error.
 	//
 	// This method returns an error if the given Round has not yet been
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	Circulation(basics.Round, crypto.Digest) (basics.MicroAlgos, error)
+	Lookup(round basics.Round, branch crypto.Digest, addr basics.Address) (basics.AccountData, error)
+
+	// Circulation returns the total amount of money in circulation at the
+	// conclusion of a given round.
+	//
+	// If branch is provided, Lookup will return a speculative total for
+	// the round corresponding to that branch. If branch is empty and the
+	// given Round is not confirmed, it will return an error.
+	//
+	// This method returns an error if the given Round has not yet been
+	// confirmed. It may also return an error if the given Round is
+	// unavailable by the storage device. In that case, the agreement
+	// protocol may lose liveness.
+	Circulation(round basics.Round, branch crypto.Digest) (basics.MicroAlgos, error)
 
 	// LookupDigest returns the Digest of the entry that was agreed on in a
 	// given round.
 	//
 	// Recent Entry Digests are periodically used when computing the Seed.
 	// This prevents some subtle attacks.
+	//
+	// If branch is provided, Lookup will return speculative pipelined
+	// account data for the round corresponding to that branch. If branch
+	// is empty and the given Round is not confirmed, it will return an error.
 	//
 	// This method returns an error if the given Round has not yet been
 	// confirmed. It may also return an error if the given Round is
@@ -160,10 +176,14 @@ type LedgerReader interface {
 	// A LedgerReader need only keep track of the digest from the most
 	// recent multiple of (config.Protocol.BalLookback/2). All other
 	// digests may be forgotten without hurting liveness.
-	LookupDigest(basics.Round, crypto.Digest) (crypto.Digest, error)
+	LookupDigest(round basics.Round, branch crypto.Digest) (crypto.Digest, error)
 
 	// ConsensusParams returns the consensus parameters that are correct
 	// for the given round.
+	//
+	// If leafBranch is specified, the ledger will look up the parameters for
+	// the round of a speculative chain of blocks ending at that leaf branch
+	// value. If it is not specified, it will only look for confirmed data.
 	//
 	// This method returns an error if the given Round has not yet been
 	// confirmed. It may also return an error if the given Round is
@@ -171,7 +191,7 @@ type LedgerReader interface {
 	// protocol may lose liveness.
 	//
 	// TODO replace with ConsensusVersion
-	ConsensusParams(basics.Round, crypto.Digest) (config.ConsensusParams, error)
+	ConsensusParams(round basics.Round, leafBranch crypto.Digest) (config.ConsensusParams, error)
 
 	// ConsensusVersion returns the consensus version that is correct
 	// for the given round.
