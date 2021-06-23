@@ -179,13 +179,13 @@ func TestAsyncTelemetryHook_CloseDrop(t *testing.T) {
 		<-filling // Block while filling
 	}
 	hook := createAsyncHook(&testHook, 4, entryCount)
+	hook.ready = true
 	for i := 0; i < entryCount; i++ {
 		entry := logrus.Entry{
 			Level: logrus.ErrorLevel,
 		}
 		hook.Fire(&entry)
 	}
-	hook.ready = true
 
 	close(filling)
 	hook.Close()
@@ -206,13 +206,13 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	}
 
 	hook := createAsyncHook(&testHook, entryCount, maxDepth)
+	hook.ready = true
 	for i := 0; i < entryCount; i++ {
 		entry := logrus.Entry{
 			Level: logrus.ErrorLevel,
 		}
 		hook.Fire(&entry)
 	}
-	hook.ready = true
 
 	close(filling)
 	hook.Close()
