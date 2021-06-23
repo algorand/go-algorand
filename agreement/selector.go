@@ -58,34 +58,34 @@ func seedRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
 }
 
 // a helper function for obtaining membership verification parameters.
-func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s step) (m committee.Membership, err error) {
-	cparams, err := l.ConsensusParams(ParamsRound(r))
+func membership(l LedgerReader, addr basics.Address, r round, p period, s step) (m committee.Membership, err error) {
+	cparams, err := l.ConsensusParams(paramsRoundBranch(r))
 	if err != nil {
 		return
 	}
-	balanceRound := balanceRound(r, cparams)
-	seedRound := seedRound(r, cparams)
+	balanceRound := balanceRound(r.number, cparams)
+	seedRound := seedRound(r.number, cparams)
 
-	record, err := l.Lookup(balanceRound, addr)
+	record, err := l.Lookup(balanceRound, crypto.Digest{}, addr) // assumes balance was confirmed
 	if err != nil {
 		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain balance record for address %v in round %d: %w", r, addr, balanceRound, err)
 		return
 	}
 
-	total, err := l.Circulation(balanceRound)
+	total, err := l.Circulation(balanceRound, crypto.Digest{})
 	if err != nil {
 		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain total circulation in round %d: %v", r, balanceRound, err)
 		return
 	}
 
-	seed, err := l.Seed(seedRound)
+	seed, err := l.Seed(seedRound, r.branch)
 	if err != nil {
 		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain seed in round %d: %v", r, seedRound, err)
 		return
 	}
 
 	m.Record = committee.BalanceRecord{AccountData: record, Addr: addr}
-	m.Selector = selector{Seed: seed, Round: r, Period: p, Step: s}
+	m.Selector = selector{Seed: seed, Round: r.number, Branch: r.branch, Period: p, Step: s}
 	m.TotalMoney = total
 	return m, nil
 }

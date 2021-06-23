@@ -51,6 +51,10 @@ type branchRound struct {
 
 var roundZero = round{number: 0}
 
+func makeBranchRound(n basics.Round, b crypto.Digest) round {
+	return round{number: n, branch: b}
+}
+
 type (
 	// round denotes a single round of the agreement protocol
 	round = branchRound

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -203,7 +204,7 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []a
 		return n.participationKeys
 	}
 
-	cparams, err := n.ledger.ConsensusParams(ParamsRound(voteRound))
+	cparams, err := n.ledger.ConsensusParams(ParamsRound(voteRound), crypto.Digest{}) // XXX ignores branch
 	if err != nil {
 		// if we cannot figure out the balance round number, reset the parameters so that we won't be sending
 		// any vote.
@@ -268,7 +269,7 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round round, period period, accounts []account.Participation) ([]proposal, []unauthenticatedVote) {
 	deadline := time.Now().Add(config.ProposalAssemblyTime)
-	ve, err := n.factory.AssembleBlock(round.number, deadline) // XXXX needs branch-aware
+	ve, err := n.factory.AssembleBlock(round.number, round.branch, deadline)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
 			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)

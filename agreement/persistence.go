@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -289,7 +290,7 @@ func (p *asyncPersistenceLoop) loop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-p.ledger.Wait(s.round.number.SubSaturate(1)): // XXXX need ledger.Wait to be branch-aware
+		case <-p.ledger.Wait(s.round.number.SubSaturate(1), crypto.Digest{}): // XXXX need hash of block r-2 for call to Wait
 		}
 
 		// store the state.

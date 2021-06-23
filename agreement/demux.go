@@ -187,7 +187,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		if !ok {
 			return
 		}
-		proto, err := d.ledger.ConsensusVersion(ParamsRound(e.ConsensusRound().number))
+		proto, err := d.ledger.ConsensusVersion(paramsRoundBranch(e.ConsensusRound()))
 		e = e.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto})
 	}()
 
@@ -234,13 +234,13 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		rawBundles = nil
 	}
 
-	ledgerNextRoundCh := s.Ledger.Wait(nextRound.number) // XXXX needs to be branch-aware
+	ledgerNextRoundCh := s.Ledger.Wait(nextRound.number, nextRound.branch)
 	deadlineCh := s.Clock.TimeoutAt(deadline)
 	var fastDeadlineCh <-chan time.Time
 
 	fastPartitionRecoveryEnabled := false
-	if proto, err := d.ledger.ConsensusVersion(ParamsRound(currentRound.number)); err != nil {
-		logging.Base().Warnf("demux: could not get consensus parameters for round %d: %v", ParamsRound(currentRound.number), err)
+	if proto, err := d.ledger.ConsensusVersion(paramsRoundBranch(currentRound)); err != nil {
+		logging.Base().Warnf("demux: could not get consensus parameters for round %d from round %+v: %v", ParamsRound(currentRound.number), currentRound, err)
 		// this might happen during catchup, since the Ledger.Wait fires as soon as a new block is received by the ledger, which could be
 		// far before it's being committed. In these cases, it should be safe to default to the current consensus version. On subsequent
 		// iterations, it will get "corrected" since the ledger would finish flushing the blocks to disk.
@@ -282,7 +282,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		// since we don't know how long we've been waiting in this select statement and we don't really know
 		// if the current next round has been increased by 1 or more, we need to sample it again.
 		previousRound := nextRound
-		nextRound = round{number: s.Ledger.NextRound()} // XXX set branch for roundInterruptionEvent
+		nextRound = makeBranchRound(s.Ledger.NextRound())
 
 		logEvent := logspec.AgreementEvent{
 			Type:   logspec.RoundInterrupted,
@@ -370,7 +370,7 @@ func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 
 	tailmsg := message{MessageHandle: m.MessageHandle, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: compound.Proposal}
 	synthetic := messageEvent{T: payloadPresent, Input: tailmsg}
-	proto, err := l.ConsensusVersion(ParamsRound(synthetic.ConsensusRound().number))
+	proto, err := l.ConsensusVersion(paramsRoundBranch(synthetic.ConsensusRound()))
 	synthetic = synthetic.AttachConsensusVersion(ConsensusVersionView{Err: makeSerErr(err), Version: proto}).(messageEvent)
 
 	m.Tag = protocol.AgreementVoteTag

@@ -199,19 +199,20 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		}
 	}
 	// err will tell us if the restore/decode operations above completed successfully or not.
-	if err != nil || status.Round.number < s.Ledger.NextRound() { // XXX double-check with branch
+	// XXXX handle restoring multiple player states and using NextRound to check last confirmed
+	if nr, _ := s.Ledger.NextRound(); err != nil || status.Round.number < nr { // XXX double-check with branch
 		// in this case, we don't have fresh and valid state
 		// pretend a new round has just started, and propose a block
-		nextRound := s.Ledger.NextRound() // XXX have Ledger.NextRound() return prev/branch
-		nextVersion, err := s.Ledger.ConsensusVersion(nextRound)
+		nextRound := makeBranchRound(s.Ledger.NextRound())                                // XXX handle Ledger.NextRound() returning prev/branch
+		nextVersion, err := s.Ledger.ConsensusVersion(nextRound.number, nextRound.branch) // XXX correct?
 		if err != nil {
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		status = player{Round: round{number: nextRound}, Step: soft, Deadline: FilterTimeout(0, nextVersion)} // XXXX provide branch
+		status = player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
 		router = makeRootRouter(status)
 
-		a1 := pseudonodeAction{T: assemble, Round: round{number: s.Ledger.NextRound()}} // XXXX provide branch
+		a1 := pseudonodeAction{T: assemble, Round: makeBranchRound(s.Ledger.NextRound())}
 		a2 := rezeroAction{}
 
 		a = make([]action, 0)
