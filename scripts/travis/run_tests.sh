@@ -12,9 +12,9 @@ if [ "${BUILD_TYPE}" = "integration" ]; then
         SHORTTEST=-short
     fi
     export SHORTTEST 
-    ./travis_retry.sh make integration
+    "${SCRIPTPATH}/travis_retry.sh" make integration
 elif [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
-    ./travis_retry.sh make fulltest -j2
+    "${SCRIPTPATH}/travis_retry.sh" make fulltest -j2
 else
-    ./travis_retry.sh make shorttest -j2
+    "${SCRIPTPATH}/travis_retry.sh" make shorttest -j2
 fi
