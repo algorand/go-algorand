@@ -371,7 +371,7 @@ type WebsocketNetwork struct {
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
-	// lastNetworkAdvanceMu syncronized teh access to lastNetworkAdvance
+	// lastNetworkAdvanceMu syncronized the access to lastNetworkAdvance
 	lastNetworkAdvanceMu deadlock.Mutex
 
 	// lastNetworkAdvance contains the last timestamp where the agreement protocol was able to make a notable progress.
@@ -429,7 +429,7 @@ func (wn *WebsocketNetwork) Address() (string, bool) {
 }
 
 // PublicAddress what we tell other nodes to connect to.
-// Might be different than our locally percieved network address due to NAT/etc.
+// Might be different than our locally perceived network address due to NAT/etc.
 // Returns config "PublicAddress" if available, otherwise local addr.
 func (wn *WebsocketNetwork) PublicAddress() string {
 	if len(wn.config.PublicAddress) > 0 {
@@ -1346,7 +1346,7 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 		// clear out the unused portion of the peers array to allow the GC to cleanup unused peers.
 		remainderPeers := dest[len(wn.peers):cap(dest)]
 		for i := range remainderPeers {
-			// we want to delete only up to the first nil peer, since we're always writing to this array from the begining to the end
+			// we want to delete only up to the first nil peer, since we're always writing to this array from the beginning to the end
 			if remainderPeers[i] == nil {
 				break
 			}
@@ -1854,7 +1854,7 @@ var SupportedProtocolVersions = []string{"2.1"}
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
- *  2.1 Introducted topic key/data pairs and enabled services over the gossip connections
+ *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
  */
 const ProtocolVersion = "2.1"
 
@@ -1923,7 +1923,7 @@ func (wn *WebsocketNetwork) addrToGossipAddr(addr string) (string, error) {
 	return parsedURL.String(), nil
 }
 
-// tryConnectReserveAddr synchronously checks that addr is not already being connected to, returns (websocket URL or "", true if connection may procede)
+// tryConnectReserveAddr synchronously checks that addr is not already being connected to, returns (websocket URL or "", true if connection may proceed)
 func (wn *WebsocketNetwork) tryConnectReserveAddr(addr string) (gossipAddr string, ok bool) {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
@@ -1949,7 +1949,7 @@ func (wn *WebsocketNetwork) tryConnectReserveAddr(addr string) (gossipAddr strin
 	return gossipAddr, true
 }
 
-// tryConnectReleaseAddr should be called when connection succedes and becomes a peer or fails and is no longer being attempted
+// tryConnectReleaseAddr should be called when connection succeeds and becomes a peer or fails and is no longer being attempted
 func (wn *WebsocketNetwork) tryConnectReleaseAddr(addr, gossipAddr string) {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
@@ -2001,7 +2001,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	for _, supportedProtocolVersion := range SupportedProtocolVersions {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
-	// for backward compatability, include the ProtocolVersion header as well.
+	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()

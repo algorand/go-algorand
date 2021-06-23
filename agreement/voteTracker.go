@@ -216,7 +216,7 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 
 			// We've just moved the vote around ( regular vote -> equivocator vote ) but that did not
 			// change the total weight. Since the total weight for the proposal in the vote wasn't altered,
-			// we know for sure that we haven't reached a threshold for that proposal. ( but maybe for a diffrent one )
+			// we know for sure that we haven't reached a threshold for that proposal. ( but maybe for a different one )
 
 			// at this point, we need to check if this is the very last vote or not.
 			// if we have no regular votes, we won't be generating a bundle so we can abort right here.

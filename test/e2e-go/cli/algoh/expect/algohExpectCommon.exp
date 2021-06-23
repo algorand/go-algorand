@@ -92,7 +92,7 @@ proc ::Algoh::StopNode { TEST_ALGO_DIR } {
         puts "node stop with $TEST_ALGO_DIR"
         spawn goal node stop -d $TEST_ALGO_DIR
         expect {
-            timeout { close; ::Algoh::Abort "Did not recieve appropriate message during node stop"}
+            timeout { close; ::Algoh::Abort "Did not receive appropriate message during node stop"}
             "*The node was successfully stopped.*" {puts "Node stopped successfully"; close}
             eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to stop node"; Algoh::Abort } }
 

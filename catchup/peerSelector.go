@@ -333,7 +333,7 @@ func (ps *peerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int, int) {
 		sortNeeded = ps.addToPool(psp.Peer, rank, class, peerHistory)
 	}
 
-	// Update the ranks of the peers by reducing the penalty for not beeing selected
+	// Update the ranks of the peers by reducing the penalty for not being selected
 	for pl := len(ps.pools) - 1; pl >= 0; pl-- {
 		pool := ps.pools[pl]
 		for pr := len(pool.peers) - 1; pr >= 0; pr-- {
@@ -404,7 +404,7 @@ func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass, 
 	return true
 }
 
-// sort the pools array in an accending order according to the rank of each pool.
+// sort the pools array in an ascending order according to the rank of each pool.
 func (ps *peerSelector) sort() {
 	sort.SliceStable(ps.pools, func(i, j int) bool {
 		return ps.pools[i].rank < ps.pools[j].rank

@@ -279,22 +279,22 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs
 	return
 }
 
-// setSynchronousMode sets the writing database connections syncronous mode to the specified mode
+// setSynchronousMode sets the writing database connections synchronous mode to the specified mode
 func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.SynchronousMode) {
 	if synchronousMode < db.SynchronousModeOff || synchronousMode > db.SynchronousModeExtra {
-		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode : requested value %d is invalid", synchronousMode)
+		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode : requested value %d is invalid", synchronousMode)
 		return
 	}
 
 	err := l.blockDBs.Wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
-		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on blocks db: %v", err)
+		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode on blocks db: %v", err)
 		return
 	}
 
 	err = l.trackerDBs.Wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
-		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on trackers db: %v", err)
+		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode on trackers db: %v", err)
 		return
 	}
 }
