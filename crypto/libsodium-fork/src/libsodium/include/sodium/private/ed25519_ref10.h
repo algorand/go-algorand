@@ -81,6 +81,8 @@ int ge25519_frombytes(ge25519_p3 *h, const unsigned char *s);
 
 int ge25519_frombytes_negate_vartime(ge25519_p3 *h, const unsigned char *s);
 
+int ge25519_frombytes_vartime(ge25519_p3 *h, const unsigned char *s);
+
 void ge25519_p3_to_cached(ge25519_cached *r, const ge25519_p3 *p);
 
 void ge25519_p1p1_to_p2(ge25519_p2 *r, const ge25519_p1p1 *p);
@@ -93,7 +95,9 @@ void ge25519_sub(ge25519_p1p1 *r, const ge25519_p3 *p, const ge25519_cached *q);
 
 void ge25519_scalarmult_base(ge25519_p3 *h, const unsigned char *a);
 
-void ge25519_double_scalarmult_vartime(ge25519_p2 *r, const unsigned char *a,
+void ge25519_p2_dbl(ge25519_p1p1 *r, const ge25519_p2 *p);
+
+void ge25519_double_scalarmult_vartime(ge25519_p3 *r, const unsigned char *a,
                                        const ge25519_p3 *A,
                                        const unsigned char *b);
 
