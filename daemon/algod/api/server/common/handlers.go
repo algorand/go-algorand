@@ -52,26 +52,26 @@ func GenesisJSON(ctx lib.ReqContext, context echo.Context) {
 
 // Consensus returns protocol consensun information
 func Consensus(ctx lib.ReqContext, context echo.Context) {
-        // swagger:operation GET /consensus Consensus
-        //---
-        //     Summary: Returns the protocol consensus information.
-        //     Produces:
-        //     - application/json
-        //     Schemes:
-        //     - http
+	// swagger:operation GET /consensus Consensus
+	//---
+	//     Summary: Returns the protocol consensus information.
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
 	//     Parameters:
 	//       - name: version
 	//         in: query
 	//         type: string
 	//         description: Return information about a specific version, if exists.
-        //     Responses:
-        //       200:
-        //         description: The protocol consensus details in json
+	//     Responses:
+	//       200:
+	//         description: The protocol consensus details in json
 	//         schema: {type: string}
 	//       404:
 	//         description: Version Not Found
 	//         schema: {type: string}
-        //       default: { description: Unknown Error }
+	//       default: { description: Unknown Error }
 	w := context.Response().Writer
 
 	// Check for unknown query parameters.
@@ -89,16 +89,17 @@ func Consensus(ctx lib.ReqContext, context echo.Context) {
 	version := context.QueryParam("version")
 	if len(version) == 0 {
 		w.Header().Set("Content-Type", "application/json")
-	        w.WriteHeader(http.StatusOK)
-	        w.Write(protocol.EncodeJSON(config.Consensus))
+		w.WriteHeader(http.StatusOK)
+		w.Write(protocol.EncodeJSON(config.Consensus))
 	} else {
 		cv, ok := config.Consensus[protocol.ConsensusVersion(version)]
 		if ok {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-	                w.Write(protocol.EncodeJSON(cv))
+			w.Write(protocol.EncodeJSON(cv))
 		} else {
 			w.WriteHeader(http.StatusNotFound)
-                        w.Write([]byte("version not found"))
+			w.Write([]byte("version not found"))
 		}
 	}
 }
