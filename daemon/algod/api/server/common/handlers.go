@@ -18,6 +18,7 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -25,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // GenesisJSON is an httpHandler for route GET /genesis
@@ -46,6 +48,59 @@ func GenesisJSON(ctx lib.ReqContext, context echo.Context) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(lib.GenesisJSONText))
+}
+
+// Consensus returns protocol consensun information
+func Consensus(ctx lib.ReqContext, context echo.Context) {
+        // swagger:operation GET /consensus Consensus
+        //---
+        //     Summary: Returns the protocol consensus information.
+        //     Produces:
+        //     - application/json
+        //     Schemes:
+        //     - http
+	//     Parameters:
+	//       - name: version
+	//         in: query
+	//         type: string
+	//         description: Return information about a specific version, if exists.
+        //     Responses:
+        //       200:
+        //         description: The protocol consensus details in json
+	//         schema: {type: string}
+	//       404:
+	//         description: Version Not Found
+	//         schema: {type: string}
+        //       default: { description: Unknown Error }
+	w := context.Response().Writer
+
+	// Check for unknown query parameters.
+	validQueryParams := map[string]bool{
+		"version": true,
+	}
+	for name, _ := range context.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(fmt.Sprintf("Unknown parameter detected: %s", name)))
+			return
+		}
+	}
+
+	version := context.QueryParam("version")
+	if len(version) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+	        w.WriteHeader(http.StatusOK)
+	        w.Write(protocol.EncodeJSON(config.Consensus))
+	} else {
+		cv, ok := config.Consensus[protocol.ConsensusVersion(version)]
+		if ok {
+			w.WriteHeader(http.StatusOK)
+	                w.Write(protocol.EncodeJSON(cv))
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+                        w.Write([]byte("version not found"))
+		}
+	}
 }
 
 // SwaggerJSON is an httpHandler for route GET /swagger.json

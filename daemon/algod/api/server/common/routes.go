@@ -42,6 +42,13 @@ var Routes = lib.Routes{
 	},
 
 	lib.Route{
+		Name:        "consensus",
+		Method:      "GET",
+		Path:        "/consensus",
+		HandlerFunc: Consensus,
+	},
+
+	lib.Route{
 		Name:        "swagger.json",
 		Method:      "GET",
 		Path:        "/swagger.json",
