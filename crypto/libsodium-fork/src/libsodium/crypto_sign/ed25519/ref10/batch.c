@@ -9,10 +9,11 @@
 #include <stdint.h>
 #include <string.h>
 
+
+void ed25519_randombytes_unsafe(void *p, size_t len);
+
 #define MAX_BATCH_SIZE 64 
 #define HEAP_BATCH_SIZE ((MAX_BATCH_SIZE * 2) + 1)
-
-
 
 /* which limb is the 128th bit in? */
 static const size_t limb128bits = (128 + SC25519_BITS_PER_LIMB - 1) / SC25519_BITS_PER_LIMB;
@@ -251,9 +252,8 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *
 	while (num > 3) {
 		batchsize = (num > MAX_BATCH_SIZE) ? MAX_BATCH_SIZE : num;
         /* generate r (scalars[batchsize+1]..scalars[2*batchsize] */
-        //!! ED25519_FN(ed25519_randombytes_unsafe) (batch.r, batchsize * 16);
+        ed25519_randombytes_unsafe (batch.r, batchsize * 16);
         
-        memset(batch.r, 1, batchsize  * 16);
 
 		r_scalars = &batch.scalars[batchsize + 1];
 		for (i = 0; i < batchsize; i++)

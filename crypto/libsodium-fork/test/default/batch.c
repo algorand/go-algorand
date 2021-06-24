@@ -2,8 +2,16 @@
 #include "cmptest.h"
 
 
-
 #define SAMPLE_SIZE 1025
+
+
+
+
+void ed25519_randombytes_unsafe (void *p, size_t len) 
+{
+	randombytes_buf(p,len);
+}
+
 
 
 typedef struct TestData_ {
