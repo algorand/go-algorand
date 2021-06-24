@@ -6,20 +6,42 @@ import (
 )
 
 func TestPersistedAccountDataList(t *testing.T) {
-
 	t.Run("single element list movements", testSingleElementListPositioning)
 
 	t.Run("multi-element list movements", testMultielementListPositioning)
 
 	t.Run("test remove", testRemove)
+
+	t.Run("test freelist usage", testFreeListMovement)
 }
 
 func testRemove(t *testing.T) {
 	t.Run("attempt to remove from wrong list", attemptToRemoveFromWrongList)
 
 	t.Run("attempt to remove from wrong list and then add to that list", attemptToRemoveFromWrongListAndAddToOtherList)
+}
 
-	t.Run("removed object should have value and nil pointers", testRemovedNodeContainsValueButNoLinks)
+func testFreeListMovement(t *testing.T) {
+	t.Run("removed node should be moved to freelist", removedNodeShouldBeMovedToFreeList)
+
+	t.Run("new node should come from free list", testAddingNewNodeWithAllocatedFreeList)
+}
+
+func testAddingNewNodeWithAllocatedFreeList(t *testing.T) {
+	l := newPersistedAccountList().allocateFreeNodes(10)
+	checkListPointers(t, l, []*persistedAccountDataListNode{})
+	if l.freeList.len != 10 {
+		t.Errorf("free list did not allocate nodes")
+		return
+	}
+	// test elements
+	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
+	checkListPointers(t, l, []*persistedAccountDataListNode{e1})
+
+	if l.freeList.len != 9 {
+		t.Errorf("free list did not provide a node on new list entry")
+		return
+	}
 }
 
 func checkListLen(t *testing.T, l *persistedAccountDataList, len int) bool {
@@ -154,7 +176,7 @@ func attemptToRemoveFromWrongListAndAddToOtherList(t *testing.T) {
 	}
 }
 
-func testRemovedNodeContainsValueButNoLinks(t *testing.T) {
+func removedNodeShouldBeMovedToFreeList(t *testing.T) {
 	l := newPersistedAccountList()
 	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
 	e2 := l.pushFront(&persistedAccountData{addr: basics.Address{2}})
@@ -163,20 +185,12 @@ func testRemovedNodeContainsValueButNoLinks(t *testing.T) {
 
 	e := l.back()
 	l.remove(e)
-	if e.Value.addr == e2.Value.addr {
-		t.Errorf("\nhave %v\nwant %v", e.Value.addr, e1.Value.addr)
-	}
-	if e.next != nil {
-		t.Errorf("e.next != nil")
-	}
-	if e.prev != nil {
-		t.Errorf("e.prev != nil")
-	}
 
-	if e.list != nil {
-		t.Errorf("e.list != nil")
+	if e.list != l.freeList {
+		t.Errorf("node wasn't moved to freelist")
 	}
 }
+
 func createTwoLists() (*persistedAccountDataList, *persistedAccountDataList) {
 	l1 := newPersistedAccountList()
 	l1.pushFront(&persistedAccountData{addr: basics.Address{1}})

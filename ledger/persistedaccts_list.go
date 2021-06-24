@@ -3,8 +3,9 @@ package ledger
 // persistedAccountDataList represents a doubly linked list.
 // must initiate with newPersistedAccountList.
 type persistedAccountDataList struct {
-	root persistedAccountDataListNode // sentinel list element, only &root, root.prev, and root.next are used
-	len  int                          // current list length excluding (this) sentinel element
+	root     persistedAccountDataListNode // sentinel list element, only &root, root.prev, and root.next are used
+	len      int                          // current list length excluding (this) sentinel element
+	freeList *persistedAccountDataList    // preallocated nodes location
 }
 
 type persistedAccountDataListNode struct {
@@ -22,10 +23,27 @@ type persistedAccountDataListNode struct {
 }
 
 func newPersistedAccountList() *persistedAccountDataList {
-	l := new(persistedAccountDataList)
+	l := new(persistedAccountDataList).init()
+	l.freeList = new(persistedAccountDataList).init()
+
+	return l
+}
+
+func (l *persistedAccountDataList) init() *persistedAccountDataList {
 	l.root.next = &l.root
 	l.root.prev = &l.root
 	l.len = 0
+	return l
+}
+
+func (l *persistedAccountDataList) allocateFreeNodes(numAllocs int) *persistedAccountDataList {
+	if l.freeList == nil {
+		return l
+	}
+	for i := 0; i < numAllocs; i++ {
+		l.freeList.pushFront(&persistedAccountData{})
+	}
+
 	return l
 }
 
@@ -48,17 +66,29 @@ func (l *persistedAccountDataList) remove(e *persistedAccountDataListNode) {
 		e.prev = nil // avoid memory leaks
 		e.list = nil
 		l.len--
+
+		if l.freeList != nil {
+			// add the node back to the freelist.
+			l.freeList.insertValue(e, &l.freeList.root)
+		}
 	}
 }
 
 // pushFront inserts a new element e with value v at the front of list l and returns e.
 func (l *persistedAccountDataList) pushFront(v *persistedAccountData) *persistedAccountDataListNode {
-	return l.insertValue(v, &l.root)
+	var newNode *persistedAccountDataListNode
+	if l.freeList != nil && l.freeList.len > 0 {
+		newNode = l.freeList.back()
+		l.freeList.remove(newNode)
+		newNode.Value = v
+	} else {
+		newNode = &persistedAccountDataListNode{Value: v}
+	}
+	return l.insertValue(newNode, &l.root)
 }
 
 // insertValue inserts e after at, increments l.len, and returns e.
-func (l *persistedAccountDataList) insertValue(v *persistedAccountData, at *persistedAccountDataListNode) *persistedAccountDataListNode {
-	newNode := &persistedAccountDataListNode{Value: v}
+func (l *persistedAccountDataList) insertValue(newNode *persistedAccountDataListNode, at *persistedAccountDataListNode) *persistedAccountDataListNode {
 	n := at.next
 	at.next = newNode
 	newNode.prev = at
