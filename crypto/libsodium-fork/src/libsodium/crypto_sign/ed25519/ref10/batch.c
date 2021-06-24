@@ -2,6 +2,7 @@
 #include "sign_ed25519_ref10.h"
 #include "private/ed25519_ref10.h"
 #include "private/ed25519_ref10_sc.h"
+#include "crypto_sign.h"
 
 
 #include <limits.h>
@@ -226,7 +227,16 @@ static int ge25519_is_neutral_vartime(const ge25519_p3 *p) {
 }
 
 
-int crypto_sign_ed25519_open_batch(const unsigned char **m, size_t *mlen, const unsigned char **pk, const unsigned char **RS, size_t num, int *valid)
+/*
+* verifies ed25519 signatures in  batch. The algorithm is based on https://github.com/floodyberry/ed25519-donna 
+* implemention. we changed the algorithm according to https://eprint.iacr.org/2020/1244.pdf .
+* the batch size is between 3 and 64 sigantures per batch. 
+* When the batch fails the function falls back to check singature one at a time.
+* the function returns 0 on success and fills and array of "valid" ints. 
+* 1 - for signature i passed verification
+* 0 - for siganture i failed verification
+*/
+int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *mlen, const unsigned char **pk, const unsigned char **RS, size_t num, int *valid)
 {
 	batch_heap batch;
 	ge25519_p3  p;
@@ -285,7 +295,7 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, size_t *mlen, const 
 
 			fallback:
 			for (i = 0; i < batchsize; i++) {
-				//!! valid[i] = ed25519_sign_open (m[i], mlen[i], pk[i], RS[i]) ? 0 : 1;
+				valid[i] = crypto_sign_ed25519_verify_detached(RS[i], m[i], mlen[i], pk[i]) ? 0 : 1;
 				ret |= (valid[i] ^ 1);
 			}
         }
@@ -299,8 +309,8 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, size_t *mlen, const 
     }
 
 
-	for (i = 0; i < num; i++) {
-		//!! valid[i] = ED25519_FN(ed25519_sign_open) (m[i], mlen[i], pk[i], RS[i]) ? 0 : 1;
+	for (i = 0; i < num; i++) {		
+		valid[i] = crypto_sign_ed25519_verify_detached(RS[i], m[i], mlen[i], pk[i]) ? 0 : 1;
 		ret |= (valid[i] ^ 1);
 	}
 

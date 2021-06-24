@@ -19,7 +19,7 @@ int _crypto_sign_ed25519_verify_detached(const unsigned char *sig,
 
 
 int _crypto_sign_ed25519_open_batch(const unsigned char **m, 
-                                size_t *mlen, 
+                                unsigned long long *mlen, 
                                 const unsigned char **pk, 
                                 const unsigned char **RS, 
                                 size_t num, 
