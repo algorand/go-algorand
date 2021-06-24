@@ -57,7 +57,6 @@ _crypto_sign_ed25519_verify_detached(const unsigned char *sig,
     if (pk_sig_valid != 0){
         return pk_sig_valid;
     }
-
     if (ge25519_frombytes_negate_vartime(&A, pk) != 0) {
         return -1;
     }
