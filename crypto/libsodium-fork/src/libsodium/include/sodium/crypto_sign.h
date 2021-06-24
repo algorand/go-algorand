@@ -64,6 +64,10 @@ int crypto_sign(unsigned char *sm, unsigned long long *smlen_p,
                 const unsigned char *sk) __attribute__ ((nonnull(1, 3, 5)));
 
 SODIUM_EXPORT
+int validate_ed25519_pk_and_sig(const unsigned char *sig, const unsigned char *pk)
+            __attribute__ ((warn_unused_result)) __attribute__ ((nonnull(1, 2)));
+
+SODIUM_EXPORT
 int crypto_sign_open(unsigned char *m, unsigned long long *mlen_p,
                      const unsigned char *sm, unsigned long long smlen,
                      const unsigned char *pk)

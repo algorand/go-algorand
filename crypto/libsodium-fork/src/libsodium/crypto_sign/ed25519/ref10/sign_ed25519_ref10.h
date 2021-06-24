@@ -4,6 +4,8 @@
 void _crypto_sign_ed25519_ref10_hinit(crypto_hash_sha512_state *hs,
                                       int prehashed);
 
+int validate_ed25519_pk_and_sig(const unsigned char *sig, const unsigned char *pk);
+
 int _crypto_sign_ed25519_detached(unsigned char *sig,
                                   unsigned long long *siglen_p,
                                   const unsigned char *m,

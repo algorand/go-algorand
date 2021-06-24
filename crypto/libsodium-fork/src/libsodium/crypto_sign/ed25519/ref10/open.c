@@ -11,25 +11,9 @@
 #include "utils.h"
 
 
-int
-_crypto_sign_ed25519_verify_detached(const unsigned char *sig,
-                                     const unsigned char *m,
-                                     unsigned long long   mlen,
-                                     const unsigned char *pk,
-                                     int prehashed)
+int 
+validate_ed25519_pk_and_sig(const unsigned char *sig, const unsigned char *pk)
 {
-    crypto_hash_sha512_state hs;
-    unsigned char            h[64];
-    unsigned char            rcheck[32];
-    ge25519_p3               A;
-
-    ge25519_p1p1             tempR;
-    ge25519_p3               Rsig;
-    ge25519_p2               Rsub;
-    ge25519_p3               Rcalc;
-    ge25519_cached           cached;
-
-
 #ifdef ED25519_COMPAT
     if (sig[63] & 224) {
         return -1;
@@ -48,6 +32,32 @@ _crypto_sign_ed25519_verify_detached(const unsigned char *sig,
         return -1;
     }
 #endif
+    return 0;
+}
+
+int
+_crypto_sign_ed25519_verify_detached(const unsigned char *sig,
+                                     const unsigned char *m,
+                                     unsigned long long   mlen,
+                                     const unsigned char *pk,
+                                     int prehashed)
+{
+    crypto_hash_sha512_state hs;
+    unsigned char            h[64];
+    unsigned char            rcheck[32];
+    ge25519_p3               A;
+
+    ge25519_p1p1             tempR;
+    ge25519_p3               Rsig;
+    ge25519_p2               Rsub;
+    ge25519_p3               Rcalc;
+    ge25519_cached           cached;
+
+    int pk_sig_valid = validate_ed25519_pk_and_sig(sig,pk);
+    if (pk_sig_valid != 0){
+        return pk_sig_valid;
+    }
+
     if (ge25519_frombytes_negate_vartime(&A, pk) != 0) {
         return -1;
     }

@@ -1268,16 +1268,10 @@ static const  char non_canoical_public_key_greater_than_field_element[][3][500]=
 };
 
 
-int test_edge_case_signature(const char* message_in, unsigned long long message_len, const char * pk_in,  const char * sig_in )
+int test_edge_case_signature(const char * pk_in,  const char * sig_in)
 {
     unsigned char pk[crypto_sign_PUBLICKEYBYTES];
     unsigned char sig[crypto_sign_BYTES];
-    unsigned char message[crypto_sign_PUBLICKEYBYTES];
-
-    unsigned long long sig_len = crypto_sign_BYTES;
-    sodium_hex2bin(message, crypto_sign_PUBLICKEYBYTES,
-                message_in,
-                crypto_sign_PUBLICKEYBYTES * 2, NULL, NULL, NULL);
 
 
     sodium_hex2bin(pk, crypto_sign_PUBLICKEYBYTES,
@@ -1288,7 +1282,7 @@ int test_edge_case_signature(const char* message_in, unsigned long long message_
                 crypto_sign_BYTES * 2, NULL, NULL, NULL);              
 
    
-    return crypto_sign_verify_detached(sig, message, message_len,pk);
+    return validate_ed25519_pk_and_sig(sig, pk);
 }
 
 void test_edge_cases_vectors()
@@ -1296,9 +1290,7 @@ void test_edge_cases_vectors()
     printf("---- testing: white paper edge cases\n");
     for (int i=0; i<(sizeof edge_cases_signatures) / (sizeof edge_cases_signatures[0]) ;i++)
     {
-        if (test_edge_case_signature(edge_cases_signatures[i][0],
-                                    crypto_sign_PUBLICKEYBYTES,
-                                    edge_cases_signatures[i][1],
+        if (test_edge_case_signature(edge_cases_signatures[i][1],
                                     edge_cases_signatures[i][2]) == 0)    
         {
             printf("sig num : %i is : V\n", i);           
@@ -1312,9 +1304,7 @@ void test_edge_cases_vectors()
     printf("---- testing: non canonical public key\n");
     for (int i=0; i<(sizeof non_canoical_public_key) / (sizeof non_canoical_public_key[0]) ;i++)
     {
-        if (test_edge_case_signature(non_canoical_public_key[i][0],
-                                    crypto_sign_PUBLICKEYBYTES,
-                                    non_canoical_public_key[i][1],
+        if (test_edge_case_signature(non_canoical_public_key[i][1],
                                     non_canoical_public_key[i][2]) == -1)    
         {
             printf("input for sig num : %i rejected \n", i);           
@@ -1328,9 +1318,7 @@ void test_edge_cases_vectors()
     printf("---- testing: non canonical public key greater than field element\n");
     for (int i=0; i<(sizeof non_canoical_public_key_greater_than_field_element) / (sizeof non_canoical_public_key_greater_than_field_element[0]) ;i++)
     {
-        if (test_edge_case_signature(non_canoical_public_key_greater_than_field_element[i][0],
-                                    crypto_sign_PUBLICKEYBYTES,
-                                    non_canoical_public_key_greater_than_field_element[i][1],
+        if (test_edge_case_signature(non_canoical_public_key_greater_than_field_element[i][1],
                                     non_canoical_public_key_greater_than_field_element[i][2]) == -1)    
         {
             printf("input for sig num : %i rejected \n", i);           
@@ -1344,9 +1332,7 @@ void test_edge_cases_vectors()
     printf("---- testing: non canonical R\n");
     for (int i=0; i<(sizeof non_canoical_R) / (sizeof non_canoical_R[0]) ;i++)
     {
-        if (test_edge_case_signature(non_canoical_R[i][0],
-                                    crypto_sign_PUBLICKEYBYTES,
-                                    non_canoical_R[i][1],
+        if (test_edge_case_signature(non_canoical_R[i][1],
                                     non_canoical_R[i][2]) == -1)    
         {
             printf("input for sig num : %i rejected \n", i);           
@@ -1359,9 +1345,7 @@ void test_edge_cases_vectors()
       printf("---- testing: non canonical greater than field element R\n");
     for (int i=0; i<(sizeof non_canoical_R_greater_than_field_element) / (sizeof non_canoical_R_greater_than_field_element[0]) ;i++)
     {
-        if (test_edge_case_signature(non_canoical_R_greater_than_field_element[i][0],
-                                    crypto_sign_PUBLICKEYBYTES,
-                                    non_canoical_R_greater_than_field_element[i][1],
+        if (test_edge_case_signature(non_canoical_R_greater_than_field_element[i][1],
                                     non_canoical_R_greater_than_field_element[i][2]) == -1)    
         {
             printf("input for sig num : %i rejected \n", i);           

@@ -251,6 +251,13 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *
 
 	while (num > 3) {
 		batchsize = (num > MAX_BATCH_SIZE) ? MAX_BATCH_SIZE : num;
+
+		/* valida the public key and siganture */
+		for (i=0; i < batchsize; i++){
+			if (validate_ed25519_pk_and_sig(RS[i],pk[i]) != 0)
+				goto fallback;
+		}
+
         /* generate r (scalars[batchsize+1]..scalars[2*batchsize] */
         ed25519_randombytes_unsafe (batch.r, batchsize * 16);
         
