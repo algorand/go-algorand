@@ -42,7 +42,7 @@ type lruAccounts struct {
 // init initializes the lruAccounts for use.
 // thread locking semantics : write lock
 func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
-	m.accountsList = newPersistedAccountList()
+	m.accountsList = newPersistedAccountList().allocateFreeNodes(pendingWrites)
 	m.accounts = make(map[basics.Address]*persistedAccountDataListNode, pendingWrites)
 	m.pendingAccounts = make(chan persistedAccountData, pendingWrites)
 	m.log = log
