@@ -203,6 +203,10 @@ func BenchmarkLRUAccountsWrite(b *testing.B) {
 	fillerAccounts := generatePersistedAccountData(0, 97500)
 	accounts := generatePersistedAccountData(97500-numTestAccounts/2, 97500+numTestAccounts/2)
 
+	benchLruWrite(b, fillerAccounts, accounts)
+}
+
+func benchLruWrite(b *testing.B, fillerAccounts []persistedAccountData, accounts []persistedAccountData) {
 	b.ResetTimer()
 	b.StopTimer()
 	var baseAcct lruAccounts
