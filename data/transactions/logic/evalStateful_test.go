@@ -40,7 +40,7 @@ type balanceRecord struct {
 }
 
 // In our test ledger, we don't store the AppParams with its creator,
-// so we need to carry the creator arround with the params,
+// so we need to carry the creator around with the params,
 type appParams struct {
 	basics.AppParams
 	Creator basics.Address

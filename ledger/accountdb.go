@@ -137,7 +137,7 @@ type persistedAccountData struct {
 	round basics.Round
 }
 
-// compactAccountDeltas and accountDelta is an extention to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
+// compactAccountDeltas and accountDelta is an extension to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
 // number of changes we've made per account. The ndeltas is used exclusively for consistency checking - making sure that
 // all the pending changes were written and that there are no outstanding writes missing.
 type compactAccountDeltas struct {
@@ -274,7 +274,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 				}
 				a.updateOld(idx, *persistedAcctData)
 			} else {
-				// to retain backward compatability, we will treat this condition as if we don't have the account.
+				// to retain backward compatibility, we will treat this condition as if we don't have the account.
 				a.updateOld(idx, persistedAccountData{addr: addr, rowid: rowid.Int64})
 			}
 		case sql.ErrNoRows:
@@ -1526,7 +1526,7 @@ type accountAddressHash struct {
 }
 
 // Next returns an array containing the account address and hash
-// the Next function works in multiple processing stages, where it first processs the current accounts and order them
+// the Next function works in multiple processing stages, where it first processes the current accounts and order them
 // followed by returning the ordered accounts. In the first phase, it would return empty accountAddressHash array
 // and sets the processedRecords to the number of accounts that were processed. On the second phase, the acct
 // would contain valid data ( and optionally the account data as well, if was asked in makeOrderedAccountsIter) and

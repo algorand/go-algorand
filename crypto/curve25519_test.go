@@ -52,11 +52,11 @@ func TestGenerateSignatureSecrets(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		secrets := GenerateSignatureSecrets(s)
 		if bytes.Compare(ref.SignatureVerifier[:], secrets.SignatureVerifier[:]) != 0 {
-			t.Errorf("SignatureSecrets.SignatureVerifier is inconsistent; diffrent results generated for the same seed")
+			t.Errorf("SignatureSecrets.SignatureVerifier is inconsistent; different results generated for the same seed")
 			return
 		}
 		if bytes.Compare(ref.SK[:], secrets.SK[:]) != 0 {
-			t.Errorf("SignatureSecrets.SK is inconsistent; diffrent results generated for the same seed")
+			t.Errorf("SignatureSecrets.SK is inconsistent; different results generated for the same seed")
 			return
 		}
 	}

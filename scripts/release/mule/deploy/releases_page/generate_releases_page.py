@@ -136,7 +136,7 @@ def read_hashes(fin):
             ob = {}
             by_fname[fname] = ob
 
-        # if 32 chars, it's md5; 64 is sha256, 128 is sha512. Asign to dict
+        # if 32 chars, it's md5; 64 is sha256, 128 is sha512. Assign to dict
         # under those keys
         if len(hashstr) == 32:
             ob["md5"] = hashstr
