@@ -22,17 +22,12 @@ _crypto_sign_ed25519_verify_detached(const unsigned char *sig,
     unsigned char            h[64];
     unsigned char            rcheck[32];
     ge25519_p3               A;
-    ge25519_p3               sigR;
+
     ge25519_p1p1             tempR;
-
-    ge25519_p2               Rorig;
-    ge25519_p3               R;
-    ge25519_p2               cofactored_R_diff;
-
-    ge25519_p3               r_diff;
+    ge25519_p3               Rsig;
+    ge25519_p2               Rsub;
+    ge25519_p3               Rcalc;
     ge25519_cached           cached;
-
-
 
 
 #ifdef ED25519_COMPAT
@@ -56,7 +51,7 @@ _crypto_sign_ed25519_verify_detached(const unsigned char *sig,
     if (ge25519_frombytes_negate_vartime(&A, pk) != 0) {
         return -1;
     }
-    if (ge25519_frombytes_vartime(&sigR, sig) != 0) {
+    if (ge25519_frombytes_vartime(&Rsig, sig) != 0) {
         return -1;
     }
     _crypto_sign_ed25519_ref10_hinit(&hs, prehashed);
@@ -66,17 +61,15 @@ _crypto_sign_ed25519_verify_detached(const unsigned char *sig,
     crypto_hash_sha512_final(&hs, h);
     sc25519_reduce(h);
 
-    ge25519_double_scalarmult_vartime(&R, h, &A, sig + 32);
+    //  R calculated <- -h*A + s*B 
+    ge25519_double_scalarmult_vartime(&Rcalc, h, &A, sig + 32);
 
-    
-    ge25519_p3_to_cached(&cached, &sigR);
-    ge25519_sub(&tempR,&R,&cached);
+    // R calculated - R signature
+    ge25519_p3_to_cached(&cached, &Rsig);
+    ge25519_sub(&tempR, &Rcalc, &cached);
 
-    ge25519_p1p1_to_p2(&Rorig, &tempR);
-    ge25519_p2_dbl(&tempR, &Rorig);
-
-    ge25519_p1p1_to_p2(&Rorig,&tempR);
-    ge25519_tobytes(rcheck, &Rorig);
+    ge25519_p1p1_to_p2(&Rsub, &tempR);
+    ge25519_tobytes(rcheck, &Rsub);
 
     if (ge25519_has_small_order(rcheck) == 0)
     {
