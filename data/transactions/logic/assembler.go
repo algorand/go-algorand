@@ -1063,6 +1063,18 @@ func typecheck(expected, got StackType) bool {
 	return expected == got
 }
 
+func typecheck2(expected, got StackType) bool {
+	//Since I clear the stack at start of every block, I need to take out StackNone check
+	//Also doesn't original typecheck error if someone loops to push a bunch onto the stack and then jumps and pops the same cuz the assembler stack would not keep track?
+	if got == StackNone{
+		return true
+	}
+	if (expected == StackAny) || (got==StackAny){
+		return true
+	}
+	return expected == got
+}
+
 var spaces = [256]uint8{'\t': 1, ' ': 1}
 
 func fieldsFromLine(line string) []string {
@@ -1156,13 +1168,9 @@ func (ops *OpStream) checkArgs(spec OpSpec) {
 		} else {
 			ops.trace(", %s", argType.String())
 		}
-		if !typecheck(argType, stype) {
+		if !typecheck2(argType, stype) {
 			err := fmt.Errorf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
-			if len(ops.labelReferences) > 0 {
-				ops.warnf("%w; but branches have happened and assembler does not precisely track types in this case", err)
-			} else {
-				ops.error(err)
-			}
+			ops.error(err)
 		}
 	}
 	if !firstPop {
@@ -1220,6 +1228,8 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			fields = fields[1:]
 			if len(fields) == 0 {
 				// There was a label, not need to ops.trace this
+				// Clear stack b/c starting new block most likely; ppl who add labels that aren't targeted don't get proper typechecks
+				ops.typeStack=ops.typeStack[:0]
 				continue
 			}
 			opstring = fields[0]
