@@ -16,9 +16,6 @@ type persistedAccountDataListNode struct {
 	// element (l.Front()).
 	next, prev *persistedAccountDataListNode
 
-	// The list to which this element belongs. (helps removing items fast)
-	list *persistedAccountDataList
-
 	Value *persistedAccountData
 }
 
@@ -59,19 +56,18 @@ func (l *persistedAccountDataList) back() *persistedAccountDataListNode {
 // It returns the element value e.Value.
 // The element must not be nil.
 func (l *persistedAccountDataList) remove(e *persistedAccountDataListNode) {
-	if e.list == l {
-		e.prev.next = e.next
-		e.next.prev = e.prev
-		e.next = nil // avoid memory leaks
-		e.prev = nil // avoid memory leaks
-		e.list = nil
-		l.len--
 
-		if l.freeList != nil {
-			// add the node back to the freelist.
-			l.freeList.insertValue(e, &l.freeList.root)
-		}
+	e.prev.next = e.next
+	e.next.prev = e.prev
+	e.next = nil // avoid memory leaks
+	e.prev = nil // avoid memory leaks
+	l.len--
+
+	if l.freeList != nil {
+		// add the node back to the freelist.
+		l.freeList.insertValue(e, &l.freeList.root)
 	}
+
 }
 
 // pushFront inserts a new element e with value v at the front of list l and returns e.
@@ -94,7 +90,6 @@ func (l *persistedAccountDataList) insertValue(newNode *persistedAccountDataList
 	newNode.prev = at
 	newNode.next = n
 	n.prev = newNode
-	newNode.list = l
 	l.len++
 	return newNode
 }
@@ -103,7 +98,7 @@ func (l *persistedAccountDataList) insertValue(newNode *persistedAccountDataList
 // If e is not an element of l, the list is not modified.
 // The element must not be nil.
 func (l *persistedAccountDataList) moveToFront(e *persistedAccountDataListNode) {
-	if e.list != l || l.root.next == e {
+	if l.root.next == e {
 		return
 	}
 	l.move(e, &l.root)
