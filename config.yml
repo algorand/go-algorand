@@ -1,0 +1,103 @@
+version: 2.1
+
+orbs:
+  win: circleci/windows@2.3.0
+
+workflows:
+  version: 2
+  build_pr:
+    jobs:
+      - codegen_verification
+      - amd64_build
+      - amd64_integration
+      #- arm64_build
+      #- arm64_integration
+      #- mac_amd64_build
+      #- windows_x64_build
+
+jobs:
+  codegen_verification:
+    # docker:
+    #   - image: cimg/base:stable-18.04
+    # resource_class: large
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    steps:
+      - checkout
+      - run: scripts/travis/codegen_verification.sh
+
+  amd64_build:
+    # docker:
+    #   - image: cimg/base:stable-18.04
+    # resource_class: large
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    steps:
+      - checkout
+      - run:
+          no_output_timeout: 30m
+          command: scripts/travis/build_test.sh
+
+  amd64_integration:
+    # docker:
+    #   - image: cimg/base:stable-18.04
+    # resource_class: large
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    steps:
+      - checkout
+      - run:
+          no_output_timeout: 30m
+          command: scripts/travis/integration_test.sh
+
+  arm64_build:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.medium
+    steps:
+      - checkout
+      - run:
+          no_output_timeout: 30m
+          command: scripts/travis/build_test.sh
+
+  arm64_integration:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.medium
+    steps:
+      - checkout
+      - run:
+          no_output_timeout: 30m
+          command: scripts/travis/integration_test.sh
+
+  mac_amd64_build:
+    macos:
+      xcode: 11.0.0
+    steps:
+      - checkout
+      - run:
+          no_output_timeout: 30m
+          command: scripts/travis/build_test.sh
+
+  mac_amd64_integration:
+    macos:
+      xcode: 11.0.0
+    steps:
+      - checkout
+      - run:
+          no_output_timeout: 30m
+          command: scripts/travis/integration_test.sh
+
+  windows_x64_build:
+    executor:
+      name: win/default
+      size: medium
+    steps:
+      - checkout
+      - run:
+          no_output_timeout: 30m
+          command: scripts/travis/build_test.sh
+          shell: bash.exe
