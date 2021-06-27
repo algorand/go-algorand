@@ -5,6 +5,17 @@ import (
 	"testing"
 )
 
+func checkLen(list *persistedAccountDataList) (counter int) {
+	if isLenZero(list) {
+		return
+	}
+
+	for i := list.root.next; i != &list.root; i = i.next {
+		counter += 1
+	}
+	return
+}
+
 func TestPersistedAccountDataList(t *testing.T) {
 	t.Run("single element list movements", testSingleElementListPositioning)
 
@@ -41,7 +52,7 @@ func testFreeListMovement(t *testing.T) {
 func testAddingNewNodeWithAllocatedFreeList(t *testing.T) {
 	l := newPersistedAccountList().allocateFreeNodes(10)
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
-	if l.freeList.len != 10 {
+	if checkLen(l.freeList) != 10 {
 		t.Errorf("free list did not allocate nodes")
 		return
 	}
@@ -49,14 +60,14 @@ func testAddingNewNodeWithAllocatedFreeList(t *testing.T) {
 	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
 	checkListPointers(t, l, []*persistedAccountDataListNode{e1})
 
-	if l.freeList.len != 9 {
+	if checkLen(l.freeList) != 9 {
 		t.Errorf("free list did not provide a node on new list entry")
 		return
 	}
 }
 
 func checkListLen(t *testing.T, l *persistedAccountDataList, len int) bool {
-	if n := l.len; n != len {
+	if n := checkLen(l); n != len {
 		t.Errorf("l.Len() = %d, want %d", n, len)
 		return true
 	}

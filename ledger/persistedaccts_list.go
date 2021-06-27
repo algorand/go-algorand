@@ -4,7 +4,6 @@ package ledger
 // must initiate with newPersistedAccountList.
 type persistedAccountDataList struct {
 	root     persistedAccountDataListNode // sentinel list element, only &root, root.prev, and root.next are used
-	len      int                          // current list length excluding (this) sentinel element
 	freeList *persistedAccountDataList    // preallocated nodes location
 }
 
@@ -29,7 +28,6 @@ func newPersistedAccountList() *persistedAccountDataList {
 func (l *persistedAccountDataList) init() *persistedAccountDataList {
 	l.root.next = &l.root
 	l.root.prev = &l.root
-	l.len = 0
 	return l
 }
 
@@ -44,9 +42,14 @@ func (l *persistedAccountDataList) allocateFreeNodes(numAllocs int) *persistedAc
 	return l
 }
 
+func isLenZero(list *persistedAccountDataList) bool {
+	// assumes we are inserting correctly to the list - using pushFront.
+	return list.root.next == &list.root
+}
+
 // Back returns the last element of list l or nil if the list is empty.
 func (l *persistedAccountDataList) back() *persistedAccountDataListNode {
-	if l.len == 0 {
+	if isLenZero(l) {
 		return nil
 	}
 	return l.root.prev
@@ -56,12 +59,10 @@ func (l *persistedAccountDataList) back() *persistedAccountDataListNode {
 // It returns the element value e.Value.
 // The element must not be nil.
 func (l *persistedAccountDataList) remove(e *persistedAccountDataListNode) {
-
 	e.prev.next = e.next
 	e.next.prev = e.prev
 	e.next = nil // avoid memory leaks
 	e.prev = nil // avoid memory leaks
-	l.len--
 
 	if l.freeList != nil {
 		// add the node back to the freelist.
@@ -73,7 +74,7 @@ func (l *persistedAccountDataList) remove(e *persistedAccountDataListNode) {
 // pushFront inserts a new element e with value v at the front of list l and returns e.
 func (l *persistedAccountDataList) pushFront(v *persistedAccountData) *persistedAccountDataListNode {
 	var newNode *persistedAccountDataListNode
-	if l.freeList != nil && l.freeList.len > 0 {
+	if l.freeList != nil && !isLenZero(l.freeList) {
 		newNode = l.freeList.back()
 		l.freeList.remove(newNode)
 		newNode.Value = v
@@ -90,7 +91,7 @@ func (l *persistedAccountDataList) insertValue(newNode *persistedAccountDataList
 	newNode.prev = at
 	newNode.next = n
 	n.prev = newNode
-	l.len++
+
 	return newNode
 }
 
