@@ -78,7 +78,7 @@ func Consensus(ctx lib.ReqContext, context echo.Context) {
 	validQueryParams := map[string]bool{
 		"version": true,
 	}
-	for name, _ := range context.QueryParams() {
+	for name := range context.QueryParams() {
 		if _, ok := validQueryParams[name]; !ok {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(fmt.Sprintf("Unknown parameter detected: %s", name)))
