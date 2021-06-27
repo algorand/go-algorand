@@ -5,15 +5,18 @@ import (
 	"testing"
 )
 
-func checkLen(list *persistedAccountDataList) (counter int) {
+func checkLen(list *persistedAccountDataList) int {
 	if isLenZero(list) {
-		return
+		return 0
 	}
+	return countListSize(&list.root)
+}
 
-	for i := list.root.next; i != &list.root; i = i.next {
+func countListSize(head *persistedAccountDataListNode) (counter int) {
+	for i := head.next; i != head && i != nil; i = i.next {
 		counter += 1
 	}
-	return
+	return counter
 }
 
 func TestPersistedAccountDataList(t *testing.T) {
@@ -52,7 +55,7 @@ func testFreeListMovement(t *testing.T) {
 func testAddingNewNodeWithAllocatedFreeList(t *testing.T) {
 	l := newPersistedAccountList().allocateFreeNodes(10)
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
-	if checkLen(l.freeList) != 10 {
+	if countListSize(l.freeList) != 10 {
 		t.Errorf("free list did not allocate nodes")
 		return
 	}
@@ -60,7 +63,7 @@ func testAddingNewNodeWithAllocatedFreeList(t *testing.T) {
 	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
 	checkListPointers(t, l, []*persistedAccountDataListNode{e1})
 
-	if checkLen(l.freeList) != 9 {
+	if countListSize(l.freeList) != 9 {
 		t.Errorf("free list did not provide a node on new list entry")
 		return
 	}
@@ -174,7 +177,6 @@ func testSingleElementListPositioning(t *testing.T) {
 }
 
 func removedNodeShouldBeMovedToFreeList(t *testing.T) {
-	t.Skip()
 	l := newPersistedAccountList()
 	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
 	e2 := l.pushFront(&persistedAccountData{addr: basics.Address{2}})
@@ -183,6 +185,14 @@ func removedNodeShouldBeMovedToFreeList(t *testing.T) {
 
 	e := l.back()
 	l.remove(e)
+
+	for i := l.freeList.next; i != nil; i = i.next {
+		if i == e {
+			// stopping the tst with good results:
+			return
+		}
+	}
+	t.Error("expected the removed node to appear at the freelist")
 
 }
 

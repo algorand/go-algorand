@@ -3,8 +3,8 @@ package ledger
 // persistedAccountDataList represents a doubly linked list.
 // must initiate with newPersistedAccountList.
 type persistedAccountDataList struct {
-	root     persistedAccountDataListNode // sentinel list element, only &root, root.prev, and root.next are used
-	freeList *persistedAccountDataList    // preallocated nodes location
+	root     persistedAccountDataListNode  // sentinel list element, only &root, root.prev, and root.next are used
+	freeList *persistedAccountDataListNode // preallocated nodes location
 }
 
 type persistedAccountDataListNode struct {
@@ -19,16 +19,29 @@ type persistedAccountDataListNode struct {
 }
 
 func newPersistedAccountList() *persistedAccountDataList {
-	l := new(persistedAccountDataList).init()
-	l.freeList = new(persistedAccountDataList).init()
+	l := new(persistedAccountDataList)
+	l.root.next = &l.root
+	l.root.prev = &l.root
+	// used as a helper but does not store value
+	l.freeList = new(persistedAccountDataListNode)
 
 	return l
 }
 
-func (l *persistedAccountDataList) init() *persistedAccountDataList {
-	l.root.next = &l.root
-	l.root.prev = &l.root
-	return l
+func (l *persistedAccountDataList) reclaimNode(otherNode *persistedAccountDataListNode) {
+	otherNode.next = l.freeList.next
+	l.freeList.next = otherNode
+	otherNode.Value = nil
+}
+
+func (l *persistedAccountDataList) getNewNode() *persistedAccountDataListNode {
+	if l.freeList.next == nil {
+		return new(persistedAccountDataListNode)
+	}
+	newNode := l.freeList.next
+	l.freeList.next = newNode.next
+
+	return newNode
 }
 
 func (l *persistedAccountDataList) allocateFreeNodes(numAllocs int) *persistedAccountDataList {
@@ -36,7 +49,7 @@ func (l *persistedAccountDataList) allocateFreeNodes(numAllocs int) *persistedAc
 		return l
 	}
 	for i := 0; i < numAllocs; i++ {
-		l.freeList.pushFront(&persistedAccountData{})
+		l.reclaimNode(new(persistedAccountDataListNode))
 	}
 
 	return l
@@ -64,23 +77,13 @@ func (l *persistedAccountDataList) remove(e *persistedAccountDataListNode) {
 	e.next = nil // avoid memory leaks
 	e.prev = nil // avoid memory leaks
 
-	if l.freeList != nil {
-		// add the node back to the freelist.
-		l.freeList.insertValue(e, &l.freeList.root)
-	}
-
+	l.reclaimNode(e)
 }
 
 // pushFront inserts a new element e with value v at the front of list l and returns e.
 func (l *persistedAccountDataList) pushFront(v *persistedAccountData) *persistedAccountDataListNode {
-	var newNode *persistedAccountDataListNode
-	if l.freeList != nil && !isLenZero(l.freeList) {
-		newNode = l.freeList.back()
-		l.freeList.remove(newNode)
-		newNode.Value = v
-	} else {
-		newNode = &persistedAccountDataListNode{Value: v}
-	}
+	newNode := l.getNewNode()
+	newNode.Value = v
 	return l.insertValue(newNode, &l.root)
 }
 
