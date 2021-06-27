@@ -152,13 +152,12 @@ void ge25519_multi_scalarmult_vartime_final(ge25519_p3 *r, ge25519_p3 *point, sc
     ge25519_p3_to_cached(&cache_r, point);
 	/* exponentiate */
 	for (;;) {
-		// Was - ge25519_double(r, r);
         ge25519_p3_dbl(&p1p1_r, r);
+		ge25519_p1p1_to_p3(r, &p1p1_r);
 		if (scalar[limb] & flag) 
         {
             ge25519_add(&p1p1_r, r, &cache_r);
             ge25519_p1p1_to_p3(r,&p1p1_r);
-			// Was _ ge25519_add(r, r, point);
         }
 
 
@@ -244,6 +243,7 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *
 	sc25519 *r_scalars;
 	size_t i, batchsize;
 	unsigned char hram[64];
+	unsigned char batchsum[32];
     int ret = 0;
 
 	for (i = 0; i < num; i++)
@@ -297,7 +297,8 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *
 				goto fallback;
 
         ge25519_multi_scalarmult_vartime(&p, &batch, (batchsize * 2) + 1);
-		if (!ge25519_is_neutral_vartime(&p)) {
+		ge25519_p3_tobytes(batchsum,&p);
+		if (ge25519_has_small_order(batchsum) == 0 ) {
 			ret |= 2;
 
 			fallback:

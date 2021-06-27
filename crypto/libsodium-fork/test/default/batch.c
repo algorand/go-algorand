@@ -1140,34 +1140,34 @@ void validate_edge_cases()
 
 int main()
 {
-    // unsigned char * messages[SAMPLE_SIZE];
-    // unsigned char * pk_set[SAMPLE_SIZE];
-    // unsigned char * sign_set[SAMPLE_SIZE];
-    // size_t m_len_array[SAMPLE_SIZE];
-    // int valid [SAMPLE_SIZE];
-    // for (int i = 0; i < SAMPLE_SIZE; i++) 
-    // {
-    //     messages[i] = test_data[i].m;
-    //     pk_set[i] = test_data[i].pk;
-    //     sign_set[i] = test_data[i].sig;
-    //     m_len_array[i] = i;
-    // }
+    unsigned char * messages[SAMPLE_SIZE];
+    unsigned char * pk_set[SAMPLE_SIZE];
+    unsigned char * sign_set[SAMPLE_SIZE];
+    size_t m_len_array[SAMPLE_SIZE];
+    int valid [SAMPLE_SIZE];
+    for (int i = 0; i < SAMPLE_SIZE; i++) 
+    {
+        messages[i] = test_data[i].m;
+        pk_set[i] = test_data[i].pk;
+        sign_set[i] = test_data[i].sig;
+        m_len_array[i] = i;
+    }
 
-	// int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,SAMPLE_SIZE-1, valid);
-	// printf("open batch ended on %d sign result is %d\n",SAMPLE_SIZE-1, res );
-    // printf("validation array : \n");
-    // for (int i=0; i < SAMPLE_SIZE-1; ++i)
-    // {
-    //     printf("%d", valid[i]);
-    // }
+	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,SAMPLE_SIZE-1, valid);
+	printf("open batch ended on %d sign result is %d\n",SAMPLE_SIZE-1, res );
+    printf("validation array : \n");
+    for (int i=0; i < SAMPLE_SIZE-1; ++i)
+    {
+        printf("%d", valid[i]);
+    }
 
-	// res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,SAMPLE_SIZE, valid);
-	// printf("\nopen batch + plus one single ended on %d sign result is %d\n",SAMPLE_SIZE, res );
-    // printf("validation array : \n");
-    // for (int i=0; i < SAMPLE_SIZE; ++i)
-    // {
-    //     printf("%d", valid[i]);
-    // }
+	res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,SAMPLE_SIZE, valid);
+	printf("\nopen batch + plus one single ended on %d sign result is %d\n",SAMPLE_SIZE, res );
+    printf("validation array : \n");
+    for (int i=0; i < SAMPLE_SIZE; ++i)
+    {
+        printf("%d", valid[i]);
+    }
 
     validate_edge_cases();
 
