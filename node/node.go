@@ -113,6 +113,7 @@ type AlgorandFullNode struct {
 	rootDir     string
 	genesisID   string
 	genesisHash crypto.Digest
+	devMode     bool // is this node operates in a developer mode ? ( benine agreement, broadcasting transaction generates a new block )
 
 	log logging.Logger
 
@@ -164,6 +165,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
+	node.devMode = genesis.DevMode
+
+	if node.devMode {
+		cfg.DisableNetworking = true
+	}
 
 	// tie network, block fetcher, and agreement services together
 	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network)
@@ -238,11 +244,16 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	blockValidator := blockValidatorImpl{l: node.ledger, verificationPool: node.highPriorityCryptoVerificationPool}
 	agreementLedger := makeAgreementLedger(node.ledger, node.net)
-
+	var agreementClock timers.Clock
+	if node.devMode {
+		agreementClock = timers.MakeFrozenClock()
+	} else {
+		agreementClock = timers.MakeMonotonicClock(time.Now())
+	}
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
 		Accessor:       crashAccess,
-		Clock:          timers.MakeMonotonicClock(time.Now()),
+		Clock:          agreementClock,
 		Local:          node.config,
 		Network:        gossip.WrapNetwork(node.net, log),
 		Ledger:         agreementLedger,
@@ -462,10 +473,55 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 	return node.ledger
 }
 
+// writeDevmodeBlock generates a new block for a devmode, and write it to the ledger.
+func (node *AlgorandFullNode) writeDevmodeBlock(lastRound basics.Round) (err error) {
+	// get the last block
+	blk, err := node.ledger.Block(lastRound)
+	if err != nil {
+		return
+	}
+
+	// modify the block blk round number, to emulate into-the-future block. The OnNewBlock doesn't
+	// really care about the rest of this data structure anyway, so it would be safe to do.
+	blk.BlockHeader.Round++
+
+	// calling OnNewBlock would trigger recomputation of the txn pool for round blk+1.
+	node.transactionPool.OnNewBlock(blk, ledgercore.StateDelta{})
+
+	// The above was already pregenerating the entire block,
+	// so there won't be any waiting on this call.
+	var vb *ledger.ValidatedBlock
+	vb, err = node.transactionPool.AssembleBlock(lastRound+1, time.Now().Add(config.ProposalAssemblyTime))
+	if err != nil || vb == nil {
+		return
+	}
+
+	// add the newly generated block to the ledger
+	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{})
+	return err
+}
+
 // BroadcastSignedTxGroup broadcasts a transaction group that has already been signed.
-func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
-	lastRound := node.ledger.Latest()
-	b, err := node.ledger.BlockHdr(lastRound)
+func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+	var lastRound basics.Round
+
+	// in developer mode, we need to take a lock, so that each new transaction group would truely
+	// render into a unique block.
+	if node.devMode {
+		node.mu.Lock()
+		defer func() {
+			// if we added the transaction successfully to the transaction pool, then
+			// attempt to generate a block and write it to the ledger.
+			if err == nil {
+				err = node.writeDevmodeBlock(lastRound)
+			}
+			node.mu.Unlock()
+		}()
+	}
+
+	lastRound = node.ledger.Latest()
+	var b bookkeeping.BlockHeader
+	b, err = node.ledger.BlockHdr(lastRound)
 	if err != nil {
 		node.log.Errorf("could not get block header from last round %v: %v", lastRound, err)
 		return err
