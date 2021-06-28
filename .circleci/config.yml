@@ -20,6 +20,10 @@ commands:
     description: "Clean out existing Go so we can use our preferred version"
     steps:
       - run: sudo rm -rf /usr/local/go
+      - run: sudo rm -rf /home/circleci/.go_workspace/bin /usr/local/go/bin
+      - run: export PATH=$(echo "$PATH" | sed -e 's/:\/home\/circleci\/\.go_workspace\/bin//')
+      - run: export PATH=$(echo "$PATH" | sed -e 's/:\/usr\/local\/go\/bin//')
+      - run: unset GOPATH
 
 jobs:
   codegen_verification:
