@@ -90,6 +90,8 @@ jobs:
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
+            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+            eval "$(~/gimme "${GOLANG_VERSION}")"
             PACKAGES="$(go list ./... | grep -v /go-algorand/test/ | circleci tests split --split-by=timings --timings-type=classname)"
             export PACKAGE_NAMES=$(echo $TEST_PACKAGES | tr -d '\n')
             echo "Testing the following packages:"
@@ -116,7 +118,9 @@ jobs:
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
             export BUILD_TYPE=integration
-            scripts/travis/test.sh
+            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+            eval "$(~/gimme "${GOLANG_VERSION}")"
+            ./test/scripts/run_integration_tests.sh
 
   arm64_build:
     machine:
