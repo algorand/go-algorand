@@ -23,7 +23,11 @@ if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; t
      exit 0
  fi
 
-GOPATHBIN=$(go env GOPATH)/bin
+if $CIRCLECI; then
+  GOPATHBIN=/home/circleci/.go_workspace/bin;
+else
+  GOPATHBIN=$(go env GOPATH)/bin
+fi
 export PATH=$PATH:$GOPATHBIN
 
 scripts/travis/run_tests.sh;
