@@ -109,7 +109,10 @@ func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
 		switch delta.Action {
 		case SetBytesAction:
 			if len(delta.Bytes) > proto.MaxAppBytesValueLen {
-				return fmt.Errorf("cannot set value for key 0x%x, too long: length was %d, maximum is %d", key, len(delta.Bytes), proto.MaxAppBytesValueLen)
+				return fmt.Errorf("value too long for key 0x%x: length was %d", key, len(delta.Bytes))
+			}
+			if sum := len(key) + len(delta.Bytes); sum > proto.MaxAppSumKeyValueLens {
+				return fmt.Errorf("key/value total too long for key 0x%x: sum was %d", key, sum)
 			}
 		case SetUintAction:
 		case DeleteAction:

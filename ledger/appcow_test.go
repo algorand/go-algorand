@@ -404,7 +404,7 @@ func TestCowBuildDelta(t *testing.T) {
 
 	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.Error(err)
-	a.Contains(err.Error(), "could not find offset")
+	a.Contains(err.Error(), "invalid Account reference ")
 	a.Empty(ed)
 
 	// check v26 behavior for empty deltas
@@ -1169,6 +1169,39 @@ func TestCowSetKey(t *testing.T) {
 	// ensure other requests go down to roundCowParent
 	a.Panics(func() { c.SetKey(getRandomAddress(a), aidx, false, key, tv, 0) })
 	a.Panics(func() { c.SetKey(addr, aidx+1, false, key, tv, 0) })
+}
+
+func TestCowSetKeyVFuture(t *testing.T) {
+	a := require.New(t)
+
+	addr := getRandomAddress(a)
+	aidx := basics.AppIndex(1)
+	c := getCow([]modsData{
+		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
+	})
+	protoF := config.Consensus[protocol.ConsensusFuture]
+	c.proto = protoF
+
+	key := strings.Repeat("key", 100)
+	val := "val"
+	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: val}
+	err := c.SetKey(addr, aidx, true, key, tv, 0)
+	a.Error(err)
+	a.Contains(err.Error(), "key too long")
+
+	key = "key"
+	val = strings.Repeat("val", 100)
+	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
+	err = c.SetKey(addr, aidx, true, key, tv, 0)
+	a.Error(err)
+	a.Contains(err.Error(), "value too long")
+
+	key = strings.Repeat("k", protoF.MaxAppKeyLen)
+	val = strings.Repeat("v", protoF.MaxAppSumKeyValueLens-len(key)+1)
+	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
+	err = c.SetKey(addr, aidx, true, key, tv, 0)
+	a.Error(err)
+	a.Contains(err.Error(), "key/value total too long")
 }
 
 func TestCowAccountIdx(t *testing.T) {

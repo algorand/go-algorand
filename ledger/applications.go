@@ -32,6 +32,7 @@ type logicLedger struct {
 
 type cowForLogicLedger interface {
 	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
+	GetCreatableID(groupIdx int) basics.CreatableIndex
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
 	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (basics.EvalDelta, error)
@@ -82,6 +83,10 @@ func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusPa
 	}
 
 	return record.MinBalance(proto), nil
+}
+
+func (al *logicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
+	return al.cow.GetCreatableID(groupIdx)
 }
 
 func (al *logicLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {

@@ -379,6 +379,29 @@ func (rt *RequestTracker) Close() error {
 	return rt.listener.Close()
 }
 
+func (rt *RequestTracker) getWaitUntilNoConnectionsChannel(checkInterval time.Duration) <-chan struct{} {
+	done := make(chan struct{})
+
+	go func() {
+		checkEmpty := func(rt *RequestTracker) bool {
+			rt.httpConnectionsMu.Lock()
+			defer rt.httpConnectionsMu.Unlock()
+			return len(rt.httpConnections) == 0
+		}
+
+		for true {
+			if checkEmpty(rt) {
+				close(done)
+				return
+			}
+
+			time.Sleep(checkInterval)
+		}
+	}()
+
+	return done
+}
+
 // Addr returns the listener's network address.
 func (rt *RequestTracker) Addr() net.Addr {
 	return rt.listener.Addr()

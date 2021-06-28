@@ -143,6 +143,9 @@ const (
 	// LocalNumByteSlice uint64
 	LocalNumByteSlice
 
+	// ExtraProgramPages AppParams.ExtraProgramPages
+	ExtraProgramPages
+
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
@@ -228,6 +231,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{GlobalNumByteSlice, StackUint64, 3},
 	{LocalNumUint, StackUint64, 3},
 	{LocalNumByteSlice, StackUint64, 3},
+	{ExtraProgramPages, StackUint64, 4},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode

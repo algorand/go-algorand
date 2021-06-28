@@ -59,6 +59,7 @@ type mockCowForLogicLedger struct {
 	cr     map[creatableLocator]basics.Address
 	brs    map[basics.Address]basics.AccountData
 	stores map[storeLocator]basics.TealKeyValue
+	tcs    map[int]basics.CreatableIndex
 }
 
 func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -67,6 +68,10 @@ func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool
 		return basics.AccountData{}, fmt.Errorf("addr %s not in mock cow", addr.String())
 	}
 	return br, nil
+}
+
+func (c *mockCowForLogicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
+	return c.tcs[groupIdx]
 }
 
 func (c *mockCowForLogicLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -921,7 +926,7 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCallFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
+	err = l.appendUnvalidatedTx(t, nil, initKeys, appCall, transactions.ApplyData{
 		EvalDelta: basics.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk": basics.ValueDelta{
 				Action: basics.SetBytesAction,
@@ -969,6 +974,8 @@ return`
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
+
+	l.WaitForCommit(3)
 
 	// save data into DB and write into local state
 	l.accts.accountsWriting.Add(1)

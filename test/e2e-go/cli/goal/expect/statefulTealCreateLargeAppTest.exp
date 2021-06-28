@@ -1,0 +1,143 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+source  goalExpectCommon.exp
+
+# put a TEAL program into f, with at least size and cost.
+
+set TEST_ALGO_DIR [lindex $argv 0]
+set TEST_DATA_DIR [lindex $argv 1]
+
+proc teal {f v size cost {prefix ""}} {
+    set CHAN [open $f w]
+    puts $CHAN "#pragma version $v\n"
+    puts $CHAN $prefix
+    for {set i 5} {$i < $size} {incr i 2} {
+        puts $CHAN "int 1\npop\n"
+    }
+
+    if {$cost > [expr $size * 2]} {
+        puts $CHAN "byte 0x1234\n"
+        for {set i [expr $size * 2]} {$i < $cost} {incr i 130} {
+            puts $CHAN "keccak256\n"
+        }
+        puts $CHAN "pop\n"
+    }
+    puts $CHAN "int 1\n"
+    close $CHAN
+}
+
+
+if { [catch {
+    source  goalExpectCommon.exp
+
+    puts "starting test"
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+
+    set timeout 60
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root_$TIME_STAMP
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+
+    exec cp $TEST_DATA_DIR/../../installer/genesis/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    ::AlgorandGoal::WaitForRound 1 $TEST_PRIMARY_NODE_DIR
+
+    # Create wallet #1
+    set WALLET_1_NAME Wallet_1_$TIME_STAMP
+    set WALLET_1_PASSWORD 1234
+    set WALLET_1_PASSPHRASE [::AlgorandGoal::CreateWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    puts "WALLET_1_PASSPHRASE: $WALLET_1_PASSPHRASE"
+    ::AlgorandGoal::VerifyWallet $WALLET_1_NAME  $TEST_PRIMARY_NODE_DIR
+
+    # Associate a new account with the wallet
+    set ACCOUNT_1_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::VerifyAccount $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    # Transfer Algos from primary account to account 1
+    set MIN_BALANCE 1000000
+    set TRANSFER_AMOUNT  [expr {1000 * $MIN_BALANCE}]
+    set FEE_AMOUNT 1000
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""]
+
+    set GLOBAL_BYTE_SLICES 1
+    set LOCAL_BYTE_SLICES 0
+    set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
+
+    # Create large teal programs
+    teal "$TEST_ROOT_DIR/big-app.teal" 3 4090 1 "int 0\nbalance\npop\n"
+    teal "$TEST_ROOT_DIR/big-app-v4.teal" 4 4090 1 "int 0\nbalance\npop\n"
+
+    # Create a small program
+    teal "$TEST_ROOT_DIR/sm-app.teal" 3 10 1 "int 0\nbalance\npop\n"
+
+    # App create fails. Approval program too long
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog ${TEST_ROOT_DIR}/big-app.teal --global-byteslices $GLOBAL_BYTE_SLICES --global-ints 0 --local-byteslices $LOCAL_BYTE_SLICES --local-ints 0 --app-arg "str:hello" --clear-prog ${TEST_ROOT_DIR}/big-app.teal  -w $PRIMARY_WALLET_NAME  -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "approval program too long. max len 1024 bytes" {puts "received expected error"; close}
+        eof { close; ::AlgorandGoal::Abort "did not receive expected error" }
+    }
+
+    # App create fails. Clear program too long
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog ${TEST_ROOT_DIR}/sm-app.teal --global-byteslices $GLOBAL_BYTE_SLICES --global-ints 0 --local-byteslices $LOCAL_BYTE_SLICES --local-ints 0 --app-arg "str:hello" --clear-prog ${TEST_ROOT_DIR}/big-app.teal  -w $PRIMARY_WALLET_NAME  -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "clear state program too long. max len 1024 bytes" {puts "received expected error"; close}
+        eof { close; ::AlgorandGoal::Abort "did not receive expected error" }
+    }
+
+    # App create with extra pages, v3 teal
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog ${TEST_ROOT_DIR}/big-app.teal --global-byteslices $GLOBAL_BYTE_SLICES --global-ints 0 --local-byteslices $LOCAL_BYTE_SLICES --local-ints 0 --app-arg "str:hello" --clear-prog ${TEST_ROOT_DIR}/big-app.teal --extra-pages 3 -w $PRIMARY_WALLET_NAME  -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "*pc=705 static cost budget of 700 exceeded" {puts "received expected message"; close}
+        eof { close; ::AlgorandGoal::Abort "did not receive expected message" }
+    }
+
+    # App create with extra pages, v4 teal
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog ${TEST_ROOT_DIR}/big-app-v4.teal --global-byteslices $GLOBAL_BYTE_SLICES --global-ints 0 --local-byteslices $LOCAL_BYTE_SLICES --local-ints 0 --app-arg "str:hello" --clear-prog ${TEST_ROOT_DIR}/big-app-v4.teal --extra-pages 3 -w $PRIMARY_WALLET_NAME  -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "*pc=704 dynamic cost budget of 700 exceeded, executing intc_1" {puts "received expected message"; close}
+        eof { close; ::AlgorandGoal::Abort "did not receive expected message" }
+    }
+
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
+
+    puts "Goal Stateful Teal test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in statefulTealCreateAppTest: $EXCEPTION"
+}
