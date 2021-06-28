@@ -19,11 +19,9 @@ commands:
   prepare_go:
     description: "Clean out existing Go so we can use our preferred version"
     steps:
-      - run: sudo rm -rf /usr/local/go
-      - run: sudo rm -rf /home/circleci/.go_workspace/bin /usr/local/go/bin
-      - run: export NEWPATH=$(echo "$PATH" | sed -e 's/:\/home\/circleci\/\.go_workspace\/bin//' | sed -e 's/:\/usr\/local\/go\/bin//')
-      - run: echo "export PATH=$NEWPATH" >> $BASH_ENV
-      - run: echo "unset GOPATH" >> $BASH_ENV
+      - run: |
+          sudo rm -rf /usr/local/go
+          sudo rm -rf /home/circleci/.go_workspace/bin /usr/local/go/bin
 
 jobs:
   codegen_verification:
@@ -36,7 +34,10 @@ jobs:
     steps:
       - checkout
       - prepare_go
-      - run: scripts/travis/codegen_verification.sh
+      - run: |
+          export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+          unset GOPATH
+          scripts/travis/codegen_verification.sh
 
   amd64_build:
     # docker:
@@ -50,7 +51,10 @@ jobs:
       - prepare_go
       - run:
           no_output_timeout: 30m
-          command: scripts/travis/build_test.sh
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            unset GOPATH
+            scripts/travis/build_test.sh
 
   amd64_integration:
     # docker:
@@ -64,7 +68,10 @@ jobs:
       - prepare_go
       - run:
           no_output_timeout: 30m
-          command: scripts/travis/integration_test.sh
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            unset GOPATH
+            scripts/travis/integration_test.sh
 
   arm64_build:
     machine:
@@ -75,7 +82,10 @@ jobs:
       - prepare_go
       - run:
           no_output_timeout: 30m
-          command: scripts/travis/build_test.sh
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            unset GOPATH
+            scripts/travis/build_test.sh
 
   arm64_integration:
     machine:
@@ -86,7 +96,10 @@ jobs:
       - prepare_go
       - run:
           no_output_timeout: 30m
-          command: scripts/travis/integration_test.sh
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            unset GOPATH
+            scripts/travis/integration_test.sh
 
   mac_amd64_build:
     macos:
@@ -96,7 +109,10 @@ jobs:
       - prepare_go
       - run:
           no_output_timeout: 30m
-          command: scripts/travis/build_test.sh
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            unset GOPATH
+            scripts/travis/build_test.sh
 
   mac_amd64_integration:
     macos:
@@ -106,7 +122,10 @@ jobs:
       - prepare_go
       - run:
           no_output_timeout: 30m
-          command: scripts/travis/integration_test.sh
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            unset GOPATH
+            scripts/travis/integration_test.sh
 
   windows_x64_build:
     executor:
@@ -117,5 +136,8 @@ jobs:
       - prepare_go
       - run:
           no_output_timeout: 30m
-          command: scripts/travis/build_test.sh
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            unset GOPATH
+            scripts/travis/build_test.sh
           shell: bash.exe
