@@ -29,6 +29,13 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
+# If available, use gotestsum instead of 'go test'.
+ifeq (, $(shell which gotestsum))
+export GOTESTCOMMAND=go test
+else
+export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
+endif
+
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
 ifeq ($(ARCH), amd64)
@@ -68,7 +75,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./compactcert
+MSGP_GENERATE	:= ./protocol ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./compactcert
 
 default: build
 
@@ -80,9 +87,6 @@ fmt:
 
 fix: build
 	$(GOPATH1)/bin/algofix */
-
-fixcheck: build
-	$(GOPATH1)/bin/algofix -error */
 
 lint: deps
 	$(GOPATH1)/bin/golint ./...
@@ -148,7 +152,7 @@ $(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib
 		PATH=$(GOPATH1)/bin:$$PATH \
 		go generate ./...
 
-$(ALGOD_API_SWAGGER_INJECT): $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
+$(ALGOD_API_SWAGGER_INJECT): deps $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
 	./daemon/algod/api/server/lib/bundle_swagger_json.sh
 
 # Regenerate kmd swagger spec files
@@ -175,26 +179,36 @@ $(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/lib
 		touch $@; \
 	fi
 
-$(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
+$(KMD_API_SWAGGER_INJECT): deps $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 	./daemon/kmd/lib/kmdapi/bundle_swagger_json.sh
+
+# generated files we should make sure we clean
+GENERATED_FILES := \
+	$(ALGOD_API_SWAGGER_INJECT) \
+	$(KMD_API_SWAGGER_INJECT) \
+	$(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated \
+	$(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
+
+rebuild_swagger: deps
+	rm -f $(GENERATED_FILES)
+	# we need to invoke the make here since we want to ensure that the deletion and re-creating are sequential
+	make $(KMD_API_SWAGGER_INJECT) $(ALGOD_API_SWAGGER_INJECT)
 
 # develop
 
-build: buildsrc gen
+build: buildsrc
 
 # We're making an empty file in the go-cache dir to
 # get around a bug in go build where it will fail
 # to cache binaries from time to time on empty NFS
 # dirs
-buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
+buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
 	mkdir -p tmp/go-cache && \
 	touch tmp/go-cache/file.txt && \
 	GOCACHE=$(SRCPATH)/tmp/go-cache go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:
 	./scripts/check_golang_version.sh build
-
-SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 
 ## Build binaries with the race detector enabled in them.
 ## This allows us to run e2e tests with race detection.
@@ -203,7 +217,7 @@ SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 build-race: build
 	@mkdir -p $(GOPATH1)/bin-race
 	GOBIN=$(GOPATH1)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./...
-	GOBIN=$(GOPATH1)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -ldflags="$(GOLDFLAGS)" $(SOURCES_RACE)
+	cp $(GOPATH1)/bin/kmd $(GOPATH1)/bin-race
 
 NONGO_BIN_FILES=$(GOPATH1)/bin/find-nodes.sh $(GOPATH1)/bin/update.sh $(GOPATH1)/bin/COPYING $(GOPATH1)/bin/ddconfig.sh
 
@@ -221,45 +235,33 @@ $(GOPATH1)/bin/%:
 	cp -f $< $@
 
 test: build
-	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s | logfilter
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 fulltest: build-race
-	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
-		go test $(GOTAGS) -timeout 2500s -race $$PACKAGE_DIRECTORY | logfilter; \
-	done
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
-shorttest: build-race $(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
-
-$(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
-	@go test $(GOTAGS) -short -timeout 2500s -race $(subst short_test_target_,,$@) | logfilter
+shorttest: build-race
+	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
 
 testall: fulltest integration
 
-# generated files we should make sure we clean
-GENERATED_FILES := daemon/algod/api/bundledSpecInject.go \
-	daemon/algod/api/lib/bundledSpecInject.go \
-	daemon/kmd/lib/kmdapi/bundledSpecInject.go \
-	$(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated \
-	$(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
-
 clean:
 	go clean -i ./...
 	rm -f $(GOPATH1)/bin/node_exporter
-	rm -f $(GENERATED_FILES)
 	cd crypto/libsodium-fork && \
 		test ! -e Makefile || make clean
 	rm -rf crypto/lib
 	rm -rf crypto/libs
 	rm -rf crypto/copies
+	rm -rf ./gen/devnet ./gen/mainnetnet ./gen/testnet
 
 # clean without crypto
 cleango:
 	go clean -i ./...
 	rm -f $(GOPATH1)/bin/node_exporter
-	rm -f $(GENERATED_FILES)
 
 # assign the phony target node_exporter the dependency of the actual executable.
 node_exporter: $(GOPATH1)/bin/node_exporter
@@ -312,7 +314,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version
+.PHONY: default fmt vet lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_swagger
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule
