@@ -36,7 +36,7 @@ jobs:
       - prepare_go
       - run: |
           export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-          unset GOPATH
+          export GOPATH="$(HOME)/go"
           scripts/travis/codegen_verification.sh
 
   amd64_build:
@@ -53,7 +53,7 @@ jobs:
           no_output_timeout: 30m
           command: |
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            unset GOPATH
+            export GOPATH="$(HOME)/go"
             scripts/travis/build_test.sh
 
   amd64_integration:
@@ -70,7 +70,7 @@ jobs:
           no_output_timeout: 30m
           command: |
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            unset GOPATH
+            export GOPATH="$(HOME)/go"
             scripts/travis/integration_test.sh
 
   arm64_build:
@@ -84,7 +84,7 @@ jobs:
           no_output_timeout: 30m
           command: |
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            unset GOPATH
+            export GOPATH="$(HOME)/go"
             scripts/travis/build_test.sh
 
   arm64_integration:
@@ -98,7 +98,7 @@ jobs:
           no_output_timeout: 30m
           command: |
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            unset GOPATH
+            export GOPATH="$(HOME)/go"
             scripts/travis/integration_test.sh
 
   mac_amd64_build:
@@ -111,7 +111,7 @@ jobs:
           no_output_timeout: 30m
           command: |
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            unset GOPATH
+            export GOPATH="$(HOME)/go"
             scripts/travis/build_test.sh
 
   mac_amd64_integration:
@@ -124,7 +124,7 @@ jobs:
           no_output_timeout: 30m
           command: |
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            unset GOPATH
+            export GOPATH="$(HOME)/go"
             scripts/travis/integration_test.sh
 
   windows_x64_build:
@@ -138,6 +138,6 @@ jobs:
           no_output_timeout: 30m
           command: |
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            unset GOPATH
+            export GOPATH="$(HOME)/go"
             scripts/travis/build_test.sh
           shell: bash.exe
