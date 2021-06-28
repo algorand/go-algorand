@@ -42,7 +42,7 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$("$GOPATH"/bin/golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
+    warningCount=$("golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
     if [ "${warningCount}" = "0" ]; then
         return 0
     fi
@@ -72,8 +72,8 @@ echo "Regenerate config files"
 go generate ./config
 
 echo "Running fixcheck"
-GOPATH=$(go env GOPATH)
-"$GOPATH"/bin/algofix -error */
+# GOPATH=$(go env GOPATH)
+algofix -error */
 
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
