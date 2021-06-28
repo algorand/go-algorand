@@ -93,6 +93,7 @@ jobs:
             export ALGORAND_DEADLOCK=enable
             GOLANG_VERSION=$(./scripts/get_golang_version.sh)
             eval "$(~/gimme "${GOLANG_VERSION}")"
+            scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             PACKAGES="$(go list ./... | grep -v /go-algorand/test/ | circleci tests split --split-by=timings --timings-type=classname)"
             export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
@@ -123,7 +124,8 @@ jobs:
             export BUILD_TYPE=integration
             GOLANG_VERSION=$(./scripts/get_golang_version.sh)
             eval "$(~/gimme "${GOLANG_VERSION}")"
-            ./test/scripts/run_integration_tests.sh
+            scripts/configure_dev.sh
+            test/scripts/run_integration_tests.sh
 
   arm64_build:
     machine:
