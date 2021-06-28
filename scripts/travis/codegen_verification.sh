@@ -73,6 +73,7 @@ go generate ./config
 
 echo "Running fixcheck"
 # GOPATH=$(go env GOPATH)
+which algofix
 algofix -error */
 
 echo Checking Enlistment...
