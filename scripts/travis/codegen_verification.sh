@@ -42,7 +42,7 @@ function runGoFmt() {
 }
 
 function runGoLint() {
-    warningCount=$("golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
+    warningCount=$(golint $(go list ./... | grep -v /vendor/ | grep -v /test/e2e-go/) | wc -l | tr -d ' ')
     if [ "${warningCount}" = "0" ]; then
         return 0
     fi
