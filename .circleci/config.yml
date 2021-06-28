@@ -15,6 +15,12 @@ workflows:
       #- mac_amd64_build
       #- windows_x64_build
 
+commands:
+  prepare_go:
+    description: "Clean out existing Go so we can use our preferred version"
+    steps:
+      - run: sudo rm -rf /usr/local/go
+
 jobs:
   codegen_verification:
     # docker:
@@ -25,6 +31,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - prepare_go
       - run: scripts/travis/codegen_verification.sh
 
   amd64_build:
@@ -36,6 +43,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - prepare_go
       - run:
           no_output_timeout: 30m
           command: scripts/travis/build_test.sh
@@ -49,6 +57,7 @@ jobs:
     resource_class: large
     steps:
       - checkout
+      - prepare_go
       - run:
           no_output_timeout: 30m
           command: scripts/travis/integration_test.sh
@@ -59,6 +68,7 @@ jobs:
     resource_class: arm.medium
     steps:
       - checkout
+      - prepare_go
       - run:
           no_output_timeout: 30m
           command: scripts/travis/build_test.sh
@@ -69,6 +79,7 @@ jobs:
     resource_class: arm.medium
     steps:
       - checkout
+      - prepare_go
       - run:
           no_output_timeout: 30m
           command: scripts/travis/integration_test.sh
@@ -78,6 +89,7 @@ jobs:
       xcode: 11.0.0
     steps:
       - checkout
+      - prepare_go
       - run:
           no_output_timeout: 30m
           command: scripts/travis/build_test.sh
@@ -87,6 +99,7 @@ jobs:
       xcode: 11.0.0
     steps:
       - checkout
+      - prepare_go
       - run:
           no_output_timeout: 30m
           command: scripts/travis/integration_test.sh
@@ -97,6 +110,7 @@ jobs:
       size: medium
     steps:
       - checkout
+      - prepare_go
       - run:
           no_output_timeout: 30m
           command: scripts/travis/build_test.sh
