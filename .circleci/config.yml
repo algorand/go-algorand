@@ -8,7 +8,7 @@ workflows:
   build_pr:
     jobs:
       - codegen_verification
-      # - amd64_build
+      - amd64_build
       # - amd64_integration
       #- arm64_build
       #- arm64_integration
