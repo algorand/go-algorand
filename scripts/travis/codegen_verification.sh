@@ -84,6 +84,12 @@ else
    echo Enlistment is clean
 fi
 
+# If we are in CircleCI, hardcode the GOPATH so we can find artifacts
+if $CIRCLECI; then
+  GOPATH='/home/circleci/.go_workspace'
+else
+  GOPATH=$(go env GOPATH)
+fi
+
 # test binary compatibility
-go env GOPATH
-GOPATH=$(go env GOPATH) "${SCRIPTPATH}/../../test/platform/test_linux_amd64_compatibility.sh"
+"${SCRIPTPATH}/../../test/platform/test_linux_amd64_compatibility.sh"
