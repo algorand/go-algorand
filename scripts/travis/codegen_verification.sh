@@ -72,8 +72,6 @@ echo "Regenerate config files"
 go generate ./config
 
 echo "Running fixcheck"
-# GOPATH=$(go env GOPATH)
-which algofix
 algofix -error */
 
 echo Checking Enlistment...
@@ -87,4 +85,5 @@ else
 fi
 
 # test binary compatibility
-"${SCRIPTPATH}/../../test/platform/test_linux_amd64_compatibility.sh"
+go env GOPATH
+GOPATH=$(go env GOPATH) "${SCRIPTPATH}/../../test/platform/test_linux_amd64_compatibility.sh"
