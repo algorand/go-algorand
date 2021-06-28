@@ -9,12 +9,10 @@ workflows:
     jobs:
       - codegen_verification
       - amd64_build
-      - amd64_test:
-          requires:
-            - amd64_build
-      - amd64_integration:
-          requires:
-            - amd64_build
+#      - amd64_test:
+#          requires:
+#            - amd64_build
+      - amd64_integration
       #- arm64_build
       #- arm64_integration
       #- mac_amd64_build
@@ -62,7 +60,7 @@ jobs:
             export ALGORAND_DEADLOCK=enable
             scripts/travis/build.sh
 
-  amd64_test:
+#  amd64_test:
       
   amd64_integration:
     # docker:
