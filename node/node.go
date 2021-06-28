@@ -113,7 +113,7 @@ type AlgorandFullNode struct {
 	rootDir     string
 	genesisID   string
 	genesisHash crypto.Digest
-	devMode     bool // is this node operates in a developer mode ? ( benine agreement, broadcasting transaction generates a new block )
+	devMode     bool // is this node operates in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
 
 	log logging.Logger
 

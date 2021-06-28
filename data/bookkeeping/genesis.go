@@ -71,8 +71,9 @@ type Genesis struct {
 
 	// DevMode defines whether this network operates in a developer mode or not. Developer mode networks
 	// are a single node network, that operates without the agreement service being active. In liue of the
-	// agreement service, a new block is generated each time a node receives a block. The default value for
-	// this field is "false", which makes this field empty from it's encoding, and therefore safe.
+	// agreement service, a new block is generated each time a node receives a transaction group. The
+	// default value for this field is "false", which makes this field empty from it's encoding, and
+	// therefore backward compatible.
 	DevMode bool `codec:"devmode"`
 }
 
