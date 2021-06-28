@@ -31,9 +31,6 @@ commands:
 
 jobs:
   codegen_verification:
-    # docker:
-    #   - image: cimg/base:stable-18.04
-    # resource_class: large
     machine:
       image: ubuntu-2004:202104-01
     resource_class: xlarge
@@ -46,9 +43,6 @@ jobs:
           scripts/travis/codegen_verification.sh
 
   amd64_build:
-    # docker:
-    #   - image: cimg/base:stable-18.04
-    # resource_class: large
     machine:
       image: ubuntu-2004:202104-01
     resource_class: xlarge
@@ -57,7 +51,7 @@ jobs:
       - prepare_go
       - restore_cache:
           keys:
-            - 'go-mod-{{ arch }}-{{ checksum "go.sum" }}'
+            - 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.sum" }}'
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
@@ -66,7 +60,7 @@ jobs:
             export ALGORAND_DEADLOCK=enable
             scripts/travis/build.sh --make_debug
       - save_cache:
-          key: 'go-mod-{{ arch }}-{{ checksum "go.sum" }}'
+          key: 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
           paths:
             - /home/circleci/go/pkg/mod
       - persist_to_workspace:
@@ -81,22 +75,33 @@ jobs:
     machine:
       image: ubuntu-2004:202104-01
     resource_class: xlarge
+    parallelism: 5
+    environment:
+      TEST_RESULTS: /tmp/results/shorttest
     steps:
       - prepare_go
       - attach_workspace:
           at: /home/circleci
+      - run: mkdir -p $TEST_RESULTS
       - run:
-          name: scripts/travis/test.sh
+          name: Run short tests
           command: |
+            set -e
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
-            scripts/travis/test.sh
+            PACKAGES="$(go list ./... | grep -v /go-algorand/test/ | circleci tests split --split-by=timings --timings-type=classname)"
+            export PACKAGE_NAMES=$(echo $TEST_PACKAGES | tr -d '\n')
+            echo "Testing the following packages:"
+            echo $PACKAGE_NAMES
+            gotestsum --format pkgname --junitfile $TEST_RESULTS/results.xml --jsonfile $TEST_RESULTS/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $(PACKAGE_NAMES)
+      - store_artifacts:
+          path: /tmp/results
+          destination: raw-test-output
+      - store_test_results:
+          path: /tmp/results
       
   amd64_integration:
-    # docker:
-    #   - image: cimg/base:stable-18.04
-    # resource_class: large
     machine:
       image: ubuntu-2004:202104-01
     resource_class: xlarge
