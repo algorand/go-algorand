@@ -7,9 +7,9 @@ workflows:
   version: 2
   build_pr:
     jobs:
-      - codegen_verification
-      - amd64_build
-      # - amd64_integration
+      # - codegen_verification
+      # - amd64_build
+      - amd64_integration
       #- arm64_build
       #- arm64_integration
       #- mac_amd64_build
