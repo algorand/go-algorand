@@ -2,6 +2,7 @@ version: 2.1
 
 orbs:
   win: circleci/windows@2.3.0
+  go: circleci/go@1.7.0
 
 workflows:
   version: 2
@@ -9,10 +10,12 @@ workflows:
     jobs:
       - codegen_verification
       - amd64_build
-#      - amd64_test:
-#          requires:
-#            - amd64_build
-      - amd64_integration
+      - amd64_test:
+          requires:
+            - amd64_build
+      - amd64_integration:
+          requires:
+            - amd64_build
       #- arm64_build
       #- arm64_integration
       #- mac_amd64_build
@@ -23,7 +26,7 @@ commands:
     description: "Clean out existing Go so we can use our preferred version"
     steps:
       - run: |
-          sudo rm -rf /usr/local/go
+          sudo rm -rf /home/circleci/.go_workspace /usr/local/go
           sudo rm -rf /home/circleci/.go_workspace/bin /usr/local/go/bin
 
 jobs:
@@ -33,7 +36,7 @@ jobs:
     # resource_class: large
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: large
+    resource_class: xlarge
     steps:
       - checkout
       - prepare_go
@@ -48,19 +51,47 @@ jobs:
     # resource_class: large
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: large
+    resource_class: xlarge
     steps:
       - checkout
       - prepare_go
+      - restore_cache:
+          keys:
+            - 'go-mod-{{ arch }}-{{ checksum "go.sum" }}'
       - run:
-          no_output_timeout: 30m
+          name: scripts/travis/build.sh --make_debug
           command: |
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
-            scripts/travis/build.sh
+            scripts/travis/build.sh --make_debug
+      - save_cache:
+          key: 'go-mod-{{ arch }}-{{ checksum "go.sum" }}'
+          paths:
+            - /home/circleci/go/pkg/mod
+      - persist_to_workspace:
+          root: /home/circleci
+          paths:
+            - project
+            - go
+            - gimme
+            - .gimme
 
-#  amd64_test:
+  amd64_test:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: xlarge
+    steps:
+      - prepare_go
+      - attach_workspace:
+          at: /home/circleci
+      - run:
+          name: scripts/travis/test.sh
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="/home/circleci/go"
+            export ALGORAND_DEADLOCK=enable
+            scripts/travis/test.sh
       
   amd64_integration:
     # docker:
@@ -68,16 +99,19 @@ jobs:
     # resource_class: large
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: large
+    resource_class: xlarge
     steps:
-      - checkout
       - prepare_go
+      - attach_workspace:
+          at: /home/circleci
       - run:
-          no_output_timeout: 30m
+          name: BUILD_TYPE=integration scripts/travis/test.sh
           command: |
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
-            scripts/travis/integration_test.sh
+            export ALGORAND_DEADLOCK=enable
+            export BUILD_TYPE=integration
+            scripts/travis/test.sh
 
   arm64_build:
     machine:
