@@ -93,7 +93,7 @@ jobs:
             GOLANG_VERSION=$(./scripts/get_golang_version.sh)
             eval "$(~/gimme "${GOLANG_VERSION}")"
             PACKAGES="$(go list ./... | grep -v /go-algorand/test/ | circleci tests split --split-by=timings --timings-type=classname)"
-            export PACKAGE_NAMES=$(echo $TEST_PACKAGES | tr -d '\n')
+            export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
             echo "Testing the following packages:"
             echo $PACKAGE_NAMES
             gotestsum --format pkgname --junitfile $TEST_RESULTS/results.xml --jsonfile $TEST_RESULTS/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $(PACKAGE_NAMES)
