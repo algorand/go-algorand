@@ -51,7 +51,7 @@ jobs:
       - prepare_go
       - restore_cache:
           keys:
-            - 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.sum" }}'
+            - 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
