@@ -21,9 +21,9 @@ commands:
     steps:
       - run: sudo rm -rf /usr/local/go
       - run: sudo rm -rf /home/circleci/.go_workspace/bin /usr/local/go/bin
-      - run: export PATH=$(echo "$PATH" | sed -e 's/:\/home\/circleci\/\.go_workspace\/bin//')
-      - run: export PATH=$(echo "$PATH" | sed -e 's/:\/usr\/local\/go\/bin//')
-      - run: unset GOPATH
+      - run: export NEWPATH=$(echo "$PATH" | sed -e 's/:\/home\/circleci\/\.go_workspace\/bin//' | sed -e 's/:\/usr\/local\/go\/bin//')
+      - run: echo "export PATH=$NEWPATH" >> $BASH_ENV
+      - run: echo "unset GOPATH" >> $BASH_ENV
 
 jobs:
   codegen_verification:
