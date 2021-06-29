@@ -132,6 +132,11 @@ jobs:
             export ALGOTEST=1
             export SHORTTEST=-short
             test/scripts/run_integration_tests.sh
+      - store_artifacts:
+          path: /tmp/results
+          destination: raw-test-output
+      - store_test_results:
+          path: /tmp/results
 
   arm64_build:
     machine:
