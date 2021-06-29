@@ -65,11 +65,11 @@ func checkFlags() (ok bool) {
 		ok = false
 	}
 	if len(*binDir) == 0 {
-		log.Errorf("Use the -bindir flag to specifiy the location of the algod bin directory")
+		log.Errorf("Use the -bindir flag to specify the location of the algod bin directory")
 		ok = false
 	}
 	if len(*tempDir) == 0 {
-		log.Errorf("Use the -tempdir flag to specifiy the location of the tmp directory directory")
+		log.Errorf("Use the -tempdir flag to specify the location of the tmp directory directory")
 		ok = false
 	}
 	return ok

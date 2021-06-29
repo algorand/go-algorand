@@ -246,7 +246,7 @@ func (db *Accessor) atomic(fn idemFn, commitLocker sync.Locker, extras ...interf
 		// see https://www.sqlite.org/sharedcache.html for more details.
 		// These shared cache constrains are more strict than the WAL based concurrency limitations, which allows
 		// one writer and multiple readers at the same time.
-		// In particular, the shared cache limitation means that since a connection could become a writer, any syncronization
+		// In particular, the shared cache limitation means that since a connection could become a writer, any synchronization
 		// operating that would prevent this operation from completing could result with a deadlock.
 		// This is the reason why for shared cache connections, we'll take the lock before starting the write transaction,
 		// and would keep it along. It will cause a degraded performance when using a shared cache connection
@@ -438,7 +438,7 @@ func dbretry(obj error) bool {
 	return ok && (err.Code == sqlite3.ErrLocked || err.Code == sqlite3.ErrBusy)
 }
 
-// IsErrBusy examine the input inerr varaible of type error and determine if it's a sqlite3 error for the ErrBusy error code.
+// IsErrBusy examine the input inerr variable of type error and determine if it's a sqlite3 error for the ErrBusy error code.
 func IsErrBusy(inerr error) bool {
 	err, ok := inerr.(sqlite3.Error)
 	return ok && (err.Code == sqlite3.ErrBusy)
@@ -473,7 +473,7 @@ const (
 	SynchronousModeExtra SynchronousMode = 3
 )
 
-// SetSynchronousMode updates the syncronous mode of the connection
+// SetSynchronousMode updates the synchronous mode of the connection
 func (db *Accessor) SetSynchronousMode(ctx context.Context, mode SynchronousMode, fullfsync bool) (err error) {
 	if mode < SynchronousModeOff || mode > SynchronousModeExtra {
 		return fmt.Errorf("invalid value(%d) was provided to mode", mode)

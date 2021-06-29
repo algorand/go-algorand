@@ -71,7 +71,7 @@ var trieCachedNodesCount = 9000
 var merkleCommitterNodesPerPage = int64(116)
 
 // baseAccountsPendingAccountsBufferSize defines the size of the base account pending accounts buffer size.
-// At the begining of a new round, the entries from this buffer are being flushed into the base accounts map.
+// At the beginning of a new round, the entries from this buffer are being flushed into the base accounts map.
 const baseAccountsPendingAccountsBufferSize = 100000
 
 // baseAccountsPendingAccountsWarnThreshold defines the threshold at which the lruAccounts would generate a warning
@@ -131,7 +131,7 @@ type accountUpdates struct {
 	// initProto specifies the initial consensus parameters at the genesis block.
 	initProto config.ConsensusParams
 
-	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directroy for the catchup files to be generated
+	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directory for the catchup files to be generated
 	dbDirectory string
 
 	// catchpointInterval is the configured interval at which the accountUpdates would generate catchpoint labels and catchpoint files.
@@ -1067,7 +1067,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 
 			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
 			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(au.catchpointInterval) {
-				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any futher changes
+				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any further changes
 				// would just accumulate in memory.
 				close(blockEvalFailed)
 				au.log.Errorf("initializeCaches was unable to fill up the account caches accounts round = %d, block round = %d. See above error for more details.", au.dbRound, blk.Round())

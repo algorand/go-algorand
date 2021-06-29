@@ -467,7 +467,7 @@ type mismatchingDirectroyPermissionsLog struct {
 
 func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interface{}) {
 	fmtStr := fmt.Sprintf(fmts, args...)
-	require.Contains(m.t, fmtStr, "Unable to create genesis directroy")
+	require.Contains(m.t, fmtStr, "Unable to create genesis directory")
 }
 
 // TestMismatchingGenesisDirectoryPermissions tests to see that the os.MkDir check we have in MakeFull works as expected. It tests both the return error as well as the logged error.

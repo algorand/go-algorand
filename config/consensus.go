@@ -546,7 +546,7 @@ func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) Con
 	return staticConsensus
 }
 
-// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directory
 func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
 	if err != nil {
@@ -562,7 +562,7 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	return nil
 }
 
-// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
 // and merge it with a copy of the Consensus map. Then, it returns it to the caller.
 func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)

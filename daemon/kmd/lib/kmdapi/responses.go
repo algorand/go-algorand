@@ -159,42 +159,42 @@ type walletInfoResponse struct {
 	Body *APIV1POSTWalletInfoResponse
 }
 
-// APIV1POSTMasterKeyExportResponse is the reponse to `POST /v1/master-key/export`
+// APIV1POSTMasterKeyExportResponse is the response to `POST /v1/master-key/export`
 // friendly:ExportMasterKeyResponse
 type APIV1POSTMasterKeyExportResponse struct {
 	APIV1ResponseEnvelope
 	MasterDerivationKey APIV1MasterDerivationKey `json:"master_derivation_key"`
 }
 
-// Reponse to `POST /v1/master-key/export`
+// Response to `POST /v1/master-key/export`
 // swagger:response ExportMasterKeyResponse
 type exportMasterKeyResponse struct {
 	//	in:body
 	Body *APIV1POSTMasterKeyExportResponse
 }
 
-// APIV1POSTKeyImportResponse is the repsonse to `POST /v1/key/import`
+// APIV1POSTKeyImportResponse is the response to `POST /v1/key/import`
 // friendly:ImportKeyResponse
 type APIV1POSTKeyImportResponse struct {
 	APIV1ResponseEnvelope
 	Address string `json:"address"`
 }
 
-// Repsonse to `POST /v1/key/import`
+// Response to `POST /v1/key/import`
 // swagger:response ImportKeyResponse
 type importKeyResponse struct {
 	//	in:body
 	Body *APIV1POSTKeyImportResponse
 }
 
-// APIV1POSTKeyExportResponse is the reponse to `POST /v1/key/export`
+// APIV1POSTKeyExportResponse is the response to `POST /v1/key/export`
 // friendly:ExportKeyResponse
 type APIV1POSTKeyExportResponse struct {
 	APIV1ResponseEnvelope
 	PrivateKey APIV1PrivateKey `json:"private_key"`
 }
 
-// Reponse to `POST /v1/key/export`
+// Response to `POST /v1/key/export`
 // swagger:response ExportKeyResponse
 type exportKeyResponse struct {
 	//	in:body
@@ -242,7 +242,7 @@ type listKeysResponse struct {
 	Body *APIV1POSTKeyListResponse
 }
 
-// APIV1POSTTransactionSignResponse is the repsonse to `POST /v1/transaction/sign`
+// APIV1POSTTransactionSignResponse is the response to `POST /v1/transaction/sign`
 // friendly:SignTransactionResponse
 type APIV1POSTTransactionSignResponse struct {
 	APIV1ResponseEnvelope
@@ -258,7 +258,7 @@ type signTransactionResponse struct {
 	Body *APIV1POSTTransactionSignResponse
 }
 
-// APIV1POSTProgramSignResponse is the repsonse to `POST /v1/data/sign`
+// APIV1POSTProgramSignResponse is the response to `POST /v1/data/sign`
 // friendly:SignProgramResponse
 type APIV1POSTProgramSignResponse struct {
 	APIV1ResponseEnvelope
