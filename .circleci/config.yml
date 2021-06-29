@@ -110,12 +110,16 @@ jobs:
     machine:
       image: ubuntu-2004:202104-01
     resource_class: xlarge
+    parallelism: 5
+    environment:
+      TEST_RESULTS: /tmp/results/integration
     steps:
       - prepare_go
       - attach_workspace:
           at: /home/circleci
       - run:
           name: Run integration tests
+          no_output_timeout: 30m
           command: |
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
@@ -125,6 +129,8 @@ jobs:
             GOLANG_VERSION=$(./scripts/get_golang_version.sh)
             eval "$(~/gimme "${GOLANG_VERSION}")"
             scripts/configure_dev.sh
+            export ALGOTEST=1
+            export SHORTTEST=-short
             test/scripts/run_integration_tests.sh
 
   arm64_build:
