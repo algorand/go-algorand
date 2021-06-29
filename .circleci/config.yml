@@ -23,8 +23,6 @@ workflows:
       - arm64_integration:
           requires:
             - arm64_build
-  build_mac:
-    jobs:
       - mac_amd64_build
       - mac_amd64_test:
           requires:
