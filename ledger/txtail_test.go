@@ -29,9 +29,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestTxTailCheckdup(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	tail := txTail{}
@@ -95,6 +98,8 @@ func TestTxTailCheckdup(t *testing.T) {
 }
 
 func TestGetRoundTxIds(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	r := basics.Round(100)
 	txids := make(map[transactions.Txid]basics.Round)
 	txids[transactions.Txid(crypto.Hash([]byte("a")))] = r

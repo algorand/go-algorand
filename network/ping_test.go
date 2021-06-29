@@ -21,10 +21,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 // for two node network, check that B can ping A and get a reply
 func TestPing(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.config.PeerPingPeriodSeconds = 5

@@ -29,9 +29,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestGenerateAndListKeys(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
@@ -84,6 +87,8 @@ func TestGenerateAndListKeys(t *testing.T) {
 }
 
 func TestImportKey(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
@@ -134,6 +139,8 @@ func TestImportKey(t *testing.T) {
 }
 
 func TestExportKey(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
@@ -196,6 +203,8 @@ func TestExportKey(t *testing.T) {
 }
 
 func TestDeleteKey(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
@@ -260,6 +269,8 @@ func TestDeleteKey(t *testing.T) {
 }
 
 func TestSignTransaction(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
@@ -318,6 +329,8 @@ func TestSignTransaction(t *testing.T) {
 }
 
 func TestSignProgram(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
@@ -417,6 +430,8 @@ func BenchmarkSignTransaction(b *testing.B) {
 }
 
 func TestMasterKeyImportExport(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
@@ -584,6 +599,8 @@ func TestMasterKeyImportExport(t *testing.T) {
 }
 
 func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture

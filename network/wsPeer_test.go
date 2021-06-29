@@ -23,9 +23,12 @@ import (
 	"unsafe"
 
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestCheckSlowWritingPeer(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	now := time.Now()
 	peer := wsPeer{
 		intermittentOutgoingMessageEnqueueTime: 0,
@@ -42,6 +45,8 @@ func TestCheckSlowWritingPeer(t *testing.T) {
 
 // TestGetRequestNonce tests if unique values are generated each time
 func TestGetRequestNonce(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numValues := 1000
 	peer := wsPeer{}
 	valueChannel := make(chan uint64, numValues)
@@ -74,6 +79,8 @@ func TestGetRequestNonce(t *testing.T) {
 }
 
 func TestDefaultMessageTagsLength(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	for tag := range defaultSendMessageTags {
 		require.Equal(t, 2, len(tag))
 	}
@@ -83,6 +90,8 @@ func TestDefaultMessageTagsLength(t *testing.T) {
 // offsets are 64-bit aligned. This is required due to go atomic library
 // limitation.
 func TestAtomicVariablesAligment(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	p := wsPeer{}
 	require.True(t, (unsafe.Offsetof(p.requestNonce)%8) == 0)
 	require.True(t, (unsafe.Offsetof(p.lastPacketTime)%8) == 0)

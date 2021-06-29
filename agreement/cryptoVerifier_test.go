@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 var _ = fmt.Printf
@@ -136,6 +137,8 @@ func getSelectorCapacity(tag protocol.Tag) int {
 }
 
 func TestCryptoVerifierBuffers(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Skip("Test is flaky")
 
 	t.Parallel()

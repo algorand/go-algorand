@@ -24,9 +24,12 @@ import (
 
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestNodeControllerCleanup(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 

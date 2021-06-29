@@ -21,9 +21,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestLoadBootstrappedData(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	badSpecPath := filepath.Join("./../../test", "testdata/deployednettemplates/networks/bootstrapped/badSpec.json")
 	_, err := LoadBootstrappedData(badSpecPath)
 	require.NotEqual(t, nil, err)

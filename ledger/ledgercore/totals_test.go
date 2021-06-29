@@ -23,9 +23,12 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestAccountTotalsCanMarshalMsg(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var at *AccountTotals
 	require.True(t, at.CanMarshalMsg(interface{}(at)))
 	require.False(t, at.CanMarshalMsg(interface{}(t)))
@@ -33,6 +36,8 @@ func TestAccountTotalsCanMarshalMsg(t *testing.T) {
 	require.False(t, at.CanUnmarshalMsg(interface{}(t)))
 }
 func TestAccountTotalsMarshalMsg(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	at := AccountTotals{
 		Online: AlgoCount{
 			Money:       basics.MicroAlgos{Raw: 0x1234123412340001},
@@ -59,6 +64,8 @@ func TestAccountTotalsMarshalMsg(t *testing.T) {
 }
 
 func TestAlgoCountMarshalMsg(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	ac := AlgoCount{
 		Money:       basics.MicroAlgos{Raw: 0x4321432143214321},
 		RewardUnits: 0x1234123412341234,
@@ -197,6 +204,8 @@ var uniqueAccountTotals = []AccountTotals{
 }
 
 func TestAccountTotalsMarshalMsgUnique(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	uniqueAt := make(map[crypto.Digest]bool, 0)
 	for _, at := range uniqueAccountTotals {
 		inBuffer := make([]byte, 0, 128)
@@ -208,6 +217,8 @@ func TestAccountTotalsMarshalMsgUnique(t *testing.T) {
 }
 
 func TestAccountTotalsMarshalUnMarshal(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	for _, at := range uniqueAccountTotals {
 		inBuffer := make([]byte, 0, 128)
 		outBuffer := at.MarshalMsg(inBuffer)

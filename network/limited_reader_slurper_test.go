@@ -25,9 +25,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestLimitedReaderSlurper(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	for _, arraySize := range []uint64{30000, 90000, 200000} {
 		// create a random bytes array.
 		bytesBlob := make([]byte, arraySize)
@@ -76,6 +79,8 @@ func (f *fuzzReader) Read(b []byte) (n int, err error) {
 }
 
 func TestLimitedReaderSlurper_FuzzedBlippedSource(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	arraySize := uint64(300000)
 	bytesBlob := make([]byte, arraySize)
 	crypto.RandBytes(bytesBlob[:])
@@ -121,6 +126,8 @@ func BenchmarkLimitedReaderSlurper(b *testing.B) {
 }
 
 func TestLimitedReaderSlurperMemoryConsumption(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	for _, arraySize := range []uint64{1024, 2048, 65536, 1024 * 1024} {
 		result := testing.Benchmark(func(b *testing.B) {
 			benchmarkLimitedReaderSlurper(b, arraySize)
@@ -130,6 +137,8 @@ func TestLimitedReaderSlurperMemoryConsumption(t *testing.T) {
 }
 
 func TestLimitedReaderSlurperBufferAllocations(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	for baseAllocation := uint64(512); baseAllocation < 100000; baseAllocation += 2048 {
 		for maxAllocation := uint64(512); maxAllocation < 100000; maxAllocation += 512 {
 			lrs := MakeLimitedReaderSlurper(baseAllocation, maxAllocation)

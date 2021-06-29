@@ -9,9 +9,12 @@ import (
 
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestMarshalUnmarshalsigFromAddr(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := sigFromAddr{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -32,6 +35,8 @@ func TestMarshalUnmarshalsigFromAddr(t *testing.T) {
 }
 
 func TestRandomizedEncodingsigFromAddr(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &sigFromAddr{})
 }
 

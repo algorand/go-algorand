@@ -25,9 +25,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestLoadConfig(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	templateDir, err := filepath.Abs("../test/testdata/nettemplates")
@@ -39,6 +42,8 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestLoadMissingConfig(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	templateDir, err := filepath.Abs("../test/testdata/nettemplates")
@@ -48,6 +53,8 @@ func TestLoadMissingConfig(t *testing.T) {
 }
 
 func TestGenerateGenesis(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	templateDir, _ := filepath.Abs("../test/testdata/nettemplates")
@@ -66,6 +73,8 @@ func TestGenerateGenesis(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	templateDir, _ := filepath.Abs("../test/testdata/nettemplates")

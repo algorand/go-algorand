@@ -26,9 +26,12 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestBasicLRUAccounts(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var baseAcct lruAccounts
 	baseAcct.init(logging.TestingLog(t), 10, 5)
 
@@ -85,6 +88,8 @@ func TestBasicLRUAccounts(t *testing.T) {
 }
 
 func TestLRUAccountsPendingWrites(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var baseAcct lruAccounts
 	accountsNum := 250
 	baseAcct.init(logging.TestingLog(t), accountsNum*2, accountsNum)
@@ -135,6 +140,8 @@ func (cl *lruAccountsTestLogger) Warnf(s string, args ...interface{}) {
 }
 
 func TestLRUAccountsPendingWritesWarning(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var baseAcct lruAccounts
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
@@ -159,6 +166,8 @@ func TestLRUAccountsPendingWritesWarning(t *testing.T) {
 }
 
 func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var baseAcct lruAccounts
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40

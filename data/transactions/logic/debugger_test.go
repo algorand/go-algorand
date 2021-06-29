@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 var testProgram string = `intcblock 0 1 1 1 1 5 100
@@ -63,6 +64,8 @@ bytec 4
 `
 
 func TestWebDebuggerManual(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
 	if len(debugURL) == 0 {
 		return
@@ -114,6 +117,8 @@ func (d *testDbgHook) Complete(state *DebugState) error {
 }
 
 func TestDebuggerHook(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	testDbg := testDbgHook{}
 	ops, err := AssembleString(testProgram)
 	require.NoError(t, err)
@@ -129,6 +134,8 @@ func TestDebuggerHook(t *testing.T) {
 }
 
 func TestLineToPC(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	dState := DebugState{
 		Disassembly: "abc\ndef\nghi",
 		PCOffset:    []PCOffset{{PC: 1, Offset: 4}, {PC: 2, Offset: 8}, {PC: 3, Offset: 12}},
@@ -164,6 +171,8 @@ func TestLineToPC(t *testing.T) {
 }
 
 func TestValueDeltaToValueDelta(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	vDelta := basics.ValueDelta{
 		Action: basics.SetUintAction,
 		Bytes:  "some string",

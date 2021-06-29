@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -52,6 +53,8 @@ func init() {
 }
 
 func TestBlockEvaluator(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	genesisInitState, addrs, keys := genesis(10)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
@@ -222,6 +225,8 @@ func TestBlockEvaluator(t *testing.T) {
 }
 
 func TestRekeying(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	// Pretend rekeying is supported
 	actual := config.Consensus[protocol.ConsensusCurrentVersion]
 	pretend := actual
@@ -327,6 +332,8 @@ func TestRekeying(t *testing.T) {
 }
 
 func TestPrepareEvalParams(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	eval := BlockEvaluator{
 		prevHeader: bookkeeping.BlockHeader{
 			TimeStamp: 1234,
@@ -532,6 +539,8 @@ ok:
 // commitToParent -> applyChild copies child's cow state usage counts into parent
 // and the usage counts correctly propagated from parent cow to child cow and back
 func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	_, _, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 1})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "store bytes count 2 exceeds schema bytes count 1")
@@ -540,6 +549,8 @@ func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
 // TestEvalAppAllocStateWithTxnGroup ensures roundCowState.deltas and applyStorageDelta
 // produce correct results when a txn group has storage allocate and storage update actions
 func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
 	require.NoError(t, err)
 	deltas := eval.state.deltas()
@@ -677,6 +688,8 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 }
 
 func TestCowCompactCert(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var certRnd basics.Round
 	var certType protocol.CompactCertType
 	var cert compactcert.Cert
@@ -735,6 +748,8 @@ func TestCowCompactCert(t *testing.T) {
 // a couple trivial tests that don't need setup
 // see TestBlockEvaluator for more
 func TestTestTransactionGroup(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var txgroup []transactions.SignedTxn
 	eval := BlockEvaluator{}
 	err := eval.TestTransactionGroup(txgroup)
@@ -749,6 +764,8 @@ func TestTestTransactionGroup(t *testing.T) {
 // test BlockEvaluator.transactionGroup()
 // some trivial checks that require no setup
 func TestPrivateTransactionGroup(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var txgroup []transactions.SignedTxnWithAD
 	eval := BlockEvaluator{}
 	err := eval.transactionGroup(txgroup)
@@ -763,6 +780,8 @@ func TestPrivateTransactionGroup(t *testing.T) {
 // BlockEvaluator.workaroundOverspentRewards() fixed a couple issues on testnet.
 // This is now part of history and has to be re-created when running catchup on testnet. So, test to ensure it keeps happenning.
 func TestTestnetFixup(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	eval := &BlockEvaluator{}
 	var rewardPoolBalance basics.AccountData
 	rewardPoolBalance.MicroAlgos.Raw = 1234

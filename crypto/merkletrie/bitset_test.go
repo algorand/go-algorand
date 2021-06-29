@@ -21,9 +21,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestBitSet(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var a, b bitset
 
 	// set the bits in a different order, and see if we're ending with the same set.
@@ -63,6 +66,8 @@ func TestBitSet(t *testing.T) {
 
 // TestBitSetOneBit test that only one bit is being set when we call SetBit
 func TestBitSetOneBit(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	for i := 0; i < 256; i++ {
 		var a bitset
 		a.SetBit(byte(i))

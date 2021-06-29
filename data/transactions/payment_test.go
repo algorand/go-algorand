@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func keypair() *crypto.SignatureSecrets {
@@ -34,6 +35,8 @@ func keypair() *crypto.SignatureSecrets {
 }
 
 func TestAlgosEncoding(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var a basics.MicroAlgos
 	var b basics.MicroAlgos
 	var i uint64

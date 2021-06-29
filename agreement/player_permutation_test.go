@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func makeRandomProposalPayload(r round) *proposal {
@@ -744,6 +745,8 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 
 // Generates a set of player states, router states, and messageEvents and tests all permutations of them
 func TestPlayerPermutation(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	for i := 0; i < 7; i++ {
 		for j := 0; j < 14; j++ {
 			_, pMachine, helper := getPlayerPermutation(t, i)

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type TestArray [4]uint64
@@ -54,12 +55,16 @@ type HelperStruct2 struct {
 }
 
 func TestOmitEmpty(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var x TestStruct
 	enc := EncodeReflect(&x)
 	require.Equal(t, 1, len(enc))
 }
 
 func TestEncodeOrder(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var a struct {
 		A int
 		B string
@@ -117,6 +122,8 @@ type InlineParent struct {
 }
 
 func TestEncodeInline(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := InlineChild{X: 5}
 	b := InlineParent{InlineChild: a}
 
@@ -129,6 +136,8 @@ type embeddedMsgp struct {
 }
 
 func TestEncodeEmbedded(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var x embeddedMsgp
 
 	x.TxType = PaymentTx
@@ -145,6 +154,8 @@ func TestEncodeEmbedded(t *testing.T) {
 }
 
 func TestEncodeJSON(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	type ar []string
 	type mp struct {
 		Map map[int]ar `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`

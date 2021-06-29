@@ -21,9 +21,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestSrvSort(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	arr := make([]*net.SRV, 0, 7)

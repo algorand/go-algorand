@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type testWorkerStubs struct {
@@ -213,6 +214,8 @@ func newPartKey(t testing.TB, parent basics.Address) account.Participation {
 }
 
 func TestWorkerAllSigs(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -273,6 +276,8 @@ func TestWorkerAllSigs(t *testing.T) {
 }
 
 func TestWorkerPartialSigs(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var keys []account.Participation
 	for i := 0; i < 7; i++ {
 		var parent basics.Address
@@ -329,6 +334,8 @@ func TestWorkerPartialSigs(t *testing.T) {
 }
 
 func TestWorkerInsufficientSigs(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var keys []account.Participation
 	for i := 0; i < 2; i++ {
 		var parent basics.Address
@@ -358,6 +365,8 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 }
 
 func TestLatestSigsFromThisNode(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -395,6 +404,8 @@ func TestLatestSigsFromThisNode(t *testing.T) {
 }
 
 func TestWorkerRestart(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var keys []account.Participation
 	for i := 0; i < 10; i++ {
 		var parent basics.Address
@@ -434,6 +445,8 @@ func TestWorkerRestart(t *testing.T) {
 }
 
 func TestWorkerHandleSig(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var keys []account.Participation
 	for i := 0; i < 2; i++ {
 		var parent basics.Address

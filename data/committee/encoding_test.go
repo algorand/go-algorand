@@ -22,9 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestEmptyEncoding(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var c Credential
 	require.Equal(t, 1, len(protocol.Encode(&c)))
 }

@@ -27,9 +27,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestGroupTransactions(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -100,6 +103,8 @@ func TestGroupTransactions(t *testing.T) {
 }
 
 func TestGroupTransactionsDifferentSizes(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -206,6 +211,8 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 }
 
 func TestGroupTransactionsSubmission(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 

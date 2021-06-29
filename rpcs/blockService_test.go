@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type mockUnicastPeer struct {
@@ -58,6 +59,8 @@ func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.Incoming
 
 // TestHandleCatchupReqNegative covers the error reporting in handleCatchupReq
 func TestHandleCatchupReqNegative(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 
 	reqMsg := network.IncomingMessage{
 		Sender: &mockUnicastPeer{},
@@ -112,6 +115,8 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 
 // TestRedirectBasic tests the case when the block service redirects the request to elsewhere
 func TestRedirectFallbackArchiver(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	log := logging.TestingLog(t)
 
 	ledger1 := makeLedger(t, "l1")
@@ -164,6 +169,8 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 
 // TestRedirectBasic tests the case when the block service redirects the request to elsewhere
 func TestRedirectFallbackEndpoints(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	log := logging.TestingLog(t)
 
 	ledger1 := makeLedger(t, "l1")
@@ -216,6 +223,8 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 // - the case when the peer is not a valid http peer
 // - the case when the block service keeps redirecting and cannot get a block
 func TestRedirectExceptions(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	log := logging.TestingLog(t)
 
 	ledger1 := makeLedger(t, "l1")

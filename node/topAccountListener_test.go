@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 // errorString is a trivial implementation of error.
@@ -37,6 +38,8 @@ func (e *errorString) Error() string {
 }
 
 func TestUpdateTopAccounts(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var topN []basics.AccountDetail
 	var input []basics.AccountDetail
 
@@ -136,6 +139,8 @@ func TestUpdateTopAccounts(t *testing.T) {
 }
 
 func TestRemoveSome(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	// Initialize slice with 100 accounts
 	var accountsSlice []basics.AccountDetail
 	for i := 0; i <= 100; i++ {
@@ -176,6 +181,8 @@ func TestRemoveSome(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	listener := topAccountListener{
 		accounts:          []basics.AccountDetail{},
 		round:             1,
@@ -253,6 +260,8 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	listener := makeTopAccountListener(logging.Base())
 
 	// "init" should remove existing values before adding new ones.

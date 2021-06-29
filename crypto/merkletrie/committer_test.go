@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 // Duplicate duplicates the current memory committer.
@@ -41,6 +42,8 @@ func (mc *InMemoryCommitter) Duplicate(flat bool) (out *InMemoryCommitter) {
 }
 
 func TestInMemoryCommitter(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var memoryCommitter InMemoryCommitter
 	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
 	// create 50000 hashes.
@@ -101,6 +104,8 @@ func (n *node) getChildren() (list []storedNodeIdentifier) {
 }
 
 func TestNoRedundentPages(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var memoryCommitter InMemoryCommitter
 	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
 
@@ -152,6 +157,8 @@ func decodePageHeaderSize(bytes []byte) (headerSize int, err error) {
 }
 
 func TestMultipleCommits(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	testSize := 5000
 	commitsCount := 5
 
@@ -195,6 +202,8 @@ func TestMultipleCommits(t *testing.T) {
 }
 
 func TestIterativeCommits(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	testSize := 1000
 
 	memConfig := MemoryConfig{

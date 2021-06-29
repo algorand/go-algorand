@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func GenerateRandomBytes(n int) []byte {
@@ -43,22 +44,32 @@ func GenerateRandomBytes(n int) []byte {
 // this test checks that two accounts can send money to one another
 // across a protocol upgrade.
 func TestAccountsCanSendMoneyAcrossUpgradeV15toV16(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV15Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV21toV22(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV21Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV22toV23(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV22Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV23toV24(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV23Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV24toV25(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV24Upgrade.json"))
 }
 

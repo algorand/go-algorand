@@ -23,9 +23,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestResolver(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	// start with a resolver that has no specific DNS address defined.
 	// we want to make sure that it will go to the default DNS server ( 8.8.8.8 )
 	resolver := Resolver{}
