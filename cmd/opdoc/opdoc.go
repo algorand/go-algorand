@@ -247,7 +247,7 @@ func argEnum(name string) []string {
 	if name == "asset_params_get" {
 		return logic.AssetParamsFieldNames
 	}
-	if name == "app" {
+	if name == "app_params_get" {
 		return logic.AppParamsFieldNames
 	}
 	return nil

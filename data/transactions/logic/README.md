@@ -309,7 +309,7 @@ Global fields are fields that are common to all the transactions in the group. I
 
 **Asset Fields**
 
-Asset fields include `AssetHolding` and `AssetParam` fields that are used in the `asset_hold_get` and `asset_params_get` opcodes.
+Asset fields include `AssetHolding` and `AssetParam` fields that are used in the `asset_holding_get` and `asset_params_get` opcodes.
 
 | Index | Name | Type | Notes |
 | --- | --- | --- | --- |
