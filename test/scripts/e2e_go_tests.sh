@@ -93,7 +93,7 @@ echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
 
 if [ "$CIRCLECI" != "" ]; then
     PARALLEL_FLAG="-p 1"
-    PACKAGES="$(go list ./... | grep -v /go-algorand/test/ | circleci tests split --split-by=timings --timings-type=classname)"
+    PACKAGES="$(go list ./... | circleci tests split --split-by=timings --timings-type=classname)"
     PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
     echo "Testing the following packages:"
     echo $PACKAGE_NAMES

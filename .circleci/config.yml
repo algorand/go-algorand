@@ -23,32 +23,15 @@ workflows:
 
 commands:
   prepare_go:
-    description: "Clean out existing Go so we can use our preferred version"
+    description: Clean out existing Go so we can use our preferred version
     steps:
       - run: |
           sudo rm -rf /home/circleci/.go_workspace /usr/local/go
           sudo rm -rf /home/circleci/.go_workspace/bin /usr/local/go/bin
 
-jobs:
-  codegen_verification:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: xlarge
+  generic_build:
+    description: Run basic build and store in workspace for re-use by different architectures
     steps:
-      - checkout
-      - prepare_go
-      - run: |
-          export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-          export GOPATH="/home/circleci/go"
-          scripts/travis/codegen_verification.sh
-
-  amd64_build:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: xlarge
-    steps:
-      - checkout
-      - prepare_go
       - restore_cache:
           keys:
             - 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
@@ -71,18 +54,15 @@ jobs:
             - gimme
             - .gimme
 
-  amd64_test:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: xlarge
-    parallelism: 5
-    environment:
-      TEST_RESULTS: /tmp/results/shorttest
+  generic_shorttest:
+    description: Run short tests from build workspace, for re-use by diferent architectures
+    parameters:
+      result_subdir:
+        type: string
     steps:
-      - prepare_go
       - attach_workspace:
           at: /home/circleci
-      - run: mkdir -p $TEST_RESULTS
+      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
           name: Run short tests
           command: |
@@ -99,24 +79,22 @@ jobs:
             export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
             echo "Testing the following packages:"
             echo $PACKAGE_NAMES
-            gotestsum --format pkgname --junitfile $TEST_RESULTS/results.xml --jsonfile $TEST_RESULTS/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
           path: /tmp/results
-          destination: raw-test-output
+          destination: test-results
       - store_test_results:
           path: /tmp/results
-      
-  amd64_integration:
-    machine:
-      image: ubuntu-2004:202104-01
-    resource_class: xlarge
-    parallelism: 5
-    environment:
-      TEST_RESULTS: /tmp/results/integration
+
+  generic_integration:
+    description: Run integration tests from build workspace, for re-use by diferent architectures
+    parameters:
+      result_subdir:
+        type: string
     steps:
-      - prepare_go
       - attach_workspace:
           at: /home/circleci
+      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
           name: Run integration tests
           no_output_timeout: 30m
@@ -131,12 +109,57 @@ jobs:
             scripts/configure_dev.sh
             export ALGOTEST=1
             export SHORTTEST=-short
+            export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
             test/scripts/run_integration_tests.sh
       - store_artifacts:
           path: /tmp/results
-          destination: raw-test-output
+          destination: test-results
       - store_test_results:
           path: /tmp/results
+
+jobs:
+  codegen_verification:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: xlarge
+    steps:
+      - checkout
+      - prepare_go
+      - run: |
+          export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+          export GOPATH="/home/circleci/go"
+          scripts/travis/codegen_verification.sh
+
+  amd64_build:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: xlarge
+    steps:
+      - checkout
+      - prepare_go
+      - generic_build
+
+  amd64_test:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: xlarge
+    parallelism: 5
+    steps:
+      - prepare_go
+      - generic_shorttest:
+          result_subdir: amd64-short
+
+  amd64_integration:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: xlarge
+    parallelism: 5
+    environment:
+      TEST_RESULTS: /tmp/results/integration
+    steps:
+      - prepare_go
+      - generic_integration:
+          result_subdir: amd64-integration
 
   arm64_build:
     machine:
