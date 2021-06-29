@@ -37,13 +37,21 @@ workflows:
 commands:
   prepare_go:
     description: Clean out existing Go so we can use our preferred version
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
     steps:
       - run: |
-          sudo rm -rf /home/circleci/.go_workspace /usr/local/go
-          sudo rm -rf /home/circleci/.go_workspace/bin /usr/local/go/bin
+          sudo rm -rf << parameters.circleci_home >>/.go_workspace /usr/local/go
+          sudo rm -rf << parameters.circleci_home >>/.go_workspace/bin /usr/local/go/bin
 
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
     steps:
       - restore_cache:
           keys:
@@ -51,16 +59,16 @@ commands:
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
-            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            export GOPATH="/home/circleci/go"
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="<< parameters.circleci_home >>/go"
             export ALGORAND_DEADLOCK=enable
             scripts/travis/build.sh --make_debug
       - save_cache:
           key: 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
           paths:
-            - /home/circleci/go/pkg/mod
+            - << parameters.circleci_home >>/go/pkg/mod
       - persist_to_workspace:
-          root: /home/circleci
+          root: << parameters.circleci_home >>
           paths:
             - project
             - go
@@ -70,11 +78,14 @@ commands:
   generic_shorttest:
     description: Run short tests from build workspace, for re-use by diferent architectures
     parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
       result_subdir:
         type: string
     steps:
       - attach_workspace:
-          at: /home/circleci
+          at: << parameters.circleci_home >>
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
           name: Run short tests
@@ -82,8 +93,8 @@ commands:
           command: |
             set -e
             set -x
-            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            export GOPATH="/home/circleci/go"
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="<< parameters.circleci_home >>/go"
             export PATH="${PATH}:${GOPATH}/bin"
             export ALGORAND_DEADLOCK=enable
             GOLANG_VERSION=$(./scripts/get_golang_version.sh)
@@ -104,19 +115,22 @@ commands:
   generic_integration:
     description: Run integration tests from build workspace, for re-use by diferent architectures
     parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
       result_subdir:
         type: string
     steps:
       - attach_workspace:
-          at: /home/circleci
+          at: << parameters.circleci_home >>
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
           name: Run integration tests
           no_output_timeout: 30m
           command: |
             set -x
-            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            export GOPATH="/home/circleci/go"
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="<< parameters.circleci_home >>/go"
             export PATH="${PATH}:${GOPATH}/bin"
             export ALGORAND_DEADLOCK=enable
             export BUILD_TYPE=integration
@@ -216,7 +230,8 @@ jobs:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - checkout
       - prepare_go
-      - generic_build
+      - generic_build:
+          circleci_home: /Users/distiller
 
   mac_amd64_test:
     macos:
@@ -227,6 +242,7 @@ jobs:
       - prepare_go
       - generic_shorttest:
           result_subdir: mac-amd64-short
+          circleci_home: /Users/distiller
 
   mac_amd64_integration:
     macos:
@@ -239,6 +255,7 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: mac-amd64-integration
+          circleci_home: /Users/distiller
 
   windows_x64_build:
     executor:
