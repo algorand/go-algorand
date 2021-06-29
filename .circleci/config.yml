@@ -6,7 +6,7 @@ orbs:
 
 workflows:
   version: 2
-  build_amd64:
+  build_pr:
     jobs:
       - codegen_verification
       - amd64_build
@@ -16,8 +16,6 @@ workflows:
       - amd64_integration:
           requires:
             - amd64_build
-  build_arm64:
-    jobs:
       - arm64_build
       - arm64_test:
           requires:
@@ -186,7 +184,6 @@ jobs:
     machine:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
-    parallelism: 8
     steps:
       - checkout
       - prepare_go
