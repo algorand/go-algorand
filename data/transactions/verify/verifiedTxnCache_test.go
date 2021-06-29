@@ -24,11 +24,11 @@ import (
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestAddingToCache(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	icache := MakeVerifiedTransactionCache(500)
 	impl := icache.(*verifiedTransactionCache)
@@ -46,7 +46,7 @@ func TestAddingToCache(t *testing.T) {
 }
 
 func TestBucketCycling(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	bucketCount := 3
 	icache := MakeVerifiedTransactionCache(entriesPerBucket * bucketCount)
@@ -76,7 +76,7 @@ func TestBucketCycling(t *testing.T) {
 }
 
 func TestGetUnverifiedTranscationGroups50(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	size := 300
 	icache := MakeVerifiedTransactionCache(size * 2)
@@ -134,7 +134,7 @@ func BenchmarkGetUnverifiedTranscationGroups50(b *testing.B) {
 }
 
 func TestUpdatePinned(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	size := entriesPerBucket
 	icache := MakeVerifiedTransactionCache(size * 10)
@@ -163,7 +163,7 @@ func TestUpdatePinned(t *testing.T) {
 }
 
 func TestPinningTransactions(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	size := entriesPerBucket
 	icache := MakeVerifiedTransactionCache(size)

@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -107,7 +107,7 @@ func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transa
 }
 
 func TestSignedPayment(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -130,7 +130,7 @@ func TestSignedPayment(t *testing.T) {
 }
 
 func TestTxnValidationEncodeDecode(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
@@ -152,7 +152,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 }
 
 func TestTxnValidationEmptySig(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
@@ -175,7 +175,7 @@ func TestTxnValidationEmptySig(t *testing.T) {
 const ccProto = protocol.ConsensusVersion("test-compact-cert-enabled")
 
 func TestTxnValidationCompactCert(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	proto.CompactCertRounds = 128
@@ -245,7 +245,7 @@ func TestTxnValidationCompactCert(t *testing.T) {
 }
 
 func TestDecodeNil(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// This is a regression test for improper decoding of a nil SignedTxn.
 	// This is a subtle case because decoding a msgpack nil does not run
@@ -263,7 +263,7 @@ func TestDecodeNil(t *testing.T) {
 }
 
 func TestPaysetGroups(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
 	blkHdr := bookkeeping.BlockHeader{

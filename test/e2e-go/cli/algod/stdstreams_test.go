@@ -24,12 +24,12 @@ import (
 
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/go-algorand/util"
 )
 
 func TestAlgodLogsToFile(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 

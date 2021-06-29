@@ -43,7 +43,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -113,7 +113,7 @@ func getInitState() (genesisInitState InitState) {
 }
 
 func TestArchival(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// This test ensures that trackers return the correct value from
 	// committedUpTo() -- that is, if they return round rnd, then they
@@ -178,7 +178,7 @@ func TestArchival(t *testing.T) {
 }
 
 func TestArchivalRestart(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
 
@@ -326,7 +326,7 @@ func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCo
 }
 
 func TestArchivalCreatables(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// Start in archival mode, add 2K blocks with asset + app txns
 	// restart, ensure all assets are there in index unless they were
@@ -684,7 +684,7 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 }
 
 func TestArchivalFromNonArchival(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
 	deadlockDisable := deadlock.Opts.Disable

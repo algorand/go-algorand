@@ -20,12 +20,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLoadBootstrappedData(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	badSpecPath := filepath.Join("./../../test", "testdata/deployednettemplates/networks/bootstrapped/badSpec.json")
 	_, err := LoadBootstrappedData(badSpecPath)

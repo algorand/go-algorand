@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 // Note that most of the tests use defaultEvalProto/defaultEvalParams as evaluator version so that
@@ -102,7 +102,7 @@ func defaultEvalParamsWithVersion(sb *strings.Builder, txn *transactions.SignedT
 }
 
 func TestTooManyArgs(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -121,7 +121,7 @@ func TestTooManyArgs(t *testing.T) {
 }
 
 func TestEmptyProgram(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	pass, err := Eval(nil, defaultEvalParams(nil, nil))
@@ -132,7 +132,7 @@ func TestEmptyProgram(t *testing.T) {
 
 // TestMinTealVersionParamEval tests eval/check reading the MinTealVersion from the param
 func TestMinTealVersionParamEvalCheck(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	params := defaultEvalParams(nil, nil)
@@ -153,7 +153,7 @@ func TestMinTealVersionParamEvalCheck(t *testing.T) {
 }
 
 func TestTxnFieldToTealValue(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	txn := transactions.Transaction{}
 	groupIndex := 0
@@ -200,7 +200,7 @@ func TestTxnFieldToTealValue(t *testing.T) {
 }
 
 func TestWrongProtoVersion(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -225,7 +225,7 @@ func TestWrongProtoVersion(t *testing.T) {
 }
 
 func TestSimpleMath(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int  2; int 3; + ;int  5;==", 1)
@@ -237,7 +237,7 @@ func TestSimpleMath(t *testing.T) {
 }
 
 func TestSha256EqArg(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -295,7 +295,7 @@ int 1000000
 &&`
 
 func TestTLHC(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -382,21 +382,21 @@ func TestTLHC(t *testing.T) {
 }
 
 func TestU64Math(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 0x1234567812345678; int 0x100000000; /; int 0x12345678; ==", 1)
 }
 
 func TestItob(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "byte 0x1234567812345678; int 0x1234567812345678; itob; ==", 1)
 }
 
 func TestBtoi(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 0x1234567812345678; byte 0x1234567812345678; btoi; ==", 1)
@@ -409,14 +409,14 @@ func TestBtoi(t *testing.T) {
 }
 
 func TestBtoiTooLong(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "int 0x1234567812345678; byte 0x1234567812345678aa; btoi; ==", 1)
 }
 
 func TestBnz(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, `
@@ -448,7 +448,7 @@ pop
 }
 
 func TestV2Branches(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, `
@@ -470,7 +470,7 @@ int 1
 }
 
 func TestReturn(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 1; return; err", 2)
@@ -478,28 +478,28 @@ func TestReturn(t *testing.T) {
 }
 
 func TestSubUnderflow(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "int 1; int 10; -; pop; int 1", 1)
 }
 
 func TestAddOverflow(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "int 0xf000000000000000; int 0x1111111111111111; +; pop; int 1", 1)
 }
 
 func TestMulOverflow(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "int 0x111111111; int 0x222222222; *; pop; int 1", 1)
 }
 
 func TestMulwImpl(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	high, low, err := opMulwImpl(1, 2)
@@ -524,7 +524,7 @@ func TestMulwImpl(t *testing.T) {
 }
 
 func TestMulw(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, `
@@ -546,7 +546,7 @@ int 1                   // ret 1
 }
 
 func TestAddwImpl(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	carry, sum := opAddwImpl(1, 2)
@@ -567,7 +567,7 @@ func TestAddwImpl(t *testing.T) {
 }
 
 func TestAddw(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, `
@@ -589,7 +589,7 @@ int 1                   // ret 1
 }
 
 func TestUint128(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	x := uint128(0, 3)
 	require.Equal(t, x.String(), "3")
@@ -604,7 +604,7 @@ func TestUint128(t *testing.T) {
 }
 
 func TestDivModw(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	// 2:0 / 1:0 == 2r0 == 0:2,0:0
@@ -649,7 +649,7 @@ func TestDivModw(t *testing.T) {
 }
 
 func TestWideMath(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// 2^64 = 18446744073709551616, we use a bunch of numbers close to that below
 	pattern := `
@@ -695,70 +695,70 @@ int 1
 }
 
 func TestDivZero(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "int 0x11; int 0; /; pop; int 1", 1)
 }
 
 func TestModZero(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "int 0x111111111; int 0; %; pop; int 1", 1)
 }
 
 func TestErr(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "err; int 1", 1)
 }
 
 func TestModSubMulOk(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 35; int 16; %; int 1; -; int 2; *; int 4; ==", 1)
 }
 
 func TestPop(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 1; int 0; pop", 1)
 }
 
 func TestStackLeftover(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "int 1; int 1", 1)
 }
 
 func TestStackBytesLeftover(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "byte 0x10101010", 1)
 }
 
 func TestStackEmpty(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "int 1; int 1; pop; pop", 1)
 }
 
 func TestArgTooFar(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "arg_1; btoi", 1)
 }
 
 func TestIntcTooFar(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	// Want to be super clear that intc_1 fails, whether an intcblock exists (but small) or not
@@ -767,7 +767,7 @@ func TestIntcTooFar(t *testing.T) {
 }
 
 func TestBytecTooFar(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "bytec_1; btoi", 1)
@@ -775,7 +775,7 @@ func TestBytecTooFar(t *testing.T) {
 }
 
 func TestTxnBadField(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	program := []byte{0x01, 0x31, 0x7f}
@@ -812,7 +812,7 @@ func TestTxnBadField(t *testing.T) {
 }
 
 func TestGtxnBadIndex(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x1, 0x01}
@@ -837,7 +837,7 @@ func TestGtxnBadIndex(t *testing.T) {
 }
 
 func TestGtxnBadField(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x0, 0x7f}
@@ -878,7 +878,7 @@ func TestGtxnBadField(t *testing.T) {
 }
 
 func TestGlobalBadField(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	program := []byte{0x01, 0x32, 0x7f}
@@ -899,7 +899,7 @@ func TestGlobalBadField(t *testing.T) {
 }
 
 func TestArg(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -993,7 +993,7 @@ const globalV4TestProgram = globalV3TestProgram + `
 `
 
 func TestGlobal(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	type desc struct {
@@ -1069,7 +1069,7 @@ func TestGlobal(t *testing.T) {
 }
 
 func TestTypeEnum(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -1125,7 +1125,7 @@ int %s
 }
 
 func TestOnCompletionConstants(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -1488,7 +1488,7 @@ func makeSampleTxnGroup(txn transactions.SignedTxn) []transactions.SignedTxn {
 }
 
 func TestTxn(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for _, txnField := range TxnFieldNames {
@@ -1554,7 +1554,7 @@ func TestTxn(t *testing.T) {
 }
 
 func TestCachedTxIDs(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	cachedTxnProg := `
@@ -1627,7 +1627,7 @@ return
 }
 
 func TestGaid(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	checkCreatableIDProg := `
@@ -1696,7 +1696,7 @@ int 0
 }
 
 func TestGtxn(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	gtxnTextV1 := `gtxn 1 Amount
@@ -1841,7 +1841,7 @@ func testLogic(t *testing.T, program string, v uint64, ep EvalParams, problems .
 }
 
 func TestTxna(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	source := `txna Accounts 1
@@ -1964,7 +1964,7 @@ txn Sender
 
 // check empty values in ApplicationArgs and Account
 func TestTxnaEmptyValues(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	source := `txna ApplicationArgs 0
@@ -2016,7 +2016,7 @@ global ZeroAddress
 }
 
 func TestBitOps(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, `int 0x17
@@ -2034,7 +2034,7 @@ int 0x310
 }
 
 func TestStringOps(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, `byte 0x123456789abc
@@ -2067,7 +2067,7 @@ int 0
 }
 
 func TestConsOverflow(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	justfits := `byte 0xf000000000000000
@@ -2086,7 +2086,7 @@ dup; concat				// 4096
 }
 
 func TestSubstringFlop(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	// fails in compiler
@@ -2121,7 +2121,7 @@ len`, 2)
 }
 
 func TestSubstringRange(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, `byte 0xf000000000000000
@@ -2130,7 +2130,7 @@ len`, 2)
 }
 
 func TestLoadStore(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, `int 37
@@ -2151,7 +2151,7 @@ load 1
 }
 
 func TestLoadStore2(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	progText := `int 2
@@ -2169,7 +2169,7 @@ int 5
 }
 
 func TestGload(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -2369,7 +2369,7 @@ int 1`,
 }
 
 func TestGloads(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -2495,14 +2495,14 @@ byte 0xf00d
 &&`
 
 func TestCompares(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, testCompareProgramText, 1)
 }
 
 func TestKeccak256(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	/*
@@ -2519,7 +2519,7 @@ byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
 }
 
 func TestSHA512_256(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	/*
@@ -2540,7 +2540,7 @@ byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 }
 
 func TestSlowLogic(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	fragment := `byte 0x666E6F7264; keccak256
@@ -2598,7 +2598,7 @@ func isNotPanic(t *testing.T, err error) {
 }
 
 func TestStackUnderflow(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -2621,7 +2621,7 @@ func TestStackUnderflow(t *testing.T) {
 }
 
 func TestWrongStackTypeRuntime(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -2644,7 +2644,7 @@ func TestWrongStackTypeRuntime(t *testing.T) {
 }
 
 func TestEqMismatch(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -2668,7 +2668,7 @@ int 1`, v)
 }
 
 func TestNeqMismatch(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -2692,7 +2692,7 @@ int 1`, v)
 }
 
 func TestWrongStackTypeRuntime2(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -2716,7 +2716,7 @@ int 1`, v)
 }
 
 func TestIllegalOp(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -2744,7 +2744,7 @@ func TestIllegalOp(t *testing.T) {
 }
 
 func TestShortProgram(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -2772,7 +2772,7 @@ int 1
 }
 
 func TestShortProgramTrue(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	ops := testProg(t, `intcblock 1
@@ -2788,7 +2788,7 @@ done:`, 2)
 	require.True(t, pass)
 }
 func TestShortBytecblock(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -2817,7 +2817,7 @@ func TestShortBytecblock(t *testing.T) {
 }
 
 func TestShortBytecblock2(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	sources := []string{
@@ -2855,7 +2855,7 @@ func checkPanic(cx *evalContext) error {
 }
 
 func TestPanic(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	log := logging.TestingLog(t)
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -2911,7 +2911,7 @@ func TestPanic(t *testing.T) {
 }
 
 func TestProgramTooNew(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	var program [12]byte
@@ -2926,7 +2926,7 @@ func TestProgramTooNew(t *testing.T) {
 }
 
 func TestInvalidVersion(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	program, err := hex.DecodeString("ffffffffffffffffffffffff")
@@ -2941,7 +2941,7 @@ func TestInvalidVersion(t *testing.T) {
 }
 
 func TestProgramProtoForbidden(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	var program [12]byte
@@ -2961,7 +2961,7 @@ func TestProgramProtoForbidden(t *testing.T) {
 }
 
 func TestMisalignedBranch(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -3006,7 +3006,7 @@ int 1`, v)
 }
 
 func TestBranchTooFar(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -3035,7 +3035,7 @@ int 1`, v)
 }
 
 func TestBranchTooLarge(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -3563,7 +3563,7 @@ func BenchmarkSha256Raw(b *testing.B) {
 }
 
 func TestEd25519verify(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	var s crypto.Seed
@@ -3696,7 +3696,7 @@ func BenchmarkCheckx5(b *testing.B) {
 }
 
 func TestStackValues(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -3714,7 +3714,7 @@ func TestStackValues(t *testing.T) {
 }
 
 func TestEvalVersions(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -3745,7 +3745,7 @@ pop
 }
 
 func TestStackOverflow(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	source := "int 1; int 2;"
@@ -3757,7 +3757,7 @@ func TestStackOverflow(t *testing.T) {
 }
 
 func TestDup(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -3794,7 +3794,7 @@ int 1
 }
 
 func TestStringLiteral(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -3824,7 +3824,7 @@ byte 0x // empty byte constant
 }
 
 func TestArgType(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -3839,7 +3839,7 @@ func TestArgType(t *testing.T) {
 }
 
 func TestApplicationsDisallowOldTeal(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	const source = "int 1"
 	ep := defaultEvalParams(nil, nil)
@@ -3874,7 +3874,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 }
 
 func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	const source = "int 1"
 
@@ -3968,7 +3968,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 
 // check all v2 opcodes: allowed in v2 and not allowed in v1 and v0
 func TestAllowedOpcodesV2(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -4047,7 +4047,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 
 // check all v3 opcodes: allowed in v3 and not allowed before
 func TestAllowedOpcodesV3(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -4108,7 +4108,7 @@ func TestAllowedOpcodesV3(t *testing.T) {
 }
 
 func TestRekeyFailsOnOldVersion(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	for v := uint64(0); v < rekeyingEnabledVersion; v++ {
@@ -4210,7 +4210,7 @@ func testPanics(t *testing.T, program string, introduced uint64) error {
 }
 
 func TestAssert(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 1;assert;int 1", 3)
@@ -4221,7 +4221,7 @@ func TestAssert(t *testing.T) {
 }
 
 func TestBits(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 1; int 0; getbit; int 1; ==", 3)
@@ -4259,7 +4259,7 @@ func TestBits(t *testing.T) {
 }
 
 func TestBytes(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "byte 0x12345678; int 2; getbyte; int 0x56; ==", 3)
@@ -4285,7 +4285,7 @@ func TestBytes(t *testing.T) {
 }
 
 func TestSwap(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 1; byte 0x1234; swap; int 1; ==; assert; byte 0x1234; ==", 3)
@@ -4293,7 +4293,7 @@ func TestSwap(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -4305,7 +4305,7 @@ func TestSelect(t *testing.T) {
 }
 
 func TestDig(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 3; int 2; int 1; dig 1; int 2; ==; return", 3)
@@ -4313,7 +4313,7 @@ func TestDig(t *testing.T) {
 }
 
 func TestPush(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 2; pushint 2; ==", 3)
@@ -4342,7 +4342,7 @@ func TestPush(t *testing.T) {
 }
 
 func TestLoop(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	// Double until > 10. Should be 16
@@ -4355,7 +4355,7 @@ func TestLoop(t *testing.T) {
 }
 
 func TestSubroutine(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 1; callsub double; int 2; ==; return; double: dup; +; retsub;", 4)
@@ -4439,7 +4439,7 @@ main:
 }
 
 func TestShifts(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 1; int 1; shl; int 2; ==", 4)
@@ -4456,7 +4456,7 @@ func TestShifts(t *testing.T) {
 }
 
 func TestSqrt(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 0; sqrt; int 0; ==", 4)
@@ -4482,7 +4482,7 @@ func TestSqrt(t *testing.T) {
 }
 
 func TestExp(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "int 0; int 0; exp; int 1; ==", 4)
@@ -4495,7 +4495,7 @@ func TestExp(t *testing.T) {
 }
 
 func TestExpw(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testPanics(t, "int 0; int 0; expw; int 1; ==; assert; int 0; ==", 4)
@@ -4511,7 +4511,7 @@ func TestExpw(t *testing.T) {
 }
 
 func TestBitLen(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "int 0; bitlen; int 0; ==", 4)
@@ -4534,7 +4534,7 @@ func TestBitLen(t *testing.T) {
 }
 
 func TestBytesMath(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "byte 0x01; byte 0x01; b+; byte 0x02; ==", 4)
@@ -4564,7 +4564,7 @@ func TestBytesMath(t *testing.T) {
 }
 
 func TestBytesCompare(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "byte 0x10; byte 0x10; b*; byte 0x0100; ==", 4)
@@ -4589,7 +4589,7 @@ func TestBytesCompare(t *testing.T) {
 }
 
 func TestBytesBits(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	testAccepts(t, "byte 0x11; byte 0x10; b|; byte 0x11; ==", 4)
@@ -4616,7 +4616,7 @@ func TestBytesBits(t *testing.T) {
 }
 
 func TestBytesConversions(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	testAccepts(t, "byte 0x11; byte 0x10; b+; btoi; int 0x21; ==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x10; b+; btoi; int 0x21; ==", 4)

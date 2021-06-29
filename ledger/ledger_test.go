@@ -38,7 +38,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -255,7 +255,7 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 }
 
 func TestLedgerBasic(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
@@ -268,7 +268,7 @@ func TestLedgerBasic(t *testing.T) {
 }
 
 func TestLedgerBlockHeaders(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -411,7 +411,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 }
 
 func TestLedgerSingleTx(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -616,7 +616,7 @@ func TestLedgerSingleTx(t *testing.T) {
 }
 
 func TestLedgerSingleTxV24(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -787,7 +787,7 @@ func addEmptyValidatedBlock(t *testing.T, l *Ledger, initAccounts map[basics.Add
 
 // TestLedgerAppCrossRoundWrites ensures app state writes survive between rounds
 func TestLedgerAppCrossRoundWrites(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -925,7 +925,7 @@ int 1
 
 // TestLedgerAppMultiTxnWrites ensures app state writes in multiple txn are applied
 func TestLedgerAppMultiTxnWrites(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -1322,44 +1322,44 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 }
 
 func TestLedgerSingleTxApplyData(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	testLedgerSingleTxApplyData(t, protocol.ConsensusCurrentVersion)
 }
 
 // SupportTransactionLeases was introduced after v18.
 func TestLedgerSingleTxApplyDataV18(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	testLedgerSingleTxApplyData(t, protocol.ConsensusV18)
 }
 
 func TestLedgerSingleTxApplyDataFuture(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	testLedgerSingleTxApplyData(t, protocol.ConsensusFuture)
 }
 
 func TestLedgerRegressionFaultyLeaseFirstValidCheckOld(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusV22)
 }
 
 func TestLedgerRegressionFaultyLeaseFirstValidCheckV23(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusV23)
 }
 
 func TestLedgerRegressionFaultyLeaseFirstValidCheck(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusCurrentVersion)
 }
 
 func TestLedgerRegressionFaultyLeaseFirstValidCheckFuture(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusFuture)
 }
@@ -1427,7 +1427,7 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 }
 
 func TestLedgerBlockHdrCaching(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
@@ -1454,7 +1454,7 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 }
 
 func TestLedgerReload(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
@@ -1490,7 +1490,7 @@ func TestLedgerReload(t *testing.T) {
 
 // TestGetLastCatchpointLabel tests ledger.GetLastCatchpointLabel is returning the correct value.
 func TestGetLastCatchpointLabel(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	//initLedger
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
@@ -1567,7 +1567,7 @@ func generateCreatables(numElementsPerSegement int) (
 // interfaces. The detailed test on the correctness of these functions is given in:
 // TestListCreatables (acctupdates_test.go)
 func TestListAssetsAndApplications(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	numElementsPerSegement := 10 // This is multiplied by 10. see randomCreatables
 
@@ -1627,7 +1627,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 }
 
 func TestLedgerMemoryLeak(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Skip() // for manual runs only
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())

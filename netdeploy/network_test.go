@@ -25,11 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestSaveNetworkCfg(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -49,7 +49,7 @@ func TestSaveNetworkCfg(t *testing.T) {
 }
 
 func TestSaveConsensus(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 

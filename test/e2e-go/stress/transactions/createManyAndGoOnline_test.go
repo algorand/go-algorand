@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func cascadeCreateAndFundAccounts(amountToSend, transactionFee uint64, fundingAccount string, client libgoal.Client, a *require.Assertions) map[string]string {
@@ -49,7 +49,7 @@ func cascadeCreateAndFundAccounts(amountToSend, transactionFee uint64, fundingAc
 // this test creates many accounts
 // sends them all money, and sends them online
 func TestManyAccountsCanGoOnline(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))

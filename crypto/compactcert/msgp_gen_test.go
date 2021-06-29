@@ -8,12 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalCert(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := Cert{}
 	bts := v.MarshalMsg(nil)
@@ -35,7 +35,7 @@ func TestMarshalUnmarshalCert(t *testing.T) {
 }
 
 func TestRandomizedEncodingCert(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &Cert{})
 }
@@ -76,7 +76,7 @@ func BenchmarkUnmarshalCert(b *testing.B) {
 }
 
 func TestMarshalUnmarshalCompactOneTimeSignature(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := CompactOneTimeSignature{}
 	bts := v.MarshalMsg(nil)
@@ -98,7 +98,7 @@ func TestMarshalUnmarshalCompactOneTimeSignature(t *testing.T) {
 }
 
 func TestRandomizedEncodingCompactOneTimeSignature(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &CompactOneTimeSignature{})
 }
@@ -139,7 +139,7 @@ func BenchmarkUnmarshalCompactOneTimeSignature(b *testing.B) {
 }
 
 func TestMarshalUnmarshalParticipant(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := Participant{}
 	bts := v.MarshalMsg(nil)
@@ -161,7 +161,7 @@ func TestMarshalUnmarshalParticipant(t *testing.T) {
 }
 
 func TestRandomizedEncodingParticipant(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &Participant{})
 }
@@ -202,7 +202,7 @@ func BenchmarkUnmarshalParticipant(b *testing.B) {
 }
 
 func TestMarshalUnmarshalReveal(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := Reveal{}
 	bts := v.MarshalMsg(nil)
@@ -224,7 +224,7 @@ func TestMarshalUnmarshalReveal(t *testing.T) {
 }
 
 func TestRandomizedEncodingReveal(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &Reveal{})
 }
@@ -265,7 +265,7 @@ func BenchmarkUnmarshalReveal(b *testing.B) {
 }
 
 func TestMarshalUnmarshalcoinChoice(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := coinChoice{}
 	bts := v.MarshalMsg(nil)
@@ -287,7 +287,7 @@ func TestMarshalUnmarshalcoinChoice(t *testing.T) {
 }
 
 func TestRandomizedEncodingcoinChoice(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &coinChoice{})
 }
@@ -328,7 +328,7 @@ func BenchmarkUnmarshalcoinChoice(b *testing.B) {
 }
 
 func TestMarshalUnmarshalsigslotCommit(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := sigslotCommit{}
 	bts := v.MarshalMsg(nil)
@@ -350,7 +350,7 @@ func TestMarshalUnmarshalsigslotCommit(t *testing.T) {
 }
 
 func TestRandomizedEncodingsigslotCommit(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &sigslotCommit{})
 }

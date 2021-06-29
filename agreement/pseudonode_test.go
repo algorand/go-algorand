@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 // The serializedPseudonode is the trivial implementation for the pseudonode interface
@@ -133,7 +133,7 @@ func compareEventChannels(t *testing.T, ch1, ch2 <-chan externalEvent) bool {
 }
 
 func TestPseudonode(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -391,7 +391,7 @@ func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []a
 }
 
 func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 

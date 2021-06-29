@@ -27,12 +27,12 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 // TestRekeyUpgrade tests that the rekey does not work before the upgrade and works well after
 func TestRekeyUpgrade(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 

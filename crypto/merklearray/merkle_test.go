@@ -22,7 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 type TestMessage string
@@ -75,7 +75,7 @@ func (a TestRepeatingArray) GetHash(pos uint64) (crypto.Digest, error) {
 }
 
 func TestMerkle(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	var junk TestData
 	crypto.RandBytes(junk[:])

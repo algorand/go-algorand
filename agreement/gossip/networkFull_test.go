@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -126,7 +126,7 @@ func shutdownNetwork(nets []*networkImpl, counters []*messageCounter) {
 }
 
 func TestNetworkImplFullStackLong(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -136,7 +136,7 @@ func TestNetworkImplFullStackLong(t *testing.T) {
 }
 
 func TestNetworkImplFullStackQuick(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	if !testing.Short() {
 		t.Skip()

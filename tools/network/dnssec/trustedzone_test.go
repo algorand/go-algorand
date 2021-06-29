@@ -21,13 +21,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTrustedZone(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -101,7 +101,7 @@ func TestTrustedZone(t *testing.T) {
 }
 
 func TestMakeTrustedZone(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -193,7 +193,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	a.Empty(tzTest)
 }
 func TestVerifyRRSig(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 	tt, _ := time.Parse(time.RFC3339, "2020-02-12T00:00:00Z")
@@ -235,7 +235,7 @@ func TestVerifyRRSig(t *testing.T) {
 }
 
 func TestMatchKSKDigest(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 

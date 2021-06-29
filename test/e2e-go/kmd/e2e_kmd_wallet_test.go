@@ -24,11 +24,11 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestWalletCreation(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -80,7 +80,7 @@ func TestWalletCreation(t *testing.T) {
 }
 
 func TestBlankWalletCreation(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -115,7 +115,7 @@ func TestBlankWalletCreation(t *testing.T) {
 }
 
 func TestWalletRename(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -195,7 +195,7 @@ func TestWalletRename(t *testing.T) {
 }
 
 func TestWalletSessionRelease(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -237,7 +237,7 @@ func TestWalletSessionRelease(t *testing.T) {
 }
 
 func TestWalletSessionRenew(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -285,7 +285,7 @@ func TestWalletSessionRenew(t *testing.T) {
 }
 
 func TestWalletSessionExpiry(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()

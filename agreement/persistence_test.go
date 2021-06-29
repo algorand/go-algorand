@@ -26,13 +26,13 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
 func TestAgreementSerialization(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// todo : we need to deserialize some more meaningfull state.
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
@@ -85,7 +85,7 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 }
 
 func TestAgreementPersistence(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	accessor, err := db.MakeAccessor(t.Name()+"_crash.db", false, true)
 	require.NoError(t, err)

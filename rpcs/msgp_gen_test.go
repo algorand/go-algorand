@@ -8,12 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalEncodedBlockCert(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := EncodedBlockCert{}
 	bts := v.MarshalMsg(nil)
@@ -35,7 +35,7 @@ func TestMarshalUnmarshalEncodedBlockCert(t *testing.T) {
 }
 
 func TestRandomizedEncodingEncodedBlockCert(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &EncodedBlockCert{})
 }

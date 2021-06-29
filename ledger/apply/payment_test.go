@@ -27,7 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -45,7 +45,7 @@ func keypair() *crypto.SignatureSecrets {
 }
 
 func TestAlgosEncoding(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	var a basics.MicroAlgos
 	var b basics.MicroAlgos
@@ -80,7 +80,7 @@ func TestAlgosEncoding(t *testing.T) {
 }
 
 func TestPaymentApply(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
 
@@ -109,7 +109,7 @@ func TestPaymentApply(t *testing.T) {
 }
 
 func TestCheckSpender(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
 	mockBalV7 := makeMockBalances(protocol.ConsensusV7)
@@ -150,7 +150,7 @@ func TestCheckSpender(t *testing.T) {
 }
 
 func TestPaymentValidation(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	payments, _, _, _ := generateTestObjects(100, 50)
 	genHash := crypto.Digest{0x42}
@@ -245,7 +245,7 @@ func TestPaymentValidation(t *testing.T) {
 }
 
 func TestPaymentSelfClose(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)

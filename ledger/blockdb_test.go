@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -119,7 +119,7 @@ func setDbLogging(t testing.TB, dbs db.Pair) {
 }
 
 func TestBlockDBEmpty(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
@@ -135,7 +135,7 @@ func TestBlockDBEmpty(t *testing.T) {
 }
 
 func TestBlockDBInit(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
@@ -157,7 +157,7 @@ func TestBlockDBInit(t *testing.T) {
 }
 
 func TestBlockDBAppend(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)

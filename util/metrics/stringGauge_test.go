@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,7 +30,7 @@ func hasKey(data map[string]string, key string) bool {
 }
 
 func TestMetricStringGauge(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	stringGauge := MakeStringGauge()
 	stringGauge.Set("number-key", "1")

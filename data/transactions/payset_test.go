@@ -19,7 +19,7 @@ package transactions
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,7 +36,7 @@ func preparePayset(txnCount, acctCount int) Payset {
 	return Payset(stxnb)
 }
 func TestPaysetCommitsToTxnOrder(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	payset := preparePayset(50, 50)
 	commit1 := payset.CommitFlat()
@@ -46,7 +46,7 @@ func TestPaysetCommitsToTxnOrder(t *testing.T) {
 }
 
 func TestEmptyPaysetCommitment(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	const nilFlatPaysetHash = "WRS2VL2OQ5LPWBYLNBCZV3MEQ4DACSRDES6IUKHGOWYQERJRWC5A"
 	const emptyFlatPaysetHash = "E54GFMNS2LISPG5VUGOQ3B2RR7TRKAHRE24LUM3HOW6TJGQ6PNZQ"

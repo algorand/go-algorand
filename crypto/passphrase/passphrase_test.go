@@ -24,11 +24,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestGenerateAndRecovery(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	key := make([]byte, 32)
 	for i := 0; i < 1000; i++ {
@@ -45,7 +45,7 @@ func TestGenerateAndRecovery(t *testing.T) {
 }
 
 func TestZeroVector(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	zeroVector := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	mn := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon invest"
@@ -57,7 +57,7 @@ func TestZeroVector(t *testing.T) {
 }
 
 func TestWordNotInList(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	mn := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon zzz invest"
 	_, err := MnemonicToKey(mn)
@@ -66,7 +66,7 @@ func TestWordNotInList(t *testing.T) {
 }
 
 func TestCorruptedChecksum(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	key := make([]byte, 32)
 	_, err := rand.Read(key)
@@ -82,7 +82,7 @@ func TestCorruptedChecksum(t *testing.T) {
 }
 
 func TestInvalidKeyLen(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	badLens := []int{0, 31, 33, 100}
 	for _, l := range badLens {
@@ -96,7 +96,7 @@ func TestInvalidKeyLen(t *testing.T) {
 }
 
 func TestUint11Array(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	N := 11*8*32 + 1
 

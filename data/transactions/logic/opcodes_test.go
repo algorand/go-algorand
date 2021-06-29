@@ -21,12 +21,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/stretchr/testify/require"
 )
 
 func TestOpSpecs(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -59,7 +59,7 @@ func (os *OpSpec) equals(oso *OpSpec) bool {
 }
 
 func TestOpcodesByVersionReordered(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// Make a copy to restore to the original
 	OpSpecsOrig := make([]OpSpec, len(OpSpecs))
@@ -81,7 +81,7 @@ func TestOpcodesByVersionReordered(t *testing.T) {
 }
 
 func TestOpcodesByVersion(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
 	OpSpecs2 := make([]OpSpec, len(OpSpecs))
@@ -121,7 +121,7 @@ func TestOpcodesByVersion(t *testing.T) {
 }
 
 func TestOpcodesVersioningV2(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 

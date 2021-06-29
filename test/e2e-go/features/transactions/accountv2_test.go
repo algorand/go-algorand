@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func checkEvalDelta(t *testing.T, client *libgoal.Client, startRnd, endRnd uint64, gval uint64, lval uint64) {
@@ -76,7 +76,7 @@ func checkEvalDelta(t *testing.T, client *libgoal.Client, startRnd, endRnd uint6
 }
 
 func TestAccountInformationV2(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))

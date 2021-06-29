@@ -8,12 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalCertificate(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := Certificate{}
 	bts := v.MarshalMsg(nil)
@@ -35,7 +35,7 @@ func TestMarshalUnmarshalCertificate(t *testing.T) {
 }
 
 func TestRandomizedEncodingCertificate(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &Certificate{})
 }
@@ -76,7 +76,7 @@ func BenchmarkUnmarshalCertificate(b *testing.B) {
 }
 
 func TestMarshalUnmarshalbundle(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := bundle{}
 	bts := v.MarshalMsg(nil)
@@ -98,7 +98,7 @@ func TestMarshalUnmarshalbundle(t *testing.T) {
 }
 
 func TestRandomizedEncodingbundle(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &bundle{})
 }
@@ -139,7 +139,7 @@ func BenchmarkUnmarshalbundle(b *testing.B) {
 }
 
 func TestMarshalUnmarshalequivocationVote(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := equivocationVote{}
 	bts := v.MarshalMsg(nil)
@@ -161,7 +161,7 @@ func TestMarshalUnmarshalequivocationVote(t *testing.T) {
 }
 
 func TestRandomizedEncodingequivocationVote(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &equivocationVote{})
 }
@@ -202,7 +202,7 @@ func BenchmarkUnmarshalequivocationVote(b *testing.B) {
 }
 
 func TestMarshalUnmarshalequivocationVoteAuthenticator(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := equivocationVoteAuthenticator{}
 	bts := v.MarshalMsg(nil)
@@ -224,7 +224,7 @@ func TestMarshalUnmarshalequivocationVoteAuthenticator(t *testing.T) {
 }
 
 func TestRandomizedEncodingequivocationVoteAuthenticator(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &equivocationVoteAuthenticator{})
 }
@@ -265,7 +265,7 @@ func BenchmarkUnmarshalequivocationVoteAuthenticator(b *testing.B) {
 }
 
 func TestMarshalUnmarshalproposal(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := proposal{}
 	bts := v.MarshalMsg(nil)
@@ -287,7 +287,7 @@ func TestMarshalUnmarshalproposal(t *testing.T) {
 }
 
 func TestRandomizedEncodingproposal(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &proposal{})
 }
@@ -328,7 +328,7 @@ func BenchmarkUnmarshalproposal(b *testing.B) {
 }
 
 func TestMarshalUnmarshalproposalValue(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := proposalValue{}
 	bts := v.MarshalMsg(nil)
@@ -350,7 +350,7 @@ func TestMarshalUnmarshalproposalValue(t *testing.T) {
 }
 
 func TestRandomizedEncodingproposalValue(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &proposalValue{})
 }
@@ -391,7 +391,7 @@ func BenchmarkUnmarshalproposalValue(b *testing.B) {
 }
 
 func TestMarshalUnmarshalproposerSeed(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := proposerSeed{}
 	bts := v.MarshalMsg(nil)
@@ -413,7 +413,7 @@ func TestMarshalUnmarshalproposerSeed(t *testing.T) {
 }
 
 func TestRandomizedEncodingproposerSeed(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &proposerSeed{})
 }
@@ -454,7 +454,7 @@ func BenchmarkUnmarshalproposerSeed(b *testing.B) {
 }
 
 func TestMarshalUnmarshalrawVote(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := rawVote{}
 	bts := v.MarshalMsg(nil)
@@ -476,7 +476,7 @@ func TestMarshalUnmarshalrawVote(t *testing.T) {
 }
 
 func TestRandomizedEncodingrawVote(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &rawVote{})
 }
@@ -517,7 +517,7 @@ func BenchmarkUnmarshalrawVote(b *testing.B) {
 }
 
 func TestMarshalUnmarshalseedInput(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := seedInput{}
 	bts := v.MarshalMsg(nil)
@@ -539,7 +539,7 @@ func TestMarshalUnmarshalseedInput(t *testing.T) {
 }
 
 func TestRandomizedEncodingseedInput(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &seedInput{})
 }
@@ -580,7 +580,7 @@ func BenchmarkUnmarshalseedInput(b *testing.B) {
 }
 
 func TestMarshalUnmarshalselector(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := selector{}
 	bts := v.MarshalMsg(nil)
@@ -602,7 +602,7 @@ func TestMarshalUnmarshalselector(t *testing.T) {
 }
 
 func TestRandomizedEncodingselector(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &selector{})
 }
@@ -643,7 +643,7 @@ func BenchmarkUnmarshalselector(b *testing.B) {
 }
 
 func TestMarshalUnmarshaltransmittedPayload(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := transmittedPayload{}
 	bts := v.MarshalMsg(nil)
@@ -665,7 +665,7 @@ func TestMarshalUnmarshaltransmittedPayload(t *testing.T) {
 }
 
 func TestRandomizedEncodingtransmittedPayload(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &transmittedPayload{})
 }
@@ -706,7 +706,7 @@ func BenchmarkUnmarshaltransmittedPayload(b *testing.B) {
 }
 
 func TestMarshalUnmarshalunauthenticatedBundle(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := unauthenticatedBundle{}
 	bts := v.MarshalMsg(nil)
@@ -728,7 +728,7 @@ func TestMarshalUnmarshalunauthenticatedBundle(t *testing.T) {
 }
 
 func TestRandomizedEncodingunauthenticatedBundle(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &unauthenticatedBundle{})
 }
@@ -769,7 +769,7 @@ func BenchmarkUnmarshalunauthenticatedBundle(b *testing.B) {
 }
 
 func TestMarshalUnmarshalunauthenticatedEquivocationVote(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := unauthenticatedEquivocationVote{}
 	bts := v.MarshalMsg(nil)
@@ -791,7 +791,7 @@ func TestMarshalUnmarshalunauthenticatedEquivocationVote(t *testing.T) {
 }
 
 func TestRandomizedEncodingunauthenticatedEquivocationVote(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &unauthenticatedEquivocationVote{})
 }
@@ -832,7 +832,7 @@ func BenchmarkUnmarshalunauthenticatedEquivocationVote(b *testing.B) {
 }
 
 func TestMarshalUnmarshalunauthenticatedProposal(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := unauthenticatedProposal{}
 	bts := v.MarshalMsg(nil)
@@ -854,7 +854,7 @@ func TestMarshalUnmarshalunauthenticatedProposal(t *testing.T) {
 }
 
 func TestRandomizedEncodingunauthenticatedProposal(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &unauthenticatedProposal{})
 }
@@ -895,7 +895,7 @@ func BenchmarkUnmarshalunauthenticatedProposal(b *testing.B) {
 }
 
 func TestMarshalUnmarshalunauthenticatedVote(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := unauthenticatedVote{}
 	bts := v.MarshalMsg(nil)
@@ -917,7 +917,7 @@ func TestMarshalUnmarshalunauthenticatedVote(t *testing.T) {
 }
 
 func TestRandomizedEncodingunauthenticatedVote(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &unauthenticatedVote{})
 }
@@ -958,7 +958,7 @@ func BenchmarkUnmarshalunauthenticatedVote(b *testing.B) {
 }
 
 func TestMarshalUnmarshalvote(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := vote{}
 	bts := v.MarshalMsg(nil)
@@ -980,7 +980,7 @@ func TestMarshalUnmarshalvote(t *testing.T) {
 }
 
 func TestRandomizedEncodingvote(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &vote{})
 }
@@ -1021,7 +1021,7 @@ func BenchmarkUnmarshalvote(b *testing.B) {
 }
 
 func TestMarshalUnmarshalvoteAuthenticator(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	v := voteAuthenticator{}
 	bts := v.MarshalMsg(nil)
@@ -1043,7 +1043,7 @@ func TestMarshalUnmarshalvoteAuthenticator(t *testing.T) {
 }
 
 func TestRandomizedEncodingvoteAuthenticator(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &voteAuthenticator{})
 }

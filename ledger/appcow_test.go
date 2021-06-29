@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 type addrApp struct {
@@ -190,7 +190,7 @@ func randomAddrApps(n int) ([]storagePtr, []basics.Address) {
 }
 
 func TestCowStorage(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	ml := emptyLedger{}
 	var bh bookkeeping.BlockHeader
@@ -357,7 +357,7 @@ func TestCowStorage(t *testing.T) {
 }
 
 func TestCowBuildDelta(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -602,7 +602,7 @@ func TestCowBuildDelta(t *testing.T) {
 }
 
 func TestCowDeltaSerialize(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -670,7 +670,7 @@ func TestCowDeltaSerialize(t *testing.T) {
 }
 
 func TestApplyChild(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -802,7 +802,7 @@ func TestApplyChild(t *testing.T) {
 }
 
 func TestApplyStorageDelta(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -932,7 +932,7 @@ func TestApplyStorageDelta(t *testing.T) {
 }
 
 func TestCowAllocated(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -961,7 +961,7 @@ func TestCowAllocated(t *testing.T) {
 }
 
 func TestCowGetCreator(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -984,7 +984,7 @@ func TestCowGetCreator(t *testing.T) {
 }
 
 func TestCowGetters(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -1002,7 +1002,7 @@ func TestCowGetters(t *testing.T) {
 }
 
 func TestCowGet(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -1027,7 +1027,7 @@ func TestCowGet(t *testing.T) {
 }
 
 func TestCowGetKey(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -1100,7 +1100,7 @@ func TestCowGetKey(t *testing.T) {
 }
 
 func TestCowSetKey(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -1195,7 +1195,7 @@ func TestCowSetKey(t *testing.T) {
 }
 
 func TestCowSetKeyVFuture(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -1230,7 +1230,7 @@ func TestCowSetKeyVFuture(t *testing.T) {
 }
 
 func TestCowAccountIdx(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -1278,7 +1278,7 @@ func TestCowAccountIdx(t *testing.T) {
 }
 
 func TestCowDelKey(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := require.New(t)
 

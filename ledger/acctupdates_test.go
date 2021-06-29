@@ -40,7 +40,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -310,7 +310,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates) {
 }
 
 func TestAcctUpdates(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
@@ -396,7 +396,7 @@ func TestAcctUpdates(t *testing.T) {
 }
 
 func TestAcctUpdatesFastUpdates(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
@@ -609,7 +609,7 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 // and attempts to have the accountUpdates create the associated catchpoint. It's designed precisely around setting an
 // environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
 func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
@@ -699,7 +699,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 // In addition, throughout the test, we check ( using lookup ) that the historical balances, *beyond* the
 // lookback are generating either an error, or returning the correct amount.
 func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
@@ -875,7 +875,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 // and ensures that it did not errored, the catchpoint files were correctly deleted, and that deleteStoredCatchpoints contains no more
 // entries.
 func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -1031,7 +1031,7 @@ func listAndCompare(t *testing.T,
 // It tests with all elements in cache, all synced to database, and combination of both
 // It also tests the max results, max app index and max asset index
 func TestListCreatables(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// test configuration parameters
 	numElementsPerSegement := 25
@@ -1098,7 +1098,7 @@ func TestListCreatables(t *testing.T) {
 }
 
 func TestIsWritingCatchpointFile(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	au := &accountUpdates{}
 
@@ -1112,7 +1112,7 @@ func TestIsWritingCatchpointFile(t *testing.T) {
 }
 
 func TestGetCatchpointStream(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -1381,7 +1381,7 @@ func BenchmarkCompactDeltas(b *testing.B) {
 	})
 }
 func TestCompactDeltas(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	addrs := make([]basics.Address, 10)
 	for i := 0; i < len(addrs); i++ {
@@ -1442,7 +1442,7 @@ func TestCompactDeltas(t *testing.T) {
 }
 
 func TestReproducibleCatchpointLabels(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
@@ -1566,7 +1566,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 
 // TestCachesInitialization test the functionality of the initializeCaches cache.
 func TestCachesInitialization(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	protocolVersion := protocol.ConsensusCurrentVersion
 	proto := config.Consensus[protocolVersion]
@@ -1660,7 +1660,7 @@ func TestCachesInitialization(t *testing.T) {
 
 // TestSplittingConsensusVersionCommits tests the a sequence of commits that spans over multiple consensus versions works correctly.
 func TestSplittingConsensusVersionCommits(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	initProtocolVersion := protocol.ConsensusV20
 	initialProtoParams := config.Consensus[initProtocolVersion]
@@ -1774,7 +1774,7 @@ func TestSplittingConsensusVersionCommits(t *testing.T) {
 // TestSplittingConsensusVersionCommitsBoundry tests the a sequence of commits that spans over multiple consensus versions works correctly, and
 // in particular, complements TestSplittingConsensusVersionCommits by testing the commit boundary.
 func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	initProtocolVersion := protocol.ConsensusV20
 	initialProtoParams := config.Consensus[initProtocolVersion]
@@ -1919,7 +1919,7 @@ func TestSplittingConsensusVersionCommitsBoundry(t *testing.T) {
 
 // TestConsecutiveVersion tests the consecutiveVersion method correctness.
 func TestConsecutiveVersion(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	var au accountUpdates
 	au.versions = []protocol.ConsensusVersion{

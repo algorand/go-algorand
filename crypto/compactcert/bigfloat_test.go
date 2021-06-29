@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func rand32() uint32 {
@@ -31,7 +31,7 @@ func rand32() uint32 {
 }
 
 func TestBigFloatRounding(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := &bigFloatDn{}
 	b := &bigFloatUp{}
@@ -65,7 +65,7 @@ func TestBigFloatRounding(t *testing.T) {
 }
 
 func TestBigFloat(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	a := &bigFloatDn{}
 	b := &bigFloatDn{}

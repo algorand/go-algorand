@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 var proposalStoreTracer tracer
@@ -38,7 +38,7 @@ func init() {
 }
 
 func TestProposalStoreCreation(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	player, router, accounts, factory, ledger := testSetup(0)
 
@@ -48,7 +48,7 @@ func TestProposalStoreCreation(t *testing.T) {
 }
 
 func TestBlockAssemblerPipeline(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	type fields struct {
 		Pipeline       unauthenticatedProposal
@@ -118,7 +118,7 @@ func TestBlockAssemblerPipeline(t *testing.T) {
 }
 
 func TestBlockAssemblerBind(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	type fields struct {
 		Pipeline       unauthenticatedProposal
@@ -186,7 +186,7 @@ func TestBlockAssemblerBind(t *testing.T) {
 }
 
 func TestBlockAssemblerAuthenticator(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	type fields struct {
 		Pipeline       unauthenticatedProposal
@@ -252,7 +252,7 @@ func TestBlockAssemblerAuthenticator(t *testing.T) {
 }
 
 func TestBlockAssemblerTrim(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	type fields struct {
 		Pipeline       unauthenticatedProposal
@@ -336,7 +336,7 @@ func TestBlockAssemblerTrim(t *testing.T) {
 }
 
 func TestProposalStoreT(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
@@ -404,7 +404,7 @@ func TestProposalStoreT(t *testing.T) {
 }
 
 func TestProposalStoreUnderlying(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	type fields struct {
 		Relevant   map[period]proposalValue
@@ -472,7 +472,7 @@ func TestProposalStoreUnderlying(t *testing.T) {
 }
 
 func TestProposalStoreHandle(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	player, router, accounts, factory, ledger := testPlayerSetup()
 
@@ -658,7 +658,7 @@ func TestProposalStoreHandle(t *testing.T) {
 }
 
 func TestProposalStoreGetPinnedValue(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	// create proposal Store
 	player, router, accounts, factory, ledger := testPlayerSetup()
@@ -712,7 +712,7 @@ func TestProposalStoreGetPinnedValue(t *testing.T) {
 }
 
 func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	var msgV1, msgV2, msgP1, msgP2 message
 	var rv rawVote
@@ -823,7 +823,7 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 }
 
 func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	var msgV1, msgV2, msgP1, msgP2 message
 	var rv rawVote

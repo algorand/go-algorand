@@ -34,12 +34,12 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 // TestUGetBlockWs tests the universal fetcher ws peer case
 func TestUGetBlockWs(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
 
@@ -81,7 +81,7 @@ func TestUGetBlockWs(t *testing.T) {
 
 // TestUGetBlockHTTP tests the universal fetcher http peer case
 func TestUGetBlockHTTP(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
 
@@ -127,7 +127,7 @@ func TestUGetBlockHTTP(t *testing.T) {
 
 // TestUGetBlockUnsupported tests the handling of an unsupported peer
 func TestUGetBlockUnsupported(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	fetcher := universalBlockFetcher{}
 	peer := ""
@@ -141,7 +141,7 @@ func TestUGetBlockUnsupported(t *testing.T) {
 
 // TestprocessBlockBytesErrors checks the error handling in processBlockBytes
 func TestProcessBlockBytesErrors(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	blk := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
@@ -173,7 +173,7 @@ func TestProcessBlockBytesErrors(t *testing.T) {
 
 // TestRequestBlockBytesErrors checks the error handling in requestBlockBytes
 func TestRequestBlockBytesErrors(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
 
@@ -239,7 +239,7 @@ func (thh *TestHTTPHandler) ServeHTTP(response http.ResponseWriter, request *htt
 
 // TestGetBlockBytesHTTPErrors tests the errors reported from getblockBytes for http peer
 func TestGetBlockBytesHTTPErrors(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}
@@ -288,7 +288,7 @@ func (et ErrTest) Error() string {
 
 // TestErrorTypes tests the error types are implemented correctly
 func TestErrorTypes(t *testing.T) {
-	testPartitioning.PartitionTest(t)
+	testpartitioning.PartitionTest(t)
 
 	err1 := makeErrWrongCertFromPeer(1, 2, "somepeer1")
 	require.Equal(t, "processBlockBytes: got wrong cert from peer somepeer1: wanted 1, got 2", err1.Error())
