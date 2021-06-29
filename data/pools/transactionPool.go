@@ -899,3 +899,17 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 	}
 	return blockEval.GenerateBlock()
 }
+
+// AssembleDevModeBlock assemble a new block from the existing transaction pool. The pending evaluator is being
+func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledger.ValidatedBlock, err error) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// drop the current block evaluator and start with a new one.
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round), 0)
+
+	// The above was already pregenerating the entire block,
+	// so there won't be any waiting on this call.
+	assembled, err = pool.AssembleBlock(pool.pendingBlockEvaluator.Round(), time.Now().Add(config.ProposalAssemblyTime))
+	return
+}

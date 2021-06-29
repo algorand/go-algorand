@@ -474,24 +474,9 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 }
 
 // writeDevmodeBlock generates a new block for a devmode, and write it to the ledger.
-func (node *AlgorandFullNode) writeDevmodeBlock(lastRound basics.Round) (err error) {
-	// get the last block
-	blk, err := node.ledger.Block(lastRound)
-	if err != nil {
-		return
-	}
-
-	// modify the block blk round number, to emulate into-the-future block. The OnNewBlock doesn't
-	// really care about the rest of this data structure anyway, so it would be safe to do.
-	blk.BlockHeader.Round++
-
-	// calling OnNewBlock would trigger recomputation of the txn pool for round blk+1.
-	node.transactionPool.OnNewBlock(blk, ledgercore.StateDelta{})
-
-	// The above was already pregenerating the entire block,
-	// so there won't be any waiting on this call.
+func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	var vb *ledger.ValidatedBlock
-	vb, err = node.transactionPool.AssembleBlock(lastRound+1, time.Now().Add(config.ProposalAssemblyTime))
+	vb, err = node.transactionPool.AssembleDevModeBlock()
 	if err != nil || vb == nil {
 		return
 	}
@@ -503,8 +488,6 @@ func (node *AlgorandFullNode) writeDevmodeBlock(lastRound basics.Round) (err err
 
 // BroadcastSignedTxGroup broadcasts a transaction group that has already been signed.
 func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
-	var lastRound basics.Round
-
 	// in developer mode, we need to take a lock, so that each new transaction group would truely
 	// render into a unique block.
 	if node.devMode {
@@ -513,13 +496,13 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 			// if we added the transaction successfully to the transaction pool, then
 			// attempt to generate a block and write it to the ledger.
 			if err == nil {
-				err = node.writeDevmodeBlock(lastRound)
+				err = node.writeDevmodeBlock()
 			}
 			node.mu.Unlock()
 		}()
 	}
 
-	lastRound = node.ledger.Latest()
+	lastRound := node.ledger.Latest()
 	var b bookkeeping.BlockHeader
 	b, err = node.ledger.BlockHdr(lastRound)
 	if err != nil {
