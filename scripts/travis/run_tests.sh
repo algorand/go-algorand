@@ -4,6 +4,12 @@ set -e
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
+if $CIRCLECI; then
+  export GOPATH=/home/circleci/.go_workspace;
+else
+  export GOPATH=$(go env GOPATH)
+fi
+
 if [ "${BUILD_TYPE}" = "integration" ]; then
     # Run short tests when doing pull requests; leave the long testing for nightly runs.
     if [[ "${TRAVIS_BRANCH}" =~ ^rel/nightly ]]; then
