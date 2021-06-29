@@ -79,17 +79,17 @@ def create_kmd_config_with_unsafe_scrypt(working_dir):
     with open(os.path.join(kmd_config_dir,"kmd_config.json.example")) as f:
         kmd_conf_data = json.load(f)
     if "drivers" not in kmd_conf_data:
-        raise Exception("kmd_conf example does not contian drivers attribute")
+        raise Exception("kmd_conf example does not contain drivers attribute")
     if "sqlite" not in kmd_conf_data["drivers"]:
-        raise Exception("kmd_conf example does not contian sqlite attribute")
+        raise Exception("kmd_conf example does not contain sqlite attribute")
     if "allow_unsafe_scrypt" not in kmd_conf_data["drivers"]["sqlite"]:
-        raise Exception("kmd_conf example does not contian allow_unsafe_scrypt attribute")
+        raise Exception("kmd_conf example does not contain allow_unsafe_scrypt attribute")
     if "scrypt" not in kmd_conf_data["drivers"]["sqlite"]:
-        raise Exception("kmd_conf example does not contian scrypt attribute")
+        raise Exception("kmd_conf example does not contain scrypt attribute")
     if "scrypt_n" not in kmd_conf_data["drivers"]["sqlite"]["scrypt"]:
-        raise Exception("kmd_conf example does not contian scrypt_n attribute")
+        raise Exception("kmd_conf example does not contain scrypt_n attribute")
     if "scrypt_r" not in kmd_conf_data["drivers"]["sqlite"]["scrypt"]:
-        raise Exception("kmd_conf example does not contian scrypt_r attribute")
+        raise Exception("kmd_conf example does not contain scrypt_r attribute")
 
     kmd_conf_data["drivers"]["sqlite"]["allow_unsafe_scrypt"] = True
     kmd_conf_data["drivers"]["sqlite"]["scrypt"]["scrypt_n"] = 4096

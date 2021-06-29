@@ -644,7 +644,7 @@
       "x-go-package": "github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
     },
     "APIV1POSTKeyExportResponse": {
-      "description": "APIV1POSTKeyExportResponse is the reponse to `POST /v1/key/export`\nfriendly:ExportKeyResponse",
+      "description": "APIV1POSTKeyExportResponse is the response to `POST /v1/key/export`\nfriendly:ExportKeyResponse",
       "type": "object",
       "properties": {
         "error": {
@@ -662,7 +662,7 @@
       "x-go-package": "github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
     },
     "APIV1POSTKeyImportResponse": {
-      "description": "APIV1POSTKeyImportResponse is the repsonse to `POST /v1/key/import`\nfriendly:ImportKeyResponse",
+      "description": "APIV1POSTKeyImportResponse is the response to `POST /v1/key/import`\nfriendly:ImportKeyResponse",
       "type": "object",
       "properties": {
         "address": {
@@ -722,7 +722,7 @@
       "x-go-package": "github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
     },
     "APIV1POSTMasterKeyExportResponse": {
-      "description": "APIV1POSTMasterKeyExportResponse is the reponse to `POST /v1/master-key/export`\nfriendly:ExportMasterKeyResponse",
+      "description": "APIV1POSTMasterKeyExportResponse is the response to `POST /v1/master-key/export`\nfriendly:ExportMasterKeyResponse",
       "type": "object",
       "properties": {
         "error": {
@@ -853,7 +853,7 @@
       "x-go-package": "github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
     },
     "APIV1POSTProgramSignResponse": {
-      "description": "APIV1POSTProgramSignResponse is the repsonse to `POST /v1/data/sign`\nfriendly:SignProgramResponse",
+      "description": "APIV1POSTProgramSignResponse is the response to `POST /v1/data/sign`\nfriendly:SignProgramResponse",
       "type": "object",
       "properties": {
         "error": {
@@ -873,7 +873,7 @@
       "x-go-package": "github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
     },
     "APIV1POSTTransactionSignResponse": {
-      "description": "APIV1POSTTransactionSignResponse is the repsonse to `POST /v1/transaction/sign`\nfriendly:SignTransactionResponse",
+      "description": "APIV1POSTTransactionSignResponse is the response to `POST /v1/transaction/sign`\nfriendly:SignTransactionResponse",
       "type": "object",
       "properties": {
         "error": {
@@ -1570,13 +1570,13 @@
       }
     },
     "ExportKeyResponse": {
-      "description": "Reponse to `POST /v1/key/export`",
+      "description": "Response to `POST /v1/key/export`",
       "schema": {
         "$ref": "#/definitions/APIV1POSTKeyExportResponse"
       }
     },
     "ExportMasterKeyResponse": {
-      "description": "Reponse to `POST /v1/master-key/export`",
+      "description": "Response to `POST /v1/master-key/export`",
       "schema": {
         "$ref": "#/definitions/APIV1POSTMasterKeyExportResponse"
       }
@@ -1594,7 +1594,7 @@
       }
     },
     "ImportKeyResponse": {
-      "description": "Repsonse to `POST /v1/key/import`",
+      "description": "Response to `POST /v1/key/import`",
       "schema": {
         "$ref": "#/definitions/APIV1POSTKeyImportResponse"
       }

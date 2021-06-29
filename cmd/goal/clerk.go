@@ -837,7 +837,7 @@ var groupCmd = &cobra.Command{
 		transactionIdx := 0
 		for {
 			var stxn transactions.SignedTxn
-			// we decode the file into a SignedTxn since we want to verify the absense of the signature as well as preserve the AuthAddr.
+			// we decode the file into a SignedTxn since we want to verify the absence of the signature as well as preserve the AuthAddr.
 			err = dec.Decode(&stxn)
 			if err == io.EOF {
 				break

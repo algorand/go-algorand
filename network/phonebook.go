@@ -216,7 +216,7 @@ func (e *phonebookImpl) GetConnectionWaitTime(addr string) (addrInPhonebook bool
 	if !addrInPhonebook {
 		// The addr is not in this phonebook.
 		// Will find the addr in a different phonebook.
-		return addrInPhonebook, 0 /* not unsed */, curTime /* not unsed */
+		return addrInPhonebook, 0 /* not used */, curTime /* not used */
 	}
 
 	var timeSince time.Duration
@@ -237,7 +237,7 @@ func (e *phonebookImpl) GetConnectionWaitTime(addr string) (addrInPhonebook bool
 	numElts := len(e.data[addr].recentConnectionTimes)
 	if uint(numElts) >= e.connectionsRateLimitingCount {
 		return addrInPhonebook, /* true */
-			(e.connectionsRateLimitingWindow - timeSince), curTime /* not unsed */
+			(e.connectionsRateLimitingWindow - timeSince), curTime /* not used */
 	}
 
 	// Else, there is space in connectionsRateLimitingCount. The

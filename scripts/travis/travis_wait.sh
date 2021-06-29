@@ -69,4 +69,4 @@ travis_wait() {
   return $result
 }
 
-travis_wait $@
+travis_wait "$@"

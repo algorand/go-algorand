@@ -200,7 +200,7 @@ type wsPeer struct {
 	// responseChannelsMutex guards the operations of responseChannels
 	responseChannelsMutex deadlock.RWMutex
 
-	// sendMessageTag is a map of allowed message to send to a peer. We don't use any syncronization on this map, and the
+	// sendMessageTag is a map of allowed message to send to a peer. We don't use any synchronization on this map, and the
 	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
 	sendMessageTag map[protocol.Tag]bool
 
@@ -607,7 +607,7 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 
 func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	if len(msg.data) > maxMessageLength {
-		wp.net.log.Errorf("trying to send a message longer than we would recieve: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
+		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
 		if msg.callback != nil {
 			// let the callback know that the message was not sent.

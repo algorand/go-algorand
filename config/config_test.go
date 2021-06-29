@@ -244,7 +244,7 @@ func loadWithoutDefaults(cfg Local) (Local, error) {
 }
 
 func TestConfigMigrate(t *testing.T) {
-	t.Skip()
+
 	a := require.New(t)
 
 	c0, err := loadWithoutDefaults(getVersionedDefaultLocalConfig(0))

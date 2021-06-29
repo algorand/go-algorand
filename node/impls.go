@@ -108,7 +108,7 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, verifier *agre
 	// The channel send to UnmatchedPendingCertificates is guaranteed to be non-blocking since due to the fact that -
 	// 1. the channel capacity is 1
 	// 2. we just cleared a single item off this channel ( if there was any )
-	// 3. the EnsureDigest method is being called with the agreeement service guarantee
+	// 3. the EnsureDigest method is being called with the agreement service guarantee
 	// 4. no other senders to this channel exists
 	l.UnmatchedPendingCertificates <- catchup.PendingUnmatchedCertificate{Cert: cert, VoteVerifier: verifier}
 }

@@ -258,7 +258,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	return network.OutgoingMessage{Action: network.Ignore}
 }
 
-// checkAlreadyCommitted test to see if the given transaction ( in the txBacklogMsg ) was already commited, and
+// checkAlreadyCommitted test to see if the given transaction ( in the txBacklogMsg ) was already committed, and
 // whether it would qualify as a candidate for the transaction pool.
 //
 // Note that this also checks the consistency of the transaction's group hash,

@@ -1550,7 +1550,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 
 	// ******* All results are obtained from the cache. Empty database *******
 	// ******* No deletes                                              *******
-	// get random data. Inital batch, no deletes
+	// get random data. Initial batch, no deletes
 	randomCtbs, maxAsset, maxApp, err := generateCreatables(numElementsPerSegement)
 	require.NoError(t, err)
 
