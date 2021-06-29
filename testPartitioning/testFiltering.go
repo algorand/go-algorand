@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package testPartitioning
+package testpartitioning
 
 import (
 	"os"
@@ -22,6 +22,7 @@ import (
 	"testing"
 )
 
+// PartitionTest checks if the current partition should run this test, and skips it if not.
 func PartitionTest(t *testing.T) {
 	pt, found := os.LookupEnv("PARTITION_TOTAL")
 	if !found {
@@ -32,13 +33,13 @@ func PartitionTest(t *testing.T) {
 		return
 	}
 	pid := os.Getenv("PARTITION_ID")
-	partitionId, err := strconv.Atoi(pid)
+	partitionID, err := strconv.Atoi(pid)
 	if err != nil {
 		return
 	}
 	name := t.Name()
 	nameNumber := stringToUint64(name)
-	if nameNumber%uint64(partitions) != uint64(partitionId) {
+	if nameNumber%uint64(partitions) != uint64(partitionID) {
 		t.Skip()
 	}
 }
