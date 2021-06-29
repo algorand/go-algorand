@@ -107,6 +107,7 @@ commands:
             GOLANG_VERSION=$(./scripts/get_golang_version.sh)
             eval "$(~/gimme "${GOLANG_VERSION}")"
             scripts/configure_dev.sh
+            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
             export SHORTTEST=-short
             export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
