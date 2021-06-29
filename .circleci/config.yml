@@ -16,14 +16,24 @@ workflows:
       - amd64_integration:
           requires:
             - amd64_build
-      #- arm64_build
-      #- arm64_test:
-      #    requires:
-      #      - arm64_build
-      #- arm64_integration:
-      #    requires:
-      #      - arm64_build
-      #- mac_amd64_build
+      - arm64_build
+      - arm64_test:
+          requires:
+            - arm64_build
+      - arm64_integration:
+          requires:
+            - arm64_build
+  # build_mac:
+  #   jobs:
+  #     - mac_amd64_build
+  #     - mac_amd64_test:
+  #         requires:
+  #           - mac_amd64_build
+  #     - mac_amd64_integration:
+  #         requires:
+  #           - mac_amd64_build
+  #build_windows:
+  #  jobs:
       #- windows_x64_build
 
 commands:
@@ -198,6 +208,7 @@ jobs:
     machine:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
+    parallelism: 8
     steps:
       - checkout
       - prepare_go
