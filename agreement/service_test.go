@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/timers"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type testingClock struct {
@@ -908,6 +909,8 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 }
 
 func TestAgreementSynchronous1(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	// if testing.Short() {
 	// 	t.Skip("Skipping agreement integration test")
 	// }
@@ -916,6 +919,8 @@ func TestAgreementSynchronous1(t *testing.T) {
 }
 
 func TestAgreementSynchronous2(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	// if testing.Short() {
 	// 	t.Skip("Skipping agreement integration test")
 	// }
@@ -924,6 +929,8 @@ func TestAgreementSynchronous2(t *testing.T) {
 }
 
 func TestAgreementSynchronous3(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	// if testing.Short() {
 	// 	t.Skip("Skipping agreement integration test")
 	// }
@@ -932,6 +939,8 @@ func TestAgreementSynchronous3(t *testing.T) {
 }
 
 func TestAgreementSynchronous4(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip("Skipping agreement integration test")
 	}
@@ -940,6 +949,8 @@ func TestAgreementSynchronous4(t *testing.T) {
 }
 
 func TestAgreementSynchronous5(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip("Skipping agreement integration test")
 	}
@@ -948,6 +959,8 @@ func TestAgreementSynchronous5(t *testing.T) {
 }
 
 func TestAgreementSynchronous10(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip("Skipping agreement integration test")
 	}
@@ -956,6 +969,8 @@ func TestAgreementSynchronous10(t *testing.T) {
 }
 
 func TestAgreementSynchronous5_50(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip("Skipping agreement integration test")
 	}
@@ -964,6 +979,8 @@ func TestAgreementSynchronous5_50(t *testing.T) {
 }
 
 func TestAgreementSynchronousFuture1(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	//if testing.Short() {
 	//	t.Skip("Skipping agreement integration test")
 	//}
@@ -975,6 +992,8 @@ func TestAgreementSynchronousFuture1(t *testing.T) {
 }
 
 func TestAgreementSynchronousFuture5(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip("Skipping agreement integration test")
 	}
@@ -986,6 +1005,8 @@ func TestAgreementSynchronousFuture5(t *testing.T) {
 }
 
 func TestAgreementSynchronousFutureUpgrade(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip("Skipping agreement integration test")
 	}
@@ -1000,6 +1021,8 @@ func TestAgreementSynchronousFutureUpgrade(t *testing.T) {
 }
 
 func TestAgreementFastRecoveryDownEarly(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1056,6 +1079,8 @@ func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 }
 
 func TestAgreementFastRecoveryDownMiss(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1135,6 +1160,8 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 }
 
 func TestAgreementFastRecoveryLate(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1246,6 +1273,8 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 }
 
 func TestAgreementFastRecoveryRedo(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1398,6 +1427,8 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 }
 
 func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 2
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1455,6 +1486,8 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 }
 
 func TestAgreementLateCertBug(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1511,6 +1544,8 @@ func TestAgreementLateCertBug(t *testing.T) {
 }
 
 func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1609,6 +1644,8 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 }
 
 func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1710,6 +1747,8 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 }
 
 func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1833,6 +1872,8 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 }
 
 func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1889,6 +1930,8 @@ func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
 }
 
 func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -1952,6 +1995,8 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 }
 
 func TestAgreementLargePeriods(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
@@ -2047,6 +2092,8 @@ func (v *testSuspendableBlockValidator) suspend() chan struct{} {
 }
 
 func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5
 	validator := makeTestSuspendableBlockValidator()
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreementWithValidator(t, numNodes, disabled, validator, makeTestLedger)
@@ -2202,6 +2249,8 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 // (such as blocks and pipelined messages for the next round)
 // Note that the stall will be resolved by catchup even if the relay blocks.
 func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	numNodes := 5 // single relay, four leaf nodes
 	relayID := nodeID(0)
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
@@ -2315,6 +2364,8 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 }
 
 func TestAgreementServiceStartDeadline(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	accessor, err := db.MakeAccessor(t.Name()+"_crash.db", false, true)
 	require.NoError(t, err)
 

@@ -30,9 +30,12 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestPutBlockTooOld(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	genesisInitState, _, _ := genesis(10)
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
@@ -62,6 +65,8 @@ func TestPutBlockTooOld(t *testing.T) {
 
 // TestGetEncodedBlockCert tests getEncodedBlockCert with valid and invalid round numbers.
 func TestGetEncodedBlockCert(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	genesisInitState, _, _ := genesis(10)
 
 	const inMem = true

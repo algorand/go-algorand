@@ -29,9 +29,12 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestParticipation_NewDB(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	rootDB, err := db.MakeAccessor(t.Name(), false, true)
@@ -86,6 +89,8 @@ func getSchemaVersions(db db.Accessor) (versions map[string]int, err error) {
 }
 
 func TestOverlapsInterval(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	const before = basics.Round(95)
 	const start = basics.Round(100)
 	const middle = basics.Round(105)

@@ -33,9 +33,12 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestInMemoryDisposal(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
 	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
@@ -81,6 +84,8 @@ func TestInMemoryDisposal(t *testing.T) {
 }
 
 func TestInMemoryUniqueDB(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
 	defer acc.Close()
@@ -113,6 +118,8 @@ func TestInMemoryUniqueDB(t *testing.T) {
 }
 
 func TestDBConcurrency(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	defer cleanupSqliteDb(t, fn)
 
@@ -229,6 +236,8 @@ func cleanupSqliteDb(t *testing.T, path string) {
 }
 
 func TestDBConcurrencyRW(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	dbFolder := "/dev/shm"
 	os := runtime.GOOS
 	if os == "darwin" {
@@ -351,6 +360,8 @@ func (wlc *WarningLogCounter) With(key string, value interface{}) logging.Logger
 
 // Test resetting warning notification
 func TestResettingTransactionWarnDeadline(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Run("expectedWarning", func(t *testing.T) {
 		t.Parallel()
 		acc, err := MakeAccessor("fn-expectedWarning.db", false, true)
@@ -388,6 +399,8 @@ func TestResettingTransactionWarnDeadline(t *testing.T) {
 
 // Test the SetSynchronousMode function
 func TestSetSynchronousMode(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	setSynchrounousModeHelper := func(mem bool, ctx context.Context, mode SynchronousMode, fullfsync bool) error {
 		acc, err := MakeAccessor("fn.db", false, mem)
 		require.NoError(t, err)
@@ -423,6 +436,8 @@ func TestSetSynchronousMode(t *testing.T) {
 // it demonstrates that at any time before we're calling Commit, the database content can be read, and it's containing it's pre-transaction
 // value.
 func TestReadingWhileWriting(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	writeAcc, err := MakeAccessor("fn.db", false, false)
 	require.NoError(t, err)
 	defer os.Remove("fn.db")

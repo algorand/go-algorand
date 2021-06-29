@@ -24,9 +24,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestTransactionPoolOrderingAndClearing(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Skip("test is flaky as of 2019-06-18")
 	t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
@@ -112,6 +115,8 @@ func TestTransactionPoolOrderingAndClearing(t *testing.T) {
 }
 
 func TestTransactionPoolExponentialFees(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Skip("new FIFO pool does not have exponential fee txn replacement")
 
 	t.Parallel()

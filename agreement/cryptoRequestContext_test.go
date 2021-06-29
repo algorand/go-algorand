@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func forEachTagDo(fn func(protocol.Tag)) {
@@ -32,6 +33,8 @@ func forEachTagDo(fn func(protocol.Tag)) {
 }
 
 func TestCryptoRequestContextAddCancelRound(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	pending := makePendingRequestsContext()
 	rnd := round(10)
 	per := period(10)
@@ -65,6 +68,8 @@ func TestCryptoRequestContextAddCancelRound(t *testing.T) {
 }
 
 func TestCryptoRequestContextAddCancelPeriod(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	pending := makePendingRequestsContext()
 	rnd := round(10)
 	per := period(10)
@@ -99,6 +104,8 @@ func TestCryptoRequestContextAddCancelPeriod(t *testing.T) {
 }
 
 func TestCryptoRequestContextAddCancelProposal(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	pending := makePendingRequestsContext()
 	rnd := round(10)
 	per := period(10)
@@ -123,6 +130,8 @@ func TestCryptoRequestContextAddCancelProposal(t *testing.T) {
 }
 
 func TestCryptoRequestContextAddCancelPinnedProposal(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	pending := makePendingRequestsContext()
 	rnd := round(10)
 	proposal := cryptoProposalRequest{message: message{Tag: protocol.ProposalPayloadTag}, Round: rnd, Pinned: true}
@@ -146,6 +155,8 @@ func TestCryptoRequestContextAddCancelPinnedProposal(t *testing.T) {
 }
 
 func TestCryptoRequestContextAddNoCancelPinnedProposal(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	pending := makePendingRequestsContext()
 	rnd := round(10)
 	per := period(10)
@@ -169,6 +180,8 @@ func TestCryptoRequestContextAddNoCancelPinnedProposal(t *testing.T) {
 }
 
 func TestCryptoRequestContextAddNoInterferencePinnedProposal(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	pending := makePendingRequestsContext()
 	rnd := round(10)
 	per := period(10)
@@ -192,6 +205,8 @@ func TestCryptoRequestContextAddNoInterferencePinnedProposal(t *testing.T) {
 }
 
 func TestCryptoRequestContextCleanupByRound(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	pending := makePendingRequestsContext()
 	rnd := round(10)
 	per := period(10)
@@ -239,6 +254,8 @@ func TestCryptoRequestContextCleanupByRound(t *testing.T) {
 }
 
 func TestCryptoRequestContextCleanupByRoundPinnedCertify(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	pending := makePendingRequestsContext()
 	rnd := round(10)
 
@@ -300,6 +317,8 @@ func TestCryptoRequestContextCleanupByRoundPinnedCertify(t *testing.T) {
 }
 
 func TestCryptoRequestContextCleanupByPeriod(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	pending := makePendingRequestsContext()
 	rnd := round(10)
 	per := period(10)
@@ -361,6 +380,8 @@ func TestCryptoRequestContextCleanupByPeriod(t *testing.T) {
 }
 
 func TestCryptoRequestContextCleanupByPeriodPinned(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	pending := makePendingRequestsContext()
 	rnd := round(10)
 

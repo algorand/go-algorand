@@ -24,9 +24,12 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestStateDeltaValid(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	// test pre-applications proto
@@ -82,6 +85,8 @@ func TestStateDeltaValid(t *testing.T) {
 }
 
 func TestStateDeltaValidV24(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	// v24: short key, value too long: hits MaxAppBytesValueLen
@@ -103,6 +108,8 @@ func TestStateDeltaValidV24(t *testing.T) {
 }
 
 func TestStateDeltaEqual(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	var d1 StateDelta = nil
@@ -138,6 +145,8 @@ func TestStateDeltaEqual(t *testing.T) {
 }
 
 func TestEvalDeltaEqual(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	d1 := EvalDelta{}

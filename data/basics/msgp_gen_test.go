@@ -9,9 +9,12 @@ import (
 
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestMarshalUnmarshalAccountData(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := AccountData{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -32,6 +35,8 @@ func TestMarshalUnmarshalAccountData(t *testing.T) {
 }
 
 func TestRandomizedEncodingAccountData(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &AccountData{})
 }
 
@@ -71,6 +76,8 @@ func BenchmarkUnmarshalAccountData(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAppLocalState(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := AppLocalState{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -91,6 +98,8 @@ func TestMarshalUnmarshalAppLocalState(t *testing.T) {
 }
 
 func TestRandomizedEncodingAppLocalState(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &AppLocalState{})
 }
 
@@ -130,6 +139,8 @@ func BenchmarkUnmarshalAppLocalState(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAppParams(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := AppParams{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -150,6 +161,8 @@ func TestMarshalUnmarshalAppParams(t *testing.T) {
 }
 
 func TestRandomizedEncodingAppParams(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &AppParams{})
 }
 
@@ -189,6 +202,8 @@ func BenchmarkUnmarshalAppParams(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAssetHolding(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := AssetHolding{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -209,6 +224,8 @@ func TestMarshalUnmarshalAssetHolding(t *testing.T) {
 }
 
 func TestRandomizedEncodingAssetHolding(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &AssetHolding{})
 }
 
@@ -248,6 +265,8 @@ func BenchmarkUnmarshalAssetHolding(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAssetParams(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := AssetParams{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -268,6 +287,8 @@ func TestMarshalUnmarshalAssetParams(t *testing.T) {
 }
 
 func TestRandomizedEncodingAssetParams(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &AssetParams{})
 }
 
@@ -307,6 +328,8 @@ func BenchmarkUnmarshalAssetParams(b *testing.B) {
 }
 
 func TestMarshalUnmarshalBalanceRecord(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := BalanceRecord{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -327,6 +350,8 @@ func TestMarshalUnmarshalBalanceRecord(t *testing.T) {
 }
 
 func TestRandomizedEncodingBalanceRecord(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &BalanceRecord{})
 }
 
@@ -366,6 +391,8 @@ func BenchmarkUnmarshalBalanceRecord(b *testing.B) {
 }
 
 func TestMarshalUnmarshalEvalDelta(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := EvalDelta{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -386,6 +413,8 @@ func TestMarshalUnmarshalEvalDelta(t *testing.T) {
 }
 
 func TestRandomizedEncodingEvalDelta(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &EvalDelta{})
 }
 
@@ -425,6 +454,8 @@ func BenchmarkUnmarshalEvalDelta(b *testing.B) {
 }
 
 func TestMarshalUnmarshalStateDelta(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := StateDelta{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -445,6 +476,8 @@ func TestMarshalUnmarshalStateDelta(t *testing.T) {
 }
 
 func TestRandomizedEncodingStateDelta(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &StateDelta{})
 }
 
@@ -484,6 +517,8 @@ func BenchmarkUnmarshalStateDelta(b *testing.B) {
 }
 
 func TestMarshalUnmarshalStateSchema(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := StateSchema{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -504,6 +539,8 @@ func TestMarshalUnmarshalStateSchema(t *testing.T) {
 }
 
 func TestRandomizedEncodingStateSchema(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &StateSchema{})
 }
 
@@ -543,6 +580,8 @@ func BenchmarkUnmarshalStateSchema(b *testing.B) {
 }
 
 func TestMarshalUnmarshalStateSchemas(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := StateSchemas{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -563,6 +602,8 @@ func TestMarshalUnmarshalStateSchemas(t *testing.T) {
 }
 
 func TestRandomizedEncodingStateSchemas(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &StateSchemas{})
 }
 
@@ -602,6 +643,8 @@ func BenchmarkUnmarshalStateSchemas(b *testing.B) {
 }
 
 func TestMarshalUnmarshalTealKeyValue(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := TealKeyValue{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -622,6 +665,8 @@ func TestMarshalUnmarshalTealKeyValue(t *testing.T) {
 }
 
 func TestRandomizedEncodingTealKeyValue(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &TealKeyValue{})
 }
 
@@ -661,6 +706,8 @@ func BenchmarkUnmarshalTealKeyValue(b *testing.B) {
 }
 
 func TestMarshalUnmarshalTealValue(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := TealValue{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -681,6 +728,8 @@ func TestMarshalUnmarshalTealValue(t *testing.T) {
 }
 
 func TestRandomizedEncodingTealValue(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &TealValue{})
 }
 
@@ -720,6 +769,8 @@ func BenchmarkUnmarshalTealValue(b *testing.B) {
 }
 
 func TestMarshalUnmarshalValueDelta(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	v := ValueDelta{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -740,6 +791,8 @@ func TestMarshalUnmarshalValueDelta(t *testing.T) {
 }
 
 func TestRandomizedEncodingValueDelta(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	protocol.RunEncodingTest(t, &ValueDelta{})
 }
 

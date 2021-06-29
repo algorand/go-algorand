@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type balanceRecord struct {
@@ -429,6 +430,8 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 }
 
 func TestEvalModes(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	// ed25519verify and err are tested separately below
 
@@ -704,6 +707,8 @@ func testStateful(t *testing.T, source string, ver uint64, ledger LedgerForLogic
 }
 
 func TestBalance(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	text := "int 2; balance; int 177; =="
@@ -791,6 +796,8 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 }
 
 func TestMinBalance(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	txn := makeSampleTxn()
@@ -840,6 +847,8 @@ func TestMinBalance(t *testing.T) {
 }
 
 func TestAppCheckOptedIn(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	txn := makeSampleTxn()
@@ -885,6 +894,8 @@ func TestAppCheckOptedIn(t *testing.T) {
 }
 
 func TestAppReadLocalState(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	text := `int 2  // account idx
@@ -1032,6 +1043,8 @@ int 0
 }
 
 func TestAppReadGlobalState(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	text := `int 0
@@ -1231,6 +1244,8 @@ int 1
 `
 
 func TestAssets(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	for _, field := range AssetHoldingFieldNames {
 		if !strings.Contains(assetsTestProgram, field) {
@@ -1417,6 +1432,8 @@ intc_1
 }
 
 func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	sourceRead := `intcblock 0 100 0x77 1
@@ -1534,6 +1551,8 @@ intc_1
 }
 
 func TestAppLocalStateReadWrite(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	ep := defaultEvalParams(nil, nil)
@@ -1809,6 +1828,8 @@ int 1
 }
 
 func TestAppGlobalReadWriteDeleteErrors(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	sourceRead := `int 0
@@ -1888,6 +1909,8 @@ int 1
 }
 
 func TestAppGlobalReadWrite(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	// check writing ints and bytes
@@ -2105,6 +2128,8 @@ byte 0x414c474f
 }
 
 func TestAppGlobalReadOtherApp(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	source := `int 2 // ForeignApps index
 byte "mykey1"
@@ -2150,6 +2175,8 @@ byte "myval"
 }
 
 func TestBlankKey(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	source := `
 byte ""
@@ -2184,6 +2211,8 @@ int 7
 }
 
 func TestAppGlobalDelete(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	// check write/delete/read
@@ -2341,6 +2370,8 @@ int 1
 }
 
 func TestAppLocalDelete(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	// check write/delete/read
@@ -2553,6 +2584,8 @@ int 1
 }
 
 func TestEnumFieldErrors(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	ep := defaultEvalParams(nil, nil)
 
 	source := `txn Amount`
@@ -2645,6 +2678,8 @@ pop
 }
 
 func TestReturnTypes(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	// Ensure all opcodes return values they supposed to according to the OpSpecs table
 	t.Parallel()
 	typeToArg := map[StackType]string{
@@ -2777,6 +2812,8 @@ func TestReturnTypes(t *testing.T) {
 }
 
 func TestRound(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	source := `global Round
 int 1
 >=
@@ -2806,6 +2843,8 @@ int 1
 }
 
 func TestLatestTimestamp(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	source := `global LatestTimestamp
 int 1
 >=
@@ -2835,6 +2874,8 @@ int 1
 }
 
 func TestCurrentApplicationID(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	source := `global CurrentApplicationID
 int 42
 ==

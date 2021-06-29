@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func makeSignedTxnMsg() IncomingMessage {
@@ -54,6 +55,8 @@ func (th *testHandler) SawMsg(msg IncomingMessage) bool {
 }
 
 func TestMultiplexer(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	m := MakeMultiplexer(logging.TestingLog(t))
 	handler := &testHandler{}
 

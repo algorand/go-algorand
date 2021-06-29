@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func getEq(t *testing.T, cache *heapLRUCache, r basics.Round, expected string) {
@@ -45,6 +46,8 @@ func getNone(t *testing.T, cache *heapLRUCache, r basics.Round) {
 }
 
 func TestRoundLRUBasic(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	cache := heapLRUCache{maxEntries: 3}
 	cache.Put(1, "one")
 	cache.Put(2, "two")
@@ -63,6 +66,8 @@ func TestRoundLRUBasic(t *testing.T) {
 }
 
 func TestRoundLRUReIndex(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	cache := heapLRUCache{
 		entries: lruHeap{
 			heap: []lruEntry{

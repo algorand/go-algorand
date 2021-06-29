@@ -23,9 +23,12 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestOnlineTopHeap_Less(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	h := onlineTopHeap{
 		accts: []*onlineAccount{
 			{
@@ -53,6 +56,8 @@ func TestOnlineTopHeap_Less(t *testing.T) {
 }
 
 func TestOnlineTopHeap_Swap(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	h := onlineTopHeap{
 		accts: []*onlineAccount{
 			{
@@ -80,6 +85,8 @@ func TestOnlineTopHeap_Swap(t *testing.T) {
 }
 
 func TestOnlineTopHeap_Push(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	h := onlineTopHeap{
 		accts: []*onlineAccount{
 			{
@@ -109,6 +116,8 @@ func TestOnlineTopHeap_Push(t *testing.T) {
 }
 
 func TestOnlineTopHeap_Pop(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	h := onlineTopHeap{
 		accts: []*onlineAccount{
 			{

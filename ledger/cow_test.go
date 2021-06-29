@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type mockLedger struct {
@@ -106,6 +107,8 @@ func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
 }
 
 func TestCowBalance(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	accts0 := randomAccounts(20, true)
 	ml := mockLedger{balanceMap: accts0}
 

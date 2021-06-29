@@ -26,9 +26,12 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestSystemResolver(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 	log := logging.Base()
 
@@ -43,6 +46,8 @@ func TestSystemResolver(t *testing.T) {
 }
 
 func TestFallbackResolver(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 	log := logging.Base()
 
@@ -58,6 +63,8 @@ func TestFallbackResolver(t *testing.T) {
 }
 
 func TestDefaultResolver(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 	log := logging.Base()
 
@@ -73,6 +80,8 @@ func TestDefaultResolver(t *testing.T) {
 }
 
 func TestRealNamesWithResolver(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Skip() // skip real network tests in autotest
 	a := require.New(t)
 	log := logging.Base()

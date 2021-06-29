@@ -26,9 +26,12 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestAssetTransfer(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	// Creator
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)

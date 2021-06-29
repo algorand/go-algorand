@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type eventsDetailsLogger struct {
@@ -42,6 +43,8 @@ func (dl eventsDetailsLogger) EventWithDetails(category telemetryspec.Category, 
 
 // for two node network, check that B can ping A and get a reply
 func TestRequestLogger(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	log := logging.TestingLog(t)
 	dl := eventsDetailsLogger{Logger: log, eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.HTTPRequestEvent}
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))

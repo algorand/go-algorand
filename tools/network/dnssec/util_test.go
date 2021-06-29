@@ -20,9 +20,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestSplitZone(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 	var res []string
 	var err error
@@ -54,6 +57,8 @@ func TestSplitZone(t *testing.T) {
 }
 
 func TestParentZone(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 	var res string
 	var err error

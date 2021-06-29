@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func testSetup(periodCount uint64) (player, rootRouter, testAccountData, testBlockFactory, Ledger) {
@@ -107,6 +108,8 @@ func createProposalEvents(t *testing.T, player player, accs testAccountData, f t
 }
 
 func TestProposalCreation(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	player, router, accounts, factory, ledger := testSetup(0)
 
 	proposalVoteEventBatch, _, _ := createProposalEvents(t, player, accounts, factory, ledger)
@@ -115,6 +118,8 @@ func TestProposalCreation(t *testing.T) {
 }
 
 func TestProposalFunctions(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	player, _, accs, factory, ledger := testSetup(0)
 	round := player.Round
 	period := player.Period
@@ -152,6 +157,8 @@ func TestProposalFunctions(t *testing.T) {
 }
 
 func TestProposalUnauthenticated(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	player, _, accounts, factory, ledger := testSetup(0)
 
 	round := player.Round

@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func transcodeNoError(t *testing.T, mpToJSON bool, in io.ReadCloser, out io.WriteCloser) {
@@ -164,6 +165,8 @@ func randomMap(width int, depth int) interface{} {
 }
 
 func TestIdempotence(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	niter := 10000
 	if testing.Short() {
 		niter = 1000
@@ -176,6 +179,8 @@ func TestIdempotence(t *testing.T) {
 }
 
 func TestIdempotenceMultiobject(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	niter := 1000
 	if testing.Short() {
 		niter = 100
@@ -211,6 +216,8 @@ type parentStruct struct {
 }
 
 func TestIdempotenceStruct(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	niter := 10000
 	if testing.Short() {
 		niter = 1000

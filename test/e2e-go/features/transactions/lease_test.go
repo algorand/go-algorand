@@ -24,9 +24,12 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestLeaseTransactionsSameSender(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -86,6 +89,8 @@ func TestLeaseTransactionsSameSender(t *testing.T) {
 }
 
 func TestLeaseRegressionFaultyFirstValidCheckOld_2f3880f7(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -158,6 +163,8 @@ func TestLeaseRegressionFaultyFirstValidCheckOld_2f3880f7(t *testing.T) {
 }
 
 func TestLeaseRegressionFaultyFirstValidCheckNew_2f3880f7(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -217,6 +224,8 @@ func TestLeaseRegressionFaultyFirstValidCheckNew_2f3880f7(t *testing.T) {
 }
 
 func TestLeaseTransactionsSameSenderDifferentLease(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -278,6 +287,8 @@ func TestLeaseTransactionsSameSenderDifferentLease(t *testing.T) {
 }
 
 func TestLeaseTransactionsDifferentSender(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -352,6 +363,8 @@ func TestLeaseTransactionsDifferentSender(t *testing.T) {
 }
 
 func TestOverlappingLeases(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 

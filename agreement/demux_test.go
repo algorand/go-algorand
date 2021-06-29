@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/timers"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 const fastTimeoutChTime = 2
@@ -414,6 +415,8 @@ var demuxTestUsecases = []demuxTestUsecase{
 }
 
 func TestDemuxNext(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	dt := &demuxTester{T: t}
 	dt.Test()
 }

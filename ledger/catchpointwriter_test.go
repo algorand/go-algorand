@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func makeString(len int) string {
@@ -138,6 +139,8 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 }
 
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	er := makeTestEncodedBalanceRecord(t)
 	encodedBr := er.MarshalMsg(nil)
 
@@ -149,6 +152,8 @@ func TestEncodedBalanceRecordEncoding(t *testing.T) {
 }
 
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	fbc := catchpointFileBalancesChunk{}
 	for i := 0; i < 512; i++ {
 		fbc.Balances = append(fbc.Balances, makeTestEncodedBalanceRecord(t))
@@ -163,6 +168,8 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 }
 
 func TestBasicCatchpointWriter(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -261,6 +268,8 @@ func TestBasicCatchpointWriter(t *testing.T) {
 }
 
 func TestFullCatchpointWriter(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]

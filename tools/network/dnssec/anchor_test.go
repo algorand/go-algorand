@@ -20,9 +20,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestParseRootTrustAnchor(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 	an1, err := makeRootTrustAnchor(rootAnchorXML)
 	a.NoError(err)

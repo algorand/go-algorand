@@ -30,9 +30,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestApplicationCallFieldsEmpty(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	ac := transactions.ApplicationCallTxnFields{}
@@ -273,6 +276,8 @@ func (e *testEvaluator) InitLedger(balances Balances, appIdx basics.AppIndex, sc
 }
 
 func TestAppCallCloneEmpty(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	var ls map[basics.AppIndex]basics.AppLocalState
@@ -285,6 +290,8 @@ func TestAppCallCloneEmpty(t *testing.T) {
 }
 
 func TestAppCallGetParam(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	var b testBalances
@@ -323,6 +330,8 @@ func TestAppCallGetParam(t *testing.T) {
 }
 
 func TestAppCallAddressByIndex(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	sender := getRandomAddress(a)
@@ -348,6 +357,8 @@ func TestAppCallAddressByIndex(t *testing.T) {
 }
 
 func TestAppCallCheckPrograms(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	var ac transactions.ApplicationCallTxnFields
@@ -386,6 +397,8 @@ func TestAppCallCheckPrograms(t *testing.T) {
 }
 
 func TestAppCallCreate(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	var b testBalances
@@ -428,6 +441,8 @@ func TestAppCallCreate(t *testing.T) {
 
 // TestAppCallApplyCreate carefully tracks and validates balance record updates
 func TestAppCallApplyCreate(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -545,6 +560,8 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 // TestAppCallApplyCreateOptIn checks balance record fields without tracking substages
 func TestAppCallApplyCreateOptIn(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -590,6 +607,8 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 }
 
 func TestAppCallOptIn(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	sender := getRandomAddress(a)
@@ -663,6 +682,8 @@ func TestAppCallOptIn(t *testing.T) {
 }
 
 func TestAppCallClearState(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -817,6 +838,8 @@ func TestAppCallClearState(t *testing.T) {
 }
 
 func TestAppCallApplyCloseOut(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -899,6 +922,8 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 }
 
 func TestAppCallApplyUpdate(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -965,6 +990,8 @@ func TestAppCallApplyUpdate(t *testing.T) {
 }
 
 func TestAppCallApplyDelete(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -1031,6 +1058,8 @@ func TestAppCallApplyDelete(t *testing.T) {
 }
 
 func TestAppCallApplyCreateClearState(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)
@@ -1079,6 +1108,8 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 }
 
 func TestAppCallApplyCreateDelete(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	creator := getRandomAddress(a)

@@ -29,11 +29,13 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 const testNetTimeout = 100 * time.Millisecond
 
 func TestMain(m *testing.M) {
+
 	logging.Base().SetLevel(logging.Debug)
 	// increase limit on max allowed number of sockets
 	err := util.RaiseRlimit(500)
@@ -124,6 +126,8 @@ func shutdownNetwork(nets []*networkImpl, counters []*messageCounter) {
 }
 
 func TestNetworkImplFullStackLong(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}
@@ -132,6 +136,8 @@ func TestNetworkImplFullStackLong(t *testing.T) {
 }
 
 func TestNetworkImplFullStackQuick(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if !testing.Short() {
 		t.Skip()
 	}

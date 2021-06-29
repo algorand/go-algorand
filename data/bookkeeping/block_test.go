@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 var delegatesMoney = basics.MicroAlgos{Raw: 1000 * 1000 * 1000}
@@ -60,6 +61,8 @@ func init() {
 }
 
 func TestUpgradeVote(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	s := UpgradeState{
 		CurrentProtocol: proto1,
 	}
@@ -121,6 +124,8 @@ func TestUpgradeVote(t *testing.T) {
 }
 
 func TestUpgradeVariableDelay(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	s := UpgradeState{
 		CurrentProtocol: protoDelay,
 	}
@@ -145,6 +150,8 @@ func TestUpgradeVariableDelay(t *testing.T) {
 }
 
 func TestMakeBlockUpgrades(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var b Block
 	b.BlockHeader.GenesisID = t.Name()
 	b.CurrentProtocol = proto1
@@ -195,6 +202,8 @@ func TestMakeBlockUpgrades(t *testing.T) {
 }
 
 func TestBlockUnsupported(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var b Block
 	b.CurrentProtocol = protoUnsupported
 
@@ -208,6 +217,8 @@ func TestBlockUnsupported(t *testing.T) {
 }
 
 func TestTime(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var prev Block
 	prev.BlockHeader.GenesisID = t.Name()
 	prev.CurrentProtocol = proto1
@@ -235,6 +246,8 @@ func TestTime(t *testing.T) {
 }
 
 func TestRewardsLevel(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	var prev Block
 	prev.RewardsLevel = 1
@@ -247,6 +260,8 @@ func TestRewardsLevel(t *testing.T) {
 }
 
 func TestRewardsLevelWithResidue(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	var prev Block
@@ -261,6 +276,8 @@ func TestRewardsLevelWithResidue(t *testing.T) {
 }
 
 func TestRewardsLevelNoUnits(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	var prev Block
@@ -274,6 +291,8 @@ func TestRewardsLevelNoUnits(t *testing.T) {
 }
 
 func TestTinyLevel(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	var prev Block
@@ -286,6 +305,8 @@ func TestTinyLevel(t *testing.T) {
 }
 
 func TestRewardsRate(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var prev Block
 	prev.RewardsLevel = 1
 	prev.RewardsRate = 10
@@ -303,6 +324,8 @@ func TestRewardsRate(t *testing.T) {
 }
 
 func TestRewardsRateRefresh(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var prev Block
 	prev.RewardsLevel = 1
 	prev.RewardsRate = 10
@@ -320,6 +343,8 @@ func TestRewardsRateRefresh(t *testing.T) {
 }
 
 func TestEncodeDecodeSignedTxn(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var b Block
 	b.BlockHeader.GenesisID = "foo"
 	crypto.RandBytes(b.BlockHeader.GenesisHash[:])
@@ -337,6 +362,8 @@ func TestEncodeDecodeSignedTxn(t *testing.T) {
 }
 
 func TestEncodeMalformedSignedTxn(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var b Block
 	b.BlockHeader.GenesisID = "foo"
 	b.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
@@ -360,6 +387,8 @@ func TestEncodeMalformedSignedTxn(t *testing.T) {
 }
 
 func TestDecodeMalformedSignedTxn(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	var b Block
 	b.BlockHeader.GenesisID = "foo"
 	b.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
@@ -379,6 +408,8 @@ func TestDecodeMalformedSignedTxn(t *testing.T) {
 // TestInitialRewardsRateCalculation perform positive and negative testing for the InitialRewardsRateCalculation fix by
 // running the rounds in the same way eval() is executing them over RewardsRateRefreshInterval rounds.
 func TestInitialRewardsRateCalculation(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	runTest := func() bool {

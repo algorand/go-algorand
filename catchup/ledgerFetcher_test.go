@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 type dummyLedgerFetcherReporter struct {
@@ -40,6 +41,8 @@ func (lf *dummyLedgerFetcherReporter) updateLedgerFetcherProgress(*ledger.Catchp
 }
 
 func TestNoPeersAvailable(t *testing.T) {
+	testPartitioning.PartitionTest(t)
+
 	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
 	var peer network.Peer
 	peer = &lf // The peer is an opaque interface.. we can add anything as a Peer.
@@ -48,6 +51,8 @@ func TestNoPeersAvailable(t *testing.T) {
 }
 
 func TestNonParsableAddress(t *testing.T) {
+	testPartitioning.PartitionTest(t)
+
 	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
 	peer := testHTTPPeer(":def")
 	err := lf.getPeerLedger(context.Background(), &peer, basics.Round(0))
@@ -55,6 +60,8 @@ func TestNonParsableAddress(t *testing.T) {
 }
 
 func TestLedgerFetcherErrorResponseHandling(t *testing.T) {
+	testPartitioning.PartitionTest(t)
+
 	// create a dummy server.
 	mux := http.NewServeMux()
 	s := &http.Server{

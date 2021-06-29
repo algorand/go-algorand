@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func (ard *hostIncomingRequests) remove(trackedRequest *TrackerRequest) {
@@ -37,6 +38,8 @@ func (ard *hostIncomingRequests) remove(trackedRequest *TrackerRequest) {
 	}
 }
 func TestHostIncomingRequestsOrdering(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if defaultConfig.ConnectionsRateLimitingCount == 0 || defaultConfig.ConnectionsRateLimitingWindowSeconds == 0 {
 		t.Skip()
 	}
@@ -70,6 +73,8 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 }
 
 func TestRateLimiting(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if defaultConfig.ConnectionsRateLimitingCount == 0 || defaultConfig.ConnectionsRateLimitingWindowSeconds == 0 {
 		t.Skip()
 	}
@@ -166,6 +171,8 @@ func TestRateLimiting(t *testing.T) {
 }
 
 func TestIsLocalHost(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	require.True(t, isLocalhost("localhost"))
 	require.True(t, isLocalhost("127.0.0.1"))
 	require.True(t, isLocalhost("[::1]"))

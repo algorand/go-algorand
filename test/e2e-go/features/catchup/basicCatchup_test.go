@@ -28,9 +28,12 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestBasicCatchup(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}
@@ -76,6 +79,8 @@ func TestBasicCatchup(t *testing.T) {
 // TestCatchupOverGossip tests catchup across network versions
 // The current versions are the original v1 and the upgraded to v2.1
 func TestCatchupOverGossip(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	syncTest := fixtures.SynchronizedTest(t)
@@ -195,6 +200,8 @@ const consensusTestUnupgradedProtocol = protocol.ConsensusVersion("test-unupgrad
 const consensusTestUnupgradedToProtocol = protocol.ConsensusVersion("test-unupgradedto-protocol")
 
 func TestStoppedCatchupOnUnsupported(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}

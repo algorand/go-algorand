@@ -24,12 +24,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 const partitionRecoveryTime = 20 * time.Minute // If we hit step 9, worst case recovery time can be ~2^8 * 5 ~= 20 mins
 const inducePartitionTime = 6 * time.Second    // Try to minimize change of proceeding too many steps while stalled
 
 func TestBasicPartitionRecovery(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}
@@ -74,6 +77,8 @@ func TestBasicPartitionRecovery(t *testing.T) {
 }
 
 func TestPartitionRecoverySwapStartup(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}
@@ -94,6 +99,8 @@ func TestPartitionRecoverySwapStartup(t *testing.T) {
 }
 
 func TestPartitionRecoveryStaggerRestart(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}
@@ -155,6 +162,8 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFix
 }
 
 func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}
@@ -206,6 +215,8 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 }
 
 func TestPartitionHalfOffline(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}

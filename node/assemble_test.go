@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 var genesisHash = crypto.Digest{0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}
@@ -172,6 +173,8 @@ func (cl callbackLogger) Warnf(s string, args ...interface{}) {
 }
 
 func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	const numUsers = 100
 	expectingLog := false
 	baseLog := logging.TestingLog(t)

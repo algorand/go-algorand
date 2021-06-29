@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type SegmentTest struct {
@@ -32,6 +33,8 @@ type SegmentTest struct {
 }
 
 func TestMetricSegment(t *testing.T) {
+   testPartitioning.PartitionTest(t)
+
 	const initialSleepDuration = 10 * time.Millisecond
 	const maxSleepDuration = 4 * time.Second
 	done := false
