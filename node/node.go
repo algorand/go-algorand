@@ -188,7 +188,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	// create initial ledger, if it doesn't exist
 	err = os.Mkdir(genesisDir, 0700)
 	if err != nil && !os.IsExist(err) {
-		log.Errorf("Unable to create genesis directroy: %v", err)
+		log.Errorf("Unable to create genesis directory: %v", err)
 		return nil, err
 	}
 	var genalloc data.GenesisBalances
@@ -539,7 +539,7 @@ func (node *AlgorandFullNode) ListTxns(addr basics.Address, minRound basics.Roun
 	return result, nil
 }
 
-// GetTransaction looks for the required txID within with a specific account withing a range of rounds (inclusive) and
+// GetTransaction looks for the required txID within with a specific account within a range of rounds (inclusive) and
 // returns the SignedTxn and true iff it finds the transaction.
 func (node *AlgorandFullNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool) {
 	// start with the most recent round, and work backwards:

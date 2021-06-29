@@ -23,7 +23,7 @@ import (
 )
 
 // A proposalManager is a proposalMachine which applies relay rules to incoming
-// proposal-votes and proposal payloads, absorbes threshold events, and emits
+// proposal-votes and proposal payloads, absorbs threshold events, and emits
 // proposalCommittable events as proposals become committable.
 //
 // It handles the following type(s) of event: vote{Present,Verified},

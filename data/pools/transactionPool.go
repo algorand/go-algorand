@@ -48,7 +48,7 @@ import (
 // TransactionPool.AssembleBlock constructs a valid block for
 // proposal given a deadline.
 type TransactionPool struct {
-	// feePerByte is stored at the begining of this struct to ensure it has a 64 bit aligned address. This is needed as it's being used
+	// feePerByte is stored at the beginning of this struct to ensure it has a 64 bit aligned address. This is needed as it's being used
 	// with atomic operations which require 64 bit alignment on arm.
 	feePerByte uint64
 
@@ -127,7 +127,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 // poolAsmResults is used to syncronize the state of the block assembly process. The structure reading/writing is syncronized
 // via the pool.assemblyMu lock.
 type poolAsmResults struct {
-	// the ok variable indicates whther the assembly for the block roundStartedEvaluating was complete ( i.e. ok == true ) or
+	// the ok variable indicates whether the assembly for the block roundStartedEvaluating was complete ( i.e. ok == true ) or
 	// whether it's still in-progress.
 	ok    bool
 	blk   *ledger.ValidatedBlock
@@ -137,7 +137,7 @@ type poolAsmResults struct {
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
 	roundStartedEvaluating basics.Round
 	// assemblyCompletedOrAbandoned is *not* protected via the pool.assemblyMu lock and should be accessed only from the OnNewBlock goroutine.
-	// it's equivilent to the "ok" variable, and used for avoiding taking the lock.
+	// it's equivalent to the "ok" variable, and used for avoiding taking the lock.
 	assemblyCompletedOrAbandoned bool
 }
 
