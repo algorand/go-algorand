@@ -213,6 +213,7 @@ jobs:
     macos:
       xcode: 11.0.0
     steps:
+      - run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - checkout
       - prepare_go
       - generic_build
@@ -222,6 +223,7 @@ jobs:
       xcode: 11.0.0
     parallelism: 8
     steps:
+      - run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_shorttest:
           result_subdir: mac-amd64-short
