@@ -10,7 +10,12 @@
 
 set -e
 
-GOPATH=$(go env GOPATH)
+if $CIRCLECI; then
+  GOPATH=/home/circleci/.go_workspace;
+else
+  GOPATH=$(go env GOPATH)
+fi
+
 export GOPATH
 export GO111MODULE=on
 
