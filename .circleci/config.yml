@@ -239,6 +239,7 @@ jobs:
       TEST_RESULTS: /tmp/results/integration
     steps:
       - prepare_go
+      - run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - generic_integration:
           result_subdir: mac-amd64-integration
 
