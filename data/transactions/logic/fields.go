@@ -236,7 +236,7 @@ var txnFieldSpecs = []txnFieldSpec{
 
 // TxnaFieldNames are arguments to the 'txna' opcode
 // It is a subset of txn transaction fields so initialized here in-place
-var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String()}
+var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String(), Assets.String(), Applications.String()}
 
 // TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
 var TxnaFieldTypes = []StackType{
