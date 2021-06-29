@@ -81,10 +81,11 @@ commands:
             eval "$(~/gimme "${GOLANG_VERSION}")"
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-            PACKAGES="$(go list ./... | grep -v /go-algorand/test/ | circleci tests split --split-by=timings --timings-type=classname)"
+            PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
             export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-            echo "Testing the following packages:"
-            echo $PACKAGE_NAMES
+            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
+            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            export PARALLEL_FLAG="-p 1"
             gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
           path: /tmp/results
@@ -118,6 +119,8 @@ commands:
             export ALGOTEST=1
             export SHORTTEST=-short
             export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
+            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
+            export PARTITION_ID=$CIRCLE_NODE_INDEX
             test/scripts/run_integration_tests.sh
       - store_artifacts:
           path: /tmp/results

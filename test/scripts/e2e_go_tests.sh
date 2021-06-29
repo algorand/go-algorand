@@ -91,7 +91,7 @@ fi
 
 echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
 
-if [ "$CIRCLECI" != "" ]; then
+if [ "$USE_CIRCLECI_SPLIT" != "" ]; then
     PARALLEL_FLAG="-p 1"
     PACKAGES="$(go list ./... | circleci tests split --split-by=timings --timings-type=classname)"
     PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
