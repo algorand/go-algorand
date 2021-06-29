@@ -23,11 +23,11 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestChecksumAddress_Unmarshal(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
@@ -40,7 +40,7 @@ func TestChecksumAddress_Unmarshal(t *testing.T) {
 }
 
 func TestAddressChecksumMalformedWrongChecksum(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
@@ -52,7 +52,7 @@ func TestAddressChecksumMalformedWrongChecksum(t *testing.T) {
 }
 
 func TestAddressChecksumShort(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var address string
 	_, err := UnmarshalChecksumAddress(address)
@@ -60,7 +60,7 @@ func TestAddressChecksumShort(t *testing.T) {
 }
 
 func TestAddressChecksumMalformedWrongChecksumSpace(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
@@ -72,7 +72,7 @@ func TestAddressChecksumMalformedWrongChecksumSpace(t *testing.T) {
 }
 
 func TestAddressChecksumMalformedWrongAddress(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
@@ -84,7 +84,7 @@ func TestAddressChecksumMalformedWrongAddress(t *testing.T) {
 }
 
 func TestAddressChecksumMalformedWrongAddressSpaces(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	address := crypto.Hash([]byte("randomString"))
 	shortAddress := Address(address)
@@ -96,7 +96,7 @@ func TestAddressChecksumMalformedWrongAddressSpaces(t *testing.T) {
 }
 
 func TestAddressChecksumCanonical(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	addr := "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU"
 	nonCanonical := "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELV"
@@ -113,7 +113,7 @@ type TestOb struct {
 }
 
 func TestAddressMarshalUnmarshal(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var addr Address
 	crypto.RandBytes(addr[:])

@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 type telemetryURIUpdaterTest struct {
@@ -59,8 +59,7 @@ func (t *telemetryURIUpdaterTest) add(protocol, bootstrap string, addrs []string
 }
 
 func TestTelemetryURILookup(t *testing.T) {
-   testPartitioning.PartitionTest(t)
-
+	testPartitioning.PartitionTest(t)
 
 	// trivial success case.
 	uriUpdater := makeTelemetryURIUpdaterTest(config.Devnet)

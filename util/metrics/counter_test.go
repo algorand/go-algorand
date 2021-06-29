@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/stretchr/testify/require"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type CounterTest struct {
@@ -31,8 +31,7 @@ type CounterTest struct {
 }
 
 func TestMetricCounter(t *testing.T) {
-   testPartitioning.PartitionTest(t)
-
+	testPartitioning.PartitionTest(t)
 
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
@@ -78,7 +77,7 @@ func TestMetricCounter(t *testing.T) {
 }
 
 func TestMetricCounterFastInts(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),
@@ -125,7 +124,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 }
 
 func TestMetricCounterMixed(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	test := &CounterTest{
 		MetricTest: NewMetricTest(),

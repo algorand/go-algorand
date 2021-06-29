@@ -23,12 +23,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/stretchr/testify/require"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestConfigEmpty(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -51,7 +51,7 @@ func TestConfigEmpty(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 

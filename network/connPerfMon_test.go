@@ -25,7 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func makeMsgPool(N int, peers []Peer) (out []IncomingMessage) {
@@ -93,7 +93,7 @@ func BenchmarkConnMonitor(b *testing.B) {
 }
 
 func TestConnMonitorStageTiming(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	peers := []Peer{&wsPeer{}, &wsPeer{}, &wsPeer{}, &wsPeer{}}
 	msgPool := makeMsgPool(60000, peers)
@@ -131,7 +131,7 @@ func TestConnMonitorStageTiming(t *testing.T) {
 
 }
 func TestBucketsPruning(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	bucketsCount := 100
 	curTime := time.Now().UnixNano()

@@ -19,12 +19,12 @@ package logic
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/stretchr/testify/require"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestOpDocs(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
@@ -45,7 +45,7 @@ func TestOpDocs(t *testing.T) {
 }
 
 func TestOpGroupCoverage(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
@@ -69,7 +69,7 @@ func TestOpGroupCoverage(t *testing.T) {
 }
 
 func TestOpDoc(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	xd := OpDoc("txn")
 	require.NotEmpty(t, xd)
@@ -78,7 +78,7 @@ func TestOpDoc(t *testing.T) {
 }
 
 func TestOpImmediateNote(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	xd := OpImmediateNote("txn")
 	require.NotEmpty(t, xd)
@@ -87,7 +87,7 @@ func TestOpImmediateNote(t *testing.T) {
 }
 
 func TestOpDocExtra(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	xd := OpDocExtra("bnz")
 	require.NotEmpty(t, xd)
@@ -96,7 +96,7 @@ func TestOpDocExtra(t *testing.T) {
 }
 
 func TestOpAllCosts(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := OpAllCosts("+")
 	require.Len(t, a, 1)
@@ -110,7 +110,7 @@ func TestOpAllCosts(t *testing.T) {
 }
 
 func TestOnCompletionDescription(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	desc := OnCompletionDescription(0)
 	require.Equal(t, "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.", desc)
@@ -120,7 +120,7 @@ func TestOnCompletionDescription(t *testing.T) {
 }
 
 func TestFieldDocs(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	txnFields := TxnFieldDocs()
 	require.Greater(t, len(txnFields), 0)

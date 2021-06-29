@@ -23,11 +23,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestAccountsCanClose(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))

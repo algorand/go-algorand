@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/stretchr/testify/require"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type GaugeTest struct {
@@ -32,8 +32,7 @@ type GaugeTest struct {
 }
 
 func TestMetricGauge(t *testing.T) {
-   testPartitioning.PartitionTest(t)
-
+	testPartitioning.PartitionTest(t)
 
 	test := &GaugeTest{
 		MetricTest: NewMetricTest(),

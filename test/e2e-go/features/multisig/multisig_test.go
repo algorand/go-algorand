@@ -23,8 +23,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/stretchr/testify/require"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 // create a 2 out of 3 multisig address
@@ -32,7 +32,7 @@ import (
 // try to transact with 2 sigs: expect success
 // try to transact with 3 sigs: expect success
 func TestBasicMultisig(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -109,7 +109,7 @@ func TestBasicMultisig(t *testing.T) {
 
 // create a 0-of-3 multisig address: expect failure
 func TestZeroThreshold(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -138,7 +138,7 @@ func TestZeroThreshold(t *testing.T) {
 
 // create a 3-of-0 multisig address: expect failure
 func TestZeroSigners(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Parallel()
 
@@ -163,7 +163,7 @@ func TestZeroSigners(t *testing.T) {
 // where the valid keys are all the same
 // then try to transact
 func TestDuplicateKeys(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Parallel()
 

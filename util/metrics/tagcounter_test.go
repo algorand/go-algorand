@@ -22,12 +22,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/stretchr/testify/require"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestTagCounter(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	tags := make([]string, 17)
 	for i := range tags {

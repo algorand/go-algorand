@@ -17,9 +17,9 @@
 package codecs
 
 import (
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/stretchr/testify/require"
 	"testing"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type testValue struct {
@@ -29,7 +29,7 @@ type testValue struct {
 }
 
 func TestIsDefaultValue(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 

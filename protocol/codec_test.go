@@ -21,8 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/stretchr/testify/require"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type TestArray [4]uint64
@@ -55,7 +55,7 @@ type HelperStruct2 struct {
 }
 
 func TestOmitEmpty(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var x TestStruct
 	enc := EncodeReflect(&x)
@@ -63,7 +63,7 @@ func TestOmitEmpty(t *testing.T) {
 }
 
 func TestEncodeOrder(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var a struct {
 		A int
@@ -122,7 +122,7 @@ type InlineParent struct {
 }
 
 func TestEncodeInline(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := InlineChild{X: 5}
 	b := InlineParent{InlineChild: a}
@@ -136,7 +136,7 @@ type embeddedMsgp struct {
 }
 
 func TestEncodeEmbedded(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var x embeddedMsgp
 
@@ -154,7 +154,7 @@ func TestEncodeEmbedded(t *testing.T) {
 }
 
 func TestEncodeJSON(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	type ar []string
 	type mp struct {

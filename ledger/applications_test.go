@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func getRandomAddress(a *require.Assertions) basics.Address {
@@ -136,7 +136,7 @@ func newCowMock(creatables []modsData) *mockCowForLogicLedger {
 }
 
 func TestLogicLedgerMake(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -165,7 +165,7 @@ func TestLogicLedgerMake(t *testing.T) {
 }
 
 func TestLogicLedgerBalances(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -185,7 +185,7 @@ func TestLogicLedgerBalances(t *testing.T) {
 }
 
 func TestLogicLedgerGetters(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -213,7 +213,7 @@ func TestLogicLedgerGetters(t *testing.T) {
 }
 
 func TestLogicLedgerAsset(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -257,7 +257,7 @@ func TestLogicLedgerAsset(t *testing.T) {
 }
 
 func TestLogicLedgerGetKey(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -300,7 +300,7 @@ func TestLogicLedgerGetKey(t *testing.T) {
 }
 
 func TestLogicLedgerSetKey(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -330,7 +330,7 @@ func TestLogicLedgerSetKey(t *testing.T) {
 }
 
 func TestLogicLedgerDelKey(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -364,7 +364,7 @@ func TestLogicLedgerDelKey(t *testing.T) {
 // 2) writing into empty (opted-in) local state's KeyValue works after reloading
 // Hardcoded values are from commit 9a0b439 (pre app refactor commit)
 func TestAppAccountDataStorage(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 	source := `#pragma version 2
@@ -591,7 +591,7 @@ return`
 }
 
 func TestAppAccountDelta(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 	source := `#pragma version 2
@@ -870,7 +870,7 @@ return`
 }
 
 func TestAppEmptyAccountsLocal(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 	source := `#pragma version 2
@@ -1022,7 +1022,7 @@ return`
 }
 
 func TestAppEmptyAccountsGlobal(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 	source := `#pragma version 2
@@ -1155,7 +1155,7 @@ return`
 }
 
 func TestAppAccountDeltaIndicesCompatibility1(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	source := `#pragma version 2
 txn ApplicationID
@@ -1178,7 +1178,7 @@ int 1
 }
 
 func TestAppAccountDeltaIndicesCompatibility2(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	source := `#pragma version 2
 txn ApplicationID
@@ -1201,7 +1201,7 @@ int 1
 }
 
 func TestAppAccountDeltaIndicesCompatibility3(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	source := `#pragma version 2
 txn ApplicationID

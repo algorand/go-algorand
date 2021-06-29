@@ -30,8 +30,8 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/algorand/go-algorand/util/execpool"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
@@ -107,7 +107,7 @@ func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transa
 }
 
 func TestSignedPayment(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -130,7 +130,7 @@ func TestSignedPayment(t *testing.T) {
 }
 
 func TestTxnValidationEncodeDecode(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
@@ -152,7 +152,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 }
 
 func TestTxnValidationEmptySig(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
@@ -175,7 +175,7 @@ func TestTxnValidationEmptySig(t *testing.T) {
 const ccProto = protocol.ConsensusVersion("test-compact-cert-enabled")
 
 func TestTxnValidationCompactCert(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	proto.CompactCertRounds = 128
@@ -245,7 +245,7 @@ func TestTxnValidationCompactCert(t *testing.T) {
 }
 
 func TestDecodeNil(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// This is a regression test for improper decoding of a nil SignedTxn.
 	// This is a subtle case because decoding a msgpack nil does not run
@@ -263,7 +263,7 @@ func TestDecodeNil(t *testing.T) {
 }
 
 func TestPaysetGroups(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
 	blkHdr := bookkeeping.BlockHeader{

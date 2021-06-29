@@ -25,11 +25,11 @@ import (
 	"github.com/algorand/go-algorand/daemon/kmd/client"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestServerStartsStopsSuccessfully(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -45,7 +45,7 @@ func TestServerStartsStopsSuccessfully(t *testing.T) {
 }
 
 func TestBadAuthFails(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -66,7 +66,7 @@ func TestBadAuthFails(t *testing.T) {
 }
 
 func TestGoodAuthSucceeds(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()

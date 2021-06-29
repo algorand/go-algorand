@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 type assetIDParams struct {
@@ -54,7 +54,7 @@ func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx
 }
 
 func TestAssetValidRounds(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -187,7 +187,7 @@ func TestAssetValidRounds(t *testing.T) {
 }
 
 func TestAssetConfig(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	if testing.Short() {
 		t.Skip()
@@ -424,7 +424,7 @@ func TestAssetConfig(t *testing.T) {
 }
 
 func TestAssetInformation(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -518,7 +518,7 @@ func TestAssetInformation(t *testing.T) {
 }
 
 func TestAssetGroupCreateSendDestroy(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -661,7 +661,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 }
 
 func TestAssetSend(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
@@ -910,7 +910,7 @@ func TestAssetSend(t *testing.T) {
 }
 
 func TestAssetCreateWaitRestartDelete(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a, fixture, client, account0 := setupTestAndNetwork(t, "", nil)
 	defer fixture.Shutdown()
@@ -973,7 +973,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 }
 
 func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	if testing.Short() {
 		t.Skip()

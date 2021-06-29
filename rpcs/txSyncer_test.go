@@ -36,8 +36,8 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/algorand/go-algorand/util/bloom"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 type mockPendingTxAggregate struct {
@@ -164,7 +164,7 @@ func makeMockClientAggregator(t *testing.T, failWithNil bool, failWithError bool
 }
 
 func TestSyncFromClient(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	clientPool := makeMockPendingTxAggregate(2)
 	serverPool := makeMockPendingTxAggregate(1)
@@ -180,7 +180,7 @@ func TestSyncFromClient(t *testing.T) {
 }
 
 func TestSyncFromUnsupportedClient(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
 	runner := mockRunner{failWithNil: true, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
@@ -195,7 +195,7 @@ func TestSyncFromUnsupportedClient(t *testing.T) {
 }
 
 func TestSyncFromClientAndQuit(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
 	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
@@ -210,8 +210,7 @@ func TestSyncFromClientAndQuit(t *testing.T) {
 }
 
 func TestSyncFromClientAndError(t *testing.T) {
-   testPartitioning.PartitionTest(t)
-
+	testPartitioning.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
 	runner := mockRunner{failWithNil: false, failWithError: true, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
@@ -225,7 +224,7 @@ func TestSyncFromClientAndError(t *testing.T) {
 }
 
 func TestSyncFromClientAndTimeout(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
 	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
@@ -240,7 +239,7 @@ func TestSyncFromClientAndTimeout(t *testing.T) {
 }
 
 func TestSync(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(1)
 	nodeA := basicRPCNode{}
@@ -262,7 +261,7 @@ func TestSync(t *testing.T) {
 }
 
 func TestNoClientsSync(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
 	clientAgg := mockClientAggregator{peers: []network.Peer{}}
@@ -275,7 +274,7 @@ func TestNoClientsSync(t *testing.T) {
 }
 
 func TestStartAndStop(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Skip("TODO: replace this test in new client paradigm")
 	pool := makeMockPendingTxAggregate(3)
@@ -306,7 +305,7 @@ func TestStartAndStop(t *testing.T) {
 }
 
 func TestStartAndQuit(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	pool := makeMockPendingTxAggregate(3)
 	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}

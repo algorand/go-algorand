@@ -34,7 +34,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]byte, last64KIndex int) {
@@ -140,7 +140,7 @@ func BenchmarkRestoringFromCatchpointFile(b *testing.B) {
 }
 
 func TestCatchupAcessorFoo(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	log := logging.TestingLog(t)
 	dbBaseFileName := t.Name()
@@ -195,7 +195,7 @@ func TestCatchupAcessorFoo(t *testing.T) {
 }
 
 func TestBuildMerkleTrie(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// setup boilerplate
 	log := logging.TestingLog(t)
@@ -294,7 +294,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 // TODO: blockEnsureSingleBlock called from EnsureFirstBlock()
 
 func TestCatchupAccessorBlockdb(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// setup boilerplate
 	log := logging.TestingLog(t)
@@ -320,7 +320,7 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 }
 
 func TestVerifyCatchpoint(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// setup boilerplate
 	log := logging.TestingLog(t)

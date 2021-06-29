@@ -26,18 +26,18 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestEmptyEncoding(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var ub BalanceRecord
 	require.Equal(t, 1, len(protocol.Encode(&ub)))
 }
 
 func TestRewards(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	accountAlgos := []MicroAlgos{{Raw: 0}, {Raw: 8000}, {Raw: 13000}, {Raw: 83000}}
@@ -59,7 +59,7 @@ func TestRewards(t *testing.T) {
 }
 
 func TestWithUpdatedRewardsPanics(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	t.Run("AlgoPanic", func(t *testing.T) {
@@ -106,7 +106,7 @@ func makeString(len int) string {
 }
 
 func TestEncodedAccountDataSize(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
@@ -212,7 +212,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 }
 
 func TestEncodedAccountAllocationBounds(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds

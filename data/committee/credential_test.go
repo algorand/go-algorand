@@ -23,13 +23,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 // test SelfCheckSelected (should always be true, with current testingenv parameters)
 // and then set balance to 0 and test not SelfCheckSelected
 func TestAccountSelected(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	N := 1
 	for i := 0; i < N; i++ {
@@ -89,7 +89,7 @@ func TestAccountSelected(t *testing.T) {
 }
 
 func TestRichAccountSelected(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 10, 2000)
 
@@ -142,7 +142,7 @@ func TestRichAccountSelected(t *testing.T) {
 }
 
 func TestPoorAccountSelectedLeaders(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	N := 2
 	failsLeaders := 0
@@ -187,7 +187,7 @@ func TestPoorAccountSelectedLeaders(t *testing.T) {
 }
 
 func TestPoorAccountSelectedCommittee(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	N := 1
 	committee := uint64(0)
@@ -227,7 +227,7 @@ func TestPoorAccountSelectedCommittee(t *testing.T) {
 }
 
 func TestNoMoneyAccountNotSelected(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	N := 1
 	for i := 0; i < N; i++ {
@@ -260,7 +260,7 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 }
 
 func TestLeadersSelected(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
 
@@ -292,7 +292,7 @@ func TestLeadersSelected(t *testing.T) {
 }
 
 func TestCommitteeSelected(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
 
@@ -324,7 +324,7 @@ func TestCommitteeSelected(t *testing.T) {
 }
 
 func TestAccountNotSelected(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
 	period := Period(0)

@@ -8,12 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/algorand/msgp/msgp"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestMarshalUnmarshalCredential(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	v := Credential{}
 	bts := v.MarshalMsg(nil)
@@ -35,7 +35,7 @@ func TestMarshalUnmarshalCredential(t *testing.T) {
 }
 
 func TestRandomizedEncodingCredential(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &Credential{})
 }
@@ -76,7 +76,7 @@ func BenchmarkUnmarshalCredential(b *testing.B) {
 }
 
 func TestMarshalUnmarshalSeed(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	v := Seed{}
 	bts := v.MarshalMsg(nil)
@@ -98,7 +98,7 @@ func TestMarshalUnmarshalSeed(t *testing.T) {
 }
 
 func TestRandomizedEncodingSeed(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &Seed{})
 }
@@ -139,7 +139,7 @@ func BenchmarkUnmarshalSeed(b *testing.B) {
 }
 
 func TestMarshalUnmarshalUnauthenticatedCredential(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	v := UnauthenticatedCredential{}
 	bts := v.MarshalMsg(nil)
@@ -161,7 +161,7 @@ func TestMarshalUnmarshalUnauthenticatedCredential(t *testing.T) {
 }
 
 func TestRandomizedEncodingUnauthenticatedCredential(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &UnauthenticatedCredential{})
 }
@@ -202,7 +202,7 @@ func BenchmarkUnmarshalUnauthenticatedCredential(b *testing.B) {
 }
 
 func TestMarshalUnmarshalhashableCredential(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	v := hashableCredential{}
 	bts := v.MarshalMsg(nil)
@@ -224,7 +224,7 @@ func TestMarshalUnmarshalhashableCredential(t *testing.T) {
 }
 
 func TestRandomizedEncodinghashableCredential(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	protocol.RunEncodingTest(t, &hashableCredential{})
 }

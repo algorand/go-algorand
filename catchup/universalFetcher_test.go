@@ -41,7 +41,6 @@ import (
 func TestUGetBlockWs(t *testing.T) {
 	testPartitioning.PartitionTest(t)
 
-
 	cfg := config.GetDefaultLocal()
 
 	ledger, next, b, err := buildTestLedger(t, bookkeeping.Block{})
@@ -83,7 +82,6 @@ func TestUGetBlockWs(t *testing.T) {
 // TestUGetBlockHTTP tests the universal fetcher http peer case
 func TestUGetBlockHTTP(t *testing.T) {
 	testPartitioning.PartitionTest(t)
-
 
 	cfg := config.GetDefaultLocal()
 
@@ -145,7 +143,6 @@ func TestUGetBlockUnsupported(t *testing.T) {
 func TestProcessBlockBytesErrors(t *testing.T) {
 	testPartitioning.PartitionTest(t)
 
-
 	blk := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
 			Round: basics.Round(22),
@@ -177,7 +174,6 @@ func TestProcessBlockBytesErrors(t *testing.T) {
 // TestRequestBlockBytesErrors checks the error handling in requestBlockBytes
 func TestRequestBlockBytesErrors(t *testing.T) {
 	testPartitioning.PartitionTest(t)
-
 
 	cfg := config.GetDefaultLocal()
 
@@ -244,7 +240,6 @@ func (thh *TestHTTPHandler) ServeHTTP(response http.ResponseWriter, request *htt
 // TestGetBlockBytesHTTPErrors tests the errors reported from getblockBytes for http peer
 func TestGetBlockBytesHTTPErrors(t *testing.T) {
 	testPartitioning.PartitionTest(t)
-
 
 	cfg := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}

@@ -23,7 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 // this helper object creates threshold events
@@ -66,7 +66,7 @@ func makeVoteTrackerRoundZero() listener {
 }
 
 func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// goal: generate a next vote bottom quorum for the given period
 	// check that Cached is set properly. This is a private
@@ -133,7 +133,7 @@ func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
 
 // add value threshold only, make sure its returned in status
 func TestVoteTrackerPeriodValueStatus(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
@@ -154,7 +154,7 @@ func TestVoteTrackerPeriodValueStatus(t *testing.T) {
 
 // check seen no thresholds
 func TestVoteTrackerPeriodNoneSeen(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	b := testCaseBuilder{}
 	expectedStatus := nextThresholdStatusEvent{Bottom: false, Proposal: bottom}
@@ -170,7 +170,7 @@ func TestVoteTrackerPeriodNoneSeen(t *testing.T) {
 
 // check seen bottom threshold only
 func TestVoteTrackerPeriodBottomOnly(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
@@ -189,7 +189,7 @@ func TestVoteTrackerPeriodBottomOnly(t *testing.T) {
 
 // check seen both bottom and value threshodl
 func TestVoteTrackerPeriodValueAndBottom(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
@@ -213,7 +213,7 @@ func TestVoteTrackerPeriodValueAndBottom(t *testing.T) {
 /* VoteTrackerRound Tests */
 
 func TestVoteTrackerRoundUpdatesFreshest(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
@@ -233,7 +233,7 @@ func TestVoteTrackerRoundUpdatesFreshest(t *testing.T) {
 }
 
 func TestVoteTrackerRoundUpdatesFreshestNextOverSoft(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
@@ -259,7 +259,7 @@ func TestVoteTrackerRoundUpdatesFreshestNextOverSoft(t *testing.T) {
 }
 
 func TestVoteTrackerRoundUpdatesFreshestPeriod(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
@@ -285,7 +285,7 @@ func TestVoteTrackerRoundUpdatesFreshestPeriod(t *testing.T) {
 }
 
 func TestVoteTrackerRoundUpdatesFreshestBot(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
@@ -316,7 +316,7 @@ func TestVoteTrackerRoundUpdatesFreshestBot(t *testing.T) {
 }
 
 func TestVoteTrackerRoundForwardsVoteAccepted(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// check forwards vote accepted, and returns only a fresh bundle
 	// this is really a test on the composition of machines. We should build

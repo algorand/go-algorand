@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
@@ -87,7 +87,7 @@ func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int)
 }
 
 func TestArrayPhonebookAll(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
@@ -98,7 +98,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 }
 
 func TestArrayPhonebookUniform1(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
@@ -109,7 +109,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 }
 
 func TestArrayPhonebookUniform3(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
@@ -122,7 +122,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 // TestPhonebookExtension tests for extending different phonebooks with
 // addresses.
 func TestPhonebookExtension(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	setA := []string{"a"}
 	moreB := []string{"b"}
@@ -148,7 +148,7 @@ func extenderThread(th *phonebookImpl, more []string, wg *sync.WaitGroup, repeti
 }
 
 func TestThreadsafePhonebookExtension(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	set := []string{"a", "b", "c", "d", "e"}
 	more := []string{"f", "g", "h", "i", "j"}
@@ -174,7 +174,7 @@ func threadTestThreadsafePhonebookExtensionLong(wg *sync.WaitGroup, ph *phoneboo
 }
 
 func TestThreadsafePhonebookExtensionLong(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	if testing.Short() {
 		t.SkipNow()
@@ -196,7 +196,7 @@ func TestThreadsafePhonebookExtensionLong(t *testing.T) {
 }
 
 func TestMultiPhonebook(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
 	pha := make([]string, 0)
@@ -217,7 +217,7 @@ func TestMultiPhonebook(t *testing.T) {
 }
 
 func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
 	pha := make([]string, 0)
@@ -238,7 +238,7 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 }
 
 func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	entries := MakePhonebook(3, 200*time.Millisecond).(*phonebookImpl)
 	addr1 := "addrABC"
@@ -334,7 +334,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 }
 
 func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	entries := MakePhonebook(3, 2*time.Millisecond).(*phonebookImpl)
 	addr1 := "addrABC"
@@ -388,7 +388,7 @@ func BenchmarkThreadsafePhonebook(b *testing.B) {
 // TestPhonebookRoles tests that the filtering by roles for different
 // phonebooks entries works as expected.
 func TestPhonebookRoles(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	relaysSet := []string{"relay1", "relay2", "relay3"}
 	archiverSet := []string{"archiver1", "archiver2", "archiver3"}

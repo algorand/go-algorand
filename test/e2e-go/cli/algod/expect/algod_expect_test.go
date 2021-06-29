@@ -24,7 +24,7 @@ import (
 
 // TestAlgodWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/algod/expect directory
 func TestAlgodWithExpect(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	et := fixtures.MakeExpectTest(t)
 	et.Run()

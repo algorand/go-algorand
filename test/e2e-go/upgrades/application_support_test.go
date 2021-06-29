@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 // consensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
@@ -71,7 +71,7 @@ func makeApplicationUpgradeConsensus(t *testing.T) (appConsensus config.Consensu
 // to a version that supports applications. It verify that prior to supporting applications, the node would not accept
 // any application transaction and after the upgrade is complete, it would support that.
 func TestApplicationsUpgradeOverREST(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	smallLambdaMs := 500
 	consensus := makeApplicationUpgradeConsensus(t)
@@ -301,7 +301,7 @@ int 1
 // to a version that supports applications. It verify that prior to supporting applications, the node would not accept
 // any application transaction and after the upgrade is complete, it would support that.
 func TestApplicationsUpgradeOverGossip(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	smallLambdaMs := 500

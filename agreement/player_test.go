@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 var playerTracer tracer
@@ -426,7 +426,7 @@ func testPlayerSetup() (player, rootRouter, testAccountData, testBlockFactory, L
 }
 
 func TestPlayerSynchronous(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	player, router, accs, f, ledger := testPlayerSetup()
 
@@ -436,7 +436,7 @@ func TestPlayerSynchronous(t *testing.T) {
 }
 
 func TestPlayerOffsetStart(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	player, router, accs, f, ledger := testPlayerSetup()
 
@@ -456,7 +456,7 @@ func TestPlayerOffsetStart(t *testing.T) {
 }
 
 func TestPlayerLateBlockProposalPeriod0(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	player, router, accs, f, ledger := testPlayerSetup()
 
@@ -511,7 +511,7 @@ func setupP(t *testing.T, r round, p period, s step) (plyr *player, pMachine ioA
 
 // ISV = Issue Soft Vote
 func TestPlayerISVDoesNotSoftVoteBottom(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// every soft vote is associated with a proposalValue != bottom.
 	const r = round(209)
@@ -537,7 +537,7 @@ func TestPlayerISVDoesNotSoftVoteBottom(t *testing.T) {
 }
 
 func TestPlayerISVVoteForStartingValue(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// if we see a next value quorum, and no next bottom quorum, vote for that value regardless
 	// every soft vote is associated with a proposalValue != bottom.
@@ -582,7 +582,7 @@ func TestPlayerISVVoteForStartingValue(t *testing.T) {
 }
 
 func TestPlayerISVVoteNoVoteSansProposal(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// if we see no proposal, even if we see a next-value bottom quorum, do not issue a soft vote
 
@@ -635,7 +635,7 @@ func TestPlayerISVVoteNoVoteSansProposal(t *testing.T) {
 }
 
 func TestPlayerISVVoteForReProposal(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// even if we saw bottom, if we see reproposal, and a next value quorum, vote for it
 	// why do reproposals need to be associated with next value quorums? (instead of just a next
@@ -724,7 +724,7 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 }
 
 func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// if there's no next value quorum, don't support the reproposal
 	const r = round(209)
@@ -784,7 +784,7 @@ func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
 
 // ICV = Issue Cert Vote
 func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// basic cert vote check.
 	// This also tests cert vote even if freeze timer has not yet fired
@@ -858,7 +858,7 @@ func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
 }
 
 func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// Check cert voting when soft bundle is received
 	// before a proposal payload. Should still generate cert vote.
@@ -930,7 +930,7 @@ func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
 }
 
 func TestPlayerICVOnSoftThresholdThenPayloadNoProposalVote(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// if there's no proposal vote, a soft threshold should still trigger a cert vote
 	const r = round(12)
@@ -984,7 +984,7 @@ func TestPlayerICVOnSoftThresholdThenPayloadNoProposalVote(t *testing.T) {
 }
 
 func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(12)
 	const p = period(1)
@@ -1041,7 +1041,7 @@ func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
 }
 
 func TestPlayerICVPanicOnSoftBottomThreshold(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(209)
 	const p = period(1)
@@ -1075,7 +1075,7 @@ func TestPlayerICVPanicOnSoftBottomThreshold(t *testing.T) {
 
 // FF = Fast Forwarding
 func TestPlayerFFSoftThreshold(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// future periods
 	const r = round(201221)
@@ -1115,7 +1115,7 @@ func TestPlayerFFSoftThreshold(t *testing.T) {
 }
 
 func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// future periods
 	// must also cert vote
@@ -1188,7 +1188,7 @@ func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
 }
 
 func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// should cert vote after fast forwarding due to soft bundle, if we see late payload
 	const r = round(201221)
@@ -1260,7 +1260,7 @@ func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
 }
 
 func TestPlayerFFNextThresholdBottom(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// Set up a composed test machine starting at period 0
 	const r = round(209)
@@ -1296,7 +1296,7 @@ func TestPlayerFFNextThresholdBottom(t *testing.T) {
 }
 
 func TestPlayerFFNextThresholdValue(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// Set up a composed test machine starting at period 0
 	const r = round(209)
@@ -1332,7 +1332,7 @@ func TestPlayerFFNextThresholdValue(t *testing.T) {
 }
 
 func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// thresholds/bundles with p_k < p are useless and should not cause any logic
 	// (though, in the process of generating the threshold, it should update cached next bundle)
@@ -1421,7 +1421,7 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 // Proposals
 // Contract: player should not propose unless it sees valid proof of proposal safety
 func TestPlayerProposesBottomBundle(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// sanity check that player actually proposes something
 	// player should create a new proposal
@@ -1461,7 +1461,7 @@ func TestPlayerProposesBottomBundle(t *testing.T) {
 }
 
 func TestPlayerProposesNewRound(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// player should create a new proposal on new round
 	const r = round(209)
@@ -1525,7 +1525,7 @@ func TestPlayerProposesNewRound(t *testing.T) {
 }
 
 func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// player should create a new proposal on new round
 	const r = round(209)
@@ -1580,7 +1580,7 @@ func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
 }
 
 func TestPlayerReproposesNextValueBundleWithoutPayload(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// Even having not seen the payload, player should still repropose
 	const r = round(209)
@@ -1624,7 +1624,7 @@ func TestPlayerReproposesNextValueBundleWithoutPayload(t *testing.T) {
 }
 
 func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// player should forward the proposal payload, forwad freshest bundle, and broadcast a reproposal vote.
 	// which comes from the previous period. (has period set to p - 1)
@@ -1725,7 +1725,7 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 
 // Commitment
 func TestPlayerCommitsCertThreshold(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(20239)
 	const p = period(1001)
@@ -1793,7 +1793,7 @@ const testPartitionPeriod = 3
 var testPartitionStep = partitionStep
 
 func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// let's just fire a bunch of timeouts
 	const r = round(20239)
@@ -1856,7 +1856,7 @@ func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 }
 
 func TestPlayerPropagatesProposalPayload(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// if a player receives a payload from the network, it should relay it.
 	const r = round(209)
@@ -1893,7 +1893,7 @@ func TestPlayerPropagatesProposalPayload(t *testing.T) {
 }
 
 func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// if a player receives a PayloadVerified event with its own payload, it should relay it.
 	const r = round(209)
@@ -1930,7 +1930,7 @@ func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
 }
 
 func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// if a player receives a proposal payload for a future round, it should still
 	// propagate it at some point.
@@ -1976,7 +1976,7 @@ func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
 }
 
 func TestPlayerRePropagatesProposalPayload(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// if player broadcasts a non-bottom freshest bundle during recovery/resynch, broadcast the
 	// associated proposal payload. note this is distinct from relaying the payload
@@ -2164,7 +2164,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 }
 
 func TestPlayerPropagatesProposalVote(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(209)
 	_, pM, helper := setupP(t, r, 0, soft)
@@ -2188,7 +2188,7 @@ func TestPlayerPropagatesProposalVote(t *testing.T) {
 }
 
 func TestPlayerPropagatesSoftVote(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(209)
 	_, pM, helper := setupP(t, r, 0, soft)
@@ -2212,7 +2212,7 @@ func TestPlayerPropagatesSoftVote(t *testing.T) {
 }
 
 func TestPlayerPropagatesCertVote(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(209)
 	_, pM, helper := setupP(t, r, 0, cert)
@@ -2238,7 +2238,7 @@ func TestPlayerPropagatesCertVote(t *testing.T) {
 // Malformed Messages
 // check both proposals, proposal payloads, and votes, bundles
 func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(201221)
 	const p = period(0)
@@ -2277,7 +2277,7 @@ func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
 }
 
 func TestPlayerIgnoresMalformedPayload(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(201221)
 	const p = period(0)
@@ -2316,7 +2316,7 @@ func TestPlayerIgnoresMalformedPayload(t *testing.T) {
 }
 
 func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(201221)
 	const p = period(0)
@@ -2356,7 +2356,7 @@ func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
 }
 
 func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(201221)
 	const p = period(0)
@@ -2396,7 +2396,7 @@ func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
 
 // Helper Sanity Checks
 func TestPlayerRequestsVoteVerification(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(201221)
 	const p = period(0)
@@ -2419,7 +2419,7 @@ func TestPlayerRequestsVoteVerification(t *testing.T) {
 }
 
 func TestPlayerRequestsProposalVoteVerification(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(1)
 	const p = period(0)
@@ -2442,7 +2442,7 @@ func TestPlayerRequestsProposalVoteVerification(t *testing.T) {
 }
 
 func TestPlayerRequestsBundleVerification(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(201221)
 	const p = period(0)
@@ -2467,7 +2467,7 @@ func TestPlayerRequestsBundleVerification(t *testing.T) {
 
 // Payload Pipelining
 func TestPlayerRequestsPayloadVerification(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(201221)
 	const p = period(0)
@@ -2504,7 +2504,7 @@ func TestPlayerRequestsPayloadVerification(t *testing.T) {
 }
 
 func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(201221)
 	const p = period(0)
@@ -2599,7 +2599,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 
 // Round pipelining
 func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// make sure we stage a pipelined soft threshold after entering new round
 	const r = round(20)
@@ -2713,7 +2713,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 }
 
 func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// should not ignore cert thresholds from previous period in same round, if it
 	// was saved as freshest threshold
@@ -2789,7 +2789,7 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 }
 
 func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(20)
 	const p = period(0)
@@ -2824,7 +2824,7 @@ func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
 }
 
 func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// if player has pinned a block, then sees a cert threshold, it should commit
 	const r = round(20)
@@ -2900,7 +2900,7 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 }
 
 func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// check that ledger gets a hint to stage digest
 	const r = round(20)
@@ -2936,7 +2936,7 @@ func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
 }
 
 func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// check that ledger gets a hint to stage digest
 	const r = round(20)
@@ -2972,7 +2972,7 @@ func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
 }
 
 func TestPlayer_CertThresholdFastForwards(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(20)
 	const p = period(0)
@@ -3012,7 +3012,7 @@ func TestPlayer_CertThresholdFastForwards(t *testing.T) {
 }
 
 func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(20)
 	const p = period(0)
@@ -3077,7 +3077,7 @@ func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) 
 }
 
 func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	const r = round(20)
 	const p = period(0)
@@ -3135,7 +3135,7 @@ func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
 }
 
 func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// a white box test that checks the pinned value is relayed even it is not staged in the period corresponding to the freshest bundle
 	const r = round(209)

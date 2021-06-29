@@ -242,7 +242,6 @@ func TestFindMissingPeer(t *testing.T) {
 func TestHistoricData(t *testing.T) {
 	testPartitioning.PartitionTest(t)
 
-
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
 
@@ -306,7 +305,6 @@ func TestHistoricData(t *testing.T) {
 
 func TestPeersDownloadFailed(t *testing.T) {
 	testPartitioning.PartitionTest(t)
-
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
@@ -384,7 +382,6 @@ func TestPeersDownloadFailed(t *testing.T) {
 func TestPenalty(t *testing.T) {
 	testPartitioning.PartitionTest(t)
 
-
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
 
@@ -442,7 +439,6 @@ func TestPenalty(t *testing.T) {
 // TestPeerDownloadDurationToRank tests all the cases handled by peerDownloadDurationToRank
 func TestPeerDownloadDurationToRank(t *testing.T) {
 	testPartitioning.PartitionTest(t)
-
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
@@ -519,7 +515,6 @@ func TestFullResetRequestPenalty(t *testing.T) {
 func TestClassUpperBound(t *testing.T) {
 	testPartitioning.PartitionTest(t)
 
-
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}}
 	pClass := peerClass{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers}
 	peerSelector := makePeerSelector(
@@ -554,7 +549,6 @@ func TestClassUpperBound(t *testing.T) {
 func TestClassLowerBound(t *testing.T) {
 	testPartitioning.PartitionTest(t)
 
-
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}}
 	pClass := peerClass{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers}
 	peerSelector := makePeerSelector(
@@ -583,7 +577,6 @@ func TestClassLowerBound(t *testing.T) {
 // TestEviction tests that the peer is evicted after several download failures, and it handles same address for different peer classes
 func TestEvictionAndUpgrade(t *testing.T) {
 	testPartitioning.PartitionTest(t)
-
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "a1"}}

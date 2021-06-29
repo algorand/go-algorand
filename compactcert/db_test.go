@@ -28,8 +28,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/algorand/go-algorand/util/db"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func dbOpenTestRand(t testing.TB, inMemory bool, rnd uint64) (db.Pair, string) {
@@ -49,7 +49,7 @@ func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 }
 
 func TestPendingSigDB(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	dbs, _ := dbOpenTest(t, true)
 	defer dbs.Close()

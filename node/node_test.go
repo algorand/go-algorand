@@ -37,10 +37,10 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 var expectedAgreementTime = 2*config.Protocol.BigLambda + config.Protocol.SmallLambda + config.Consensus[protocol.ConsensusCurrentVersion].AgreementFilterTimeout + 2*time.Second
@@ -178,7 +178,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 }
 
 func TestSyncingFullNode(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Skip("This is failing randomly again - PLEASE FIX!")
 
@@ -237,7 +237,7 @@ func TestSyncingFullNode(t *testing.T) {
 }
 
 func TestInitialSync(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Skip("flaky TestInitialSync ")
 
@@ -272,7 +272,7 @@ func TestInitialSync(t *testing.T) {
 }
 
 func TestSimpleUpgrade(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Skip("Randomly failing: node_test.go:~330 : no block notification for account. Re-enable after agreement bug-fix pass")
 
@@ -423,7 +423,7 @@ func delayStartNode(node *AlgorandFullNode, peers []*AlgorandFullNode, delay tim
 }
 
 func TestStatusReport_TimeSinceLastRound(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	type fields struct {
 		LastRoundTimestamp time.Time
@@ -481,7 +481,7 @@ func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interfac
 
 // TestMismatchingGenesisDirectoryPermissions tests to see that the os.MkDir check we have in MakeFull works as expected. It tests both the return error as well as the logged error.
 func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	testDirectroy, err := ioutil.TempDir(os.TempDir(), t.Name())
 	require.NoError(t, err)

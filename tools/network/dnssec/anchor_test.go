@@ -19,12 +19,12 @@ package dnssec
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/stretchr/testify/require"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestParseRootTrustAnchor(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 	an1, err := makeRootTrustAnchor(rootAnchorXML)

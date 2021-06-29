@@ -27,11 +27,11 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestTxnMerkleElemHash(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var tme txnMerkleElem
 	crypto.RandBytes(tme.stib.SignedTxn.Txn.Header.Sender[:])
@@ -39,7 +39,7 @@ func TestTxnMerkleElemHash(t *testing.T) {
 }
 
 func TestTxnMerkle(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	for ntxn := uint64(0); ntxn < 128; ntxn++ {
 		var b Block

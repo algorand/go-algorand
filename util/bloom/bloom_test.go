@@ -16,11 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestBitset(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	f := New(1024, 4, 1234)
 	for i := uint32(0); i < 1024; i++ {
@@ -35,7 +35,7 @@ func TestBitset(t *testing.T) {
 }
 
 func TestFilter(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	f := New(1024, 4, 1234)
 	if f.Test([]byte("foo")) {
@@ -48,7 +48,7 @@ func TestFilter(t *testing.T) {
 }
 
 func TestOptimal(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	numElementsCases := []int{2000, 20000, 200000}
 	fpRateCases := []float64{0.001, 0.00001, 0.0000001}
@@ -120,7 +120,7 @@ func (f *Filter) estimateFalsePositiveRate(numAdded uint32, numFP int) float64 {
 }
 
 func TestOptimalSize(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// These are the parameters we use in the Alpenhorn paper.
 	numElements := 150000
@@ -134,7 +134,7 @@ func TestOptimalSize(t *testing.T) {
 }
 
 func TestIncompressible(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	numElements := 150000
 	numBits, numHashes := Optimal(numElements, 1e-10)
@@ -156,7 +156,7 @@ func TestIncompressible(t *testing.T) {
 }
 
 func TestMarshalJSON(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	filter := New(1000, 6, 1234)
 	filter.Set([]byte("hello"))
@@ -198,7 +198,7 @@ func BenchmarkCreateLargeFilter(b *testing.B) {
 }
 
 func TestMaxHashes(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// These are the parameters we use in the Alpenhorn paper.
 	numElements := 150000
@@ -237,7 +237,7 @@ func TestMaxHashes(t *testing.T) {
 // unmarshaled data stream, we can still call Test safely. If the unmarshaling fails, that's ok.
 // This test was implemented as an attempt to ensure that the data member is always non-empty.
 func TestEmptyFilter(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	blm := New(200, 16, 1234)
 	marshaled, _ := blm.MarshalBinary()
@@ -253,7 +253,7 @@ func TestEmptyFilter(t *testing.T) {
 // TestBinaryMarshalLength tests various sizes of bloom filters and ensures that the encoded binary
 // size is equal to the one reported by BinaryMarshalLength.
 func TestBinaryMarshalLength(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	for _, elementCount := range []int{2, 16, 1024, 32768, 5101, 100237, 144539} {
 		for _, falsePositiveRate := range []float64{0.2, 0.1, 0.01, 0.001, 0.00001, 0.0000001} {
@@ -270,7 +270,7 @@ func TestBinaryMarshalLength(t *testing.T) {
 }
 
 func TestBloomFilterMemoryConsumption(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Run("Set", func(t *testing.T) {
 		N := 1000000
@@ -375,7 +375,7 @@ func BenchmarkBloomFilterTest(b *testing.B) {
 // TestBloomFilterReferenceHash ensure that we generate a bloom filter in a consistent way. This is important since we want to ensure that
 // this code is backward compatible.
 func TestBloomFilterReferenceHash(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	N := 3
 	sizeBits, numHashes := Optimal(N, 0.01)

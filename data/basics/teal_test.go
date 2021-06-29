@@ -24,11 +24,11 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestStateDeltaValid(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -85,7 +85,7 @@ func TestStateDeltaValid(t *testing.T) {
 }
 
 func TestStateDeltaValidV24(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -108,7 +108,7 @@ func TestStateDeltaValidV24(t *testing.T) {
 }
 
 func TestStateDeltaEqual(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -145,7 +145,7 @@ func TestStateDeltaEqual(t *testing.T) {
 }
 
 func TestEvalDeltaEqual(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 

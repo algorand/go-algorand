@@ -38,11 +38,10 @@ func PartitionTest(t *testing.T) {
 	}
 	name := t.Name()
 	nameNumber := stringToUint64(name)
-	if nameNumber % uint64(partitions) != uint64(partitionId) {
+	if nameNumber%uint64(partitions) != uint64(partitionId) {
 		t.Skip()
 	}
 }
-
 
 func stringToUint64(str string) uint64 {
 	sum := uint64(0)

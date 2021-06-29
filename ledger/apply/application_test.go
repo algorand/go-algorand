@@ -30,11 +30,11 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestApplicationCallFieldsEmpty(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -276,7 +276,7 @@ func (e *testEvaluator) InitLedger(balances Balances, appIdx basics.AppIndex, sc
 }
 
 func TestAppCallCloneEmpty(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -290,7 +290,7 @@ func TestAppCallCloneEmpty(t *testing.T) {
 }
 
 func TestAppCallGetParam(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -330,7 +330,7 @@ func TestAppCallGetParam(t *testing.T) {
 }
 
 func TestAppCallAddressByIndex(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -357,7 +357,7 @@ func TestAppCallAddressByIndex(t *testing.T) {
 }
 
 func TestAppCallCheckPrograms(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -397,7 +397,7 @@ func TestAppCallCheckPrograms(t *testing.T) {
 }
 
 func TestAppCallCreate(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -441,7 +441,7 @@ func TestAppCallCreate(t *testing.T) {
 
 // TestAppCallApplyCreate carefully tracks and validates balance record updates
 func TestAppCallApplyCreate(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -560,7 +560,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 // TestAppCallApplyCreateOptIn checks balance record fields without tracking substages
 func TestAppCallApplyCreateOptIn(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -607,7 +607,7 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 }
 
 func TestAppCallOptIn(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -682,7 +682,7 @@ func TestAppCallOptIn(t *testing.T) {
 }
 
 func TestAppCallClearState(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -838,7 +838,7 @@ func TestAppCallClearState(t *testing.T) {
 }
 
 func TestAppCallApplyCloseOut(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -922,7 +922,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 }
 
 func TestAppCallApplyUpdate(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -990,7 +990,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 }
 
 func TestAppCallApplyDelete(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -1058,7 +1058,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 }
 
 func TestAppCallApplyCreateClearState(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -1108,7 +1108,7 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 }
 
 func TestAppCallApplyCreateDelete(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 

@@ -40,8 +40,8 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var defaultConfig = config.GetDefaultLocal()
@@ -439,7 +439,6 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 func TestOnSwitchToUnSupportedProtocol1(t *testing.T) {
 	testPartitioning.PartitionTest(t)
 
-
 	lastRoundRemote := 5
 	lastRoundLocal := 0
 	roundWithSwitchOn := 0
@@ -458,7 +457,6 @@ func TestOnSwitchToUnSupportedProtocol1(t *testing.T) {
 // Test the interruption in "the rest" loop
 func TestOnSwitchToUnSupportedProtocol2(t *testing.T) {
 	testPartitioning.PartitionTest(t)
-
 
 	lastRoundRemote := 10
 	lastRoundLocal := 7
@@ -481,7 +479,6 @@ func TestOnSwitchToUnSupportedProtocol2(t *testing.T) {
 // enough rounds for the protocol upgrade notice.
 func TestOnSwitchToUnSupportedProtocol3(t *testing.T) {
 	testPartitioning.PartitionTest(t)
-
 
 	lastRoundRemote := 14
 	lastRoundLocal := 7
@@ -508,7 +505,6 @@ func TestOnSwitchToUnSupportedProtocol3(t *testing.T) {
 // an upgrade happens.
 func TestOnSwitchToUnSupportedProtocol4(t *testing.T) {
 	testPartitioning.PartitionTest(t)
-
 
 	lastRoundRemote := 14
 	lastRoundLocal := 7

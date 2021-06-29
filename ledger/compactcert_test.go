@@ -27,11 +27,11 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestValidateCompactCert(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var certHdr bookkeeping.BlockHeader
 	var cert compactcert.Cert
@@ -100,7 +100,7 @@ func TestValidateCompactCert(t *testing.T) {
 }
 
 func TestAcceptableCompactCertWeight(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var votersHdr bookkeeping.BlockHeader
 	var firstValid basics.Round
@@ -146,7 +146,7 @@ func TestAcceptableCompactCertWeight(t *testing.T) {
 }
 
 func TestCompactCertParams(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var votersHdr bookkeeping.BlockHeader
 	var hdr bookkeeping.BlockHeader

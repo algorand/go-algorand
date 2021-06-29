@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 var defaultTestMemoryConfig = MemoryConfig{
@@ -51,7 +51,7 @@ func verifyCacheNodeCount(t *testing.T, trie *Trie) {
 }
 
 func TestCacheEviction1(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var memoryCommitter InMemoryCommitter
 	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
@@ -75,7 +75,7 @@ func TestCacheEviction1(t *testing.T) {
 }
 
 func TestCacheEviction2(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var memoryCommitter InMemoryCommitter
 	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
@@ -104,7 +104,7 @@ func TestCacheEviction2(t *testing.T) {
 }
 
 func TestCacheEviction3(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var memoryCommitter InMemoryCommitter
 	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
@@ -192,7 +192,7 @@ func cacheEvictionFuzzer(t *testing.T, hashes []crypto.Digest, pageSize int64, e
 // TestCacheEvictionFuzzer generates bursts of random Add/Delete operations on the trie, and
 // testing the correctness of the cache internal buffers priodically.
 func TestCacheEvictionFuzzer(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// create 2000 hashes.
 	leafsCount := 2000
@@ -212,7 +212,7 @@ func TestCacheEvictionFuzzer(t *testing.T) {
 // TestCacheEvictionFuzzer generates bursts of random Add/Delete operations on the trie, and
 // testing the correctness of the cache internal buffers priodically.
 func TestCacheEvictionFuzzer2(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// create 1000 hashes.
 	leafsCount := 1000
@@ -234,7 +234,7 @@ func TestCacheEvictionFuzzer2(t *testing.T) {
 // delete a in-memory page during merkleTrieCache.commitTransaction(),
 // it's being deleted correctly.
 func TestCacheMidTransactionPageDeletion(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var memoryCommitter smallPageMemoryCommitter
 	memoryConfig := defaultTestMemoryConfig
@@ -321,7 +321,7 @@ func (mt *Trie) TestDeleteRollback(d []byte) (bool, error) {
 // delete a in-memory page during merkleTrieCache.rollbackTransaction(),
 // it's being deleted correctly.
 func TestCacheTransactionRollbackPageDeletion(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var memoryCommitter smallPageMemoryCommitter
 	memConfig := defaultTestMemoryConfig
@@ -364,7 +364,7 @@ func TestCacheTransactionRollbackPageDeletion(t *testing.T) {
 // delete a in-memory page during merkleTrieCache.deleteNode(),
 // it's being deleted correctly.
 func TestCacheDeleteNodeMidTransaction(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var memoryCommitter smallPageMemoryCommitter
 	memConfig := defaultTestMemoryConfig
@@ -399,7 +399,7 @@ func TestCacheDeleteNodeMidTransaction(t *testing.T) {
 // TestCachePageLoading ensures that during page loading, the number of cachedNodeCount is not
 // increased if the page was already loaded previously into memory.
 func TestCachePageReloading(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var memoryCommitter InMemoryCommitter
 	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
@@ -441,7 +441,7 @@ func TestCachePageReloading(t *testing.T) {
 // TestCachePagedOutTip verifies that the evict function would prioritize
 // evicting other pages before evicting the top page.
 func TestCachePagedOutTip(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var memoryCommitter InMemoryCommitter
 	memConfig := defaultTestMemoryConfig
@@ -479,7 +479,7 @@ func TestCachePagedOutTip(t *testing.T) {
 // TestCacheLoadingDeferedPage verifies that the loadPage
 // method correcly resets the mtc.deferedPageLoad on the correct page.
 func TestCacheLoadingDeferedPage(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var memoryCommitter1 InMemoryCommitter
 	mt1, _ := MakeTrie(&memoryCommitter1, defaultTestMemoryConfig)

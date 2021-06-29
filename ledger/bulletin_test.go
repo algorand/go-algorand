@@ -17,15 +17,15 @@
 package ledger
 
 import (
+	"github.com/algorand/go-algorand/testPartitioning"
 	"testing"
 	"time"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 const epsilon = 5 * time.Millisecond
 
 func TestBulletin(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	bul := makeBulletin()
 

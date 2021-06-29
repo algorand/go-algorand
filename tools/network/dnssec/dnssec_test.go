@@ -23,13 +23,13 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/testPartitioning"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestLookup(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -216,7 +216,7 @@ func TestLookup(t *testing.T) {
 }
 
 func TestLookupAux(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -317,7 +317,7 @@ func TestLookupAux(t *testing.T) {
 }
 
 func TestDeadNS(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Skip() // skip real network tests in autotest
 	a := require.New(t)
@@ -336,7 +336,7 @@ func TestDeadNS(t *testing.T) {
 }
 
 func TestRealRequests(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	t.Skip() // skip real network tests in autotest
 	a := require.New(t)
@@ -387,7 +387,7 @@ func TestRealRequests(t *testing.T) {
 }
 
 func TestDefaultResolver(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 	r := MakeDefaultDnssecResolver("127.0.0.1", logging.Base())

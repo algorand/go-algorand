@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -113,7 +113,7 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 }
 
 func TestLedgerCirculation(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	genesisInitState, keys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 
@@ -246,7 +246,7 @@ func TestLedgerCirculation(t *testing.T) {
 }
 
 func TestLedgerSeed(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 
@@ -320,7 +320,7 @@ func TestLedgerSeed(t *testing.T) {
 }
 
 func TestConsensusVersion(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// find a consensus protocol that leads to ConsensusCurrentVersion
 	var previousProtocol protocol.ConsensusVersion

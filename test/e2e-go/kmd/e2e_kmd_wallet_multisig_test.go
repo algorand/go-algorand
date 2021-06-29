@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func addrToPK(t *testing.T, addr string) crypto.PublicKey {
@@ -40,7 +40,7 @@ func addrToPK(t *testing.T, addr string) crypto.PublicKey {
 }
 
 func TestMultisigImportList(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -89,7 +89,7 @@ func TestMultisigImportList(t *testing.T) {
 }
 
 func TestMultisigExportDelete(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -161,7 +161,7 @@ func TestMultisigExportDelete(t *testing.T) {
 }
 
 func TestMultisigSign(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -236,7 +236,7 @@ func TestMultisigSign(t *testing.T) {
 }
 
 func TestMultisigSignWithSigner(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -318,7 +318,7 @@ func TestMultisigSignWithSigner(t *testing.T) {
 }
 
 func TestMultisigSignWithWrongSigner(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
@@ -377,7 +377,7 @@ func TestMultisigSignWithWrongSigner(t *testing.T) {
 }
 
 func TestMultisigSignProgram(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()

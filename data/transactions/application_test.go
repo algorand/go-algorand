@@ -24,11 +24,11 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-   "github.com/algorand/go-algorand/testPartitioning"
+	"github.com/algorand/go-algorand/testPartitioning"
 )
 
 func TestApplicationCallFieldsNotChanged(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	af := ApplicationCallTxnFields{}
 	s := reflect.ValueOf(&af).Elem()
@@ -41,7 +41,7 @@ func TestApplicationCallFieldsNotChanged(t *testing.T) {
 }
 
 func TestApplicationCallFieldsEmpty(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -98,7 +98,7 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 }
 
 func TestEncodedAppTxnAllocationBounds(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds

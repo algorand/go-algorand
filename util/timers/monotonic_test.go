@@ -17,10 +17,10 @@
 package timers
 
 import (
+	"github.com/algorand/go-algorand/testPartitioning"
 	"math/rand"
 	"testing"
 	"time"
-   "github.com/algorand/go-algorand/testPartitioning"
 )
 
 func polled(ch <-chan time.Time) bool {
@@ -33,7 +33,7 @@ func polled(ch <-chan time.Time) bool {
 }
 
 func TestMonotonicDelta(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var m Monotonic
 	var c Clock
@@ -59,7 +59,7 @@ func TestMonotonicDelta(t *testing.T) {
 }
 
 func TestMonotonicZeroDelta(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var m Monotonic
 	var c Clock
@@ -73,7 +73,7 @@ func TestMonotonicZeroDelta(t *testing.T) {
 }
 
 func TestMonotonicNegativeDelta(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var m Monotonic
 	var c Clock
@@ -87,7 +87,7 @@ func TestMonotonicNegativeDelta(t *testing.T) {
 }
 
 func TestMonotonicZeroTwice(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	var m Monotonic
 	var c Clock
@@ -119,7 +119,7 @@ func TestMonotonicZeroTwice(t *testing.T) {
 }
 
 func TestMonotonicEncodeDecode(t *testing.T) {
-   testPartitioning.PartitionTest(t)
+	testPartitioning.PartitionTest(t)
 
 	singleTest := func(c Clock, descr string) {
 		data := c.Encode()
