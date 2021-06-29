@@ -129,13 +129,13 @@ three functions:
 
 - Construct a new block, based on a pool of potential transactions
   and rewards, that will be valid.  This is done by using
-  the `Ledger.StartEvaluator(hdr, txcache)` method.  This returns a
-  `BlockEvaluator`, which can then accept tentative transactions
+  the `Ledger.StartEvaluator(hdr, paysetHint, maxTxnBytesPerBlock)` method.
+  This returns a `BlockEvaluator`, which can then accept tentative transactions
   and rewards (using `BlockEvaluator.Transaction()` and
   `BlockEvaluator.Reward()`).  The caller can finalize the block by
-  calling `BlockEvaluator.GenerateBlock()`.  `txcache` represents a
-  cache of previously verified transactions, to avoid repeated checking
-  of transaction signatures.
+  calling `BlockEvaluator.GenerateBlock()`.  `paysetHint` provides a hint
+  to the evaluator for the upcoming number of transactions. `maxTxnBytesPerBlock`
+  allows the evaluator to adjust the size of the block dynamically.
 
 - Validate a block.  This is done by calling `Ledger.Validate(block, txcache)`.
   Under the covers, it executes the same logic using a `BlockEvaluator`.

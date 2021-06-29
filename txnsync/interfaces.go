@@ -71,7 +71,7 @@ type NodeConnector interface {
 	Random(uint64) uint64
 	GetPeers() []PeerInfo
 	GetPeer(interface{}) PeerInfo // get a single peer given a network peer opaque interface
-	UpdatePeers([]*Peer, []interface{})
+	UpdatePeers(txsyncPeers []*Peer, netPeers []interface{}, averageDataExchangeRate uint64)
 	SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback)
 	// GetPendingTransactionGroups is called by the transaction sync when it needs to look into the transaction
 	// pool and get the updated set of pending transactions. The second returned argument is the latest group counter

@@ -52,6 +52,11 @@ type TransactionPool struct {
 	// with atomic operations which require 64 bit alignment on arm.
 	feePerByte uint64
 
+	// latestMeasuredDataExchangeRate is the average data exchange rate, as measured by the transaction sync.
+	// we use the latestMeasuredDataExchangeRate in order to determine the desired proposal size, so that it
+	// won't create undesired network bottlenecks.
+	latestMeasuredDataExchangeRate uint64
+
 	// const
 	logProcessBlockStats bool
 	logAssembleStats     bool
@@ -736,7 +741,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, pool.calculateMaxTxnBytesPerBlock(next.BlockHeader.CurrentProtocol))
 	if err != nil {
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
@@ -965,10 +970,44 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 		return nil, err
 	}
 	next := bookkeeping.MakeBlock(prev)
-	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0)
+	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0, pool.calculateMaxTxnBytesPerBlock(next.BlockHeader.CurrentProtocol))
 	if err != nil {
 		err = fmt.Errorf("TransactionPool.assembleEmptyBlock: cannot start evaluator for %d: %v", round, err)
 		return nil, err
 	}
 	return blockEval.GenerateBlock()
+}
+
+// SetDataExchangeRate updates the data exchange rate this node is expected to have.
+func (pool *TransactionPool) SetDataExchangeRate(dataExchangeRate uint64) {
+	atomic.StoreUint64(&pool.latestMeasuredDataExchangeRate, dataExchangeRate)
+}
+
+// calculateMaxTxnBytesPerBlock computes the optimal block size for the current node, based
+// on it's effective network capabilities. This number is bound by the protocol MaxTxnBytesPerBlock.
+func (pool *TransactionPool) calculateMaxTxnBytesPerBlock(consensusVersion protocol.ConsensusVersion) int {
+	proto, ok := config.Consensus[consensusVersion]
+	if !ok {
+		// if we can't figure out the consensus version, just return 0.
+		return 0
+	}
+	// get the latest data exchange rate we received from the transaction sync.
+	dataExchangeRate := atomic.LoadUint64(&pool.latestMeasuredDataExchangeRate)
+
+	// calculate the amount of data we can send in half of the agreement period.
+	halfMaxBlockSize := int(time.Duration(dataExchangeRate) * proto.AgreementFilterTimeoutPeriod0 / (2 * time.Second))
+
+	// if the amount of data is too high, bound it by the consensus parameters.
+	if halfMaxBlockSize > proto.MaxTxnBytesPerBlock {
+		return proto.MaxTxnBytesPerBlock
+	}
+
+	const minTxnBytesPerBlock = 100 * 1024
+
+	// if the amount of data is too low, use the low transaction bytes threshold.
+	if halfMaxBlockSize < minTxnBytesPerBlock {
+		return proto.MaxTxnBytesPerBlock
+	}
+
+	return halfMaxBlockSize
 }

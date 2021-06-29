@@ -369,6 +369,9 @@ func (s *syncState) getPeers() (result []*Peer) {
 	peersInfo := s.node.GetPeers()
 	updatedNetworkPeers := []interface{}{}
 	updatedNetworkPeersSync := []*Peer{}
+
+	var averageDataExchangeRate uint64
+
 	// some of the network peers might not have a sync peer, so we need to create one for these.
 	for _, peerInfo := range peersInfo {
 		if peerInfo.TxnSyncPeer == nil {
@@ -378,9 +381,13 @@ func (s *syncState) getPeers() (result []*Peer) {
 			updatedNetworkPeersSync = append(updatedNetworkPeersSync, syncPeer)
 		}
 		result = append(result, peerInfo.TxnSyncPeer)
+		averageDataExchangeRate += peerInfo.TxnSyncPeer.dataExchangeRate
 	}
-	if len(updatedNetworkPeers) > 0 {
-		s.node.UpdatePeers(updatedNetworkPeersSync, updatedNetworkPeers)
+	if len(peersInfo) > 0 {
+		averageDataExchangeRate /= uint64(len(peersInfo))
+	}
+	if len(updatedNetworkPeers) > 0 || len(peersInfo) > 0 {
+		s.node.UpdatePeers(updatedNetworkPeersSync, updatedNetworkPeers, averageDataExchangeRate)
 	}
 	return result
 }
