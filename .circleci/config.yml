@@ -16,11 +16,17 @@ workflows:
       - amd64_integration:
           requires:
             - amd64_build
+      - amd64_e2e_subs:
+          requires:
+            - amd64_build
       - arm64_build
       - arm64_test:
           requires:
             - arm64_build
       - arm64_integration:
+          requires:
+            - arm64_build
+      - arm64_e2e_subs:
           requires:
             - arm64_build
   # build_mac:
@@ -177,11 +183,22 @@ jobs:
     resource_class: xlarge
     parallelism: 4
     environment:
-      TEST_RESULTS: /tmp/results/integration
+      SKIP_E2E_SUBS: "true"
     steps:
       - prepare_go
       - generic_integration:
           result_subdir: amd64-integration
+
+  amd64_e2e_subs:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: xlarge
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      - prepare_go
+      - generic_integration:
+          result_subdir: amd64-e2e_subs
 
   arm64_build:
     machine:
@@ -208,11 +225,25 @@ jobs:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
     parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
     steps:
       - checkout
       - prepare_go
       - generic_integration:
           result_subdir: arm64-integration
+
+  arm64_e2e_subs:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      - checkout
+      - prepare_go
+      - generic_integration:
+          result_subdir: arm64-e2e_subs
 
   mac_amd64_build:
     macos:
