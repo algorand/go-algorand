@@ -165,7 +165,7 @@ jobs:
     machine:
       image: ubuntu-2004:202104-01
     resource_class: xlarge
-    parallelism: 8
+    parallelism: 4
     steps:
       - prepare_go
       - generic_shorttest:
@@ -175,7 +175,7 @@ jobs:
     machine:
       image: ubuntu-2004:202104-01
     resource_class: xlarge
-    parallelism: 8
+    parallelism: 4
     environment:
       TEST_RESULTS: /tmp/results/integration
     steps:
@@ -196,7 +196,7 @@ jobs:
     machine:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
-    parallelism: 8
+    parallelism: 4
     steps:
       - checkout
       - prepare_go
@@ -207,7 +207,7 @@ jobs:
     machine:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
-    parallelism: 8
+    parallelism: 4
     steps:
       - checkout
       - prepare_go
