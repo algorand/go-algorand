@@ -4096,7 +4096,10 @@ func TestBytes(t *testing.T) {
 
 func TestSelector(t *testing.T) {
 	t.Parallel()
-	testAccepts(t, "selector \"add(uint64,uint64)uint128\"; byte 0x8aa3b61f; ==", 4)
+	// Although 'selector' is new around the time of v5, it is a
+	// pseudo-op, so it's ok to use it earlier, as it compiles to
+	// existing opcodes.
+	testAccepts(t, "selector \"add(uint64,uint64)uint128\"; byte 0x8aa3b61f; ==", 1)
 }
 
 func TestSwap(t *testing.T) {

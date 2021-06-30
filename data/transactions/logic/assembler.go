@@ -1056,7 +1056,7 @@ var keywords = map[string]OpSpec{
 	// parse basics.Address, actually just another []byte constant
 	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"selector": {0, "selector", nil, assembleSelector, nil, nil, oneBytes, 4, modeAny, opDetails{1, 2, nil, nil}}}
+	"selector": {0, "selector", nil, assembleSelector, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}}}
 
 type lineError struct {
 	Line int
