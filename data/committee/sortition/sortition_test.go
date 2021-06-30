@@ -17,6 +17,7 @@
 package sortition
 
 import (
+	"flag"
 	"math/rand"
 	"testing"
 
@@ -59,4 +60,43 @@ func TestSortitionBasic(t *testing.T) {
 	if d > maxd {
 		t.Errorf("wanted %d selections but got %d, d=%d, maxd=%d", expected, hitcount, d, maxd)
 	}
+}
+
+var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 100, "number of sortition tests to run")
+
+func TestSortitionExhausting(t *testing.T) {
+	errsum := uint64(0)
+	errfracsum := float64(0.0)
+	maxerr := uint64(0)
+	runcount := *runcountP
+	const totalMoney = 10000000000000000
+	for i := uint64(0); i < runcount; i++ {
+		money := uint64(rand.Int63n(totalMoney))
+		// committee size [30.0 .. 60.0)
+		expectedSize := (rand.Float64() * 30.0) + 30.0
+		n := float64(money)
+		p := expectedSize / float64(totalMoney)
+		ratio := rand.Float64()
+		boost := boostCdfWalk(n, p, ratio, money)
+		gocdf := sortitionBinomialCDFWalk(n, p, ratio, money)
+		var cdferr uint64
+		if boost > gocdf {
+			cdferr = boost - gocdf
+		} else {
+			cdferr = gocdf - boost
+		}
+		t.Logf("boost=%d gocdf=%d", boost, gocdf)
+		var errfrac float64
+		if boost != 0 {
+			errfrac = float64(cdferr) / float64(boost)
+		} else {
+			errfrac = float64(cdferr)
+		}
+		if cdferr > maxerr {
+			maxerr = cdferr
+		}
+		errsum += cdferr
+		errfracsum += errfrac
+	}
+	t.Logf("%d total err across %d tests, avg=%f (%f), max=%d", errsum, runcount, float64(errsum)/float64(runcount), errfracsum/float64(runcount), maxerr)
 }
