@@ -216,17 +216,6 @@ ge25519_multi_scalarmult_vartime(ge25519_p3 *r, batch_heap *heap, size_t count) 
 	ge25519_multi_scalarmult_vartime_final(r, &heap->points[max1], heap->scalars[max1]);
 }
 
-
-static int ge25519_is_neutral_vartime(const ge25519_p3 *p) {
-	static const unsigned char zero[32] = {0};
-	unsigned char point_buffer[3][32];
-	fe25519_tobytes(point_buffer[0], p->X);
-	fe25519_tobytes(point_buffer[1], p->Y);
-	fe25519_tobytes(point_buffer[2], p->Z);
-	return (memcmp(point_buffer[0], zero, 32) == 0) && (memcmp(point_buffer[1], point_buffer[2], 32) == 0);
-}
-
-
 /*
 * verifies ed25519 signatures in  batch. The algorithm is based on https://github.com/floodyberry/ed25519-donna 
 * implemention. we changed the algorithm according to https://eprint.iacr.org/2020/1244.pdf .
@@ -240,6 +229,7 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *
 {
 	batch_heap batch;
 	ge25519_p3  p;
+	ge25519_p3  p_mul;
 	sc25519 *r_scalars;
 	size_t i, batchsize;
 	unsigned char hram[64];
@@ -297,8 +287,9 @@ int crypto_sign_ed25519_open_batch(const unsigned char **m, unsigned long long *
 				goto fallback;
 
         ge25519_multi_scalarmult_vartime(&p, &batch, (batchsize * 2) + 1);
-		ge25519_p3_tobytes(batchsum,&p);
-		if (ge25519_has_small_order(batchsum) == 0 ) {
+
+		ge25519_mul_by_cofactor(&p_mul, &p);
+		if (ge25519_is_neutral_vartime(&p_mul) == 0 ) {
 			ret |= 2;
 
 			fallback:

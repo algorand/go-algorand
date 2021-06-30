@@ -944,6 +944,25 @@ ge25519_scalarmult_base(ge25519_p3 *h, const unsigned char *a)
     }
 }
 
+
+/*
+ * r = 8 * p
+ */
+void ge25519_mul_by_cofactor(ge25519_p3* p_out, const ge25519_p3* p_in)
+{
+    ge25519_p1p1 tempP;
+    ge25519_p2 tempP2;
+
+    ge25519_p3_dbl(&tempP, p_in);
+    ge25519_p1p1_to_p2(&tempP2, &tempP);
+
+    ge25519_p2_dbl(&tempP, &tempP2);
+    ge25519_p1p1_to_p2(&tempP2, &tempP);
+
+    ge25519_p2_dbl(&tempP, &tempP2);
+    ge25519_p1p1_to_p3(p_out, &tempP);
+}
+
 /* multiply by the order of the main subgroup l = 2^252+27742317777372353535851937790883648493 */
 static void
 ge25519_mul_l(ge25519_p3 *r, const ge25519_p3 *A)
@@ -1059,6 +1078,18 @@ ge25519_is_canonical(const unsigned char *s)
 
     return 1 - (c & d & 1);
 }
+
+
+int ge25519_is_neutral_vartime(const ge25519_p3 *p) {
+	static const unsigned char zero[32] = {0};
+	unsigned char point_buffer[3][32];
+	fe25519_tobytes(point_buffer[0], p->X);
+	fe25519_tobytes(point_buffer[1], p->Y);
+	fe25519_tobytes(point_buffer[2], p->Z);
+	return (memcmp(point_buffer[0], zero, 32) == 0) && (memcmp(point_buffer[1], point_buffer[2], 32) == 0);
+}
+
+
 
 int
 ge25519_has_small_order(const unsigned char s[32])

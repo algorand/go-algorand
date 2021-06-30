@@ -112,6 +112,10 @@ int ge25519_is_canonical(const unsigned char *s);
 
 int ge25519_is_canonical_vartime(const unsigned char *s);
 
+int ge25519_is_neutral_vartime(const ge25519_p3 *p);
+
+void ge25519_mul_by_cofactor(ge25519_p3* p_out, const ge25519_p3* p_in);
+
 int ge25519_is_on_curve(const ge25519_p3 *p);
 
 int ge25519_is_on_main_subgroup(const ge25519_p3 *p);
