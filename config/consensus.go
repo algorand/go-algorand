@@ -964,8 +964,6 @@ func initConsensusProtocols() {
 	v28.EnableFeePooling = true
 	v28.EnableKeyregCoherencyCheck = true
 
-	v28.MaxTxnBytesPerBlock = 4 * 1000000
-
 	Consensus[protocol.ConsensusV28] = v28
 
 	// v27 can be upgraded to v28, with an update delay of 7 days ( see calculation above )

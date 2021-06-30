@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                 17,
+	Version:                                 16,
 	AccountUpdatesStatsInterval:             5000000000,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
@@ -104,7 +104,7 @@ var defaultLocal = Local{
 	TLSKeyFile:                              "",
 	TelemetryToLog:                          true,
 	TxPoolExponentialIncreaseFactor:         2,
-	TxPoolSize:                              50000,
+	TxPoolSize:                              15000,
 	TxSyncIntervalSeconds:                   60,
 	TxSyncServeResponseSize:                 1000000,
 	TxSyncTimeoutSeconds:                    30,

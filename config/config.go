@@ -63,7 +63,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -183,7 +183,7 @@ type Local struct {
 	SuggestedFeeBlockHistory int `version[0]:"3"`
 
 	// TxPoolSize is the number of transactions that fit in the transaction pool
-	TxPoolSize int `version[0]:"50000" version[5]:"15000" version[17]:"50000"`
+	TxPoolSize int `version[0]:"50000" version[5]:"15000"`
 
 	// number of seconds allowed for syncing transactions
 	TxSyncTimeoutSeconds int64 `version[0]:"30"`
