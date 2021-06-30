@@ -27,9 +27,13 @@ DEPLOY=true
 IMAGE_NAME=stable
 NETWORK=mainnet
 TAGNAME=latest
+CACHED=false
 
 while [ "$1" != "" ]; do
     case "$1" in
+        --cached)
+            CACHED=true
+            ;;
         --name)
             shift
             IMAGE_NAME="${1-stable}"
@@ -80,7 +84,14 @@ RUN apt-get update && apt-get install -y ca-certificates curl --no-install-recom
 WORKDIR /root/node
 EOF
 
-if ! echo "$DOCKERFILE" | docker build --no-cache -t "algorand/$IMAGE_NAME:$TAGNAME" -
+# By default, we don't want to cache our docker build. However, we might want to
+# if running building and tagging back to back, like with mainnet and testnet.
+if ! $CACHED
+then
+  CACHED_ARG='--no-cache'
+fi
+
+if ! echo "$DOCKERFILE" | docker build $CACHED_ARG -t "algorand/$IMAGE_NAME:$TAGNAME" -
 then
     echo -e "\n$RED_FG[$0]$END_FG_COLOR The algorand/$IMAGE_NAME:$TAGNAME image could not be built."
     exit 1
@@ -107,4 +118,4 @@ then
     echo -e "\n$GREEN_FG[$0]$END_FG_COLOR Successfully published to docker hub."
 fi
 
-echo "$GREEN_FG[$0]$END_FG_COLOR Build completed with no failures."
+echo -e "\n$GREEN_FG[$0]$END_FG_COLOR Build completed with no failures."

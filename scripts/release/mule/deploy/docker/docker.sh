@@ -27,7 +27,7 @@ then
   ./build_releases.sh --tagname "$VERSION"
 
   # Build and push testnet.
-  ./build_releases.sh --tagname "$VERSION" --network testnet
+  ./build_releases.sh --tagname "$VERSION" --network testnet --cached
 elif [ "$NETWORK" = betanet ]
 then
   ./build_releases.sh --tagname "$VERSION" --network betanet
