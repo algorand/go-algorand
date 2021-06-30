@@ -48,7 +48,6 @@ commands:
     steps:
       - run: |
           sudo rm -rf /home/circleci/.go_workspace /usr/local/go
-          sudo rm -rf /home/circleci/.go_workspace/bin /usr/local/go/bin
 
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
@@ -180,7 +179,7 @@ jobs:
   amd64_integration:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: xlarge
+    resource_class: large
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -192,7 +191,7 @@ jobs:
   amd64_e2e_subs:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: xlarge
+    resource_class: large
     environment:
       E2E_SUBS_ONLY: "true"
     steps:
