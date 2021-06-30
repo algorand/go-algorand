@@ -386,6 +386,9 @@ func (s *syncState) getPeers() (result []*Peer) {
 	if len(peersInfo) > 0 {
 		averageDataExchangeRate /= uint64(len(peersInfo))
 	}
+
+	// if we have any update for the transaction sync connector, the send them via
+	// a UpdatePeers call.
 	if len(updatedNetworkPeers) > 0 || len(peersInfo) > 0 {
 		s.node.UpdatePeers(updatedNetworkPeersSync, updatedNetworkPeers, averageDataExchangeRate)
 	}

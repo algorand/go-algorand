@@ -162,6 +162,10 @@ const (
 	// duration it would take to execute the GenerateBlock() function
 	generateBlockBaseDuration        = 2 * time.Millisecond
 	generateBlockTransactionDuration = 2155 * time.Nanosecond
+
+	// minMaxTxnBytesPerBlock is the minimal maximum block size that the evaluator would be asked to create, in case
+	// the local node doesn't have sufficient bandwidth to support higher throughputs.
+	minMaxTxnBytesPerBlock = 100 * 1024
 )
 
 // ErrStaleBlockAssemblyRequest returned by AssembleBlock when requested block number is older than the current transaction pool round
@@ -986,13 +990,21 @@ func (pool *TransactionPool) SetDataExchangeRate(dataExchangeRate uint64) {
 // calculateMaxTxnBytesPerBlock computes the optimal block size for the current node, based
 // on it's effective network capabilities. This number is bound by the protocol MaxTxnBytesPerBlock.
 func (pool *TransactionPool) calculateMaxTxnBytesPerBlock(consensusVersion protocol.ConsensusVersion) int {
+	// get the latest data exchange rate we received from the transaction sync.
+	dataExchangeRate := atomic.LoadUint64(&pool.latestMeasuredDataExchangeRate)
+
+	// if we never received an update from the transaction sync connector about the data exchange rate,
+	// just let the evaluator use the consensus's default value.
+	if dataExchangeRate == 0 {
+		return 0
+	}
+
+	// get the consensus parameters for the given consensus version.
 	proto, ok := config.Consensus[consensusVersion]
 	if !ok {
 		// if we can't figure out the consensus version, just return 0.
 		return 0
 	}
-	// get the latest data exchange rate we received from the transaction sync.
-	dataExchangeRate := atomic.LoadUint64(&pool.latestMeasuredDataExchangeRate)
 
 	// calculate the amount of data we can send in half of the agreement period.
 	halfMaxBlockSize := int(time.Duration(dataExchangeRate) * proto.AgreementFilterTimeoutPeriod0 / (2 * time.Second))
@@ -1002,10 +1014,8 @@ func (pool *TransactionPool) calculateMaxTxnBytesPerBlock(consensusVersion proto
 		return proto.MaxTxnBytesPerBlock
 	}
 
-	const minTxnBytesPerBlock = 100 * 1024
-
 	// if the amount of data is too low, use the low transaction bytes threshold.
-	if halfMaxBlockSize < minTxnBytesPerBlock {
+	if halfMaxBlockSize < minMaxTxnBytesPerBlock {
 		return proto.MaxTxnBytesPerBlock
 	}
 
