@@ -1285,13 +1285,36 @@ int test_edge_case_signature(const char * pk_in,  const char * sig_in)
     return validate_ed25519_pk_and_sig(sig, pk);
 }
 
-void test_edge_cases_vectors()
+
+void test_edge_cases()
 {
+    unsigned char pk[crypto_sign_PUBLICKEYBYTES];
+    unsigned char sig[crypto_sign_BYTES];
+    unsigned char msg[crypto_sign_BYTES];
+
+
+
+
     printf("---- testing: white paper edge cases\n");
     for (int i=0; i<(sizeof edge_cases_signatures) / (sizeof edge_cases_signatures[0]) ;i++)
     {
-        if (test_edge_case_signature(edge_cases_signatures[i][1],
-                                    edge_cases_signatures[i][2]) == 0)    
+
+        sodium_hex2bin(pk, crypto_sign_PUBLICKEYBYTES,
+                edge_cases_signatures[i][1],
+                crypto_sign_PUBLICKEYBYTES * 2, NULL, NULL, NULL);
+        sodium_hex2bin(sig, crypto_sign_BYTES,
+                edge_cases_signatures[i][2],
+                crypto_sign_BYTES * 2, NULL, NULL, NULL);  
+        
+
+        sodium_hex2bin(msg, crypto_sign_BYTES,
+                edge_cases_signatures[i][0],
+                crypto_sign_BYTES * 2, NULL, NULL, NULL);  
+                
+        if ((crypto_sign_ed25519_verify_detached(sig,
+                                                msg,
+                                                crypto_sign_PUBLICKEYBYTES,
+                                                pk)) == 0)    
         {
             printf("sig num : %i is : V\n", i);           
         }
@@ -1300,7 +1323,10 @@ void test_edge_cases_vectors()
             printf("sig num : %i is : X\n", i);
         }
     }
+}
 
+void test_inputs()
+{
     printf("---- testing: non canonical public key\n");
     for (int i=0; i<(sizeof non_canoical_public_key) / (sizeof non_canoical_public_key[0]) ;i++)
     {
@@ -1620,6 +1646,7 @@ int main(void)
     exit(0);
 #endif
 
-    test_edge_cases_vectors();
+    test_inputs();
+    test_edge_cases();
     return 0;
 }
