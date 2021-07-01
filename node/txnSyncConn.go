@@ -122,9 +122,14 @@ func (tsnc *transcationSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerIn
 	return peersInfo[:k]
 }
 
-func (tsnc *transcationSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Peer, netPeers []interface{}) {
+func (tsnc *transcationSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Peer, netPeers []interface{}, averageDataExchangeRate uint64) {
 	for i, netPeer := range netPeers {
 		tsnc.node.net.SetPeerData(netPeer, "txsync", txsyncPeers[i])
+	}
+	// The average peers data exchange rate has been updated.
+	if averageDataExchangeRate > 0 {
+		// update the transaction pool with the latest peers data exchange rate.
+		tsnc.node.transactionPool.SetDataExchangeRate(averageDataExchangeRate)
 	}
 }
 
