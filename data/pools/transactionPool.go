@@ -52,6 +52,11 @@ type TransactionPool struct {
 	// with atomic operations which require 64 bit alignment on arm.
 	feePerByte uint64
 
+	// latestMeasuredDataExchangeRate is the average data exchange rate, as measured by the transaction sync.
+	// we use the latestMeasuredDataExchangeRate in order to determine the desired proposal size, so that it
+	// won't create undesired network bottlenecks.
+	latestMeasuredDataExchangeRate uint64
+
 	// const
 	logProcessBlockStats bool
 	logAssembleStats     bool
@@ -157,6 +162,14 @@ const (
 	// duration it would take to execute the GenerateBlock() function
 	generateBlockBaseDuration        = 2 * time.Millisecond
 	generateBlockTransactionDuration = 2155 * time.Nanosecond
+
+	// minMaxTxnBytesPerBlock is the minimal maximum block size that the evaluator would be asked to create, in case
+	// the local node doesn't have sufficient bandwidth to support higher throughputs.
+	// for example: a node that has a very low bandwidth of 10KB/s. If we will follow the block size calculations, we
+	// would get to an unrealistic block size of 20KB. This could be due to a temporary network bandwidth fluctuations
+	// or other measuring issue. In order to ensure we have some more realistic block sizes to
+	// work with, we clamp the block size to the range of [minMaxTxnBytesPerBlock .. proto.MaxTxnBytesPerBlock].
+	minMaxTxnBytesPerBlock = 100 * 1024
 )
 
 // ErrStaleBlockAssemblyRequest returned by AssembleBlock when requested block number is older than the current transaction pool round
@@ -736,7 +749,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, pool.calculateMaxTxnBytesPerBlock(next.BlockHeader.CurrentProtocol))
 	if err != nil {
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
@@ -965,10 +978,50 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 		return nil, err
 	}
 	next := bookkeeping.MakeBlock(prev)
-	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0)
+	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0, pool.calculateMaxTxnBytesPerBlock(next.BlockHeader.CurrentProtocol))
 	if err != nil {
 		err = fmt.Errorf("TransactionPool.assembleEmptyBlock: cannot start evaluator for %d: %v", round, err)
 		return nil, err
 	}
 	return blockEval.GenerateBlock()
+}
+
+// SetDataExchangeRate updates the data exchange rate this node is expected to have.
+func (pool *TransactionPool) SetDataExchangeRate(dataExchangeRate uint64) {
+	atomic.StoreUint64(&pool.latestMeasuredDataExchangeRate, dataExchangeRate)
+}
+
+// calculateMaxTxnBytesPerBlock computes the optimal block size for the current node, based
+// on it's effective network capabilities. This number is bound by the protocol MaxTxnBytesPerBlock.
+func (pool *TransactionPool) calculateMaxTxnBytesPerBlock(consensusVersion protocol.ConsensusVersion) int {
+	// get the latest data exchange rate we received from the transaction sync.
+	dataExchangeRate := atomic.LoadUint64(&pool.latestMeasuredDataExchangeRate)
+
+	// if we never received an update from the transaction sync connector about the data exchange rate,
+	// just let the evaluator use the consensus's default value.
+	if dataExchangeRate == 0 {
+		return 0
+	}
+
+	// get the consensus parameters for the given consensus version.
+	proto, ok := config.Consensus[consensusVersion]
+	if !ok {
+		// if we can't figure out the consensus version, just return 0.
+		return 0
+	}
+
+	// calculate the amount of data we can send in half of the agreement period.
+	halfMaxBlockSize := int(time.Duration(dataExchangeRate)*proto.AgreementFilterTimeoutPeriod0/time.Second) / 2
+
+	// if the amount of data is too high, bound it by the consensus parameters.
+	if halfMaxBlockSize > proto.MaxTxnBytesPerBlock {
+		return proto.MaxTxnBytesPerBlock
+	}
+
+	// if the amount of data is too low, use the low transaction bytes threshold.
+	if halfMaxBlockSize < minMaxTxnBytesPerBlock {
+		return minMaxTxnBytesPerBlock
+	}
+
+	return halfMaxBlockSize
 }

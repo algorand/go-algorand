@@ -244,7 +244,7 @@ func (n *emulatedNode) GetPeer(p interface{}) PeerInfo {
 	}
 }
 
-func (n *emulatedNode) UpdatePeers(txPeers []*Peer, netPeers []interface{}) {
+func (n *emulatedNode) UpdatePeers(txPeers []*Peer, netPeers []interface{}, _ uint64) {
 	for i, peer := range netPeers {
 		netPeer := peer.(*networkPeer)
 		netPeer.peer = txPeers[i]

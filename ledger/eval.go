@@ -355,8 +355,9 @@ type BlockEvaluator struct {
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
 
-	block        bookkeeping.Block
-	blockTxBytes int
+	block               bookkeeping.Block
+	blockTxBytes        int
+	maxTxnBytesPerBlock int
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
@@ -381,15 +382,23 @@ type ledgerForCowBase interface {
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
-// passed, avoiding unnecessary payset slice growth.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*BlockEvaluator, error) {
-	return startEvaluator(l, hdr, paysetHint, true, true)
+// passed, avoiding unnecessary payset slice growth. The optional maxTxnBytesPerBlock parameter
+// provides a cap on the size of a single generated block size, when a non-zero value is passed.
+// If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
+// be used instead.
+func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
+	return startEvaluator(l, hdr, paysetHint, true, true, maxTxnBytesPerBlock)
 }
 
-func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHint int, validate bool, generate bool) (*BlockEvaluator, error) {
+func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHint int, validate bool, generate bool, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(hdr.CurrentProtocol)
+	}
+
+	// if the caller did not provide a valid block size limit, default to the consensus params defaults.
+	if maxTxnBytesPerBlock <= 0 || maxTxnBytesPerBlock > proto.MaxTxnBytesPerBlock {
+		maxTxnBytesPerBlock = proto.MaxTxnBytesPerBlock
 	}
 
 	base := &roundCowBase{
@@ -404,12 +413,13 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 	}
 
 	eval := &BlockEvaluator{
-		validate:    validate,
-		generate:    generate,
-		block:       bookkeeping.Block{BlockHeader: hdr},
-		proto:       proto,
-		genesisHash: l.GenesisHash(),
-		l:           l,
+		validate:            validate,
+		generate:            generate,
+		block:               bookkeeping.Block{BlockHeader: hdr},
+		proto:               proto,
+		genesisHash:         l.GenesisHash(),
+		l:                   l,
+		maxTxnBytesPerBlock: maxTxnBytesPerBlock,
 	}
 
 	// Preallocate space for the payset so that we don't have to
@@ -745,7 +755,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 		if eval.validate {
 			groupTxBytes += txib.GetEncodedLength()
-			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
+			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
 				return ErrNoSpace
 			}
 		}
@@ -1166,7 +1176,7 @@ func (validator *evalTxValidator) run() {
 // AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
 // tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
 func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
-	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
+	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false, 0)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}

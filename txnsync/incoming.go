@@ -181,7 +181,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 			// we couldn't really do much about this message previously, since we didn't have the peer.
 			peer = makePeer(message.networkPeer, peerInfo.IsOutgoing, s.isRelay)
 			// let the network peer object know about our peer
-			s.node.UpdatePeers([]*Peer{peer}, []interface{}{message.networkPeer})
+			s.node.UpdatePeers([]*Peer{peer}, []interface{}{message.networkPeer}, 0)
 		} else {
 			peer = peerInfo.TxnSyncPeer
 		}
