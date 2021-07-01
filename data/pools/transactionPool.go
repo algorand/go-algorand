@@ -165,6 +165,10 @@ const (
 
 	// minMaxTxnBytesPerBlock is the minimal maximum block size that the evaluator would be asked to create, in case
 	// the local node doesn't have sufficient bandwidth to support higher throughputs.
+	// for example: a node that has a very low bandwidth of 10KB/s. If we will follow the block size calculations, we
+	// would get to an unrealistic block size of 20KB. This could be due to a temporary network bandwidth fluctuations
+	// or other measuring issue. In order to ensure we have some more realistic block sizes to
+	// work with, we clamp the block size to the range of [minMaxTxnBytesPerBlock .. proto.MaxTxnBytesPerBlock].
 	minMaxTxnBytesPerBlock = 100 * 1024
 )
 
@@ -1007,7 +1011,7 @@ func (pool *TransactionPool) calculateMaxTxnBytesPerBlock(consensusVersion proto
 	}
 
 	// calculate the amount of data we can send in half of the agreement period.
-	halfMaxBlockSize := int(time.Duration(dataExchangeRate) * proto.AgreementFilterTimeoutPeriod0 / (2 * time.Second))
+	halfMaxBlockSize := int(time.Duration(dataExchangeRate)*proto.AgreementFilterTimeoutPeriod0/time.Second) / 2
 
 	// if the amount of data is too high, bound it by the consensus parameters.
 	if halfMaxBlockSize > proto.MaxTxnBytesPerBlock {
@@ -1016,7 +1020,7 @@ func (pool *TransactionPool) calculateMaxTxnBytesPerBlock(consensusVersion proto
 
 	// if the amount of data is too low, use the low transaction bytes threshold.
 	if halfMaxBlockSize < minMaxTxnBytesPerBlock {
-		return proto.MaxTxnBytesPerBlock
+		return minMaxTxnBytesPerBlock
 	}
 
 	return halfMaxBlockSize
