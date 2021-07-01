@@ -1097,6 +1097,21 @@ static const  char edge_cases_signatures[EDGE_CASES_SIZE][3][500]=
 
 
 
+static int test_data_expected_results[SAMPLE_SIZE];
+
+static int edge_cases_expected_results[EDGE_CASES_SIZE] = {0,0,0,1,1,1,0,0,0,0,0,0};
+
+void check_valid_array(const int* is_valid_array, const int size, const int * expected_result)
+{
+    for (int i=0; i<size; ++i)
+    {
+        if (is_valid_array[i] != expected_result[i])
+        {
+            printf("result not as expected! expected: %d, got: %d", expected_result[i] ,is_valid_array[i]);
+        }
+    }
+}
+
 void ed25519_randombytes_unsafe (void *p, size_t len) 
 {
     rand_func_iml(p,len);
@@ -1123,6 +1138,7 @@ void test_mixed_subgroup_signatures()
     unsigned char * sign_data[MINIMAL_BATCH_SIZE][crypto_sign_BYTES];
     unsigned char * message_data[MINIMAL_BATCH_SIZE][crypto_sign_PUBLICKEYBYTES];
 
+    printf("-----  mixed subgroup test\n");
     rand_func_iml = &ed25519_only_ones;
     
     // Test case number 4 is a signature that is validated only in the cofactored version
@@ -1151,13 +1167,13 @@ void test_mixed_subgroup_signatures()
         sign_set[i] = test_data[i].sig;
         m_len_array[i] = i;
     }
+
     int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,MINIMAL_BATCH_SIZE, valid);
-    printf("\nmixed_subgroup_signatures: open batch ended on %d sign result is %d\n",MINIMAL_BATCH_SIZE, res );
-    printf("validation array : \n");
-    for (int i=0; i < MINIMAL_BATCH_SIZE; ++i)
+    if (res != 0)
     {
-        printf("%d", valid[i]);
+        printf("batch verification failed\n");
     }
+    check_valid_array(valid, MINIMAL_BATCH_SIZE, test_data_expected_results);
 }
 
 
@@ -1174,7 +1190,7 @@ void test_edge_cases()
     unsigned char * message_data[EDGE_CASES_SIZE][crypto_sign_PUBLICKEYBYTES];
 
 
-
+    printf("-----  edge cases test\n");
     rand_func_iml = &randombytes_buf;
 
 
@@ -1198,25 +1214,25 @@ void test_edge_cases()
         messages[i] = &message_data[i][0];
         m_len_array[i] = 32;
     }
-            int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,EDGE_CASES_SIZE, valid);
-        printf("\nedge_cases: open batch ended on %d sign result is %d\n",EDGE_CASES_SIZE, res );
-        printf("validation array : \n");
-        for (int i=0; i < EDGE_CASES_SIZE; ++i)
-        {
-            printf("%d", valid[i]);
-        }
+
+	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,EDGE_CASES_SIZE, valid);
+    if (res == 0)
+    {
+        printf("batch passed - should have failed!");
+    }
+    check_valid_array(valid, EDGE_CASES_SIZE, edge_cases_expected_results);
 }
 
 
 void bos_carter_edge_case_random_scalars(void *p, size_t len)
 {
     static const uint8_t scalars_array[] = {
-       0x56, 0xd8, 0xb2, 0x99, 0xf3, 0xe6, 0x25, 0x4c, 0xf8, 0x9c, 0x72, 0x21, 0x0, 0xaa, 0x2, 0x1, 
-       0xda, 0x4, 0xb, 0x1b, 0x2c, 0x5e, 0x88, 0xbb, 0xca, 0x7, 0x68, 0xf0, 0x3f, 0xd5, 0x5b, 0x7e, 
-       0xbc, 0xee, 0x45, 0xfb, 0x21, 0x80, 0x13, 0x75, 0xc8, 0xb9, 0x84, 0xe0, 0x9f, 0x11, 0xc5, 
-       0xc6, 0x42, 0x31, 0x46, 0x31, 0x9c, 0xa1, 0x4, 0x2c, 0x3d, 0x6, 0xdf, 0x90, 0x4c, 0x64, 
-       0x6d, 0xf1, 0x84, 0x29, 0x4c, 0x94, 0xdb, 0x52, 0x33, 0x70, 0xb2, 0xc9, 0x1d, 0x82, 0xf8, 
-       0xf8, 0x49, 0x7c, 0x9a, 0x96, 0xb0, 0x37, 0x66, 0x64, 0xaa, 0x8e, 0xe4, 0xd7, 0xfb, 0xc,
+        0x56, 0xd8, 0xb2, 0x99, 0xf3, 0xe6, 0x25, 0x4c, 0xf8, 0x9c, 0x72, 0x21, 0x0, 0xaa, 0x2, 0x1, 
+        0xda, 0x4, 0xb, 0x1b, 0x2c, 0x5e, 0x88, 0xbb, 0xca, 0x7, 0x68, 0xf0, 0x3f, 0xd5, 0x5b, 0x7e, 
+        0xbc, 0xee, 0x45, 0xfb, 0x21, 0x80, 0x13, 0x75, 0xc8, 0xb9, 0x84, 0xe0, 0x9f, 0x11, 0xc5, 
+        0xc6, 0x42, 0x31, 0x46, 0x31, 0x9c, 0xa1, 0x4, 0x2c, 0x3d, 0x6, 0xdf, 0x90, 0x4c, 0x64, 
+        0x6d, 0xf1, 0x84, 0x29, 0x4c, 0x94, 0xdb, 0x52, 0x33, 0x70, 0xb2, 0xc9, 0x1d, 0x82, 0xf8, 
+        0xf8, 0x49, 0x7c, 0x9a, 0x96, 0xb0, 0x37, 0x66, 0x64, 0xaa, 0x8e, 0xe4, 0xd7, 0xfb, 0xc,
         0x78, 0x3c, 0x1, 0xc3, 0xbe, 0x9e, 0xd7, 0xa2, 0xa2, 0xeb, 0x87, 0x21, 0xfd, 0x17, 0xfc, 
         0x8e, 0x43, 0xf1, 0xec, 0xe4, 0xca, 0x3b, 0x93, 0xc4, 0x32, 0x8f, 0xf7, 0xde, 0x30, 0x52, 
         0xa1, 0xb6, 0x38, 0x6a, 0x7e, 0xa7,
@@ -1233,23 +1249,25 @@ void test_bos_carter_edge_case()
     size_t m_len_array[SAMPLE_SIZE];
     int valid [SAMPLE_SIZE];
 
-    rand_func_iml= &bos_carter_edge_case_random_scalars;
 
-    for (int i = 0; i < SAMPLE_SIZE; i++) 
+    printf("----- bosecarter edge case test\n");
+    rand_func_iml = &bos_carter_edge_case_random_scalars;
+
+    for (int i = 0; i < 8; i++) 
     {
         messages[i] = test_data[i].m;
         pk_set[i] = test_data[i].pk;
         sign_set[i] = test_data[i].sig;
         m_len_array[i] = i;
     }
-    m_len_array[SAMPLE_SIZE-1]--; // the last signature is 1024 chars long
+    
 	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,8, valid);
-	printf("\nbos_carter_edge_case: open batch ended on %d sign result is %d \n",SAMPLE_SIZE-1, res );
-    printf("validation array : \n");
-    for (int i=0; i < 8; ++i)
+    if (res != 0)
     {
-        printf("%d", valid[i]);
-    }      
+        printf("batch failed!");
+    }
+    check_valid_array(valid, 8, test_data_expected_results);
+  
 }
 
 
@@ -1262,7 +1280,7 @@ void test_invalid_signatures_outside_batch()
     size_t m_len_array[MAX_BATCH_SIZE+1];
     int valid [MAX_BATCH_SIZE+1];
 
-
+    printf("----- invalid signature outside batch \n");
     rand_func_iml = &randombytes_buf;
 
     for (int i = 0; i < MAX_BATCH_SIZE+1; i++) 
@@ -1275,16 +1293,18 @@ void test_invalid_signatures_outside_batch()
 
     //change first signature
     sign_set[MAX_BATCH_SIZE][0]++;
+    test_data_expected_results[MAX_BATCH_SIZE]=0;
 
 	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,MAX_BATCH_SIZE+1, valid);
-	printf("\ninvalid: open batch + plus one single ended on %d sign result is %d - should failed\n",MAX_BATCH_SIZE+1, res );
-    printf("validation array : \n");
-    for (int i=0; i < MAX_BATCH_SIZE+1; ++i)
+    if (res == 0)
     {
-        printf("%d", valid[i]);
+        printf("batch passed - should failed!");
     }
-        //change first signature
+    check_valid_array(valid, MAX_BATCH_SIZE+1, test_data_expected_results);
+
+    
     sign_set[MAX_BATCH_SIZE][0]--;
+    test_data_expected_results[MAX_BATCH_SIZE]=1;
 }
 
 
@@ -1296,7 +1316,7 @@ void test_invalid_signatures_inside_batch()
     size_t m_len_array[MINIMAL_BATCH_SIZE];
     int valid [MINIMAL_BATCH_SIZE];
 
-
+    printf("----- invalid signature in batch \n");
     rand_func_iml = &randombytes_buf;
 
     for (int i = 0; i < MINIMAL_BATCH_SIZE; i++) 
@@ -1309,17 +1329,18 @@ void test_invalid_signatures_inside_batch()
 
     //change first signature
     sign_set[0][0]++;
+    test_data_expected_results[0]=0;
 
 	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,MINIMAL_BATCH_SIZE, valid);
-	printf("\ninvalid: open batch + plus one single ended on %d sign result is %d - should failed\n",MINIMAL_BATCH_SIZE, res );
-    printf("validation array : \n");
-    for (int i=0; i < MINIMAL_BATCH_SIZE; ++i)
+    if (res == 0)
     {
-        printf("%d", valid[i]);
+        printf("batch passed - should failed!");
     }
+    check_valid_array(valid, MINIMAL_BATCH_SIZE, test_data_expected_results);
 
 
     sign_set[0][0]--;
+    test_data_expected_results[0]=1;
 
 }
 
@@ -1333,6 +1354,7 @@ void sainty_tests()
     int valid [SAMPLE_SIZE];
 
 
+    printf("----- sainty test 1024 signatures\n");
     rand_func_iml = &randombytes_buf;
 
     for (int i = 0; i < SAMPLE_SIZE; i++) 
@@ -1344,31 +1366,34 @@ void sainty_tests()
     }
     m_len_array[SAMPLE_SIZE-1]--; // the last signature is 1024 chars long
 	int res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,SAMPLE_SIZE, valid);
-	printf("\nsainty_tests: open batch ended on %d sign result is %d \n",SAMPLE_SIZE-1, res );
-    printf("validation array : \n");
-    for (int i=0; i < SAMPLE_SIZE; ++i)
+    if (res != 0)
     {
-        printf("%d", valid[i]);
+        printf("batch failed!");
     }
+    check_valid_array(valid, SAMPLE_SIZE -1 , test_data_expected_results);
 
-
+	printf("----- sainty test 1025 signatures\n");
 	res = crypto_sign_ed25519_open_batch(messages, m_len_array, pk_set, sign_set ,SAMPLE_SIZE, valid);
-	printf("\nsainty_tests: open batch + plus one single ended on %d sign result is %d\n",SAMPLE_SIZE, res );
-    printf("validation array : \n");
-    for (int i=0; i < SAMPLE_SIZE; ++i)
+    if (res != 0)
     {
-        printf("%d", valid[i]);
+        printf("batch failed!");
     }
+    check_valid_array(valid, SAMPLE_SIZE , test_data_expected_results);
 }
 
 int main()
 {
+    for (int i=0; i<SAMPLE_SIZE; i++)
+    {
+        test_data_expected_results[i] = 1;
+    }
     sainty_tests();
     test_invalid_signatures_inside_batch();
     test_invalid_signatures_outside_batch();
     test_bos_carter_edge_case();
     test_edge_cases();
     test_mixed_subgroup_signatures(); 
+    
 
 	return 0;
 }

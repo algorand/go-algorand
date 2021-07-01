@@ -1100,7 +1100,9 @@ static const  char edge_cases_signatures[12][3][500]=
 "a9d55260f765261eb9b84e106f665e00b867287a761990d7135963ee0a7d59dca5bb704786be79fc476f91d3f3f89b03984d8068dcf1bb7dfc6637b45450ac04"}
 };
 
-
+// we desinged the verification to fit the white paper results on the above vectors.
+// the only defernce is that we reject small order R (becuase our previous version done that)
+static const int edge_cases_results[] = {-1,-1,-1,0,0,0,-1,-1,-1,-1,-1,-1};
 
 
 //checking for non canoical R
@@ -1292,10 +1294,17 @@ void test_edge_cases()
     unsigned char sig[crypto_sign_BYTES];
     unsigned char msg[crypto_sign_BYTES];
 
-
+    
 
 
     printf("---- testing: white paper edge cases\n");
+    printf("\t expecting the following result: \n");
+    for (int i=0; i<(sizeof edge_cases_signatures) / (sizeof edge_cases_signatures[0]) ;i++)
+    {
+        printf("%d |",edge_cases_results[i]);
+    }
+    printf("\n");
+
     for (int i=0; i<(sizeof edge_cases_signatures) / (sizeof edge_cases_signatures[0]) ;i++)
     {
 
@@ -1314,73 +1323,69 @@ void test_edge_cases()
         if ((crypto_sign_ed25519_verify_detached(sig,
                                                 msg,
                                                 crypto_sign_PUBLICKEYBYTES,
-                                                pk)) == 0)    
+                                                pk)) != edge_cases_results[i])    
         {
-            printf("sig num : %i is : V\n", i);           
+            printf("sig num : %i doesn't match expected reuslt\n",i); 
+            printf("test failed!\n");          
         }
-        else
-        {
-            printf("sig num : %i is : X\n", i);
-        }
+
     }
+    printf("success\n");        
 }
 
 void test_inputs()
 {
-    printf("---- testing: non canonical public key\n");
+    
+    printf("---- testing: non canonical public key  - all should be rejected\n");
     for (int i=0; i<(sizeof non_canoical_public_key) / (sizeof non_canoical_public_key[0]) ;i++)
     {
         if (test_edge_case_signature(non_canoical_public_key[i][1],
-                                    non_canoical_public_key[i][2]) == -1)    
+                                    non_canoical_public_key[i][2]) != -1)    
         {
-            printf("input for sig num : %i rejected \n", i);           
-        }
-        else
-        {
-            printf("input for sig num : %i accepted \n", i);  
+            printf("input for sig num : %i accepted \n", i);
+            printf("test failed\n");
+            
         }
     }
+    printf("success\n");        
 
-    printf("---- testing: non canonical public key greater than field element\n");
+    printf("---- testing: non canonical public key greater than field element - all should be rejected\n");
     for (int i=0; i<(sizeof non_canoical_public_key_greater_than_field_element) / (sizeof non_canoical_public_key_greater_than_field_element[0]) ;i++)
     {
         if (test_edge_case_signature(non_canoical_public_key_greater_than_field_element[i][1],
-                                    non_canoical_public_key_greater_than_field_element[i][2]) == -1)    
+                                    non_canoical_public_key_greater_than_field_element[i][2]) != -1)    
         {
-            printf("input for sig num : %i rejected \n", i);           
-        }
-        else
-        {
-            printf("input for sig num : %i accepted \n", i);  
+            printf("input for sig num : %i accepted \n", i);
+            printf("test failed\n");
+            
         }
     }
+    printf("success\n");        
 
-    printf("---- testing: non canonical R\n");
+    printf("---- testing: non canonical R - all should be rejected\n");
     for (int i=0; i<(sizeof non_canoical_R) / (sizeof non_canoical_R[0]) ;i++)
     {
         if (test_edge_case_signature(non_canoical_R[i][1],
-                                    non_canoical_R[i][2]) == -1)    
+                                    non_canoical_R[i][2]) != -1)    
         {
-            printf("input for sig num : %i rejected \n", i);           
-        }
-        else
-        {
-            printf("input for sig num : %i accepted \n", i);  
+            printf("input for sig num : %i accepted \n", i);
+            printf("test failed\n");
+                     
         }
     }
-      printf("---- testing: non canonical greater than field element R\n");
+    printf("success\n");        
+
+    printf("---- testing: non canonical greater than field element R -  all should be rejected\n");
     for (int i=0; i<(sizeof non_canoical_R_greater_than_field_element) / (sizeof non_canoical_R_greater_than_field_element[0]) ;i++)
     {
         if (test_edge_case_signature(non_canoical_R_greater_than_field_element[i][1],
-                                    non_canoical_R_greater_than_field_element[i][2]) == -1)    
+                                    non_canoical_R_greater_than_field_element[i][2]) != -1)    
         {
-            printf("input for sig num : %i rejected \n", i);           
-        }
-        else
-        {
-            printf("input for sig num : %i accepted \n", i);  
+            printf("input for sig num : %i accepted \n", i);
+            printf("test failed\n");
         }
     }
+    printf("success\n");        
 }
 
 int main(void)
