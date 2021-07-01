@@ -93,11 +93,7 @@ else
     # We need to install this since it's not being installed by a package manager.
     # Normally, this is installed for us b/c it's a dependency.
     # See `./installer/rpm/algorand/algorand.spec`.
-    if [[ $(rpm --eval '%{centos_ver}') = 7 ]]; then
-       yum install yum-cron -y
-    else
-       dnf install dnf-automatic -y
-    fi
+    dnf install dnf-automatic -y
     #
     # Note that the RPM package DOES NOT have the CHANNEL in its filename (unlike DEB),
     # instead it contains the package name.
