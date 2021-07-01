@@ -8,12 +8,10 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalDigest(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := Digest{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -73,7 +71,6 @@ func BenchmarkUnmarshalDigest(b *testing.B) {
 }
 
 func TestMarshalUnmarshalMasterDerivationKey(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := MasterDerivationKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -133,7 +130,6 @@ func BenchmarkUnmarshalMasterDerivationKey(b *testing.B) {
 }
 
 func TestMarshalUnmarshalMultisigSig(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := MultisigSig{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -193,7 +189,6 @@ func BenchmarkUnmarshalMultisigSig(b *testing.B) {
 }
 
 func TestMarshalUnmarshalMultisigSubsig(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := MultisigSubsig{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -253,7 +248,6 @@ func BenchmarkUnmarshalMultisigSubsig(b *testing.B) {
 }
 
 func TestMarshalUnmarshalOneTimeSignature(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := OneTimeSignature{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -313,7 +307,6 @@ func BenchmarkUnmarshalOneTimeSignature(b *testing.B) {
 }
 
 func TestMarshalUnmarshalOneTimeSignatureSecrets(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := OneTimeSignatureSecrets{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -373,7 +366,6 @@ func BenchmarkUnmarshalOneTimeSignatureSecrets(b *testing.B) {
 }
 
 func TestMarshalUnmarshalOneTimeSignatureSecretsPersistent(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := OneTimeSignatureSecretsPersistent{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -433,7 +425,6 @@ func BenchmarkUnmarshalOneTimeSignatureSecretsPersistent(b *testing.B) {
 }
 
 func TestMarshalUnmarshalOneTimeSignatureSubkeyBatchID(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := OneTimeSignatureSubkeyBatchID{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -493,7 +484,6 @@ func BenchmarkUnmarshalOneTimeSignatureSubkeyBatchID(b *testing.B) {
 }
 
 func TestMarshalUnmarshalOneTimeSignatureSubkeyOffsetID(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := OneTimeSignatureSubkeyOffsetID{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -553,7 +543,6 @@ func BenchmarkUnmarshalOneTimeSignatureSubkeyOffsetID(b *testing.B) {
 }
 
 func TestMarshalUnmarshalOneTimeSignatureVerifier(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := OneTimeSignatureVerifier{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -600,124 +589,6 @@ func BenchmarkAppendMsgOneTimeSignatureVerifier(b *testing.B) {
 
 func BenchmarkUnmarshalOneTimeSignatureVerifier(b *testing.B) {
 	v := OneTimeSignatureVerifier{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalPackedSignatureAlgorithm(t *testing.T) {
-	v := PackedSignatureAlgorithm{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingPackedSignatureAlgorithm(t *testing.T) {
-	protocol.RunEncodingTest(t, &PackedSignatureAlgorithm{})
-}
-
-func BenchmarkMarshalMsgPackedSignatureAlgorithm(b *testing.B) {
-	v := PackedSignatureAlgorithm{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgPackedSignatureAlgorithm(b *testing.B) {
-	v := PackedSignatureAlgorithm{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalPackedSignatureAlgorithm(b *testing.B) {
-	v := PackedSignatureAlgorithm{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestMarshalUnmarshalPackedVerifyingKey(t *testing.T) {
-	v := PackedVerifyingKey{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingPackedVerifyingKey(t *testing.T) {
-	protocol.RunEncodingTest(t, &PackedVerifyingKey{})
-}
-
-func BenchmarkMarshalMsgPackedVerifyingKey(b *testing.B) {
-	v := PackedVerifyingKey{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgPackedVerifyingKey(b *testing.B) {
-	v := PackedVerifyingKey{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalPackedVerifyingKey(b *testing.B) {
-	v := PackedVerifyingKey{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -849,7 +720,6 @@ func BenchmarkUnmarshalPlaceHolderPublicKey(b *testing.B) {
 }
 
 func TestMarshalUnmarshalPrivateKey(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := PrivateKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -909,7 +779,6 @@ func BenchmarkUnmarshalPrivateKey(b *testing.B) {
 }
 
 func TestMarshalUnmarshalPublicKey(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := PublicKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -969,7 +838,6 @@ func BenchmarkUnmarshalPublicKey(b *testing.B) {
 }
 
 func TestMarshalUnmarshalSeed(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := Seed{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1029,7 +897,6 @@ func BenchmarkUnmarshalSeed(b *testing.B) {
 }
 
 func TestMarshalUnmarshalSignature(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := Signature{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1088,67 +955,7 @@ func BenchmarkUnmarshalSignature(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalSignatureAlgorithm(t *testing.T) {
-	v := SignatureAlgorithm{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingSignatureAlgorithm(t *testing.T) {
-	protocol.RunEncodingTest(t, &SignatureAlgorithm{})
-}
-
-func BenchmarkMarshalMsgSignatureAlgorithm(b *testing.B) {
-	v := SignatureAlgorithm{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgSignatureAlgorithm(b *testing.B) {
-	v := SignatureAlgorithm{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalSignatureAlgorithm(b *testing.B) {
-	v := SignatureAlgorithm{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func TestMarshalUnmarshalSignatureSecrets(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := SignatureSecrets{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1208,7 +1015,6 @@ func BenchmarkUnmarshalSignatureSecrets(b *testing.B) {
 }
 
 func TestMarshalUnmarshalVRFSecrets(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := VRFSecrets{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1267,67 +1073,7 @@ func BenchmarkUnmarshalVRFSecrets(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalVerifyingKey(t *testing.T) {
-	v := VerifyingKey{}
-	bts := v.MarshalMsg(nil)
-	left, err := v.UnmarshalMsg(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after UnmarshalMsg(): %q", len(left), left)
-	}
-
-	left, err = msgp.Skip(bts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(left) > 0 {
-		t.Errorf("%d bytes left over after Skip(): %q", len(left), left)
-	}
-}
-
-func TestRandomizedEncodingVerifyingKey(t *testing.T) {
-	protocol.RunEncodingTest(t, &VerifyingKey{})
-}
-
-func BenchmarkMarshalMsgVerifyingKey(b *testing.B) {
-	v := VerifyingKey{}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		v.MarshalMsg(nil)
-	}
-}
-
-func BenchmarkAppendMsgVerifyingKey(b *testing.B) {
-	v := VerifyingKey{}
-	bts := make([]byte, 0, v.Msgsize())
-	bts = v.MarshalMsg(bts[0:0])
-	b.SetBytes(int64(len(bts)))
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		bts = v.MarshalMsg(bts[0:0])
-	}
-}
-
-func BenchmarkUnmarshalVerifyingKey(b *testing.B) {
-	v := VerifyingKey{}
-	bts := v.MarshalMsg(nil)
-	b.ReportAllocs()
-	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := v.UnmarshalMsg(bts)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func TestMarshalUnmarshalVrfOutput(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := VrfOutput{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1387,7 +1133,6 @@ func BenchmarkUnmarshalVrfOutput(b *testing.B) {
 }
 
 func TestMarshalUnmarshalVrfPrivkey(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := VrfPrivkey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1447,7 +1192,6 @@ func BenchmarkUnmarshalVrfPrivkey(b *testing.B) {
 }
 
 func TestMarshalUnmarshalVrfProof(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := VrfProof{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1507,7 +1251,6 @@ func BenchmarkUnmarshalVrfProof(b *testing.B) {
 }
 
 func TestMarshalUnmarshalVrfPubkey(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := VrfPubkey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1567,7 +1310,6 @@ func BenchmarkUnmarshalVrfPubkey(b *testing.B) {
 }
 
 func TestMarshalUnmarshaled25519PrivateKey(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := ed25519PrivateKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1627,7 +1369,6 @@ func BenchmarkUnmarshaled25519PrivateKey(b *testing.B) {
 }
 
 func TestMarshalUnmarshaled25519PublicKey(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := ed25519PublicKey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1687,7 +1428,6 @@ func BenchmarkUnmarshaled25519PublicKey(b *testing.B) {
 }
 
 func TestMarshalUnmarshaled25519Seed(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := ed25519Seed{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1747,7 +1487,6 @@ func BenchmarkUnmarshaled25519Seed(b *testing.B) {
 }
 
 func TestMarshalUnmarshaled25519Signature(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := ed25519Signature{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -1807,7 +1546,6 @@ func BenchmarkUnmarshaled25519Signature(b *testing.B) {
 }
 
 func TestMarshalUnmarshalephemeralSubkey(t *testing.T) {
-	partitiontest.PartitionTest(t)
 	v := ephemeralSubkey{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
