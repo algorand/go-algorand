@@ -81,6 +81,7 @@ func (cfg TelemetryConfig) Save(configPath string) error {
 	if err != nil {
 		return err
 	}
+
 	defer f.Close()
 
 	var marshaledConfig MarshalingTelemetryConfig
@@ -127,6 +128,7 @@ func SanitizeTelemetryString(input string, maxParts int) string {
 	return input
 }
 
+// Returns err if os.Open fails or if config is mal-formed
 func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 	f, err := os.Open(path)
 	if err != nil {

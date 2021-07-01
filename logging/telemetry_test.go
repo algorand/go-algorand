@@ -335,4 +335,25 @@ func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
 	a.Equal(defaultCfgSettings.UserName, cfg.UserName)
 	a.Equal(defaultCfgSettings.Password, cfg.Password)
 	a.Equal(len(defaultCfgSettings.GUID), len(cfg.GUID))
+
+}
+
+func TestReadTelemetryConfigOrDefaultHasSameGUID(t *testing.T) {
+	a := require.New(t)
+	originalGlobalConfigFileRoot, _ := config.GetGlobalConfigFileRoot()
+	config.SetGlobalConfigFileRoot(originalGlobalConfigFileRoot)
+
+	cfg, err := ReadTelemetryConfigOrDefault("", "")
+
+	a.Nil(err)
+	a.NotNil(cfg)
+
+	// Test that if we read twice, then the GUIDs are the same
+	cfg2, err2 := ReadTelemetryConfigOrDefault("", "")
+
+	a.Nil(err2)
+	a.NotNil(cfg2)
+
+	a.Equal(cfg.GUID, cfg2.GUID)
+
 }
