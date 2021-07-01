@@ -19,10 +19,13 @@ package metrics
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/stretchr/testify/require"
 )
 
 func TestParseNodeExporterArgs(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	passTestcases := map[string][]string{
 		"./node_exporter":                                                                           {"./node_exporter", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},                                               // simple case
 		"./node_exporter --collector.systemd":                                                       {"./node_exporter", "--collector.systemd", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},                        // extended case with one argument

@@ -25,9 +25,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestSaveNetworkCfg(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	cfg := NetworkCfg{
@@ -46,6 +49,8 @@ func TestSaveNetworkCfg(t *testing.T) {
 }
 
 func TestSaveConsensus(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	tmpFolder, _ := ioutil.TempDir("", "tmp")

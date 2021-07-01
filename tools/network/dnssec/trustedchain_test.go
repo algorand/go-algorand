@@ -22,11 +22,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTrustChainBasic(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	r := makeTestResolver()
@@ -57,6 +60,8 @@ func TestTrustChainBasic(t *testing.T) {
 }
 
 func TestEnsureTrustChain(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	var err error
@@ -270,6 +275,8 @@ func TestEnsureTrustChain(t *testing.T) {
 }
 
 func TestEnsureTrustChainFailures(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	var err error
@@ -319,6 +326,8 @@ func TestEnsureTrustChainFailures(t *testing.T) {
 }
 
 func TestAuthenticate(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	var err error
@@ -376,6 +385,8 @@ func TestAuthenticate(t *testing.T) {
 }
 
 func TestQueryWrapper(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	a := require.New(t)
 
 	r := makeEmptyTestResolver()

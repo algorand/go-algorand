@@ -22,9 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestEmptyEncoding(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	var v vote
 	require.Equal(t, 1, len(protocol.Encode(&v)))
 

@@ -9,11 +9,11 @@ stages:
   - name: build_commit
     if: NOT (branch =~ /^rel\//) AND type != pull_request
   - name: build_pr
-    if: type = pull_request
+    if: type = pull_request AND branch !~ /circleci/
   - name: build_release
-    if: branch =~ /^rel\// AND type != pull_request
+    if: branch =~ /^rel\// AND type != pull_request AND branch !~ /circleci/
   - name: deploy
-    if: branch =~ /^rel\// AND type != pull_request
+    if: branch =~ /^rel\// AND type != pull_request AND branch !~ /circleci/
   - name: post_deploy
     if: branch =~ /^rel\// AND type != pull_request
 

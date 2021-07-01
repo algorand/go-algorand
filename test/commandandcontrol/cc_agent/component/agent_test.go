@@ -19,10 +19,13 @@ package component
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCommandStatus(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	var start = START
 	var completed = COMPLETED
 	var failed = FAILED

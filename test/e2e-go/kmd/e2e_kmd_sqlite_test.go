@@ -23,9 +23,12 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestNonAbsSQLiteWalletConfigFails(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture
@@ -42,6 +45,8 @@ func TestNonAbsSQLiteWalletConfigFails(t *testing.T) {
 }
 
 func TestAbsSQLiteWalletConfigSucceeds(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	t.Parallel()
 	var f fixtures.KMDFixture

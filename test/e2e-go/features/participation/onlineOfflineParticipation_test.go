@@ -25,9 +25,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -96,6 +99,8 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 }
 
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	/*if runtime.GOOS == "darwin" {
 		t.Skip()
 	}

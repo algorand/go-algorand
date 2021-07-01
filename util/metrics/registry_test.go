@@ -22,10 +22,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/stretchr/testify/require"
 )
 
 func TestWriteAdd(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	// Test AddMetrics and WriteMetrics with a counter
 	counter := MakeCounter(MetricName{Name: "gauge-name", Description: "gauge description"})
 	counter.Add(12.34, nil)
