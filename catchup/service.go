@@ -604,12 +604,12 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 	peerSelector := s.createPeerSelector(false)
 	for s.ledger.LastRound() < cert.Round {
 		psp, getPeerErr := peerSelector.getNextPeer()
-		peer := psp.Peer
 		if getPeerErr != nil {
 			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
 			s.net.RequestConnectOutgoing(true, s.ctx.Done())
 			continue
 		}
+		peer := psp.Peer
 
 		// Ask the fetcher to get the block somehow
 		block, fetchedCert, _, err := s.innerFetch(cert.Round, peer)
