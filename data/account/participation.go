@@ -44,8 +44,9 @@ import (
 type Participation struct {
 	Parent basics.Address
 
-	VRF    *crypto.VRFSecrets
-	Voting *crypto.OneTimeSignatureSecrets
+	VRF            *crypto.VRFSecrets
+	Voting         *crypto.OneTimeSignatureSecrets
+	CompactCertKey *crypto.PlaceHolderKey
 
 	// The first and last rounds for which this account is valid, respectively.
 	//
@@ -176,18 +177,22 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate them
 	v := crypto.GenerateOneTimeSignatureSecrets(firstID.Batch, numBatches)
 
-	// Also generate a new VRF key, which lives in the participation keys db
+	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
+
+	// Generate new CompactCertKey
+	compcertKey := crypto.GeneratePlaceHolderKey()
 
 	// Construct the Participation containing these keys to be persisted
 	part = PersistedParticipation{
 		Participation: Participation{
-			Parent:      address,
-			VRF:         vrf,
-			Voting:      v,
-			FirstValid:  firstValid,
-			LastValid:   lastValid,
-			KeyDilution: keyDilution,
+			Parent:         address,
+			VRF:            vrf,
+			Voting:         v,
+			CompactCertKey: compcertKey,
+			FirstValid:     firstValid,
+			LastValid:      lastValid,
+			KeyDilution:    keyDilution,
 		},
 		Store: store,
 	}
