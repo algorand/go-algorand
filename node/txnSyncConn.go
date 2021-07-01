@@ -126,8 +126,9 @@ func (tsnc *transcationSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Pee
 	for i, netPeer := range netPeers {
 		tsnc.node.net.SetPeerData(netPeer, "txsync", txsyncPeers[i])
 	}
+	// The average peers data exchange rate has been updated.
 	if averageDataExchangeRate > 0 {
-		// update the transaction pool with the updated data exchange rate.
+		// update the transaction pool with the latest peers data exchange rate.
 		tsnc.node.transactionPool.SetDataExchangeRate(averageDataExchangeRate)
 	}
 }
