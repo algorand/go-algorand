@@ -335,4 +335,5 @@ func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
 	a.Equal(defaultCfgSettings.UserName, cfg.UserName)
 	a.Equal(defaultCfgSettings.Password, cfg.Password)
 	a.Equal(len(defaultCfgSettings.GUID), len(cfg.GUID))
+
 }

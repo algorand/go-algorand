@@ -93,24 +93,42 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 func ReadTelemetryConfigOrDefault(dataDir string, genesisID string) (cfg TelemetryConfig, err error) {
 	err = nil
 	dataDirProvided := dataDir != ""
+	var configPath string
+
+	// If we have a data directory, then load the config
 	if dataDirProvided {
-		configPath := filepath.Join(dataDir, TelemetryConfigFilename)
+		configPath = filepath.Join(dataDir, TelemetryConfigFilename)
+		// Load the config, if the GUID is there then we are all set
+		// However if it isn't there then we must create it, save the file and load it.
 		cfg, err = LoadTelemetryConfig(configPath)
 	}
+
+	// We couldn't load the telemetry config for some reason
+	// If the reason is because the directory doesn't exist or we didn't provide a data directory then...
 	if (err != nil && os.IsNotExist(err)) || !dataDirProvided {
-		var configPath string
+
 		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
 		if err != nil {
+			// In this case we don't know what to do since we couldn't
+			// create the directory.  Just create an ephemeral config.
 			cfg = createTelemetryConfig()
 			return
 		}
+
+		// Load the telemetry from the default config path
 		cfg, err = LoadTelemetryConfig(configPath)
 	}
+
+	// If there was some error loading the configuration from the config path...
 	if err != nil {
+		// Create an ephemeral config
 		cfg = createTelemetryConfig()
+
+		// If the error was that the the config wasn't there then it wasn't really an error
 		if os.IsNotExist(err) {
 			err = nil
 		} else {
+			// The error was actually due to a malformed config file...just return
 			return
 		}
 	}
@@ -134,9 +152,20 @@ func EnsureTelemetryConfig(dataDir *string, genesisID string) (TelemetryConfig, 
 // EnsureTelemetryConfigCreated is the same as EnsureTelemetryConfig but it also returns a bool indicating
 // whether EnsureTelemetryConfig had to create the config.
 func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryConfig, bool, error) {
+	/*
+		Our logic should be as follows:
+			- We first look inside the provided data-directory.  If a config file is there, load it
+			  and return it
+			- Otherwise, look in the global directory.  If a config file is there, load it and return it.
+			- Otherwise, if a data-directory was provided then save the config file there.
+			- Otherwise, save the config file in the global directory
+
+	*/
+
 	configPath := ""
 	var cfg TelemetryConfig
 	var err error
+
 	if dataDir != nil && *dataDir != "" {
 		configPath = filepath.Join(*dataDir, TelemetryConfigFilename)
 		cfg, err = LoadTelemetryConfig(configPath)
@@ -149,6 +178,8 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
 		if err != nil {
 			cfg := createTelemetryConfig()
+			// Since GetConfigFilePath failed, there is no chance that we
+			// can save the next config files
 			return cfg, true, err
 		}
 		cfg, err = LoadTelemetryConfig(configPath)
@@ -158,6 +189,12 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 		err = nil
 		created = true
 		cfg = createTelemetryConfig()
+
+		if dataDir != nil && *dataDir != "" {
+			// Remember, if we had a data directory supplied we want to save the config there
+			configPath = filepath.Join(*dataDir, TelemetryConfigFilename)
+		}
+
 		cfg.FilePath = configPath // Initialize our desired cfg.FilePath
 
 		// There was no config file, create it.
