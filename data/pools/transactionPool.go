@@ -567,7 +567,6 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	defer pool.cond.Broadcast()
-
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
 		// Adjust the pool fee threshold.  The rules are:
 		// - If there was less than one full block in the pool, reduce
@@ -950,7 +949,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
 	}
 	if pool.assemblyResults.roundStartedEvaluating > round {
-		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlocks
+		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlock
 		// with "jumps" between consecutive blocks ( which is why it's a warning )
 		// The "normal" usecase is evaluated on the top of the function.
 		pool.log.Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
@@ -1024,4 +1023,18 @@ func (pool *TransactionPool) calculateMaxTxnBytesPerBlock(consensusVersion proto
 	}
 
 	return halfMaxBlockSize
+}
+
+// AssembleDevModeBlock assemble a new block from the existing transaction pool. The pending evaluator is being
+func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledger.ValidatedBlock, err error) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// drop the current block evaluator and start with a new one.
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round), 0)
+
+	// The above was already pregenerating the entire block,
+	// so there won't be any waiting on this call.
+	assembled, err = pool.AssembleBlock(pool.pendingBlockEvaluator.Round(), time.Now().Add(config.ProposalAssemblyTime))
+	return
 }
