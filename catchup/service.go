@@ -209,11 +209,11 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		}
 
 		psp, getPeerErr := peerSelector.getNextPeer()
-		peer := psp.Peer
 		if getPeerErr != nil {
 			s.log.Debugf("fetchAndWrite: was unable to obtain a peer to retrieve the block from")
 			break
 		}
+		peer := psp.Peer
 
 		// Try to fetch, timing out after retryInterval
 		block, cert, blockDownloadDuration, err := s.innerFetch(r, peer)
