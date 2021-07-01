@@ -77,6 +77,15 @@ func TestOpImmediateNote(t *testing.T) {
 	require.Empty(t, xd)
 }
 
+func TestAllImmediatesDocumented(t *testing.T) {
+	for _, op := range OpSpecs {
+		if len(op.Details.Immediates) > 0 {
+			xd := OpImmediateNote(op.Name)
+			require.NotEmpty(t, xd, "%s has undocumented immediates", op.Name)
+		}
+	}
+}
+
 func TestOpDocExtra(t *testing.T) {
 	xd := OpDocExtra("bnz")
 	require.NotEmpty(t, xd)
