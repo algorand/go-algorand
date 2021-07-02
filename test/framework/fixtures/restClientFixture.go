@@ -56,6 +56,12 @@ func (f *RestClientFixture) SetupShared(testName string, templateFile string) {
 	f.AlgodClient = f.GetAlgodClientForController(f.NC)
 }
 
+// Start can be called to start the fixture's network if SetupNoStart() was used.
+func (f *RestClientFixture) Start() {
+	f.LibGoalFixture.Start()
+	f.AlgodClient = f.GetAlgodClientForController(f.NC)
+}
+
 // GetAlgodClientForController returns a RestClient for the specified NodeController
 func (f *RestClientFixture) GetAlgodClientForController(nc nodecontrol.NodeController) client.RestClient {
 	url, err := nc.ServerURL()

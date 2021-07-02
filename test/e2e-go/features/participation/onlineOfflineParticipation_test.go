@@ -126,7 +126,18 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
-	fixture.Setup(t, filepath.Join("nettemplates", "OneNode.json"))
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNode.json"))
+
+	// update the config file by setting the ParticipationKeysRefreshInterval to 5 second.
+	nodeDirectory, err := fixture.GetNodeDir("Primary")
+	a.NoError(err)
+	cfg, err := config.LoadConfigFromDisk(nodeDirectory)
+	a.NoError(err)
+	cfg.ParticipationKeysRefreshInterval = 5 * time.Second
+	cfg.SaveToDisk(nodeDirectory)
+
+	fixture.Start()
+
 	defer fixture.Shutdown()
 	client := fixture.LibGoalClient
 
@@ -163,7 +174,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, nil, 0, 0, transactionFee, [32]byte{})
+	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, &partkeyResponse, 0, 0, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)
