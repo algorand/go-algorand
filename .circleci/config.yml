@@ -36,6 +36,9 @@ workflows:
       - mac_amd64_integration:
           requires:
             - mac_amd64_build
+      - mac_amd64_e2e_subs:
+          requires:
+            - mac_amd64_build
   #build_windows:
   #  jobs:
       #- windows_x64_build
@@ -269,7 +272,7 @@ jobs:
   mac_amd64_test:
     macos:
       xcode: 12.4.0
-    parallelism: 8
+    parallelism: 4
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
@@ -280,14 +283,26 @@ jobs:
   mac_amd64_integration:
     macos:
       xcode: 12.4.0
-    parallelism: 8
+    parallelism: 4
     environment:
-      TEST_RESULTS: /tmp/results/integration
+      SKIP_E2E_SUBS: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
       - generic_integration:
           result_subdir: mac-amd64-integration
+          circleci_home: /Users/distiller
+
+  mac_amd64_e2e_subs:
+    macos:
+      xcode: 12.4.0
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_integration:
+          result_subdir: mac-amd64-e2e_subs
           circleci_home: /Users/distiller
 
   windows_x64_build:
