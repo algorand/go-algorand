@@ -1917,12 +1917,21 @@ var HostColonPortPattern = regexp.MustCompile("^[^:]+:\\d+$")
 // ParseHostOrURL handles "host:port" or a full URL.
 // Standard library net/url.Parse chokes on "host:port".
 func ParseHostOrURL(addr string) (*url.URL, error) {
-	var parsedURL *url.URL
+	// If the entire addr is "host:port" grab that right away.
+	// Don't try url.Parse() because that will grab "host:" as if it were "scheme:"
 	if HostColonPortPattern.MatchString(addr) {
-		parsedURL = &url.URL{Scheme: "http", Host: addr}
-		return parsedURL, nil
+		return &url.URL{Scheme: "http", Host: addr}, nil
 	}
-	return url.Parse(addr)
+	parsed, err := url.Parse(addr)
+	if err == nil {
+		return parsed, nil
+	}
+	// This turns "[::]:4601" into "http://[::]:4601" which url.Parse can do
+	parsed, e2 := url.Parse("http://" + addr)
+	if e2 == nil {
+		return parsed, nil
+	}
+	return parsed, err /* return original err, not our prefix altered try */
 }
 
 // addrToGossipAddr parses host:port or a URL and returns the URL to the websocket interface at that address.

@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"sort"
@@ -1967,5 +1968,48 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 			break
 		}
 		txnCount += txnCount/4 + 1
+	}
+}
+
+type urlCase struct {
+	text string
+	out  url.URL
+	err  error
+}
+
+var urlTestCases = []urlCase{
+	{"localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}, nil},
+	{"http://localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}, nil},
+	{"ws://localhost:123", url.URL{Scheme: "ws", Host: "localhost:123"}, nil},
+	{"https://localhost:123", url.URL{Scheme: "https", Host: "localhost:123"}, nil},
+	{"http://127.0.0.1:123", url.URL{Scheme: "http", Host: "127.0.0.1:123"}, nil},
+	{"http://[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}, nil},
+	{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}, nil},
+	{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}, nil},
+}
+
+func TestParseHostOrURL(t *testing.T) {
+	for _, tc := range urlTestCases {
+		t.Run(tc.text, func(t *testing.T) {
+			v, err := ParseHostOrURL(tc.text)
+			if (err != nil) && (tc.err == nil) {
+				t.Errorf("unexpected error, %s", err)
+				return
+			}
+			if (err == nil) && (tc.err != nil) {
+				t.Errorf("wanted err but got none")
+				return
+			}
+			if (err != nil) && (tc.err != nil) {
+				if err.Error() != tc.err.Error() {
+					t.Errorf("err mismatch, wanted %#v got %#v", tc.err, err)
+					return
+				}
+			}
+			if tc.out != *v {
+				t.Errorf("url wanted %#v, got %#v", tc.out, v)
+				return
+			}
+		})
 	}
 }
