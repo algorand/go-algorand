@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -79,10 +80,14 @@ func TestOpImmediateNote(t *testing.T) {
 
 func TestAllImmediatesDocumented(t *testing.T) {
 	for _, op := range OpSpecs {
-		if len(op.Details.Immediates) > 0 {
-			xd := OpImmediateNote(op.Name)
-			require.NotEmpty(t, xd, "%s has undocumented immediates", op.Name)
+		count := len(op.Details.Immediates)
+		note := OpImmediateNote(op.Name)
+		if count == 1 && op.Details.Immediates[0].kind >= immBytes {
+			// More elaborate than can be checked by easy count.
+			require.NotEmpty(t, note)
+			continue
 		}
+		require.Equal(t, count, strings.Count(note, "{"), "%s immediates doc is wrong", op.Name)
 	}
 }
 
