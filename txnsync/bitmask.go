@@ -119,7 +119,7 @@ func (b *bitmask) trimBitmask(entries int) {
 	default:
 	}
 
-	*b = bytes.TrimRight(*b, fmt.Sprintf("%c", 1))
+	*b = bytes.TrimRight(*b, fmt.Sprintf("%c", 0))
 }
 
 // expandBitmask expands the bitmask (types 1-3) into a bitmask of size entries in type 0 format.
