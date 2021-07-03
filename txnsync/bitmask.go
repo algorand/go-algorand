@@ -25,12 +25,13 @@ import (
 type bitmask []byte
 
 // assumed to be in mode 0, sets bit at index to 1
-func (b *bitmask) SetBit(index int) {
+func (b *bitmask) setBit(index int) {
 	byteIndex := index/8 + 1
 	(*b)[byteIndex] |= 1 << (index % 8)
 }
 
-func (b *bitmask) EntryExists(index int, entries int) bool {
+// entryExists converts the bitmask to type 0 (if not already)
+func (b *bitmask) entryExists(index int, entries int) bool {
 	if len(*b) == 0 {
 		return false
 	}
@@ -41,6 +42,13 @@ func (b *bitmask) EntryExists(index int, entries int) bool {
 	return byteIndex < len(*b) && ((*b)[byteIndex]&(1<<(index%8)) != 0)
 }
 
+// trimBitmask compresses the bitmask into one of the 4 types:
+// type 0: intput bitmask bit pos x b -> output bitmask bit pos x b 
+// type 1: intput bitmask bit pos x b -> output bitmask bit pos x !b
+// type 2: stores the positions of bits where b = 1
+//         intput bitmask first b=1 pos A, second b=1 pos B, ...
+//         output bitmask byte 2,A/256,A%256,(B-A)/256,(B-A)%256,...
+// type 3: same as type 2, but stures the positons where b = 0
 func (b *bitmask) trimBitmask(entries int) {
 	if *b == nil {
 		return
@@ -113,6 +121,7 @@ func (b *bitmask) trimBitmask(entries int) {
 	*b = bytes.TrimRight(*b, string(0))
 }
 
+// expandBitmask expands the bitmask (types 1-3) into a bitmask of size entries in type 0 format.
 func (b *bitmask) expandBitmask(entries int) {
 	option := 0
 	if len(*b) > 0 {
@@ -140,7 +149,7 @@ func (b *bitmask) expandBitmask(entries int) {
 		sum := 0
 		for i := 0; i*2+2 < len(*b); i++ {
 			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
-			newBitmask.SetBit(sum)
+			newBitmask.setBit(sum)
 		}
 		*b = newBitmask
 	case 3: // contain a list of bytes designating the negative transaction bit index
@@ -148,7 +157,7 @@ func (b *bitmask) expandBitmask(entries int) {
 		sum := 0
 		for i := 0; i*2+2 < len(*b); i++ {
 			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
-			newBitmask.SetBit(sum)
+			newBitmask.setBit(sum)
 		}
 		*b = newBitmask
 		for i := range *b {
@@ -159,7 +168,9 @@ func (b *bitmask) expandBitmask(entries int) {
 	}
 }
 
-func (b *bitmask) Iterate(entries int, maxIndex int, callback func(int, int) error) error {
+// iterate through the elements of bitmask. If more than maxIndex set bit values are found,
+// return error. For each set value, call callback.
+func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) error) error {
 	option := 0
 	if len(*b) > 0 {
 		option = int((*b)[0])
@@ -254,6 +265,7 @@ func (b *bitmask) Iterate(entries int, maxIndex int, callback func(int, int) err
 	return nil
 }
 
+// bytesNeededBitmask returns the number of bytes needed to store enteris bits.
 func bytesNeededBitmask(entries int) int {
 	return (entries+7)/8 + 1
 }

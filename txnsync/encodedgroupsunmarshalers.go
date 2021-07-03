@@ -58,7 +58,7 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 	index := 0
 	txGroupHashes := make([]crypto.Digest, 16)
 	for _, txns := range txnGroups {
-		if len(txns.Transactions) == 1 && !b.EntryExists(index, txnCount) {
+		if len(txns.Transactions) == 1 && !b.entryExists(index, txnCount) {
 			index++
 			continue
 		}

@@ -44,16 +44,16 @@ var endRound = flag.Int("end", 10, "Ending round")
 func TestBitmaskType0And2(t *testing.T) {
 	entries := 80
 	b := make(bitmask, 12)
-	b.SetBit(0)
-	b.SetBit(2)
-	b.SetBit(69)
+	b.setBit(0)
+	b.setBit(2)
+	b.setBit(69)
 	iterated := make([]bool, entries)
 	b.Iterate(entries, 3, func(i int, index int) error {
 		iterated[i] = true
 		return nil
 	})
 	for i := 0; i < entries; i++ {
-		exists := b.EntryExists(i, entries)
+		exists := b.entryExists(i, entries)
 		if i == 0 || i == 2 || i == 69 {
 			require.True(t, exists)
 			require.True(t, iterated[i], i)
@@ -69,7 +69,7 @@ func TestBitmaskType0And2(t *testing.T) {
 		return nil
 	})
 	for i := 0; i < entries; i++ {
-		exists := b.EntryExists(i, entries)
+		exists := b.entryExists(i, entries)
 		if i == 0 || i == 2 || i == 69 {
 			require.True(t, exists)
 			require.True(t, iterated[i], i)
@@ -85,7 +85,7 @@ func TestBitmaskType1(t *testing.T) {
 	b := make(bitmask, 12)
 	for i := 0; i < entries; i++ {
 		if i%3 != 0 {
-			b.SetBit(i)
+			b.setBit(i)
 		}
 	}
 	b.trimBitmask(entries)
@@ -95,7 +95,7 @@ func TestBitmaskType1(t *testing.T) {
 		return nil
 	})
 	for i := 0; i < entries; i++ {
-		exists := b.EntryExists(i, entries)
+		exists := b.entryExists(i, entries)
 		if i%3 == 0 {
 			require.False(t, exists)
 			require.False(t, iterated[i], i)
@@ -111,7 +111,7 @@ func TestBitmaskType3(t *testing.T) {
 	b := make(bitmask, 12)
 	for i := 0; i < entries; i++ {
 		if i != 0 && i != 2 && i != 69 {
-			b.SetBit(i)
+			b.setBit(i)
 		}
 	}
 	b.trimBitmask(entries)
@@ -121,7 +121,7 @@ func TestBitmaskType3(t *testing.T) {
 		return nil
 	})
 	for i := 0; i < entries; i++ {
-		exists := b.EntryExists(i, entries)
+		exists := b.entryExists(i, entries)
 		if i == 0 || i == 2 || i == 69 {
 			require.False(t, exists)
 			require.False(t, iterated[i], i)
