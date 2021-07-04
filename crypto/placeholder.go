@@ -18,22 +18,28 @@ type PlaceHolderPublicKey struct {
 	SignatureVerifier `codec:"sigVerifier"`
 }
 
-func (p *PlaceHolderKey) Sign(message Hashable) Signature {
-	return p.Sec.Sign(message)
+func (p *PlaceHolderKey) Sign(message Hashable) ByteSignature {
+	sig := p.Sec.Sign(message)
+	return sig[:]
 }
 
-func (p *PlaceHolderKey) SignBytes(message []byte) Signature {
-	return p.Sec.SignBytes(message)
+func (p *PlaceHolderKey) SignBytes(message []byte) ByteSignature {
+	sig := p.Sec.SignBytes(message)
+	return sig[:]
 }
 
 func (p *PlaceHolderKey) GetVerifier() VerifyingKey {
 	return NewVerifyingKey(PlaceHolderType, &PlaceHolderPublicKey{SignatureVerifier: p.Sec.SignatureVerifier})
 }
 
-func (p *PlaceHolderPublicKey) Verify(message Hashable, sig Signature) bool {
-	return p.SignatureVerifier.Verify(message, sig)
+func (p *PlaceHolderPublicKey) Verify(message Hashable, sig ByteSignature) bool {
+	var scopy Signature
+	copy(scopy[:], sig)
+	return p.SignatureVerifier.Verify(message, scopy)
 }
 
-func (p *PlaceHolderPublicKey) VerifyBytes(message []byte, sig Signature) bool {
-	return p.SignatureVerifier.VerifyBytes(message, sig)
+func (p *PlaceHolderPublicKey) VerifyBytes(message []byte, sig ByteSignature) bool {
+	var scopy Signature
+	copy(scopy[:], sig)
+	return p.SignatureVerifier.VerifyBytes(message, scopy)
 }
