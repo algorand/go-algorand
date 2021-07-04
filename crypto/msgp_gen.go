@@ -10,6 +10,14 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
+// AlgorithmType
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
 // Digest
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
@@ -90,6 +98,22 @@ import (
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
 //
+// PackedSignatureAlgorithm
+//             |-----> (*) MarshalMsg
+//             |-----> (*) CanMarshalMsg
+//             |-----> (*) UnmarshalMsg
+//             |-----> (*) CanUnmarshalMsg
+//             |-----> (*) Msgsize
+//             |-----> (*) MsgIsZero
+//
+// PackedVerifyingKey
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//
 // PlaceHolderKey
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
@@ -138,6 +162,14 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
+// SignatureAlgorithm
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//
 // SignatureSecrets
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
@@ -153,6 +185,14 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//
+// VerifyingKey
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
 //
 // VrfOutput
 //     |-----> (*) MarshalMsg
@@ -185,14 +225,6 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//
-// algorithmType
-//       |-----> MarshalMsg
-//       |-----> CanMarshalMsg
-//       |-----> (*) UnmarshalMsg
-//       |-----> (*) CanUnmarshalMsg
-//       |-----> Msgsize
-//       |-----> MsgIsZero
 //
 // ed25519PrivateKey
 //         |-----> (*) MarshalMsg
@@ -234,6 +266,52 @@ import (
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
 //
+
+// MarshalMsg implements msgp.Marshaler
+func (z AlgorithmType) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint64(o, uint64(z))
+	return
+}
+
+func (_ AlgorithmType) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(AlgorithmType)
+	if !ok {
+		_, ok = (z).(*AlgorithmType)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *AlgorithmType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint64
+		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = AlgorithmType(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *AlgorithmType) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*AlgorithmType)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z AlgorithmType) Msgsize() (s int) {
+	s = msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z AlgorithmType) MsgIsZero() bool {
+	return z == 0
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *Digest) MarshalMsg(b []byte) (o []byte) {
@@ -1764,31 +1842,728 @@ func (z *OneTimeSignatureVerifier) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *PlaceHolderKey) MarshalMsg(b []byte) (o []byte) {
+func (z *PackedSignatureAlgorithm) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(2)
-	var zb0002Mask uint8 /* 4 bits */
-	if (*z).SignatureSecrets.SK == (ed25519PrivateKey{}) {
-		zb0002Len--
-		zb0002Mask |= 0x1
-	}
-	if (*z).SignatureSecrets.SignatureVerifier.MsgIsZero() {
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
+	if ((*z).PlaceHolderKey.Sec.SignatureVerifier.MsgIsZero()) && ((*z).PlaceHolderKey.Sec.SK == (ed25519PrivateKey{})) {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
 	if zb0002Len != 0 {
-		if (zb0002Mask & 0x1) == 0 { // if not empty
-			// string "SK"
-			o = append(o, 0xa2, 0x53, 0x4b)
-			o = msgp.AppendBytes(o, ((*z).SignatureSecrets.SK)[:])
-		}
 		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "placeholderkey"
+			o = append(o, 0xae, 0x70, 0x6c, 0x61, 0x63, 0x65, 0x68, 0x6f, 0x6c, 0x64, 0x65, 0x72, 0x6b, 0x65, 0x79)
+			// omitempty: check for empty values
+			zb0003Len := uint32(1)
+			var zb0003Mask uint8 /* 2 bits */
+			if ((*z).PlaceHolderKey.Sec.SignatureVerifier.MsgIsZero()) && ((*z).PlaceHolderKey.Sec.SK == (ed25519PrivateKey{})) {
+				zb0003Len--
+				zb0003Mask |= 0x2
+			}
+			// variable map header, size zb0003Len
+			o = append(o, 0x80|uint8(zb0003Len))
+			if (zb0003Mask & 0x2) == 0 { // if not empty
+				// string "sec"
+				o = append(o, 0xa3, 0x73, 0x65, 0x63)
+				// map header, size 2
+				// string "SK"
+				o = append(o, 0x82, 0xa2, 0x53, 0x4b)
+				o = msgp.AppendBytes(o, ((*z).PlaceHolderKey.Sec.SK)[:])
+				// string "SignatureVerifier"
+				o = append(o, 0xb1, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
+				o = (*z).PlaceHolderKey.Sec.SignatureVerifier.MarshalMsg(o)
+			}
+		}
+	}
+	return
+}
+
+func (_ *PackedSignatureAlgorithm) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PackedSignatureAlgorithm)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PackedSignatureAlgorithm) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if _, ok := err.(msgp.TypeError); ok {
+				zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey")
+					return
+				}
+				if zb0004 > 0 {
+					zb0004--
+					var zb0006 int
+					var zb0007 bool
+					zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+					if _, ok := err.(msgp.TypeError); ok {
+						zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "struct-from-array", "Sec")
+							return
+						}
+						if zb0006 > 0 {
+							zb0006--
+							bts, err = (*z).PlaceHolderKey.Sec.SignatureVerifier.UnmarshalMsg(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "struct-from-array", "Sec", "struct-from-array", "SignatureVerifier")
+								return
+							}
+						}
+						if zb0006 > 0 {
+							zb0006--
+							bts, err = msgp.ReadExactBytes(bts, ((*z).PlaceHolderKey.Sec.SK)[:])
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "struct-from-array", "Sec", "struct-from-array", "SK")
+								return
+							}
+						}
+						if zb0006 > 0 {
+							err = msgp.ErrTooManyArrayFields(zb0006)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "struct-from-array", "Sec", "struct-from-array")
+								return
+							}
+						}
+					} else {
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "struct-from-array", "Sec")
+							return
+						}
+						if zb0007 {
+							(*z).PlaceHolderKey.Sec = SignatureSecrets{}
+						}
+						for zb0006 > 0 {
+							zb0006--
+							field, bts, err = msgp.ReadMapKeyZC(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "struct-from-array", "Sec")
+								return
+							}
+							switch string(field) {
+							case "SignatureVerifier":
+								bts, err = (*z).PlaceHolderKey.Sec.SignatureVerifier.UnmarshalMsg(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "struct-from-array", "Sec", "SignatureVerifier")
+									return
+								}
+							case "SK":
+								bts, err = msgp.ReadExactBytes(bts, ((*z).PlaceHolderKey.Sec.SK)[:])
+								if err != nil {
+									err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "struct-from-array", "Sec", "SK")
+									return
+								}
+							default:
+								err = msgp.ErrNoField(string(field))
+								if err != nil {
+									err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "struct-from-array", "Sec")
+									return
+								}
+							}
+						}
+					}
+				}
+				if zb0004 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0004)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "struct-from-array")
+						return
+					}
+				}
+			} else {
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey")
+					return
+				}
+				if zb0005 {
+					(*z).PlaceHolderKey = PlaceHolderKey{}
+				}
+				for zb0004 > 0 {
+					zb0004--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey")
+						return
+					}
+					switch string(field) {
+					case "sec":
+						var zb0008 int
+						var zb0009 bool
+						zb0008, zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
+						if _, ok := err.(msgp.TypeError); ok {
+							zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "Sec")
+								return
+							}
+							if zb0008 > 0 {
+								zb0008--
+								bts, err = (*z).PlaceHolderKey.Sec.SignatureVerifier.UnmarshalMsg(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "Sec", "struct-from-array", "SignatureVerifier")
+									return
+								}
+							}
+							if zb0008 > 0 {
+								zb0008--
+								bts, err = msgp.ReadExactBytes(bts, ((*z).PlaceHolderKey.Sec.SK)[:])
+								if err != nil {
+									err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "Sec", "struct-from-array", "SK")
+									return
+								}
+							}
+							if zb0008 > 0 {
+								err = msgp.ErrTooManyArrayFields(zb0008)
+								if err != nil {
+									err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "Sec", "struct-from-array")
+									return
+								}
+							}
+						} else {
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "Sec")
+								return
+							}
+							if zb0009 {
+								(*z).PlaceHolderKey.Sec = SignatureSecrets{}
+							}
+							for zb0008 > 0 {
+								zb0008--
+								field, bts, err = msgp.ReadMapKeyZC(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "Sec")
+									return
+								}
+								switch string(field) {
+								case "SignatureVerifier":
+									bts, err = (*z).PlaceHolderKey.Sec.SignatureVerifier.UnmarshalMsg(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "Sec", "SignatureVerifier")
+										return
+									}
+								case "SK":
+									bts, err = msgp.ReadExactBytes(bts, ((*z).PlaceHolderKey.Sec.SK)[:])
+									if err != nil {
+										err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "Sec", "SK")
+										return
+									}
+								default:
+									err = msgp.ErrNoField(string(field))
+									if err != nil {
+										err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey", "Sec")
+										return
+									}
+								}
+							}
+						}
+					default:
+						err = msgp.ErrNoField(string(field))
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "PlaceHolderKey")
+							return
+						}
+					}
+				}
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = PackedSignatureAlgorithm{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "placeholderkey":
+				var zb0010 int
+				var zb0011 bool
+				zb0010, zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "PlaceHolderKey")
+						return
+					}
+					if zb0010 > 0 {
+						zb0010--
+						var zb0012 int
+						var zb0013 bool
+						zb0012, zb0013, bts, err = msgp.ReadMapHeaderBytes(bts)
+						if _, ok := err.(msgp.TypeError); ok {
+							zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "PlaceHolderKey", "struct-from-array", "Sec")
+								return
+							}
+							if zb0012 > 0 {
+								zb0012--
+								bts, err = (*z).PlaceHolderKey.Sec.SignatureVerifier.UnmarshalMsg(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "PlaceHolderKey", "struct-from-array", "Sec", "struct-from-array", "SignatureVerifier")
+									return
+								}
+							}
+							if zb0012 > 0 {
+								zb0012--
+								bts, err = msgp.ReadExactBytes(bts, ((*z).PlaceHolderKey.Sec.SK)[:])
+								if err != nil {
+									err = msgp.WrapError(err, "PlaceHolderKey", "struct-from-array", "Sec", "struct-from-array", "SK")
+									return
+								}
+							}
+							if zb0012 > 0 {
+								err = msgp.ErrTooManyArrayFields(zb0012)
+								if err != nil {
+									err = msgp.WrapError(err, "PlaceHolderKey", "struct-from-array", "Sec", "struct-from-array")
+									return
+								}
+							}
+						} else {
+							if err != nil {
+								err = msgp.WrapError(err, "PlaceHolderKey", "struct-from-array", "Sec")
+								return
+							}
+							if zb0013 {
+								(*z).PlaceHolderKey.Sec = SignatureSecrets{}
+							}
+							for zb0012 > 0 {
+								zb0012--
+								field, bts, err = msgp.ReadMapKeyZC(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "PlaceHolderKey", "struct-from-array", "Sec")
+									return
+								}
+								switch string(field) {
+								case "SignatureVerifier":
+									bts, err = (*z).PlaceHolderKey.Sec.SignatureVerifier.UnmarshalMsg(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "PlaceHolderKey", "struct-from-array", "Sec", "SignatureVerifier")
+										return
+									}
+								case "SK":
+									bts, err = msgp.ReadExactBytes(bts, ((*z).PlaceHolderKey.Sec.SK)[:])
+									if err != nil {
+										err = msgp.WrapError(err, "PlaceHolderKey", "struct-from-array", "Sec", "SK")
+										return
+									}
+								default:
+									err = msgp.ErrNoField(string(field))
+									if err != nil {
+										err = msgp.WrapError(err, "PlaceHolderKey", "struct-from-array", "Sec")
+										return
+									}
+								}
+							}
+						}
+					}
+					if zb0010 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0010)
+						if err != nil {
+							err = msgp.WrapError(err, "PlaceHolderKey", "struct-from-array")
+							return
+						}
+					}
+				} else {
+					if err != nil {
+						err = msgp.WrapError(err, "PlaceHolderKey")
+						return
+					}
+					if zb0011 {
+						(*z).PlaceHolderKey = PlaceHolderKey{}
+					}
+					for zb0010 > 0 {
+						zb0010--
+						field, bts, err = msgp.ReadMapKeyZC(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "PlaceHolderKey")
+							return
+						}
+						switch string(field) {
+						case "sec":
+							var zb0014 int
+							var zb0015 bool
+							zb0014, zb0015, bts, err = msgp.ReadMapHeaderBytes(bts)
+							if _, ok := err.(msgp.TypeError); ok {
+								zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "PlaceHolderKey", "Sec")
+									return
+								}
+								if zb0014 > 0 {
+									zb0014--
+									bts, err = (*z).PlaceHolderKey.Sec.SignatureVerifier.UnmarshalMsg(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "PlaceHolderKey", "Sec", "struct-from-array", "SignatureVerifier")
+										return
+									}
+								}
+								if zb0014 > 0 {
+									zb0014--
+									bts, err = msgp.ReadExactBytes(bts, ((*z).PlaceHolderKey.Sec.SK)[:])
+									if err != nil {
+										err = msgp.WrapError(err, "PlaceHolderKey", "Sec", "struct-from-array", "SK")
+										return
+									}
+								}
+								if zb0014 > 0 {
+									err = msgp.ErrTooManyArrayFields(zb0014)
+									if err != nil {
+										err = msgp.WrapError(err, "PlaceHolderKey", "Sec", "struct-from-array")
+										return
+									}
+								}
+							} else {
+								if err != nil {
+									err = msgp.WrapError(err, "PlaceHolderKey", "Sec")
+									return
+								}
+								if zb0015 {
+									(*z).PlaceHolderKey.Sec = SignatureSecrets{}
+								}
+								for zb0014 > 0 {
+									zb0014--
+									field, bts, err = msgp.ReadMapKeyZC(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "PlaceHolderKey", "Sec")
+										return
+									}
+									switch string(field) {
+									case "SignatureVerifier":
+										bts, err = (*z).PlaceHolderKey.Sec.SignatureVerifier.UnmarshalMsg(bts)
+										if err != nil {
+											err = msgp.WrapError(err, "PlaceHolderKey", "Sec", "SignatureVerifier")
+											return
+										}
+									case "SK":
+										bts, err = msgp.ReadExactBytes(bts, ((*z).PlaceHolderKey.Sec.SK)[:])
+										if err != nil {
+											err = msgp.WrapError(err, "PlaceHolderKey", "Sec", "SK")
+											return
+										}
+									default:
+										err = msgp.ErrNoField(string(field))
+										if err != nil {
+											err = msgp.WrapError(err, "PlaceHolderKey", "Sec")
+											return
+										}
+									}
+								}
+							}
+						default:
+							err = msgp.ErrNoField(string(field))
+							if err != nil {
+								err = msgp.WrapError(err, "PlaceHolderKey")
+								return
+							}
+						}
+					}
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *PackedSignatureAlgorithm) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PackedSignatureAlgorithm)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *PackedSignatureAlgorithm) Msgsize() (s int) {
+	s = 1 + 15 + 1 + 4 + 1 + 18 + (*z).PlaceHolderKey.Sec.SignatureVerifier.Msgsize() + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *PackedSignatureAlgorithm) MsgIsZero() bool {
+	return (((*z).PlaceHolderKey.Sec.SignatureVerifier.MsgIsZero()) && ((*z).PlaceHolderKey.Sec.SK == (ed25519PrivateKey{})))
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *PackedVerifyingKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(1)
+	var zb0001Mask uint8 /* 2 bits */
+	if (*z).PlaceHolderPublicKey.SignatureVerifier.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "placeholder"
+			o = append(o, 0xab, 0x70, 0x6c, 0x61, 0x63, 0x65, 0x68, 0x6f, 0x6c, 0x64, 0x65, 0x72)
+			// omitempty: check for empty values
+			zb0002Len := uint32(1)
+			var zb0002Mask uint8 /* 2 bits */
+			if (*z).PlaceHolderPublicKey.SignatureVerifier.MsgIsZero() {
+				zb0002Len--
+				zb0002Mask |= 0x2
+			}
+			// variable map header, size zb0002Len
+			o = append(o, 0x80|uint8(zb0002Len))
+			if (zb0002Mask & 0x2) == 0 { // if not empty
+				// string "sigVerifier"
+				o = append(o, 0xab, 0x73, 0x69, 0x67, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
+				o = (*z).PlaceHolderPublicKey.SignatureVerifier.MarshalMsg(o)
+			}
+		}
+	}
+	return
+}
+
+func (_ *PackedVerifyingKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PackedVerifyingKey)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PackedVerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			var zb0003 int
+			var zb0004 bool
+			zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if _, ok := err.(msgp.TypeError); ok {
+				zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "PlaceHolderPublicKey")
+					return
+				}
+				if zb0003 > 0 {
+					zb0003--
+					bts, err = (*z).PlaceHolderPublicKey.SignatureVerifier.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "PlaceHolderPublicKey", "struct-from-array", "SignatureVerifier")
+						return
+					}
+				}
+				if zb0003 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0003)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "PlaceHolderPublicKey", "struct-from-array")
+						return
+					}
+				}
+			} else {
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "PlaceHolderPublicKey")
+					return
+				}
+				if zb0004 {
+					(*z).PlaceHolderPublicKey = PlaceHolderPublicKey{}
+				}
+				for zb0003 > 0 {
+					zb0003--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "PlaceHolderPublicKey")
+						return
+					}
+					switch string(field) {
+					case "sigVerifier":
+						bts, err = (*z).PlaceHolderPublicKey.SignatureVerifier.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "PlaceHolderPublicKey", "SignatureVerifier")
+							return
+						}
+					default:
+						err = msgp.ErrNoField(string(field))
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "PlaceHolderPublicKey")
+							return
+						}
+					}
+				}
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = PackedVerifyingKey{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "placeholder":
+				var zb0005 int
+				var zb0006 bool
+				zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "PlaceHolderPublicKey")
+						return
+					}
+					if zb0005 > 0 {
+						zb0005--
+						bts, err = (*z).PlaceHolderPublicKey.SignatureVerifier.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "PlaceHolderPublicKey", "struct-from-array", "SignatureVerifier")
+							return
+						}
+					}
+					if zb0005 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0005)
+						if err != nil {
+							err = msgp.WrapError(err, "PlaceHolderPublicKey", "struct-from-array")
+							return
+						}
+					}
+				} else {
+					if err != nil {
+						err = msgp.WrapError(err, "PlaceHolderPublicKey")
+						return
+					}
+					if zb0006 {
+						(*z).PlaceHolderPublicKey = PlaceHolderPublicKey{}
+					}
+					for zb0005 > 0 {
+						zb0005--
+						field, bts, err = msgp.ReadMapKeyZC(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "PlaceHolderPublicKey")
+							return
+						}
+						switch string(field) {
+						case "sigVerifier":
+							bts, err = (*z).PlaceHolderPublicKey.SignatureVerifier.UnmarshalMsg(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "PlaceHolderPublicKey", "SignatureVerifier")
+								return
+							}
+						default:
+							err = msgp.ErrNoField(string(field))
+							if err != nil {
+								err = msgp.WrapError(err, "PlaceHolderPublicKey")
+								return
+							}
+						}
+					}
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *PackedVerifyingKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*PackedVerifyingKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *PackedVerifyingKey) Msgsize() (s int) {
+	s = 1 + 12 + 1 + 12 + (*z).PlaceHolderPublicKey.SignatureVerifier.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *PackedVerifyingKey) MsgIsZero() bool {
+	return ((*z).PlaceHolderPublicKey.SignatureVerifier.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *PlaceHolderKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
+	if ((*z).Sec.SignatureVerifier.MsgIsZero()) && ((*z).Sec.SK == (ed25519PrivateKey{})) {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "sec"
+			o = append(o, 0xa3, 0x73, 0x65, 0x63)
+			// map header, size 2
+			// string "SK"
+			o = append(o, 0x82, 0xa2, 0x53, 0x4b)
+			o = msgp.AppendBytes(o, ((*z).Sec.SK)[:])
 			// string "SignatureVerifier"
 			o = append(o, 0xb1, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-			o = (*z).SignatureSecrets.SignatureVerifier.MarshalMsg(o)
+			o = (*z).Sec.SignatureVerifier.MarshalMsg(o)
 		}
 	}
 	return
@@ -1814,18 +2589,74 @@ func (z *PlaceHolderKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).SignatureSecrets.SignatureVerifier.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SignatureVerifier")
-				return
-			}
-		}
-		if zb0002 > 0 {
-			zb0002--
-			bts, err = msgp.ReadExactBytes(bts, ((*z).SignatureSecrets.SK)[:])
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "SK")
-				return
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if _, ok := err.(msgp.TypeError); ok {
+				zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Sec")
+					return
+				}
+				if zb0004 > 0 {
+					zb0004--
+					bts, err = (*z).Sec.SignatureVerifier.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Sec", "struct-from-array", "SignatureVerifier")
+						return
+					}
+				}
+				if zb0004 > 0 {
+					zb0004--
+					bts, err = msgp.ReadExactBytes(bts, ((*z).Sec.SK)[:])
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Sec", "struct-from-array", "SK")
+						return
+					}
+				}
+				if zb0004 > 0 {
+					err = msgp.ErrTooManyArrayFields(zb0004)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Sec", "struct-from-array")
+						return
+					}
+				}
+			} else {
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Sec")
+					return
+				}
+				if zb0005 {
+					(*z).Sec = SignatureSecrets{}
+				}
+				for zb0004 > 0 {
+					zb0004--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Sec")
+						return
+					}
+					switch string(field) {
+					case "SignatureVerifier":
+						bts, err = (*z).Sec.SignatureVerifier.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Sec", "SignatureVerifier")
+							return
+						}
+					case "SK":
+						bts, err = msgp.ReadExactBytes(bts, ((*z).Sec.SK)[:])
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Sec", "SK")
+							return
+						}
+					default:
+						err = msgp.ErrNoField(string(field))
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Sec")
+							return
+						}
+					}
+				}
 			}
 		}
 		if zb0002 > 0 {
@@ -1851,17 +2682,75 @@ func (z *PlaceHolderKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "SignatureVerifier":
-				bts, err = (*z).SignatureSecrets.SignatureVerifier.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "SignatureVerifier")
-					return
-				}
-			case "SK":
-				bts, err = msgp.ReadExactBytes(bts, ((*z).SignatureSecrets.SK)[:])
-				if err != nil {
-					err = msgp.WrapError(err, "SK")
-					return
+			case "sec":
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Sec")
+						return
+					}
+					if zb0006 > 0 {
+						zb0006--
+						bts, err = (*z).Sec.SignatureVerifier.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Sec", "struct-from-array", "SignatureVerifier")
+							return
+						}
+					}
+					if zb0006 > 0 {
+						zb0006--
+						bts, err = msgp.ReadExactBytes(bts, ((*z).Sec.SK)[:])
+						if err != nil {
+							err = msgp.WrapError(err, "Sec", "struct-from-array", "SK")
+							return
+						}
+					}
+					if zb0006 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0006)
+						if err != nil {
+							err = msgp.WrapError(err, "Sec", "struct-from-array")
+							return
+						}
+					}
+				} else {
+					if err != nil {
+						err = msgp.WrapError(err, "Sec")
+						return
+					}
+					if zb0007 {
+						(*z).Sec = SignatureSecrets{}
+					}
+					for zb0006 > 0 {
+						zb0006--
+						field, bts, err = msgp.ReadMapKeyZC(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Sec")
+							return
+						}
+						switch string(field) {
+						case "SignatureVerifier":
+							bts, err = (*z).Sec.SignatureVerifier.UnmarshalMsg(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Sec", "SignatureVerifier")
+								return
+							}
+						case "SK":
+							bts, err = msgp.ReadExactBytes(bts, ((*z).Sec.SK)[:])
+							if err != nil {
+								err = msgp.WrapError(err, "Sec", "SK")
+								return
+							}
+						default:
+							err = msgp.ErrNoField(string(field))
+							if err != nil {
+								err = msgp.WrapError(err, "Sec")
+								return
+							}
+						}
+					}
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -1883,13 +2772,13 @@ func (_ *PlaceHolderKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *PlaceHolderKey) Msgsize() (s int) {
-	s = 1 + 18 + (*z).SignatureSecrets.SignatureVerifier.Msgsize() + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
+	s = 1 + 4 + 1 + 18 + (*z).Sec.SignatureVerifier.Msgsize() + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *PlaceHolderKey) MsgIsZero() bool {
-	return ((*z).SignatureSecrets.SignatureVerifier.MsgIsZero()) && ((*z).SignatureSecrets.SK == (ed25519PrivateKey{}))
+	return (((*z).Sec.SignatureVerifier.MsgIsZero()) && ((*z).Sec.SK == (ed25519PrivateKey{})))
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1900,14 +2789,14 @@ func (z *PlaceHolderPublicKey) MarshalMsg(b []byte) (o []byte) {
 	var zb0001Mask uint8 /* 2 bits */
 	if (*z).SignatureVerifier.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x1
+		zb0001Mask |= 0x2
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
-		if (zb0001Mask & 0x1) == 0 { // if not empty
-			// string "SignatureVerifier"
-			o = append(o, 0xb1, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "sigVerifier"
+			o = append(o, 0xab, 0x73, 0x69, 0x67, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
 			o = (*z).SignatureVerifier.MarshalMsg(o)
 		}
 	}
@@ -1963,7 +2852,7 @@ func (z *PlaceHolderPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "SignatureVerifier":
+			case "sigVerifier":
 				bts, err = (*z).SignatureVerifier.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "SignatureVerifier")
@@ -1989,7 +2878,7 @@ func (_ *PlaceHolderPublicKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *PlaceHolderPublicKey) Msgsize() (s int) {
-	s = 1 + 18 + (*z).SignatureVerifier.Msgsize()
+	s = 1 + 12 + (*z).SignatureVerifier.Msgsize()
 	return
 }
 
@@ -2152,6 +3041,143 @@ func (z *Signature) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Signature) MsgIsZero() bool {
 	return (*z) == (Signature{})
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *SignatureAlgorithm) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 4 bits */
+	if (*z).Pack.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Type == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "keys"
+			o = append(o, 0xa4, 0x6b, 0x65, 0x79, 0x73)
+			o = (*z).Pack.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "sigType"
+			o = append(o, 0xa7, 0x73, 0x69, 0x67, 0x54, 0x79, 0x70, 0x65)
+			o = msgp.AppendUint64(o, uint64((*z).Type))
+		}
+	}
+	return
+}
+
+func (_ *SignatureAlgorithm) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignatureAlgorithm)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *SignatureAlgorithm) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			{
+				var zb0003 uint64
+				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Type")
+					return
+				}
+				(*z).Type = AlgorithmType(zb0003)
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Pack.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Pack")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = SignatureAlgorithm{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "sigType":
+				{
+					var zb0004 uint64
+					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Type")
+						return
+					}
+					(*z).Type = AlgorithmType(zb0004)
+				}
+			case "keys":
+				bts, err = (*z).Pack.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Pack")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *SignatureAlgorithm) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignatureAlgorithm)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *SignatureAlgorithm) Msgsize() (s int) {
+	s = 1 + 8 + msgp.Uint64Size + 5 + (*z).Pack.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *SignatureAlgorithm) MsgIsZero() bool {
+	return ((*z).Type == 0) && ((*z).Pack.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2377,6 +3403,143 @@ func (z *VRFSecrets) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z *VerifyingKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 4 bits */
+	if (*z).Pack.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Type == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "pubKeys"
+			o = append(o, 0xa7, 0x70, 0x75, 0x62, 0x4b, 0x65, 0x79, 0x73)
+			o = (*z).Pack.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "verType"
+			o = append(o, 0xa7, 0x76, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65)
+			o = msgp.AppendUint64(o, uint64((*z).Type))
+		}
+	}
+	return
+}
+
+func (_ *VerifyingKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*VerifyingKey)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *VerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			{
+				var zb0003 uint64
+				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Type")
+					return
+				}
+				(*z).Type = AlgorithmType(zb0003)
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Pack.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Pack")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = VerifyingKey{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "verType":
+				{
+					var zb0004 uint64
+					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Type")
+						return
+					}
+					(*z).Type = AlgorithmType(zb0004)
+				}
+			case "pubKeys":
+				bts, err = (*z).Pack.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Pack")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *VerifyingKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*VerifyingKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *VerifyingKey) Msgsize() (s int) {
+	s = 1 + 8 + msgp.Uint64Size + 8 + (*z).Pack.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *VerifyingKey) MsgIsZero() bool {
+	return ((*z).Type == 0) && ((*z).Pack.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *VrfOutput) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendBytes(o, (*z)[:])
@@ -2530,52 +3693,6 @@ func (z *VrfPubkey) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *VrfPubkey) MsgIsZero() bool {
 	return (*z) == (VrfPubkey{})
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z algorithmType) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint64(o, uint64(z))
-	return
-}
-
-func (_ algorithmType) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(algorithmType)
-	if !ok {
-		_, ok = (z).(*algorithmType)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *algorithmType) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 uint64
-		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = algorithmType(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *algorithmType) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*algorithmType)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z algorithmType) Msgsize() (s int) {
-	s = msgp.Uint64Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z algorithmType) MsgIsZero() bool {
-	return z == 0
 }
 
 // MarshalMsg implements msgp.Marshaler
