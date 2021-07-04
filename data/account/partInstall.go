@@ -95,17 +95,9 @@ func partMigrate(tx *sql.Tx) (err error) {
 		return ErrUnsupportedSchema
 	}
 
-	if partVersion == 1 {
-		_, err = tx.Exec("ALTER TABLE ParticipationAccount ADD keyDilution INTEGER NOT NULL DEFAULT 0")
-		if err != nil {
-			return
-		}
-
-		partVersion = 2
-		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
-		if err != nil {
-			return
-		}
+	partVersion, err = updateDB(tx, partVersion)
+	if err != nil {
+		return err
 	}
 
 	if partVersion != PartTableSchemaVersion {
@@ -113,4 +105,33 @@ func partMigrate(tx *sql.Tx) (err error) {
 	}
 
 	return
+}
+
+func updateDB(tx *sql.Tx, partVersion int) (int, error) {
+	if partVersion == 1 {
+		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD keyDilution INTEGER NOT NULL DEFAULT 0")
+		if err != nil {
+			return 0, nil
+		}
+
+		partVersion = 2
+		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
+		if err != nil {
+			return 0, nil
+		}
+	}
+
+	if partVersion == 2 {
+		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD keyDilution INTEGER NOT NULL DEFAULT 0")
+		if err != nil {
+			return 0, nil
+		}
+
+		partVersion = 3
+		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
+		if err != nil {
+			return 0, nil
+		}
+	}
+	return partVersion, nil
 }
