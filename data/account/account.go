@@ -135,7 +135,7 @@ func (root Root) Address() basics.Address {
 // RestoreParticipation restores a Participation from a database
 // handle.
 func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err error) {
-	var rawParent, rawVRF, rawVoting []byte
+	var rawParent, rawVRF, rawVoting, rawCompactCert []byte
 
 	err = Migrate(store)
 	if err != nil {
@@ -153,8 +153,9 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 			logging.Base().Infof("RestoreParticipation: state not found (n = %v)", nrows)
 		}
 
-		row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution from ParticipationAccount")
-		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution)
+		row = tx.QueryRow("select parent, vrf, voting,compactCert, firstValid, lastValid, keyDilution from ParticipationAccount")
+
+		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &rawCompactCert, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution)
 		if err != nil {
 			return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err)
 		}
@@ -175,6 +176,11 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 	acc.Voting = &crypto.OneTimeSignatureSecrets{}
 	err = protocol.Decode(rawVoting, acc.Voting)
 	if err != nil {
+		return PersistedParticipation{}, err
+	}
+
+	acc.CompactCertKey = &crypto.SignatureAlgorithm{}
+	if err = protocol.Decode(rawCompactCert, acc.CompactCertKey); err != nil {
 		return PersistedParticipation{}, err
 	}
 
