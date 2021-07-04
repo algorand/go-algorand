@@ -22,8 +22,6 @@ type SignatureAlgorithm struct {
 
 	Type AlgorithmType            `codec:"sigType"`
 	Pack PackedSignatureAlgorithm `codec:"keys"`
-
-	s Signer
 }
 
 type VerifyingKey struct {
@@ -31,46 +29,26 @@ type VerifyingKey struct {
 
 	Type AlgorithmType      `codec:"verType"`
 	Pack PackedVerifyingKey `codec:"pubKeys"`
-
-	v Verifier
 }
 
 func (s *SignatureAlgorithm) Sign(message Hashable) Signature {
-	return s.getSigner().Sign(message)
+	return s.Pack.getSigner(s.Type).Sign(message)
 }
 
 func (s *SignatureAlgorithm) SignBytes(message []byte) Signature {
-	return s.getSigner().SignBytes(message)
+	return s.Pack.getSigner(s.Type).SignBytes(message)
 }
 
 func (s *SignatureAlgorithm) GetVerifier() VerifyingKey {
-	return s.getSigner().GetVerifier()
-}
-
-func (s *SignatureAlgorithm) getSigner() Signer {
-	if s.s == nil {
-		s.s = s.Pack.getSigner(s.Type)
-	}
-	return s.s
+	return s.Pack.getSigner(s.Type).GetVerifier()
 }
 
 func (v *VerifyingKey) Verify(message Hashable, sig Signature) bool {
-	return v.getVerifier().Verify(message, sig)
+	return v.Pack.getVerifier(v.Type).Verify(message, sig)
 }
 
 func (v *VerifyingKey) VerifyBytes(message []byte, sig Signature) bool {
-	return v.getVerifier().VerifyBytes(message, sig)
-}
-
-func (v *VerifyingKey) setup() {
-	v.v = v.Pack.getVerifier(v.Type)
-}
-
-func (v *VerifyingKey) getVerifier() Verifier {
-	if v.v == nil {
-		v.v = v.Pack.getVerifier(v.Type)
-	}
-	return v.v
+	return v.Pack.getVerifier(v.Type).VerifyBytes(message, sig)
 }
 
 type PackedVerifyingKey struct {
@@ -107,7 +85,7 @@ func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
 func NewSignerFromSeed(seed Seed, t AlgorithmType) *SignatureAlgorithm {
 	var p PackedSignatureAlgorithm
 	switch t {
-	case 0:
+	case PlaceHolderType:
 		key := GeneratePlaceHolderKey(seed)
 		p = PackedSignatureAlgorithm{
 			PlaceHolderKey: *key,
@@ -128,7 +106,6 @@ func NewSigner(t AlgorithmType) *SignatureAlgorithm {
 func NewVerifyingKey(t AlgorithmType, v Verifier) VerifyingKey {
 	vKey := VerifyingKey{
 		Type: t,
-		v:    v,
 		Pack: PackedVerifyingKey{},
 	}
 	switch t {

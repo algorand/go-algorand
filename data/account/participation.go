@@ -46,7 +46,7 @@ type Participation struct {
 
 	VRF            *crypto.VRFSecrets
 	Voting         *crypto.OneTimeSignatureSecrets
-	CompactCertKey *crypto.PlaceHolderKey
+	CompactCertKey *crypto.SignatureAlgorithm
 
 	// The first and last rounds for which this account is valid, respectively.
 	//
@@ -181,7 +181,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	vrf := crypto.GenerateVRFSecrets()
 
 	// Generate new CompactCertKey
-	compcertKey := crypto.GeneratePlaceHolderKey()
+	compcertKey := crypto.NewSigner(crypto.PlaceHolderType)
 
 	// Construct the Participation containing these keys to be persisted
 	part = PersistedParticipation{
