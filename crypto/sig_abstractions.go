@@ -4,15 +4,17 @@ type AlgorithmType uint64
 
 const PlaceHolderType AlgorithmType = 1 + iota
 
+type ByteSignature []byte
+
 type Signer interface {
-	Sign(message Hashable) Signature
-	SignBytes(message []byte) Signature
+	Sign(message Hashable) ByteSignature
+	SignBytes(message []byte) ByteSignature
 	GetVerifier() VerifyingKey
 }
 
 type Verifier interface {
-	Verify(message Hashable, sig Signature) bool
-	VerifyBytes(message []byte, sig Signature) bool
+	Verify(message Hashable, sig ByteSignature) bool
+	VerifyBytes(message []byte, sig ByteSignature) bool
 }
 
 // SignatureAlgorithm holds a Signer, and the type of algorithm the Signer conforms to.
@@ -31,11 +33,11 @@ type VerifyingKey struct {
 	Pack PackedVerifyingKey `codec:"pubKeys"`
 }
 
-func (s *SignatureAlgorithm) Sign(message Hashable) Signature {
+func (s *SignatureAlgorithm) Sign(message Hashable) []byte {
 	return s.Pack.getSigner(s.Type).Sign(message)
 }
 
-func (s *SignatureAlgorithm) SignBytes(message []byte) Signature {
+func (s *SignatureAlgorithm) SignBytes(message []byte) []byte {
 	return s.Pack.getSigner(s.Type).SignBytes(message)
 }
 
@@ -43,11 +45,11 @@ func (s *SignatureAlgorithm) GetVerifier() VerifyingKey {
 	return s.Pack.getSigner(s.Type).GetVerifier()
 }
 
-func (v *VerifyingKey) Verify(message Hashable, sig Signature) bool {
+func (v *VerifyingKey) Verify(message Hashable, sig []byte) bool {
 	return v.Pack.getVerifier(v.Type).Verify(message, sig)
 }
 
-func (v *VerifyingKey) VerifyBytes(message []byte, sig Signature) bool {
+func (v *VerifyingKey) VerifyBytes(message []byte, sig []byte) bool {
 	return v.Pack.getVerifier(v.Type).VerifyBytes(message, sig)
 }
 
