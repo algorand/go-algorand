@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -104,6 +103,10 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 		OneTimeSignatureSecrets: part.Voting,
 		OptionalKeyDilution:     part.KeyDilution,
 	}
+}
+
+func (part Participation) CompactCertSigner() *crypto.SignatureAlgorithm {
+	return part.CompactCertKey
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
@@ -206,6 +209,7 @@ func (part PersistedParticipation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
 	voting := part.Voting.Snapshot()
 	rawVoting := protocol.Encode(&voting)
+	rawCompactCert := protocol.Encode(part.CompactCertKey)
 
 	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := partInstallDatabase(tx)
@@ -213,8 +217,8 @@ func (part PersistedParticipation) Persist() error {
 			return fmt.Errorf("failed to install database: %w", err)
 		}
 
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?)",
-			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, compactCert, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?,?)",
+			part.Parent[:], rawVRF, rawVoting, rawCompactCert, part.FirstValid, part.LastValid, part.KeyDilution)
 		if err != nil {
 			return fmt.Errorf("failed to insert account: %w", err)
 		}
