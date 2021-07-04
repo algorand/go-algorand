@@ -1313,6 +1313,7 @@ var partkeyInfoCmd = &cobra.Command{
 					LastValid:       part.LastValid,
 					VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
 					SelectionID:     part.VRFSecrets().PK,
+					CompactCertId:   part.CompactCertSigner().GetVerifier(),
 					VoteKeyDilution: part.KeyDilution,
 				}
 				if certSigner := part.BlockProofSigner(); certSigner != nil {
