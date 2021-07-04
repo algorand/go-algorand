@@ -1283,6 +1283,7 @@ type partkeyInfo struct {
 	LastValid       basics.Round                    `codec:"last"`
 	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID     crypto.VRFVerifier              `codec:"sel"`
+	CompactCertId   crypto.VerifyingKey             `codec:"compcert"`
 	VoteKeyDilution uint64                          `codec:"voteKD"`
 }
 
@@ -1311,6 +1312,7 @@ var partkeyInfoCmd = &cobra.Command{
 					LastValid:       part.LastValid,
 					VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
 					SelectionID:     part.VRFSecrets().PK,
+					CompactCertId:   part.CompactCertSigner().GetVerifier(),
 					VoteKeyDilution: part.KeyDilution,
 				}
 				infoString := protocol.EncodeJSON(&info)
