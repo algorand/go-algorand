@@ -25,7 +25,7 @@ import (
 const PartTableSchemaName = "parttable"
 
 // PartTableSchemaVersion is the latest version of the PartTable schema
-const PartTableSchemaVersion = 2
+const PartTableSchemaVersion = 3
 
 // ErrUnsupportedSchema is the error returned when the PartTable schema version is wrong.
 var ErrUnsupportedSchema = fmt.Errorf("unsupported participation file schema version (expected %d)", PartTableSchemaVersion)
@@ -35,9 +35,11 @@ func partInstallDatabase(tx *sql.Tx) error {
 
 	_, err = tx.Exec(`CREATE TABLE ParticipationAccount (
 		parent BLOB,
-
-		vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
-		voting BLOB, --*  msgpack encoding of ParticipationAccount.voting
+		
+		--* participation keys
+		vrf BLOB,          --*  msgpack encoding of ParticipationAccount.vrf
+		voting BLOB,       --*  msgpack encoding of ParticipationAccount.voting
+		compactCert BLOB,  --*  msgpack encoding of ParticipationAccount.CompactCertKey
 
 		firstValid INTEGER,
 		lastValid INTEGER,
