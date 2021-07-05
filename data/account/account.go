@@ -167,6 +167,8 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 		return PersistedParticipation{}, err
 	}
 
+	acc.Store = store
+
 	acc.VRF = &crypto.VRFSecrets{}
 	err = protocol.Decode(rawVRF, acc.VRF)
 	if err != nil {
@@ -179,11 +181,13 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 		return PersistedParticipation{}, err
 	}
 
+	if len(rawCompactCert) == 0 {
+		return acc, nil
+	}
 	acc.CompactCertKey = &crypto.SignatureAlgorithm{}
 	if err = protocol.Decode(rawCompactCert, acc.CompactCertKey); err != nil {
 		return PersistedParticipation{}, err
 	}
 
-	acc.Store = store
 	return acc, nil
 }
