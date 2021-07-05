@@ -41,15 +41,23 @@ func (p *PlaceHolderKey) GetVerifier() VerifyingKey {
 }
 
 // Verify that a signature match to a specific message
-func (p *PlaceHolderPublicKey) Verify(message Hashable, sig ByteSignature) bool {
-	var scopy Signature
-	copy(scopy[:], sig)
-	return p.SignatureVerifier.Verify(message, scopy)
+func (p *PlaceHolderPublicKey) Verify(message Hashable, sig ByteSignature) error {
+	if !p.SignatureVerifier.Verify(message, byteSigToSignatureType(sig)) {
+		return ErrBadSignature
+	}
+	return nil
 }
 
 // VerifyBytes checks that a signature match to a specific byte message
-func (p *PlaceHolderPublicKey) VerifyBytes(message []byte, sig ByteSignature) bool {
+func (p *PlaceHolderPublicKey) VerifyBytes(message []byte, sig ByteSignature) error {
+	if !p.SignatureVerifier.VerifyBytes(message, byteSigToSignatureType(sig)) {
+		return ErrBadSignature
+	}
+	return nil
+}
+
+func byteSigToSignatureType(sig ByteSignature) Signature {
 	var scopy Signature
 	copy(scopy[:], sig)
-	return p.SignatureVerifier.VerifyBytes(message, scopy)
+	return scopy
 }
