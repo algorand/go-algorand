@@ -19,7 +19,9 @@ package account
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -179,41 +181,96 @@ func TestRead(t *testing.T) {
 
 func testDBMigration(t *testing.T, ppart PersistedParticipation) {
 	a := require.New(t)
-	_, rootDB, partDB, err := createTestDBs(t, a)
-	a.NoError(err)
-	defer rootDB.Close()
-	defer partDB.Close()
-
 	part := ppart.Participation
 
-	a.NoError(setupTestDBAtVer1(err, partDB, part))
+	t.Run("upgrade from version 1", func(t *testing.T) {
+		_, rootDB, partDB, err := createTestDBs(t, a)
+		a.NoError(err)
+		defer rootDB.Close()
+		defer partDB.Close()
 
-	a.NoError(Migrate(partDB))
+		a.NoError(setupTestDBAtVer1(partDB, part))
+		a.NoError(Migrate(partDB))
 
-	rawCompCert := protocol.Encode(part.CompactCertKey)
-	err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec("UPDATE ParticipationAccount SET compactCert=?, keyDilution=?;",
-			rawCompCert, part.KeyDilution)
-		return err
+		a.NoError(testDBContainsAllColumns(partDB))
 	})
-	a.NoError(err)
 
-	retrievedPart, err := RestoreParticipation(partDB)
-	a.NoError(err)
-	a.NotNil(retrievedPart)
+	t.Run("upgrade from version 2", func(t *testing.T) {
+		_, rootDB, partDB, err := createTestDBs(t, a)
+		a.NoError(err)
+		defer rootDB.Close()
+		defer partDB.Close()
 
-	// comparing the outputs:
-	a.Equal(intoComparable(ppart), intoComparable(retrievedPart))
+		a.NoError(setupTestDBAtVer2(partDB, part))
+		a.NoError(Migrate(partDB))
+
+		a.NoError(testDBContainsAllColumns(partDB))
+	})
 }
 
-func setupTestDBAtVer1(err error, partDB db.Accessor, part Participation) error {
+func testDBContainsAllColumns(partDB db.Accessor) error {
+	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec(fmt.Sprintf("select %v From ParticipationAccount;",
+			strings.Join(partableColumnNames[:], ",")))
+		return err
+	})
+}
+
+func setupTestDBAtVer2(partDB db.Accessor, part Participation) error {
 	rawVRF := protocol.Encode(part.VRF)
 	voting := part.Voting.Snapshot()
 	rawVoting := protocol.Encode(&voting)
 
 	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		//set up an actual DB..
-		_, err = tx.Exec(`CREATE TABLE ParticipationAccount (
+		_, err := tx.Exec(`CREATE TABLE ParticipationAccount (
+		parent BLOB,
+
+		vrf BLOB,
+		voting BLOB,
+
+		firstValid INTEGER,
+		lastValid INTEGER,
+
+		keyDilution INTEGER NOT NULL DEFAULT 0
+	);`)
+		if err != nil {
+			return nil
+		}
+
+		if err := setupSchemaForTest(tx, 2); err != nil {
+			return err
+		}
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?,?)",
+			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+func setupSchemaForTest(tx *sql.Tx, version int) error {
+	_, err := tx.Exec(`CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER);`)
+	if err != nil {
+		return nil
+	}
+
+	_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", PartTableSchemaName, version)
+	if err != nil {
+		return nil
+	}
+	return err
+}
+
+func setupTestDBAtVer1(partDB db.Accessor, part Participation) error {
+	rawVRF := protocol.Encode(part.VRF)
+	voting := part.Voting.Snapshot()
+	rawVoting := protocol.Encode(&voting)
+
+	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		//set up an actual DB..
+		_, err := tx.Exec(`CREATE TABLE ParticipationAccount (
 		parent BLOB,
 		
 		vrf BLOB,
@@ -226,13 +283,7 @@ func setupTestDBAtVer1(err error, partDB db.Accessor, part Participation) error 
 			return err
 		}
 
-		_, err = tx.Exec(`CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER);`)
-		if err != nil {
-			return err
-		}
-
-		_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", PartTableSchemaName, 1)
-		if err != nil {
+		if err := setupSchemaForTest(tx, 1); err != nil {
 			return err
 		}
 		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid) VALUES (?, ?, ?, ?, ?)",
@@ -243,8 +294,6 @@ func setupTestDBAtVer1(err error, partDB db.Accessor, part Participation) error 
 		return nil
 	})
 }
-
-// todo test the advancement of a single migration verion.
 
 type comparablePartition struct {
 	Parent basics.Address

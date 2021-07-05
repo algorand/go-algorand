@@ -24,6 +24,8 @@ import (
 // PartTableSchemaName is the name of the table in the Schema Versions table storing the table + version details
 const PartTableSchemaName = "parttable"
 
+var partableColumnNames = [...]string{"parent", "vrf", "voting", "compactCert", "firstValid", "lastValid", "keyDilution"}
+
 // PartTableSchemaVersion is the latest version of the PartTable schema
 const PartTableSchemaVersion = 3
 
@@ -35,7 +37,7 @@ func partInstallDatabase(tx *sql.Tx) error {
 
 	_, err = tx.Exec(`CREATE TABLE ParticipationAccount (
 		parent BLOB,
-		
+
 		--* participation keys
 		vrf BLOB,          --*  msgpack encoding of ParticipationAccount.vrf
 		voting BLOB,       --*  msgpack encoding of ParticipationAccount.voting
