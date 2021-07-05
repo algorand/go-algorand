@@ -38,12 +38,11 @@ func TestParticipation_NewDB(t *testing.T) {
 
 	_, rootDB, partDB, err := setupParticipationKey(t, a)
 	a.NoError(err)
-	partDB.Close()
-	rootDB.Close()
+	closeDBS(rootDB, partDB)
 }
 
 func setupParticipationKey(t *testing.T, a *require.Assertions) (PersistedParticipation, db.Accessor, db.Accessor, error) {
-	root, rootDB, partDB, err := createTestDBs(t, a)
+	root, rootDB, partDB := createTestDBs(t, a)
 
 	part, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 0, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 	a.NoError(err)
@@ -54,8 +53,16 @@ func setupParticipationKey(t *testing.T, a *require.Assertions) (PersistedPartic
 	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
 	return part, rootDB, partDB, err
 }
+func setupkeyWithNoDBS(t *testing.T, a *require.Assertions) PersistedParticipation {
+	part, rootDB, partDB, err := setupParticipationKey(t, a)
+	a.NoError(err)
+	a.NotNil(part)
 
-func createTestDBs(t *testing.T, a *require.Assertions) (Root, db.Accessor, db.Accessor, error) {
+	closeDBS(rootDB, partDB)
+	return part
+}
+
+func createTestDBs(t *testing.T, a *require.Assertions) (Root, db.Accessor, db.Accessor) {
 	rootDB, err := db.MakeAccessor(t.Name(), false, true)
 	a.NoError(err)
 	a.NotNil(rootDB)
@@ -66,7 +73,8 @@ func createTestDBs(t *testing.T, a *require.Assertions) (Root, db.Accessor, db.A
 	partDB, err := db.MakeAccessor(t.Name()+"_part", false, true)
 	a.NoError(err)
 	a.NotNil(partDB)
-	return root, rootDB, partDB, err
+
+	return root, rootDB, partDB
 }
 
 func getSchemaVersions(db db.Accessor) (versions map[string]int, err error) {
@@ -157,15 +165,14 @@ func BenchmarkOldKeysDeletion(b *testing.B) {
 	part.Close()
 }
 
-func TestRead(t *testing.T) {
+func TestDBMReads(t *testing.T) {
 	a := require.New(t)
 
-	part, rootDB, partDB, err := setupParticipationKey(t, a)
-	a.NoError(err)
-	defer rootDB.Close()
-	defer partDB.Close()
-
 	t.Run("retrieve from DB", func(t *testing.T) {
+		part, rootDB, partDB, err := setupParticipationKey(t, a)
+		a.NoError(err)
+		defer closeDBS(rootDB, partDB)
+
 		retrievedPart, err := RestoreParticipation(partDB)
 		a.NoError(err)
 		a.NotNil(retrievedPart)
@@ -174,20 +181,55 @@ func TestRead(t *testing.T) {
 		a.Equal(intoComparable(part), intoComparable(retrievedPart))
 	})
 
-	t.Run("test migration", func(t *testing.T) {
-		testDBMigration(t, part)
+	t.Run("retrieve from non-upgraded DB at version 1", func(t *testing.T) {
+		ppart := setupkeyWithNoDBS(t, a)
+		_, rootDB, partDB := createTestDBs(t, a)
+		defer closeDBS(rootDB, partDB)
+
+		part := ppart.Participation
+		a.NoError(setupTestDBAtVer1(partDB, part))
+
+		retrivedPart, err := RestoreParticipation(partDB)
+		a.NoError(err)
+		assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+	})
+
+	t.Run("retrieve from non upgraded DB at version 2", func(t *testing.T) {
+		ppart := setupkeyWithNoDBS(t, a)
+		_, rootDB, partDB := createTestDBs(t, a)
+		defer closeDBS(rootDB, partDB)
+
+		part := ppart.Participation
+		a.NoError(setupTestDBAtVer2(partDB, part))
+
+		retrivedPart, err := RestoreParticipation(partDB)
+		a.NoError(err)
+		assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
 	})
 }
 
-func testDBMigration(t *testing.T, ppart PersistedParticipation) {
+func closeDBS(dbAccessor ...db.Accessor) {
+	for _, accessor := range dbAccessor {
+		accessor.Close()
+	}
+}
+
+func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart PersistedParticipation) {
+	a.NotNil(retrivedPart)
+	a.Nil(retrivedPart.CompactCertKey)
+}
+
+func TestDBMigration(t *testing.T) {
 	a := require.New(t)
+	ppart, rootDB, partDB, err := setupParticipationKey(t, a)
+	a.NoError(err)
+	closeDBS(rootDB, partDB)
+
 	part := ppart.Participation
 
 	t.Run("upgrade from version 1", func(t *testing.T) {
-		_, rootDB, partDB, err := createTestDBs(t, a)
-		a.NoError(err)
-		defer rootDB.Close()
-		defer partDB.Close()
+		_, rootDB, partDB := createTestDBs(t, a)
+		defer closeDBS(rootDB, partDB)
 
 		a.NoError(setupTestDBAtVer1(partDB, part))
 		a.NoError(Migrate(partDB))
@@ -196,10 +238,8 @@ func testDBMigration(t *testing.T, ppart PersistedParticipation) {
 	})
 
 	t.Run("upgrade from version 2", func(t *testing.T) {
-		_, rootDB, partDB, err := createTestDBs(t, a)
-		a.NoError(err)
-		defer rootDB.Close()
-		defer partDB.Close()
+		_, rootDB, partDB := createTestDBs(t, a)
+		defer closeDBS(rootDB, partDB)
 
 		a.NoError(setupTestDBAtVer2(partDB, part))
 		a.NoError(Migrate(partDB))
