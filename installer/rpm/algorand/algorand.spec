@@ -54,7 +54,7 @@ mkdir -p %{buildroot}/etc/pki/rpm-gpg
 install -m 644 ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand %{buildroot}/etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
 
 mkdir -p %{buildroot}/usr/lib/algorand/dnf.repos.d
-install -m 644 ${REPO_DIR}/installer/rpm/algorand/algorand-centos-stream8.repo %{buildroot}/usr/lib/algorand/dnf.repos.d/algorand-centos-stream8.repo
+install -m 644 ${REPO_DIR}/installer/rpm/algorand/algorand.repo %{buildroot}/usr/lib/algorand/dnf.repos.d/algorand.repo
 
 
 mkdir -p %{buildroot}/var/lib/algorand/genesis
@@ -96,7 +96,7 @@ fi
 %config(noreplace) /etc/dnf/dnf-cron-algorand.conf
 
 /etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
-/usr/lib/algorand/dnf.repos.d/algorand-centos-stream8.repo
+/usr/lib/algorand/dnf.repos.d/algorand.repo
 
 %changelog
 
