@@ -41,6 +41,19 @@ func TestParticipation_NewDB(t *testing.T) {
 }
 
 func setupParticipationKey(t *testing.T, a *require.Assertions) (PersistedParticipation, db.Accessor, db.Accessor, error) {
+	root, rootDB, partDB, err := createTestDBs(t, a)
+
+	part, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 0, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	a.NoError(err)
+	a.NotNil(part)
+
+	versions, err := getSchemaVersions(partDB)
+	a.NoError(err)
+	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
+	return part, rootDB, partDB, err
+}
+
+func createTestDBs(t *testing.T, a *require.Assertions) (Root, db.Accessor, db.Accessor, error) {
 	rootDB, err := db.MakeAccessor(t.Name(), false, true)
 	a.NoError(err)
 	a.NotNil(rootDB)
@@ -51,15 +64,7 @@ func setupParticipationKey(t *testing.T, a *require.Assertions) (PersistedPartic
 	partDB, err := db.MakeAccessor(t.Name()+"_part", false, true)
 	a.NoError(err)
 	a.NotNil(partDB)
-
-	part, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 0, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
-	a.NoError(err)
-	a.NotNil(part)
-
-	versions, err := getSchemaVersions(partDB)
-	a.NoError(err)
-	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
-	return part, rootDB, partDB, err
+	return root, rootDB, partDB, err
 }
 
 func getSchemaVersions(db db.Accessor) (versions map[string]int, err error) {
@@ -167,7 +172,79 @@ func TestRead(t *testing.T) {
 		a.Equal(intoComparable(part), intoComparable(retrievedPart))
 	})
 
+	t.Run("test migration", func(t *testing.T) {
+		testDBMigration(t, part)
+	})
 }
+
+func testDBMigration(t *testing.T, ppart PersistedParticipation) {
+	a := require.New(t)
+	_, rootDB, partDB, err := createTestDBs(t, a)
+	a.NoError(err)
+	defer rootDB.Close()
+	defer partDB.Close()
+
+	part := ppart.Participation
+
+	a.NoError(setupTestDBAtVer1(err, partDB, part))
+
+	a.NoError(Migrate(partDB))
+
+	rawCompCert := protocol.Encode(part.CompactCertKey)
+	err = partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("UPDATE ParticipationAccount SET compactCert=?, keyDilution=?;",
+			rawCompCert, part.KeyDilution)
+		return err
+	})
+	a.NoError(err)
+
+	retrievedPart, err := RestoreParticipation(partDB)
+	a.NoError(err)
+	a.NotNil(retrievedPart)
+
+	// comparing the outputs:
+	a.Equal(intoComparable(ppart), intoComparable(retrievedPart))
+}
+
+func setupTestDBAtVer1(err error, partDB db.Accessor, part Participation) error {
+	rawVRF := protocol.Encode(part.VRF)
+	voting := part.Voting.Snapshot()
+	rawVoting := protocol.Encode(&voting)
+
+	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		//set up an actual DB..
+		_, err = tx.Exec(`CREATE TABLE ParticipationAccount (
+		parent BLOB,
+		
+		vrf BLOB,
+		voting BLOB,
+
+		firstValid INTEGER,
+		lastValid INTEGER
+	);`)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(`CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER);`)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", PartTableSchemaName, 1)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid) VALUES (?, ?, ?, ?, ?)",
+			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// todo test the advancement of a single migration verion.
 
 type comparablePartition struct {
 	Parent basics.Address
