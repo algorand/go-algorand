@@ -31,7 +31,7 @@ func TestBatchVerifierSingle(t *testing.T) {
 	sigSecrets := GenerateSignatureSecrets(s)
 	sig := sigSecrets.Sign(msg)
 	bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
-	require.True(t, bv.Verify())
+	require.NoError(t, bv.Verify())
 
 	// test expected failuire
 	bv = MakeBatchVerifier(1)
@@ -42,7 +42,7 @@ func TestBatchVerifierSingle(t *testing.T) {
 	// break the signature:
 	sig[0] = sig[0] + 1
 	bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
-	require.False(t, bv.Verify())
+	require.Error(t, bv.Verify())
 }
 
 func TestBatchVerifierBulk(t *testing.T) {
@@ -58,7 +58,7 @@ func TestBatchVerifierBulk(t *testing.T) {
 			sig := sigSecrets.Sign(msg)
 			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 		}
-		require.True(t, bv.Verify())
+		require.NoError(t, bv.Verify())
 	}
 
 }
@@ -75,7 +75,7 @@ func TestBatchVerifierBulkWithExpand(t *testing.T) {
 		sig := sigSecrets.Sign(msg)
 		bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 	}
-	require.True(t, bv.Verify())
+	require.NoError(t, bv.Verify())
 }
 
 func TestBatchVerifierWithInvalidSiganture(t *testing.T) {
@@ -97,7 +97,7 @@ func TestBatchVerifierWithInvalidSiganture(t *testing.T) {
 	sig[0] = sig[0] + 1
 	bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 
-	require.False(t, bv.Verify())
+	require.Error(t, bv.Verify())
 }
 
 func BenchmarkBatchVerifier(b *testing.B) {
@@ -109,5 +109,5 @@ func BenchmarkBatchVerifier(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	require.True(b, bv.Verify())
+	require.NoError(b, bv.Verify())
 }

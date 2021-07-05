@@ -217,11 +217,17 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 
 // MultisigVerify verifies an assembled MultisigSig
 func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, err error) {
+	return MultisigBatchVerify(msg, addr, sig, nil)
+}
 
+// MultisigBatchVerify verifies an assembled MultisigSig.
+// if the batchverifier is not nil, this function DOES NOT validate the digital signature.
+func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (verified bool, err error) {
 	verified = false
 	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
 	// then terminate (the upper layer should now verify the unisig)
 	if (len(sig.Subsigs) == 0 || sig.Subsigs[0] == MultisigSubsig{}) {
+		err = errors.New(errorinvalidnumberofsignature)
 		return
 	}
 
@@ -263,6 +269,11 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, 
 	var verifiedCount int
 	for _, subsigi := range sig.Subsigs {
 		if (subsigi.Sig != Signature{}) {
+			if batchVerifier != nil {
+				batchVerifier.EnqueueSignature(subsigi.Key, msg, subsigi.Sig)
+				verifiedCount++
+				continue
+			}
 			if !subsigi.Key.Verify(msg, subsigi.Sig) {
 				err = errors.New(errorsubsigverification)
 				return

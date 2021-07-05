@@ -16,6 +16,8 @@
 
 package crypto
 
+import "errors"
+
 // BatchVerifier enqueues signatures to be validated in batch.
 type BatchVerifier struct {
 	messages   [][]byte            // contains a slice of messages to be hashed. Each message is varible length
@@ -24,6 +26,12 @@ type BatchVerifier struct {
 }
 
 const minBatchVerifierAlloc = 16
+
+// Batch verifications errors
+var (
+	ErrBatchVerificationFailed = errors.New("At least on signature didn't pass verification")
+	ErrZeroTranscationsInBatch = errors.New("Could not validate empty signature set")
+)
 
 // MakeBatchVerifier create a BatchVerifier instance, and initialize it using the provided hint.
 func MakeBatchVerifier(hint int) *BatchVerifier {
@@ -71,16 +79,17 @@ func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
 }
 
 // Verify verifies that all the signatures are valid.
-func (b *BatchVerifier) Verify() bool {
+// if all the signatures are valid nil is returned
+func (b *BatchVerifier) Verify() error {
 	if b.GetNumberOfEnqueuedSignatures() == 0 {
-		return true
+		return ErrZeroTranscationsInBatch
 	}
 
 	for i := range b.messages {
 		verifier := SignatureVerifier(b.publicKeys[i])
 		if !verifier.VerifyBytes(b.messages[i], b.signatures[i]) {
-			return false
+			return ErrBatchVerificationFailed
 		}
 	}
-	return true
+	return nil
 }

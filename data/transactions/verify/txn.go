@@ -52,9 +52,6 @@ const txnPerWorksetThreshold = 32
 // - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
 const concurrentWorksets = 16
 
-// error returned when the batch verification fails
-var errBatchVerificationFailed = errors.New("transaction signature verification failed")
-
 // GroupContext is the set of parameters external to a transaction which
 // stateless checks are performed against.
 //
@@ -106,6 +103,8 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	return TxnBatchVerifiy(s, txnIdx, groupCtx, nil)
 }
 
+// TxnBatchVerifiy verifies a SignedTxn having no obviously inconsistent data.
+// Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 // if verifier is not nil, this function DOES NOT check the cryptographic signature on each transaction.
 // Instead, the signatures are enqueued into the batchverification
 func TxnBatchVerifiy(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) error {
@@ -125,6 +124,7 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	return TxnGroupBatchVerifiy(stxs, contextHdr, cache, nil)
 }
 
+// TxnGroupBatchVerifiy verifies a []SignedTxn having no obviously inconsistent data.
 // if verifier is not nil, this function DOES NOT check the cryptographic signature on each transaction.
 // Instead, the signatures are enqueued into the batchverification
 func TxnGroupBatchVerifiy(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
@@ -210,7 +210,10 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return errors.New("signature validation failed")
 	}
 	if hasMsig {
-		if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Authorizer()), s.Msig); ok {
+		if ok, _ := crypto.MultisigBatchVerify(s.Txn,
+			crypto.Digest(s.Authorizer()),
+			s.Msig,
+			batchVerifier); ok {
 			return nil
 		}
 		return errors.New("multisig validation failed")
@@ -367,8 +370,11 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 							return grpErr
 						}
 					}
-					if !batchVerifier.Verify() {
-						return errBatchVerificationFailed
+					if batchVerifier.GetNumberOfEnqueuedSignatures() != 0 {
+						err = batchVerifier.Verify()
+						if err != nil {
+							return err
+						}
 					}
 					cache.AddPayset(txnGroups, groupCtxs)
 					return nil
