@@ -122,7 +122,7 @@ func updateDB(tx *sql.Tx, partVersion int) (int, error) {
 	}
 
 	if partVersion == 2 {
-		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD keyDilution INTEGER NOT NULL DEFAULT 0")
+		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD compactCert BLOB")
 		if err != nil {
 			return 0, nil
 		}
