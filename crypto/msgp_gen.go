@@ -18,6 +18,14 @@ import (
 //       |-----> Msgsize
 //       |-----> MsgIsZero
 //
+// ByteSignature
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
 // Digest
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
@@ -311,6 +319,52 @@ func (z AlgorithmType) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z AlgorithmType) MsgIsZero() bool {
 	return z == 0
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z ByteSignature) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ ByteSignature) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(ByteSignature)
+	if !ok {
+		_, ok = (z).(*ByteSignature)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *ByteSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = ByteSignature(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *ByteSignature) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*ByteSignature)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z ByteSignature) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z ByteSignature) MsgIsZero() bool {
+	return len(z) == 0
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3048,14 +3102,14 @@ func (z *SignatureAlgorithm) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 4 bits */
+	var zb0001Mask uint8 /* 3 bits */
 	if (*z).Pack.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
 	if (*z).Type == 0 {
 		zb0001Len--
-		zb0001Mask |= 0x8
+		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -3065,7 +3119,7 @@ func (z *SignatureAlgorithm) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xa4, 0x6b, 0x65, 0x79, 0x73)
 			o = (*z).Pack.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
+		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "sigType"
 			o = append(o, 0xa7, 0x73, 0x69, 0x67, 0x54, 0x79, 0x70, 0x65)
 			o = msgp.AppendUint64(o, uint64((*z).Type))
@@ -3407,14 +3461,14 @@ func (z *VerifyingKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 4 bits */
+	var zb0001Mask uint8 /* 3 bits */
 	if (*z).Pack.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
 	if (*z).Type == 0 {
 		zb0001Len--
-		zb0001Mask |= 0x8
+		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -3424,7 +3478,7 @@ func (z *VerifyingKey) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xa7, 0x70, 0x75, 0x62, 0x4b, 0x65, 0x79, 0x73)
 			o = (*z).Pack.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
+		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "verType"
 			o = append(o, 0xa7, 0x76, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65)
 			o = msgp.AppendUint64(o, uint64((*z).Type))

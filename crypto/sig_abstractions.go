@@ -1,5 +1,7 @@
 package crypto
 
+import "fmt"
+
 // AlgorithmType enum type for signing algorithms
 type AlgorithmType uint64
 
@@ -19,10 +21,15 @@ type Signer interface {
 	GetVerifier() VerifyingKey
 }
 
+// ErrBadSignature represents a bad signature
+var ErrBadSignature = fmt.Errorf("invalid signature")
+
 // Verifier interface represent a public key of a signature scheme.
+// Verifier returns error for bad signature/ other issues while verifying a signature, or nil for correct signature -
+// that is, returns: complain or no complain.
 type Verifier interface {
-	Verify(message Hashable, sig ByteSignature) bool
-	VerifyBytes(message []byte, sig ByteSignature) bool
+	Verify(message Hashable, sig ByteSignature) error
+	VerifyBytes(message []byte, sig ByteSignature) error
 }
 
 // SignatureAlgorithm holds a Signer, and the type of algorithm the Signer conforms to.
@@ -59,12 +66,12 @@ func (s *SignatureAlgorithm) GetVerifier() VerifyingKey {
 }
 
 // Verify that a signature match to a specific message
-func (v *VerifyingKey) Verify(message Hashable, sig []byte) bool {
+func (v *VerifyingKey) Verify(message Hashable, sig []byte) error {
 	return v.Pack.getVerifier(v.Type).Verify(message, sig)
 }
 
 // VerifyBytes checks that a signature match to a specific byte message
-func (v *VerifyingKey) VerifyBytes(message []byte, sig []byte) bool {
+func (v *VerifyingKey) VerifyBytes(message []byte, sig []byte) error {
 	return v.Pack.getVerifier(v.Type).VerifyBytes(message, sig)
 }
 
