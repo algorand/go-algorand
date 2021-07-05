@@ -1,17 +1,25 @@
 package crypto
 
+// AlgorithmType enum type for signing algorithms
 type AlgorithmType uint64
 
-const PlaceHolderType AlgorithmType = 1 + iota
+// all AlgorithmType enums
+const (
+	PlaceHolderType AlgorithmType = 1 + iota
+)
 
+// ByteSignature is a cryptographic signature represented by bytes.
 type ByteSignature []byte
 
+// Signer interface represents the possible things that can be done with a signing key.
+// outputs Sign, SignBytes which are self explanatory and GetVerifier which is a representation of a public key.
 type Signer interface {
 	Sign(message Hashable) ByteSignature
 	SignBytes(message []byte) ByteSignature
 	GetVerifier() VerifyingKey
 }
 
+// Verifier interface represent a public key of a signature scheme.
 type Verifier interface {
 	Verify(message Hashable, sig ByteSignature) bool
 	VerifyBytes(message []byte, sig ByteSignature) bool
@@ -26,6 +34,8 @@ type SignatureAlgorithm struct {
 	Pack PackedSignatureAlgorithm `codec:"keys"`
 }
 
+// VerifyingKey is the correct way to interact with a Verifier. It implements the interface,
+// but allows for correct marshling and unmarshling of itself.
 type VerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -33,26 +43,32 @@ type VerifyingKey struct {
 	Pack PackedVerifyingKey `codec:"pubKeys"`
 }
 
+// Sign - Signs a Hashable message
 func (s *SignatureAlgorithm) Sign(message Hashable) []byte {
 	return s.Pack.getSigner(s.Type).Sign(message)
 }
 
+// SignBytes - Signs a a slice of bytes
 func (s *SignatureAlgorithm) SignBytes(message []byte) []byte {
 	return s.Pack.getSigner(s.Type).SignBytes(message)
 }
 
+// GetVerifier outputs a representation of a public key. that implements Verifier
 func (s *SignatureAlgorithm) GetVerifier() VerifyingKey {
 	return s.Pack.getSigner(s.Type).GetVerifier()
 }
 
+// Verify that a signature match to a specific message
 func (v *VerifyingKey) Verify(message Hashable, sig []byte) bool {
 	return v.Pack.getVerifier(v.Type).Verify(message, sig)
 }
 
+// VerifyBytes checks that a signature match to a specific byte message
 func (v *VerifyingKey) VerifyBytes(message []byte, sig []byte) bool {
 	return v.Pack.getVerifier(v.Type).VerifyBytes(message, sig)
 }
 
+// PackedVerifyingKey is a key store. Allows for easy marshal/unmarshal.
 type PackedVerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -84,6 +100,7 @@ func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
 	}
 }
 
+// NewSignerFromSeed Generates a new signer from a specific Seed
 func NewSignerFromSeed(seed Seed, t AlgorithmType) *SignatureAlgorithm {
 	var p PackedSignatureAlgorithm
 	switch t {
@@ -99,13 +116,14 @@ func NewSignerFromSeed(seed Seed, t AlgorithmType) *SignatureAlgorithm {
 	}
 }
 
+// NewSigner receives a type of signing algorithm and generates keys.
 func NewSigner(t AlgorithmType) *SignatureAlgorithm {
 	var seed Seed
 	SystemRNG.RandBytes(seed[:])
 	return NewSignerFromSeed(seed, t)
 }
 
-func NewVerifyingKey(t AlgorithmType, v Verifier) VerifyingKey {
+func newVerifyingKey(t AlgorithmType, v Verifier) VerifyingKey {
 	vKey := VerifyingKey{
 		Type: t,
 		Pack: PackedVerifyingKey{},
