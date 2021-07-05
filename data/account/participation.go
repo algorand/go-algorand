@@ -105,6 +105,7 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 	}
 }
 
+// CompactCertSigner returns the key used to sign on Compact Certificates.
 func (part Participation) CompactCertSigner() *crypto.SignatureAlgorithm {
 	return part.CompactCertKey
 }
