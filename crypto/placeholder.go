@@ -1,43 +1,53 @@
 package crypto
 
+// GeneratePlaceHolderKey is responsible for creating some unknown key
 func GeneratePlaceHolderKey(seed Seed) *PlaceHolderKey {
 	return &PlaceHolderKey{
 		Sec: *GenerateSignatureSecrets(seed),
 	}
 }
 
+// PlaceHolderKey represents an unknown key
+// the struct implements Signer
 type PlaceHolderKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Sec SignatureSecrets `codec:"sec"`
 }
 
+// PlaceHolderPublicKey represents an unknown public key
+// the struct implements Verifier
 type PlaceHolderPublicKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	SignatureVerifier `codec:"sigVerifier"`
 }
 
+// Sign - Signs a Hashable message
 func (p *PlaceHolderKey) Sign(message Hashable) ByteSignature {
 	sig := p.Sec.Sign(message)
 	return sig[:]
 }
 
+// SignBytes - Signs a a slice of bytes
 func (p *PlaceHolderKey) SignBytes(message []byte) ByteSignature {
 	sig := p.Sec.SignBytes(message)
 	return sig[:]
 }
 
+// GetVerifier outputs a representation of a public key. that implements Verifier
 func (p *PlaceHolderKey) GetVerifier() VerifyingKey {
-	return NewVerifyingKey(PlaceHolderType, &PlaceHolderPublicKey{SignatureVerifier: p.Sec.SignatureVerifier})
+	return newVerifyingKey(PlaceHolderType, &PlaceHolderPublicKey{SignatureVerifier: p.Sec.SignatureVerifier})
 }
 
+// Verify that a signature match to a specific message
 func (p *PlaceHolderPublicKey) Verify(message Hashable, sig ByteSignature) bool {
 	var scopy Signature
 	copy(scopy[:], sig)
 	return p.SignatureVerifier.Verify(message, scopy)
 }
 
+// VerifyBytes checks that a signature match to a specific byte message
 func (p *PlaceHolderPublicKey) VerifyBytes(message []byte, sig ByteSignature) bool {
 	var scopy Signature
 	copy(scopy[:], sig)
