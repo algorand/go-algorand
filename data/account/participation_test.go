@@ -34,6 +34,13 @@ import (
 func TestParticipation_NewDB(t *testing.T) {
 	a := require.New(t)
 
+	_, rootDB, partDB, err := setupParticipationKey(t, a)
+	a.NoError(err)
+	partDB.Close()
+	rootDB.Close()
+}
+
+func setupParticipationKey(t *testing.T, a *require.Assertions) (PersistedParticipation, db.Accessor, db.Accessor, error) {
 	rootDB, err := db.MakeAccessor(t.Name(), false, true)
 	a.NoError(err)
 	a.NotNil(rootDB)
@@ -52,9 +59,7 @@ func TestParticipation_NewDB(t *testing.T) {
 	versions, err := getSchemaVersions(partDB)
 	a.NoError(err)
 	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
-
-	partDB.Close()
-	rootDB.Close()
+	return part, rootDB, partDB, err
 }
 
 func getSchemaVersions(db db.Accessor) (versions map[string]int, err error) {
@@ -143,4 +148,48 @@ func BenchmarkOldKeysDeletion(b *testing.B) {
 		a.NoError(err)
 	}
 	part.Close()
+}
+
+func TestRead(t *testing.T) {
+	a := require.New(t)
+
+	part, rootDB, partDB, err := setupParticipationKey(t, a)
+	a.NoError(err)
+	defer rootDB.Close()
+	defer partDB.Close()
+
+	t.Run("retrieve from DB", func(t *testing.T) {
+		retrievedPart, err := RestoreParticipation(partDB)
+		a.NoError(err)
+		a.NotNil(retrievedPart)
+
+		// comparing the outputs:
+		a.Equal(intoComparable(part), intoComparable(retrievedPart))
+	})
+
+}
+
+type comparablePartition struct {
+	Parent basics.Address
+
+	VRF            crypto.VRFSecrets
+	Voting         []byte
+	CompactCertKey crypto.SignatureAlgorithm
+
+	FirstValid basics.Round
+	LastValid  basics.Round
+
+	KeyDilution uint64
+}
+
+func intoComparable(part PersistedParticipation) comparablePartition {
+	return comparablePartition{
+		Parent:         part.Parent,
+		VRF:            *part.VRF,
+		Voting:         part.Voting.MarshalMsg(nil),
+		CompactCertKey: *part.CompactCertKey,
+		FirstValid:     part.FirstValid,
+		LastValid:      part.LastValid,
+		KeyDilution:    part.KeyDilution,
+	}
 }
