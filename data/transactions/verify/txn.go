@@ -52,6 +52,9 @@ const txnPerWorksetThreshold = 32
 // - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
 const concurrentWorksets = 16
 
+// error returned when the batch verification fails
+var errBatchVerificationFailed = errors.New("transaction signature verification failed")
+
 // GroupContext is the set of parameters external to a transaction which
 // stateless checks are performed against.
 //
@@ -100,6 +103,12 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
+	return TxnBatchVerifiy(s, txnIdx, groupCtx, nil)
+}
+
+// if verifier is not nil, this function DOES NOT check the cryptographic signature on each transaction.
+// Instead, the signatures are enqueued into the batchverification
+func TxnBatchVerifiy(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) error {
 	if !groupCtx.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
 		return errors.New("nonempty AuthAddr but rekeying not supported")
 	}
@@ -108,11 +117,17 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 		return err
 	}
 
-	return stxnVerifyCore(s, txnIdx, groupCtx)
+	return stxnVerifyCore(s, txnIdx, groupCtx, verifier)
 }
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
 func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
+	return TxnGroupBatchVerifiy(stxs, contextHdr, cache, nil)
+}
+
+// if verifier is not nil, this function DOES NOT check the cryptographic signature on each transaction.
+// Instead, the signatures are enqueued into the batchverification
+func TxnGroupBatchVerifiy(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
 	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
 	if err != nil {
 		return nil, err
@@ -121,7 +136,7 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
 	for i, stxn := range stxs {
-		err = Txn(&stxn, i, groupCtx)
+		err = TxnBatchVerifiy(&stxn, i, groupCtx, verifier)
 		if err != nil {
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 			return
@@ -151,7 +166,7 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 	return
 }
 
-func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
+func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
 	numSigs := 0
 	hasSig := false
 	hasMsig := false
@@ -185,6 +200,10 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 	}
 
 	if hasSig {
+		if batchVerifier != nil {
+			batchVerifier.EnqueueSignature(crypto.SignatureVerifier(s.Authorizer()), s.Txn, s.Sig)
+			return nil
+		}
 		if crypto.SignatureVerifier(s.Authorizer()).Verify(s.Txn, s.Sig) {
 			return nil
 		}
@@ -336,14 +355,20 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 					if tasksCtx.Err() != nil {
 						return tasksCtx.Err()
 					}
+
 					txnGroups := arg.([][]transactions.SignedTxn)
 					groupCtxs := make([]*GroupContext, len(txnGroups))
+
+					batchVerifier := crypto.MakeBatchVerifier(len(payset))
 					for i, signTxnsGrp := range txnGroups {
-						groupCtxs[i], grpErr = TxnGroup(signTxnsGrp, blkHeader, nil)
+						groupCtxs[i], grpErr = TxnGroupBatchVerifiy(signTxnsGrp, blkHeader, nil, batchVerifier)
 						// abort only if it's a non-cache error.
 						if grpErr != nil {
 							return grpErr
 						}
+					}
+					if !batchVerifier.Verify() {
+						return errBatchVerificationFailed
 					}
 					cache.AddPayset(txnGroups, groupCtxs)
 					return nil

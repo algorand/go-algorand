@@ -44,6 +44,10 @@ func (b *BatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message 
 }
 
 func (b *BatchVerifier) enqueueRaw(sigVerifier SignatureVerifier, message []byte, sig Signature) {
+	// do we need to reallocate ?
+	if len(b.messages) == cap(b.messages) {
+		b.expand()
+	}
 	b.messages = append(b.messages, message)
 	b.publicKeys = append(b.publicKeys, sigVerifier)
 	b.signatures = append(b.signatures, sig)
@@ -69,7 +73,7 @@ func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
 // Verify verifies that all the signatures are valid.
 func (b *BatchVerifier) Verify() bool {
 	if b.GetNumberOfEnqueuedSignatures() == 0 {
-		return false
+		return true
 	}
 
 	for i := range b.messages {
