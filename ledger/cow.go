@@ -220,7 +220,9 @@ func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {
 
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
 	cb.mods.Txids[txid] = txn.LastValid
-	cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
+	if txn.Lease != [32]byte{} {
+		cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
+	}
 }
 
 func (cb *roundCowState) setCompactCertNext(rnd basics.Round) {
