@@ -1974,41 +1974,47 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 type urlCase struct {
 	text string
 	out  url.URL
-	err  error
-}
-
-var urlTestCases = []urlCase{
-	{"localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}, nil},
-	{"http://localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}, nil},
-	{"ws://localhost:123", url.URL{Scheme: "ws", Host: "localhost:123"}, nil},
-	{"https://localhost:123", url.URL{Scheme: "https", Host: "localhost:123"}, nil},
-	{"http://127.0.0.1:123", url.URL{Scheme: "http", Host: "127.0.0.1:123"}, nil},
-	{"http://[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}, nil},
-	{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}, nil},
-	{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}, nil},
 }
 
 func TestParseHostOrURL(t *testing.T) {
+	urlTestCases := []urlCase{
+		{"localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
+		{"http://localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
+		{"ws://localhost:9999", url.URL{Scheme: "ws", Host: "localhost:9999"}},
+		{"wss://localhost:443", url.URL{Scheme: "wss", Host: "localhost:443"}},
+		{"https://localhost:123", url.URL{Scheme: "https", Host: "localhost:123"}},
+		{"https://somewhere.tld", url.URL{Scheme: "https", Host: "somewhere.tld"}},
+		{"http://127.0.0.1:123", url.URL{Scheme: "http", Host: "127.0.0.1:123"}},
+		{"http://[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
+		{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}},
+		{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
+	}
+	badUrls := []string{
+		"justahost",
+		"localhost:WAT",
+		"http://localhost:WAT",
+		"https://localhost:WAT",
+		"ws://localhost:WAT",
+		"wss://localhost:WAT",
+	}
 	for _, tc := range urlTestCases {
 		t.Run(tc.text, func(t *testing.T) {
 			v, err := ParseHostOrURL(tc.text)
-			if (err != nil) && (tc.err == nil) {
+			if err != nil {
 				t.Errorf("unexpected error, %s", err)
 				return
-			}
-			if (err == nil) && (tc.err != nil) {
-				t.Errorf("wanted err but got none")
-				return
-			}
-			if (err != nil) && (tc.err != nil) {
-				if err.Error() != tc.err.Error() {
-					t.Errorf("err mismatch, wanted %#v got %#v", tc.err, err)
-					return
-				}
 			}
 			if tc.out != *v {
 				t.Errorf("url wanted %#v, got %#v", tc.out, v)
 				return
+			}
+		})
+	}
+	for _, addr := range badUrls {
+		t.Run(addr, func(t *testing.T) {
+			_, err := ParseHostOrURL(addr)
+			if err == nil {
+				t.Errorf("url should fail: %#v", addr)
 			}
 		})
 	}
