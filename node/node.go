@@ -842,15 +842,17 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 }
 
 var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
+var txPoolExpiredGauge = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_expired_count", Description: "Count of expired transactions in the pool"})
 
 func (node *AlgorandFullNode) txPoolGaugeThread() {
 	defer node.monitoringRoutinesWaitGroup.Done()
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for true {
 		select {
 		case <-ticker.C:
 			txPoolGuage.Set(float64(node.transactionPool.PendingCount()), nil)
+			txPoolExpiredGauge.Set(float64(node.transactionPool.NumExpired(node.ledger.Latest())), nil)
 		case <-node.ctx.Done():
 			return
 		}
