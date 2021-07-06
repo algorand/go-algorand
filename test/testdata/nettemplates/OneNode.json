@@ -1,6 +1,7 @@
 {
   "Genesis": {
     "NetworkName": "tbd",
+    "ConsensusProtocol": "shortpartkeysprotocol",
     "Wallets": [
       {
         "Name": "Rich",
@@ -27,12 +28,7 @@
         { "Name": "Rich",
           "ParticipationOnly": false },
         { "Name": "Partkey",
-          "ParticipationOnly": true }
-      ]
-    },
-    {
-      "Name": "Node",
-      "Wallets": [
+          "ParticipationOnly": true },
         { "Name": "Offline",
           "ParticipationOnly": true }
       ]
