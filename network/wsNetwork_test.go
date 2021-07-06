@@ -1985,6 +1985,8 @@ func TestParseHostOrURL(t *testing.T) {
 		{"https://localhost:123", url.URL{Scheme: "https", Host: "localhost:123"}},
 		{"https://somewhere.tld", url.URL{Scheme: "https", Host: "somewhere.tld"}},
 		{"http://127.0.0.1:123", url.URL{Scheme: "http", Host: "127.0.0.1:123"}},
+		{"//somewhere.tld", url.URL{Scheme: "", Host: "somewhere.tld"}},
+		{"//somewhere.tld:4601", url.URL{Scheme: "", Host: "somewhere.tld:4601"}},
 		{"http://[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
 		{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}},
 		{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
@@ -1996,14 +1998,12 @@ func TestParseHostOrURL(t *testing.T) {
 		"https://localhost:WAT",
 		"ws://localhost:WAT",
 		"wss://localhost:WAT",
+		"//localhost:WAT",
 	}
 	for _, tc := range urlTestCases {
 		t.Run(tc.text, func(t *testing.T) {
 			v, err := ParseHostOrURL(tc.text)
-			if err != nil {
-				t.Errorf("unexpected error, %s", err)
-				return
-			}
+			require.NoError(t, err)
 			if tc.out != *v {
 				t.Errorf("url wanted %#v, got %#v", tc.out, v)
 				return
@@ -2013,9 +2013,7 @@ func TestParseHostOrURL(t *testing.T) {
 	for _, addr := range badUrls {
 		t.Run(addr, func(t *testing.T) {
 			_, err := ParseHostOrURL(addr)
-			if err == nil {
-				t.Errorf("url should fail: %#v", addr)
-			}
+			require.Error(t, err, "url should fail", addr)
 		})
 	}
 }

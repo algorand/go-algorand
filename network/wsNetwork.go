@@ -1911,10 +1911,10 @@ var errBcastInvalidArray = errors.New("invalid broadcast array")
 
 var errBcastQFull = errors.New("broadcast queue full")
 
-var errUrlNoHost = errors.New("could not parse a host from url")
+var errURLNoHost = errors.New("could not parse a host from url")
 
-// HostColonPortPattern matches "^[^:]+:\\d+$" e.g. "foo.com.:1234"
-var HostColonPortPattern = regexp.MustCompile("^[^:]+:\\d+$")
+// HostColonPortPattern matches "^[a-zA-Z0-9.]+:\\d+$" e.g. "foo.com.:1234"
+var HostColonPortPattern = regexp.MustCompile("^[a-zA-Z0-9.]+:\\d+$")
 
 // ParseHostOrURL handles "host:port" or a full URL.
 // Standard library net/url.Parse chokes on "host:port".
@@ -1927,11 +1927,11 @@ func ParseHostOrURL(addr string) (*url.URL, error) {
 	parsed, err := url.Parse(addr)
 	if err == nil {
 		if parsed.Host == "" {
-			return nil, errUrlNoHost
+			return nil, errURLNoHost
 		}
 		return parsed, nil
 	}
-	if strings.HasPrefix(addr, "http:") || strings.HasPrefix(addr, "https:") || strings.HasPrefix(addr, "ws:") || strings.HasPrefix(addr, "wss:") {
+	if strings.HasPrefix(addr, "http:") || strings.HasPrefix(addr, "https:") || strings.HasPrefix(addr, "ws:") || strings.HasPrefix(addr, "wss:") || strings.HasPrefix(addr, "//") {
 		return parsed, err
 	}
 	// This turns "[::]:4601" into "http://[::]:4601" which url.Parse can do
