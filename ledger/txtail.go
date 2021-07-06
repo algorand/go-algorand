@@ -26,8 +26,9 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
+const initialLastValidArrayLen = 256
+
 type roundTxMembers struct {
-	txids    map[transactions.Txid]basics.Round
 	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
 	proto    config.ConsensusParams
 }
@@ -60,6 +61,13 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
 
 	t.recent = make(map[basics.Round]roundTxMembers)
+
+	// the roundsLastValids is a temporary map used during the exection of
+	// loadFromDisk, allowing us to construct the lastValid maps in their
+	// optimal size. This would ensure that upon startup, we don't preallocate
+	// more memory than we truely need.
+	roundsLastValids := make(map[basics.Round][]transactions.Txid)
+
 	for ; old <= latest; old++ {
 		blk, err := l.Block(old)
 		if err != nil {
@@ -71,19 +79,44 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 			return err
 		}
 
+		consensusParams := config.Consensus[blk.CurrentProtocol]
 		t.recent[old] = roundTxMembers{
-			txids:    make(map[transactions.Txid]basics.Round),
-			txleases: make(map[ledgercore.Txlease]basics.Round),
-			proto:    config.Consensus[blk.CurrentProtocol],
+			txleases: make(map[ledgercore.Txlease]basics.Round, len(payset)),
+			proto:    consensusParams,
 		}
+
 		for _, txad := range payset {
 			tx := txad.SignedTxn
-			t.recent[old].txids[tx.ID()] = tx.Txn.LastValid
-			t.recent[old].txleases[ledgercore.Txlease{Sender: tx.Txn.Sender, Lease: tx.Txn.Lease}] = tx.Txn.LastValid
-			t.putLV(tx.Txn.LastValid, tx.ID())
+			if consensusParams.SupportTransactionLeases && (tx.Txn.Lease != [32]byte{}) {
+				t.recent[old].txleases[ledgercore.Txlease{Sender: tx.Txn.Sender, Lease: tx.Txn.Lease}] = tx.Txn.LastValid
+			}
+			if tx.Txn.LastValid > t.lowWaterMark {
+				list := roundsLastValids[tx.Txn.LastValid]
+				// if the list reached capacity, resize.
+				if len(list) == cap(list) {
+					var newList []transactions.Txid
+					if cap(list) == 0 {
+						newList = make([]transactions.Txid, 0, initialLastValidArrayLen)
+					} else {
+						newList = make([]transactions.Txid, len(list), len(list)*2)
+					}
+					copy(newList[:], list[:])
+					list = newList
+				}
+				list = append(list, tx.ID())
+				roundsLastValids[tx.Txn.LastValid] = list
+			}
 		}
 	}
 
+	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
+	for lastValid, list := range roundsLastValids {
+		lastValueMap := make(map[transactions.Txid]struct{}, len(list))
+		for _, id := range list {
+			lastValueMap[id] = struct{}{}
+		}
+		t.lastValid[lastValid] = lastValueMap
+	}
 	return nil
 }
 
@@ -93,13 +126,12 @@ func (t *txTail) close() {
 func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
-	if t.recent[rnd].txids != nil {
+	if _, has := t.recent[rnd]; has {
 		// Repeat, ignore
 		return
 	}
 
 	t.recent[rnd] = roundTxMembers{
-		txids:    delta.Txids,
 		txleases: delta.Txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
 	}
@@ -160,15 +192,6 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 		return &ledgercore.TransactionInLedgerError{Txid: txid}
 	}
 	return nil
-}
-
-func (t *txTail) getRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
-	rndtxs := t.recent[rnd].txids
-	txMap = make(map[transactions.Txid]bool, len(rndtxs))
-	for txid := range rndtxs {
-		txMap[txid] = true
-	}
-	return
 }
 
 func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
