@@ -34,8 +34,8 @@ func Test_loadTelemetryConfig(t *testing.T) {
 		MinLogLevel:        4,
 		ReportHistoryLevel: 4,
 		// These credentials are here intentionally. Not a bug.
-		UserName: "telemetry-v9",
-		Password: "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
+		UserName: DefaultTelemetryUsername,
+		Password: DefaultTelemetryPassword,
 	}
 
 	a := require.New(t)
@@ -118,4 +118,15 @@ func TestLoadTelemetryConfig(t *testing.T) {
 	// ensure we know how to default correctly if some of the fields in the configuration field aren't specified.
 	require.Equal(t, createTelemetryConfig().Password, tc.Password)
 
+}
+
+func TestLoadTelemetryConfigBlankUsernamePassword(t *testing.T ) {
+
+	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test2"
+	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
+	require.NoError(t, err)
+	// make sure the user name was loaded from the specified file
+	require.Equal(t, DefaultTelemetryUsername, tc.UserName)
+	// ensure we know how to default correctly if some of the fields in the configuration field aren't specified.
+	require.Equal(t, DefaultTelemetryPassword, tc.Password)
 }

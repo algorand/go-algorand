@@ -33,6 +33,9 @@ import (
 // TelemetryConfigFilename default file name for telemetry config "logging.config"
 var TelemetryConfigFilename = "logging.config"
 
+var DefaultTelemetryUsername = "telemetry-v9"
+var DefaultTelemetryPassword = "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu"
+
 const hostnameLength = 255
 
 // TelemetryOverride Determines whether an override value is set and what it's value is.
@@ -65,8 +68,8 @@ func createTelemetryConfig() TelemetryConfig {
 		MinLogLevel:        logrus.WarnLevel,
 		ReportHistoryLevel: logrus.WarnLevel,
 		// These credentials are here intentionally. Not a bug.
-		UserName: "telemetry-v9",
-		Password: "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
+		UserName: DefaultTelemetryUsername,
+		Password: DefaultTelemetryPassword,
 	}
 }
 
@@ -89,6 +92,14 @@ func (cfg TelemetryConfig) Save(configPath string) error {
 	marshaledConfig.TelemetryConfig.FilePath = ""
 	marshaledConfig.MinLogLevel = uint32(cfg.MinLogLevel)
 	marshaledConfig.ReportHistoryLevel = uint32(cfg.ReportHistoryLevel)
+
+	// If the configuration contains both default username and password for the telemetry
+	// server then we just want to substitute a blank string
+	if marshaledConfig.TelemetryConfig.UserName == DefaultTelemetryUsername &&
+		marshaledConfig.TelemetryConfig.Password == DefaultTelemetryPassword {
+		marshaledConfig.TelemetryConfig.UserName = ""
+		marshaledConfig.TelemetryConfig.Password = ""
+	}
 
 	enc := json.NewEncoder(f)
 	err = enc.Encode(marshaledConfig)
@@ -144,6 +155,11 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 	cfg.MinLogLevel = logrus.Level(marshaledConfig.MinLogLevel)
 	cfg.ReportHistoryLevel = logrus.Level(marshaledConfig.ReportHistoryLevel)
 	cfg.FilePath = path
+
+	if cfg.UserName == "" && cfg.Password == "" {
+		cfg.UserName = DefaultTelemetryUsername
+		cfg.Password = DefaultTelemetryPassword
+	}
 
 	// Sanitize user-defined name.
 	if len(cfg.Name) > 0 {
