@@ -27,9 +27,13 @@ DEPLOY=true
 IMAGE_NAME=stable
 NETWORK=mainnet
 TAGNAME=latest
+CACHED=false
 
 while [ "$1" != "" ]; do
     case "$1" in
+        --cached)
+            CACHED=true
+            ;;
         --name)
             shift
             IMAGE_NAME="${1-stable}"
@@ -53,50 +57,65 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [[ ! "$NETWORK" =~ ^mainnet$|^testnet$|^betanet$ ]]
-then
+# Set IMAGE_NAME to docker image name
+case $NETWORK in
+  mainnet)
+    IMAGE_NAME=stable
+    ;;
+  testnet)
+    IMAGE_NAME=testnet
+    ;;
+  betanet)
+    IMAGE_NAME=betanet
+    CHANNEL=beta
+    ;;
+  *)
     echo "$RED_FG[$0]$END_FG_COLOR Network values must be either \`mainnet\`, \`testnet\` or \`betanet\`."
     exit 1
-elif [ "$NETWORK" != "mainnet" ]
-then
-    if [ "$NETWORK" == "betanet" ]
-    then
-        CHANNEL=beta
-    fi
+    ;;
+esac
 
-    IMAGE_NAME="$NETWORK"
-    NETWORK="-g $NETWORK"
-fi
+IFS='' read -r -d '' DOCKERFILE <<EOF
+FROM ubuntu
 
-build_image () {
-    IFS='' read -r -d '' DOCKERFILE <<EOF
-    FROM ubuntu
-
-    RUN apt-get update && apt-get install -y ca-certificates curl --no-install-recommends && \
-        curl --silent -L https://github.com/algorand/go-algorand-doc/blob/master/downloads/installers/linux_amd64/install_master_linux-amd64.tar.gz?raw=true | tar xzf - && \
-        ./update.sh -c $CHANNEL -n -p ~/node -d ~/node/data -i $NETWORK
-    WORKDIR /root/node
+RUN apt-get update && apt-get install -y ca-certificates curl --no-install-recommends && \
+    curl --silent -L https://github.com/algorand/go-algorand-doc/blob/master/downloads/installers/linux_amd64/install_master_linux-amd64.tar.gz?raw=true | tar xzf - && \
+    ./update.sh -c $CHANNEL -n -p ~/node -d ~/node/data -i -g $NETWORK
+WORKDIR /root/node
 EOF
 
-    if ! echo "$DOCKERFILE" | docker build -t "algorand/$IMAGE_NAME:$TAGNAME" -
-    then
-        echo -e "\n$RED_FG[$0]$END_FG_COLOR The algorand/$IMAGE_NAME:$TAGNAME image could not be built."
-        exit 1
-    fi
-}
+# By default, we don't want to cache our docker build. However, we might want to
+# if running building and tagging back to back, like with mainnet and testnet.
+if ! $CACHED
+then
+  CACHED_ARG='--no-cache'
+fi
 
-build_image
+if ! echo "$DOCKERFILE" | docker build $CACHED_ARG -t "algorand/$IMAGE_NAME:$TAGNAME" -
+then
+    echo -e "\n$RED_FG[$0]$END_FG_COLOR The algorand/$IMAGE_NAME:$TAGNAME image could not be built."
+    exit 1
+fi
 
 if $DEPLOY
 then
     if ! docker push "algorand/$IMAGE_NAME:$TAGNAME"
     then
-        echo -e "\n$RED_FG[$0]$END_FG_COLOR \`docker push\` failed."
+        echo -e "\n$RED_FG[$0]$END_FG_COLOR \`docker push\` of $IMAGE_NAME:$TAGNAME failed."
         exit 1
+    fi
+
+    if [ "$TAGNAME" != 'latest' ]
+    then
+      # We built a new tag, so also tag this as latest.
+      docker tag algorand/$IMAGE_NAME:$TAGNAME algorand/$IMAGE_NAME:latest
+      if ! docker push algorand/$IMAGE_NAME:latest
+      then
+        echo -e "\n$RED_FG[$0]$END_FG_COLOR \`docker push\` of $IMAGE_NAME:latest failed."
+      fi
     fi
 
     echo -e "\n$GREEN_FG[$0]$END_FG_COLOR Successfully published to docker hub."
 fi
 
-echo "$GREEN_FG[$0]$END_FG_COLOR Build completed with no failures."
-
+echo -e "\n$GREEN_FG[$0]$END_FG_COLOR Build completed with no failures."
