@@ -193,14 +193,3 @@ func TestRemovedNodeShouldBeMovedToFreeList(t *testing.T) {
 	t.Error("expected the removed node to appear at the freelist")
 
 }
-
-func createTwoLists() (*persistedAccountDataList, *persistedAccountDataList) {
-	l1 := newPersistedAccountList()
-	l1.pushFront(&persistedAccountData{addr: basics.Address{1}})
-	l1.pushFront(&persistedAccountData{addr: basics.Address{2}})
-
-	l2 := newPersistedAccountList()
-	l2.pushFront(&persistedAccountData{addr: basics.Address{3}})
-	l2.pushFront(&persistedAccountData{addr: basics.Address{4}})
-	return l1, l2
-}
