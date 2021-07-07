@@ -78,8 +78,7 @@ func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
 	return len(b.messages)
 }
 
-// Verify verifies that all the signatures are valid.
-// if all the signatures are valid nil is returned
+// Verify verifies that all the signatures are valid. in that case nil is returned
 func (b *BatchVerifier) Verify() error {
 	if b.GetNumberOfEnqueuedSignatures() == 0 {
 		return ErrZeroTranscationsInBatch

@@ -100,14 +100,14 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
-	return TxnBatchVerifiy(s, txnIdx, groupCtx, nil)
+	return TxnBatchVerify(s, txnIdx, groupCtx, nil)
 }
 
-// TxnBatchVerifiy verifies a SignedTxn having no obviously inconsistent data.
+// TxnBatchVerify verifies a SignedTxn having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 // if verifier is not nil, this function DOES NOT check the cryptographic signature on each transaction.
 // Instead, the signatures are enqueued into the batchverification
-func TxnBatchVerifiy(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) error {
+func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) error {
 	if !groupCtx.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
 		return errors.New("nonempty AuthAddr but rekeying not supported")
 	}
@@ -121,13 +121,13 @@ func TxnBatchVerifiy(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupConte
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
 func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
-	return TxnGroupBatchVerifiy(stxs, contextHdr, cache, nil)
+	return TxnGroupBatchVerify(stxs, contextHdr, cache, nil)
 }
 
-// TxnGroupBatchVerifiy verifies a []SignedTxn having no obviously inconsistent data.
+// TxnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data.
 // if verifier is not nil, this function DOES NOT check the cryptographic signature on each transaction.
 // Instead, the signatures are enqueued into the batchverification
-func TxnGroupBatchVerifiy(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
+func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
 	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
 	if err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func TxnGroupBatchVerifiy(stxs []transactions.SignedTxn, contextHdr bookkeeping.
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
 	for i, stxn := range stxs {
-		err = TxnBatchVerifiy(&stxn, i, groupCtx, verifier)
+		err = TxnBatchVerify(&stxn, i, groupCtx, verifier)
 		if err != nil {
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 			return
@@ -219,7 +219,7 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return logicSig(s, txnIdx, groupCtx)
+		return logicSigBatchVerify(s, txnIdx, groupCtx, batchVerifier)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
@@ -227,6 +227,14 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContex
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
 func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
+	return LogicSigSanityCheckBatchVerify(txn, groupIndex, groupCtx, nil)
+}
+
+// LogicSigSanityCheckBatchVerify checks that the signature is valid and that the program is basically well formed.
+// It does not evaluate the logic.
+// if batchverifier is not nil the function DOES NOT check the validity of the digital signature.
+// instead it adds the signature into the batchverifier
+func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
 	lsig := txn.Lsig
 
 	if groupCtx.consensusParams.LogicSigVersion == 0 {
@@ -282,20 +290,26 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 
 	if !hasMsig {
 		program := logic.Program(lsig.Logic)
+		if batchVerifier != nil {
+			batchVerifier.EnqueueSignature(crypto.PublicKey(txn.AuthAddr), &program, lsig.Sig)
+			return nil
+		}
 		if !crypto.SignatureVerifier(txn.Authorizer()).Verify(&program, lsig.Sig) {
 			return errors.New("logic signature validation failed")
 		}
 	} else {
 		program := logic.Program(lsig.Logic)
-		if ok, _ := crypto.MultisigVerify(&program, crypto.Digest(txn.Authorizer()), lsig.Msig); !ok {
+		if ok, _ := crypto.MultisigBatchVerify(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); !ok {
 			return errors.New("logic multisig validation failed")
 		}
 	}
 	return nil
 }
 
-// logicSig checks that the signature is valid, executing the program.
-func logicSig(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
+// logicSigBatchVerify checks that the signature is valid, executing the program.
+// if batchverifier is not nil the function DOES NOT check the validity of the digital signature.
+// instead it adds the signature into the batchverifier
+func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, batchverifier *crypto.BatchVerifier) error {
 	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
 	if err != nil {
 		return err
@@ -364,16 +378,16 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 
 					batchVerifier := crypto.MakeBatchVerifier(len(payset))
 					for i, signTxnsGrp := range txnGroups {
-						groupCtxs[i], grpErr = TxnGroupBatchVerifiy(signTxnsGrp, blkHeader, nil, batchVerifier)
+						groupCtxs[i], grpErr = TxnGroupBatchVerify(signTxnsGrp, blkHeader, nil, batchVerifier)
 						// abort only if it's a non-cache error.
 						if grpErr != nil {
 							return grpErr
 						}
 					}
 					if batchVerifier.GetNumberOfEnqueuedSignatures() != 0 {
-						err = batchVerifier.Verify()
-						if err != nil {
-							return err
+						verify_err := batchVerifier.Verify()
+						if verify_err != nil {
+							return verify_err
 						}
 					}
 					cache.AddPayset(txnGroups, groupCtxs)
