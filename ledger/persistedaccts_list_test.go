@@ -24,13 +24,9 @@ func TestPersistedAccountDataList(t *testing.T) {
 
 	t.Run("multi-element list movements", testMultielementListPositioning)
 
-	t.Run("test remove", testRemove)
+	t.Run("remove from list", removeFromListTest)
 
 	t.Run("test freelist usage", testFreeListMovement)
-}
-
-func testRemove(t *testing.T) {
-	t.Run("remove from list", removeFromListTest)
 }
 
 func removeFromListTest(t *testing.T) {
@@ -157,12 +153,14 @@ func testMultielementListPositioning(t *testing.T) {
 	l.remove(e4) // removing from end
 	checkListPointers(t, l, []*persistedAccountDataListNode{e2, e1})
 
-	l.remove(e2) // removing front
-	checkListPointers(t, l, []*persistedAccountDataListNode{e1})
+	l.move(e2, e1) // swapping between two elements
+	checkListPointers(t, l, []*persistedAccountDataListNode{e1, e2})
 
-	l.remove(e1) // remove last one
+	l.remove(e1) // removing front
+	checkListPointers(t, l, []*persistedAccountDataListNode{e2})
+
+	l.remove(e2) // remove last one
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
-
 }
 
 func testSingleElementListPositioning(t *testing.T) {
