@@ -19,7 +19,6 @@ package participation
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -132,9 +131,6 @@ func TestOnlineOfflineRewards(t *testing.T) {
 }
 
 func TestPartkeyOnlyRewards(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -335,7 +331,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	minFee, minBal, err := fixture.MinFeeAndBalance(curStatus.LastRound)
 	r.NoError(err)
 	deadline := curStatus.LastRound + uint64(5)
-	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount)
+	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
 
 	blk, err := client.Block(curStatus.LastRound)
 	r.NoError(err)
@@ -361,7 +357,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	curStatus, err = client.Status()
 	r.NoError(err)
 	deadline = curStatus.LastRound + uint64(5)
-	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount)
+	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
 
 	rewardRecalcRound = rewardRecalcRound + consensusParams.RewardsRateRefreshInterval
 
