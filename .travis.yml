@@ -28,7 +28,7 @@ jobs:
     - stage: build_commit
       os: linux
       script:
-        - scripts/travis/build_test.sh
+        - travis_retry scripts/travis/build_test.sh
 
     - stage: build_pr
       os: linux
@@ -39,12 +39,12 @@ jobs:
       os: linux
       name: Ubuntu AMD64 Build
       script:
-        - scripts/travis/build_test.sh
+        - travis_retry scripts/travis/build_test.sh
     - # same stage, parallel job
       os: linux
       name: Ubuntu AMD64 Integration Test
       script:
-        - ./scripts/travis/integration_test.sh
+        - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       name: External ARM64 Build
       os: linux
@@ -56,7 +56,7 @@ jobs:
           packages:
             - awscli
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+        - travis_retry scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
       name: External ARM64 Integration Test
       os: linux
@@ -74,13 +74,13 @@ jobs:
       osx_image: xcode11
       name: MacOS AMD64 Build
       script:
-        - scripts/travis/build_test.sh
+        - travis_retry scripts/travis/build_test.sh
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
       name: MacOS AMD64 Integration Test
       script:
-        - ./scripts/travis/integration_test.sh
+        - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
        os: windows
        name: Windows x64 Build
@@ -89,7 +89,7 @@ jobs:
            - $HOME/AppData/Local/Temp/chocolatey
            - /C/tools/msys64
        script:
-         - $mingw64 scripts/travis/build_test.sh
+         - travis_retry $mingw64 scripts/travis/build_test.sh
 
     - stage: build_release
       os: linux
@@ -100,12 +100,12 @@ jobs:
       os: linux
       name: Ubuntu AMD64 Build
       script:
-        - ./scripts/travis/build_test.sh
+        - travis_retry ./scripts/travis/build_test.sh
     - # same stage, parallel job
       os: linux
       name: Ubuntu AMD64 Integration Test
       script:
-        - ./scripts/travis/integration_test.sh
+        - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
       name: External ARM64 Build
       os: linux
@@ -117,7 +117,7 @@ jobs:
           packages:
             - awscli
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+        - travis_retry scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
       name: External ARM64 Integration Test
       os: linux
@@ -135,13 +135,13 @@ jobs:
       osx_image: xcode11
       name: MacOS AMD64 Build
       script:
-        - scripts/travis/build_test.sh
+        - travis_retry scripts/travis/build_test.sh
     - # same stage, parallel job
       os: osx
       osx_image: xcode11
       name: MacOS AMD64 Integration Test
       script:
-        - ./scripts/travis/integration_test.sh
+        - travis_retry ./scripts/travis/integration_test.sh
     - # same stage, parallel job
        os: windows
        name: Windows x64 Build
@@ -150,7 +150,7 @@ jobs:
            - $HOME/AppData/Local/Temp/chocolatey
            - /C/tools/msys64
        script:
-         - $mingw64 scripts/travis/build_test.sh
+         - travis_retry $mingw64 scripts/travis/build_test.sh
 
     - stage: deploy
       name: Ubuntu Deploy
