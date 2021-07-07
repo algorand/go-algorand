@@ -1931,7 +1931,7 @@ func ParseHostOrURL(addr string) (*url.URL, error) {
 		}
 		return parsed, nil
 	}
-	if strings.HasPrefix(addr, "http:") || strings.HasPrefix(addr, "https:") || strings.HasPrefix(addr, "ws:") || strings.HasPrefix(addr, "wss:") || strings.HasPrefix(addr, "//") {
+	if strings.HasPrefix(addr, "http:") || strings.HasPrefix(addr, "https:") || strings.HasPrefix(addr, "ws:") || strings.HasPrefix(addr, "wss:") || strings.HasPrefix(addr, "://") || strings.HasPrefix(addr, "//") {
 		return parsed, err
 	}
 	// This turns "[::]:4601" into "http://[::]:4601" which url.Parse can do

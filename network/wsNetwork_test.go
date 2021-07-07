@@ -1999,6 +1999,8 @@ func TestParseHostOrURL(t *testing.T) {
 		"ws://localhost:WAT",
 		"wss://localhost:WAT",
 		"//localhost:WAT",
+		"://badaddress", // See rpcs/blockService_test.go TestRedirectFallbackEndpoints
+		"://localhost:1234",
 	}
 	for _, tc := range urlTestCases {
 		t.Run(tc.text, func(t *testing.T) {
