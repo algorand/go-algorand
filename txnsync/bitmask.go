@@ -59,7 +59,7 @@ func (b *bitmask) entryExists(index int, entries int) bool {
 // type 2: stores the positions of bits where b = 1
 //         intput bitmask first b=1 pos A, second b=1 pos B, ...
 //         output bitmask byte 2,A/256,A%256,(B-A)/256,(B-A)%256,...
-// type 3: same as type 2, but stures the positons where b = 0
+// type 3: same as type 2, but stores the positons where b = 0
 func (b *bitmask) trimBitmask(entries int) error {
 	if *b == nil {
 		return nil
