@@ -59,12 +59,25 @@ func (stub *txGroupsEncodingStub) deconstructSignedTransactions(i int, txn *tran
 	return stub.deconstructTransactions(i, txn)
 }
 
-func (stub *txGroupsEncodingStub) finishDeconstructSignedTransactions() {
-	stub.BitmaskAuthAddr.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.finishDeconstructMsigs()
-	stub.finishDeconstructLsigs()
-	stub.BitmaskSig.trimBitmask(int(stub.TotalTransactionsCount))
+func (stub *txGroupsEncodingStub) finishDeconstructSignedTransactions() error {
+	err := stub.BitmaskAuthAddr.trimBitmask(int(stub.TotalTransactionsCount))
+	if err != nil {
+		return err
+	}
+	err = stub.finishDeconstructMsigs()
+	if err != nil {
+		return err
+	}
+	err = stub.finishDeconstructLsigs()
+	if err != nil {
+		return err
+	}
+	err = stub.BitmaskSig.trimBitmask(int(stub.TotalTransactionsCount))
+	if err != nil {
+		return err
+	}
 	stub.finishDeconstructTransactions()
+	return nil
 }
 
 func (stub *txGroupsEncodingStub) deconstructMsigs(i int, txn *transactions.SignedTxn) {
@@ -95,10 +108,21 @@ func (stub *txGroupsEncodingStub) deconstructMsigs(i int, txn *transactions.Sign
 	}
 }
 
-func (stub *txGroupsEncodingStub) finishDeconstructMsigs() {
-	stub.BitmaskVersion.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskThreshold.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskSubsigs.trimBitmask(int(stub.TotalTransactionsCount))
+func (stub *txGroupsEncodingStub) finishDeconstructMsigs() error {
+	err := stub.BitmaskVersion.trimBitmask(int(stub.TotalTransactionsCount))
+	if err != nil {
+		return err
+	}
+	err = stub.BitmaskThreshold.trimBitmask(int(stub.TotalTransactionsCount))
+	if err != nil {
+		return err
+	}
+
+	err = stub.BitmaskSubsigs.trimBitmask(int(stub.TotalTransactionsCount))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (stub *txGroupsEncodingStub) deconstructLsigs(i int, txn *transactions.SignedTxn) {
@@ -153,9 +177,16 @@ func (stub *txGroupsEncodingStub) deconstructLsigs(i int, txn *transactions.Sign
 	}
 }
 
-func (stub *txGroupsEncodingStub) finishDeconstructLsigs() {
-	stub.BitmaskLogic.trimBitmask(int(stub.TotalTransactionsCount))
-	stub.BitmaskLogicArgs.trimBitmask(int(stub.TotalTransactionsCount))
+func (stub *txGroupsEncodingStub) finishDeconstructLsigs() error {
+	err := stub.BitmaskLogic.trimBitmask(int(stub.TotalTransactionsCount))
+	if err != nil {
+		return err
+	}
+	err = stub.BitmaskLogicArgs.trimBitmask(int(stub.TotalTransactionsCount))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (stub *txGroupsEncodingStub) deconstructTransactions(i int, txn *transactions.SignedTxn) error {
