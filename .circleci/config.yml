@@ -262,6 +262,7 @@ jobs:
   mac_amd64_build:
     macos:
       xcode: 12.4.0
+    resource_class: xlarge
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - checkout
@@ -272,6 +273,7 @@ jobs:
   mac_amd64_test:
     macos:
       xcode: 12.4.0
+    resource_class: xlarge
     parallelism: 4
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
@@ -283,6 +285,7 @@ jobs:
   mac_amd64_integration:
     macos:
       xcode: 12.4.0
+    resource_class: xlarge
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -296,6 +299,7 @@ jobs:
   mac_amd64_e2e_subs:
     macos:
       xcode: 12.4.0
+    resource_class: xlarge
     environment:
       E2E_SUBS_ONLY: "true"
     steps:
