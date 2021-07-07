@@ -1213,22 +1213,6 @@ type lookupFullTestSpec struct {
 	holdings  bool
 }
 
-func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
-	res := make(map[basics.AssetIndex]basics.AssetHolding, len(m))
-	for id, val := range m {
-		res[id] = val
-	}
-	return res
-}
-
-func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
-	res := make(map[basics.AssetIndex]basics.AssetParams, len(m))
-	for id, val := range m {
-		res[id] = val
-	}
-	return res
-}
-
 func lookupFullTest(t *testing.T, spec []lookupFullTestSpec) {
 	a := require.New(t)
 	inMemory := false
@@ -1294,7 +1278,7 @@ func lookupFullTest(t *testing.T, spec []lookupFullTestSpec) {
 					ads[i].AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
 				}
 				ads[i].AssetParams[basics.AssetIndex(cidx)] = basics.AssetParams{Total: uint64(cidx), DefaultFrozen: true, AssetName: "test"}
-				pad.AccountData.AssetParams = cloneAssetParams(ads[i].AssetParams)
+				pad.AccountData.AssetParams = ledgercore.CloneAssetParams(ads[i].AssetParams)
 				deltas.SetEntityDelta(addresses[i], cidx, ledgercore.ActionParamsCreate)
 			}
 			if spec[i].holdings {
@@ -1302,7 +1286,7 @@ func lookupFullTest(t *testing.T, spec []lookupFullTestSpec) {
 					ads[i].Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 				}
 				ads[i].Assets[basics.AssetIndex(cidx)] = basics.AssetHolding{Amount: uint64(cidx), Frozen: true}
-				pad.AccountData.Assets = cloneAssetHoldings(ads[i].Assets)
+				pad.AccountData.Assets = ledgercore.CloneAssetHoldings(ads[i].Assets)
 				deltas.SetEntityDelta(addresses[i], cidx, ledgercore.ActionHoldingCreate)
 			}
 			deltas.Upsert(addresses[i], pad)
@@ -1408,11 +1392,11 @@ func TestLargeAssetHoldingsLargeBlock(t *testing.T) {
 		cidx := basics.CreatableIndex(aidx)
 
 		ad.AssetParams[basics.AssetIndex(cidx)] = basics.AssetParams{Total: uint64(cidx), DefaultFrozen: true, AssetName: "test"}
-		pad.AccountData.AssetParams = cloneAssetParams(ad.AssetParams)
+		pad.AccountData.AssetParams = ledgercore.CloneAssetParams(ad.AssetParams)
 		deltas.SetEntityDelta(addr, cidx, ledgercore.ActionParamsCreate)
 
 		ad.Assets[basics.AssetIndex(cidx)] = basics.AssetHolding{Amount: uint64(cidx), Frozen: true}
-		pad.AccountData.Assets = cloneAssetHoldings(ad.Assets)
+		pad.AccountData.Assets = ledgercore.CloneAssetHoldings(ad.Assets)
 		deltas.SetEntityDelta(addr, cidx, ledgercore.ActionHoldingCreate)
 		deltas.Upsert(addr, pad)
 	}
@@ -1443,11 +1427,11 @@ func TestLargeAssetHoldingsLargeBlock(t *testing.T) {
 		cidx := basics.CreatableIndex(aidx)
 
 		ad.AssetParams[basics.AssetIndex(cidx)] = basics.AssetParams{Total: uint64(cidx), DefaultFrozen: true, AssetName: "test"}
-		pad.AccountData.AssetParams = cloneAssetParams(ad.AssetParams)
+		pad.AccountData.AssetParams = ledgercore.CloneAssetParams(ad.AssetParams)
 		deltas.SetEntityDelta(addr, cidx, ledgercore.ActionParamsCreate)
 
 		ad.Assets[basics.AssetIndex(cidx)] = basics.AssetHolding{Amount: uint64(cidx), Frozen: true}
-		pad.AccountData.Assets = cloneAssetHoldings(ad.Assets)
+		pad.AccountData.Assets = ledgercore.CloneAssetHoldings(ad.Assets)
 		deltas.SetEntityDelta(addr, cidx, ledgercore.ActionHoldingCreate)
 		deltas.Upsert(addr, pad)
 	}

@@ -2025,6 +2025,11 @@ func lookupAssetHolding(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgerc
 			// pad.AccountData.Assets might not be nil because looks up into deltas cache
 			pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, 1)
 		}
+		// clone Assets map before modifying and returning to the caller
+		// the original pad.AccountData.Assets might be in use by apply.Balances / cow logic
+		if len(pad.AccountData.Assets) > 0 {
+			pad.AccountData.Assets = ledgercore.CloneAssetHoldings(pad.AccountData.Assets)
+		}
 		pad.AccountData.Assets[aidx] = pad.ExtendedAssetHolding.Groups[gi].GetHolding(ai)
 		exist = true
 	}
@@ -2038,9 +2043,14 @@ func lookupAssetParams(loadStmt *sql.Stmt, aidx basics.AssetIndex, pad *ledgerco
 	}
 	exist := false
 	if gi != -1 && ai != -1 {
-		if pad.AccountData.Assets == nil {
+		if pad.AccountData.AssetParams == nil {
 			// pad.AccountData.AssetParams might not be nil because looks up into deltas cache
 			pad.AccountData.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 1)
+		}
+		// clone AssetParams map before modifying and returning to the caller
+		// the original pad.AccountData.AssetParams might be in use by apply.Balances / cow logic
+		if len(pad.AccountData.AssetParams) > 0 {
+			pad.AccountData.AssetParams = ledgercore.CloneAssetParams(pad.AccountData.AssetParams)
 		}
 		pad.AccountData.AssetParams[aidx] = pad.ExtendedAssetParams.Groups[gi].GetParams(ai)
 		exist = true
