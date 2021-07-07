@@ -121,7 +121,7 @@ func TestLoadTelemetryConfig(t *testing.T) {
 
 }
 
-func TestLoadTelemetryConfigBlankUsernamePassword(t *testing.T ) {
+func TestLoadTelemetryConfigBlankUsernamePassword(t *testing.T) {
 
 	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test2"
 	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
@@ -132,7 +132,7 @@ func TestLoadTelemetryConfigBlankUsernamePassword(t *testing.T ) {
 	require.Equal(t, defaultTelemetryPassword, tc.Password)
 }
 
-func TestSaveTelemetryConfigBlankUsernamePassword(t *testing.T ) {
+func TestSaveTelemetryConfigBlankUsernamePassword(t *testing.T) {
 
 	testDir := os.Getenv("TESTDIR")
 
