@@ -167,47 +167,47 @@ func BenchmarkOldKeysDeletion(b *testing.B) {
 	part.Close()
 }
 
-func TestDBMReads(t *testing.T) {
+func TestRetrieveFromDB(t *testing.T) {
+	a := require.New(t)
+	part, rootDB, partDB, err := setupParticipationKey(t, a)
+	a.NoError(err)
+	defer closeDBS(rootDB, partDB)
+
+	retrievedPart, err := RestoreParticipation(partDB)
+	a.NoError(err)
+	a.NotNil(retrievedPart)
+
+	// comparing the outputs:
+	a.Equal(intoComparable(part), intoComparable(retrievedPart))
+}
+
+func TestRetrieveFromDBAtVersion1(t *testing.T) {
+	a := require.New(t)
+	ppart := setupkeyWithNoDBS(t, a)
+	_, rootDB, partDB := createTestDBs(t, a)
+	defer closeDBS(rootDB, partDB)
+
+	part := ppart.Participation
+	a.NoError(setupTestDBAtVer1(partDB, part))
+
+	retrivedPart, err := RestoreParticipation(partDB)
+	a.NoError(err)
+	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+}
+
+func TestRetriveFromDBAtVersion2(t *testing.T) {
 	a := require.New(t)
 
-	t.Run("retrieve from DB", func(t *testing.T) {
-		part, rootDB, partDB, err := setupParticipationKey(t, a)
-		a.NoError(err)
-		defer closeDBS(rootDB, partDB)
+	ppart := setupkeyWithNoDBS(t, a)
+	_, rootDB, partDB := createTestDBs(t, a)
+	defer closeDBS(rootDB, partDB)
 
-		retrievedPart, err := RestoreParticipation(partDB)
-		a.NoError(err)
-		a.NotNil(retrievedPart)
+	part := ppart.Participation
+	a.NoError(setupTestDBAtVer2(partDB, part))
 
-		// comparing the outputs:
-		a.Equal(intoComparable(part), intoComparable(retrievedPart))
-	})
-
-	t.Run("retrieve from non-upgraded DB at version 1", func(t *testing.T) {
-		ppart := setupkeyWithNoDBS(t, a)
-		_, rootDB, partDB := createTestDBs(t, a)
-		defer closeDBS(rootDB, partDB)
-
-		part := ppart.Participation
-		a.NoError(setupTestDBAtVer1(partDB, part))
-
-		retrivedPart, err := RestoreParticipation(partDB)
-		a.NoError(err)
-		assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
-	})
-
-	t.Run("retrieve from non upgraded DB at version 2", func(t *testing.T) {
-		ppart := setupkeyWithNoDBS(t, a)
-		_, rootDB, partDB := createTestDBs(t, a)
-		defer closeDBS(rootDB, partDB)
-
-		part := ppart.Participation
-		a.NoError(setupTestDBAtVer2(partDB, part))
-
-		retrivedPart, err := RestoreParticipation(partDB)
-		a.NoError(err)
-		assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
-	})
+	retrivedPart, err := RestoreParticipation(partDB)
+	a.NoError(err)
+	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
 }
 
 func closeDBS(dbAccessor ...db.Accessor) {
@@ -221,33 +221,30 @@ func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart
 	a.Nil(retrivedPart.CompactCertKey)
 }
 
-func TestDBMigration(t *testing.T) {
+func TestMigrateFromVersion1(t *testing.T) {
 	a := require.New(t)
-	ppart, rootDB, partDB, err := setupParticipationKey(t, a)
-	a.NoError(err)
-	closeDBS(rootDB, partDB)
+	part := setupkeyWithNoDBS(t, a).Participation
 
-	part := ppart.Participation
+	_, rootDB, partDB := createTestDBs(t, a)
+	defer closeDBS(rootDB, partDB)
 
-	t.Run("upgrade from version 1", func(t *testing.T) {
-		_, rootDB, partDB := createTestDBs(t, a)
-		defer closeDBS(rootDB, partDB)
+	a.NoError(setupTestDBAtVer1(partDB, part))
+	a.NoError(Migrate(partDB))
 
-		a.NoError(setupTestDBAtVer1(partDB, part))
-		a.NoError(Migrate(partDB))
+	a.NoError(testDBContainsAllColumns(partDB))
+}
 
-		a.NoError(testDBContainsAllColumns(partDB))
-	})
+func TestMigrationFromVersion2(t *testing.T) {
+	a := require.New(t)
+	part := setupkeyWithNoDBS(t, a).Participation
 
-	t.Run("upgrade from version 2", func(t *testing.T) {
-		_, rootDB, partDB := createTestDBs(t, a)
-		defer closeDBS(rootDB, partDB)
+	_, rootDB, partDB := createTestDBs(t, a)
+	defer closeDBS(rootDB, partDB)
 
-		a.NoError(setupTestDBAtVer2(partDB, part))
-		a.NoError(Migrate(partDB))
+	a.NoError(setupTestDBAtVer2(partDB, part))
+	a.NoError(Migrate(partDB))
 
-		a.NoError(testDBContainsAllColumns(partDB))
-	})
+	a.NoError(testDBContainsAllColumns(partDB))
 }
 
 func testDBContainsAllColumns(partDB db.Accessor) error {
