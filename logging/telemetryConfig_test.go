@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -34,8 +35,8 @@ func Test_loadTelemetryConfig(t *testing.T) {
 		MinLogLevel:        4,
 		ReportHistoryLevel: 4,
 		// These credentials are here intentionally. Not a bug.
-		UserName: DefaultTelemetryUsername,
-		Password: DefaultTelemetryPassword,
+		UserName: defaultTelemetryUsername,
+		Password: defaultTelemetryPassword,
 	}
 
 	a := require.New(t)
@@ -126,7 +127,47 @@ func TestLoadTelemetryConfigBlankUsernamePassword(t *testing.T ) {
 	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
 	require.NoError(t, err)
 	// make sure the user name was loaded from the specified file
-	require.Equal(t, DefaultTelemetryUsername, tc.UserName)
+	require.Equal(t, defaultTelemetryUsername, tc.UserName)
 	// ensure we know how to default correctly if some of the fields in the configuration field aren't specified.
-	require.Equal(t, DefaultTelemetryPassword, tc.Password)
+	require.Equal(t, defaultTelemetryPassword, tc.Password)
+}
+
+func TestSaveTelemetryConfigBlankUsernamePassword(t *testing.T ) {
+
+	testDir := os.Getenv("TESTDIR")
+
+	if testDir == "" {
+		testDir, _ = ioutil.TempDir("", "tmp")
+	}
+
+	a := require.New(t)
+
+	configsPath := filepath.Join(testDir, "logging.config")
+
+	config := createTelemetryConfig()
+
+	// Ensure that config has default username and password
+	config.UserName = defaultTelemetryUsername
+	config.Password = defaultTelemetryPassword
+
+	err := config.Save(configsPath)
+	a.NoError(err)
+
+	f, err := os.Open(configsPath)
+	a.NoError(err)
+	defer f.Close()
+
+	var cfg TelemetryConfig
+
+	var marshaledConfig MarshalingTelemetryConfig
+	marshaledConfig.TelemetryConfig = createTelemetryConfig()
+
+	dec := json.NewDecoder(f)
+	err = dec.Decode(&marshaledConfig)
+	a.NoError(err)
+
+	cfg = marshaledConfig.TelemetryConfig
+	a.Equal(cfg.UserName, "")
+	a.Equal(cfg.Password, "")
+
 }
