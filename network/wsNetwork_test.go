@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"sort"
@@ -1967,5 +1968,54 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 			break
 		}
 		txnCount += txnCount/4 + 1
+	}
+}
+
+type urlCase struct {
+	text string
+	out  url.URL
+}
+
+func TestParseHostOrURL(t *testing.T) {
+	urlTestCases := []urlCase{
+		{"localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
+		{"http://localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
+		{"ws://localhost:9999", url.URL{Scheme: "ws", Host: "localhost:9999"}},
+		{"wss://localhost:443", url.URL{Scheme: "wss", Host: "localhost:443"}},
+		{"https://localhost:123", url.URL{Scheme: "https", Host: "localhost:123"}},
+		{"https://somewhere.tld", url.URL{Scheme: "https", Host: "somewhere.tld"}},
+		{"http://127.0.0.1:123", url.URL{Scheme: "http", Host: "127.0.0.1:123"}},
+		{"//somewhere.tld", url.URL{Scheme: "", Host: "somewhere.tld"}},
+		{"//somewhere.tld:4601", url.URL{Scheme: "", Host: "somewhere.tld:4601"}},
+		{"http://[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
+		{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}},
+		{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
+	}
+	badUrls := []string{
+		"justahost",
+		"localhost:WAT",
+		"http://localhost:WAT",
+		"https://localhost:WAT",
+		"ws://localhost:WAT",
+		"wss://localhost:WAT",
+		"//localhost:WAT",
+		"://badaddress", // See rpcs/blockService_test.go TestRedirectFallbackEndpoints
+		"://localhost:1234",
+	}
+	for _, tc := range urlTestCases {
+		t.Run(tc.text, func(t *testing.T) {
+			v, err := ParseHostOrURL(tc.text)
+			require.NoError(t, err)
+			if tc.out != *v {
+				t.Errorf("url wanted %#v, got %#v", tc.out, v)
+				return
+			}
+		})
+	}
+	for _, addr := range badUrls {
+		t.Run(addr, func(t *testing.T) {
+			_, err := ParseHostOrURL(addr)
+			require.Error(t, err, "url should fail", addr)
+		})
 	}
 }
