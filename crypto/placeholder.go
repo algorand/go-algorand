@@ -37,7 +37,10 @@ func (p *PlaceHolderKey) SignBytes(message []byte) ByteSignature {
 
 // GetVerifier outputs a representation of a public key. that implements Verifier
 func (p *PlaceHolderKey) GetVerifier() VerifyingKey {
-	return newVerifyingKey(PlaceHolderType, &PlaceHolderPublicKey{SignatureVerifier: p.Sec.SignatureVerifier})
+	return VerifyingKey{
+		Type: PlaceHolderType,
+		Pack: PackedVerifyingKey{PlaceHolderPublicKey: PlaceHolderPublicKey{SignatureVerifier: p.Sec.SignatureVerifier}},
+	}
 }
 
 // Verify that a signature match to a specific message
