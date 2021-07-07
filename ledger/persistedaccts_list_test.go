@@ -6,7 +6,7 @@ import (
 )
 
 func checkLen(list *persistedAccountDataList) int {
-	if isLenZero(list) {
+	if isEmpty(list) {
 		return 0
 	}
 	return countListSize(&list.root)
