@@ -19,17 +19,7 @@ func countListSize(head *persistedAccountDataListNode) (counter int) {
 	return counter
 }
 
-func TestPersistedAccountDataList(t *testing.T) {
-	t.Run("single element list movements", testSingleElementListPositioning)
-
-	t.Run("multi-element list movements", testMultielementListPositioning)
-
-	t.Run("remove from list", removeFromListTest)
-
-	t.Run("test freelist usage", testFreeListMovement)
-}
-
-func removeFromListTest(t *testing.T) {
+func TestRemoveFromList(t *testing.T) {
 	l := newPersistedAccountList()
 	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
 	e2 := l.pushFront(&persistedAccountData{addr: basics.Address{2}})
@@ -42,13 +32,7 @@ func removeFromListTest(t *testing.T) {
 	checkListPointers(t, l, []*persistedAccountDataListNode{e1})
 }
 
-func testFreeListMovement(t *testing.T) {
-	t.Run("removed node should be moved to freelist", removedNodeShouldBeMovedToFreeList)
-
-	t.Run("new node should come from free list", testAddingNewNodeWithAllocatedFreeList)
-}
-
-func testAddingNewNodeWithAllocatedFreeList(t *testing.T) {
+func TestAddingNewNodeWithAllocatedFreeList(t *testing.T) {
 	l := newPersistedAccountList().allocateFreeNodes(10)
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 	if countListSize(l.freeList) != 10 {
@@ -121,7 +105,7 @@ func pointerInspection(t *testing.T, es []*persistedAccountDataListNode, root *p
 	}
 }
 
-func testMultielementListPositioning(t *testing.T) {
+func TestMultielementListPositioning(t *testing.T) {
 	l := newPersistedAccountList()
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 	// test elements
@@ -179,7 +163,7 @@ func testMultielementListPositioning(t *testing.T) {
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 }
 
-func testSingleElementListPositioning(t *testing.T) {
+func TestSingleElementListPositioning(t *testing.T) {
 	l := newPersistedAccountList()
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 	e := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
@@ -190,7 +174,7 @@ func testSingleElementListPositioning(t *testing.T) {
 	checkListPointers(t, l, []*persistedAccountDataListNode{})
 }
 
-func removedNodeShouldBeMovedToFreeList(t *testing.T) {
+func TestRemovedNodeShouldBeMovedToFreeList(t *testing.T) {
 	l := newPersistedAccountList()
 	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
 	e2 := l.pushFront(&persistedAccountData{addr: basics.Address{2}})
