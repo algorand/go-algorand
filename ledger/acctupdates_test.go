@@ -127,14 +127,16 @@ func (ml *mockLedgerForTracker) addMockBlock(be blockEntry, delta ledgercore.Sta
 	return nil
 }
 
-func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
+func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (*roundCowState, error) {
 	// support returning the deltas if the client explicitly provided them by calling addMockBlock, otherwise,
 	// just return an empty state delta ( since the client clearly didn't care about these )
 	if len(ml.deltas) > int(blk.Round()) {
-		return ml.deltas[uint64(blk.Round())], nil
+		return &roundCowState{mods: ml.deltas[uint64(blk.Round())]}, nil
 	}
-	return ledgercore.StateDelta{
-		Hdr: &bookkeeping.BlockHeader{},
+	return &roundCowState{
+		mods: ledgercore.StateDelta{
+			Hdr: &bookkeeping.BlockHeader{},
+		},
 	}, nil
 }
 

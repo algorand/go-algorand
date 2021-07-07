@@ -52,7 +52,7 @@ const maxPaysetHint = 20000
 const asyncAccountLoadingThreadCount = 4
 
 type roundCowBase struct {
-	l ledgerForCowBase
+	l ledgerForEvaluator
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
@@ -364,18 +364,16 @@ type BlockEvaluator struct {
 }
 
 type ledgerForEvaluator interface {
-	ledgerForCowBase
-	GenesisHash() crypto.Digest
-	Totals(basics.Round) (ledgercore.AccountTotals, error)
-	CompactCertVoters(basics.Round) (*VotersForRound, error)
-}
-
-// ledgerForCowBase represents subset of Ledger functionality needed for cow business
-type ledgerForCowBase interface {
+	// Needed for cow.go
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+
+	// Needed for the evaluator
+	GenesisHash() crypto.Digest
+	Totals(basics.Round) (ledgercore.AccountTotals, error)
+	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header

@@ -76,6 +76,7 @@ type Ledger struct {
 	notifier blockNotifier
 	time     timeTracker
 	metrics  metricsTracker
+	speculate speculationTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -193,6 +194,7 @@ func (l *Ledger) reloadLedger() error {
 	l.trackers.register(&l.bulletin) // provide closed channel signaling support for completed rounds
 	l.trackers.register(&l.notifier) // send OnNewBlocks to subscribers
 	l.trackers.register(&l.metrics)  // provides metrics reporting support
+	l.trackers.register(&l.speculate)
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
@@ -636,13 +638,13 @@ func (l *Ledger) trackerLog() logging.Logger {
 // trackerEvalVerified is used by the accountUpdates to reconstruct the ledgercore.StateDelta from a given block during it's loadFromDisk execution.
 // when this function is called, the trackers mutex is expected already to be taken. The provided accUpdatesLedger would allow the
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (*roundCowState, error) {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 	state, err := eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
-		return ledgercore.StateDelta{}, err
+		return nil, err
 	}
-	return state.deltas(), err
+	return state, err
 }
 
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
