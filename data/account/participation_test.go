@@ -280,7 +280,7 @@ func setupTestDBAtVer2(partDB db.Accessor, part Participation) error {
 		if err := setupSchemaForTest(tx, 2); err != nil {
 			return err
 		}
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?,?)",
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?)",
 			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution)
 		if err != nil {
 			return err
