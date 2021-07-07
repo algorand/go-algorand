@@ -400,7 +400,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 
 	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
-		pse := logic.MakePastSideEffects(1)
+		pse := logic.MakePastSideEffects(len(dr.Txns))
 		ep := logic.EvalParams{
 			Txn:             &stxn,
 			Proto:           &proto,
