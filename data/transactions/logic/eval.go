@@ -2987,3 +2987,7 @@ func opAssetParamsGet(cx *evalContext) {
 	cx.stack[last] = value
 	cx.stack = append(cx.stack, stackValue{Uint: exist})
 }
+
+func opAnnounce(ct *evalContext) {
+	//	TODO: to be implemented
+}

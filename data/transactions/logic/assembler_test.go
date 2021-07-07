@@ -290,12 +290,16 @@ gloads 0
 gaid 0
 gaids
 `
+const v5Nonsense = `
+announce
+`
 
 var nonsense = map[uint64]string{
 	1: v1Nonsense,
 	2: v1Nonsense + v2Nonsense,
 	3: v1Nonsense + v2Nonsense + v3Nonsense,
 	4: v1Nonsense + v2Nonsense + v3Nonsense + v4Nonsense,
+	5: v1Nonsense + v2Nonsense + v3Nonsense + v4Nonsense + v5Nonsense,
 }
 
 var compiled = map[uint64]string{

@@ -141,6 +141,9 @@ var opDocByName = map[string]string{
 	"b&":  "A bitwise-and B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
 	"b^":  "A bitwise-xor B, where A and B are byte-arrays, zero-left extended to the greater of their lengths",
 	"b~":  "X with all bits inverted",
+
+	//todo: UPDATE
+	"announce": "",
 }
 
 // OpDoc returns a description of the op
