@@ -134,6 +134,9 @@ var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", De
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
 
+var incomingPeerAddr = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers_addr", Description: "IP addresses of the incoming peers."})
+var outgoingPeerAddr = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers_addr", Description: "IP addresses of the outgoing peers."})
+
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
 
@@ -2245,6 +2248,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 		atomic.AddInt32(&wn.peersChangeCounter, 1)
 	}
 	wn.countPeersSetGauges()
+	wn.updatePeersSetGauges()
 }
 
 func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
@@ -2260,6 +2264,7 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
 	atomic.AddInt32(&wn.peersChangeCounter, 1)
 	wn.countPeersSetGauges()
+	wn.updatePeersSetGauges()
 	if len(wn.peers) >= wn.config.GossipFanout {
 		// we have a quorum of connected peers, if we weren't ready before, we are now
 		if atomic.CompareAndSwapInt32(&wn.ready, 0, 1) {
@@ -2284,6 +2289,24 @@ func (wn *WebsocketNetwork) eventualReady() {
 			close(wn.readyChan)
 		}
 	}
+}
+
+// function to update the incoming and outgoing peer metrics
+// by appending the address of the peers to the metric labels
+// should be run from inside a context holding wn.peersLock
+func (wn *WebsocketNetwork) updatePeersSetGauges() {
+	outPeerMap := make(map[string]string)
+	inPeerMap := make(map[string]string)
+	for id, peer := range wn.peers {
+		key := fmt.Sprintf("%s_%d", "peer", id)
+		if peer.outgoing {
+			outPeerMap[key] = peer.GetAddress()
+		} else {
+			inPeerMap[key] = peer.GetAddress()
+		}
+	}
+	incomingPeerAddr.Set(float64(1), inPeerMap)
+	outgoingPeerAddr.Set(float64(1), outPeerMap)
 }
 
 // should be run from inside a context holding wn.peersLock
