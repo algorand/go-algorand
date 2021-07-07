@@ -1792,13 +1792,17 @@ func TestLedgerAssetHoldingsLargeBlock(t *testing.T) {
 
 	stxns = makeAssetCreateTxns(1+margin, numAssets)
 	// Clear the timer to ensure a flush (well, not always works but needed)
+	l.accts.accountsMu.RLock()
 	l.accts.lastFlushTime = time.Time{}
+	l.accts.accountsMu.RUnlock()
 	err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
 	require.NoError(t, err)
 	l.WaitForCommit(l.Latest())
 
 	for i := uint64(0); i < 2*protoParams.MaxBalLookback+2; i++ {
+		l.accts.accountsMu.RLock()
 		l.accts.lastFlushTime = time.Time{}
+		l.accts.accountsMu.RUnlock()
 		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
@@ -1809,7 +1813,9 @@ func TestLedgerAssetHoldingsLargeBlock(t *testing.T) {
 	require.Equal(t, int(numAssets), len(pad.AssetParams))
 
 	for i := uint64(0); i < 2*protoParams.MaxBalLookback+2; i++ {
+		l.accts.accountsMu.RLock()
 		l.accts.lastFlushTime = time.Time{}
+		l.accts.accountsMu.RUnlock()
 		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 		// syncer may not be fast enough and delay so it a chance to trigger committedUpTo
 		time.Sleep(10 * time.Millisecond)
