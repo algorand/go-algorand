@@ -18,15 +18,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA256 hash of value X, yields [32]byte
 - **Cost**:
    - 7 (LogicSigVersion = 1)
-<<<<<<< HEAD
-<<<<<<< HEAD
-   - 35 (2 <= LogicSigVersion <= 3)
-=======
    - 35 (2 <= LogicSigVersion <= 4)
->>>>>>> master
-=======
-   - 35 (2 <= LogicSigVersion <= 4)
->>>>>>> master
 
 ## keccak256
 
@@ -36,15 +28,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Keccak256 hash of value X, yields [32]byte
 - **Cost**:
    - 26 (LogicSigVersion = 1)
-<<<<<<< HEAD
-<<<<<<< HEAD
-   - 130 (2 <= LogicSigVersion <= 3)
-=======
    - 130 (2 <= LogicSigVersion <= 4)
->>>>>>> master
-=======
-   - 130 (2 <= LogicSigVersion <= 4)
->>>>>>> master
 
 ## sha512_256
 
@@ -54,15 +38,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA512_256 hash of value X, yields [32]byte
 - **Cost**:
    - 9 (LogicSigVersion = 1)
-<<<<<<< HEAD
-<<<<<<< HEAD
-   - 45 (2 <= LogicSigVersion <= 3)
-=======
    - 45 (2 <= LogicSigVersion <= 4)
->>>>>>> master
-=======
-   - 45 (2 <= LogicSigVersion <= 4)
->>>>>>> master
 
 ## ed25519verify
 
@@ -569,8 +545,6 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 `gloads` fails unless the requested transaction is an ApplicationCall and X < GroupIndex.
 
-<<<<<<< HEAD
-=======
 ## gaid t
 
 - Opcode: 0x3c {uint8 transaction group index}
@@ -593,7 +567,6 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 `gaids` fails unless the requested transaction created an asset or application and X < GroupIndex.
 
->>>>>>> master
 ## bnz target
 
 - Opcode: 0x40 {int16 branch offset, big endian}
@@ -938,11 +911,6 @@ pushbytes args are not added to the bytecblock during assembly processes
 - LogicSigVersion >= 3
 
 pushint args are not added to the intcblock during assembly processes
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> master
 
 ## callsub target
 
@@ -1152,7 +1120,3 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Pushes: []byte
 - push a byte-array of length X, containing all zero bytes
 - LogicSigVersion >= 4
-<<<<<<< HEAD
->>>>>>> master
-=======
->>>>>>> master
