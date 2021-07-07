@@ -82,14 +82,14 @@ func partMigrate(tx *sql.Tx) (err error) {
 		var version int
 		err = rows.Scan(&tableName, &version)
 		if err != nil {
-			return
+			return err
 		}
 		versions[tableName] = version
 	}
 
 	err = rows.Err()
 	if err != nil {
-		return
+		return err
 	}
 
 	partVersion, has := versions[PartTableSchemaName]
@@ -106,33 +106,33 @@ func partMigrate(tx *sql.Tx) (err error) {
 		return ErrUnsupportedSchema
 	}
 
-	return
+	return nil
 }
 
 func updateDB(tx *sql.Tx, partVersion int) (int, error) {
 	if partVersion == 1 {
 		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD keyDilution INTEGER NOT NULL DEFAULT 0")
 		if err != nil {
-			return 0, nil
+			return 0, err
 		}
 
 		partVersion = 2
 		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
 		if err != nil {
-			return 0, nil
+			return 0, err
 		}
 	}
 
 	if partVersion == 2 {
 		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD compactCert BLOB")
 		if err != nil {
-			return 0, nil
+			return 0, err
 		}
 
 		partVersion = 3
 		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
 		if err != nil {
-			return 0, nil
+			return 0, err
 		}
 	}
 	return partVersion, nil
