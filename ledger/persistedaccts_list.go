@@ -30,8 +30,10 @@ func newPersistedAccountList() *persistedAccountDataList {
 
 func (l *persistedAccountDataList) inserNodeToFreeList(otherNode *persistedAccountDataListNode) {
 	otherNode.next = l.freeList.next
-	l.freeList.next = otherNode
+	otherNode.prev = nil
 	otherNode.Value = nil
+
+	l.freeList.next = otherNode
 }
 
 func (l *persistedAccountDataList) getNewNode() *persistedAccountDataListNode {
