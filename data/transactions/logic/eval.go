@@ -1763,7 +1763,7 @@ func (cx *evalContext) appParamsEnumToValue(params *basics.AppParams, creator ba
 	case AppApprovalProgram:
 		sv.Bytes = params.ApprovalProgram[:]
 	case AppClearStateProgram:
-		sv.Bytes = params.ApprovalProgram[:]
+		sv.Bytes = params.ClearStateProgram[:]
 	case AppGlobalNumUint:
 		sv.Uint = params.GlobalStateSchema.NumUint
 	case AppGlobalNumByteSlice:
