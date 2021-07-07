@@ -129,17 +129,3 @@ func NewSigner(t AlgorithmType) *SignatureAlgorithm {
 	SystemRNG.RandBytes(seed[:])
 	return NewSignerFromSeed(seed, t)
 }
-
-func newVerifyingKey(t AlgorithmType, v Verifier) VerifyingKey {
-	vKey := VerifyingKey{
-		Type: t,
-		Pack: PackedVerifyingKey{},
-	}
-	switch t {
-	case PlaceHolderType:
-		vKey.Pack.PlaceHolderPublicKey = *(v.(*PlaceHolderPublicKey))
-	default:
-		panic("unknown type")
-	}
-	return vKey
-}
