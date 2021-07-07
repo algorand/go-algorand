@@ -129,7 +129,20 @@ func testMultielementListPositioning(t *testing.T) {
 	e1 := l.pushFront(&persistedAccountData{addr: basics.Address{1}})
 	e3 := l.pushFront(&persistedAccountData{addr: basics.Address{3}})
 	e4 := l.pushFront(&persistedAccountData{addr: basics.Address{4}})
+	e5 := l.pushFront(&persistedAccountData{addr: basics.Address{5}})
 
+	checkListPointers(t, l, []*persistedAccountDataListNode{e5, e4, e3, e1, e2})
+
+	l.move(e4, e1)
+	checkListPointers(t, l, []*persistedAccountDataListNode{e5, e3, e1, e4, e2})
+
+	l.remove(e5)
+	checkListPointers(t, l, []*persistedAccountDataListNode{e3, e1, e4, e2})
+
+	l.move(e1, e4) // swap in middle
+	checkListPointers(t, l, []*persistedAccountDataListNode{e3, e4, e1, e2})
+
+	l.moveToFront(e4)
 	checkListPointers(t, l, []*persistedAccountDataListNode{e4, e3, e1, e2})
 
 	l.remove(e2)
@@ -157,6 +170,9 @@ func testMultielementListPositioning(t *testing.T) {
 	checkListPointers(t, l, []*persistedAccountDataListNode{e1, e2})
 
 	l.remove(e1) // removing front
+	checkListPointers(t, l, []*persistedAccountDataListNode{e2})
+
+	l.move(e2, l.back()) // swapping element with itself.
 	checkListPointers(t, l, []*persistedAccountDataListNode{e2})
 
 	l.remove(e2) // remove last one
