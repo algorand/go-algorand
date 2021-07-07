@@ -19,7 +19,6 @@ package participation
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -132,9 +131,6 @@ func TestOnlineOfflineRewards(t *testing.T) {
 }
 
 func TestPartkeyOnlyRewards(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	if testing.Short() {
 		t.Skip()
 	}
