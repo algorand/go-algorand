@@ -184,7 +184,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
 
-	// Generate new CompactCertKey
+	// Generate a new key which signs the compact certificates
 	compcertKey := crypto.NewSigner(crypto.PlaceHolderType)
 
 	// Construct the Participation containing these keys to be persisted
