@@ -14,7 +14,7 @@ func checkLen(list *persistedAccountDataList) int {
 
 func countListSize(head *persistedAccountDataListNode) (counter int) {
 	for i := head.next; i != head && i != nil; i = i.next {
-		counter += 1
+		counter++
 	}
 	return counter
 }
