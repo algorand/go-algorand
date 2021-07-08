@@ -292,11 +292,11 @@ func TestAppCallCloneEmpty(t *testing.T) {
 	a := require.New(t)
 
 	var ls map[basics.AppIndex]basics.AppLocalState
-	cls := cloneAppLocalStates(ls)
+	cls := ledgercore.CloneAppLocalStates(ls)
 	a.Equal(0, len(cls))
 
 	var ap map[basics.AppIndex]basics.AppParams
-	cap := cloneAppParams(ap)
+	cap := ledgercore.CloneAppParams(ap)
 	a.Equal(0, len(cap))
 }
 
@@ -509,8 +509,8 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	// now we give the creator the app params again
 	cp := basics.AccountData{}
-	cp.AppParams = cloneAppParams(saved.AppParams)
-	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
+	cp.AppParams = ledgercore.CloneAppParams(saved.AppParams)
+	cp.AppLocalStates = ledgercore.CloneAppLocalStates(saved.AppLocalStates)
 	b.balances[creator] = cp
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
@@ -530,8 +530,8 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	b.pass = true
 	cp = basics.AccountData{}
-	cp.AppParams = cloneAppParams(saved.AppParams)
-	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
+	cp.AppParams = ledgercore.CloneAppParams(saved.AppParams)
+	cp.AppLocalStates = ledgercore.CloneAppLocalStates(saved.AppLocalStates)
 	cp.TotalAppSchema = saved.TotalAppSchema
 	b.balances[creator] = cp
 

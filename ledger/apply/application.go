@@ -25,28 +25,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// Allocate the map of basics.AppParams if it is nil, and return a copy. We do *not*
-// call clone on each basics.AppParams -- callers must do that for any values where
-// they intend to modify a contained reference type.
-func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
-	res := make(map[basics.AppIndex]basics.AppParams, len(m))
-	for k, v := range m {
-		res[k] = v
-	}
-	return res
-}
-
-// Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
-// call clone on each AppLocalState -- callers must do that for any values
-// where they intend to modify a contained reference type.
-func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
-	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
-	for k, v := range m {
-		res[k] = v
-	}
-	return res
-}
-
 // getAppParams fetches the creator address and basics.AppParams for the app index,
 // if they exist. It does *not* clone the basics.AppParams, so the returned params
 // must not be modified directly.
@@ -94,7 +72,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	}
 
 	// Clone app params, so that we have a copy that is safe to modify
-	record.AppParams = cloneAppParams(record.AppParams)
+	record.AppParams = ledgercore.CloneAppParams(record.AppParams)
 
 	// Allocate the new app params (+ 1 to match Assets Idx namespace)
 	appIdx = basics.AppIndex(txnCounter + 1)
@@ -158,7 +136,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	record.TotalAppSchema = totalSchema
 
 	// Delete the AppParams
-	record.AppParams = cloneAppParams(record.AppParams)
+	record.AppParams = ledgercore.CloneAppParams(record.AppParams)
 	delete(record.AppParams, appIdx)
 
 	// Delete app's extra program pages
@@ -197,7 +175,7 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	}
 
 	// Fill in the new programs
-	record.AppParams = cloneAppParams(record.AppParams)
+	record.AppParams = ledgercore.CloneAppParams(record.AppParams)
 	params := record.AppParams[appIdx]
 	params.ApprovalProgram = ac.ApprovalProgram
 	params.ClearStateProgram = ac.ClearStateProgram
@@ -225,7 +203,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	}
 
 	// Write an AppLocalState, opting in the user
-	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+	record.AppLocalStates = ledgercore.CloneAppLocalStates(record.AppLocalStates)
 	record.AppLocalStates[appIdx] = basics.AppLocalState{
 		Schema: params.LocalStateSchema,
 	}
@@ -271,7 +249,7 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	record.TotalAppSchema = totalSchema
 
 	// Delete the local state
-	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+	record.AppLocalStates = ledgercore.CloneAppLocalStates(record.AppLocalStates)
 	delete(record.AppLocalStates, appIdx)
 
 	// Write closed-out user back to cow

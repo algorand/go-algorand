@@ -226,12 +226,14 @@ func (cb *roundCowState) lookupCreatableData(addr basics.Address, locators []cre
 			if loc.global {
 				params, parentOk := parentPad.AccountData.AssetParams[basics.AssetIndex(loc.cidx)]
 				if _, ok := pad.AccountData.AssetParams[basics.AssetIndex(loc.cidx)]; !ok && parentOk {
+					pad.AccountData.AssetParams = ledgercore.CloneAssetParams(pad.AccountData.AssetParams)
 					pad.AccountData.AssetParams[basics.AssetIndex(loc.cidx)] = params
 				}
 			}
 			if loc.local {
 				holding, parentOk := parentPad.AccountData.Assets[basics.AssetIndex(loc.cidx)]
 				if _, ok := pad.AccountData.Assets[basics.AssetIndex(loc.cidx)]; !ok && parentOk {
+					pad.AccountData.Assets = ledgercore.CloneAssetHoldings(pad.AccountData.Assets)
 					pad.AccountData.Assets[basics.AssetIndex(loc.cidx)] = holding
 				}
 			}
@@ -239,12 +241,14 @@ func (cb *roundCowState) lookupCreatableData(addr basics.Address, locators []cre
 			if loc.global {
 				params, parentOk := parentPad.AccountData.AppParams[basics.AppIndex(loc.cidx)]
 				if _, ok := pad.AccountData.AppParams[basics.AppIndex(loc.cidx)]; !ok && parentOk {
+					pad.AccountData.AppParams = ledgercore.CloneAppParams(pad.AccountData.AppParams)
 					pad.AccountData.AppParams[basics.AppIndex(loc.cidx)] = params
 				}
 			}
 			if loc.local {
 				states, parentOk := parentPad.AccountData.AppLocalStates[basics.AppIndex(loc.cidx)]
 				if _, ok := pad.AccountData.AppLocalStates[basics.AppIndex(loc.cidx)]; !ok && parentOk {
+					pad.AccountData.AppLocalStates = ledgercore.CloneAppLocalStates(pad.AccountData.AppLocalStates)
 					pad.AccountData.AppLocalStates[basics.AppIndex(loc.cidx)] = states
 				}
 			}

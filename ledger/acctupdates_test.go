@@ -1089,6 +1089,26 @@ func TestListCreatables(t *testing.T) {
 	listAndCompareComb(t, au, expectedDbImage)
 }
 
+func getAddrAD(accts map[basics.Address]basics.AccountData, seen map[basics.Address]bool) (addr basics.Address, ad basics.AccountData) {
+	for addr, ad = range accts {
+		if !seen[addr] {
+			return addr, ad // take first not seen and exit
+		}
+	}
+	return
+}
+
+func getBlock(rnd basics.Round) bookkeeping.Block {
+	blk := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			Round: basics.Round(rnd),
+		},
+	}
+	blk.RewardsLevel = 0
+	blk.CurrentProtocol = protocol.ConsensusFuture
+	return blk
+}
+
 func TestLookupFull(t *testing.T) {
 	a := require.New(t)
 	inMemory := false
@@ -1106,25 +1126,7 @@ func TestLookupFull(t *testing.T) {
 	_, err = initTestAccountDB(tx, accts, protoParams)
 	a.NoError(err)
 
-	getAddrAD := func(map[basics.Address]basics.AccountData) (addr basics.Address, ad basics.AccountData) {
-		for addr, ad = range accts {
-			return addr, ad // take first and exit
-		}
-		return
-	}
-
-	getBlock := func(rnd basics.Round) bookkeeping.Block {
-		blk := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(rnd),
-			},
-		}
-		blk.RewardsLevel = 0
-		blk.CurrentProtocol = protocol.ConsensusFuture
-		return blk
-	}
-
-	addr, ad := getAddrAD(accts)
+	addr, ad := getAddrAD(accts, nil)
 	au := &accountUpdates{}
 	cfg := config.GetDefaultLocal()
 	au.initialize(cfg, ".", protoParams, accts)
@@ -1133,9 +1135,6 @@ func TestLookupFull(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusFuture)
 	err = au.loadFromDisk(ml)
 	a.NoError(err)
-
-	// au.accountsq, err = accountsDbInit(tx, tx)
-	// a.NoError(err)
 
 	rnd := basics.Round(1)
 
@@ -1169,7 +1168,7 @@ func TestLookupFull(t *testing.T) {
 	// 2. add another delta triggering looking up not in macct but in au.deltas
 	rnd = 2
 	deltas = ledgercore.AccountDeltas{}
-	addr1, ad1 := getAddrAD(accts)
+	addr1, ad1 := getAddrAD(accts, nil)
 	deltas.Upsert(addr1, ledgercore.PersistedAccountData{AccountData: ad1})
 	blk = getBlock(rnd)
 	delta = ledgercore.MakeStateDelta(&blk.BlockHeader, 0, deltas.Len(), 0)
@@ -1206,6 +1205,249 @@ func TestLookupFull(t *testing.T) {
 	for aidx, holding := range pad.AccountData.Assets {
 		a.Equal(uint64(aidx), holding.Amount)
 	}
+}
+
+type lookupFullTestSpec struct {
+	numAssets uint64
+	params    bool
+	holdings  bool
+}
+
+func lookupFullTest(t *testing.T, spec []lookupFullTestSpec) {
+	a := require.New(t)
+	inMemory := false
+	dbs, fn := dbOpenTest(t, inMemory)
+	setDbLogging(t, dbs)
+	defer cleanupTestDb(dbs, fn, inMemory)
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	a.NoError(err)
+	defer tx.Rollback()
+
+	protoParams := config.Consensus[protocol.ConsensusFuture]
+
+	maxAccounts := 20
+	if maxAccounts < len(spec) {
+		maxAccounts = 2 * len(spec)
+	}
+	accts := randomAccounts(maxAccounts, true)
+	_, err = initTestAccountDB(tx, accts, protoParams)
+	a.NoError(err)
+
+	addresses := make([]basics.Address, len(spec))
+	ads := make([]basics.AccountData, len(spec))
+	for i := 0; i < len(spec); i++ {
+		seen := make(map[basics.Address]bool, i)
+		for j := 0; j < i; j++ {
+			seen[addresses[j]] = true
+		}
+		addresses[i], ads[i] = getAddrAD(accts, seen)
+	}
+	au := &accountUpdates{}
+	cfg := config.GetDefaultLocal()
+	au.initialize(cfg, ".", protoParams, accts)
+	defer au.close()
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusFuture)
+	err = au.loadFromDisk(ml)
+	a.NoError(err)
+
+	rnd := basics.Round(1)
+
+	numAssets := uint64(testAssetsThreshold)
+	for i := 0; i < len(spec); i++ {
+		if spec[i].numAssets > numAssets {
+			numAssets = spec[i].numAssets
+		}
+		if spec[i].holdings {
+			ads[i].Assets = make(map[basics.AssetIndex]basics.AssetHolding, spec[i].numAssets)
+		}
+		if spec[i].params {
+			ads[i].AssetParams = make(map[basics.AssetIndex]basics.AssetParams, spec[i].numAssets)
+		}
+	}
+
+	for aidx := uint64(1); aidx <= numAssets; aidx++ {
+		var deltas ledgercore.AccountDeltas
+		for i := 0; i < len(spec); i++ {
+			cidx := basics.CreatableIndex(uint64(aidx) % spec[i].numAssets)
+			pad, err := au.lookupWithRewards(rnd-1, addresses[i], true)
+			a.NoError(err)
+			if spec[i].params {
+				if spec[i].numAssets > uint64(testAssetsThreshold) && pad.NumAssetParams() > testAssetsThreshold {
+					ads[i].AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+				}
+				ads[i].AssetParams[basics.AssetIndex(cidx)] = basics.AssetParams{Total: uint64(cidx), DefaultFrozen: true, AssetName: "test"}
+				pad.AccountData.AssetParams = ledgercore.CloneAssetParams(ads[i].AssetParams)
+				deltas.SetEntityDelta(addresses[i], cidx, ledgercore.ActionParamsCreate)
+			}
+			if spec[i].holdings {
+				if spec[i].numAssets > uint64(testAssetsThreshold) && pad.NumAssetHoldings() > testAssetsThreshold {
+					ads[i].Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+				}
+				ads[i].Assets[basics.AssetIndex(cidx)] = basics.AssetHolding{Amount: uint64(cidx), Frozen: true}
+				pad.AccountData.Assets = ledgercore.CloneAssetHoldings(ads[i].Assets)
+				deltas.SetEntityDelta(addresses[i], cidx, ledgercore.ActionHoldingCreate)
+			}
+			deltas.Upsert(addresses[i], pad)
+		}
+
+		blk := getBlock(rnd)
+		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, deltas.Len(), 0)
+		delta.Accts.MergeAccounts(deltas)
+		au.newBlock(blk, delta)
+		au.accountsWriting.Add(1)
+		au.commitRound(1, rnd-1, 0)
+		rnd++
+	}
+	for i := 0; i < len(spec); i++ {
+		accts[addresses[i]] = ads[i]
+	}
+
+	au.baseAccounts = lruAccounts{}
+
+	for i := 0; i < len(spec); i++ {
+		pad, err := au.lookupWithRewards(rnd-1, addresses[i], true)
+		a.NoError(err)
+		if spec[i].params {
+			a.Equal(int(spec[i].numAssets), len(pad.AccountData.AssetParams))
+			for aidx, holding := range pad.AccountData.AssetParams {
+				a.Equal(uint64(aidx), holding.Total)
+			}
+		} else {
+			a.Equal(0, len(pad.AccountData.AssetParams))
+		}
+
+		if spec[i].holdings {
+			a.Equal(int(spec[i].numAssets), len(pad.AccountData.Assets))
+			for aidx, holding := range pad.AccountData.Assets {
+				a.Equal(uint64(aidx), holding.Amount)
+			}
+		}
+	}
+}
+
+func TestLookupFullEdgeCase(t *testing.T) {
+	spec := []lookupFullTestSpec{
+		{1000, true, true},
+		{1000, false, true},
+		{999, false, true},
+		{1001, false, true},
+	}
+	lookupFullTest(t, spec)
+}
+
+func TestLookupFullAssets2k(t *testing.T) {
+	spec := []lookupFullTestSpec{
+		{2000, true, true},
+	}
+	lookupFullTest(t, spec)
+
+	spec = []lookupFullTestSpec{
+		{20, true, true},
+		{3000, false, true},
+	}
+	lookupFullTest(t, spec)
+}
+
+func TestLargeAssetHoldingsLargeBlock(t *testing.T) {
+	a := require.New(t)
+
+	inMemory := false
+	dbs, fn := dbOpenTest(t, inMemory)
+	setDbLogging(t, dbs)
+	defer cleanupTestDb(dbs, fn, inMemory)
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	a.NoError(err)
+	defer tx.Rollback()
+
+	protoParams := config.Consensus[protocol.ConsensusFuture]
+
+	accts := randomAccounts(20, true)
+	_, err = initTestAccountDB(tx, accts, protoParams)
+	a.NoError(err)
+
+	addr, ad := getAddrAD(accts, nil)
+
+	au := &accountUpdates{}
+	cfg := config.GetDefaultLocal()
+	au.initialize(cfg, ".", protoParams, accts)
+	defer au.close()
+
+	numAssets := uint64(2000)
+	ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numAssets)
+	ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, numAssets)
+
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusFuture)
+	err = au.loadFromDisk(ml)
+	a.NoError(err)
+
+	// add 1400 assets, commit
+	rnd := basics.Round(1)
+	margin := uint64(1400)
+	var deltas ledgercore.AccountDeltas
+	pad := ledgercore.PersistedAccountData{AccountData: ad}
+	for aidx := uint64(1); aidx <= margin; aidx++ {
+		cidx := basics.CreatableIndex(aidx)
+
+		ad.AssetParams[basics.AssetIndex(cidx)] = basics.AssetParams{Total: uint64(cidx), DefaultFrozen: true, AssetName: "test"}
+		pad.AccountData.AssetParams = ledgercore.CloneAssetParams(ad.AssetParams)
+		deltas.SetEntityDelta(addr, cidx, ledgercore.ActionParamsCreate)
+
+		ad.Assets[basics.AssetIndex(cidx)] = basics.AssetHolding{Amount: uint64(cidx), Frozen: true}
+		pad.AccountData.Assets = ledgercore.CloneAssetHoldings(ad.Assets)
+		deltas.SetEntityDelta(addr, cidx, ledgercore.ActionHoldingCreate)
+		deltas.Upsert(addr, pad)
+	}
+
+	blk := getBlock(rnd)
+	delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, deltas.Len(), 0)
+	delta.Accts.MergeAccounts(deltas)
+	au.newBlock(blk, delta)
+	au.accountsWriting.Add(1)
+	au.commitRound(1, rnd-1, 0)
+	rnd++
+
+	pad, err = au.lookupWithRewards(rnd-1, addr, true)
+	a.NoError(err)
+	a.Equal(uint32(margin), pad.ExtendedAssetHolding.Count)
+	a.Equal(uint32(margin), pad.ExtendedAssetParams.Count)
+
+	if pad.NumAssetParams() > testAssetsThreshold {
+		ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+	}
+	if pad.NumAssetHoldings() > testAssetsThreshold {
+		ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+	}
+
+	// add another 600 assets (2000 in total), commit
+	deltas = ledgercore.AccountDeltas{}
+	for aidx := uint64(margin + 1); aidx <= numAssets; aidx++ {
+		cidx := basics.CreatableIndex(aidx)
+
+		ad.AssetParams[basics.AssetIndex(cidx)] = basics.AssetParams{Total: uint64(cidx), DefaultFrozen: true, AssetName: "test"}
+		pad.AccountData.AssetParams = ledgercore.CloneAssetParams(ad.AssetParams)
+		deltas.SetEntityDelta(addr, cidx, ledgercore.ActionParamsCreate)
+
+		ad.Assets[basics.AssetIndex(cidx)] = basics.AssetHolding{Amount: uint64(cidx), Frozen: true}
+		pad.AccountData.Assets = ledgercore.CloneAssetHoldings(ad.Assets)
+		deltas.SetEntityDelta(addr, cidx, ledgercore.ActionHoldingCreate)
+		deltas.Upsert(addr, pad)
+	}
+
+	blk = getBlock(rnd)
+	delta = ledgercore.MakeStateDelta(&blk.BlockHeader, 0, deltas.Len(), 0)
+	delta.Accts.MergeAccounts(deltas)
+	au.newBlock(blk, delta)
+	au.accountsWriting.Add(1)
+	au.commitRound(1, rnd-1, 0)
+	rnd++
+
+	pad, err = au.lookupWithRewards(rnd-1, addr, true)
+	a.NoError(err)
+	a.Equal(uint32(numAssets), pad.ExtendedAssetHolding.Count)
+	a.Equal(uint32(numAssets), pad.ExtendedAssetParams.Count)
 }
 
 func TestIsWritingCatchpointFile(t *testing.T) {

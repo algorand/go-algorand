@@ -167,11 +167,38 @@ func (ad *AccountDeltas) ModifiedAccounts() []basics.Address {
 	return result
 }
 
+func copyEntities(dst *AccountEntityDelta, src AccountEntityDelta) {
+	if len(src) == 0 {
+		return
+	}
+
+	// assuming no nil pointers from callers
+	if *dst == nil {
+		*dst = make(map[basics.Address]EntityDelta, len(src))
+	}
+	for addr, eh := range src {
+		if len(eh) == 0 {
+			continue
+		}
+
+		ed, ok := (*dst)[addr]
+		if !ok {
+			ed = make(EntityDelta, len(eh))
+		}
+		for cidx, action := range eh {
+			ed[cidx] = action
+		}
+		(*dst)[addr] = ed
+	}
+}
+
 // MergeAccounts applies other accounts into this StateDelta accounts
 func (ad *AccountDeltas) MergeAccounts(other AccountDeltas) {
 	for new := range other.accts {
 		ad.upsert(other.accts[new])
 	}
+	copyEntities(&ad.entityHoldings, other.entityHoldings)
+	copyEntities(&ad.entityParams, other.entityParams)
 }
 
 // Len returns number of stored accounts

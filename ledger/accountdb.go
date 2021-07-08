@@ -286,10 +286,6 @@ func loadCreatedDeletedGroups(agl ledgercore.AbstractAssetGroupList, entityDelta
 }
 
 func loadOldHoldings(dbad dbAccountData, delta accountDelta, fetcher fetcher, adRound basics.Round) (dbAccountData, error) {
-	if len(delta.new.Assets) > 0 && len(dbad.pad.AccountData.Assets) == 0 {
-		dbad.pad.AccountData.Assets = make(map[basics.AssetIndex]basics.AssetHolding, len(delta.new.Assets))
-	}
-
 	// load created and deleted asset holding groups
 	err := loadCreatedDeletedGroups(&dbad.pad.ExtendedAssetHolding, delta.createdDeletedHoldings, ledgercore.ActionHoldingCreate, ledgercore.ActionHoldingDelete, fetcher, adRound)
 	if err != nil {
@@ -298,7 +294,7 @@ func loadOldHoldings(dbad dbAccountData, delta accountDelta, fetcher fetcher, ad
 
 	// load updated assets
 	for aidx := range delta.new.Assets {
-		gi, ai := dbad.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
+		gi, _ := dbad.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
 		if gi != -1 {
 			g := &dbad.pad.ExtendedAssetHolding.Groups[gi]
 			if !g.Loaded() {
@@ -311,13 +307,6 @@ func loadOldHoldings(dbad dbAccountData, delta accountDelta, fetcher fetcher, ad
 					// so the DB cannot be changed
 					return dbAccountData{}, &MismatchingDatabaseRoundError{databaseRound: gdRound, memoryRound: adRound}
 				}
-			}
-			_, ai = dbad.pad.ExtendedAssetHolding.FindAsset(aidx, gi)
-			if ai != -1 {
-				// found!
-				dbad.pad.AccountData.Assets[aidx] = g.GetHolding(ai)
-			} else {
-				// no such asset => newly created
 			}
 		}
 	}
@@ -336,7 +325,7 @@ func loadOldParams(dbad dbAccountData, delta accountDelta, fetcher fetcher, adRo
 
 	// load updated assets
 	for aidx := range delta.new.AssetParams {
-		gi, ai := dbad.pad.ExtendedAssetParams.FindAsset(aidx, 0)
+		gi, _ := dbad.pad.ExtendedAssetParams.FindAsset(aidx, 0)
 		if gi != -1 {
 			g := &dbad.pad.ExtendedAssetParams.Groups[gi]
 			if !g.Loaded() {
@@ -349,13 +338,6 @@ func loadOldParams(dbad dbAccountData, delta accountDelta, fetcher fetcher, adRo
 					// so the DB cannot be changed
 					return dbAccountData{}, &MismatchingDatabaseRoundError{databaseRound: gdRound, memoryRound: adRound}
 				}
-			}
-			_, ai = dbad.pad.ExtendedAssetParams.FindAsset(aidx, gi)
-			if ai != -1 {
-				// found!
-				dbad.pad.AccountData.AssetParams[aidx] = g.GetParams(ai)
-			} else {
-				// no such asset => newly created
 			}
 		}
 	}
@@ -1046,7 +1028,7 @@ func lookupImpl(lookupStmt *sql.Stmt, addr basics.Address) (data dbAccountData, 
 	return
 }
 
-func lookupExt(rdb db.Accessor, addr basics.Address, extension func(*sql.Stmt, *ledgercore.PersistedAccountData) error) (data dbAccountData, err error) {
+func lookupExt(rdb db.Accessor, addr basics.Address, extension func(*sql.Stmt, *ledgercore.PersistedAccountData, basics.Round) error) (data dbAccountData, err error) {
 	err = db.Retry(func() error {
 		err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			lookupStmt, err := tx.Prepare(lookupAcctBaseQuery)
@@ -1067,7 +1049,7 @@ func lookupExt(rdb db.Accessor, addr basics.Address, extension func(*sql.Stmt, *
 			}
 
 			if extension != nil && data.pad.ExtendedAssetHolding.Count > 0 {
-				err = extension(loadStmt, &data.pad)
+				err = extension(loadStmt, &data.pad, data.round)
 			}
 			return err
 		})
@@ -1575,11 +1557,23 @@ func filterCreatedDeleted(assets ledgercore.EntityDelta, cr ledgercore.EntityAct
 func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Address, delta accountDelta, genesisProto config.ConsensusParams, updatedAccounts []dbAccountData, updateIdx int) ([]dbAccountData, error) {
 	assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 
-	// sanity check: counts must match since all the modications are in delta.new.Assets and mods map
-	if delta.old.pad.ExtendedAssetHolding.Count != delta.new.ExtendedAssetHolding.Count {
-		return updatedAccounts, fmt.Errorf("extended holdings count mismatch (old) %d != %d (new)", delta.old.pad.ExtendedAssetHolding.Count, delta.new.ExtendedAssetHolding.Count)
+	// data consistency check
+	if delta.old.pad.ExtendedAssetHolding.Count != 0 && len(delta.old.pad.AccountData.Assets) > 0 {
+		err := fmt.Errorf("non-empty old asset holding (%d) on a record with group data (%d)", len(delta.old.pad.AccountData.Assets), delta.old.pad.ExtendedAssetHolding.Count)
+		return updatedAccounts, err
 	}
-
+	if delta.old.pad.ExtendedAssetHolding.Count == 0 && len(delta.old.pad.AccountData.Assets) > assetsThreshold {
+		err := fmt.Errorf("large old asset holding (%d) on a record with empty group data", len(delta.old.pad.AccountData.Assets))
+		return updatedAccounts, err
+	}
+	if delta.old.pad.ExtendedAssetParams.Count != 0 && len(delta.old.pad.AccountData.AssetParams) > 0 {
+		err := fmt.Errorf("non-empty old asset params (%d) on a record with group data (%d)", len(delta.old.pad.AccountData.Assets), delta.old.pad.ExtendedAssetParams.Count)
+		return updatedAccounts, err
+	}
+	if delta.old.pad.ExtendedAssetParams.Count == 0 && len(delta.old.pad.AccountData.AssetParams) > assetsThreshold {
+		err := fmt.Errorf("large old asset params (%d) on a record with empty group data", len(delta.old.pad.AccountData.AssetParams))
+		return updatedAccounts, err
+	}
 	// Reconciliation asset holdings (and asset params) logic:
 	// old.Assets must always have the assets modified in new (see accountsLoadOld)
 	// PersistedAccountData stores the data either in Assets field or as ExtendedHoldings
@@ -1664,7 +1658,10 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 			}
 
 			if len(created) > 0 {
-				pad.ExtendedAssetHolding.Insert(created, delta.new.Assets)
+				err = pad.ExtendedAssetHolding.Insert(created, delta.new.Assets)
+				if err != nil {
+					return updatedAccounts, err
+				}
 			}
 
 			loaded, deletedKeys := pad.ExtendedAssetHolding.Merge()
@@ -1673,6 +1670,10 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 			err = assetsUpdateGroupDataDB(qaei, qaeu, qaed, &pad.ExtendedAssetHolding, loaded, deletedKeys)
 			pad.AccountData.Assets = nil
 		}
+	}
+
+	if err != nil {
+		return updatedAccounts, err
 	}
 
 	// same logic as above but for asset params
@@ -1761,8 +1762,9 @@ func accountsNewUpdate(qabu, qabq, qaeu, qaei, qaed *sql.Stmt, addr basics.Addre
 	// update accountbase
 	if err == nil {
 		var rowsAffected int64
+		var result sql.Result
 		normBalance := delta.new.NormalizedOnlineBalance(genesisProto)
-		result, err := qabu.Exec(normBalance, protocol.Encode(&pad), delta.old.rowid)
+		result, err = qabu.Exec(normBalance, protocol.Encode(&pad), delta.old.rowid)
 		if err == nil {
 			// rowid doesn't change on update.
 			updatedAccounts[updateIdx].rowid = delta.old.rowid

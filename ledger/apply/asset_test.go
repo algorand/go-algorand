@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -110,7 +111,7 @@ func BenchmarkAssetCloning(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		clone := cloneAssetHoldings(assets)
+		clone := ledgercore.CloneAssetHoldings(assets)
 		benchTotal += len(clone) // make sure the compiler does not optimize out cloneAssetHoldings call
 	}
 }

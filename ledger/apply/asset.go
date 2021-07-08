@@ -21,23 +21,8 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
-
-func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
-	res := make(map[basics.AssetIndex]basics.AssetHolding, len(m))
-	for id, val := range m {
-		res[id] = val
-	}
-	return res
-}
-
-func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
-	res := make(map[basics.AssetIndex]basics.AssetParams, len(m))
-	for id, val := range m {
-		res[id] = val
-	}
-	return res
-}
 
 func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetParams, creator basics.Address, err error) {
 	creator, exists, err := balances.GetCreator(basics.CreatableIndex(aidx), basics.AssetCreatable)
@@ -78,8 +63,8 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		if err != nil {
 			return err
 		}
-		record.Assets = cloneAssetHoldings(record.Assets)
-		record.AssetParams = cloneAssetParams(record.AssetParams)
+		record.Assets = ledgercore.CloneAssetHoldings(record.Assets)
+		record.AssetParams = ledgercore.CloneAssetParams(record.AssetParams)
 
 		// Sanity check that there isn't an asset with this counter value.
 		_, present := record.AssetParams[newidx]
@@ -131,8 +116,8 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		return err
 	}
 
-	record.Assets = cloneAssetHoldings(record.Assets)
-	record.AssetParams = cloneAssetParams(record.AssetParams)
+	record.Assets = ledgercore.CloneAssetHoldings(record.Assets)
+	record.AssetParams = ledgercore.CloneAssetParams(record.AssetParams)
 
 	var deleted *basics.CreatableLocator
 	if cc.AssetParams == (basics.AssetParams{}) {
@@ -186,7 +171,7 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 		return err
 	}
 
-	snd.Assets = cloneAssetHoldings(snd.Assets)
+	snd.Assets = ledgercore.CloneAssetHoldings(snd.Assets)
 	sndHolding, ok := snd.Assets[asset]
 	if !ok {
 		return fmt.Errorf("asset %v missing from %v", asset, addr)
@@ -218,7 +203,7 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 		return err
 	}
 
-	rcv.Assets = cloneAssetHoldings(rcv.Assets)
+	rcv.Assets = ledgercore.CloneAssetHoldings(rcv.Assets)
 	rcvHolding, ok := rcv.Assets[asset]
 	if !ok {
 		return fmt.Errorf("asset %v missing from %v", asset, addr)
@@ -271,7 +256,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 			return err
 		}
 
-		snd.Assets = cloneAssetHoldings(snd.Assets)
+		snd.Assets = ledgercore.CloneAssetHoldings(snd.Assets)
 		sndHolding, ok := snd.Assets[ct.XferAsset]
 		if !ok {
 			// Initialize holding with default Frozen value.
@@ -383,7 +368,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 			return err
 		}
 
-		snd.Assets = cloneAssetHoldings(snd.Assets)
+		snd.Assets = ledgercore.CloneAssetHoldings(snd.Assets)
 		sndHolding = snd.Assets[ct.XferAsset]
 		if sndHolding.Amount != 0 {
 			return fmt.Errorf("asset %v not zero (%d) after closing", ct.XferAsset, sndHolding.Amount)
@@ -420,7 +405,7 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 	if err != nil {
 		return err
 	}
-	record.Assets = cloneAssetHoldings(record.Assets)
+	record.Assets = ledgercore.CloneAssetHoldings(record.Assets)
 
 	holding, ok := record.Assets[cf.FreezeAsset]
 	if !ok {
