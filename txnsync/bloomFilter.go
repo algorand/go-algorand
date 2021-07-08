@@ -50,6 +50,8 @@ type bloomFilter struct {
 	filter bloom.GenericFilter
 
 	containedTxnsRange transactionsRange
+
+	encoded *encodedBloomFilter
 }
 
 func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error) {
@@ -73,7 +75,11 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error
 	return outFilter, nil
 }
 
-func (bf *bloomFilter) encode() (out encodedBloomFilter) {
+func (bf *bloomFilter) encode() (out *encodedBloomFilter, err error) {
+	if bf.encoded != nil {
+		return bf.encoded, nil
+	}
+	out = new(encodedBloomFilter)
 	out.BloomFilterType = byte(invalidBloomFilter)
 	out.EncodingParams = bf.encodingParams
 	if bf.filter != nil {
@@ -87,7 +93,12 @@ func (bf *bloomFilter) encode() (out encodedBloomFilter) {
 		default:
 			panic("unknown internal bloom filter object")
 		}
-		out.BloomFilter, _ = bf.filter.MarshalBinary()
+		out.BloomFilter, err = bf.filter.MarshalBinary()
+		if err != nil {
+			out = nil
+		} else {
+			bf.encoded = out
+		}
 	}
 	return
 }
@@ -150,6 +161,14 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 		for _, group := range txnGroups {
 			result.filter.Set(group.FirstTransactionID[:])
 		}
+		_, err := result.encode()
+		if err != nil {
+			// fall back to standard bloom filter
+			result.filter = filterFactoryBloom(len(txnGroups), s)
+			for _, group := range txnGroups {
+				result.filter.Set(group.FirstTransactionID[:])
+			}
+		}
 	default:
 		// we want subset.
 		result.containedTxnsRange.firstCounter = math.MaxUint64
@@ -180,6 +199,14 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 
 		for _, txid := range filtedTransactionsIDs {
 			result.filter.Set(txid[:])
+		}
+		_, err := result.encode()
+		if err != nil {
+			// fall back to standard bloom filter
+			result.filter = filterFactoryBloom(len(txnGroups), s)
+			for _, txid := range filtedTransactionsIDs {
+				result.filter.Set(txid[:])
+			}
 		}
 	}
 

@@ -200,7 +200,8 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 		// generate a bloom filter that matches the requests params.
 		metaMessage.filter = s.makeBloomFilter(metaMessage.message.UpdatedRequestParams, pendingTransactions.pendingTransactionsGroups, lastBloomFilter)
 		if !metaMessage.filter.sameParams(peer.lastSentBloomFilter) {
-			metaMessage.message.TxnBloomFilter = metaMessage.filter.encode()
+			bf, _ := metaMessage.filter.encode()
+			metaMessage.message.TxnBloomFilter = *bf
 			bloomFilterSize = metaMessage.message.TxnBloomFilter.Msgsize()
 		}
 		profMakeBloomFilter.end()

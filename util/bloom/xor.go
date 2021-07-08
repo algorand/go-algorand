@@ -31,7 +31,7 @@ type XorBuilder = xorfilter.Builder
 // An XorFilter object can be used as is or with optional adittional setup.
 type XorFilter struct {
 	xor     *xorfilter.Xor32
-	holding map[uint64]bool
+	holding []uint64
 
 	b *XorBuilder
 }
@@ -40,27 +40,20 @@ type XorFilter struct {
 // The Builder is not thread safe and should only be used by one thread at a time.
 func NewXor(hint int, builder *XorBuilder) *XorFilter {
 	return &XorFilter{
-		holding: make(map[uint64]bool, hint),
-		b:       builder,
+		b: builder,
 	}
 }
 
 // Set adds the value to the filter.
 func (xf *XorFilter) Set(x []byte) {
-	if xf.holding == nil {
-		xf.holding = make(map[uint64]bool)
-	}
 	k := binary.BigEndian.Uint64(x)
-	xf.holding[k] = true
+	xf.holding = append(xf.holding, k)
 }
 
 // Test checks whether x is present in the filter.
 // May return (rare) erroneous true values, but false is precise.
 func (xf *XorFilter) Test(x []byte) bool {
 	k := binary.BigEndian.Uint64(x)
-	if xf.holding != nil {
-		return xf.holding[k]
-	}
 	if xf.xor != nil {
 		return xf.xor.Contains(k)
 	}
@@ -70,17 +63,11 @@ func (xf *XorFilter) Test(x []byte) bool {
 // MarshalBinary implements encoding.BinaryMarshaller interface
 func (xf *XorFilter) MarshalBinary() ([]byte, error) {
 	if len(xf.holding) != 0 {
-		keys := make([]uint64, len(xf.holding))
-		pos := 0
-		for k := range xf.holding {
-			keys[pos] = k
-			pos++
-		}
 		var err error
 		if xf.b != nil {
-			xf.xor, err = xf.b.Populate32(keys)
+			xf.xor, err = xf.b.Populate32(xf.holding)
 		} else {
-			xf.xor, err = xorfilter.Populate32(keys)
+			xf.xor, err = xorfilter.Populate32(xf.holding)
 		}
 		if err != nil {
 			return nil, err
@@ -164,7 +151,7 @@ func (xf *XorFilter) UnmarshalJSON(data []byte) error {
 // XorFilter8 uses 1/4 the space of XorFilter (32 bit)
 type XorFilter8 struct {
 	xor     *xorfilter.Xor8
-	holding map[uint64]bool
+	holding []uint64
 
 	b *XorBuilder
 }
@@ -173,27 +160,20 @@ type XorFilter8 struct {
 // The Builder is not thread safe and should only be used by one thread at a time.
 func NewXor8(hint int, builder *XorBuilder) *XorFilter8 {
 	return &XorFilter8{
-		holding: make(map[uint64]bool, hint),
-		b:       builder,
+		b: builder,
 	}
 }
 
 // Set adds the value to the filter.
 func (xf *XorFilter8) Set(x []byte) {
-	if xf.holding == nil {
-		xf.holding = make(map[uint64]bool)
-	}
 	k := binary.BigEndian.Uint64(x)
-	xf.holding[k] = true
+	xf.holding = append(xf.holding, k)
 }
 
 // Test checks whether x is present in the filter.
 // May return (rare) erroneous true values, but false is precise.
 func (xf *XorFilter8) Test(x []byte) bool {
 	k := binary.BigEndian.Uint64(x)
-	if xf.holding != nil {
-		return xf.holding[k]
-	}
 	if xf.xor != nil {
 		return xf.xor.Contains(k)
 	}
@@ -203,17 +183,11 @@ func (xf *XorFilter8) Test(x []byte) bool {
 // MarshalBinary implements encoding.BinaryMarshaller interface
 func (xf *XorFilter8) MarshalBinary() ([]byte, error) {
 	if len(xf.holding) != 0 {
-		keys := make([]uint64, len(xf.holding))
-		pos := 0
-		for k := range xf.holding {
-			keys[pos] = k
-			pos++
-		}
 		var err error
 		if xf.b != nil {
-			xf.xor, err = xf.b.Populate(keys)
+			xf.xor, err = xf.b.Populate(xf.holding)
 		} else {
-			xf.xor, err = xorfilter.Populate(keys)
+			xf.xor, err = xorfilter.Populate(xf.holding)
 		}
 		if err != nil {
 			return nil, err
