@@ -29,13 +29,9 @@ var errInvalidBitmaskType = errors.New("invalid bitmask type")
 type bitmask []byte
 
 // assumed to be in mode 0, sets bit at index to 1
-func (b *bitmask) setBit(index int) error {
+func (b *bitmask) setBit(index int) {
 	byteIndex := index/8 + 1
-	if index < 0 || byteIndex >= len(*b) {
-		return errIndexOutOfBounds
-	}
 	(*b)[byteIndex] |= 1 << (index % 8)
-	return nil
 }
 
 // entryExists converts the bitmask to type 0 (if not already)
@@ -60,12 +56,9 @@ func (b *bitmask) entryExists(index int, entries int) bool {
 //         intput bitmask first b=1 pos A, second b=1 pos B, ...
 //         output bitmask byte 2,A/256,A%256,(B-A)/256,(B-A)%256,...
 // type 3: same as type 2, but stores the positons where b = 0
-func (b *bitmask) trimBitmask(entries int) error {
+func (b *bitmask) trimBitmask(entries int) {
 	if *b == nil {
-		return nil
-	}
-	if (entries-1)/8+1 >= len(*b) || entries < 0 {
-		return errIndexOutOfBounds
+		return
 	}
 	lastExists := 0
 	lastNotExists := 0
@@ -114,7 +107,7 @@ func (b *bitmask) trimBitmask(entries int) error {
 			}
 		}
 		*b = newBitmask
-		return nil
+		return
 	case 3:
 		newBitmask := make(bitmask, 1, bestSize)
 		newBitmask[0] = 3
@@ -128,12 +121,11 @@ func (b *bitmask) trimBitmask(entries int) error {
 			}
 		}
 		*b = newBitmask
-		return nil
+		return
 	default:
 	}
 
 	*b = bytes.TrimRight(*b, "\x00")
-	return nil
 }
 
 // expandBitmask expands the bitmask (types 1-3) into a bitmask of size entries in type 0 format.
@@ -164,10 +156,10 @@ func (b *bitmask) expandBitmask(entries int) error {
 		sum := 0
 		for i := 0; i*2+2 < len(*b); i++ {
 			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
-			err := newBitmask.setBit(sum)
-			if err != nil {
-				return err
+			if sum >= entries {
+				return errIndexOutOfBounds
 			}
+			newBitmask.setBit(sum)
 		}
 		*b = newBitmask
 	case 3: // contain a list of bytes designating the negative transaction bit index
@@ -175,10 +167,10 @@ func (b *bitmask) expandBitmask(entries int) error {
 		sum := 0
 		for i := 0; i*2+2 < len(*b); i++ {
 			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
-			err := newBitmask.setBit(sum)
-			if err != nil {
-				return err
+			if sum >= entries {
+				return errIndexOutOfBounds
 			}
+			newBitmask.setBit(sum)
 		}
 		*b = newBitmask
 		for i := range *b {

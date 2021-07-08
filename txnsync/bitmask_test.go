@@ -41,15 +41,17 @@ func TestEntryExistsExceptions(t *testing.T) {
 	bm[0] = 2
 	bm[2] = 8
 	require.False(t, bm.entryExists(entries, entries))
+	bm[2] = byte(entries)
+	require.False(t, bm.entryExists(entries, entries))
+	bm[2] = byte(entries-1)
+	require.True(t, bm.entryExists(entries-1, entries))
+ 
 }
 
-func TestTrimBitmaskNilError(t *testing.T) {
+func TestTrimBitmaskNi(t *testing.T) {
 	var b bitmask
-	require.NoError(t, b.trimBitmask(0))
+	b.trimBitmask(0)
 	require.Nil(t, b)
-	bb := make(bitmask, 2)
-	require.Equal(t, bb.trimBitmask(9), errIndexOutOfBounds)
-	require.Equal(t, bb.trimBitmask(-1), errIndexOutOfBounds)
 }
 
 func TestExpandBitmaskExceptions(t *testing.T) {
@@ -126,15 +128,8 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 	b := make(bitmask, bytesNeededBitmask(80))
 	entries := 80
 
-	setBits = append(setBits, -1)   // end of set bits
-	setBits = append(setBits, 1000) // over the bound value
-
 	for _, x := range setBits {
-		if x < 0 || bytesNeededBitmask(x) > len(b) {
-			require.Equal(t, b.setBit(x), errIndexOutOfBounds)
-			continue
-		}
-		require.NoError(t, b.setBit(x))
+		b.setBit(x)
 	}
 	iterated := make([]bool, entries)
 	iterfunc := func(i int, index int) error {
@@ -151,13 +146,13 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 	}
 
 	require.Equal(t, errTestError, b.iterate(entries, len(setBits), errfunc))
-	require.Equal(t, errDataMissing, b.iterate(entries, len(setBits)-3, iterfunc)) // less than set bits
-	require.NoError(t, b.iterate(entries, len(setBits)-2, iterfunc))
+	require.Equal(t, errDataMissing, b.iterate(entries, len(setBits)-1, iterfunc)) // less than set bits
+	require.NoError(t, b.iterate(entries, len(setBits), iterfunc))
 
 	s := 0
 	for i := 0; i < entries; i++ {
 		exists := b.entryExists(i, entries)
-		if i == setBits[s] {
+		if s < len(setBits) && i == setBits[s] {
 			require.True(t, exists)
 			require.True(t, iterated[i], i)
 			s++
@@ -166,7 +161,7 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 			require.False(t, iterated[i], i)
 		}
 	}
-	require.NoError(t, b.trimBitmask(entries))
+	b.trimBitmask(entries)
 	if int(b[0]) < 2 {
 		// make sure TrimRight is behaving as expected
 		require.True(t, int(b[len(b)-1]) > 0)
@@ -174,26 +169,26 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 	iterated = make([]bool, entries)
 
 	require.Equal(t, errTestError, b.iterate(entries, len(setBits), errfunc))
-	require.Equal(t, errDataMissing, b.iterate(entries, len(setBits)-3, iterfunc))
+	require.Equal(t, errDataMissing, b.iterate(entries, len(setBits)-1, iterfunc))
 
 	// For types 2, let the sum exceed entries
 	if int((b)[0]) == 2 {
-		require.Equal(t, errIndexNotFound, b.iterate(setBits[len(setBits)-3], len(setBits)-3, iterfunc))
+		require.Equal(t, errIndexNotFound, b.iterate(setBits[len(setBits)-1], len(setBits)-1, iterfunc))
 	}
 
 	// For types 1 and 3, test the error handling in the first stage.
-	errorAfter = len(setBits) - 3 - 8
+	errorAfter = len(setBits) - 1 - 8
 	require.Equal(t, errTestError, b.iterate(entries, len(setBits), errfunc))
-	require.Equal(t, errDataMissing, b.iterate(entries, len(setBits)-3-8, iterfunc))
+	require.Equal(t, errDataMissing, b.iterate(entries, len(setBits)-1-8, iterfunc))
 
-	require.NoError(t, b.iterate(entries, len(setBits)-2, func(i int, index int) error {
+	require.NoError(t, b.iterate(entries, len(setBits), func(i int, index int) error {
 		iterated[i] = true
 		return nil
 	}))
 	s = 0
 	for i := 0; i < entries; i++ {
 		exists := b.entryExists(i, entries)
-		if i == setBits[s] {
+		if s < len(setBits) && i == setBits[s] {
 			require.True(t, exists)
 			require.True(t, iterated[i], i)
 			s++

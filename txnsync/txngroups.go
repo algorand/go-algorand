@@ -74,10 +74,7 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 			}
 		}
 	}
-	err := stub.finishDeconstructSignedTransactions()
-	if err != nil {
-		return packedTransactionGroups{}, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
-	}
+	stub.finishDeconstructSignedTransactions()
 
 	encoded := stub.MarshalMsg(getMessageBuffer())
 
