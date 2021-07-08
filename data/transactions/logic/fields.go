@@ -464,12 +464,19 @@ var assetParamsFields map[string]uint64
 type AppParamsField int
 
 const (
+	// AppApprovalProgram AppParams.ApprovalProgram
 	AppApprovalProgram AppParamsField = iota
+	// AppClearStateProgram AppParams.ClearStateProgram
 	AppClearStateProgram
+	// AppGlobalNumUint AppParams.StateSchemas.GlobalStateSchema.NumUint
 	AppGlobalNumUint
+	// AppGlobalNumByteSlice AppParams.StateSchemas.GlobalStateSchema.NumByteSlice
 	AppGlobalNumByteSlice
+	// AppLocalNumUint AppParams.StateSchemas.LocalStateSchema.NumUint
 	AppLocalNumUint
+	// AppLocalNumByteSlice AppParams.StateSchemas.LocalStateSchema.NumByteSlice
 	AppLocalNumByteSlice
+	// AppExtraProgramPages AppParams.ExtraProgramPages
 	AppExtraProgramPages
 
 	// AppCreator is not *in* the Params, but it is uniquely determined.
