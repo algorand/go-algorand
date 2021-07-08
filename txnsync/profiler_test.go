@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2021 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package txnsync
 
 import (
@@ -38,6 +54,30 @@ func TestPrune(t *testing.T) {
 	a.Equal(len(prof.profile), 0)
 	a.Equal(len((*firstElement).times), 1)
 	a.Equal((*firstElement).total, time.Duration(2))
+
+}
+
+func TestProfilerStartEndZero(t *testing.T) {
+
+	var s syncState
+	s.clock = timers.MakeMonotonicClock(time.Now())
+	prof := makeProfiler(2*time.Millisecond, s.clock, s.log, 0*time.Millisecond)
+	a := require.New(t)
+
+	a.NotNil(prof)
+	a.NotNil(prof.elements)
+
+	firstElement := &prof.elements[0]
+
+	oldLastStart := (*firstElement).lastStart
+	oldTotal := (*firstElement).total
+
+	(*firstElement).start()
+	time.Sleep(5 * time.Millisecond)
+	(*firstElement).end()
+
+	a.Equal(oldLastStart, (*firstElement).lastStart)
+	a.Equal(oldTotal, (*firstElement).total)
 
 }
 
