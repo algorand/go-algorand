@@ -391,6 +391,9 @@ func (l logger) GetTelemetrySession() string {
 }
 
 func (l logger) GetTelemetryHostName() string {
+	if l.loggerState.telemetry == nil {
+		return ""
+	}
 	return l.loggerState.telemetry.telemetryConfig.getHostName()
 }
 
