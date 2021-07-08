@@ -1315,8 +1315,8 @@ var partkeyInfoCmd = &cobra.Command{
 					SelectionID:     part.VRFSecrets().PK,
 					VoteKeyDilution: part.KeyDilution,
 				}
-				if part.CompactCertSigner() != nil {
-					info.CompactCertID = part.CompactCertSigner().GetVerifier()
+				if certSigner := part.CompactCertSigner(); certSigner != nil {
+					info.CompactCertID = certSigner.GetVerifier()
 				}
 				infoString := protocol.EncodeJSON(&info)
 				fmt.Printf("File: %s\n%s\n", filename, string(infoString))
