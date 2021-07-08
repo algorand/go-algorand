@@ -35,8 +35,8 @@ func (p *PlaceHolderKey) SignBytes(message []byte) ByteSignature {
 	return sig[:]
 }
 
-// GetVerifier outputs a representation of a public key. that implements Verifier
-func (p *PlaceHolderKey) GetVerifier() VerifyingKey {
+// GetVerifyingKey outputs a representation of a public key. that implements Verifier
+func (p *PlaceHolderKey) GetVerifyingKey() VerifyingKey {
 	return VerifyingKey{
 		Type: PlaceHolderType,
 		Pack: PackedVerifyingKey{PlaceHolderPublicKey: PlaceHolderPublicKey{SignatureVerifier: p.Sec.SignatureVerifier}},

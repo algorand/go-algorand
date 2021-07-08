@@ -181,12 +181,17 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 		return PersistedParticipation{}, err
 	}
 
+	// nothing is stored in the rawCompactCertKey
 	if len(rawCompactCert) == 0 {
 		return acc, nil
 	}
 	acc.CompactCertKey = &crypto.SignatureAlgorithm{}
 	if err = protocol.Decode(rawCompactCert, acc.CompactCertKey); err != nil {
 		return PersistedParticipation{}, err
+	}
+	// rawCompactCertKey was stored as not valid.
+	if !acc.CompactCertKey.IsValid() {
+		return PersistedParticipation{}, fmt.Errorf("stored compact certificate key is not valid")
 	}
 
 	return acc, nil
