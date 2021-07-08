@@ -115,6 +115,7 @@ type AlgorandFullNode struct {
 	rootDir     string
 	genesisID   string
 	genesisHash crypto.Digest
+	devMode     bool // is this node operates in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
 
 	log logging.Logger
 
@@ -168,6 +169,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
+	node.devMode = genesis.DevMode
+
+	if node.devMode {
+		cfg.DisableNetworking = true
+	}
 
 	// tie network, block fetcher, and agreement services together
 	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network)
@@ -188,7 +194,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	// create initial ledger, if it doesn't exist
 	err = os.Mkdir(genesisDir, 0700)
 	if err != nil && !os.IsExist(err) {
-		log.Errorf("Unable to create genesis directroy: %v", err)
+		log.Errorf("Unable to create genesis directory: %v", err)
 		return nil, err
 	}
 	var genalloc data.GenesisBalances
@@ -233,11 +239,16 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	blockValidator := blockValidatorImpl{l: node.ledger, verificationPool: node.highPriorityCryptoVerificationPool}
 	agreementLedger := makeAgreementLedger(node.ledger, node.net)
-
+	var agreementClock timers.Clock
+	if node.devMode {
+		agreementClock = timers.MakeFrozenClock()
+	} else {
+		agreementClock = timers.MakeMonotonicClock(time.Now())
+	}
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
 		Accessor:       crashAccess,
-		Clock:          timers.MakeMonotonicClock(time.Now()),
+		Clock:          agreementClock,
 		Local:          node.config,
 		Network:        gossip.WrapNetwork(node.net, log),
 		Ledger:         agreementLedger,
@@ -475,10 +486,38 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 	return node.ledger
 }
 
+// writeDevmodeBlock generates a new block for a devmode, and write it to the ledger.
+func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
+	var vb *ledger.ValidatedBlock
+	vb, err = node.transactionPool.AssembleDevModeBlock()
+	if err != nil || vb == nil {
+		return
+	}
+
+	// add the newly generated block to the ledger
+	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{})
+	return err
+}
+
 // BroadcastSignedTxGroup broadcasts a transaction group that has already been signed.
-func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
+func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+	// in developer mode, we need to take a lock, so that each new transaction group would truely
+	// render into a unique block.
+	if node.devMode {
+		node.mu.Lock()
+		defer func() {
+			// if we added the transaction successfully to the transaction pool, then
+			// attempt to generate a block and write it to the ledger.
+			if err == nil {
+				err = node.writeDevmodeBlock()
+			}
+			node.mu.Unlock()
+		}()
+	}
+
 	lastRound := node.ledger.Latest()
-	b, err := node.ledger.BlockHdr(lastRound)
+	var b bookkeeping.BlockHeader
+	b, err = node.ledger.BlockHdr(lastRound)
 	if err != nil {
 		node.log.Errorf("could not get block header from last round %v: %v", lastRound, err)
 		return err
@@ -539,7 +578,7 @@ func (node *AlgorandFullNode) ListTxns(addr basics.Address, minRound basics.Roun
 	return result, nil
 }
 
-// GetTransaction looks for the required txID within with a specific account withing a range of rounds (inclusive) and
+// GetTransaction looks for the required txID within with a specific account within a range of rounds (inclusive) and
 // returns the SignedTxn and true iff it finds the transaction.
 func (node *AlgorandFullNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool) {
 	// start with the most recent round, and work backwards:
@@ -1099,7 +1138,7 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 	return validatedBlock{vb: lvb}, nil
 }
 
-// VotingKeys implements the key maanger's VotingKeys method, and provides additional validation with the ledger.
+// VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.
 // that allows us to load multiple overlapping keys for the same account, and filter these per-round basis.
 func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []account.Participation {
 	keys := node.accountManager.Keys(votingRound)

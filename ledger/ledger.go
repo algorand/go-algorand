@@ -279,22 +279,22 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs
 	return
 }
 
-// setSynchronousMode sets the writing database connections syncronous mode to the specified mode
+// setSynchronousMode sets the writing database connections synchronous mode to the specified mode
 func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.SynchronousMode) {
 	if synchronousMode < db.SynchronousModeOff || synchronousMode > db.SynchronousModeExtra {
-		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode : requested value %d is invalid", synchronousMode)
+		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode : requested value %d is invalid", synchronousMode)
 		return
 	}
 
 	err := l.blockDBs.Wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
-		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on blocks db: %v", err)
+		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode on blocks db: %v", err)
 		return
 	}
 
 	err = l.trackerDBs.Wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
-		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on trackers db: %v", err)
+		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode on trackers db: %v", err)
 		return
 	}
 }
@@ -475,14 +475,6 @@ func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Ro
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl.Txlease)
-}
-
-// GetRoundTxIds returns a map of the transactions ids that we have for the given round
-// this function is currently not being used, but remains here as it might be useful in the future.
-func (l *Ledger) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.txTail.getRoundTxIds(rnd)
 }
 
 // Latest returns the latest known block round added to the ledger.

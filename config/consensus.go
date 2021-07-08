@@ -89,7 +89,7 @@ type ConsensusParams struct {
 	// DefaultKeyDilution specifies the granularity of top-level ephemeral
 	// keys. KeyDilution is the number of second-level keys in each batch,
 	// signed by a top-level "batch" key.  The default value can be
-	// overriden in the account state.
+	// overridden in the account state.
 	DefaultKeyDilution uint64
 
 	// MinBalance specifies the minimum balance that can appear in
@@ -546,7 +546,7 @@ func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) Con
 	return staticConsensus
 }
 
-// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directory
 func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
 	if err != nil {
@@ -562,7 +562,7 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	return nil
 }
 
-// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
 // and merge it with a copy of the Consensus map. Then, it returns it to the caller.
 func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
@@ -938,13 +938,41 @@ func initConsensusProtocols() {
 	// a bit :
 	v26.ApprovedUpgrades[protocol.ConsensusV27] = 60000
 
+	// v28 introduces new TEAL features, larger program size, fee pooling and longer asset max URL
+	v28 := v27
+	v28.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Enable TEAL 4
+	v28.LogicSigVersion = 4
+	// Enable support for larger app program size
+	v28.MaxExtraAppProgramPages = 3
+	v28.MaxAppProgramLen = 2048
+	// Increase asset URL length to allow for IPFS URLs
+	v28.MaxAssetURLBytes = 96
+	// Let the bytes value take more space. Key+Value is still limited to 128
+	v28.MaxAppBytesValueLen = 128
+
+	// Individual limits raised
+	v28.MaxAppTxnForeignApps = 8
+	v28.MaxAppTxnForeignAssets = 8
+
+	// MaxAppTxnAccounts has not been raised yet.  It is already
+	// higher (4) and there is a multiplicative effect in
+	// "reachability" between accounts and creatables, so we
+	// retain 4 x 4 as worst case.
+
+	v28.EnableFeePooling = true
+	v28.EnableKeyregCoherencyCheck = true
+
+	Consensus[protocol.ConsensusV28] = v28
+
+	// v27 can be upgraded to v28, with an update delay of 7 days ( see calculation above )
+	v27.ApprovedUpgrades[protocol.ConsensusV28] = 140000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v27
+	vFuture := v28
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	// Let the bytes value take more space. Key+Value is still limited to 128
-	vFuture.MaxAppBytesValueLen = 128
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
@@ -955,35 +983,6 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
-
-	vFuture.EnableKeyregCoherencyCheck = true
-
-	// Enable support for larger app program size
-	vFuture.MaxExtraAppProgramPages = 3
-	vFuture.MaxAppProgramLen = 2048
-
-	// Individual limits raised
-	vFuture.MaxAppTxnForeignApps = 8
-	vFuture.MaxAppTxnForeignAssets = 8
-	// but MaxAppTxnReferences is unchanged.
-
-	// MaxAppTxnAccounts has not been raised yet.  It is already
-	// higher (4) and there is a multiplicative effect in
-	// "reachability" between accounts and creatables, so we
-	// retain 4 x 4 as worst case.
-
-	// enable the InitialRewardsRateCalculation fix
-	vFuture.InitialRewardsRateCalculation = true
-	// Enable transaction Merkle tree.
-	vFuture.PaysetCommit = PaysetCommitMerkle
-
-	// Enable TEAL 4
-	vFuture.LogicSigVersion = 4
-
-	// Increase asset URL length to allow for IPFS URLs
-	vFuture.MaxAssetURLBytes = 96
-
-	vFuture.EnableFeePooling = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

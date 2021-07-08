@@ -142,7 +142,7 @@ func (ard *hostIncomingRequests) add(trackerRequest *TrackerRequest) {
 	return
 }
 
-// countConnections counts the number of connection that we have that occured after the provided specified time
+// countConnections counts the number of connection that we have that occurred after the provided specified time
 func (ard *hostIncomingRequests) countConnections(rateLimitingWindowStartTime time.Time) (count uint) {
 	i := ard.findTimestampIndex(rateLimitingWindowStartTime)
 	return uint(len(ard.requests) - i + len(ard.additionalHostRequests))

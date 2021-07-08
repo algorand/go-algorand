@@ -35,7 +35,7 @@ var ErrWatchdogStreamReaderReaderReachedDataLimit = fmt.Errorf("watchdog stream 
 // 1. It allows to limit the amount of data being read from the stream between two subsequent Reset calls.
 // 2. It allows to limit the amount of time being spent reading and/or waiting for data from the reader between two subsequent Reset calls.
 // The intended usage is to attach it directly to a http.Response.Body and to perform the reading from the watchdogStreamReader directly.
-// If data is being pulled as expected, the caller could extend the timeout and or data limits. This is particulary usefull when providing
+// If data is being pulled as expected, the caller could extend the timeout and or data limits. This is particularly useful when providing
 // the input stream to components which wouldn't time-limit or data-limit the data, and could end up exhusting the host computer resources.
 type watchdogStreamReader struct {
 	// watchdog configuration
@@ -52,7 +52,7 @@ type watchdogStreamReader struct {
 	readerClose   chan struct{}  // channel used to signal the shutting down of the reader goroutine
 	tickerClose   chan struct{}  // channel used to signal the shutting down of the ticker goroutine
 	readerRequest chan struct{}  // channel used to signal the reader goroutine that it needs to go and attempt to read from the underlying reader
-	readerMu      deadlock.Mutex // syncronization mutex for the reader goroutine
+	readerMu      deadlock.Mutex // synchronization mutex for the reader goroutine
 	readerCond    *sync.Cond     // conditional check variable for the reader goroutine
 }
 

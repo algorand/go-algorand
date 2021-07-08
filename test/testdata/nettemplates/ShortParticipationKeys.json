@@ -3,7 +3,7 @@
     "NetworkName": "shortpartkeys",
     "ConsensusProtocol": "shortpartkeysprotocol",
     "FirstPartKeyRound": 0,
-    "LastPartKeyRound": 36,
+    "LastPartKeyRound": 8,
     "PartKeyDilution": 8,
     "Wallets": [
       {

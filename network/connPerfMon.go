@@ -58,7 +58,7 @@ type pmMessage struct {
 type pmPeerStatistics struct {
 	peer             Peer    // the peer interface
 	peerDelay        int64   // the peer avarage relative message delay
-	peerFirstMessage float32 // what precentage of the messages were delivered by this peer before any other peer
+	peerFirstMessage float32 // what percentage of the messages were delivered by this peer before any other peer
 }
 
 // pmStatistics is the resulting datastructure of the performance analysis.
@@ -88,7 +88,7 @@ type connectionPerformanceMonitor struct {
 	connectionDelay        map[Peer]int64            // contains the total delay we've sustained by each peer when we're in stages pmStagePresync-pmStageStopping and the average delay after that. ( in nano seconds )
 	firstMessageCount      map[Peer]int64            // maps the peers to their accumulated first messages ( the number of times a message seen coming from this peer first )
 	msgCount               int64                     // total number of messages that we've accumulated.
-	accumulationTime       int64                     // the duration of which we're going to accumulate messages. This will get randomized to prevent cross-node syncronization.
+	accumulationTime       int64                     // the duration of which we're going to accumulate messages. This will get randomized to prevent cross-node synchronization.
 }
 
 // makeConnectionPerformanceMonitor creates a new performance monitor instance, that is configured for monitoring the given message tags.
@@ -369,7 +369,7 @@ func (pm *connectionPerformanceMonitor) accumulateMessage(msg *IncomingMessage, 
 	}
 	// we already seen this digest
 	// make sure we're only moving forward in time. This could be caused when
-	// we have lock contension.
+	// we have lock contention.
 	pendingMsg.peerMsgTime[msg.Sender] = msg.Received
 	if msg.Received < pendingMsg.firstPeerTime {
 		pendingMsg.firstPeerTime = msg.Received

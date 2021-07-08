@@ -177,8 +177,17 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	proto := config.Consensus[lastBlock.CurrentProtocol]
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
-	for _, acctdata := range initAccounts {
-		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+	if l.Latest() == 0 {
+		require.NotNil(t, initAccounts)
+		for _, acctdata := range initAccounts {
+			if acctdata.Status != basics.NotParticipating {
+				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+			}
+		}
+	} else {
+		totals, err := l.Totals(l.Latest())
+		require.NoError(t, err)
+		totalRewardUnits = totals.RewardUnits()
 	}
 	poolBal, err := l.Lookup(l.Latest(), poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
@@ -1541,7 +1550,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 
 	// ******* All results are obtained from the cache. Empty database *******
 	// ******* No deletes                                              *******
-	// get random data. Inital batch, no deletes
+	// get random data. Initial batch, no deletes
 	randomCtbs, maxAsset, maxApp, err := generateCreatables(numElementsPerSegement)
 	require.NoError(t, err)
 

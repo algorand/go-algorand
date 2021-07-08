@@ -206,7 +206,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 		prev, err := l0.BlockHdr(basics.Round(i))
 		require.NoError(b, err)
 		newBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000)
+		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
 		require.NoError(b, err)
 
 		// build a payset

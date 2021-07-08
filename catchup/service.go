@@ -208,18 +208,19 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 			return false
 		}
 
-		peer, getPeerErr := peerSelector.GetNextPeer()
+		psp, getPeerErr := peerSelector.getNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchAndWrite: was unable to obtain a peer to retrieve the block from")
 			break
 		}
+		peer := psp.Peer
 
 		// Try to fetch, timing out after retryInterval
 		block, cert, blockDownloadDuration, err := s.innerFetch(r, peer)
 
 		if err != nil {
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
-			peerSelector.RankPeer(peer, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, peerRankDownloadFailed)
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exists and we're making many requests down the chain
 			// for no reason.
@@ -245,7 +246,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		// Check that the block's contents match the block header (necessary with an untrusted block because b.Hash() only hashes the header)
 		if s.cfg.CatchupVerifyPaysetHash() {
 			if !block.ContentsMatchHeader() {
-				peerSelector.RankPeer(peer, peerRankInvalidDownload)
+				peerSelector.rankPeer(psp, peerRankInvalidDownload)
 				// Check if this mismatch is due to an unsupported protocol version
 				if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
 					s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
@@ -274,13 +275,13 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 			err = s.auth.Authenticate(block, cert)
 			if err != nil {
 				s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
-				peerSelector.RankPeer(peer, peerRankInvalidDownload)
+				peerSelector.rankPeer(psp, peerRankInvalidDownload)
 				continue // retry the fetch
 			}
 		}
 
-		peerRank := peerSelector.PeerDownloadDurationToRank(peer, blockDownloadDuration)
-		r1, r2 := peerSelector.RankPeer(peer, peerRank)
+		peerRank := peerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
+		r1, r2 := peerSelector.rankPeer(psp, peerRank)
 		s.log.Debugf("fetchAndWrite(%d): ranked peer with %d from %d to %d", r, peerRank, r1, r2)
 
 		// Write to ledger, noting that ledger writes must be in order
@@ -383,7 +384,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 
 	peerSelector := s.createPeerSelector(true)
 
-	if _, err := peerSelector.GetNextPeer(); err == errPeerSelectorNoPeerPoolsAvailable {
+	if _, err := peerSelector.getNextPeer(); err == errPeerSelectorNoPeerPoolsAvailable {
 		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from")
 		return
 	}
@@ -481,7 +482,7 @@ func (s *Service) periodicSync() {
 	defer close(s.done)
 	// if the catchup is disabled in the config file, just skip it.
 	if s.parallelBlocks != 0 && !s.cfg.DisableNetworking {
-		// The following request might be redundent, but it ensures we wait long enough for the DNS records to be loaded,
+		// The following request might be redundant, but it ensures we wait long enough for the DNS records to be loaded,
 		// which are required for the sync operation.
 		s.net.RequestConnectOutgoing(false, s.ctx.Done())
 		s.sync()
@@ -602,12 +603,13 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	peerSelector := s.createPeerSelector(false)
 	for s.ledger.LastRound() < cert.Round {
-		peer, getPeerErr := peerSelector.GetNextPeer()
+		psp, getPeerErr := peerSelector.getNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
 			s.net.RequestConnectOutgoing(true, s.ctx.Done())
 			continue
 		}
+		peer := psp.Peer
 
 		// Ask the fetcher to get the block somehow
 		block, fetchedCert, _, err := s.innerFetch(cert.Round, peer)
@@ -620,7 +622,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			default:
 			}
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
-			peerSelector.RankPeer(peer, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, peerRankDownloadFailed)
 			continue
 		}
 
@@ -630,7 +632,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		}
 		// Otherwise, fetcher gave us the wrong block
 		logging.Base().Warnf("fetcher gave us bad/wrong block (for round %d): fetched hash %v; want hash %v", cert.Round, block.Hash(), blockHash)
-		peerSelector.RankPeer(peer, peerRankInvalidDownload)
+		peerSelector.rankPeer(psp, peerRankInvalidDownload)
 
 		// As a failsafe, if the cert we fetched is valid but for the wrong block, panic as loudly as possible
 		if cert.Round == fetchedCert.Round &&

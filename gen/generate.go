@@ -149,11 +149,11 @@ func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusPro
 		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())
 	}
 
-	return generateGenesisFiles(outDir, proto, consensusParams, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verboseOut)
+	return generateGenesisFiles(outDir, proto, consensusParams, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, genesisData.DevMode, verboseOut)
 }
 
 func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, netName string, schemaVersionModifier string,
-	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, partKeyDilution uint64, feeSink, rewardsPool basics.Address, comment string, verboseOut io.Writer) (err error) {
+	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, partKeyDilution uint64, feeSink, rewardsPool basics.Address, comment string, devmode bool, verboseOut io.Writer) (err error) {
 
 	genesisAddrs := make(map[string]basics.Address)
 	records := make(map[string]basics.AccountData)
@@ -352,6 +352,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 		FeeSink:     feeSink.String(),
 		RewardsPool: rewardsPool.String(),
 		Comment:     comment,
+		DevMode:     devmode,
 	}
 
 	for _, wallet := range allocation {

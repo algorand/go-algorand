@@ -19,6 +19,7 @@ package v2
 import (
 	"encoding/base64"
 	"errors"
+	"math"
 	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -99,6 +100,7 @@ func AccountDataToAccount(
 		NumByteSlice: record.TotalAppSchema.NumByteSlice,
 		NumUint:      record.TotalAppSchema.NumUint,
 	}
+	totalExtraPages := uint64(record.TotalExtraAppPages)
 
 	amount := record.MicroAlgos
 	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
@@ -123,6 +125,7 @@ func AccountDataToAccount(
 		AuthAddr:                    addrOrNil(record.AuthAddr),
 		AppsLocalState:              &appsLocalState,
 		AppsTotalSchema:             &totalAppSchema,
+		AppsTotalExtraPages:         numOrNil(totalExtraPages),
 	}, nil
 }
 
@@ -308,6 +311,14 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		totalSchema.NumByteSlice = a.AppsTotalSchema.NumByteSlice
 	}
 
+	var totalExtraPages uint32
+	if a.AppsTotalExtraPages != nil {
+		if *a.AppsTotalExtraPages > math.MaxUint32 {
+			return basics.AccountData{}, errors.New("AppsTotalExtraPages exceeds maximum decodable value")
+		}
+		totalExtraPages = uint32(*a.AppsTotalExtraPages)
+	}
+
 	status, err := basics.UnmarshalStatus(a.Status)
 	if err != nil {
 		return basics.AccountData{}, err
@@ -327,6 +338,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		AppLocalStates:     appLocalStates,
 		AppParams:          appParams,
 		TotalAppSchema:     totalSchema,
+		TotalExtraAppPages: totalExtraPages,
 	}
 
 	if a.AuthAddr != nil {
@@ -358,6 +370,12 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) (basics.AppP
 		ApprovalProgram:   gap.ApprovalProgram,
 		ClearStateProgram: gap.ClearStateProgram,
 	}
+	if gap.ExtraProgramPages != nil {
+		if *gap.ExtraProgramPages > math.MaxUint32 {
+			return basics.AppParams{}, errors.New("ExtraProgramPages exceeds maximum decodable value")
+		}
+		ap.ExtraProgramPages = uint32(*gap.ExtraProgramPages)
+	}
 	if gap.LocalStateSchema != nil {
 		ap.LocalStateSchema = basics.StateSchema{
 			NumUint:      gap.LocalStateSchema.NumUint,
@@ -382,12 +400,14 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) (basics.AppP
 // AppParamsToApplication converts basics.AppParams to generated.Application
 func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *basics.AppParams) generated.Application {
 	globalState := convertTKVToGenerated(&appParams.GlobalState)
-	return generated.Application{
+	extraProgramPages := uint64(appParams.ExtraProgramPages)
+	app := generated.Application{
 		Id: uint64(appIdx),
 		Params: generated.ApplicationParams{
 			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,
 			ClearStateProgram: appParams.ClearStateProgram,
+			ExtraProgramPages: numOrNil(extraProgramPages),
 			GlobalState:       globalState,
 			LocalStateSchema: &generated.ApplicationStateSchema{
 				NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
@@ -399,6 +419,7 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 			},
 		},
 	}
+	return app
 }
 
 // AssetParamsToAsset converts basics.AssetParams to generated.Asset
