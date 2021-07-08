@@ -783,7 +783,7 @@ func opAssert(cx *evalContext) {
 		cx.stack = cx.stack[:last]
 		return
 	}
-	cx.err = errors.New("assert failed")
+	cx.err = fmt.Errorf("assert failed pc=%d", cx.pc)
 }
 
 func opSwap(cx *evalContext) {
