@@ -43,9 +43,9 @@ func TestEntryExistsExceptions(t *testing.T) {
 	require.False(t, bm.entryExists(entries, entries))
 	bm[2] = byte(entries)
 	require.False(t, bm.entryExists(entries, entries))
-	bm[2] = byte(entries-1)
+	bm[2] = byte(entries - 1)
 	require.True(t, bm.entryExists(entries-1, entries))
- 
+
 }
 
 func TestTrimBitmaskNi(t *testing.T) {
