@@ -1269,14 +1269,17 @@ var partkeyInfoCmd = &cobra.Command{
 
 			for filename, part := range parts {
 				fmt.Println("------------------------------------------------------------------")
+
 				info := partkeyInfo{
 					Address:         part.Address().String(),
 					FirstValid:      part.FirstValid,
 					LastValid:       part.LastValid,
 					VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
 					SelectionID:     part.VRFSecrets().PK,
-					CompactCertID:   part.CompactCertSigner().GetVerifier(),
 					VoteKeyDilution: part.KeyDilution,
+				}
+				if part.CompactCertSigner() != nil {
+					info.CompactCertID = part.CompactCertSigner().GetVerifier()
 				}
 				infoString := protocol.EncodeJSON(&info)
 				fmt.Printf("File: %s\n%s\n", filename, string(infoString))

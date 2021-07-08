@@ -43,8 +43,9 @@ import (
 type Participation struct {
 	Parent basics.Address
 
-	VRF            *crypto.VRFSecrets
-	Voting         *crypto.OneTimeSignatureSecrets
+	VRF    *crypto.VRFSecrets
+	Voting *crypto.OneTimeSignatureSecrets
+	// CompactCertKey is used to sign compact certifications. might be nil
 	CompactCertKey *crypto.SignatureAlgorithm
 
 	// The first and last rounds for which this account is valid, respectively.
@@ -106,6 +107,7 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 }
 
 // CompactCertSigner returns the key used to sign on Compact Certificates.
+// might return nil!
 func (part Participation) CompactCertSigner() *crypto.SignatureAlgorithm {
 	return part.CompactCertKey
 }
