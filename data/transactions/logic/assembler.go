@@ -644,10 +644,10 @@ func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-// selector "add(uint64,uint64)uint64"
-func assembleSelector(ops *OpStream, spec *OpSpec, args []string) error {
+// method "add(uint64,uint64)uint64"
+func assembleMethod(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 0 {
-		return ops.error("selector requires a literal argument")
+		return ops.error("method requires a literal argument")
 	}
 	arg := args[0]
 	if len(arg) > 1 && arg[0] == '"' && arg[len(arg)-1] == '"' {
@@ -1056,7 +1056,7 @@ var keywords = map[string]OpSpec{
 	// parse basics.Address, actually just another []byte constant
 	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"selector": {0, "selector", nil, assembleSelector, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}}}
+	"method": {0, "method", nil, assembleMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}}}
 
 type lineError struct {
 	Line int

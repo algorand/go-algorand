@@ -4094,12 +4094,12 @@ func TestBytes(t *testing.T) {
 	testAccepts(t, `byte "jo"; byte "hn"; concat; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
 }
 
-func TestSelector(t *testing.T) {
+func TestMethod(t *testing.T) {
 	t.Parallel()
-	// Although 'selector' is new around the time of v5, it is a
+	// Although 'method' is new around the time of v5, it is a
 	// pseudo-op, so it's ok to use it earlier, as it compiles to
 	// existing opcodes.
-	testAccepts(t, "selector \"add(uint64,uint64)uint128\"; byte 0x8aa3b61f; ==", 1)
+	testAccepts(t, "method \"add(uint64,uint64)uint128\"; byte 0x8aa3b61f; ==", 1)
 }
 
 func TestSwap(t *testing.T) {
