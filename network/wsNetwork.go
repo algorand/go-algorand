@@ -1735,6 +1735,8 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
 }
 
+// function to send periodic connected peer metrics
+// the peer information is stored as the metric's labels
 func (wn *WebsocketNetwork) sendPeerConnectionsMetricStatus() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
