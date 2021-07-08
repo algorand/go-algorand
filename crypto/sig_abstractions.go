@@ -7,8 +7,16 @@ type AlgorithmType uint64
 
 // all AlgorithmType enums
 const (
-	PlaceHolderType AlgorithmType = 1 + iota
+	minAlgorithmType AlgorithmType = iota
+
+	PlaceHolderType
+
+	maxAlgorithmType
 )
+
+func (t AlgorithmType) isValidType() bool {
+	return minAlgorithmType < t && t < maxAlgorithmType
+}
 
 // ByteSignature is a cryptographic signature represented by bytes.
 type ByteSignature []byte
@@ -18,7 +26,7 @@ type ByteSignature []byte
 type Signer interface {
 	Sign(message Hashable) ByteSignature
 	SignBytes(message []byte) ByteSignature
-	GetVerifier() VerifyingKey
+	GetVerifyingKey() VerifyingKey
 }
 
 // ErrBadSignature represents a bad signature
@@ -43,6 +51,9 @@ type SignatureAlgorithm struct {
 
 // VerifyingKey is the correct way to interact with a Verifier. It implements the interface,
 // but allows for correct marshling and unmarshling of itself.
+//
+// NOTE: The VerifyingKey key might not be a valid key if a malicious client sent it over the network
+// make certain it is valid.
 type VerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -50,29 +61,24 @@ type VerifyingKey struct {
 	Pack PackedVerifyingKey `codec:"pubKeys"`
 }
 
-// Sign - Signs a Hashable message
-func (s *SignatureAlgorithm) Sign(message Hashable) []byte {
-	return s.Pack.getSigner(s.Type).Sign(message)
+// IsValid Makes certain struct is valid.
+func (z *SignatureAlgorithm) IsValid() bool {
+	return !(z == nil) && z.Type.isValidType()
 }
 
-// SignBytes - Signs a a slice of bytes
-func (s *SignatureAlgorithm) SignBytes(message []byte) []byte {
-	return s.Pack.getSigner(s.Type).SignBytes(message)
+// GetSigner fetches the Signer type that is stored inside this SignatureAlgorithm.
+func (z *SignatureAlgorithm) GetSigner() Signer {
+	return z.Pack.getSigner(z.Type)
 }
 
-// GetVerifier outputs a representation of a public key. that implements Verifier
-func (s *SignatureAlgorithm) GetVerifier() VerifyingKey {
-	return s.Pack.getSigner(s.Type).GetVerifier()
+// IsValid Makes certain struct is valid.
+func (z *VerifyingKey) IsValid() bool {
+	return !(z == nil) && z.Type.isValidType()
 }
 
-// Verify that a signature match to a specific message
-func (v *VerifyingKey) Verify(message Hashable, sig []byte) error {
-	return v.Pack.getVerifier(v.Type).Verify(message, sig)
-}
-
-// VerifyBytes checks that a signature match to a specific byte message
-func (v *VerifyingKey) VerifyBytes(message []byte, sig []byte) error {
-	return v.Pack.getVerifier(v.Type).VerifyBytes(message, sig)
+// GetVerifier fetches the Verifier type that is stored inside this VerifyingKey.
+func (z *VerifyingKey) GetVerifier() Verifier {
+	return z.Pack.getVerifier(z.Type)
 }
 
 // PackedVerifyingKey is a key store. Allows for easy marshal/unmarshal.
@@ -107,25 +113,22 @@ func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) Signer {
 	}
 }
 
-// NewSignerFromSeed Generates a new signer from a specific Seed
-func NewSignerFromSeed(seed Seed, t AlgorithmType) *SignatureAlgorithm {
+// NewSigner receives a type of signing algorithm and generates keys.
+func NewSigner(t AlgorithmType) *SignatureAlgorithm {
 	var p PackedSignatureAlgorithm
 	switch t {
 	case PlaceHolderType:
+		var seed Seed
+		SystemRNG.RandBytes(seed[:])
 		key := GeneratePlaceHolderKey(seed)
 		p = PackedSignatureAlgorithm{
 			PlaceHolderKey: *key,
 		}
+	default:
+		panic("non existing signer type.")
 	}
 	return &SignatureAlgorithm{
 		Type: t,
 		Pack: p,
 	}
-}
-
-// NewSigner receives a type of signing algorithm and generates keys.
-func NewSigner(t AlgorithmType) *SignatureAlgorithm {
-	var seed Seed
-	SystemRNG.RandBytes(seed[:])
-	return NewSignerFromSeed(seed, t)
 }

@@ -1279,7 +1279,7 @@ var partkeyInfoCmd = &cobra.Command{
 					VoteKeyDilution: part.KeyDilution,
 				}
 				if certSigner := part.CompactCertSigner(); certSigner != nil {
-					info.CompactCertID = certSigner.GetVerifier()
+					info.CompactCertID = certSigner.GetSigner().GetVerifyingKey()
 				}
 				infoString := protocol.EncodeJSON(&info)
 				fmt.Printf("File: %s\n%s\n", filename, string(infoString))
