@@ -46,6 +46,24 @@ const (
 	profFirstDetachedElement = profElementGetTxnsGroups
 )
 
+// We want to create this so we can test if we actually send metrics or not
+type iProfilerMetricLogger interface {
+	logProfile(metrics telemetryspec.TransactionSyncProfilingMetrics, l logging.Logger)
+}
+
+// A one function interface can be made easier to use by the following.
+// From: https://karthikkaranth.me/blog/functions-implementing-interfaces-in-go/
+type profilerMetricLoggerFunc func(metrics telemetryspec.TransactionSyncProfilingMetrics, l logging.Logger)
+
+func (f profilerMetricLoggerFunc) logProfile(metrics telemetryspec.TransactionSyncProfilingMetrics, l logging.Logger) {
+	f(metrics, l)
+}
+
+// Our default log to profile
+func logProfile(metrics telemetryspec.TransactionSyncProfilingMetrics, l logging.Logger) {
+	l.Metrics(telemetryspec.Transaction, metrics, struct{}{})
+}
+
 // The profiler struct provides profiling information regarding the main loop performance
 // characteristics. Using it provides statistics information about the recent duty cycle utilization,
 // that could be used when trying to throttle the accuracy and performance of the transaction sync.
@@ -69,6 +87,8 @@ type profiler struct {
 	lastProfileLog time.Duration
 	// logInterval defines what is the frequency at which we send an event to the telemetry. Zero to disable.
 	logInterval time.Duration
+	// profileMetricLogger used to inject how to log metrics at runtime
+	profileMetricLogger iProfilerMetricLogger
 }
 
 // element represent a single tracked element that would be profiled.
@@ -95,7 +115,11 @@ func makeProfiler(span time.Duration, clock timers.WallClock, log logging.Logger
 		log:         log,
 		logInterval: logInterval,
 	}
+
+	prof.profileMetricLogger = profilerMetricLoggerFunc(logProfile)
+
 	prof.createElements()
+
 	return prof
 }
 
@@ -152,10 +176,7 @@ func (p *profiler) maybeLogProfile() {
 		return
 	}
 	p.lastProfileLog = curTime
-	p.logProfile()
-}
 
-func (p *profiler) logProfile() {
 	metrics := telemetryspec.TransactionSyncProfilingMetrics{
 		TotalOps:                     uint64(len(p.profile)),
 		IdleOps:                      uint64(len(p.elements[profElementIdle].times)),
@@ -184,7 +205,8 @@ func (p *profiler) logProfile() {
 		SelectPendingTransactionsPercent: float64(p.elements[profElementTxnsSelection].total) * 100.0 / float64(p.profileSum),
 	}
 
-	p.log.Metrics(telemetryspec.Transaction, metrics, struct{}{})
+	p.profileMetricLogger.logProfile(metrics, p.log)
+
 }
 
 func (e *element) start() {
