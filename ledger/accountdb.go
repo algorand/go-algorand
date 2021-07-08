@@ -1028,7 +1028,7 @@ func lookupImpl(lookupStmt *sql.Stmt, addr basics.Address) (data dbAccountData, 
 	return
 }
 
-func lookupExt(rdb db.Accessor, addr basics.Address, extension func(*sql.Stmt, *ledgercore.PersistedAccountData) error) (data dbAccountData, err error) {
+func lookupExt(rdb db.Accessor, addr basics.Address, extension func(*sql.Stmt, *ledgercore.PersistedAccountData, basics.Round) error) (data dbAccountData, err error) {
 	err = db.Retry(func() error {
 		err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			lookupStmt, err := tx.Prepare(lookupAcctBaseQuery)
@@ -1049,7 +1049,7 @@ func lookupExt(rdb db.Accessor, addr basics.Address, extension func(*sql.Stmt, *
 			}
 
 			if extension != nil && data.pad.ExtendedAssetHolding.Count > 0 {
-				err = extension(loadStmt, &data.pad)
+				err = extension(loadStmt, &data.pad, data.round)
 			}
 			return err
 		})
