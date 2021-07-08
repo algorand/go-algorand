@@ -20,7 +20,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// Allocate the map of basics.AssetHolding if it is nil, and return a copy.
+// CloneAssetHoldings allocates the map of basics.AssetHolding if it is nil, and return a copy.
 func CloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
 	res := make(map[basics.AssetIndex]basics.AssetHolding, len(m))
 	for id, val := range m {
@@ -29,7 +29,7 @@ func CloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.
 	return res
 }
 
-// Allocate the map of basics.AssetParams if it is nil, and return a copy.
+// CloneAssetParams allocates the map of basics.AssetParams if it is nil, and return a copy.
 func CloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
 	res := make(map[basics.AssetIndex]basics.AssetParams, len(m))
 	for id, val := range m {
@@ -38,7 +38,7 @@ func CloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.Ass
 	return res
 }
 
-// Allocate the map of basics.AppParams if it is nil, and return a copy. We do *not*
+// CloneAppParams allocates the map of basics.AppParams if it is nil, and return a copy. We do *not*
 // call clone on each basics.AppParams -- callers must do that for any values where
 // they intend to modify a contained reference type.
 func CloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
@@ -49,7 +49,7 @@ func CloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]
 	return res
 }
 
-// Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
+// CloneAppLocalStates allocates the map of LocalStates if it is nil, and return a copy. We do *not*
 // call clone on each AppLocalState -- callers must do that for any values
 // where they intend to modify a contained reference type.
 func CloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
