@@ -17,13 +17,13 @@ gcmd="goal -w ${WALLET}"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
-APPID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog=${TEAL}/app-params.teal  --clear-prog=${TEAL}/approve-all.teal --global-byteslices 1 --global-ints 2 --local-byteslices 3 --local-ints 4 --extra-pages 2 | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog=${TEAL}/app-params.teal  --clear-prog=${TEAL}/approve-all.teal --global-byteslices 1 --global-ints 2 --local-byteslices 3 --local-ints 4 --extra-pages 2 --app-arg "addr:$ACCOUNT" | grep Created | awk '{ print $6 }')
 
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ${gcmd} clerk send -f "$ACCOUNT" -t "$ACCOUNTB" -a 1000000
 
 # Now call from a different account
-${gcmd} app call --app-id="$APPID" --from="$ACCOUNTB"
+${gcmd} app call --app-id="$APPID" --from="$ACCOUNTB" --app-arg "addr:$ACCOUNT"
 
 
 

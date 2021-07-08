@@ -2,6 +2,16 @@
         // This program checks its own app params, as set up in
         // teal-app-params.sh, to confirm they all work.
 
+
+        // Check the creator is the address provided
+        int 0
+        app_params_get AppCreator
+        assert
+        txn ApplicationArgs 0
+        ==
+        assert
+
+
         // Check this program is version 5
         int 0
 	app_params_get AppApprovalProgram
@@ -63,6 +73,6 @@
         assert
         int 2
         ==
-pc81:   assert
+        assert
 
         int 1
