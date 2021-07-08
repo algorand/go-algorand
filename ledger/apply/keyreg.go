@@ -78,6 +78,10 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteKeyDilution = keyreg.VoteKeyDilution
 	}
 
+	if (keyreg.BlockProofParticipationPK != crypto.VerifyingKey{} && keyreg.BlockProofParticipationPK.IsValid()) {
+		record.BlockProofID = keyreg.BlockProofParticipationPK
+	}
+
 	// Write the updated entry
 	err = balances.Put(header.Sender, record)
 	if err != nil {

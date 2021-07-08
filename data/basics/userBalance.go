@@ -146,8 +146,9 @@ type AccountData struct {
 	// the past week".
 	RewardedMicroAlgos MicroAlgos `codec:"ern"`
 
-	VoteID      crypto.OneTimeSignatureVerifier `codec:"vote"`
-	SelectionID crypto.VRFVerifier              `codec:"sel"`
+	VoteID       crypto.OneTimeSignatureVerifier `codec:"vote"`
+	SelectionID  crypto.VRFVerifier              `codec:"sel"`
+	BlockProofID crypto.VerifyingKey             `codec:"blockproof"`
 
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`
