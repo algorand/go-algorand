@@ -191,8 +191,19 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 		cfg = createTelemetryConfig()
 
 		if dataDir != nil && *dataDir != "" {
-			// Remember, if we had a data directory supplied we want to save the config there
-			configPath = filepath.Join(*dataDir, TelemetryConfigFilename)
+
+			/*
+				There could be a scenario where a data directory was supplied that doesn't exist.
+				In that case, we don't want to create the directory, just save in the global one
+			*/
+
+			// If the directory exists...
+			if _, err := os.Stat(*dataDir); err == nil {
+
+				// Remember, if we had a data directory supplied we want to save the config there
+				configPath = filepath.Join(*dataDir, TelemetryConfigFilename)
+			}
+
 		}
 
 		cfg.FilePath = configPath // Initialize our desired cfg.FilePath
