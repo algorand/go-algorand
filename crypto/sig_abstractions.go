@@ -21,7 +21,7 @@ func (t AlgorithmType) isValidType() bool {
 // ByteSignature is a cryptographic signature represented by bytes.
 type ByteSignature []byte
 
-// Signer interface represents the possible things that can be done with a signing key.
+// Signer interface represents the possible operations that can be done with a signing key.
 // outputs Sign, SignBytes which are self explanatory and GetVerifier which is a representation of a public key.
 type Signer interface {
 	Sign(message Hashable) ByteSignature
@@ -32,7 +32,7 @@ type Signer interface {
 // ErrBadSignature represents a bad signature
 var ErrBadSignature = fmt.Errorf("invalid signature")
 
-// Verifier interface represent a public key of a signature scheme.
+// Verifier interface represent a public key of a SignatureAlgorithm.
 // Verifier returns error for bad signature/ other issues while verifying a signature, or nil for correct signature -
 // that is, returns: complain or no complain.
 type Verifier interface {
@@ -97,7 +97,7 @@ func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) Verifier {
 	}
 }
 
-// PackedSignatureAlgorithm used to marshal signature algorithm
+// PackedSignatureAlgorithm helps  marshal SignatureAlgorithm
 type PackedSignatureAlgorithm struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
