@@ -1581,6 +1581,7 @@ func (wn *WebsocketNetwork) meshThread() {
 		// telemetry server; that would allow the telemetry server
 		// to construct a cross-node map of all the nodes interconnections.
 		wn.sendPeerConnectionsTelemetryStatus()
+		wn.sendPeerConnectionsMetricStatus()
 	}
 }
 
@@ -1732,6 +1733,39 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 	}
 
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
+}
+
+func (wn *WebsocketNetwork) sendPeerConnectionsMetricStatus() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			outPeerMap, inPeerMap := wn.updateConnectedPeersLabelMaps()
+			incomingPeerAddr.Set(1, inPeerMap)
+			outgoingPeerAddr.Set(1, outPeerMap)
+		case <-wn.ctx.Done():
+			return
+		}
+	}
+}
+
+// function to update the incoming and outgoing peer label maps
+// which will be used in the peer connection metrics
+func (wn *WebsocketNetwork) updateConnectedPeersLabelMaps() (map[string]string, map[string]string) {
+	outPeerMap := make(map[string]string)
+	inPeerMap := make(map[string]string)
+	wn.peersLock.RLock()
+	defer wn.peersLock.RUnlock()
+	for id, peer := range wn.peers {
+		key := fmt.Sprintf("%s_%d", "peer", id)
+		if peer.outgoing {
+			outPeerMap[key] = peer.GetAddress()
+		} else {
+			inPeerMap[key] = peer.GetAddress()
+		}
+	}
+	return outPeerMap, inPeerMap
 }
 
 // prioWeightRefreshTime controls how often we refresh the weights
@@ -2248,7 +2282,6 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 		atomic.AddInt32(&wn.peersChangeCounter, 1)
 	}
 	wn.countPeersSetGauges()
-	wn.updatePeersSetGauges()
 }
 
 func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
@@ -2264,7 +2297,6 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
 	atomic.AddInt32(&wn.peersChangeCounter, 1)
 	wn.countPeersSetGauges()
-	wn.updatePeersSetGauges()
 	if len(wn.peers) >= wn.config.GossipFanout {
 		// we have a quorum of connected peers, if we weren't ready before, we are now
 		if atomic.CompareAndSwapInt32(&wn.ready, 0, 1) {
@@ -2289,24 +2321,6 @@ func (wn *WebsocketNetwork) eventualReady() {
 			close(wn.readyChan)
 		}
 	}
-}
-
-// function to update the incoming and outgoing peer metrics
-// by appending the address of the peers to the metric labels
-// should be run from inside a context holding wn.peersLock
-func (wn *WebsocketNetwork) updatePeersSetGauges() {
-	outPeerMap := make(map[string]string)
-	inPeerMap := make(map[string]string)
-	for id, peer := range wn.peers {
-		key := fmt.Sprintf("%s_%d", "peer", id)
-		if peer.outgoing {
-			outPeerMap[key] = peer.GetAddress()
-		} else {
-			inPeerMap[key] = peer.GetAddress()
-		}
-	}
-	incomingPeerAddr.Set(float64(1), inPeerMap)
-	outgoingPeerAddr.Set(float64(1), outPeerMap)
 }
 
 // should be run from inside a context holding wn.peersLock
