@@ -547,7 +547,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## gaid t
 
-- Opcode: 0x3c
+- Opcode: 0x3c {uint8 transaction group index}
 - Pops: _None_
 - Pushes: uint64
 - push the ID of the asset or application created in the Tth transaction of the current group
@@ -914,7 +914,7 @@ pushint args are not added to the intcblock during assembly processes
 
 ## callsub target
 
-- Opcode: 0x88
+- Opcode: 0x88 {int16 branch offset, big endian}
 - Pops: _None_
 - Pushes: _None_
 - branch unconditionally to TARGET, saving the next instruction on the call stack

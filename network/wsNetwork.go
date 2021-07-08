@@ -1911,18 +1911,35 @@ var errBcastInvalidArray = errors.New("invalid broadcast array")
 
 var errBcastQFull = errors.New("broadcast queue full")
 
-// HostColonPortPattern matches "^[^:]+:\\d+$" e.g. "foo.com.:1234"
-var HostColonPortPattern = regexp.MustCompile("^[^:]+:\\d+$")
+var errURLNoHost = errors.New("could not parse a host from url")
+
+// HostColonPortPattern matches "^[a-zA-Z0-9.]+:\\d+$" e.g. "foo.com.:1234"
+var HostColonPortPattern = regexp.MustCompile("^[a-zA-Z0-9.]+:\\d+$")
 
 // ParseHostOrURL handles "host:port" or a full URL.
 // Standard library net/url.Parse chokes on "host:port".
 func ParseHostOrURL(addr string) (*url.URL, error) {
-	var parsedURL *url.URL
+	// If the entire addr is "host:port" grab that right away.
+	// Don't try url.Parse() because that will grab "host:" as if it were "scheme:"
 	if HostColonPortPattern.MatchString(addr) {
-		parsedURL = &url.URL{Scheme: "http", Host: addr}
-		return parsedURL, nil
+		return &url.URL{Scheme: "http", Host: addr}, nil
 	}
-	return url.Parse(addr)
+	parsed, err := url.Parse(addr)
+	if err == nil {
+		if parsed.Host == "" {
+			return nil, errURLNoHost
+		}
+		return parsed, nil
+	}
+	if strings.HasPrefix(addr, "http:") || strings.HasPrefix(addr, "https:") || strings.HasPrefix(addr, "ws:") || strings.HasPrefix(addr, "wss:") || strings.HasPrefix(addr, "://") || strings.HasPrefix(addr, "//") {
+		return parsed, err
+	}
+	// This turns "[::]:4601" into "http://[::]:4601" which url.Parse can do
+	parsed, e2 := url.Parse("http://" + addr)
+	if e2 == nil {
+		return parsed, nil
+	}
+	return parsed, err /* return original err, not our prefix altered try */
 }
 
 // addrToGossipAddr parses host:port or a URL and returns the URL to the websocket interface at that address.
