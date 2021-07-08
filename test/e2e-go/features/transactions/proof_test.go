@@ -26,9 +26,12 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestTxnMerkleProof(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 

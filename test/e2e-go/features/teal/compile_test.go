@@ -25,9 +25,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestTealCompile(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	if testing.Short() {
 		t.Skip()
 	}

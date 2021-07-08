@@ -1,8 +1,326 @@
 version: 2.1
-orbs:
-  welcome: circleci/welcome-orb@0.4.1
-workflows:
-  welcome:
-    jobs:
-      - welcome/run
 
+orbs:
+  win: circleci/windows@2.3.0
+  go: circleci/go@1.7.0
+
+workflows:
+  version: 2
+  build_pr:
+    jobs:
+      - codegen_verification
+      - amd64_build
+      - amd64_test:
+          requires:
+            - amd64_build
+      - amd64_integration:
+          requires:
+            - amd64_build
+      - amd64_e2e_subs:
+          requires:
+            - amd64_build
+      - arm64_build
+      - arm64_test:
+          requires:
+            - arm64_build
+      - arm64_integration:
+          requires:
+            - arm64_build
+      - arm64_e2e_subs:
+          requires:
+            - arm64_build
+      - mac_amd64_build
+      - mac_amd64_test:
+          requires:
+            - mac_amd64_build
+      - mac_amd64_integration:
+          requires:
+            - mac_amd64_build
+      - mac_amd64_e2e_subs:
+          requires:
+            - mac_amd64_build
+  #build_windows:
+  #  jobs:
+      #- windows_x64_build
+
+commands:
+  prepare_go:
+    description: Clean out existing Go so we can use our preferred version
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+    steps:
+      - run: |
+          sudo rm -rf << parameters.circleci_home >>/.go_workspace /usr/local/go
+
+  generic_build:
+    description: Run basic build and store in workspace for re-use by different architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+    steps:
+      - restore_cache:
+          keys:
+            - 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+      - run:
+          name: scripts/travis/build.sh --make_debug
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="<< parameters.circleci_home >>/go"
+            export ALGORAND_DEADLOCK=enable
+            scripts/travis/build.sh --make_debug
+      - save_cache:
+          key: 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          paths:
+            - << parameters.circleci_home >>/go/pkg/mod
+      - persist_to_workspace:
+          root: << parameters.circleci_home >>
+          paths:
+            - project
+            - go
+            - gimme
+            - .gimme
+
+  generic_shorttest:
+    description: Run short tests from build workspace, for re-use by diferent architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+      result_subdir:
+        type: string
+    steps:
+      - attach_workspace:
+          at: << parameters.circleci_home >>
+      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - run:
+          name: Run short tests
+          no_output_timeout: 30m
+          command: |
+            set -e
+            set -x
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="<< parameters.circleci_home >>/go"
+            export PATH="${PATH}:${GOPATH}/bin"
+            export ALGORAND_DEADLOCK=enable
+            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+            eval "$(~/gimme "${GOLANG_VERSION}")"
+            scripts/configure_dev.sh
+            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+            PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
+            export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
+            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
+            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            export PARALLEL_FLAG="-p 1"
+            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+      - store_artifacts:
+          path: /tmp/results
+          destination: test-results
+      - store_test_results:
+          path: /tmp/results
+
+  generic_integration:
+    description: Run integration tests from build workspace, for re-use by diferent architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+      result_subdir:
+        type: string
+    steps:
+      - attach_workspace:
+          at: << parameters.circleci_home >>
+      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - run:
+          name: Run integration tests
+          no_output_timeout: 30m
+          command: |
+            set -x
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="<< parameters.circleci_home >>/go"
+            export PATH="${PATH}:${GOPATH}/bin"
+            export ALGORAND_DEADLOCK=enable
+            export BUILD_TYPE=integration
+            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+            eval "$(~/gimme "${GOLANG_VERSION}")"
+            scripts/configure_dev.sh
+            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+            export ALGOTEST=1
+            export SHORTTEST=-short
+            export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
+            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
+            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            test/scripts/run_integration_tests.sh
+      - store_artifacts:
+          path: /tmp/results
+          destination: test-results
+      - store_test_results:
+          path: /tmp/results
+
+jobs:
+  codegen_verification:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: xlarge
+    steps:
+      - checkout
+      - prepare_go
+      - run: |
+          export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+          export GOPATH="/home/circleci/go"
+          scripts/travis/codegen_verification.sh
+
+  amd64_build:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: xlarge
+    steps:
+      - checkout
+      - prepare_go
+      - generic_build
+
+  amd64_test:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: xlarge
+    parallelism: 4
+    steps:
+      - prepare_go
+      - generic_shorttest:
+          result_subdir: amd64-short
+
+  amd64_integration:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      - prepare_go
+      - generic_integration:
+          result_subdir: amd64-integration
+
+  amd64_e2e_subs:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      - prepare_go
+      - generic_integration:
+          result_subdir: amd64-e2e_subs
+
+  arm64_build:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    steps:
+      - checkout
+      - prepare_go
+      - generic_build
+
+  arm64_test:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    parallelism: 4
+    steps:
+      - checkout
+      - prepare_go
+      - generic_shorttest:
+          result_subdir: arm64-short
+
+  arm64_integration:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      - checkout
+      - prepare_go
+      - generic_integration:
+          result_subdir: arm64-integration
+
+  arm64_e2e_subs:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      - checkout
+      - prepare_go
+      - generic_integration:
+          result_subdir: arm64-e2e_subs
+
+  mac_amd64_build:
+    macos:
+      xcode: 12.4.0
+    resource_class: large
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - checkout
+      - prepare_go
+      - generic_build:
+          circleci_home: /Users/distiller
+
+  mac_amd64_test:
+    macos:
+      xcode: 12.4.0
+    resource_class: large
+    parallelism: 4
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_shorttest:
+          result_subdir: mac-amd64-short
+          circleci_home: /Users/distiller
+
+  mac_amd64_integration:
+    macos:
+      xcode: 12.4.0
+    resource_class: large
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_integration:
+          result_subdir: mac-amd64-integration
+          circleci_home: /Users/distiller
+
+  mac_amd64_e2e_subs:
+    macos:
+      xcode: 12.4.0
+    resource_class: large
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_integration:
+          result_subdir: mac-amd64-e2e_subs
+          circleci_home: /Users/distiller
+
+  windows_x64_build:
+    executor:
+      name: win/default
+      size: large
+    steps:
+      - checkout
+      - prepare_go
+      - run:
+          no_output_timeout: 30m
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="/home/circleci/go"
+            export ALGORAND_DEADLOCK=enable
+            scripts/travis/build_test.sh
+          shell: bash.exe

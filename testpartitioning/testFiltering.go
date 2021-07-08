@@ -14,26 +14,40 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package agreement
+package testpartitioning
 
 import (
+	"os"
+	"strconv"
 	"testing"
-
-	"github.com/stretchr/testify/require"
-
-	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
 )
 
-func TestEmptyEncoding(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+// PartitionTest checks if the current partition should run this test, and skips it if not.
+func PartitionTest(t *testing.T) {
+	pt, found := os.LookupEnv("PARTITION_TOTAL")
+	if !found {
+		return
+	}
+	partitions, err := strconv.Atoi(pt)
+	if err != nil {
+		return
+	}
+	pid := os.Getenv("PARTITION_ID")
+	partitionID, err := strconv.Atoi(pid)
+	if err != nil {
+		return
+	}
+	name := t.Name()
+	nameNumber := stringToUint64(name)
+	if nameNumber%uint64(partitions) != uint64(partitionID) {
+		t.Skip()
+	}
+}
 
-	var v vote
-	require.Equal(t, 1, len(protocol.Encode(&v)))
-
-	var f proposal
-	require.Equal(t, 1, len(protocol.Encode(&f)))
-
-	var b bundle
-	require.Equal(t, 1, len(protocol.Encode(&b)))
+func stringToUint64(str string) uint64 {
+	sum := uint64(0)
+	for _, x := range str {
+		sum += uint64(x)
+	}
+	return sum
 }

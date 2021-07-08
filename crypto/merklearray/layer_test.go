@@ -20,9 +20,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/testpartitioning"
 )
 
 func TestLayerHash(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	var p pair
 	crypto.RandBytes(p.l[:])
 	crypto.RandBytes(p.r[:])

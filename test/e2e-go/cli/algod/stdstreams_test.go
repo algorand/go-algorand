@@ -24,10 +24,13 @@ import (
 
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/go-algorand/util"
 )
 
 func TestAlgodLogsToFile(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	t.Parallel()
 
 	var fixture fixtures.LibGoalFixture

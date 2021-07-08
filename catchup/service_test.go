@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -129,6 +130,8 @@ func (auth *mockedAuthenticator) alter(errorRound int, fail bool) {
 }
 
 func TestServiceFetchBlocksSameRange(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	// Make Ledgers
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
@@ -162,6 +165,8 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 }
 
 func TestPeriodicSync(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	// Make Ledger
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
@@ -213,6 +218,8 @@ func TestPeriodicSync(t *testing.T) {
 }
 
 func TestServiceFetchBlocksOneBlock(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	// Make Ledger
 	numBlocks := 10
 	local := new(mockedLedger)
@@ -269,6 +276,8 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 // When caught up, and the agreement service is taking the lead, the sync() stops and
 // yields to the agreement. Agreement is emulated by the go func() loop in the test
 func TestAbruptWrites(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	numberOfBlocks := 100
 
 	if testing.Short() {
@@ -327,6 +336,8 @@ func TestAbruptWrites(t *testing.T) {
 }
 
 func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	// Make Ledger
 	numberOfBlocks := basics.Round(100)
 	if testing.Short() {
@@ -383,6 +394,8 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 }
 
 func TestServiceFetchBlocksMalformed(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	// Make Ledger
 	numBlocks := 10
 	local := new(mockedLedger)
@@ -424,6 +437,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 // Test the interruption in the initial loop
 // This cannot happen in practice, but is used to test the code.
 func TestOnSwitchToUnSupportedProtocol1(t *testing.T) {
+	testpartitioning.PartitionTest(t)
 
 	lastRoundRemote := 5
 	lastRoundLocal := 0
@@ -442,6 +456,7 @@ func TestOnSwitchToUnSupportedProtocol1(t *testing.T) {
 
 // Test the interruption in "the rest" loop
 func TestOnSwitchToUnSupportedProtocol2(t *testing.T) {
+	testpartitioning.PartitionTest(t)
 
 	lastRoundRemote := 10
 	lastRoundLocal := 7
@@ -463,6 +478,7 @@ func TestOnSwitchToUnSupportedProtocol2(t *testing.T) {
 // This can not happen in practice, because there will be
 // enough rounds for the protocol upgrade notice.
 func TestOnSwitchToUnSupportedProtocol3(t *testing.T) {
+	testpartitioning.PartitionTest(t)
 
 	lastRoundRemote := 14
 	lastRoundLocal := 7
@@ -488,6 +504,7 @@ func TestOnSwitchToUnSupportedProtocol3(t *testing.T) {
 // happen when the catchup service restart at the round when
 // an upgrade happens.
 func TestOnSwitchToUnSupportedProtocol4(t *testing.T) {
+	testpartitioning.PartitionTest(t)
 
 	lastRoundRemote := 14
 	lastRoundLocal := 7
@@ -729,6 +746,8 @@ func (s *Service) testStart() {
 }
 
 func TestCatchupUnmatchedCertificate(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	// Make Ledger
 	numBlocks := 10
 	local := new(mockedLedger)
@@ -772,6 +791,8 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 
 // TestCreatePeerSelector tests if the correct peer selector coonfigurations are prepared
 func TestCreatePeerSelector(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	// Make Service
 	cfg := defaultConfig
 
@@ -895,6 +916,8 @@ func TestCreatePeerSelector(t *testing.T) {
 }
 
 func TestServiceStartStop(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	cfg := defaultConfig
 	ledger := new(mockedLedger)
 	ledger.blocks = append(ledger.blocks, bookkeeping.Block{})
@@ -906,6 +929,8 @@ func TestServiceStartStop(t *testing.T) {
 }
 
 func TestSynchronizingTime(t *testing.T) {
+	testpartitioning.PartitionTest(t)
+
 	cfg := defaultConfig
 	ledger := new(mockedLedger)
 	ledger.blocks = append(ledger.blocks, bookkeeping.Block{})
