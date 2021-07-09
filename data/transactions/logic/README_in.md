@@ -14,6 +14,7 @@ The maximum stack depth is currently 1000.
 In addition to the stack there are 256 positions of scratch space, also uint64-bytes union values, accessed by the `load` and `store` ops moving data from or to scratch space, respectively.
 
 ## Execution Modes
+<<<<<<< HEAD
 
 Starting from version 2 TEAL evaluator can run programs in two modes:
 1. LogicSig (stateless)
@@ -26,6 +27,20 @@ Differences between modes include:
 
 ## Execution Environment for LogicSigs
 
+=======
+
+Starting from version 2 TEAL evaluator can run programs in two modes:
+1. LogicSig (stateless)
+2. Application run (stateful)
+
+Differences between modes include:
+1. Max program length (consensus parameters LogicSigMaxSize, MaxAppTotalProgramLen & MaxExtraAppProgramPages)
+2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
+3. Opcode availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
+
+## Execution Environment for LogicSigs
+
+>>>>>>> master
 TEAL LogicSigs run in Algorand nodes as part of testing a proposed transaction to see if it is valid and authorized to be committed into a block.
 
 If an authorized program executes and finishes with a single non-zero uint64 value on the stack then that program has validated the transaction it is attached to.
@@ -122,11 +137,17 @@ Global fields are fields that are common to all the transactions in the group. I
 
 **Asset Fields**
 
-Asset fields include `AssetHolding` and `AssetParam` fields that are used in `asset_read_*` opcodes
+Asset fields include `AssetHolding` and `AssetParam` fields that are used in the `asset_holding_get` and `asset_params_get` opcodes.
 
 @@ asset_holding_fields.md @@
 
 @@ asset_params_fields.md @@
+
+**App Fields**
+
+App fields used in the `app_params_get` opcode.
+
+@@ app_params_fields.md @@
 
 ### Flow Control
 
