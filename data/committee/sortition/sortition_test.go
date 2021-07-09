@@ -62,7 +62,7 @@ func TestSortitionBasic(t *testing.T) {
 	}
 }
 
-var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 500, "number of sortition tests to run")
+var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 100, "number of sortition tests to run")
 
 func TestSortitionExhausting(t *testing.T) {
 	errsum := uint64(0)
@@ -78,8 +78,8 @@ func TestSortitionExhausting(t *testing.T) {
 		p := expectedSize / float64(totalMoney)
 		ratio := rand.Float64()
 		boost := boostCdfWalk(n, p, ratio, money)
-		//gocdf := sortitionBinomialCDFWalk(n, p, ratio, money)
-		gocdf := sortitionBinomialCDFWalk2(n, p, ratio, money)
+		//gocdf := sortitionBinomialCDFWalk(p, ratio, money)
+		gocdf := sortitionBinomialCDFWalk2(p, ratio, money)
 		var cdferr uint64
 		if boost > gocdf {
 			cdferr = boost - gocdf
@@ -100,4 +100,35 @@ func TestSortitionExhausting(t *testing.T) {
 		errfracsum += errfrac
 	}
 	t.Logf("%d total err across %d tests, avg=%f (%f), max=%d", errsum, runcount, float64(errsum)/float64(runcount), errfracsum/float64(runcount), maxerr)
+}
+
+func boostCdfWrapper(p, ratio float64, money uint64) uint64 {
+	return boostCdfWalk(float64(money), p, ratio, money)
+}
+
+func cdfBenchmarkInner(b *testing.B, tf func(p, ratio float64, money uint64) uint64) {
+	const totalMoney = 10000000000000000
+	moneys := make([]uint64, b.N)
+	esizes := make([]float64, b.N)
+	ratios := make([]float64, b.N)
+	for i := 0; i < b.N; i++ {
+		moneys[i] = uint64(rand.Int63n(totalMoney))
+		esizes[i] = (rand.Float64() * 30.0) + 30.0
+		ratios[i] = rand.Float64()
+	}
+	b.ResetTimer()
+	for i, money := range moneys {
+		expectedSize := esizes[i]
+		ratio := ratios[i]
+		p := expectedSize / float64(totalMoney)
+		tf(p, ratio, money)
+	}
+}
+
+func BenchmarkBoostCdfWalk(b *testing.B) {
+	cdfBenchmarkInner(b, boostCdfWrapper)
+}
+
+func BenchmarkBigbinomialCdfWalk(b *testing.B) {
+	cdfBenchmarkInner(b, sortitionBinomialCDFWalk2)
 }

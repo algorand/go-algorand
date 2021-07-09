@@ -61,7 +61,7 @@ func boostCdfWalk(binomialN, binomialP, cratio float64, money uint64) uint64 {
 }
 
 func SelectG(money uint64, totalMoney uint64, expectedSize float64, vrfOutput crypto.Digest) uint64 {
-	binomialN := float64(money)
+	//binomialN := float64(money)
 	binomialP := expectedSize / float64(totalMoney)
 
 	t := &big.Int{}
@@ -80,10 +80,11 @@ func SelectG(money uint64, totalMoney uint64, expectedSize float64, vrfOutput cr
 	ratio := big.Float{}
 	cratio, _ := ratio.Quo(&h, max).Float64()
 
-	return sortitionBinomialCDFWalk(binomialN, binomialP, cratio, money)
+	return sortitionBinomialCDFWalk(binomialP, cratio, money)
 }
 
-func sortitionBinomialCDFWalk(n, p, ratio float64, money uint64) uint64 {
+func sortitionBinomialCDFWalk(p, ratio float64, money uint64) uint64 {
+	n := float64(money)
 	dist := distuv.Binomial{N: n, P: p} //TODO: rand src?
 
 	for j := uint64(0); j < money; j++ {
@@ -98,8 +99,8 @@ func sortitionBinomialCDFWalk(n, p, ratio float64, money uint64) uint64 {
 	return money
 }
 
-func sortitionBinomialCDFWalk2(n, p, ratio float64, money uint64) uint64 {
-	cdf, _ := bigbinomial.CDF(p, int64(n))
+func sortitionBinomialCDFWalk2(p, ratio float64, money uint64) uint64 {
+	cdf, _ := bigbinomial.CDF(p, int64(money))
 
 	for j := uint64(0); j < money; j++ {
 		// Get the cdf
