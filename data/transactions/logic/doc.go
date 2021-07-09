@@ -109,6 +109,8 @@ var opDocByName = map[string]string{
 	"setbit":            "pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result",
 	"getbyte":           "pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer",
 	"setbyte":           "pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result",
+	"extract":           "pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If S or S+L is larger than the array length, the program fails",
+	"extract3":          "pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails",
 	"balance":           "get balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted.",
 	"min_balance":       "get minimum required balance for account A, in microalgos. Required balance is affected by [ASA](https://developer.algorand.org/docs/features/asa/#assets-overview) and [App](https://developer.algorand.org/docs/features/asc1/stateful/#minimum-balance-requirement-for-a-smart-contract) usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes.",
 	"app_opted_in":      "check if account A opted in for the application B => {0 or 1}",
@@ -174,6 +176,7 @@ var opcodeImmediateNotes = map[string]string{
 	"gloads":            "{uint8 position in scratch space to load from}",
 	"gaid":              "{uint8 transaction group index}",
 	"substring":         "{uint8 start position} {uint8 end position}",
+	"extract":           "{uint8 start position} {uint8 length}",
 	"dig":               "{uint8 depth}",
 	"asset_holding_get": "{uint8 asset holding field index}",
 	"asset_params_get":  "{uint8 asset params field index}",
@@ -234,7 +237,7 @@ func OpDocExtra(opName string) string {
 
 // OpGroups is groupings of ops for documentation purposes.
 var OpGroups = map[string][]string{
-	"Arithmetic":           {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3"},
+	"Arithmetic":           {"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat", "substring", "substring3", "extract", "extract3"},
 	"Byteslice Arithmetic": {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%"},
 	"Byteslice Logic":      {"b|", "b&", "b^", "b~"},
 	"Loading Values":       {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store", "gload", "gloads", "gaid", "gaids"},

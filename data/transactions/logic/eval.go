@@ -2571,6 +2571,67 @@ func opSetByte(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+func extract(x []byte, start, length int) (out []byte, err error) {
+	out = x
+	end := start + length
+	if start > len(x) || end > len(x) {
+		err = errors.New("extract range beyond length of string")
+		return
+	}
+	out = x[start:end]
+	err = nil
+	return
+}
+
+func opExtract(cx *evalContext) {
+	last := len(cx.stack) - 1
+	start := cx.program[cx.pc+1]
+	length := cx.program[cx.pc+2]
+	cx.stack[last].Bytes, cx.err = extract(cx.stack[last].Bytes, int(start), int(length))
+}
+
+func opExtract3(cx *evalContext) {
+	last := len(cx.stack) - 1 // length
+	prev := last - 1          // start
+	pprev := prev - 1         // bytes
+	start := cx.stack[prev].Uint
+	length := cx.stack[last].Uint
+	if start > math.MaxInt32 || length > math.MaxInt32 {
+		cx.err = errors.New("extract range beyond length of string")
+		return
+	}
+	cx.stack[pprev].Bytes, cx.err = extract(cx.stack[pprev].Bytes, int(start), int(length))
+	cx.stack = cx.stack[:prev]
+}
+
+func opExtract16Bits(cx *evalContext) {
+	// last := len(cx.stack) - 1
+	// ibytes := cx.stack[last].Bytes
+	// if len(ibytes) > 8 {
+	// 	cx.err = fmt.Errorf("btoi arg too long, got [%d]bytes", len(ibytes))
+	// 	return
+	// }
+	// value := uint64(0)
+	// for _, b := range ibytes {
+	// 	value = value << 8
+	// 	value = value | (uint64(b) & 0x0ff)
+	// }
+	// cx.stack[last].Uint = value
+	// cx.stack[last].Bytes = nil
+	last := len(cx.stack) - 1 // start
+	prev := last - 1          // bytes
+	start := cx.stack[last].Uint
+	cx.stack[prev].Bytes, cx.err = extract(cx.stack[prev].Bytes, int(start), 2)
+
+	value := uint64(0)
+	for _, b := range cx.stack[prev].Bytes {
+		value = value << 8
+		value = value | (uint64(b) & 0x0ff)
+	}
+	cx.stack[last].Uint = value
+	cx.stack[last].Bytes = nil
+}
+
 func accountReference(cx *evalContext, account stackValue) (basics.Address, uint64, error) {
 	if account.argType() == StackUint64 {
 		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
