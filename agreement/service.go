@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -142,7 +143,7 @@ func (s *Service) Start() {
 	s.persistenceLoop.Start()
 	input := make(chan externalEvent)
 	output := make(chan []action)
-	ready := make(chan externalDemuxSignals)
+	ready := make(chan []externalDemuxSignals)
 	go s.demuxLoop(ctx, input, output, ready)
 	go s.mainLoop(input, output, ready)
 }
@@ -158,11 +159,11 @@ func (s *Service) Shutdown() {
 }
 
 // demuxLoop repeatedly executes pending actions and then requests the next event from the Service.demux.
-func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, output <-chan []action, ready <-chan externalDemuxSignals) {
+func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, output <-chan []action, ready <-chan []externalDemuxSignals) {
 	for a := range output {
 		s.do(ctx, a)
 		extSignals := <-ready
-		e, ok := s.demux.next(s, extSignals.Deadline, extSignals.FastRecoveryDeadline, extSignals.CurrentRound)
+		e, ok := s.demux.next(s, extSignals)
 		if !ok {
 			close(input)
 			break
@@ -182,11 +183,11 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 // 2. Obtain an input event from the demultiplexer.
 // 3. Drive the state machine with this input to obtain a slice of pending actions.
 // 4. If necessary, persist state to disk.
-func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, ready chan<- externalDemuxSignals) {
+func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, ready chan<- []externalDemuxSignals) {
 	// setup
 	var clock timers.Clock
-	var router rootRouter
-	var status player
+	var router pipelineRouter
+	var status pipelinePlayer
 	var a []action
 	var err error
 	raw, err := restore(s.log, s.Accessor)
@@ -200,19 +201,19 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	}
 	// err will tell us if the restore/decode operations above completed successfully or not.
 	// XXXX handle restoring multiple player states and using NextRound to check last confirmed
-	if nr, _ := s.Ledger.NextRound(); err != nil || status.Round.number < nr { // XXX double-check with branch
+	if nr := s.Ledger.NextRound(); err != nil || status.Round < nr { // XXX double-check with branch
 		// in this case, we don't have fresh and valid state
 		// pretend a new round has just started, and propose a block
-		nextRound := makeRoundBranch(s.Ledger.NextRound())                                // XXX handle Ledger.NextRound() returning prev/branch
-		nextVersion, err := s.Ledger.ConsensusVersion(nextRound.number, nextRound.branch) // XXX correct?
+		nextRound := s.Ledger.NextRound()
+		nextVersion, err := s.Ledger.ConsensusVersion(nextRound, crypto.Digest{}) // XXX correct?
 		if err != nil {
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		status = player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
-		router = makeRootRouter(status)
+		status = makePipelinePlayer(nextRound, nextVersion)
+		router = makePipelineRouter(status)
 
-		a1 := pseudonodeAction{T: assemble, Round: makeRoundBranch(s.Ledger.NextRound())}
+		a1 := pseudonodeAction{T: assemble, Round: makeRoundBranch(s.Ledger.NextRound(), crypto.Digest{})}
 		a2 := rezeroAction{}
 
 		a = make([]action, 0)
@@ -223,7 +224,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 
 	for {
 		output <- a
-		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, CurrentRound: status.Round}
+		ready <- router.externalDemuxSignals() // XXXX handle multiple deadlines
 		e, ok := <-input
 		if !ok {
 			break

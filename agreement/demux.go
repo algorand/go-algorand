@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -182,7 +183,7 @@ func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, 
 // next blocks until it observes an external input event of interest for the state machine.
 //
 // If ok is false, there are no more events so the agreement service should quit.
-func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Duration, currentRound round) (e externalEvent, ok bool) {
+func (d *demux) next(s *Service, extSignals []externalDemuxSignals) (e externalEvent, ok bool) {
 	defer func() {
 		if !ok {
 			return
@@ -282,7 +283,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		// since we don't know how long we've been waiting in this select statement and we don't really know
 		// if the current next round has been increased by 1 or more, we need to sample it again.
 		previousRound := nextRound
-		nextRound = makeRoundBranch(s.Ledger.NextRound())
+		nextRound = makeRoundBranch(s.Ledger.NextRound(), crypto.Digest{}) // use empty digest: not speculative
 
 		logEvent := logspec.AgreementEvent{
 			Type:   logspec.RoundInterrupted,

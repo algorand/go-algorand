@@ -23,11 +23,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type superPlayer struct {
-	lastCommittedRound round
-	players            []player
-}
-
 // The player implements the top-level state machine functionality of the
 // agreement protocol.
 type player struct {

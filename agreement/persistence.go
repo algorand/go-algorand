@@ -177,10 +177,10 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 // decode process the incoming raw bytes array and attempt to reconstruct the agreement state objects.
 //
 // In all decoding errors, it returns the error code in err
-func decode(raw []byte, t0 timers.Clock) (t timers.Clock, rr rootRouter, p player, a []action, err error) {
+func decode(raw []byte, t0 timers.Clock) (t timers.Clock, rr rootRouter, p pipelinePlayer, a []action, err error) {
 	var t2 timers.Clock
 	var rr2 rootRouter
-	var p2 player
+	var p2 pipelinePlayer
 	a2 := []action{}
 	var s diskState
 
