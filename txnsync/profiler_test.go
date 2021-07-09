@@ -17,7 +17,6 @@
 package txnsync
 
 import (
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/util/timers"
 	"github.com/stretchr/testify/require"
@@ -25,10 +24,26 @@ import (
 	"time"
 )
 
+
+type MetricsLogger struct {
+	Logger
+	sentLogger *bool
+}
+
+func makeMetricsLogger(sentLogger *bool) MetricsLogger {
+	return MetricsLogger{
+		sentLogger: sentLogger,
+	}
+}
+
+func (n MetricsLogger) Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{}) {
+	*n.sentLogger = true
+}
+
+
 func TestPrune(t *testing.T) {
 
-	var s syncState
-	prof := makeProfiler(2*time.Millisecond, s.clock, s.log, 3*time.Millisecond)
+	prof := makeProfiler(2*time.Millisecond, nil, nil, 3*time.Millisecond)
 	a := require.New(t)
 
 	a.NotNil(prof)
@@ -61,7 +76,7 @@ func TestProfilerStartEndZero(t *testing.T) {
 
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
-	prof := makeProfiler(2*time.Millisecond, s.clock, s.log, 0*time.Millisecond)
+	prof := makeProfiler(2*time.Millisecond, s.clock, nil, 0*time.Millisecond)
 	a := require.New(t)
 
 	a.NotNil(prof)
@@ -85,13 +100,10 @@ func TestProfilerStartEndEnabled(t *testing.T) {
 
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
-	prof := makeProfiler(2*time.Millisecond, s.clock, s.log, 3*time.Millisecond)
-
-	// Set logging mechanism in-case maybeLogProfile is called
-	prof.profileMetricLogger = profilerMetricLoggerFunc(func(metrics telemetryspec.TransactionSyncProfilingMetrics, l logging.Logger) {
-		return
-	},
-	)
+	tmp := false
+	// Need to supply logger just in case log profile is called
+	nl := makeMetricsLogger(&tmp)
+	prof := makeProfiler(2*time.Millisecond, s.clock, nl, 3*time.Millisecond)
 
 	a := require.New(t)
 
@@ -121,7 +133,7 @@ func TestProfilerStartEndDisabled(t *testing.T) {
 
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
-	prof := makeProfiler(2*time.Millisecond, s.clock, s.log, 3*time.Millisecond)
+	prof := makeProfiler(2*time.Millisecond, s.clock, nil, 3*time.Millisecond)
 	a := require.New(t)
 
 	a.NotNil(prof)
@@ -149,13 +161,10 @@ func TestMaybeLogProfile(t *testing.T) {
 	sentMetrics := false
 
 	var s syncState
+	nl := makeMetricsLogger(&sentMetrics)
 	s.clock = timers.MakeMonotonicClock(time.Now())
-	prof := makeProfiler(2*time.Millisecond, s.clock, s.log, 3*time.Millisecond)
-	prof.profileMetricLogger = profilerMetricLoggerFunc(func(metrics telemetryspec.TransactionSyncProfilingMetrics, l logging.Logger) {
-		sentMetrics = true
-		return
-	},
-	)
+	prof := makeProfiler(2*time.Millisecond, s.clock, nl, 3*time.Millisecond)
+
 	a := require.New(t)
 
 	a.NotNil(prof)
