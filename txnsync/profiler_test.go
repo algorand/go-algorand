@@ -24,7 +24,6 @@ import (
 	"time"
 )
 
-
 type MetricsLogger struct {
 	Logger
 	sentLogger *bool
@@ -39,7 +38,6 @@ func makeMetricsLogger(sentLogger *bool) MetricsLogger {
 func (n MetricsLogger) Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{}) {
 	*n.sentLogger = true
 }
-
 
 func TestPrune(t *testing.T) {
 
