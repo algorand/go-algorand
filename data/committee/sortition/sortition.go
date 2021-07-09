@@ -25,6 +25,7 @@ import "C"
 import (
 	"math/big"
 
+	"github.com/vsivsi/bigbinomial"
 	"gonum.org/v1/gonum/stat/distuv"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -88,6 +89,21 @@ func sortitionBinomialCDFWalk(n, p, ratio float64, money uint64) uint64 {
 	for j := uint64(0); j < money; j++ {
 		// Get the cdf
 		boundary := dist.CDF(float64(j))
+
+		// Found the correct boundary, break
+		if ratio <= boundary {
+			return j
+		}
+	}
+	return money
+}
+
+func sortitionBinomialCDFWalk2(n, p, ratio float64, money uint64) uint64 {
+	cdf, _ := bigbinomial.CDF(p, int64(n))
+
+	for j := uint64(0); j < money; j++ {
+		// Get the cdf
+		boundary := cdf(int64(j))
 
 		// Found the correct boundary, break
 		if ratio <= boundary {

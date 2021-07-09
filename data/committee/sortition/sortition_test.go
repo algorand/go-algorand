@@ -62,7 +62,7 @@ func TestSortitionBasic(t *testing.T) {
 	}
 }
 
-var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 100, "number of sortition tests to run")
+var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 500, "number of sortition tests to run")
 
 func TestSortitionExhausting(t *testing.T) {
 	errsum := uint64(0)
@@ -78,14 +78,15 @@ func TestSortitionExhausting(t *testing.T) {
 		p := expectedSize / float64(totalMoney)
 		ratio := rand.Float64()
 		boost := boostCdfWalk(n, p, ratio, money)
-		gocdf := sortitionBinomialCDFWalk(n, p, ratio, money)
+		//gocdf := sortitionBinomialCDFWalk(n, p, ratio, money)
+		gocdf := sortitionBinomialCDFWalk2(n, p, ratio, money)
 		var cdferr uint64
 		if boost > gocdf {
 			cdferr = boost - gocdf
 		} else {
 			cdferr = gocdf - boost
 		}
-		t.Logf("boost=%d gocdf=%d", boost, gocdf)
+		//t.Logf("boost=%d gocdf=%d", boost, gocdf)
 		var errfrac float64
 		if boost != 0 {
 			errfrac = float64(cdferr) / float64(boost)
