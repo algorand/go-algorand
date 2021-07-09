@@ -261,11 +261,10 @@ jobs:
 
   mac_amd64_build:
     macos:
-      xcode: 12.5.1
+      xcode: 12.0.1
     resource_class: large
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - run: lipo -extract x86_64 circleci-demo-macos.app/Contents/MacOS/circleci-demo-macos -output circleci-demo-macos-x86_64
       - checkout
       - prepare_go
       - generic_build:
@@ -273,12 +272,11 @@ jobs:
 
   mac_amd64_test:
     macos:
-      xcode: 12.5.1
+      xcode: 12.0.1
     resource_class: large
     parallelism: 4
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - run: lipo -extract x86_64 circleci-demo-macos.app/Contents/MacOS/circleci-demo-macos -output circleci-demo-macos-x86_64
       - prepare_go
       - generic_shorttest:
           result_subdir: mac-amd64-short
@@ -286,14 +284,13 @@ jobs:
 
   mac_amd64_integration:
     macos:
-      xcode: 12.5.1
+      xcode: 12.0.1
     resource_class: large
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - run: lipo -extract x86_64 circleci-demo-macos.app/Contents/MacOS/circleci-demo-macos -output circleci-demo-macos-x86_64
       - prepare_go
       - generic_integration:
           result_subdir: mac-amd64-integration
@@ -301,13 +298,12 @@ jobs:
 
   mac_amd64_e2e_subs:
     macos:
-      xcode: 12.5.1
+      xcode: 12.0.1
     resource_class: large
     environment:
       E2E_SUBS_ONLY: "tsrue"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - run: lipo -extract x86_64 circleci-demo-macos.app/Contents/MacOS/circleci-demo-macos -output circleci-demo-macos-x86_64
       - prepare_go
       - generic_integration:
           result_subdir: mac-amd64-e2e_subs
