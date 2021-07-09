@@ -910,6 +910,10 @@ const globalV4TestProgram = globalV3TestProgram + `
 // No new globals in v4
 `
 
+const globalV5TestProgram = globalV4TestProgram + `
+// No new globals in v5
+`
+
 func TestGlobal(t *testing.T) {
 	t.Parallel()
 	type desc struct {
@@ -933,6 +937,10 @@ func TestGlobal(t *testing.T) {
 			CreatorAddress, globalV4TestProgram,
 			EvalStateful, CheckStateful,
 		},
+		5: {
+			CreatorAddress, globalV5TestProgram,
+			EvalStateful, CheckStateful,
+		},
 	}
 	ledger := makeTestLedger(nil)
 	ledger.appID = 42
@@ -940,6 +948,8 @@ func TestGlobal(t *testing.T) {
 	require.NoError(t, err)
 	ledger.creatorAddr = addr
 	for v := uint64(0); v <= AssemblerMaxVersion; v++ {
+		_, ok := tests[v]
+		require.True(t, ok)
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			last := tests[v].lastField
 			testProgram := tests[v].program
