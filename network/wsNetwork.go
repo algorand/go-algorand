@@ -1913,8 +1913,8 @@ var errBcastQFull = errors.New("broadcast queue full")
 
 var errURLNoHost = errors.New("could not parse a host from url")
 
-// HostColonPortPattern matches "^[a-zA-Z0-9.]+:\\d+$" e.g. "foo.com.:1234"
-var HostColonPortPattern = regexp.MustCompile("^[a-zA-Z0-9.]+:\\d+$")
+// HostColonPortPattern matches "^[-a-zA-Z0-9.]+:\\d+$" e.g. "foo.com.:1234"
+var HostColonPortPattern = regexp.MustCompile("^[-a-zA-Z0-9.]+:\\d+$")
 
 // ParseHostOrURL handles "host:port" or a full URL.
 // Standard library net/url.Parse chokes on "host:port".

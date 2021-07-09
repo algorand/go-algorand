@@ -1990,6 +1990,7 @@ func TestParseHostOrURL(t *testing.T) {
 		{"http://[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
 		{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}},
 		{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
+		{"r2-devnet.devnet.algodev.network:4560", url.URL{Scheme: "http", Host: "r2-devnet.devnet.algodev.network:4560"}},
 	}
 	badUrls := []string{
 		"justahost",
