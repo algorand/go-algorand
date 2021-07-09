@@ -57,22 +57,43 @@ func getNibble(b []byte, index int) (byte, error) {
 func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitmask) {
 	index := 0
 	txGroupHashes := make([]crypto.Digest, 16)
-	for _, txns := range txnGroups {
-		if len(txns.Transactions) == 1 && !b.entryExists(index, txnCount) {
-			index++
-			continue
+	tStart := 0
+
+	// addGroupHashesFunc adds hashes to transactions in groups of more than 1 transaction,
+	// or to transactions with one transaction and bitmask set for that index.
+	// It stops at index nextSetBitIndex, or stops when all in txnGroups are visited.
+	addGroupHashesFunc := func(nextSetBitIndex int, count int) error {
+		remainingTxnGroups := txnGroups[tStart:]
+		for t := range remainingTxnGroups {
+			txns := remainingTxnGroups[t]
+			if len(txns.Transactions) == 1 && index != nextSetBitIndex {
+				index++
+				continue
+			}
+			var txGroup transactions.TxGroup
+			txGroup.TxGroupHashes = txGroupHashes[:len(txns.Transactions)]
+			for i, tx := range txns.Transactions {
+				txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
+			}
+			groupHash := crypto.HashObj(txGroup)
+			for i := range txns.Transactions {
+				txns.Transactions[i].Txn.Group = groupHash
+				index++
+			}
+			if index > nextSetBitIndex {
+				tStart += t + 1
+				return nil
+			}
 		}
-		var txGroup transactions.TxGroup
-		txGroup.TxGroupHashes = txGroupHashes[:len(txns.Transactions)]
-		for i, tx := range txns.Transactions {
-			txGroup.TxGroupHashes[i] = crypto.HashObj(tx.Txn)
-		}
-		groupHash := crypto.HashObj(txGroup)
-		for i := range txns.Transactions {
-			txns.Transactions[i].Txn.Group = groupHash
-			index++
-		}
+		tStart = len(txnGroups)
+		return nil
 	}
+	// addGroupHashesFunc will be called for each set bit. Between set bits, all transactions
+	// in groups of more than 1 transactions will have the hashes added.
+	b.iterate(txnCount, txnCount, addGroupHashesFunc)
+	// One more call to addGroupHashesFunc to cover all the remaining transactions in groups of
+	// more than 1 transaction that were not added because no groups with one transaction are left.
+	addGroupHashesFunc(txnCount+1, -1)
 }
 
 func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) (err error) {

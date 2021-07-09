@@ -34,21 +34,6 @@ func (b *bitmask) setBit(index int) {
 	(*b)[byteIndex] |= 1 << (index % 8)
 }
 
-// entryExists converts the bitmask to type 0 (if not already)
-func (b *bitmask) entryExists(index int, entries int) bool {
-	if len(*b) == 0 {
-		return false
-	}
-	if (*b)[0] != 0 {
-		err := b.expandBitmask(entries)
-		if err != nil {
-			return false
-		}
-	}
-	byteIndex := index/8 + 1
-	return byteIndex < len(*b) && ((*b)[byteIndex]&(1<<(index%8)) != 0)
-}
-
 // trimBitmask compresses the bitmask into one of the 4 types:
 // type 0: intput bitmask bit pos x b -> output bitmask bit pos x b
 // type 1: intput bitmask bit pos x b -> output bitmask bit pos x !b
@@ -126,60 +111,6 @@ func (b *bitmask) trimBitmask(entries int) {
 	}
 
 	*b = bytes.TrimRight(*b, "\x00")
-}
-
-// expandBitmask expands the bitmask (types 1-3) into a bitmask of size entries in type 0 format.
-func (b *bitmask) expandBitmask(entries int) error {
-	option := 0
-	if len(*b) > 0 {
-		option = int((*b)[0])
-	} else {
-		return nil
-	}
-	switch option {
-	case 0: // if we have the bit 1 then we have an entry at the corresponding bit index.
-		return nil
-	case 1: // if we have the bit 0 then we have an entry at the corresponding bit index.
-		newBitmask := make(bitmask, bytesNeededBitmask(entries))
-		for i := range newBitmask {
-			if i != 0 {
-				if i < len(*b) {
-					newBitmask[i] = 255 - (*b)[i] // invert bits
-				} else {
-					newBitmask[i] = 255
-				}
-			}
-		}
-		*b = newBitmask
-	case 2: // contains a list of bytes designating the transaction bit index
-		newBitmask := make(bitmask, bytesNeededBitmask(entries))
-		sum := 0
-		for i := 0; i*2+2 < len(*b); i++ {
-			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
-			if sum >= entries {
-				return errIndexOutOfBounds
-			}
-			newBitmask.setBit(sum)
-		}
-		*b = newBitmask
-	case 3: // contain a list of bytes designating the negative transaction bit index
-		newBitmask := make(bitmask, bytesNeededBitmask(entries))
-		sum := 0
-		for i := 0; i*2+2 < len(*b); i++ {
-			sum += int((*b)[i*2+1])*256 + int((*b)[i*2+2])
-			if sum >= entries {
-				return errIndexOutOfBounds
-			}
-			newBitmask.setBit(sum)
-		}
-		*b = newBitmask
-		for i := range *b {
-			if i != 0 {
-				(*b)[i] = 255 - (*b)[i] // invert bits
-			}
-		}
-	}
-	return nil
 }
 
 // iterate through the elements of bitmask without expanding it.

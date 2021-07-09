@@ -23,47 +23,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// test entryExists exceptions
-func TestEntryExistsExceptions(t *testing.T) {
-
-	// case of empty bitmask
-	var b bitmask
-	require.False(t, b.entryExists(0, 0))
-
-	// case of non-empty bitmask
-	entries := 5
-	bm := make(bitmask, 3)
-
-	// byteIndex == len(bitmask)
-	require.False(t, bm.entryExists(entries, entries))
-
-	// expandBitmask fails
-	bm[0] = 2
-	bm[2] = 8
-	require.False(t, bm.entryExists(entries, entries))
-	bm[2] = byte(entries)
-	require.False(t, bm.entryExists(entries, entries))
-	bm[2] = byte(entries - 1)
-	require.True(t, bm.entryExists(entries-1, entries))
-
-}
-
 func TestTrimBitmaskNi(t *testing.T) {
 	var b bitmask
 	b.trimBitmask(0)
 	require.Nil(t, b)
-}
-
-func TestExpandBitmaskExceptions(t *testing.T) {
-	var b bitmask
-	require.Nil(t, b.expandBitmask(0))
-
-	bm := make(bitmask, 3)
-	bm[0] = 2
-	require.Equal(t, bm.expandBitmask(0), errIndexOutOfBounds)
-
-	bm[0] = 3
-	require.Equal(t, bm.expandBitmask(0), errIndexOutOfBounds)
 }
 
 func TestIterateExceptions(t *testing.T) {
@@ -80,10 +43,6 @@ func TestBitmaskType0(t *testing.T) {
 	setBits = append(setBits, 10)
 
 	trimIterateHelper(t, setBits)
-
-	// expandBitmask should not fail
-	b := make(bitmask, 12)
-	require.NoError(t, b.expandBitmask(3))
 }
 
 func TestBitmaskType1(t *testing.T) {
@@ -149,9 +108,15 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 	require.Equal(t, errDataMissing, b.iterate(entries, len(setBits)-1, iterfunc)) // less than set bits
 	require.NoError(t, b.iterate(entries, len(setBits), iterfunc))
 
+	entryExist := make([]bool, entries)
+	b.iterate(entries, entries, func(setIndex int, counter int) error {
+		entryExist[setIndex] = true
+		return nil
+	})
+
 	s := 0
 	for i := 0; i < entries; i++ {
-		exists := b.entryExists(i, entries)
+		exists := entryExist[i]
 		if s < len(setBits) && i == setBits[s] {
 			require.True(t, exists)
 			require.True(t, iterated[i], i)
@@ -185,9 +150,16 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 		iterated[i] = true
 		return nil
 	}))
+
+	entryExist = make([]bool, entries)
+	b.iterate(entries, entries, func(setIndex int, counter int) error {
+		entryExist[setIndex] = true
+		return nil
+	})
+
 	s = 0
 	for i := 0; i < entries; i++ {
-		exists := b.entryExists(i, entries)
+		exists := entryExist[i]
 		if s < len(setBits) && i == setBits[s] {
 			require.True(t, exists)
 			require.True(t, iterated[i], i)
