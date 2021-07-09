@@ -19,6 +19,7 @@ import (
 )
 
 func TestBitset(t *testing.T) {
+	t.Parallel()
 	f := New(1024, 4, 1234)
 	for i := uint32(0); i < 1024; i++ {
 		if f.test(i) {
@@ -32,6 +33,7 @@ func TestBitset(t *testing.T) {
 }
 
 func TestFilter(t *testing.T) {
+	t.Parallel()
 	f := New(1024, 4, 1234)
 	if f.Test([]byte("foo")) {
 		t.Fatalf("foo not expected")
@@ -43,13 +45,14 @@ func TestFilter(t *testing.T) {
 }
 
 func TestOptimal(t *testing.T) {
+	t.Parallel()
 	numElementsCases := []int{2000, 20000, 200000}
 	fpRateCases := []float64{0.001, 0.00001, 0.0000001}
 	// increasing numFP can reduce error, but makes the tests take longer
 	numFP := []int{100, 25, 5}
 
 	if testing.Short() {
-		numElementsCases = []int{2000, 200000}
+		numElementsCases = []int{2000, 20000}
 		fpRateCases = []float64{0.001, 0.00001}
 		numFP = []int{100, 25}
 	}
@@ -92,6 +95,7 @@ func closeEnough(a, b, maxerr float64) (bool, float64) {
 }
 
 // based on "github.com/willf/bloom"
+// Changes here might need to be replicated to xor_test.go estimateFalsePositiveRateXor()
 func (f *Filter) estimateFalsePositiveRate(numAdded uint32, numFP int) float64 {
 	x := make([]byte, 4)
 	for i := uint32(0); i < numAdded; i++ {
@@ -113,6 +117,7 @@ func (f *Filter) estimateFalsePositiveRate(numAdded uint32, numFP int) float64 {
 }
 
 func TestOptimalSize(t *testing.T) {
+	t.Parallel()
 	// These are the parameters we use in the Alpenhorn paper.
 	numElements := 150000
 	numBits, numHashes := Optimal(numElements, 1e-10)
@@ -125,6 +130,7 @@ func TestOptimalSize(t *testing.T) {
 }
 
 func TestIncompressible(t *testing.T) {
+	t.Parallel()
 	numElements := 150000
 	numBits, numHashes := Optimal(numElements, 1e-10)
 	filter := New(numBits, numHashes, 1234)
@@ -145,6 +151,7 @@ func TestIncompressible(t *testing.T) {
 }
 
 func TestMarshalJSON(t *testing.T) {
+	t.Parallel()
 	filter := New(1000, 6, 1234)
 	filter.Set([]byte("hello"))
 	data, err := json.Marshal(filter)
@@ -169,22 +176,26 @@ func TestMarshalJSON(t *testing.T) {
 	}
 }
 
-func BenchmarkCreateLargeFilter(b *testing.B) {
+const largeFilterElements = 150000
+
+// BenchmarkCreateLargeBloomFilter should have the same structure as xor_test.go BenchmarkCreateLargeXorFilter
+func BenchmarkCreateLargeBloomFilter(b *testing.B) {
 	// dialing mu=25000; 3 servers; so each mailbox is 75000 real and 75000 noise
 	// for a total of 150000 elements in the dialing bloom filter
-	numElements := 150000
 	for i := 0; i < b.N; i++ {
-		numBits, numHashes := Optimal(numElements, 1e-10)
+		numBits, numHashes := Optimal(largeFilterElements, 1e-10)
 		f := New(numBits, numHashes, 1234)
 		x := make([]byte, 4)
-		for i := uint32(0); i < uint32(numElements); i++ {
+		for i := uint32(0); i < uint32(largeFilterElements); i++ {
 			binary.BigEndian.PutUint32(x, i)
 			f.Set(x)
 		}
+		f.MarshalBinary()
 	}
 }
 
 func TestMaxHashes(t *testing.T) {
+	t.Parallel()
 	// These are the parameters we use in the Alpenhorn paper.
 	numElements := 150000
 	_, numHashes := Optimal(numElements, 1e-100)
@@ -222,6 +233,7 @@ func TestMaxHashes(t *testing.T) {
 // unmarshaled data stream, we can still call Test safely. If the unmarshaling fails, that's ok.
 // This test was implemented as an attempt to ensure that the data member is always non-empty.
 func TestEmptyFilter(t *testing.T) {
+	t.Parallel()
 	blm := New(200, 16, 1234)
 	marshaled, _ := blm.MarshalBinary()
 	for i := 0; i < len(marshaled); i++ {
@@ -236,6 +248,7 @@ func TestEmptyFilter(t *testing.T) {
 // TestBinaryMarshalLength tests various sizes of bloom filters and ensures that the encoded binary
 // size is equal to the one reported by BinaryMarshalLength.
 func TestBinaryMarshalLength(t *testing.T) {
+	t.Parallel()
 	for _, elementCount := range []int{2, 16, 1024, 32768, 5101, 100237, 144539} {
 		for _, falsePositiveRate := range []float64{0.2, 0.1, 0.01, 0.001, 0.00001, 0.0000001} {
 			sizeBits, numHashes := Optimal(elementCount, falsePositiveRate)
@@ -330,30 +343,33 @@ func BenchmarkBloomFilterSet(b *testing.B) {
 	}
 }
 
+const filterTestElements = 1000000
+
+// See also BenchmarkXorFilterTest
 func BenchmarkBloomFilterTest(b *testing.B) {
-	bfElements := 1000000
-	sizeBits, numHashes := Optimal(bfElements, 0.01)
+	sizeBits, numHashes := Optimal(filterTestElements, 0.01)
 	prefix := uint32(0)
 	bf := New(sizeBits, numHashes, prefix)
-	dataset := make([][]byte, bfElements)
-	for n := 0; n < bfElements; n++ {
+	dataset := make([][]byte, filterTestElements)
+	for n := 0; n < filterTestElements; n++ {
 		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
 		dataset[n] = hash[:]
 	}
 	// set half of them.
-	for n := 0; n < bfElements/2; n++ {
+	for n := 0; n < filterTestElements/2; n++ {
 		bf.Set(dataset[n])
 	}
 
 	b.ResetTimer()
 	for x := 0; x < b.N; x++ {
-		bf.Test(dataset[x%bfElements])
+		bf.Test(dataset[x%filterTestElements])
 	}
 }
 
 // TestBloomFilterReferenceHash ensure that we generate a bloom filter in a consistent way. This is important since we want to ensure that
 // this code is backward compatible.
 func TestBloomFilterReferenceHash(t *testing.T) {
+	t.Parallel()
 	N := 3
 	sizeBits, numHashes := Optimal(N, 0.01)
 	prefix := uint32(0x11223344)

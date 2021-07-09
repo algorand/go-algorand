@@ -741,7 +741,8 @@ func (p *Peer) getNextScheduleOffset(isRelay bool, beta time.Duration, partialMe
 					bloomMessageExtrapolatedSendingTime := messageTimeWindow
 					// try to improve the sending time by using the last sent bloom filter as the expected message size.
 					if p.lastSentBloomFilter.containedTxnsRange.transactionsCount > 0 {
-						lastBloomFilterSize := uint64(len(p.lastSentBloomFilter.encode().BloomFilter))
+						bf, _ := p.lastSentBloomFilter.encode()
+						lastBloomFilterSize := uint64(len(bf.BloomFilter))
 						bloomMessageExtrapolatedSendingTime = time.Duration(lastBloomFilterSize * uint64(p.dataExchangeRate))
 					}
 

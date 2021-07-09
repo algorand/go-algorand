@@ -9,6 +9,7 @@ require (
 	github.com/algorand/msgp v1.1.47
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
 	github.com/algorand/websocket v1.4.2
+	github.com/algorand/xorfilter v0.1.0
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
@@ -24,7 +25,6 @@ require (
 	github.com/gopherjs/gopherwasm v1.0.1 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.2
-	github.com/gorilla/schema v1.0.2
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0

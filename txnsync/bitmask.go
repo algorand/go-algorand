@@ -110,7 +110,7 @@ func (b *bitmask) trimBitmask(entries int) {
 	default:
 	}
 
-	*b = bytes.TrimRight(*b, string(0))
+	*b = bytes.TrimRight(*b, "\x00")
 }
 
 func (b *bitmask) expandBitmask(entries int) {
