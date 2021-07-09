@@ -9,7 +9,7 @@ require (
 	github.com/algorand/msgp v1.1.47
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
 	github.com/algorand/websocket v1.4.2
-	github.com/algorand/xorfilter v0.0.0-20210423194602-fadd755a812a
+	github.com/algorand/xorfilter v0.1.0
 	github.com/aws/aws-sdk-go v1.16.5
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018

@@ -16,6 +16,8 @@ github.com/algorand/xorfilter v0.0.0-20210407203937-3c2e0a5aea48 h1:ev/w9eB0gOse
 github.com/algorand/xorfilter v0.0.0-20210407203937-3c2e0a5aea48/go.mod h1:PsGium0tLJeVm7AXe2hv+K56TH75+a+iPji2K+9TZxk=
 github.com/algorand/xorfilter v0.0.0-20210423194602-fadd755a812a h1:y7Srierz0JedF7ZTEuONaatSmgyAJu2FxfKMq8wKdvw=
 github.com/algorand/xorfilter v0.0.0-20210423194602-fadd755a812a/go.mod h1:PsGium0tLJeVm7AXe2hv+K56TH75+a+iPji2K+9TZxk=
+github.com/algorand/xorfilter v0.1.0 h1:9tdB+4kq/bJOIUTDV5hG6Wc9nQIHAmflYAwnjbQjBuM=
+github.com/algorand/xorfilter v0.1.0/go.mod h1:f5cJsYrFbJhXkbjnV4odJB44np05/PvwvdBnABnQoUs=
 github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hCbHZ8TKRvWD2dDTCfh9M9ya+I9JpbB7O8o=
 github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da/go.mod h1:Q73ZrmVTwzkszR9V5SSuryQ31EELlFMUz1kKyl939pY=
 github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=
