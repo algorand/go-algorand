@@ -79,7 +79,8 @@ func TestSortitionExhausting(t *testing.T) {
 		ratio := rand.Float64()
 		boost := boostCdfWalk(n, p, ratio, money)
 		//gocdf := sortitionBinomialCDFWalk(p, ratio, money)
-		gocdf := sortitionBinomialCDFWalk2(p, ratio, money)
+		//gocdf := sortitionBinomialCDFWalk2(p, ratio, money)
+		gocdf := sortitionBinomialCDFWalk3(p, ratio, money)
 		var cdferr uint64
 		if boost > gocdf {
 			cdferr = boost - gocdf
@@ -130,5 +131,5 @@ func BenchmarkBoostCdfWalk(b *testing.B) {
 }
 
 func BenchmarkBigbinomialCdfWalk(b *testing.B) {
-	cdfBenchmarkInner(b, sortitionBinomialCDFWalk2)
+	cdfBenchmarkInner(b, sortitionBinomialCDFWalk3)
 }

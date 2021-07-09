@@ -113,3 +113,21 @@ func sortitionBinomialCDFWalk2(p, ratio float64, money uint64) uint64 {
 	}
 	return money
 }
+
+func sortitionBinomialCDFWalk3(p, ratio float64, money uint64) uint64 {
+
+	n := float64(money)
+
+	for j := uint64(0); j < money; j++ {
+
+		k := float64(j)
+		boundary := mathBetaInc(1-p, n-k, k+1)
+
+		// Found the correct boundary, break
+		if ratio <= boundary {
+			return j
+		}
+	}
+
+	return money
+}
