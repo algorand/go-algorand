@@ -426,7 +426,7 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 }
 
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l ledgerForEvaluator, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
+func MakeDebugBalances(l ledgerForEvaluator, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) (apply.Balances, error) {
 	base := &roundCowBase{
 		l:        l,
 		rnd:      round - 1,
@@ -439,8 +439,8 @@ func MakeDebugBalances(l ledgerForEvaluator, round basics.Round, proto protocol.
 		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: proto},
 	}
 	hint := 2
-	cb := makeRoundCowState(base, hdr, prevTimestamp, hint)
-	return cb
+	cb, err := makeRoundCowState(base, hdr, prevTimestamp, hint)
+	return cb, err
 }
 
 // StatefulEval runs application.

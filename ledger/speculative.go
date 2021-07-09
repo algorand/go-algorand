@@ -161,8 +161,7 @@ func (v *validatedBlockAsLFE) LookupWithoutRewards(r basics.Round, a basics.Addr
 // Totals implements the ledgerForEvaluator interface.
 func (v *validatedBlockAsLFE) Totals(r basics.Round) (ledgercore.AccountTotals, error) {
 	if r == v.vb.blk.Round() {
-		// XXX roundCowState does not track changes to totals
-		return v.l.Totals(r-1)
+		return v.vb.state.modtotals, nil
 	}
 	return v.l.Totals(r)
 }

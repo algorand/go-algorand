@@ -226,6 +226,10 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 	return params.LocalStateSchema, nil
 }
 
+func (x *roundCowBase) totals() (ledgercore.AccountTotals, error) {
+	return x.l.Totals(x.rnd)
+}
+
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
 func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	acct, err := cs.lookup(addr)
@@ -251,7 +255,15 @@ func (cs *roundCowState) Put(addr basics.Address, acct basics.AccountData) error
 }
 
 func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
-	cs.put(addr, acct, newCreatable, deletedCreatable)
+	old, err := cs.lookup(addr)
+	if err != nil {
+		return err
+	}
+
+	err = cs.put(addr, old, acct, newCreatable, deletedCreatable)
+	if err != nil {
+		return err
+	}
 
 	// store the creatable locator
 	if newCreatable != nil {
@@ -283,7 +295,10 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 	}
-	cs.put(from, fromBalNew, nil, nil)
+	err = cs.put(from, fromBal, fromBalNew, nil, nil)
+	if err != nil {
+		return err
+	}
 
 	toBal, err := cs.lookup(to)
 	if err != nil {
@@ -304,7 +319,10 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 	}
-	cs.put(to, toBalNew, nil, nil)
+	err = cs.put(to, toBal, toBalNew, nil, nil)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -470,7 +488,10 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits())
 	}
 	// set the eval state with the current header
-	eval.state = makeRoundCowState(base, eval.block.BlockHeader, eval.prevHeader.TimeStamp, paysetHint)
+	eval.state, err = makeRoundCowState(base, eval.block.BlockHeader, eval.prevHeader.TimeStamp, paysetHint)
+	if err != nil {
+		return nil, err
+	}
 
 	if validate {
 		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
@@ -1114,7 +1135,10 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 		state: eval.state,
 	}
 	eval.blockGenerated = true
-	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader, eval.prevHeader.TimeStamp, len(eval.block.Payset))
+	eval.state, err = makeRoundCowState(eval.state, eval.block.BlockHeader, eval.prevHeader.TimeStamp, len(eval.block.Payset))
+	if err != nil {
+		return nil, err
+	}
 	return &vb, nil
 }
 
