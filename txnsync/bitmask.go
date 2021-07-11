@@ -210,7 +210,7 @@ func (b *bitmask) iterate(entries int, maxIndex int, callback func(int, int) err
 	return nil
 }
 
-// bytesNeededBitmask returns the number of bytes needed to store enteris bits.
+// bytesNeededBitmask returns the number of bytes needed to store entries bits.
 func bytesNeededBitmask(entries int) int {
 	return (entries+7)/8 + 1
 }

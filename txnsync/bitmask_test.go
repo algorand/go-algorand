@@ -84,8 +84,8 @@ func TestBitmaksTypeX(t *testing.T) {
 }
 
 func trimIterateHelper(t *testing.T, setBits []int) {
-	b := make(bitmask, bytesNeededBitmask(80))
 	entries := 80
+	b := make(bitmask, bytesNeededBitmask(entries))
 
 	for _, x := range setBits {
 		b.setBit(x)
@@ -108,21 +108,12 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 	require.Equal(t, errDataMissing, b.iterate(entries, len(setBits)-1, iterfunc)) // less than set bits
 	require.NoError(t, b.iterate(entries, len(setBits), iterfunc))
 
-	entryExist := make([]bool, entries)
-	b.iterate(entries, entries, func(setIndex int, counter int) error {
-		entryExist[setIndex] = true
-		return nil
-	})
-
 	s := 0
 	for i := 0; i < entries; i++ {
-		exists := entryExist[i]
 		if s < len(setBits) && i == setBits[s] {
-			require.True(t, exists)
 			require.True(t, iterated[i], i)
 			s++
 		} else {
-			require.False(t, exists)
 			require.False(t, iterated[i], i)
 		}
 	}
@@ -151,21 +142,12 @@ func trimIterateHelper(t *testing.T, setBits []int) {
 		return nil
 	}))
 
-	entryExist = make([]bool, entries)
-	b.iterate(entries, entries, func(setIndex int, counter int) error {
-		entryExist[setIndex] = true
-		return nil
-	})
-
 	s = 0
 	for i := 0; i < entries; i++ {
-		exists := entryExist[i]
 		if s < len(setBits) && i == setBits[s] {
-			require.True(t, exists)
 			require.True(t, iterated[i], i)
 			s++
 		} else {
-			require.False(t, exists)
 			require.False(t, iterated[i], i)
 		}
 	}
