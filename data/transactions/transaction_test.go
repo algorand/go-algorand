@@ -19,6 +19,7 @@ package transactions
 import (
 	"flag"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -1111,7 +1112,8 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		/* 512 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, blockProofPK: blockProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: false, err: errKeyregTxnNotEmptyBLockProofPK},
 		/* 513 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, blockProofPK: crypto.VerifyingKey{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: false, err: nil},
 		/* 514 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, blockProofPK: blockProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: true, err: nil},
-		/* 515 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, blockProofPK: crypto.VerifyingKey{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: true, err: errKeyregTxnEmptyBLockProofPK},
+		/* 515 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, blockProofPK: crypto.VerifyingKey{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: true, err: errKeyRegBadBlockProofPK},
+		/* 516 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, blockProofPK: crypto.VerifyingKey{Type: math.MaxUint64}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: true, err: errKeyRegBadBlockProofPK},
 	}
 	for testcaseIdx, testCase := range keyRegTestCases {
 		err := runTestCase(testCase)
