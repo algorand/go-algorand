@@ -17,6 +17,7 @@
 package apply
 
 import (
+	"math"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
@@ -214,4 +215,25 @@ func createTestTxn(src basics.Address, secretParticipation *crypto.SignatureSecr
 			VoteLast:     100,
 		},
 	}
+}
+
+func testBlockProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal keyregTestBalances) {
+	tx.KeyregTxnFields.BlockProofPK = crypto.VerifyingKey{Type: crypto.PlaceHolderType}
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
+	require.NoError(t, err) // expects no error with empty keyRegistration attempt
+
+	rec, err := mockBal.Get(tx.Header.Sender, false)
+	require.NoError(t, err) // expects no error with empty keyRegistration attempt
+	require.Equal(t, tx.KeyregTxnFields.BlockProofPK, rec.BlockProofID)
+}
+
+func attemptToStoreBadBlockProofPK(t *testing.T, tx transactions.Transaction, mockBal keyregTestBalances) {
+	tx.KeyregTxnFields.BlockProofPK = crypto.VerifyingKey{Type: math.MaxUint64}
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
+	require.NoError(t, err) // expects no error with empty keyRegistration attempt
+
+	rec, err := mockBal.Get(tx.Header.Sender, false)
+	require.NoError(t, err) // expects no error with empty keyRegistration attempt
+	require.Equal(t, crypto.VerifyingKey{}, rec.BlockProofID)
+	return
 }
