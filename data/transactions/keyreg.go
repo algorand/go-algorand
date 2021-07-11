@@ -25,11 +25,11 @@ import (
 type KeyregTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	VotePK                    crypto.OneTimeSignatureVerifier `codec:"votekey"`
-	SelectionPK               crypto.VRFVerifier              `codec:"selkey"`
-	BlockProofParticipationPK crypto.VerifyingKey             `codec:"compcertKey"`
-	VoteFirst                 basics.Round                    `codec:"votefst"`
-	VoteLast                  basics.Round                    `codec:"votelst"`
-	VoteKeyDilution           uint64                          `codec:"votekd"`
-	Nonparticipation          bool                            `codec:"nonpart"`
+	VotePK           crypto.OneTimeSignatureVerifier `codec:"votekey"`
+	SelectionPK      crypto.VRFVerifier              `codec:"selkey"`
+	BlockProofPK     crypto.VerifyingKey             `codec:"compcertKey"`
+	VoteFirst        basics.Round                    `codec:"votefst"`
+	VoteLast         basics.Round                    `codec:"votelst"`
+	VoteKeyDilution  uint64                          `codec:"votekd"`
+	Nonparticipation bool                            `codec:"nonpart"`
 }
