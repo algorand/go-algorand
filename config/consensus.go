@@ -1062,6 +1062,9 @@ func initConsensusProtocols() {
 	// compact certificate key registration
 	vFuture.EnableBlockProofKeyregCheck = true
 
+	// compact certificate key registration
+	vFuture.EnableBlockProofKeyregCheck = true
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
