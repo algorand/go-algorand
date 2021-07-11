@@ -129,7 +129,7 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 		},
 	}
 	if cert := part.BlockProofSigner(); cert != nil {
-		t.KeyregTxnFields.BlockProofParticipationPK = cert.GetSigner().GetVerifyingKey()
+		t.KeyregTxnFields.BlockProofPK = cert.GetSigner().GetVerifyingKey()
 	}
 	t.KeyregTxnFields.VoteFirst = part.FirstValid
 	t.KeyregTxnFields.VoteLast = part.LastValid
