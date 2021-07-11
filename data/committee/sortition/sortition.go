@@ -17,9 +17,10 @@
 package sortition
 
 import (
+	"math/big"
+
 	"github.com/algorand/go-algorand/crypto"
 	"gonum.org/v1/gonum/stat/distuv"
-	"math/big"
 )
 
 // Select runs the sortition function and returns the number of time the key was selected
@@ -47,14 +48,17 @@ func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput cry
 }
 
 func sortitionBinomialCDFWalk(n, p, ratio float64, money uint64) uint64 {
-	dist := distuv.Binomial{N: n, P: p} //TODO: rand src?
+	var (
+		dist = distuv.Binomial{N: n, P: p} //TODO: rand src?
+		cdf  float64
+	)
 
 	for j := uint64(0); j < money; j++ {
-		// Get the cdf
-		boundary := dist.CDF(float64(j))
+		// accumulate the prob
+		cdf += dist.Prob(float64(j))
 
 		// Found the correct boundary, break
-		if ratio <= boundary {
+		if ratio <= cdf {
 			return j
 		}
 	}
