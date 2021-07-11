@@ -1240,14 +1240,14 @@ var importRootKeysCmd = &cobra.Command{
 }
 
 type partkeyInfo struct {
-	_struct                   struct{}                        `codec:",omitempty,omitemptyarray"`
-	Address                   string                          `codec:"acct"`
-	FirstValid                basics.Round                    `codec:"first"`
-	LastValid                 basics.Round                    `codec:"last"`
-	VoteID                    crypto.OneTimeSignatureVerifier `codec:"vote"`
-	SelectionID               crypto.VRFVerifier              `codec:"sel"`
-	BlockProofParticipationID crypto.VerifyingKey             `codec:"blockProof"`
-	VoteKeyDilution           uint64                          `codec:"voteKD"`
+	_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
+	Address         string                          `codec:"acct"`
+	FirstValid      basics.Round                    `codec:"first"`
+	LastValid       basics.Round                    `codec:"last"`
+	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
+	SelectionID     crypto.VRFVerifier              `codec:"sel"`
+	BlockProofID    crypto.VerifyingKey             `codec:"blockProof"`
+	VoteKeyDilution uint64                          `codec:"voteKD"`
 }
 
 var partkeyInfoCmd = &cobra.Command{
@@ -1279,7 +1279,7 @@ var partkeyInfoCmd = &cobra.Command{
 					VoteKeyDilution: part.KeyDilution,
 				}
 				if certSigner := part.BlockProofSigner(); certSigner != nil {
-					info.BlockProofParticipationID = certSigner.GetSigner().GetVerifyingKey()
+					info.BlockProofID = certSigner.GetSigner().GetVerifyingKey()
 				}
 				infoString := protocol.EncodeJSON(&info)
 				fmt.Printf("File: %s\n%s\n", filename, string(infoString))
