@@ -37,9 +37,9 @@ func partInstallDatabase(tx *sql.Tx) error {
 		parent BLOB,
 
 		--* participation keys
-		vrf BLOB,          --*  msgpack encoding of ParticipationAccount.vrf
-		voting BLOB,       --*  msgpack encoding of ParticipationAccount.voting
-		compactCert BLOB,  --*  msgpack encoding of ParticipationAccount.CompactCertKey
+		vrf BLOB,         --*  msgpack encoding of ParticipationAccount.vrf
+		voting BLOB,      --*  msgpack encoding of ParticipationAccount.voting
+		blockProof BLOB,  --*  msgpack encoding of ParticipationAccount.BlockProof
 
 		firstValid INTEGER,
 		lastValid INTEGER,
@@ -122,7 +122,7 @@ func updateDB(tx *sql.Tx, partVersion int) (int, error) {
 	}
 
 	if partVersion == 2 {
-		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD compactCert BLOB")
+		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD blockProof BLOB")
 		if err != nil {
 			return 0, err
 		}

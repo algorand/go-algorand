@@ -45,8 +45,8 @@ type Participation struct {
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
-	// CompactCertKey is used to sign compact certifications. might be nil
-	CompactCertKey *crypto.SignatureAlgorithm
+	// BlockProof is used to sign compact certifications. might be nil
+	BlockProof *crypto.SignatureAlgorithm
 
 	// The first and last rounds for which this account is valid, respectively.
 	//
@@ -106,10 +106,10 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 	}
 }
 
-// CompactCertSigner returns the key used to sign on Compact Certificates.
+// BlockProofSigner returns the key used to sign on Compact Certificates.
 // might return nil!
-func (part Participation) CompactCertSigner() *crypto.SignatureAlgorithm {
-	return part.CompactCertKey
+func (part Participation) BlockProofSigner() *crypto.SignatureAlgorithm {
+	return part.BlockProof
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
@@ -187,18 +187,18 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	vrf := crypto.GenerateVRFSecrets()
 
 	// Generate a new key which signs the compact certificates
-	compcertKey := crypto.NewSigner(crypto.PlaceHolderType)
+	blockProof := crypto.NewSigner(crypto.PlaceHolderType)
 
 	// Construct the Participation containing these keys to be persisted
 	part = PersistedParticipation{
 		Participation: Participation{
-			Parent:         address,
-			VRF:            vrf,
-			Voting:         v,
-			CompactCertKey: compcertKey,
-			FirstValid:     firstValid,
-			LastValid:      lastValid,
-			KeyDilution:    keyDilution,
+			Parent:      address,
+			VRF:         vrf,
+			Voting:      v,
+			BlockProof:  blockProof,
+			FirstValid:  firstValid,
+			LastValid:   lastValid,
+			KeyDilution: keyDilution,
 		},
 		Store: store,
 	}
@@ -212,7 +212,7 @@ func (part PersistedParticipation) Persist() error {
 	rawVRF := protocol.Encode(part.VRF)
 	voting := part.Voting.Snapshot()
 	rawVoting := protocol.Encode(&voting)
-	rawCompactCert := protocol.Encode(part.CompactCertKey)
+	rawbBlockProof := protocol.Encode(part.BlockProof)
 
 	err := part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := partInstallDatabase(tx)
@@ -220,8 +220,8 @@ func (part PersistedParticipation) Persist() error {
 			return fmt.Errorf("failed to install database: %w", err)
 		}
 
-		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, compactCert, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?,?)",
-			part.Parent[:], rawVRF, rawVoting, rawCompactCert, part.FirstValid, part.LastValid, part.KeyDilution)
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, blockProof, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?,?)",
+			part.Parent[:], rawVRF, rawVoting, rawbBlockProof, part.FirstValid, part.LastValid, part.KeyDilution)
 		if err != nil {
 			return fmt.Errorf("failed to insert account: %w", err)
 		}

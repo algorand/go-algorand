@@ -1240,14 +1240,14 @@ var importRootKeysCmd = &cobra.Command{
 }
 
 type partkeyInfo struct {
-	_struct         struct{}                        `codec:",omitempty,omitemptyarray"`
-	Address         string                          `codec:"acct"`
-	FirstValid      basics.Round                    `codec:"first"`
-	LastValid       basics.Round                    `codec:"last"`
-	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
-	SelectionID     crypto.VRFVerifier              `codec:"sel"`
-	CompactCertID   crypto.VerifyingKey             `codec:"compcert"`
-	VoteKeyDilution uint64                          `codec:"voteKD"`
+	_struct                   struct{}                        `codec:",omitempty,omitemptyarray"`
+	Address                   string                          `codec:"acct"`
+	FirstValid                basics.Round                    `codec:"first"`
+	LastValid                 basics.Round                    `codec:"last"`
+	VoteID                    crypto.OneTimeSignatureVerifier `codec:"vote"`
+	SelectionID               crypto.VRFVerifier              `codec:"sel"`
+	BlockProofParticipationID crypto.VerifyingKey             `codec:"blockProof"`
+	VoteKeyDilution           uint64                          `codec:"voteKD"`
 }
 
 var partkeyInfoCmd = &cobra.Command{
@@ -1278,8 +1278,8 @@ var partkeyInfoCmd = &cobra.Command{
 					SelectionID:     part.VRFSecrets().PK,
 					VoteKeyDilution: part.KeyDilution,
 				}
-				if certSigner := part.CompactCertSigner(); certSigner != nil {
-					info.CompactCertID = certSigner.GetSigner().GetVerifyingKey()
+				if certSigner := part.BlockProofSigner(); certSigner != nil {
+					info.BlockProofParticipationID = certSigner.GetSigner().GetVerifyingKey()
 				}
 				infoString := protocol.EncodeJSON(&info)
 				fmt.Printf("File: %s\n%s\n", filename, string(infoString))

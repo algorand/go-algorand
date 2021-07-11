@@ -33,7 +33,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-var partableColumnNames = [...]string{"parent", "vrf", "voting", "compactCert", "firstValid", "lastValid", "keyDilution"}
+var partableColumnNames = [...]string{"parent", "vrf", "voting", "blockProof", "firstValid", "lastValid", "keyDilution"}
 
 func TestParticipation_NewDB(t *testing.T) {
 	a := require.New(t)
@@ -218,7 +218,7 @@ func closeDBS(dbAccessor ...db.Accessor) {
 
 func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart PersistedParticipation) {
 	a.NotNil(retrivedPart)
-	a.Nil(retrivedPart.CompactCertKey)
+	a.Nil(retrivedPart.BlockProof)
 }
 
 func TestMigrateFromVersion1(t *testing.T) {
@@ -337,9 +337,9 @@ func setupTestDBAtVer1(partDB db.Accessor, part Participation) error {
 type comparablePartition struct {
 	Parent basics.Address
 
-	VRF            crypto.VRFSecrets
-	Voting         []byte
-	CompactCertKey crypto.SignatureAlgorithm
+	VRF        crypto.VRFSecrets
+	Voting     []byte
+	blockProof crypto.SignatureAlgorithm
 
 	FirstValid basics.Round
 	LastValid  basics.Round
@@ -349,12 +349,12 @@ type comparablePartition struct {
 
 func intoComparable(part PersistedParticipation) comparablePartition {
 	return comparablePartition{
-		Parent:         part.Parent,
-		VRF:            *part.VRF,
-		Voting:         part.Voting.MarshalMsg(nil),
-		CompactCertKey: *part.CompactCertKey,
-		FirstValid:     part.FirstValid,
-		LastValid:      part.LastValid,
-		KeyDilution:    part.KeyDilution,
+		Parent:      part.Parent,
+		VRF:         *part.VRF,
+		Voting:      part.Voting.MarshalMsg(nil),
+		blockProof:  *part.BlockProof,
+		FirstValid:  part.FirstValid,
+		LastValid:   part.LastValid,
+		KeyDilution: part.KeyDilution,
 	}
 }
