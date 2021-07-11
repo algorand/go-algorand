@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AssetHoldingField,OnCompletionConstType -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AssetHoldingField,OnCompletionConstType -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -236,7 +236,7 @@ var txnFieldSpecs = []txnFieldSpec{
 
 // TxnaFieldNames are arguments to the 'txna' opcode
 // It is a subset of txn transaction fields so initialized here in-place
-var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String()}
+var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String(), Assets.String(), Applications.String()}
 
 // TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
 var TxnaFieldTypes = []StackType{
@@ -425,10 +425,14 @@ const (
 	AssetFreeze
 	// AssetClawback AssetParams.Clawback
 	AssetClawback
+
+	// AssetCreator is not *in* the Params, but it is uniquely determined.
+	AssetCreator
+
 	invalidAssetParamsField
 )
 
-// AssetParamsFieldNames are arguments to the 'asset_holding_get' opcode
+// AssetParamsFieldNames are arguments to the 'asset_params_get' opcode
 var AssetParamsFieldNames []string
 
 type assetParamsFieldType struct {
@@ -448,12 +452,62 @@ var assetParamsFieldTypeList = []assetParamsFieldType{
 	{AssetReserve, StackBytes},
 	{AssetFreeze, StackBytes},
 	{AssetClawback, StackBytes},
+	{AssetCreator, StackBytes},
 }
 
 // AssetParamsFieldTypes is StackUint64 StackBytes in parallel with AssetParamsFieldNames
 var AssetParamsFieldTypes []StackType
 
 var assetParamsFields map[string]uint64
+
+// AppParamsField is an enum for `app_params_get` opcode
+type AppParamsField int
+
+const (
+	// AppApprovalProgram AppParams.ApprovalProgram
+	AppApprovalProgram AppParamsField = iota
+	// AppClearStateProgram AppParams.ClearStateProgram
+	AppClearStateProgram
+	// AppGlobalNumUint AppParams.StateSchemas.GlobalStateSchema.NumUint
+	AppGlobalNumUint
+	// AppGlobalNumByteSlice AppParams.StateSchemas.GlobalStateSchema.NumByteSlice
+	AppGlobalNumByteSlice
+	// AppLocalNumUint AppParams.StateSchemas.LocalStateSchema.NumUint
+	AppLocalNumUint
+	// AppLocalNumByteSlice AppParams.StateSchemas.LocalStateSchema.NumByteSlice
+	AppLocalNumByteSlice
+	// AppExtraProgramPages AppParams.ExtraProgramPages
+	AppExtraProgramPages
+
+	// AppCreator is not *in* the Params, but it is uniquely determined.
+	AppCreator
+
+	invalidAppParamsField
+)
+
+// AppParamsFieldNames are arguments to the 'app_params_get' opcode
+var AppParamsFieldNames []string
+
+type appParamsFieldType struct {
+	field AppParamsField
+	ftype StackType
+}
+
+var appParamsFieldTypeList = []appParamsFieldType{
+	{AppApprovalProgram, StackBytes},
+	{AppClearStateProgram, StackBytes},
+	{AppGlobalNumUint, StackUint64},
+	{AppGlobalNumByteSlice, StackUint64},
+	{AppLocalNumUint, StackUint64},
+	{AppLocalNumByteSlice, StackUint64},
+	{AppExtraProgramPages, StackUint64},
+	{AppCreator, StackBytes},
+}
+
+// AppParamsFieldTypes is StackUint64 StackBytes in parallel with AppParamsFieldNames
+var AppParamsFieldTypes []StackType
+
+var appParamsFields map[string]uint64
 
 func init() {
 	TxnFieldNames = make([]string, int(invalidTxnField))
@@ -513,6 +567,19 @@ func init() {
 	assetParamsFields = make(map[string]uint64)
 	for i, fn := range AssetParamsFieldNames {
 		assetParamsFields[fn] = uint64(i)
+	}
+
+	AppParamsFieldNames = make([]string, int(invalidAppParamsField))
+	for i := AppApprovalProgram; i < invalidAppParamsField; i++ {
+		AppParamsFieldNames[int(i)] = i.String()
+	}
+	AppParamsFieldTypes = make([]StackType, len(AppParamsFieldNames))
+	for _, ft := range appParamsFieldTypeList {
+		AppParamsFieldTypes[int(ft.field)] = ft.ftype
+	}
+	appParamsFields = make(map[string]uint64)
+	for i, fn := range AppParamsFieldNames {
+		appParamsFields[fn] = uint64(i)
 	}
 
 	txnTypeIndexes = make(map[string]uint64, len(TxnTypeNames))

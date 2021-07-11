@@ -942,7 +942,7 @@ func initConsensusProtocols() {
 	v28 := v27
 	v28.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// Enable TEAL 4
+	// Enable TEAL 4 / AVM 0.9
 	v28.LogicSigVersion = 4
 	// Enable support for larger app program size
 	v28.MaxExtraAppProgramPages = 3
@@ -983,6 +983,9 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
+
+	// Enable TEAL 5 / AVM 1.0
+	vFuture.LogicSigVersion = 5
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
