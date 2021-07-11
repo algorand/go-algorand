@@ -53,9 +53,14 @@ func RandomizeObject(template interface{}) (interface{}, error) {
 	if tt.Kind() != reflect.Ptr {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
-
 	v := reflect.New(tt.Elem())
-	err := randomizeValue(v.Elem(), tt.String(), "")
+	hasAllocBound := checkBoundsLimitingTag(v.Elem(), v.Elem().Type().Name(), "codec:\",\"", false)
+	pseudoTag := ""
+	if hasAllocBound {
+		// we emulate a pseudo tag here on an item that has a alloc bound msgp directive.
+		pseudoTag = "codec:\",allocbound=1\""
+	}
+	err := randomizeValue(v.Elem(), tt.String(), pseudoTag)
 	return v.Interface(), err
 }
 
@@ -90,7 +95,31 @@ func printWarning(warnMsg string) {
 var testedDatatypesForAllocBound = map[string]bool{}
 var testedDatatypesForAllocBoundMu = deadlock.Mutex{}
 
-func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string) (hasAllocBound bool) {
+func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
+	// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
+	gopath := os.Getenv("GOPATH")
+	packageFilesPath := path.Join(gopath, "src", dataType.PkgPath())
+	packageFiles := []string{}
+	filepath.Walk(packageFilesPath, func(path string, info os.FileInfo, err error) error {
+		if filepath.Ext(path) == ".go" {
+			packageFiles = append(packageFiles, path)
+		}
+		return nil
+	})
+	for _, packageFile := range packageFiles {
+		fileBytes, err := ioutil.ReadFile(packageFile)
+		if err != nil {
+			continue
+		}
+		if strings.Index(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", dataType.Name())) != -1 {
+			// message pack alloc bound definition was found.
+			return true
+		}
+	}
+	return false
+}
+
+func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string, warnMissingAllocBound bool) (hasAllocBound bool) {
 	if structTag == "" {
 		return
 	}
@@ -132,28 +161,11 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 
 	if val.Type().Name() != "" {
 		// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
-		gopath := os.Getenv("GOPATH")
-		packageFilesPath := path.Join(gopath, "src", val.Type().PkgPath())
-		packageFiles := []string{}
-		filepath.Walk(packageFilesPath, func(path string, info os.FileInfo, err error) error {
-			if filepath.Ext(path) == ".go" {
-				packageFiles = append(packageFiles, path)
-			}
-			return nil
-		})
-		for _, packageFile := range packageFiles {
-			fileBytes, err := ioutil.ReadFile(packageFile)
-			if err != nil {
-				continue
-			}
-			if strings.Index(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", val.Type().Name())) != -1 {
-				// message pack alloc bound definition was found.
-				hasAllocBound = true
-				return
-			}
-		}
+		hasAllocBound = checkMsgpAllocBoundDirective(val.Type())
 	}
-	printWarning(fmt.Sprintf("%s %s does not have an allocbound defined - %s", objType, datapath, val.Type().PkgPath()))
+	if warnMissingAllocBound {
+		printWarning(fmt.Sprintf("%s %s does not have an allocbound defined - %s", objType, datapath, val.Type().PkgPath()))
+	}
 	return
 }
 
@@ -201,7 +213,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 			}
 		}
 	case reflect.Slice:
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, true)
 		l := rand.Int() % 32
 		if hasAllocBound {
 			l = 1
@@ -217,7 +229,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 	case reflect.Bool:
 		v.SetBool(rand.Uint32()%2 == 0)
 	case reflect.Map:
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, true)
 		mt := v.Type()
 		v.Set(reflect.MakeMap(mt))
 		l := rand.Int() % 32
