@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/util/bloom"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/timers"
 )
@@ -90,6 +91,8 @@ type syncState struct {
 	// sure there are no outbound messages that are waiting to be sent to the network ( i.e. that all the tasks that we enqueued to the
 	// execution pool were completed ). This does not include the time where the message spent while waiting on the network queue itself.
 	messageSendWaitGroup sync.WaitGroup
+
+	xorBuilder bloom.XorBuilder
 }
 
 func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {

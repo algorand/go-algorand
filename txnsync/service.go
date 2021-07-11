@@ -49,6 +49,7 @@ func MakeTranscationSyncService(log logging.Logger, conn NodeConnector, isRelay 
 		},
 	}
 	s.state.service = s
+	s.state.xorBuilder.MaxIterations = 10
 	return s
 }
 

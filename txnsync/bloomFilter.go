@@ -34,6 +34,8 @@ type bloomFilterTypes byte
 const (
 	invalidBloomFilter bloomFilterTypes = iota
 	multiHashBloomFilter
+	xorBloomFilter
+	xorBloomFilter8
 	// xorBloomFilter - todo.
 )
 
@@ -45,19 +47,27 @@ type transactionsRange struct {
 type bloomFilter struct {
 	encodingParams requestParams
 
-	filter *bloom.Filter
+	filter bloom.GenericFilter
 
 	containedTxnsRange transactionsRange
+
+	encoded *encodedBloomFilter
 }
 
 func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error) {
 	switch bloomFilterTypes(enc.BloomFilterType) {
 	case multiHashBloomFilter:
+		outFilter.filter, err = bloom.UnmarshalBinary(enc.BloomFilter)
+	case xorBloomFilter:
+		outFilter.filter = new(bloom.XorFilter)
+		err = outFilter.filter.UnmarshalBinary(enc.BloomFilter)
+	case xorBloomFilter8:
+		outFilter.filter = new(bloom.XorFilter8)
+		err = outFilter.filter.UnmarshalBinary(enc.BloomFilter)
 	default:
 		return bloomFilter{}, errInvalidBloomFilterEncoding
 	}
 
-	outFilter.filter, err = bloom.UnmarshalBinary(enc.BloomFilter)
 	if err != nil {
 		return bloomFilter{}, err
 	}
@@ -65,11 +75,30 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error
 	return outFilter, nil
 }
 
-func (bf *bloomFilter) encode() (out encodedBloomFilter) {
-	out.BloomFilterType = byte(multiHashBloomFilter)
+func (bf *bloomFilter) encode() (out *encodedBloomFilter, err error) {
+	if bf.encoded != nil {
+		return bf.encoded, nil
+	}
+	out = new(encodedBloomFilter)
+	out.BloomFilterType = byte(invalidBloomFilter)
 	out.EncodingParams = bf.encodingParams
 	if bf.filter != nil {
-		out.BloomFilter, _ = bf.filter.MarshalBinary()
+		switch bf.filter.(type) {
+		case *bloom.Filter:
+			out.BloomFilterType = byte(multiHashBloomFilter)
+		case *bloom.XorFilter:
+			out.BloomFilterType = byte(xorBloomFilter)
+		case *bloom.XorFilter8:
+			out.BloomFilterType = byte(xorBloomFilter8)
+		default:
+			panic("unknown internal bloom filter object")
+		}
+		out.BloomFilter, err = bf.filter.MarshalBinary()
+		if err != nil {
+			out = nil
+		} else {
+			bf.encoded = out
+		}
 	}
 	return
 }
@@ -89,7 +118,26 @@ func (bf *bloomFilter) test(txID transactions.Txid) bool {
 	return false
 }
 
-func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, shuffler uint32, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
+func filterFactoryBloom(numEntries int, s *syncState) bloom.GenericFilter {
+	shuffler := uint32(s.node.Random(0xffffffff))
+	sizeBits, numHashes := bloom.Optimal(numEntries, bloomFilterFalsePositiveRate)
+	return bloom.New(sizeBits, numHashes, shuffler)
+}
+
+func filterFactoryXor8(numEntries int, s *syncState) bloom.GenericFilter {
+	return bloom.NewXor8(numEntries, &s.xorBuilder)
+}
+
+func filterFactoryXor32(numEntries int, s *syncState) bloom.GenericFilter {
+	return bloom.NewXor(numEntries, &s.xorBuilder)
+}
+
+var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryXor8
+
+//var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryXor32
+//var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryBloom
+
+func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams
 	switch {
 	case encodingParams.Modulator == 0:
@@ -109,10 +157,17 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 			}
 		}
 
-		sizeBits, numHashes := bloom.Optimal(len(txnGroups), bloomFilterFalsePositiveRate)
-		result.filter = bloom.New(sizeBits, numHashes, shuffler)
+		result.filter = filterFactory(len(txnGroups), s)
 		for _, group := range txnGroups {
 			result.filter.Set(group.FirstTransactionID[:])
+		}
+		_, err := result.encode()
+		if err != nil {
+			// fall back to standard bloom filter
+			result.filter = filterFactoryBloom(len(txnGroups), s)
+			for _, group := range txnGroups {
+				result.filter.Set(group.FirstTransactionID[:])
+			}
 		}
 	default:
 		// we want subset.
@@ -140,10 +195,18 @@ func makeBloomFilter(encodingParams requestParams, txnGroups []transactions.Sign
 			}
 		}
 
-		sizeBits, numHashes := bloom.Optimal(len(filtedTransactionsIDs), bloomFilterFalsePositiveRate)
-		result.filter = bloom.New(sizeBits, numHashes, shuffler)
+		result.filter = filterFactory(len(filtedTransactionsIDs), s)
+
 		for _, txid := range filtedTransactionsIDs {
 			result.filter.Set(txid[:])
+		}
+		_, err := result.encode()
+		if err != nil {
+			// fall back to standard bloom filter
+			result.filter = filterFactoryBloom(len(txnGroups), s)
+			for _, txid := range filtedTransactionsIDs {
+				result.filter.Set(txid[:])
+			}
 		}
 	}
 

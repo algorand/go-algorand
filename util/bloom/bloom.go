@@ -118,22 +118,31 @@ func BinaryMarshalLength(numElements int, falsePositiveRate float64) int64 {
 	return filterBytes + 8                   // adding 8 to match 4 prefix array, plus 4 bytes for the numHashes uint32
 }
 
-// UnmarshalBinary restores the state of the filter from raw data
-func UnmarshalBinary(data []byte) (*Filter, error) {
-	f := &Filter{}
+// UnmarshalBinary implements encoding.BinaryUnmarshaller interface
+func (f *Filter) UnmarshalBinary(data []byte) error {
 	if len(data) <= 8 {
-		return nil, errors.New("short data")
+		return errors.New("short data")
 	}
 	f.numHashes = binary.BigEndian.Uint32(data[0:4])
 	if f.numHashes > maxHashes {
-		return nil, errors.New("too many hashes")
+		return errors.New("too many hashes")
 	}
 	copy(f.prefix[:], data[4:8])
 	f.data = data[8:]
 	f.preimageStagingBuffer = make([]byte, len(f.prefix), len(f.prefix)+32)
 	f.hashStagingBuffer = make([]uint32, f.numHashes+3)
 	copy(f.preimageStagingBuffer, f.prefix[:])
-	return f, nil
+	return nil
+}
+
+// UnmarshalBinary restores the state of the filter from raw data
+func UnmarshalBinary(data []byte) (*Filter, error) {
+	f := &Filter{}
+	err := f.UnmarshalBinary(data)
+	if err != nil {
+		f = nil
+	}
+	return f, err
 }
 
 // MarshalJSON defines how this filter should be encoded to JSON

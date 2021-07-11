@@ -18,15 +18,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA256 hash of value X, yields [32]byte
 - **Cost**:
    - 7 (LogicSigVersion = 1)
-<<<<<<< HEAD
-<<<<<<< HEAD
-   - 35 (2 <= LogicSigVersion <= 3)
-=======
-   - 35 (2 <= LogicSigVersion <= 4)
->>>>>>> master
-=======
-   - 35 (2 <= LogicSigVersion <= 4)
->>>>>>> master
+   - 35 (2 <= LogicSigVersion <= 5)
 
 ## keccak256
 
@@ -36,15 +28,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Keccak256 hash of value X, yields [32]byte
 - **Cost**:
    - 26 (LogicSigVersion = 1)
-<<<<<<< HEAD
-<<<<<<< HEAD
-   - 130 (2 <= LogicSigVersion <= 3)
-=======
-   - 130 (2 <= LogicSigVersion <= 4)
->>>>>>> master
-=======
-   - 130 (2 <= LogicSigVersion <= 4)
->>>>>>> master
+   - 130 (2 <= LogicSigVersion <= 5)
 
 ## sha512_256
 
@@ -54,15 +38,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA512_256 hash of value X, yields [32]byte
 - **Cost**:
    - 9 (LogicSigVersion = 1)
-<<<<<<< HEAD
-<<<<<<< HEAD
-   - 45 (2 <= LogicSigVersion <= 3)
-=======
-   - 45 (2 <= LogicSigVersion <= 4)
->>>>>>> master
-=======
-   - 45 (2 <= LogicSigVersion <= 4)
->>>>>>> master
+   - 45 (2 <= LogicSigVersion <= 5)
 
 ## ed25519verify
 
@@ -398,17 +374,17 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 2 | FirstValid | uint64 | round number |
 | 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 | round number |
-| 5 | Note | []byte |  |
-| 6 | Lease | []byte |  |
+| 5 | Note | []byte | Any data up to 1024 bytes |
+| 6 | Lease | []byte | 32 byte lease value |
 | 7 | Receiver | []byte | 32 byte address |
 | 8 | Amount | uint64 | micro-Algos |
 | 9 | CloseRemainderTo | []byte | 32 byte address |
 | 10 | VotePK | []byte | 32 byte address |
 | 11 | SelectionPK | []byte | 32 byte address |
-| 12 | VoteFirst | uint64 |  |
-| 13 | VoteLast | uint64 |  |
-| 14 | VoteKeyDilution | uint64 |  |
-| 15 | Type | []byte |  |
+| 12 | VoteFirst | uint64 | The first round that the participation key is valid. |
+| 13 | VoteLast | uint64 | The last round that the participation key is valid. |
+| 14 | VoteKeyDilution | uint64 | Dilution for the 2-level participation key |
+| 15 | Type | []byte | Transaction type as bytes |
 | 16 | TypeEnum | uint64 | See table below |
 | 17 | XferAsset | uint64 | Asset ID |
 | 18 | AssetAmount | uint64 | value in Asset's units |
@@ -569,11 +545,9 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 `gloads` fails unless the requested transaction is an ApplicationCall and X < GroupIndex.
 
-<<<<<<< HEAD
-=======
 ## gaid t
 
-- Opcode: 0x3c
+- Opcode: 0x3c {uint8 transaction group index}
 - Pops: _None_
 - Pushes: uint64
 - push the ID of the asset or application created in the Tth transaction of the current group
@@ -593,7 +567,6 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 `gaids` fails unless the requested transaction created an asset or application and X < GroupIndex.
 
->>>>>>> master
 ## bnz target
 
 - Opcode: 0x40 {int16 branch offset, big endian}
@@ -904,9 +877,35 @@ params: Txn.Accounts offset (or, since v4, an account address that appears in Tx
 | 8 | AssetReserve | []byte | Reserve address |
 | 9 | AssetFreeze | []byte | Freeze address |
 | 10 | AssetClawback | []byte | Clawback address |
+| 11 | AssetCreator | []byte | Creator address |
 
 
 params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.
+
+## app_params_get i
+
+- Opcode: 0x72 {uint8 app params field index}
+- Pops: *... stack*, uint64
+- Pushes: *... stack*, any, uint64
+- read from app A params field X (imm arg) => {0 or 1 (top), value}
+- LogicSigVersion >= 5
+- Mode: Application
+
+`app_params_get` Fields:
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AppApprovalProgram | []byte | Bytecode of Approval Program |
+| 1 | AppClearStateProgram | []byte | Bytecode of Clear State Program |
+| 2 | AppGlobalNumUint | uint64 | Number of uint64 values allowed in Global State |
+| 3 | AppGlobalNumByteSlice | uint64 | Number of byte array values allowed in Global State |
+| 4 | AppLocalNumUint | uint64 | Number of uint64 values allowed in Local State |
+| 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
+| 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
+| 7 | AppCreator | []byte | Creator address |
+
+
+params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## min_balance
 
@@ -938,15 +937,10 @@ pushbytes args are not added to the bytecblock during assembly processes
 - LogicSigVersion >= 3
 
 pushint args are not added to the intcblock during assembly processes
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> master
 
 ## callsub target
 
-- Opcode: 0x88
+- Opcode: 0x88 {int16 branch offset, big endian}
 - Pops: _None_
 - Pushes: _None_
 - branch unconditionally to TARGET, saving the next instruction on the call stack
@@ -1152,7 +1146,3 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Pushes: []byte
 - push a byte-array of length X, containing all zero bytes
 - LogicSigVersion >= 4
-<<<<<<< HEAD
->>>>>>> master
-=======
->>>>>>> master

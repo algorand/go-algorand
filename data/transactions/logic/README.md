@@ -98,49 +98,7 @@ For two-argument ops, `A` is the penultimate element on the stack and `B` is the
 
 For three-argument ops, `A` is the element two below the top, `B` is the penultimate stack element and `C` is the top of the stack. These operations typically pop A, B, and C from the stack and push the result.
 
-| Op | Description |
-| --- | --- |
-| `sha256` | SHA256 hash of value X, yields [32]byte |
-| `keccak256` | Keccak256 hash of value X, yields [32]byte |
-| `sha512_256` | SHA512_256 hash of value X, yields [32]byte |
-| `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
-| `+` | A plus B. Panic on overflow. |
-| `-` | A minus B. Panic if B > A. |
-| `/` | A divided by B (truncated division). Panic if B == 0. |
-| `*` | A times B. Panic on overflow. |
-| `<` | A less than B => {0 or 1} |
-| `>` | A greater than B => {0 or 1} |
-| `<=` | A less than or equal to B => {0 or 1} |
-| `>=` | A greater than or equal to B => {0 or 1} |
-| `&&` | A is not zero and B is not zero => {0 or 1} |
-| `\|\|` | A is not zero or B is not zero => {0 or 1} |
-| `shl` | A times 2^B, modulo 2^64 |
-| `shr` | A divided by 2^B |
-| `sqrt` | The largest integer B such that B^2 <= X |
-| `bitlen` | The highest set bit in X. If X is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4 |
-| `exp` | A raised to the Bth power. Panic if A == B == 0 and on overflow |
-| `==` | A is equal to B => {0 or 1} |
-| `!=` | A is not equal to B => {0 or 1} |
-| `!` | X == 0 yields 1; else 0 |
-| `len` | yields length of byte value X |
-| `itob` | converts uint64 X to big endian bytes |
-| `btoi` | converts bytes X as big endian to uint64 |
-| `%` | A modulo B. Panic if B == 0. |
-| `\|` | A bitwise-or B |
-| `&` | A bitwise-and B |
-| `^` | A bitwise-xor B |
-| `~` | bitwise invert value X |
-| `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
-| `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
-| `divmodw` | Pop four uint64 values.  The deepest two are interpreted as a uint128 dividend (deepest value is high word), the top two are interpreted as a uint128 divisor.  Four uint64 values are pushed to the stack. The deepest two are the quotient (deeper value is the high uint64). The top two are the remainder, low bits on top. |
-| `expw` | A raised to the Bth power as a 128-bit long result as low (top) and high uint64 values on the stack. Panic if A == B == 0 or if the results exceeds 2^128-1 |
-| `getbit` | pop a target A (integer or byte-array), and index B. Push the Bth bit of A. |
-| `setbit` | pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result |
-| `getbyte` | pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer |
-| `setbyte` | pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result |
-| `concat` | pop two byte-arrays A and B and join them, push the result |
-| `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
-| `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
+For three-argument ops, `A` is the element two below the top, `B` is the penultimate stack element and `C` is the top of the stack. These operations typically pop A, B, and C from the stack and push the result.
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
@@ -233,17 +191,17 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 2 | FirstValid | uint64 | round number |
 | 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 | round number |
-| 5 | Note | []byte |  |
-| 6 | Lease | []byte |  |
+| 5 | Note | []byte | Any data up to 1024 bytes |
+| 6 | Lease | []byte | 32 byte lease value |
 | 7 | Receiver | []byte | 32 byte address |
 | 8 | Amount | uint64 | micro-Algos |
 | 9 | CloseRemainderTo | []byte | 32 byte address |
 | 10 | VotePK | []byte | 32 byte address |
 | 11 | SelectionPK | []byte | 32 byte address |
-| 12 | VoteFirst | uint64 |  |
-| 13 | VoteLast | uint64 |  |
-| 14 | VoteKeyDilution | uint64 |  |
-| 15 | Type | []byte |  |
+| 12 | VoteFirst | uint64 | The first round that the participation key is valid. |
+| 13 | VoteLast | uint64 | The last round that the participation key is valid. |
+| 14 | VoteKeyDilution | uint64 | Dilution for the 2-level participation key |
+| 15 | Type | []byte | Transaction type as bytes |
 | 16 | TypeEnum | uint64 | See table below |
 | 17 | XferAsset | uint64 | Asset ID |
 | 18 | AssetAmount | uint64 | value in Asset's units |
@@ -309,7 +267,7 @@ Global fields are fields that are common to all the transactions in the group. I
 
 **Asset Fields**
 
-Asset fields include `AssetHolding` and `AssetParam` fields that are used in `asset_read_*` opcodes
+Asset fields include `AssetHolding` and `AssetParam` fields that are used in the `asset_holding_get` and `asset_params_get` opcodes.
 
 | Index | Name | Type | Notes |
 | --- | --- | --- | --- |
@@ -330,6 +288,23 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | 8 | AssetReserve | []byte | Reserve address |
 | 9 | AssetFreeze | []byte | Freeze address |
 | 10 | AssetClawback | []byte | Clawback address |
+| 11 | AssetCreator | []byte | Creator address |
+
+
+**App Fields**
+
+App fields used in the `app_params_get` opcode.
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AppApprovalProgram | []byte | Bytecode of Approval Program |
+| 1 | AppClearStateProgram | []byte | Bytecode of Clear State Program |
+| 2 | AppGlobalNumUint | uint64 | Number of uint64 values allowed in Global State |
+| 3 | AppGlobalNumByteSlice | uint64 | Number of byte array values allowed in Global State |
+| 4 | AppLocalNumUint | uint64 | Number of uint64 values allowed in Local State |
+| 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
+| 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
+| 7 | AppCreator | []byte | Creator address |
 
 
 ### Flow Control
@@ -368,6 +343,7 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | `app_global_del` | delete key A from a global state of the current application |
 | `asset_holding_get i` | read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value} |
 | `asset_params_get i` | read from asset A params field X (imm arg) => {0 or 1 (top), value} |
+| `app_params_get i` | read from app A params field X (imm arg) => {0 or 1 (top), value} |
 
 # Assembler Syntax
 
