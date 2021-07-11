@@ -19,7 +19,9 @@ package account
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,9 +33,38 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+var partableColumnNames = [...]string{"parent", "vrf", "voting", "blockProof", "firstValid", "lastValid", "keyDilution"}
+
 func TestParticipation_NewDB(t *testing.T) {
 	a := require.New(t)
 
+	_, rootDB, partDB, err := setupParticipationKey(t, a)
+	a.NoError(err)
+	closeDBS(rootDB, partDB)
+}
+
+func setupParticipationKey(t *testing.T, a *require.Assertions) (PersistedParticipation, db.Accessor, db.Accessor, error) {
+	root, rootDB, partDB := createTestDBs(t, a)
+
+	part, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 0, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+	a.NoError(err)
+	a.NotNil(part)
+
+	versions, err := getSchemaVersions(partDB)
+	a.NoError(err)
+	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
+	return part, rootDB, partDB, err
+}
+func setupkeyWithNoDBS(t *testing.T, a *require.Assertions) PersistedParticipation {
+	part, rootDB, partDB, err := setupParticipationKey(t, a)
+	a.NoError(err)
+	a.NotNil(part)
+
+	closeDBS(rootDB, partDB)
+	return part
+}
+
+func createTestDBs(t *testing.T, a *require.Assertions) (Root, db.Accessor, db.Accessor) {
 	rootDB, err := db.MakeAccessor(t.Name(), false, true)
 	a.NoError(err)
 	a.NotNil(rootDB)
@@ -45,16 +76,7 @@ func TestParticipation_NewDB(t *testing.T) {
 	a.NoError(err)
 	a.NotNil(partDB)
 
-	part, err := FillDBWithParticipationKeys(partDB, root.Address(), 0, 0, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
-	a.NoError(err)
-	a.NotNil(part)
-
-	versions, err := getSchemaVersions(partDB)
-	a.NoError(err)
-	a.Equal(versions[PartTableSchemaName], PartTableSchemaVersion)
-
-	partDB.Close()
-	rootDB.Close()
+	return root, rootDB, partDB
 }
 
 func getSchemaVersions(db db.Accessor) (versions map[string]int, err error) {
@@ -143,4 +165,196 @@ func BenchmarkOldKeysDeletion(b *testing.B) {
 		a.NoError(err)
 	}
 	part.Close()
+}
+
+func TestRetrieveFromDB(t *testing.T) {
+	a := require.New(t)
+	part, rootDB, partDB, err := setupParticipationKey(t, a)
+	a.NoError(err)
+	defer closeDBS(rootDB, partDB)
+
+	retrievedPart, err := RestoreParticipation(partDB)
+	a.NoError(err)
+	a.NotNil(retrievedPart)
+
+	// comparing the outputs:
+	a.Equal(intoComparable(part), intoComparable(retrievedPart))
+}
+
+func TestRetrieveFromDBAtVersion1(t *testing.T) {
+	a := require.New(t)
+	ppart := setupkeyWithNoDBS(t, a)
+	_, rootDB, partDB := createTestDBs(t, a)
+	defer closeDBS(rootDB, partDB)
+
+	part := ppart.Participation
+	a.NoError(setupTestDBAtVer1(partDB, part))
+
+	retrivedPart, err := RestoreParticipation(partDB)
+	a.NoError(err)
+	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+}
+
+func TestRetriveFromDBAtVersion2(t *testing.T) {
+	a := require.New(t)
+
+	ppart := setupkeyWithNoDBS(t, a)
+	_, rootDB, partDB := createTestDBs(t, a)
+	defer closeDBS(rootDB, partDB)
+
+	part := ppart.Participation
+	a.NoError(setupTestDBAtVer2(partDB, part))
+
+	retrivedPart, err := RestoreParticipation(partDB)
+	a.NoError(err)
+	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
+}
+
+func closeDBS(dbAccessor ...db.Accessor) {
+	for _, accessor := range dbAccessor {
+		accessor.Close()
+	}
+}
+
+func assertionForRestoringFromDBAtLowVersion(a *require.Assertions, retrivedPart PersistedParticipation) {
+	a.NotNil(retrivedPart)
+	a.Nil(retrivedPart.BlockProof)
+}
+
+func TestMigrateFromVersion1(t *testing.T) {
+	a := require.New(t)
+	part := setupkeyWithNoDBS(t, a).Participation
+
+	_, rootDB, partDB := createTestDBs(t, a)
+	defer closeDBS(rootDB, partDB)
+
+	a.NoError(setupTestDBAtVer1(partDB, part))
+	a.NoError(Migrate(partDB))
+
+	a.NoError(testDBContainsAllColumns(partDB))
+}
+
+func TestMigrationFromVersion2(t *testing.T) {
+	a := require.New(t)
+	part := setupkeyWithNoDBS(t, a).Participation
+
+	_, rootDB, partDB := createTestDBs(t, a)
+	defer closeDBS(rootDB, partDB)
+
+	a.NoError(setupTestDBAtVer2(partDB, part))
+	a.NoError(Migrate(partDB))
+
+	a.NoError(testDBContainsAllColumns(partDB))
+}
+
+func testDBContainsAllColumns(partDB db.Accessor) error {
+	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec(fmt.Sprintf("select %v From ParticipationAccount;",
+			strings.Join(partableColumnNames[:], ",")))
+		return err
+	})
+}
+
+func setupTestDBAtVer2(partDB db.Accessor, part Participation) error {
+	rawVRF := protocol.Encode(part.VRF)
+	voting := part.Voting.Snapshot()
+	rawVoting := protocol.Encode(&voting)
+
+	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		//set up an actual DB..
+		_, err := tx.Exec(`CREATE TABLE ParticipationAccount (
+		parent BLOB,
+
+		vrf BLOB,
+		voting BLOB,
+
+		firstValid INTEGER,
+		lastValid INTEGER,
+
+		keyDilution INTEGER NOT NULL DEFAULT 0
+	);`)
+		if err != nil {
+			return nil
+		}
+
+		if err := setupSchemaForTest(tx, 2); err != nil {
+			return err
+		}
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid, keyDilution) VALUES (?, ?, ?, ?, ?, ?)",
+			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid, part.KeyDilution)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+func setupSchemaForTest(tx *sql.Tx, version int) error {
+	_, err := tx.Exec(`CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER);`)
+	if err != nil {
+		return nil
+	}
+
+	_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", PartTableSchemaName, version)
+	if err != nil {
+		return nil
+	}
+	return err
+}
+
+func setupTestDBAtVer1(partDB db.Accessor, part Participation) error {
+	rawVRF := protocol.Encode(part.VRF)
+	voting := part.Voting.Snapshot()
+	rawVoting := protocol.Encode(&voting)
+
+	return partDB.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		//set up an actual DB..
+		_, err := tx.Exec(`CREATE TABLE ParticipationAccount (
+		parent BLOB,
+		
+		vrf BLOB,
+		voting BLOB,
+
+		firstValid INTEGER,
+		lastValid INTEGER
+	);`)
+		if err != nil {
+			return err
+		}
+
+		if err := setupSchemaForTest(tx, 1); err != nil {
+			return err
+		}
+		_, err = tx.Exec("INSERT INTO ParticipationAccount (parent, vrf, voting, firstValid, lastValid) VALUES (?, ?, ?, ?, ?)",
+			part.Parent[:], rawVRF, rawVoting, part.FirstValid, part.LastValid)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+type comparablePartition struct {
+	Parent basics.Address
+
+	VRF        crypto.VRFSecrets
+	Voting     []byte
+	blockProof crypto.SignatureAlgorithm
+
+	FirstValid basics.Round
+	LastValid  basics.Round
+
+	KeyDilution uint64
+}
+
+func intoComparable(part PersistedParticipation) comparablePartition {
+	return comparablePartition{
+		Parent:      part.Parent,
+		VRF:         *part.VRF,
+		Voting:      part.Voting.MarshalMsg(nil),
+		blockProof:  *part.BlockProof,
+		FirstValid:  part.FirstValid,
+		LastValid:   part.LastValid,
+		KeyDilution: part.KeyDilution,
+	}
 }

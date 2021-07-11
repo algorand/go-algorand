@@ -1246,6 +1246,7 @@ type partkeyInfo struct {
 	LastValid       basics.Round                    `codec:"last"`
 	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID     crypto.VRFVerifier              `codec:"sel"`
+	BlockProofID    crypto.VerifyingKey             `codec:"blockProof"`
 	VoteKeyDilution uint64                          `codec:"voteKD"`
 }
 
@@ -1268,6 +1269,7 @@ var partkeyInfoCmd = &cobra.Command{
 
 			for filename, part := range parts {
 				fmt.Println("------------------------------------------------------------------")
+
 				info := partkeyInfo{
 					Address:         part.Address().String(),
 					FirstValid:      part.FirstValid,
@@ -1275,6 +1277,9 @@ var partkeyInfoCmd = &cobra.Command{
 					VoteID:          part.VotingSecrets().OneTimeSignatureVerifier,
 					SelectionID:     part.VRFSecrets().PK,
 					VoteKeyDilution: part.KeyDilution,
+				}
+				if certSigner := part.BlockProofSigner(); certSigner != nil {
+					info.BlockProofID = certSigner.GetSigner().GetVerifyingKey()
 				}
 				infoString := protocol.EncodeJSON(&info)
 				fmt.Printf("File: %s\n%s\n", filename, string(infoString))

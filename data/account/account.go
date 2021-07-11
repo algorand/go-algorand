@@ -135,7 +135,7 @@ func (root Root) Address() basics.Address {
 // RestoreParticipation restores a Participation from a database
 // handle.
 func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err error) {
-	var rawParent, rawVRF, rawVoting []byte
+	var rawParent, rawVRF, rawVoting, rawBlockProof []byte
 
 	err = Migrate(store)
 	if err != nil {
@@ -153,8 +153,9 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 			logging.Base().Infof("RestoreParticipation: state not found (n = %v)", nrows)
 		}
 
-		row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution from ParticipationAccount")
-		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution)
+		row = tx.QueryRow("select parent, vrf, voting, blockProof, firstValid, lastValid, keyDilution from ParticipationAccount")
+
+		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &rawBlockProof, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution)
 		if err != nil {
 			return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err)
 		}
@@ -165,6 +166,8 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
+
+	acc.Store = store
 
 	acc.VRF = &crypto.VRFSecrets{}
 	err = protocol.Decode(rawVRF, acc.VRF)
@@ -178,6 +181,17 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 		return PersistedParticipation{}, err
 	}
 
-	acc.Store = store
+	if len(rawBlockProof) == 0 {
+		return acc, nil
+	}
+	acc.BlockProof = &crypto.SignatureAlgorithm{}
+	if err = protocol.Decode(rawBlockProof, acc.BlockProof); err != nil {
+		return PersistedParticipation{}, err
+	}
+	// rawBlockProofKey stored is invalid
+	if !acc.BlockProof.IsValid() {
+		return PersistedParticipation{}, fmt.Errorf("stored blockProof key is not valid")
+	}
+
 	return acc, nil
 }

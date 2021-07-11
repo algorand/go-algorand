@@ -25,7 +25,7 @@ import (
 const PartTableSchemaName = "parttable"
 
 // PartTableSchemaVersion is the latest version of the PartTable schema
-const PartTableSchemaVersion = 2
+const PartTableSchemaVersion = 3
 
 // ErrUnsupportedSchema is the error returned when the PartTable schema version is wrong.
 var ErrUnsupportedSchema = fmt.Errorf("unsupported participation file schema version (expected %d)", PartTableSchemaVersion)
@@ -36,8 +36,10 @@ func partInstallDatabase(tx *sql.Tx) error {
 	_, err = tx.Exec(`CREATE TABLE ParticipationAccount (
 		parent BLOB,
 
-		vrf BLOB,    --*  msgpack encoding of ParticipationAccount.vrf
-		voting BLOB, --*  msgpack encoding of ParticipationAccount.voting
+		--* participation keys
+		vrf BLOB,         --*  msgpack encoding of ParticipationAccount.vrf
+		voting BLOB,      --*  msgpack encoding of ParticipationAccount.voting
+		blockProof BLOB,  --*  msgpack encoding of ParticipationAccount.BlockProof
 
 		firstValid INTEGER,
 		lastValid INTEGER,
@@ -78,14 +80,14 @@ func partMigrate(tx *sql.Tx) (err error) {
 		var version int
 		err = rows.Scan(&tableName, &version)
 		if err != nil {
-			return
+			return err
 		}
 		versions[tableName] = version
 	}
 
 	err = rows.Err()
 	if err != nil {
-		return
+		return err
 	}
 
 	partVersion, has := versions[PartTableSchemaName]
@@ -93,22 +95,43 @@ func partMigrate(tx *sql.Tx) (err error) {
 		return ErrUnsupportedSchema
 	}
 
-	if partVersion == 1 {
-		_, err = tx.Exec("ALTER TABLE ParticipationAccount ADD keyDilution INTEGER NOT NULL DEFAULT 0")
-		if err != nil {
-			return
-		}
-
-		partVersion = 2
-		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
-		if err != nil {
-			return
-		}
+	partVersion, err = updateDB(tx, partVersion)
+	if err != nil {
+		return err
 	}
 
 	if partVersion != PartTableSchemaVersion {
 		return ErrUnsupportedSchema
 	}
 
-	return
+	return nil
+}
+
+func updateDB(tx *sql.Tx, partVersion int) (int, error) {
+	if partVersion == 1 {
+		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD keyDilution INTEGER NOT NULL DEFAULT 0")
+		if err != nil {
+			return 0, err
+		}
+
+		partVersion = 2
+		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if partVersion == 2 {
+		_, err := tx.Exec("ALTER TABLE ParticipationAccount ADD blockProof BLOB")
+		if err != nil {
+			return 0, err
+		}
+
+		partVersion = 3
+		_, err = tx.Exec("UPDATE schema SET version=? WHERE tablename=?", partVersion, PartTableSchemaName)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return partVersion, nil
 }
