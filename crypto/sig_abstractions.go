@@ -38,7 +38,6 @@ func (t AlgorithmType) isValidType() bool {
 type ByteSignature []byte
 
 // Signer interface represents the possible operations that can be done with a signing key.
-// outputs Sign, SignBytes which are self explanatory and GetVerifier which is a representation of a public key.
 type Signer interface {
 	Sign(message Hashable) ByteSignature
 	SignBytes(message []byte) ByteSignature
@@ -48,15 +47,14 @@ type Signer interface {
 // ErrBadSignature represents a bad signature
 var ErrBadSignature = fmt.Errorf("invalid signature")
 
-// Verifier interface represent a public key of a SignatureAlgorithm.
-// Verifier returns error for bad signature/ other issues while verifying a signature, or nil for correct signature -
-// that is, returns: complain or no complain.
+// Verifier interface represents any algorithm that can verify signatures for a specific signing scheme.
 type Verifier interface {
+	// Verify and VerifyBytes returns error on bad signature, and any other problem.
 	Verify(message Hashable, sig ByteSignature) error
 	VerifyBytes(message []byte, sig ByteSignature) error
 }
 
-// SignatureAlgorithm holds a Signer, and the type of algorithm the Signer conforms to.
+// SignatureAlgorithm holds a Signer, and the type of algorithm the Signer conforms with.
 // to add a key - verify that PackedSignatureAlgorithm's function (getSigner) returns your key.
 type SignatureAlgorithm struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -65,8 +63,8 @@ type SignatureAlgorithm struct {
 	Pack PackedSignatureAlgorithm `codec:"keys"`
 }
 
-// VerifyingKey is the correct way to interact with a Verifier. It implements the interface,
-// but allows for correct marshling and unmarshling of itself.
+// VerifyingKey is an abstraction of a key store of verifying keys.
+// it can return the correct key according to the underlying algorithm.
 //
 // NOTE: The VerifyingKey key might not be a valid key if a malicious client sent it over the network
 // make certain it is valid.
