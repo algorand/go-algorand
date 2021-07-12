@@ -275,6 +275,55 @@ func TestAccountDBRound(t *testing.T) {
 	}
 }
 
+func TestAccountStorageWithBlockProofID(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	accts := randomAccounts(20, false)
+	_, err = accountsInit(tx, accts, proto)
+	require.NoError(t, err)
+	checkAccounts(t, tx, 0, accts)
+	require.True(t, allAccountsHaveBlockProofPKs(accts))
+
+	var baseAccounts lruAccounts
+	baseAccounts.init(nil, 100, 80)
+
+	var updates ledgercore.AccountDeltas
+	var newaccts map[basics.Address]basics.AccountData
+	updates, newaccts, _, _ = randomDeltasFull(20, accts, 0, 0)
+	accts = newaccts
+
+	updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
+	err = updatesCnt.accountsLoadOld(tx)
+	require.NoError(t, err)
+	err = totalsNewRounds(tx, []ledgercore.AccountDeltas{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, proto)
+	require.NoError(t, err)
+	_, err = accountsNewRound(tx, updatesCnt, nil, proto, basics.Round(0))
+	require.NoError(t, err)
+	err = updateAccountsRound(tx, basics.Round(1), 0)
+	require.NoError(t, err)
+	checkAccounts(t, tx, basics.Round(1), accts)
+	accounts, err := accountsAll(tx)
+	require.True(t, allAccountsHaveBlockProofPKs(accounts))
+	require.Equal(t, accts, accounts)
+}
+
+func allAccountsHaveBlockProofPKs(accts map[basics.Address]basics.AccountData) bool {
+	for _, data := range accts {
+		if !data.BlockProofID.IsValid() {
+			return false
+		}
+	}
+	return true
+}
+
 // checkCreatables compares the expected database image to the actual databse content
 func checkCreatables(t *testing.T,
 	tx *sql.Tx, iteration int,
