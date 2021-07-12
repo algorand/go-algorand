@@ -96,6 +96,8 @@ func (encoder *messageAsyncEncoder) asyncEncodeAndSend(interface{}) interface{} 
 	releaseMessageBuffer(encodedMessage)
 
 	encoder.messageData.message.TransactionGroups.Bytes = nil
+	// increase the metric for total messages sent.
+	txsyncOutgoingMessagesTotal.Inc(nil)
 	return nil
 }
 
