@@ -1128,6 +1128,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netB := makeTestWebsocketNode(t)
 	netB.SetPrioScheme(&prioB)
 	netB.config.GossipFanout = 1
+	netB.config.NetAddress = ""
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counterB}})
 	netB.Start()
@@ -1141,6 +1142,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netC := makeTestWebsocketNode(t)
 	netC.SetPrioScheme(&prioC)
 	netC.config.GossipFanout = 1
+	netC.config.NetAddress = ""
 	netC.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netC.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counterC}})
 	netC.Start()
@@ -1148,29 +1150,44 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 
 	// Wait for response messages to propagate from B+C to A
 	select {
-	case <-netA.prioResponseChan:
+	case peer := <-netA.prioResponseChan:
+		netA.peersLock.RLock()
+		require.Subset(t, []uint64{prioB.prio, prioC.prio}, []uint64{peer.prioWeight})
+		netA.peersLock.RUnlock()
 	case <-time.After(time.Second):
 		t.Errorf("timeout on netA.prioResponseChan 1")
 	}
 	select {
-	case <-netA.prioResponseChan:
+	case peer := <-netA.prioResponseChan:
+		netA.peersLock.RLock()
+		require.Subset(t, []uint64{prioB.prio, prioC.prio}, []uint64{peer.prioWeight})
+		netA.peersLock.RUnlock()
 	case <-time.After(time.Second):
 		t.Errorf("timeout on netA.prioResponseChan 2")
 	}
 	waitReady(t, netA, time.After(time.Second))
 
+	firstPeer := netA.peers[0]
 	netA.Broadcast(context.Background(), protocol.TxnTag, nil, true, nil)
 
+	failed := false
 	select {
 	case <-counterBdone:
 	case <-time.After(time.Second):
 		t.Errorf("timeout, B did not receive message")
+		failed = true
 	}
 
 	select {
 	case <-counterCdone:
 		t.Errorf("C received message")
+		failed = true
 	case <-time.After(time.Second):
+	}
+
+	if failed {
+		t.Errorf("NetA had the following two peers priorities : [0]:%s=%d [1]:%s=%d", netA.peers[0].rootURL, netA.peers[0].prioWeight, netA.peers[1].rootURL, netA.peers[1].prioWeight)
+		t.Errorf("first peer before broadcasting was %s", firstPeer.rootURL)
 	}
 }
 
@@ -1990,6 +2007,7 @@ func TestParseHostOrURL(t *testing.T) {
 		{"http://[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
 		{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}},
 		{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
+		{"r2-devnet.devnet.algodev.network:4560", url.URL{Scheme: "http", Host: "r2-devnet.devnet.algodev.network:4560"}},
 	}
 	badUrls := []string{
 		"justahost",
