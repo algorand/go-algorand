@@ -19,6 +19,7 @@ package driver
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 
 	"github.com/karalabe/hid"
 )
@@ -196,7 +197,7 @@ func (l *LedgerUSB) USBInfo() hid.DeviceInfo {
 
 // LedgerEnumerate returns all of the Ledger devices connected to this machine.
 func LedgerEnumerate() ([]hid.DeviceInfo, error) {
-	if !hid.Supported() {
+	if !hid.Supported() || os.Getenv("KMD_NOUSB") != "" {
 		return nil, fmt.Errorf("HID not supported")
 	}
 

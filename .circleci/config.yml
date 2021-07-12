@@ -125,6 +125,7 @@ commands:
             set -e
             set -x
             export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export KMD_NOUSB=True
             export GOPATH="<< parameters.circleci_home >>/go"
             export PATH="${PATH}:${GOPATH}/bin"
             export ALGORAND_DEADLOCK=enable
@@ -162,6 +163,7 @@ commands:
           command: |
             set -x
             export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export KMD_NOUSB=True
             export GOPATH="<< parameters.circleci_home >>/go"
             export PATH="${PATH}:${GOPATH}/bin"
             export ALGORAND_DEADLOCK=enable
