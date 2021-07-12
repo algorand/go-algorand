@@ -53,6 +53,12 @@ const MaxStringSize = 4096
 // MaxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
 const MaxByteMathSize = 64
 
+// MaxLogCalls is the limit of log opcode use in a program
+const MaxLogCalls = 8
+
+// MaxLogSize is the limit of total log size from n log calls in a program
+const MaxLogSize = 1000
+
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
@@ -158,6 +164,8 @@ type LedgerForLogic interface {
 	DelGlobal(key string) error
 
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
+
+	SetLog(value basics.TealValue) error
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -280,7 +288,9 @@ type evalContext struct {
 	version   uint64
 	scratch   scratchSpace
 
-	cost int // cost incurred so far
+	cost     int // cost incurred so far
+	logCalls int // number of log calls so far
+	logSize  int // log size of the program so far
 
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
@@ -730,6 +740,16 @@ func (cx *evalContext) checkStep() (int, error) {
 	if (cx.runModeFlags & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
+
+	if spec.Name == "log" {
+		cx.logCalls++
+		//cx.logSize+=
+	}
+
+	if cx.logCalls > MaxLogCalls {
+		return 0, fmt.Errorf("too many log calls. up to %v is allowed and program has %v log calls", cx.logCalls, MaxLogCalls)
+	}
+
 	deets := spec.Details
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
@@ -2988,6 +3008,25 @@ func opAssetParamsGet(cx *evalContext) {
 	cx.stack = append(cx.stack, stackValue{Uint: exist})
 }
 
-func opAnnounce(ct *evalContext) {
-	//	TODO: to be implemented
+func opLog(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+
+	log := cx.stack[last]
+	cx.logSize += len(log.Bytes)
+
+	if cx.logSize > MaxLogSize {
+		cx.err = fmt.Errorf("%v is too large. Up to %v bytes are allowed", cx.logSize, MaxLogSize)
+		return
+	}
+
+	//	write log to applyData
+	err := cx.Ledger.SetLog(log.toTealValue())
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack = cx.stack[:prev]
+
 }

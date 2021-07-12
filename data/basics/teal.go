@@ -134,6 +134,8 @@ type EvalDelta struct {
 	// When decoding EvalDeltas, the integer key represents an offset into
 	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
 	LocalDeltas map[uint64]StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+
+	LogDelta []string `codec:"lg"`
 }
 
 // Equal compares two EvalDeltas and returns whether or not they are

@@ -4401,3 +4401,7 @@ func TestBytesConversions(t *testing.T) {
 	testAccepts(t, "byte 0x11; byte 0x10; b+; btoi; int 0x21; ==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x10; b+; btoi; int 0x21; ==", 4)
 }
+
+func TestLog(t *testing.T) {
+	testAccepts(t, `byte  "log me"; log; 0; ==`, 5)
+}

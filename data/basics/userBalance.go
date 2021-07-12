@@ -229,6 +229,7 @@ type AppParams struct {
 	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
 	ExtraProgramPages uint32 `codec:"epp"`
+	Logs              []string
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the

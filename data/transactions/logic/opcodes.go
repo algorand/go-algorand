@@ -283,7 +283,7 @@ var OpSpecs = []OpSpec{
 	{0xaf, "bzero", opBytesZero, asmDefault, disDefault, oneInt, oneBytes, 4, modeAny, opDefault},
 
 	//	 ABI support opcodes.
-	{0xb0, "announce", opAnnounce, asmDefault, disDefault, oneInt, oneBytes, 5, runModeApplication, opDefault},
+	{0xb0, "log", opLog, asmDefault, disDefault, oneBytes, oneBytes, 5, runModeApplication, opDefault},
 }
 
 type sortByOpcode []OpSpec

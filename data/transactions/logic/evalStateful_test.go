@@ -428,6 +428,10 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 	return
 }
 
+func (l *testLedger) SetLog(value basics.TealValue) error {
+	return nil
+}
+
 func TestEvalModes(t *testing.T) {
 	t.Parallel()
 	// ed25519verify and err are tested separately below

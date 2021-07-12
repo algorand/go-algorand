@@ -63,6 +63,9 @@ type roundCowState struct {
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 
+	// logs populated in AppCall transaction
+	logdeltas map[basics.AppIndex][]string
+
 	// either or not maintain compatibility with original app refactoring behavior
 	// this is needed for generating old eval delta in new code
 	compatibilityMode bool
