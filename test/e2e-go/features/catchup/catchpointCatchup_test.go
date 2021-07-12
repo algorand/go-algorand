@@ -79,7 +79,6 @@ func (ec *nodeExitErrorCollector) Print() {
 }
 
 func TestBasicCatchpointCatchup(t *testing.T) {
-	t.Skip("Temporarily disabling since they need work and shouldn't block releases")
 	if testing.Short() {
 		t.Skip()
 	}

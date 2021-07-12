@@ -162,7 +162,6 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 }
 
 func TestPeriodicSync(t *testing.T) {
-	t.Skip("Disabling since they need work and shouldn't block releases")
 	// Make Ledger
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
