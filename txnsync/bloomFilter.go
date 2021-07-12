@@ -98,6 +98,8 @@ func (bf *bloomFilter) encode() (out *encodedBloomFilter, err error) {
 			out = nil
 		} else {
 			bf.encoded = out
+			// increase the counter for a successfull bloom filter encoding
+			txsyncEncodedBloomFiltersTotal.Inc(nil)
 		}
 	}
 	return
@@ -133,9 +135,6 @@ func filterFactoryXor32(numEntries int, s *syncState) bloom.GenericFilter {
 }
 
 var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryXor8
-
-//var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryXor32
-//var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryBloom
 
 func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams
