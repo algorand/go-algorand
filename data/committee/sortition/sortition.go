@@ -20,7 +20,6 @@ import (
 	"math/big"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/vsivsi/bigbinomial"
 	"gonum.org/v1/gonum/stat/distuv"
 )
 
@@ -65,43 +64,6 @@ func sortitionPoissonCDFWalk(p, ratio float64, n uint64) uint64 {
 		cdf += px
 
 		// Found the correct boundary, break
-		if ratio <= cdf {
-			return j
-		}
-	}
-	return n
-}
-
-func sortitionBinomialCDFWalk(p, ratio float64, n uint64) uint64 {
-	var (
-		dist = distuv.Binomial{N: float64(n), P: p} //TODO: rand src?
-		cdf  float64
-	)
-
-	for j := uint64(0); j < n; j++ {
-		// accumulate the prob
-		px := dist.Prob(float64(j))
-
-		if px == 0 {
-			return n
-		}
-		cdf += px
-
-		// Found the correct boundary, break
-		if ratio <= cdf {
-			return j
-		}
-	}
-	return n
-}
-
-func sortitionBigBinomialCDFWalk(p, ratio float64, n uint64) uint64 {
-	pmf, _ := bigbinomial.PMF(p, int64(n))
-	var cdf float64
-
-	for j := uint64(0); j < n; j++ {
-		px := pmf(int64(j))
-		cdf += px
 		if ratio <= cdf {
 			return j
 		}

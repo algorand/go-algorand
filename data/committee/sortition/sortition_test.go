@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/vsivsi/bigbinomial"
 )
 
 func BenchmarkSortition(b *testing.B) {
@@ -130,4 +131,18 @@ func BenchmarkBinomialCdfWalk(b *testing.B) {
 
 func BenchmarkPoissonCdfWalk(b *testing.B) {
 	cdfBenchmarkInner(b, sortitionPoissonCDFWalk)
+}
+
+func sortitionBigBinomialCDFWalk(p, ratio float64, n uint64) uint64 {
+	pmf, _ := bigbinomial.PMF(p, int64(n))
+	var cdf float64
+
+	for j := uint64(0); j < n; j++ {
+		px := pmf(int64(j))
+		cdf += px
+		if ratio <= cdf {
+			return j
+		}
+	}
+	return n
 }
