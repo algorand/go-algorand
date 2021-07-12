@@ -722,6 +722,46 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result
 - LogicSigVersion >= 3
 
+## extract s l
+
+- Opcode: 0x57 {uint8 start position} {uint8 length}
+- Pops: *... stack*, []byte
+- Pushes: []byte
+- pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If S or S+L is larger than the array length, the program fails
+- LogicSigVersion >= 5
+
+## extract3
+
+- Opcode: 0x58
+- Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
+- Pushes: []byte
+- pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails
+- LogicSigVersion >= 5
+
+## extract16bits
+
+- Opcode: 0x59
+- Pops: *... stack*, {[]byte A}, {uint64 B}
+- Pushes: uint64
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, push the substring result. If B or B+2 is larger than the array length, the program fails
+- LogicSigVersion >= 5
+
+## extract32bits
+
+- Opcode: 0x5a
+- Pops: *... stack*, {[]byte A}, {uint64 B}
+- Pushes: uint64
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, push the substring result. If B or B+4 is larger than the array length, the program fails
+- LogicSigVersion >= 5
+
+## extract64bits
+
+- Opcode: 0x5b
+- Pops: *... stack*, {[]byte A}, {uint64 B}
+- Pushes: uint64
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, push the substring result. If B or B+8 is larger than the array length, the program fails
+- LogicSigVersion >= 5
+
 ## balance
 
 - Opcode: 0x60

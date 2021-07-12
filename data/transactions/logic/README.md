@@ -141,6 +141,11 @@ For three-argument ops, `A` is the element two below the top, `B` is the penulti
 | `concat` | pop two byte-arrays A and B and join them, push the result |
 | `substring s e` | pop a byte-array A. For immediate values in 0..255 S and E: extract a range of bytes from A starting at S up to but not including E, push the substring result. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the array length, the program fails |
+| `extract s l` | pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If S or S+L is larger than the array length, the program fails |
+| `extract3` | pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails |
+| `extract16bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, push the substring result. If B or B+2 is larger than the array length, the program fails |
+| `extract32bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, push the substring result. If B or B+4 is larger than the array length, the program fails |
+| `extract64bits` | pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, push the substring result. If B or B+8 is larger than the array length, the program fails |
 
 These opcodes take byte-array values that are interpreted as
 big-endian unsigned integers.  For mathematical operators, the
