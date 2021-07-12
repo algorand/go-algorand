@@ -17,12 +17,19 @@
 package txnsync
 
 import (
-	"github.com/algorand/go-algorand/logging/telemetryspec"
-	"github.com/algorand/go-algorand/util/timers"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/util/timers"
 )
+
+/*
+	Create a logger that hooks the "Metrics" function to signal that we have
+	indeed sent some metrics
+*/
 
 type MetricsLogger struct {
 	Logger
@@ -39,6 +46,10 @@ func (n MetricsLogger) Metrics(category telemetryspec.Category, metrics telemetr
 	*n.sentLogger = true
 }
 
+/*
+	Test the prune capabilities of the profiler.  We want to simulate
+	the conditions to show that the profiler will "remove" elements when needed.
+*/
 func TestPrune(t *testing.T) {
 
 	prof := makeProfiler(2*time.Millisecond, nil, nil, 3*time.Millisecond)
@@ -70,6 +81,9 @@ func TestPrune(t *testing.T) {
 
 }
 
+/*
+	Test functionality if the log interval is 0
+*/
 func TestProfilerStartEndZero(t *testing.T) {
 
 	var s syncState
@@ -94,6 +108,13 @@ func TestProfilerStartEndZero(t *testing.T) {
 
 }
 
+/*
+	Test profiler functionality if log interval is non-zero.
+	This test will assume that a successful start()-end() call
+	will produce a non-zero profile sum.
+
+	This test forces "detached element" logic to be run.
+*/
 func TestProfilerStartEndEnabled(t *testing.T) {
 
 	var s syncState
@@ -127,6 +148,9 @@ func TestProfilerStartEndEnabled(t *testing.T) {
 
 }
 
+/*
+	Test start-end functionality with detached elements.
+*/
 func TestProfilerStartEndDisabled(t *testing.T) {
 
 	var s syncState
@@ -154,6 +178,10 @@ func TestProfilerStartEndDisabled(t *testing.T) {
 
 }
 
+/*
+	Test that Metrics are only sent when all conditions are met and not
+	sent if they are not.
+*/
 func TestMaybeLogProfile(t *testing.T) {
 
 	sentMetrics := false
@@ -200,6 +228,9 @@ func TestMaybeLogProfile(t *testing.T) {
 
 }
 
+/*
+	Tests that getting an element returns it properly
+*/
 func TestGetElement(t *testing.T) {
 	var s syncState
 	prof := makeProfiler(2*time.Millisecond, s.clock, s.log, 3*time.Millisecond)
@@ -216,6 +247,9 @@ func TestGetElement(t *testing.T) {
 
 }
 
+/*
+	Ensures that makeProfiler() returns a valid profiler.
+*/
 func TestMakeProfiler(t *testing.T) {
 	var s syncState
 	prof := makeProfiler(2*time.Millisecond, s.clock, s.log, 3*time.Millisecond)
