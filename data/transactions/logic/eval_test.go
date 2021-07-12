@@ -2033,7 +2033,8 @@ func TestExtractOp(t *testing.T) {
 	t.Parallel()
 	testAccepts(t, "byte 0x123456789abc; extract 1 2; byte 0x3456; ==", 5)
 	testAccepts(t, "byte 0x123456789abc; extract 0 6; byte 0x123456789abc; ==", 5)
-	testAccepts(t, "byte 0x123456789abc; extract 3 0; len; int 0; ==", 5)
+	testAccepts(t, "byte 0x123456789abc; extract 3 0; byte 0x789abc; ==", 5)
+	testAccepts(t, "byte 0x123456789abc; extract 6 0; len; int 0; ==", 5)
 	testAccepts(t, "byte 0x123456789abcaa; extract 0 6; byte 0x123456789abcaa; !=", 5)
 
 	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract3; byte 0xbc; ==", 5)
@@ -2058,6 +2059,11 @@ func TestExtractFlop(t *testing.T) {
 	// fails at runtime
 	err := testPanics(t, `byte 0xf000000000000000
 	extract 1 8
+	len`, 5)
+	require.Contains(t, err.Error(), "extract range beyond length of string")
+
+	err = testPanics(t, `byte 0xf000000000000000
+	extract 9 0
 	len`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 

@@ -2587,7 +2587,12 @@ func opExtract(cx *evalContext) {
 	last := len(cx.stack) - 1
 	start := cx.program[cx.pc+1]
 	length := cx.program[cx.pc+2]
-	cx.stack[last].Bytes, cx.err = extract(cx.stack[last].Bytes, int(start), int(length))
+	// Shortcut: if length is 0, take bytes from start index to the end
+	l := int(length)
+	if length == 0 {
+		l = len(cx.stack[last].Bytes) - int(start)
+	}
+	cx.stack[last].Bytes, cx.err = extract(cx.stack[last].Bytes, int(start), l)
 }
 
 func opExtract3(cx *evalContext) {
@@ -2613,37 +2618,27 @@ func convertBytesToInt(x []byte) (out uint64) {
 	return
 }
 
-func opExtract16Bits(cx *evalContext) {
+func opExtractNBits(cx *evalContext, n int) {
 	last := len(cx.stack) - 1 // start
 	prev := last - 1          // bytes
 	start := cx.stack[last].Uint
-	cx.stack[prev].Bytes, cx.err = extract(cx.stack[prev].Bytes, int(start), 2) // extract 16 bits
+	cx.stack[prev].Bytes, cx.err = extract(cx.stack[prev].Bytes, int(start), n) // extract n bits
 
 	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
 	cx.stack[prev].Bytes = nil
 	cx.stack = cx.stack[:last]
+}
+
+func opExtract16Bits(cx *evalContext) {
+	opExtractNBits(cx, 2) // extract 16 bits
 }
 
 func opExtract32Bits(cx *evalContext) {
-	last := len(cx.stack) - 1 // start
-	prev := last - 1          // bytes
-	start := cx.stack[last].Uint
-	cx.stack[prev].Bytes, cx.err = extract(cx.stack[prev].Bytes, int(start), 4) // extract 32 bits
-
-	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
-	cx.stack[prev].Bytes = nil
-	cx.stack = cx.stack[:last]
+	opExtractNBits(cx, 4) // extract 32 bits
 }
 
 func opExtract64Bits(cx *evalContext) {
-	last := len(cx.stack) - 1 // start
-	prev := last - 1          // bytes
-	start := cx.stack[last].Uint
-	cx.stack[prev].Bytes, cx.err = extract(cx.stack[prev].Bytes, int(start), 8) // extract 64 bits
-
-	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
-	cx.stack[prev].Bytes = nil
-	cx.stack = cx.stack[:last]
+	opExtractNBits(cx, 8) // extract 64 bits
 }
 
 func accountReference(cx *evalContext, account stackValue) (basics.Address, uint64, error) {

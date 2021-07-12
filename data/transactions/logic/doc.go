@@ -109,7 +109,7 @@ var opDocByName = map[string]string{
 	"setbit":        "pop a target A, index B, and bit C. Set the Bth bit of A to C, and push the result",
 	"getbyte":       "pop a byte-array A and integer B. Extract the Bth byte of A and push it as an integer",
 	"setbyte":       "pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result",
-	"extract":       "pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If S or S+L is larger than the array length, the program fails",
+	"extract":       "pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails",
 	"extract3":      "pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails",
 	"extract16bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B or B+2 is larger than the array length, the program fails",
 	"extract32bits": "pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B or B+4 is larger than the array length, the program fails",
