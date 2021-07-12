@@ -62,10 +62,10 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 
 	t.recent = make(map[basics.Round]roundTxMembers)
 
-	// the roundsLastValids is a temporary map used during the exection of
+	// the roundsLastValids is a temporary map used during the execution of
 	// loadFromDisk, allowing us to construct the lastValid maps in their
 	// optimal size. This would ensure that upon startup, we don't preallocate
-	// more memory than we truely need.
+	// more memory than we truly need.
 	roundsLastValids := make(map[basics.Round][]transactions.Txid)
 
 	for ; old <= latest; old++ {
