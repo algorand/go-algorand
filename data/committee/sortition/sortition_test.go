@@ -63,7 +63,7 @@ func TestSortitionBasic(t *testing.T) {
 	}
 }
 
-var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 100000, "number of sortition tests to run")
+var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 1000, "number of sortition tests to run")
 
 func TestSortitionExhausting(t *testing.T) {
 	rand.Seed(time.Now().Unix())
@@ -133,6 +133,6 @@ func BenchmarkBoostCdfWalk(b *testing.B) {
 	cdfBenchmarkInner(b, boostCdfWrapper)
 }
 
-func BenchmarkBigbinomialCdfWalk(b *testing.B) {
+func BenchmarkPoissonCdfWalk(b *testing.B) {
 	cdfBenchmarkInner(b, sortitionPoissonCDFWalk)
 }
