@@ -313,11 +313,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// check that, if this tx is marking an account nonparticipating,
 		// it supplies no key (as though it were trying to go offline)
 		if tx.KeyregTxnFields.Nonparticipation {
-			if !proto.SupportBecomeNonParticipatingTransactions {
-				// if the transaction has the Nonparticipation flag high, but the protocol does not support
-				// that type of transaction, it is invalid.
-				return errKeyregTxnUnsupportedSwitchToNonParticipating
-			}
 			suppliesNullKeys := tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} || tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{}
 			if !suppliesNullKeys {
 				return errKeyregTxnGoingOnlineWithNonParticipating
