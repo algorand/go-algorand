@@ -25,7 +25,6 @@ import "C"
 import (
 	"math/big"
 
-	"github.com/vsivsi/bigbinomial"
 	"gonum.org/v1/gonum/stat/distuv"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -80,54 +79,22 @@ func SelectG(money uint64, totalMoney uint64, expectedSize float64, vrfOutput cr
 	ratio := big.Float{}
 	cratio, _ := ratio.Quo(&h, max).Float64()
 
-	return sortitionBinomialCDFWalk(binomialP, cratio, money)
+	return sortitionPoissonCDFWalk(binomialP, cratio, money)
 }
 
-func sortitionBinomialCDFWalk(p, ratio float64, money uint64) uint64 {
-	n := float64(money)
-	dist := distuv.Binomial{N: n, P: p} //TODO: rand src?
+func sortitionPoissonCDFWalk(p, ratio float64, n uint64) uint64 {
+	var (
+		dist = distuv.Poisson{Lambda: float64(n) * p} //TODO: rand src?
+		cdf  float64
+	)
 
-	for j := uint64(0); j < money; j++ {
+	for j := uint64(0); j < n; j++ {
 		// Get the cdf
-		boundary := dist.CDF(float64(j))
-
+		cdf += dist.Prob(float64(j))
 		// Found the correct boundary, break
-		if ratio <= boundary {
+		if ratio <= cdf {
 			return j
 		}
 	}
-	return money
-}
-
-func sortitionBinomialCDFWalk2(p, ratio float64, money uint64) uint64 {
-	cdf, _ := bigbinomial.CDF(p, int64(money))
-
-	for j := uint64(0); j < money; j++ {
-		// Get the cdf
-		boundary := cdf(int64(j))
-
-		// Found the correct boundary, break
-		if ratio <= boundary {
-			return j
-		}
-	}
-	return money
-}
-
-func sortitionBinomialCDFWalk3(p, ratio float64, money uint64) uint64 {
-
-	n := float64(money)
-
-	for j := uint64(0); j < money; j++ {
-
-		k := float64(j)
-		boundary := mathBetaInc(1-p, n-k, k+1)
-
-		// Found the correct boundary, break
-		if ratio <= boundary {
-			return j
-		}
-	}
-
-	return money
+	return n
 }

@@ -20,6 +20,7 @@ import (
 	"flag"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/algorand/go-algorand/crypto"
 )
@@ -62,9 +63,11 @@ func TestSortitionBasic(t *testing.T) {
 	}
 }
 
-var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 100, "number of sortition tests to run")
+var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 100000, "number of sortition tests to run")
 
 func TestSortitionExhausting(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+
 	errsum := uint64(0)
 	errfracsum := float64(0.0)
 	maxerr := uint64(0)
@@ -78,16 +81,16 @@ func TestSortitionExhausting(t *testing.T) {
 		p := expectedSize / float64(totalMoney)
 		ratio := rand.Float64()
 		boost := boostCdfWalk(n, p, ratio, money)
-		//gocdf := sortitionBinomialCDFWalk(p, ratio, money)
-		//gocdf := sortitionBinomialCDFWalk2(p, ratio, money)
-		gocdf := sortitionBinomialCDFWalk3(p, ratio, money)
+		gocdf := sortitionPoissonCDFWalk(p, ratio, money)
 		var cdferr uint64
 		if boost > gocdf {
 			cdferr = boost - gocdf
 		} else {
 			cdferr = gocdf - boost
 		}
-		//t.Logf("boost=%d gocdf=%d", boost, gocdf)
+		if boost != gocdf {
+			t.Logf("boost=%d gocdf=%d", boost, gocdf)
+		}
 		var errfrac float64
 		if boost != 0 {
 			errfrac = float64(cdferr) / float64(boost)
@@ -131,5 +134,5 @@ func BenchmarkBoostCdfWalk(b *testing.B) {
 }
 
 func BenchmarkBigbinomialCdfWalk(b *testing.B) {
-	cdfBenchmarkInner(b, sortitionBinomialCDFWalk3)
+	cdfBenchmarkInner(b, sortitionPoissonCDFWalk)
 }
