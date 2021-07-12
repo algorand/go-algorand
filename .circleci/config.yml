@@ -134,44 +134,6 @@ commands:
       - store_test_results:
           path: /tmp/results
 
-  generic_fulltest:
-    description: Run full tests from build workspace, for re-use by diferent architectures
-    parameters:
-      circleci_home:
-        type: string
-        default: "/home/circleci"
-      result_subdir:
-        type: string
-    steps:
-      - attach_workspace:
-          at: << parameters.circleci_home >>
-      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
-      - run:
-          name: Run full tests
-          no_output_timeout: 30m
-          command: |
-            set -e
-            set -x
-            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            export GOPATH="<< parameters.circleci_home >>/go"
-            export PATH="${PATH}:${GOPATH}/bin"
-            export ALGORAND_DEADLOCK=enable
-            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-            eval "$(~/gimme "${GOLANG_VERSION}")"
-            scripts/configure_dev.sh
-            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-            PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-            export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
-            export PARTITION_ID=$CIRCLE_NODE_INDEX
-            export PARALLEL_FLAG="-p 1"
-            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
-      - store_artifacts:
-          path: /tmp/results
-          destination: test-results
-      - store_test_results:
-          path: /tmp/results
-
   generic_integration:
     description: Run integration tests from build workspace, for re-use by diferent architectures
     parameters:
@@ -241,8 +203,6 @@ jobs:
       - prepare_go
       - generic_shorttest:
           result_subdir: amd64-short
-      - generic_fulltest:
-          result_subdir: amd64-full
 
 
   amd64_integration:
@@ -287,8 +247,6 @@ jobs:
       - prepare_go
       - generic_shorttest:
           result_subdir: arm64-short
-      - generic_fulltest:
-          result_subdir: amd64-full
 
   arm64_integration:
     machine:
