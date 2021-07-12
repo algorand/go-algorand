@@ -2034,8 +2034,14 @@ func TestExtractOp(t *testing.T) {
 	testAccepts(t, "byte 0x123456789abc; extract 1 2; byte 0x3456; ==", 5)
 	testAccepts(t, "byte 0x123456789abc; extract 0 6; byte 0x123456789abc; ==", 5)
 	testAccepts(t, "byte 0x123456789abc; extract 3 0; len; int 0; ==", 5)
+	testAccepts(t, "byte 0x123456789abcaa; extract 0 6; byte 0x123456789abcaa; !=", 5)
 
 	testAccepts(t, "byte 0x123456789abc; int 5; int 1; extract3; byte 0xbc; ==", 5)
+
+	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract16bits; int 0x3456; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 1; extract32bits; int 0x3456789a; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef0; ==", 5)
+	testAccepts(t, "byte 0x123456789abcdef0; int 0; extract64bits; int 0x123456789abcdef; !=", 5)
 }
 
 func TestExtractFlop(t *testing.T) {
@@ -2045,7 +2051,6 @@ func TestExtractFlop(t *testing.T) {
 	extract
 	len`, 5, expect{2, "extract expects 2 immediate arguments"})
 
-	// fails in compiler
 	testProg(t, `byte 0xf000000000000000
 	extract 1
 	len`, 5, expect{2, "extract expects 2 immediate arguments"})
@@ -2056,7 +2061,6 @@ func TestExtractFlop(t *testing.T) {
 	len`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 
-	// fails at runtime
 	err = testPanics(t, `byte 0xf000000000000000
 	int 4
 	int 0xFFFFFFFFFFFFFFFE
@@ -2064,7 +2068,6 @@ func TestExtractFlop(t *testing.T) {
 	len`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 
-	// fails at runtime
 	err = testPanics(t, `byte 0xf000000000000000
 	int 100
 	int 2
@@ -2072,6 +2075,20 @@ func TestExtractFlop(t *testing.T) {
 	len`, 5)
 	require.Contains(t, err.Error(), "extract range beyond length of string")
 
+	err = testPanics(t, `byte 0xf000000000000000
+	int 55
+	extract16bits`, 5)
+	require.Contains(t, err.Error(), "extract range beyond length of string")
+
+	err = testPanics(t, `byte 0xf000000000000000
+	int 9
+	extract32bits`, 5)
+	require.Contains(t, err.Error(), "extract range beyond length of string")
+
+	err = testPanics(t, `byte 0xf000000000000000
+	int 1
+	extract64bits`, 5)
+	require.Contains(t, err.Error(), "extract range beyond length of string")
 }
 
 func TestLoadStore(t *testing.T) {

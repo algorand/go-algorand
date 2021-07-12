@@ -2604,32 +2604,46 @@ func opExtract3(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+func convertBytesToInt(x []byte) (out uint64) {
+	out = uint64(0)
+	for _, b := range x {
+		out = out << 8
+		out = out | (uint64(b) & 0x0ff)
+	}
+	return
+}
+
 func opExtract16Bits(cx *evalContext) {
-	// last := len(cx.stack) - 1
-	// ibytes := cx.stack[last].Bytes
-	// if len(ibytes) > 8 {
-	// 	cx.err = fmt.Errorf("btoi arg too long, got [%d]bytes", len(ibytes))
-	// 	return
-	// }
-	// value := uint64(0)
-	// for _, b := range ibytes {
-	// 	value = value << 8
-	// 	value = value | (uint64(b) & 0x0ff)
-	// }
-	// cx.stack[last].Uint = value
-	// cx.stack[last].Bytes = nil
 	last := len(cx.stack) - 1 // start
 	prev := last - 1          // bytes
 	start := cx.stack[last].Uint
-	cx.stack[prev].Bytes, cx.err = extract(cx.stack[prev].Bytes, int(start), 2)
+	cx.stack[prev].Bytes, cx.err = extract(cx.stack[prev].Bytes, int(start), 2) // extract 16 bits
 
-	value := uint64(0)
-	for _, b := range cx.stack[prev].Bytes {
-		value = value << 8
-		value = value | (uint64(b) & 0x0ff)
-	}
-	cx.stack[last].Uint = value
-	cx.stack[last].Bytes = nil
+	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
+	cx.stack[prev].Bytes = nil
+	cx.stack = cx.stack[:last]
+}
+
+func opExtract32Bits(cx *evalContext) {
+	last := len(cx.stack) - 1 // start
+	prev := last - 1          // bytes
+	start := cx.stack[last].Uint
+	cx.stack[prev].Bytes, cx.err = extract(cx.stack[prev].Bytes, int(start), 4) // extract 32 bits
+
+	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
+	cx.stack[prev].Bytes = nil
+	cx.stack = cx.stack[:last]
+}
+
+func opExtract64Bits(cx *evalContext) {
+	last := len(cx.stack) - 1 // start
+	prev := last - 1          // bytes
+	start := cx.stack[last].Uint
+	cx.stack[prev].Bytes, cx.err = extract(cx.stack[prev].Bytes, int(start), 8) // extract 64 bits
+
+	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
+	cx.stack[prev].Bytes = nil
+	cx.stack = cx.stack[:last]
 }
 
 func accountReference(cx *evalContext, account stackValue) (basics.Address, uint64, error) {
