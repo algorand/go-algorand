@@ -56,11 +56,13 @@ func (tsnc *transcationSyncNodeConnector) Events() <-chan txnsync.Event {
 	return tsnc.eventsCh
 }
 
+// GetCurrentRoundSettings is called when the txsync is starting up, proving
+// round information.
 func (tsnc *transcationSyncNodeConnector) GetCurrentRoundSettings() txnsync.RoundSettings {
 	round := tsnc.node.ledger.Latest()
 	return txnsync.RoundSettings{
 		Round:             round,
-		FetchTransactions: tsnc.node.accountManager.HasLiveKeys(round, round),
+		FetchTransactions: tsnc.node.config.ForceFetchTransactions || tsnc.node.accountManager.HasLiveKeys(round, round),
 	}
 }
 
@@ -169,7 +171,8 @@ func (tsnc *transcationSyncNodeConnector) onNewTransactionPoolEntry(transcationP
 // the ordering of the block notifier registration.
 func (tsnc *transcationSyncNodeConnector) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	blkRound := block.Round()
-	fetchTransactions := tsnc.node.accountManager.HasLiveKeys(blkRound, blkRound)
+
+	fetchTransactions := tsnc.node.config.ForceFetchTransactions || tsnc.node.accountManager.HasLiveKeys(blkRound, blkRound)
 	// if this is a relay, then we always want to fetch transactions, regardless if we have participation keys.
 	if tsnc.node.config.NetAddress != "" {
 		fetchTransactions = true
