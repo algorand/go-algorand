@@ -29,16 +29,6 @@ workflows:
       - arm64_e2e_subs:
           requires:
             - arm64_build
-      - mac_amd64_build
-      - mac_amd64_test:
-          requires:
-            - mac_amd64_build
-      - mac_amd64_integration:
-          requires:
-            - mac_amd64_build
-      - mac_amd64_e2e_subs:
-          requires:
-            - mac_amd64_build
   build_windows:
     jobs:
       - windows_x64_build
@@ -281,56 +271,6 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: arm64-e2e_subs
-
-  mac_amd64_build:
-    macos:
-      xcode: 12.0.1
-    resource_class: large
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - checkout
-      - prepare_go
-      - generic_build:
-          circleci_home: /Users/distiller
-
-  mac_amd64_test:
-    macos:
-      xcode: 12.0.1
-    resource_class: large
-    parallelism: 4
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_shorttest:
-          result_subdir: mac-amd64-short
-          circleci_home: /Users/distiller
-
-  mac_amd64_integration:
-    macos:
-      xcode: 12.0.1
-    resource_class: large
-    parallelism: 4
-    environment:
-      SKIP_E2E_SUBS: "true"
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_integration:
-          result_subdir: mac-amd64-integration
-          circleci_home: /Users/distiller
-
-  mac_amd64_e2e_subs:
-    macos:
-      xcode: 12.0.1
-    resource_class: large
-    environment:
-      E2E_SUBS_ONLY: "tsrue"
-    steps:
-      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
-      - prepare_go
-      - generic_integration:
-          result_subdir: mac-amd64-e2e_subs
-          circleci_home: /Users/distiller
 
   windows_x64_build:
     executor:
