@@ -39,9 +39,9 @@ workflows:
       - mac_amd64_e2e_subs:
           requires:
             - mac_amd64_build
-  #build_windows:
-  #  jobs:
-      #- windows_x64_build
+  build_windows:
+    jobs:
+      - windows_x64_build
 
 commands:
   prepare_go:
