@@ -122,6 +122,7 @@ var opDocByName = map[string]string{
 	"app_global_del":    "delete key A from a global state of the current application",
 	"asset_holding_get": "read from account A and asset B holding field X (imm arg) => {0 or 1 (top), value}",
 	"asset_params_get":  "read from asset A params field X (imm arg) => {0 or 1 (top), value}",
+	"app_params_get":    "read from app A params field X (imm arg) => {0 or 1 (top), value}",
 	"assert":            "immediately fail unless value X is a non-zero number",
 	"callsub":           "branch unconditionally to TARGET, saving the next instruction on the call stack",
 	"retsub":            "pop the top instruction from the call stack and branch to it",
@@ -179,6 +180,7 @@ var opcodeImmediateNotes = map[string]string{
 	"dig":               "{uint8 depth}",
 	"asset_holding_get": "{uint8 asset holding field index}",
 	"asset_params_get":  "{uint8 asset params field index}",
+	"app_params_get":    "{uint8 app params field index}",
 }
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
@@ -225,6 +227,7 @@ var opDocExtras = map[string]string{
 	"app_global_del":    "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)",
 	"asset_holding_get": "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"asset_params_get":  "params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.",
+	"app_params_get":    "params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.",
 }
 
 // OpDocExtra returns extra documentation text about an op
@@ -239,7 +242,7 @@ var OpGroups = map[string][]string{
 	"Byteslice Logic":      {"b|", "b&", "b^", "b~"},
 	"Loading Values":       {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "gtxns", "gtxnsa", "global", "load", "store", "gload", "gloads", "gaid", "gaids"},
 	"Flow Control":         {"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2", "dig", "swap", "select", "assert", "callsub", "retsub"},
-	"State Access":         {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"},
+	"State Access":         {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get"},
 }
 
 // OpCost indicates the cost of an operation over the range of
@@ -307,18 +310,22 @@ func OnCompletionDescription(value uint64) string {
 const OnCompletionPreamble = "An application transaction must indicate the action to be taken following the execution of its approvalProgram or clearStateProgram. The constants below describe the available actions."
 
 var txnFieldDocs = map[string]string{
-	"Sender":           "32 byte address",
-	"Fee":              "micro-Algos",
-	"FirstValid":       "round number",
-	"FirstValidTime":   "Causes program to fail; reserved for future use",
-	"LastValid":        "round number",
-	"Receiver":         "32 byte address",
-	"Amount":           "micro-Algos",
-	"CloseRemainderTo": "32 byte address",
-	"VotePK":           "32 byte address",
-	"SelectionPK":      "32 byte address",
-	//"VoteFirst": "",
-	//"VoteLast": "",
+	"Sender":                   "32 byte address",
+	"Fee":                      "micro-Algos",
+	"FirstValid":               "round number",
+	"FirstValidTime":           "Causes program to fail; reserved for future use",
+	"LastValid":                "round number",
+	"Note":                     "Any data up to 1024 bytes",
+	"Lease":                    "32 byte lease value",
+	"Receiver":                 "32 byte address",
+	"Amount":                   "micro-Algos",
+	"CloseRemainderTo":         "32 byte address",
+	"VotePK":                   "32 byte address",
+	"SelectionPK":              "32 byte address",
+	"VoteFirst":                "The first round that the participation key is valid.",
+	"VoteLast":                 "The last round that the participation key is valid.",
+	"VoteKeyDilution":          "Dilution for the 2-level participation key",
+	"Type":                     "Transaction type as bytes",
 	"TypeEnum":                 "See table below",
 	"XferAsset":                "Asset ID",
 	"AssetAmount":              "value in Asset's units",
@@ -427,4 +434,17 @@ var AssetParamsFieldDocs = map[string]string{
 	"AssetReserve":       "Reserve address",
 	"AssetFreeze":        "Freeze address",
 	"AssetClawback":      "Clawback address",
+	"AssetCreator":       "Creator address",
+}
+
+// AppParamsFieldDocs are notes on fields available in `app_params_get`
+var AppParamsFieldDocs = map[string]string{
+	"AppApprovalProgram":    "Bytecode of Approval Program",
+	"AppClearStateProgram":  "Bytecode of Clear State Program",
+	"AppGlobalNumUint":      "Number of uint64 values allowed in Global State",
+	"AppGlobalNumByteSlice": "Number of byte array values allowed in Global State",
+	"AppLocalNumUint":       "Number of uint64 values allowed in Local State",
+	"AppLocalNumByteSlice":  "Number of byte array values allowed in Local State",
+	"AppExtraProgramPages":  "Number of Extra Program Pages of code space",
+	"AppCreator":            "Creator address",
 }
