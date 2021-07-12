@@ -134,7 +134,7 @@ func filterFactoryXor32(numEntries int, s *syncState) bloom.GenericFilter {
 	return bloom.NewXor(numEntries, &s.xorBuilder)
 }
 
-var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryXor32
+var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryXor8
 
 func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams
