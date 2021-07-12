@@ -74,31 +74,31 @@ func TestSortitionExhausting(t *testing.T) {
 		money := uint64(rand.Int63n(totalMoney))
 		// committee size [30.0 .. 60.0)
 		expectedSize := (rand.Float64() * 30.0) + 30.0
-		//n := float64(money)
 		p := expectedSize / float64(totalMoney)
 		ratio := rand.Float64()
-		boost := sortitionPoissonCDFWalk(p, ratio, money)
-		gocdf := sortitionBigBinomialCDFWalk(p, ratio, money)
-		//gocdf := sortitionBinomialCDFWalk(p, ratio, money)
+		poisson := sortitionPoissonCDFWalk(p, ratio, money)
+		big := sortitionBigBinomialCDFWalk(p, ratio, money)
 
 		var cdferr uint64
-		if boost > gocdf {
-			cdferr = boost - gocdf
+		if poisson > big {
+			cdferr = poisson - big
 		} else {
-			cdferr = gocdf - boost
+			cdferr = big - poisson
 		}
 
-		t.Logf("boost=%d gocdf=%d", boost, gocdf)
+		//t.Logf("poisson=%d big=%d", poisson, big)
 
 		var errfrac float64
-		if boost != 0 {
-			errfrac = float64(cdferr) / float64(boost)
+		if poisson != 0 {
+			errfrac = float64(cdferr) / float64(poisson)
 		} else {
 			errfrac = float64(cdferr)
 		}
+
 		if cdferr > maxerr {
 			maxerr = cdferr
 		}
+
 		errsum += cdferr
 		errfracsum += errfrac
 	}
