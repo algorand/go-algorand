@@ -1699,6 +1699,36 @@ func opDig(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
+func opCover(cx *evalContext) {
+	depth := int(uint(cx.program[cx.pc+1]))
+	idx := len(cx.stack) - 1 - depth
+	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
+	// so we can't expect our stack to be prechecked.
+	if idx < 0 {
+		cx.err = fmt.Errorf("cover %d with stack size = %d", depth, len(cx.stack))
+		return
+	}
+	topIndex := len(cx.stack) - 1
+	topsv := cx.stack[topIndex]
+	for i := 0; i < depth; i++ {
+		cx.stack[topIndex - i] = cx.stack[topIndex - i - 1]
+	}
+	cx.stack[idx] = topsv
+}
+
+func opUncover(cx *evalContext) {
+	depth := int(uint(cx.program[cx.pc+1]))
+	idx := len(cx.stack) - 1 - depth
+	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
+	// so we can't expect our stack to be prechecked.
+	if idx < 0 {
+		cx.err = fmt.Errorf("dig %d with stack size = %d", depth, len(cx.stack))
+		return
+	}
+	sv := cx.stack[idx]
+	cx.stack = append(cx.stack, sv)
+}
+
 func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
 	switch AssetHoldingField(field) {
 	case AssetBalance:

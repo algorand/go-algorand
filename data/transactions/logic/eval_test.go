@@ -4116,6 +4116,19 @@ func TestDig(t *testing.T) {
 	testPanics(t, "int 3; int 2; int 1; dig 11; int 2; ==; return", 3)
 }
 
+func TestCover(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; int 2; ==; return", 3)
+	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; pop; pop; int 1; ==; return", 3)
+	testPanics(t, "int 4; int 3; int 2; int 1; cover 11; int 2; ==; return", 3)
+}
+
+func TestUncover(t *testing.T) {
+	t.Parallel()
+	testAccepts(t, "int 3; int 2; int 1; dig 1; int 2; ==; return", 3)
+	testPanics(t, "int 3; int 2; int 1; dig 11; int 2; ==; return", 3)
+}
+
 func TestPush(t *testing.T) {
 	t.Parallel()
 	testAccepts(t, "int 2; pushint 2; ==", 3)
