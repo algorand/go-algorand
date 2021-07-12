@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -97,6 +98,11 @@ func (lwd *LedgerWalletDriver) FetchWallet(id []byte) (w wallet.Wallet, err erro
 // scanWalletsLocked enumerates attached ledger devices and stores them.
 // lwd.mu must be held
 func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
+
+	if os.Getenv("KMD_NOUSB") != "" {
+		return nil
+	}
+
 	// Initialize wallets map
 	if lwd.wallets == nil {
 		lwd.wallets = make(map[string]*LedgerWallet)
