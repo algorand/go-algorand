@@ -148,7 +148,7 @@ type AccountData struct {
 
 	VoteID       crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID  crypto.VRFVerifier              `codec:"sel"`
-	BlockProofID crypto.VerifyingKey             `codec:"blockproof"`
+	BlockProofID crypto.VerifyingKey             `codec:"blkprf"`
 
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`

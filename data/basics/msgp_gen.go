@@ -383,8 +383,8 @@ func (z *AccountData) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0009Mask & 0x40) == 0 { // if not empty
-			// string "blockproof"
-			o = append(o, 0xaa, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x70, 0x72, 0x6f, 0x6f, 0x66)
+			// string "blkprf"
+			o = append(o, 0xa6, 0x62, 0x6c, 0x6b, 0x70, 0x72, 0x66)
 			o = (*z).BlockProofID.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x80) == 0 { // if not empty
@@ -937,7 +937,7 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SelectionID")
 					return
 				}
-			case "blockproof":
+			case "blkprf":
 				bts, err = (*z).BlockProofID.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "BlockProofID")
@@ -1271,7 +1271,7 @@ func (_ *AccountData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AccountData) Msgsize() (s int) {
-	s = 3 + 4 + msgp.ByteSize + 5 + (*z).MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + (*z).RewardedMicroAlgos.Msgsize() + 5 + (*z).VoteID.Msgsize() + 4 + (*z).SelectionID.Msgsize() + 11 + (*z).BlockProofID.Msgsize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
+	s = 3 + 4 + msgp.ByteSize + 5 + (*z).MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + (*z).RewardedMicroAlgos.Msgsize() + 5 + (*z).VoteID.Msgsize() + 4 + (*z).SelectionID.Msgsize() + 7 + (*z).BlockProofID.Msgsize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
 	if (*z).AssetParams != nil {
 		for zb0001, zb0002 := range (*z).AssetParams {
 			_ = zb0001
@@ -3090,8 +3090,8 @@ func (z *BalanceRecord) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0009Mask & 0x100) == 0 { // if not empty
-			// string "blockproof"
-			o = append(o, 0xaa, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x70, 0x72, 0x6f, 0x6f, 0x66)
+			// string "blkprf"
+			o = append(o, 0xa6, 0x62, 0x6c, 0x6b, 0x70, 0x72, 0x66)
 			o = (*z).AccountData.BlockProofID.MarshalMsg(o)
 		}
 		if (zb0009Mask & 0x200) == 0 { // if not empty
@@ -3658,7 +3658,7 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "SelectionID")
 					return
 				}
-			case "blockproof":
+			case "blkprf":
 				bts, err = (*z).AccountData.BlockProofID.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "BlockProofID")
@@ -3992,7 +3992,7 @@ func (_ *BalanceRecord) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BalanceRecord) Msgsize() (s int) {
-	s = 3 + 5 + (*z).Addr.Msgsize() + 4 + msgp.ByteSize + 5 + (*z).AccountData.MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + (*z).AccountData.RewardedMicroAlgos.Msgsize() + 5 + (*z).AccountData.VoteID.Msgsize() + 4 + (*z).AccountData.SelectionID.Msgsize() + 11 + (*z).AccountData.BlockProofID.Msgsize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
+	s = 3 + 5 + (*z).Addr.Msgsize() + 4 + msgp.ByteSize + 5 + (*z).AccountData.MicroAlgos.Msgsize() + 6 + msgp.Uint64Size + 4 + (*z).AccountData.RewardedMicroAlgos.Msgsize() + 5 + (*z).AccountData.VoteID.Msgsize() + 4 + (*z).AccountData.SelectionID.Msgsize() + 7 + (*z).AccountData.BlockProofID.Msgsize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
 	if (*z).AccountData.AssetParams != nil {
 		for zb0001, zb0002 := range (*z).AccountData.AssetParams {
 			_ = zb0001
