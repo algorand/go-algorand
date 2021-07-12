@@ -42,7 +42,7 @@ func TestBloomFallback(t *testing.T) {
 
 	txnGroups := []transactions.SignedTxGroup{
 		transactions.SignedTxGroup{
-			FirstTransactionID: transactions.Txid{1},
+			GroupTransactionID: transactions.Txid{1},
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -62,7 +62,7 @@ func TestBloomFallback(t *testing.T) {
 			},
 		},
 		transactions.SignedTxGroup{
-			FirstTransactionID: transactions.Txid{2},
+			GroupTransactionID: transactions.Txid{2},
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -94,7 +94,7 @@ func TestBloomFallback(t *testing.T) {
 			},
 		},
 		transactions.SignedTxGroup{
-			FirstTransactionID: transactions.Txid{3},
+			GroupTransactionID: transactions.Txid{3},
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{

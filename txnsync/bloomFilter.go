@@ -159,14 +159,14 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 
 		result.filter = filterFactory(len(txnGroups), s)
 		for _, group := range txnGroups {
-			result.filter.Set(group.FirstTransactionID[:])
+			result.filter.Set(group.GroupTransactionID[:])
 		}
 		_, err := result.encode()
 		if err != nil {
 			// fall back to standard bloom filter
 			result.filter = filterFactoryBloom(len(txnGroups), s)
 			for _, group := range txnGroups {
-				result.filter.Set(group.FirstTransactionID[:])
+				result.filter.Set(group.GroupTransactionID[:])
 			}
 		}
 	default:
@@ -176,7 +176,7 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 		defer releaseTxIDSliceBuffer(filtedTransactionsIDs)
 
 		for _, group := range txnGroups {
-			txID := group.FirstTransactionID
+			txID := group.GroupTransactionID
 			if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {
 				continue
 			}

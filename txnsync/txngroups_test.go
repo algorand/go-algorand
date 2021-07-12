@@ -151,7 +151,7 @@ func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte
 		TxnGroups: make([]txnGroups, len(inTxnGroups)),
 	}
 	for i := range inTxnGroups {
-		stub.TxnGroups[i] = inTxnGroups[i].Transactions
+		stub.TxnGroups[i] = txnGroups(inTxnGroups[i].Transactions)
 	}
 
 	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
@@ -169,7 +169,7 @@ func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTx
 	}
 	txnGroups = make([]transactions.SignedTxGroup, len(stub.TxnGroups))
 	for i := range stub.TxnGroups {
-		txnGroups[i].Transactions = stub.TxnGroups[i]
+		txnGroups[i].Transactions = transactions.SignedTxnSlice(stub.TxnGroups[i])
 	}
 	return txnGroups, nil
 }

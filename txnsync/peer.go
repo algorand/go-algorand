@@ -356,7 +356,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 	grpIdx := startIndex
 scanLoop:
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
-		txID := pendingTransactions[grpIdx].FirstTransactionID
+		txID := pendingTransactions[grpIdx].GroupTransactionID
 
 		// check if the peer would be interested in these messages -
 		if p.requestedTransactionsModulator > 1 {
@@ -515,7 +515,7 @@ func (p *Peer) updateRequestParams(modulator, offset byte) {
 func (p *Peer) updateIncomingTransactionGroups(txnGroups []transactions.SignedTxGroup) {
 	for _, txnGroup := range txnGroups {
 		if len(txnGroup.Transactions) > 0 {
-			p.recentSentTransactions.add(txnGroup.FirstTransactionID)
+			p.recentSentTransactions.add(txnGroup.GroupTransactionID)
 		}
 	}
 }

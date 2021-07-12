@@ -130,6 +130,14 @@ import (
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
 //
+// SignedTxnSlice
+//        |-----> MarshalMsg
+//        |-----> CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> Msgsize
+//        |-----> MsgIsZero
+//
 // SignedTxnWithAD
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
@@ -3327,6 +3335,79 @@ func (z *SignedTxnInBlock) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxnInBlock) MsgIsZero() bool {
 	return ((*z).SignedTxnWithAD.SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Txn.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.AuthAddr.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ClosingAmount.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.AssetClosingAmount == 0) && ((*z).SignedTxnWithAD.ApplyData.SenderRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.CloseRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.EvalDelta.MsgIsZero()) && ((*z).HasGenesisID == false) && ((*z).HasGenesisHash == false)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z SignedTxnSlice) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	if z == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendArrayHeader(o, uint32(len(z)))
+	}
+	for za0001 := range z {
+		o = z[za0001].MarshalMsg(o)
+	}
+	return
+}
+
+func (_ SignedTxnSlice) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(SignedTxnSlice)
+	if !ok {
+		_, ok = (z).(*SignedTxnSlice)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *SignedTxnSlice) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0002 > config.MaxTxGroupSize {
+		err = msgp.ErrOverflow(uint64(zb0002), uint64(config.MaxTxGroupSize))
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0003 {
+		(*z) = nil
+	} else if (*z) != nil && cap((*z)) >= zb0002 {
+		(*z) = (*z)[:zb0002]
+	} else {
+		(*z) = make(SignedTxnSlice, zb0002)
+	}
+	for zb0001 := range *z {
+		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
+		if err != nil {
+			err = msgp.WrapError(err, zb0001)
+			return
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *SignedTxnSlice) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*SignedTxnSlice)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z SignedTxnSlice) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize
+	for za0001 := range z {
+		s += z[za0001].Msgsize()
+	}
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z SignedTxnSlice) MsgIsZero() bool {
+	return len(z) == 0
 }
 
 // MarshalMsg implements msgp.Marshaler
