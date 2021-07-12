@@ -17,6 +17,7 @@
 package sortition
 
 import (
+	"flag"
 	"math/rand"
 	"testing"
 
@@ -34,6 +35,8 @@ func BenchmarkSortition(b *testing.B) {
 		Select(1000000, 1000000000000, 2500, keys[i])
 	}
 }
+
+var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 100, "number of sortition tests to run")
 
 func TestSortitionBasic(t *testing.T) {
 	hitcount := uint64(0)
@@ -59,4 +62,72 @@ func TestSortitionBasic(t *testing.T) {
 	if d > maxd {
 		t.Errorf("wanted %d selections but got %d, d=%d, maxd=%d", expected, hitcount, d, maxd)
 	}
+}
+
+func TestSortitionExhausting(t *testing.T) {
+	errsum := uint64(0)
+	errfracsum := float64(0.0)
+	maxerr := uint64(0)
+	runcount := *runcountP
+	const totalMoney = 10000000000000000
+	for i := uint64(0); i < runcount; i++ {
+		money := uint64(rand.Int63n(totalMoney))
+		// committee size [30.0 .. 60.0)
+		expectedSize := (rand.Float64() * 30.0) + 30.0
+		//n := float64(money)
+		p := expectedSize / float64(totalMoney)
+		ratio := rand.Float64()
+		boost := sortitionPoissonCDFWalk(p, ratio, money)
+		gocdf := sortitionBigBinomialCDFWalk(p, ratio, money)
+		//gocdf := sortitionBinomialCDFWalk(p, ratio, money)
+
+		var cdferr uint64
+		if boost > gocdf {
+			cdferr = boost - gocdf
+		} else {
+			cdferr = gocdf - boost
+		}
+
+		t.Logf("boost=%d gocdf=%d", boost, gocdf)
+
+		var errfrac float64
+		if boost != 0 {
+			errfrac = float64(cdferr) / float64(boost)
+		} else {
+			errfrac = float64(cdferr)
+		}
+		if cdferr > maxerr {
+			maxerr = cdferr
+		}
+		errsum += cdferr
+		errfracsum += errfrac
+	}
+	t.Logf("%d total err across %d tests, avg=%f (%f), max=%d", errsum, runcount, float64(errsum)/float64(runcount), errfracsum/float64(runcount), maxerr)
+}
+
+func cdfBenchmarkInner(b *testing.B, tf func(p, ratio float64, money uint64) uint64) {
+	const totalMoney = 10000000000000000
+	moneys := make([]uint64, b.N)
+	esizes := make([]float64, b.N)
+	ratios := make([]float64, b.N)
+	for i := 0; i < b.N; i++ {
+		moneys[i] = uint64(rand.Int63n(totalMoney))
+		esizes[i] = (rand.Float64() * 30.0) + 30.0
+		ratios[i] = rand.Float64()
+	}
+	b.ResetTimer()
+	for i, money := range moneys {
+		expectedSize := esizes[i]
+		ratio := ratios[i]
+		p := expectedSize / float64(totalMoney)
+		tf(p, ratio, money)
+	}
+}
+
+func BenchmarkBinomialCdfWalk(b *testing.B) {
+	cdfBenchmarkInner(b, sortitionBigBinomialCDFWalk)
+}
+
+func BenchmarkPoissonCdfWalk(b *testing.B) {
+	cdfBenchmarkInner(b, sortitionPoissonCDFWalk)
 }

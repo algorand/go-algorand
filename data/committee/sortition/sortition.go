@@ -20,13 +20,12 @@ import (
 	"math/big"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/vsivsi/bigbinomial"
 	"gonum.org/v1/gonum/stat/distuv"
 )
 
 // Select runs the sortition function and returns the number of time the key was selected
 func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput crypto.Digest) uint64 {
-	binomialN := float64(money)
-	binomialP := expectedSize / float64(totalMoney)
 
 	t := &big.Int{}
 	t.SetBytes(vrfOutput[:])
@@ -44,23 +43,68 @@ func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput cry
 	ratio := big.Float{}
 	cratio, _ := ratio.Quo(&h, max).Float64()
 
-	return sortitionBinomialCDFWalk(binomialN, binomialP, cratio, money)
+	p := expectedSize / float64(totalMoney)
+
+	return sortitionPoissonCDFWalk(p, cratio, money)
 }
 
-func sortitionBinomialCDFWalk(n, p, ratio float64, money uint64) uint64 {
+func sortitionPoissonCDFWalk(p, ratio float64, n uint64) uint64 {
 	var (
-		dist = distuv.Binomial{N: n, P: p} //TODO: rand src?
+		dist = distuv.Poisson{Lambda: float64(n) * p} //TODO: rand src?
 		cdf  float64
 	)
 
-	for j := uint64(0); j < money; j++ {
+	for j := uint64(0); j < n; j++ {
 		// accumulate the prob
-		cdf += dist.Prob(float64(j))
+		px := dist.Prob(float64(j))
+
+		if px == 0 {
+			return n
+		}
+
+		cdf += px
 
 		// Found the correct boundary, break
 		if ratio <= cdf {
 			return j
 		}
 	}
-	return money
+	return n
+}
+
+func sortitionBinomialCDFWalk(p, ratio float64, n uint64) uint64 {
+	var (
+		dist = distuv.Binomial{N: float64(n), P: p} //TODO: rand src?
+		cdf  float64
+	)
+
+	for j := uint64(0); j < n; j++ {
+		// accumulate the prob
+		px := dist.Prob(float64(j))
+
+		if px == 0 {
+			return n
+		}
+		cdf += px
+
+		// Found the correct boundary, break
+		if ratio <= cdf {
+			return j
+		}
+	}
+	return n
+}
+
+func sortitionBigBinomialCDFWalk(p, ratio float64, n uint64) uint64 {
+	pmf, _ := bigbinomial.PMF(p, int64(n))
+	var cdf float64
+
+	for j := uint64(0); j < n; j++ {
+		px := pmf(int64(j))
+		cdf += px
+		if ratio <= cdf {
+			return j
+		}
+	}
+	return n
 }
