@@ -250,8 +250,10 @@ var errKeyregTxnUnsupportedSwitchToNonParticipating = errors.New("transaction tr
 var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries to register keys to go online, but nonparticipatory flag is set")
 var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
 var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
-var errKeyRegBadBlockProofPK = errors.New("transaction field BlockProofPK is either empty or invalid")
+var errKeyRegEmptyBlockProofPK = errors.New("transaction field BlockProofPK is empty")
+var errKeyReginvalidBlockProofPK = errors.New("transaction field BlockProofPK is invalid")
 var errKeyregTxnNotEmptyBLockProofPK = errors.New("transaction field BlockProofPK should be empty in this consensus version")
+var errKeyregTxnNonParticipantShouldBeEmptyBlockProofPK = errors.New("non participation keyreg transactions should contain empty blockProofPK")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
@@ -293,23 +295,19 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
-		if proto.EnableBlockProofKeyregCheck {
-			if (tx.KeyregTxnFields.BlockProofPK == crypto.VerifyingKey{}) || !tx.KeyregTxnFields.BlockProofPK.IsValid() {
-				return errKeyRegBadBlockProofPK
-			}
-		} else {
-			if (tx.KeyregTxnFields.BlockProofPK != crypto.VerifyingKey{}) {
-				return errKeyregTxnNotEmptyBLockProofPK
-			}
+		if tx.KeyregTxnFields.Nonparticipation && !proto.SupportBecomeNonParticipatingTransactions {
+			// if the transaction has the Nonparticipation flag high, but the protocol does not support
+			// that type of transaction, it is invalid.
+			return errKeyregTxnUnsupportedSwitchToNonParticipating
 		}
+
+		if err := tx.blockProofPKWellFormed(proto); err != nil {
+			return err
+		}
+
 		// check that, if this tx is marking an account nonparticipating,
 		// it supplies no key (as though it were trying to go offline)
 		if tx.KeyregTxnFields.Nonparticipation {
-			if !proto.SupportBecomeNonParticipatingTransactions {
-				// if the transaction has the Nonparticipation flag high, but the protocol does not support
-				// that type of transaction, it is invalid.
-				return errKeyregTxnUnsupportedSwitchToNonParticipating
-			}
 			suppliesNullKeys := tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} || tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{}
 			if !suppliesNullKeys {
 				return errKeyregTxnGoingOnlineWithNonParticipating
@@ -537,6 +535,36 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if !proto.SupportRekeying && (tx.RekeyTo != basics.Address{}) {
 		return fmt.Errorf("transaction has RekeyTo set but rekeying not yet enabled")
 	}
+	return nil
+}
+
+func (tx Transaction) blockProofPKWellFormed(proto config.ConsensusParams) error {
+	if !proto.EnableBlockProofKeyregCheck {
+		// make certain empty key is stored.
+		if (tx.KeyregTxnFields.BlockProofPK != crypto.VerifyingKey{}) {
+			return errKeyregTxnNotEmptyBLockProofPK
+		}
+		return nil
+	}
+
+	if tx.Nonparticipation {
+		// make certain that set offline request clears the blockProofPK.
+		if (tx.KeyregTxnFields.BlockProofPK != crypto.VerifyingKey{}) {
+			return errKeyregTxnNonParticipantShouldBeEmptyBlockProofPK
+		}
+		return nil
+	}
+
+	// setting online cannot set an empty blockProofPK
+	if (tx.KeyregTxnFields.BlockProofPK == crypto.VerifyingKey{}) {
+		return errKeyRegEmptyBlockProofPK
+	}
+
+	// setting online cannot set invalid blockProofPK
+	if !tx.KeyregTxnFields.BlockProofPK.IsValid() {
+		return errKeyReginvalidBlockProofPK
+	}
+
 	return nil
 }
 
