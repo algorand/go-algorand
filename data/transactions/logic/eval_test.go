@@ -4421,5 +4421,68 @@ func TestBytesConversions(t *testing.T) {
 }
 
 func TestLog(t *testing.T) {
-	testAccepts(t, `byte  "log me"; log; 0; ==`, 5)
+	t.Parallel()
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+	txn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+		},
+	}
+	ledger := makeTestLedger(nil)
+	ledger.appID = 10
+	sb := strings.Builder{}
+	ep := defaultEvalParams(&sb, &txn)
+	ep.Proto = &proto
+	ep.Ledger = ledger
+
+	source := `byte  "a logging message"; log; int 1`
+	source1 := `byte  "a logging message"; log; byte  "second logging message"; log; int 1`
+	source2 := fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, MaxLogCalls))
+	sources := []string{source, source1, source2}
+
+	for _, s := range sources {
+		ops := testProg(t, s, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, source)
+
+		pass, err := EvalStateful(ops.Program, ep)
+		require.NoError(t, err)
+		require.True(t, pass)
+	}
+
+	type failCase struct {
+		source      string
+		errContains string
+	}
+
+	failCase0 := failCase{
+		source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", 1001)),
+		errContains: fmt.Sprintf("Up to %v bytes are allowed", MaxLogSize),
+	}
+
+	msg := strings.Repeat("a", 400)
+	failCase1 := failCase{
+		source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
+		errContains: fmt.Sprintf("Up to %v bytes are allowed", MaxLogSize),
+	}
+
+	failCase2 := failCase{
+		source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a logging message"; log;`, MaxLogCalls+1)),
+		errContains: "too many log calls",
+	}
+	failCases := []failCase{failCase0, failCase1, failCase2}
+	for _, c := range failCases {
+		ops := testProg(t, c.source, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		if err != nil {
+			require.Contains(t, err.Error(), c.errContains)
+			return
+		}
+
+		pass, err := EvalStateful(ops.Program, ep)
+		require.Contains(t, err.Error(), c.errContains)
+		require.False(t, pass)
+	}
 }

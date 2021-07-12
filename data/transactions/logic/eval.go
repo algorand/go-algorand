@@ -748,7 +748,7 @@ func (cx *evalContext) checkStep() (int, error) {
 	}
 
 	if cx.logCalls > MaxLogCalls {
-		return 0, fmt.Errorf("too many log calls. up to %v is allowed and program has %v log calls", cx.logCalls, MaxLogCalls)
+		return 0, fmt.Errorf("too many log calls. up to %v is allowed and program has %v log calls", MaxLogCalls, cx.logCalls)
 	}
 
 	deets := spec.Details
@@ -3076,7 +3076,6 @@ func opAppParamsGet(cx *evalContext) {
 
 func opLog(cx *evalContext) {
 	last := len(cx.stack) - 1
-	prev := last - 1
 
 	log := cx.stack[last]
 	cx.logSize += len(log.Bytes)
@@ -3093,6 +3092,6 @@ func opLog(cx *evalContext) {
 		return
 	}
 
-	cx.stack = cx.stack[:prev]
+	cx.stack = cx.stack[:last]
 
 }
