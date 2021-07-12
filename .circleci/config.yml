@@ -1,8 +1,16 @@
+# .circleci/config.yml
 version: 2.1
-orbs:
-  welcome: circleci/welcome-orb@0.4.1
-workflows:
-  welcome:
-    jobs:
-      - welcome/run
 
+jobs:
+  build-medium:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.medium
+    steps:
+      - run: uname -a
+      - run: echo "Testing BUild machine medium!"
+
+workflows:
+  build:
+    jobs:
+      - build-medium
