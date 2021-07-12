@@ -1145,6 +1145,13 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		VoteLast:        10000,
 	}
 
+	// depends on what the concensus is need to generate correct KeyregTxnFields.
+	if proto.EnableBlockProofKeyregCheck {
+		correctKeyregFields.BlockProofPK = crypto.NewSigner(crypto.PlaceHolderType).GetSigner().GetVerifyingKey()
+	} else {
+		correctKeyregFields.BlockProofPK = crypto.VerifyingKey{}
+	}
+
 	correctKeyreg := transactions.Transaction{
 		Type:            protocol.KeyRegistrationTx,
 		Header:          correctTxHeader,
