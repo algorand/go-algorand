@@ -166,5 +166,17 @@ func TestKeyregApply(t *testing.T) {
 
 		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
 		require.NoError(t, err)
+
+		testBlockProofPKBeingStored(t, tx, mockBal)
 	}
+}
+
+func testBlockProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal keyregTestBalances) {
+	tx.KeyregTxnFields.BlockProofPK = crypto.VerifyingKey{Type: crypto.PlaceHolderType}
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
+	require.NoError(t, err) // expects no error with empty keyRegistration attempt
+
+	rec, err := mockBal.Get(tx.Header.Sender, false)
+	require.NoError(t, err) // expects no error with empty keyRegistration attempt
+	require.Equal(t, tx.KeyregTxnFields.BlockProofPK, rec.BlockProofID)
 }
