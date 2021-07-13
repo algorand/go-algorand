@@ -582,7 +582,7 @@ var appExecuteCmd = &cobra.Command{
 			localSchema = header.Query.Local.ToStateSchema()
 			globalSchema = header.Query.Global.ToStateSchema()
 		}
-		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, onCompletion, approvalProg, clearProg, globalSchema, localSchema)
+		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -600,6 +600,10 @@ var appExecuteCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		if outFilename == "" {

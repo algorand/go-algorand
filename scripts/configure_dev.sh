@@ -11,12 +11,9 @@ Options:
     -f        Force dependencies to be installed (May overwrite existing files)
 "
 
-SKIP_GO_DEPS=false
 FORCE=false
 while getopts ":sfh" opt; do
   case ${opt} in
-    s ) SKIP_GO_DEPS=true
-      ;;
     f ) FORCE=true
       ;;
     h ) echo "${HELP}"
@@ -95,9 +92,3 @@ elif [ "${OS}" = "windows" ]; then
         exit 1
     fi
 fi
-
-if ${SKIP_GO_DEPS}; then
-    exit 0
-fi
-
-"$SCRIPTPATH/configure_dev-deps.sh"

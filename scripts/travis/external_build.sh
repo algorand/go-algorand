@@ -8,7 +8,7 @@
 #
 # Examples: scripts/travis/external_build.sh
 #
-# Use the following travis varaibles:
+# Use the following travis variables:
 # BUILD_TYPE
 # TARGET_PLATFORM
 # TRAVIS_BRANCH

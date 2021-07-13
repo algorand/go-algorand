@@ -84,6 +84,7 @@ func (h *onlineTopHeap) Push(x interface{}) {
 // Pop implements heap.Interface
 func (h *onlineTopHeap) Pop() interface{} {
 	res := h.accts[len(h.accts)-1]
+	h.accts[len(h.accts)-1] = nil
 	h.accts = h.accts[:len(h.accts)-1]
 	return res
 }

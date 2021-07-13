@@ -17,7 +17,7 @@ if { [catch {
     set NETWORK_NAME test_net_expect_$TIME_STAMP
     set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
 
-    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+    exec cp $TEST_DATA_DIR/../../installer/genesis/devnet/genesis.json $TEST_ALGO_DIR
 
     # Create network
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR

@@ -1664,8 +1664,8 @@ func (z *CompactCertState) MsgIsZero() bool {
 func (z *Genesis) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(8)
-	var zb0002Mask uint16 /* 9 bits */
+	zb0002Len := uint32(9)
+	var zb0002Mask uint16 /* 10 bits */
 	if len((*z).Allocation) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
@@ -1674,29 +1674,33 @@ func (z *Genesis) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x4
 	}
-	if (*z).FeeSink == "" {
+	if (*z).DevMode == false {
 		zb0002Len--
 		zb0002Mask |= 0x8
 	}
-	if (*z).SchemaID == "" {
+	if (*z).FeeSink == "" {
 		zb0002Len--
 		zb0002Mask |= 0x10
 	}
-	if (*z).Network.MsgIsZero() {
+	if (*z).SchemaID == "" {
 		zb0002Len--
 		zb0002Mask |= 0x20
 	}
-	if (*z).Proto.MsgIsZero() {
+	if (*z).Network.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x40
 	}
-	if (*z).RewardsPool == "" {
+	if (*z).Proto.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x80
 	}
-	if (*z).Timestamp == 0 {
+	if (*z).RewardsPool == "" {
 		zb0002Len--
 		zb0002Mask |= 0x100
+	}
+	if (*z).Timestamp == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x200
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
@@ -1719,31 +1723,36 @@ func (z *Genesis) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendString(o, (*z).Comment)
 		}
 		if (zb0002Mask & 0x8) == 0 { // if not empty
+			// string "devmode"
+			o = append(o, 0xa7, 0x64, 0x65, 0x76, 0x6d, 0x6f, 0x64, 0x65)
+			o = msgp.AppendBool(o, (*z).DevMode)
+		}
+		if (zb0002Mask & 0x10) == 0 { // if not empty
 			// string "fees"
 			o = append(o, 0xa4, 0x66, 0x65, 0x65, 0x73)
 			o = msgp.AppendString(o, (*z).FeeSink)
 		}
-		if (zb0002Mask & 0x10) == 0 { // if not empty
+		if (zb0002Mask & 0x20) == 0 { // if not empty
 			// string "id"
 			o = append(o, 0xa2, 0x69, 0x64)
 			o = msgp.AppendString(o, (*z).SchemaID)
 		}
-		if (zb0002Mask & 0x20) == 0 { // if not empty
+		if (zb0002Mask & 0x40) == 0 { // if not empty
 			// string "network"
 			o = append(o, 0xa7, 0x6e, 0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b)
 			o = (*z).Network.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x40) == 0 { // if not empty
+		if (zb0002Mask & 0x80) == 0 { // if not empty
 			// string "proto"
 			o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x74, 0x6f)
 			o = (*z).Proto.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x80) == 0 { // if not empty
+		if (zb0002Mask & 0x100) == 0 { // if not empty
 			// string "rwd"
 			o = append(o, 0xa3, 0x72, 0x77, 0x64)
 			o = msgp.AppendString(o, (*z).RewardsPool)
 		}
-		if (zb0002Mask & 0x100) == 0 { // if not empty
+		if (zb0002Mask & 0x200) == 0 { // if not empty
 			// string "timestamp"
 			o = append(o, 0xa9, 0x74, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70)
 			o = msgp.AppendInt64(o, (*z).Timestamp)
@@ -1856,6 +1865,14 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0002 > 0 {
+			zb0002--
+			(*z).DevMode, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "DevMode")
+				return
+			}
+		}
+		if zb0002 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0002)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -1947,6 +1964,12 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Comment")
 					return
 				}
+			case "devmode":
+				(*z).DevMode, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "DevMode")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -1971,13 +1994,13 @@ func (z *Genesis) Msgsize() (s int) {
 	for zb0001 := range (*z).Allocation {
 		s += (*z).Allocation[zb0001].Msgsize()
 	}
-	s += 4 + msgp.StringPrefixSize + len((*z).RewardsPool) + 5 + msgp.StringPrefixSize + len((*z).FeeSink) + 10 + msgp.Int64Size + 8 + msgp.StringPrefixSize + len((*z).Comment)
+	s += 4 + msgp.StringPrefixSize + len((*z).RewardsPool) + 5 + msgp.StringPrefixSize + len((*z).FeeSink) + 10 + msgp.Int64Size + 8 + msgp.StringPrefixSize + len((*z).Comment) + 8 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Genesis) MsgIsZero() bool {
-	return ((*z).SchemaID == "") && ((*z).Network.MsgIsZero()) && ((*z).Proto.MsgIsZero()) && (len((*z).Allocation) == 0) && ((*z).RewardsPool == "") && ((*z).FeeSink == "") && ((*z).Timestamp == 0) && ((*z).Comment == "")
+	return ((*z).SchemaID == "") && ((*z).Network.MsgIsZero()) && ((*z).Proto.MsgIsZero()) && (len((*z).Allocation) == 0) && ((*z).RewardsPool == "") && ((*z).FeeSink == "") && ((*z).Timestamp == 0) && ((*z).Comment == "") && ((*z).DevMode == false)
 }
 
 // MarshalMsg implements msgp.Marshaler

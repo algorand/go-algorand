@@ -148,6 +148,11 @@ const ConsensusV27 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/d050b3cade6d5c664df8bd729bf219f179812595",
 )
 
+// ConsensusV28 introduces new TEAL features, larger program size, fee pooling and longer asset max URL
+const ConsensusV28 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/65b4ab3266c52c56a0fa7d591754887d68faad0a",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -160,7 +165,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV27
+const ConsensusCurrentVersion = ConsensusV28
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

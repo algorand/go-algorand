@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                 16,
+	Version:                                 17,
 	AccountUpdatesStatsInterval:             5000000000,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
@@ -67,6 +67,7 @@ var defaultLocal = Local{
 	EnableTopAccountsReporting:              false,
 	EndpointAddress:                         "127.0.0.1:0",
 	FallbackDNSResolverAddress:              "",
+	ForceFetchTransactions:                  false,
 	ForceRelayMessages:                      false,
 	GossipFanout:                            4,
 	IncomingConnectionsLimit:                10000,

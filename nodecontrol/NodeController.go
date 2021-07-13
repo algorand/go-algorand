@@ -101,13 +101,13 @@ func (nc NodeController) FullStop() error {
 
 // stopProcesses attempts to read PID files for algod and kmd and kill the
 // corresponding processes. If it can't read a PID file, it doesn't return an
-// error, but if it reads a PID file and the process doesn't die, it does
+// error, but if it reads a PID file and the process doesn't die, it does.
 func (nc NodeController) stopProcesses() (kmdAlreadyStopped bool, err error) {
-	err = nc.StopAlgod()
-	if err != nil {
-		return
-	}
+	errAlgod := nc.StopAlgod()
 	kmdAlreadyStopped, err = nc.StopKMD()
+	if errAlgod != nil {
+		err = errAlgod
+	}
 	return
 }
 

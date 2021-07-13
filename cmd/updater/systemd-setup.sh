@@ -17,7 +17,7 @@ setup_root() {
     systemctl daemon-reload
 }
 
-if [ "$#" != 2 ]; then
+if [ "$#" != 2 ] && [ "$#" != 3 ]; then
     echo "Usage: $0 username group [bindir]"
     exit 1
 fi

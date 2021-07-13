@@ -1,0 +1,78 @@
+#pragma version 5
+        // This program checks its own app params, as set up in
+        // teal-app-params.sh, to confirm they all work.
+
+
+        // Check the creator is the address provided
+        int 0
+        app_params_get AppCreator
+        assert
+        txn ApplicationArgs 0
+        ==
+        assert
+
+
+        // Check this program is version 5
+        int 0
+	app_params_get AppApprovalProgram
+        assert
+        int 0
+        getbyte
+        int 5
+        ==
+        assert
+
+        // Check it's longer than 15 (don't want to try to check all the bytes)
+        int 0
+	app_params_get AppApprovalProgram
+        assert
+        len
+        int 15
+        >
+        assert
+
+
+        // Check the Clear State program precisely
+        int 0
+	app_params_get AppClearStateProgram
+        assert
+        byte 0x0220010122
+        ==
+        assert
+
+        int 0
+	app_params_get AppGlobalNumByteSlice
+        assert
+        int 1
+        ==
+        assert
+
+        int 0
+        app_params_get AppGlobalNumUint
+        assert
+        int 2
+        ==
+        assert
+
+        int 0
+	app_params_get AppLocalNumByteSlice
+        assert
+        int 3
+        ==
+        assert
+
+        int 0
+	app_params_get AppLocalNumUint
+        assert
+        int 4
+        ==
+        assert
+
+        int 0
+	app_params_get AppExtraProgramPages
+        assert
+        int 2
+        ==
+        assert
+
+        int 1

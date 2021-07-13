@@ -91,7 +91,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	// Let it run for 37 rounds.
 	// create a web proxy, and connect it to the primary node, blocking all requests for round #1. ( and allowing everything else )
 	// start a secondary node, and instuct it to catchpoint catchup from the proxy. ( which would be for round 36 )
-	// wait until the clone node cought up, skipping the "impossibe" hole of round #1.
+	// wait until the clone node cought up, skipping the "impossible" hole of round #1.
 
 	consensus := make(config.ConsensusProtocols)
 	const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
@@ -118,9 +118,6 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	errorsCollector := nodeExitErrorCollector{t: fixtures.SynchronizedTest(t)}
 	defer errorsCollector.Print()
 
-	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
-	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
-	// distribution for catchup so this is fine.
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
 
 	// Get primary node
@@ -200,7 +197,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	targetRound = uint64(1)
 	log.Infof("Second node catching up to round 1")
 	for {
-		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10000*time.Millisecond)
+		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
 		a.NoError(err)
 		if targetRound <= currentRound {
 			break
@@ -216,11 +213,11 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	log.Infof("primary node latest catchpoint - %s!\n", *primaryNodeStatus.LastCatchpoint)
 	secondNodeRestClient.Catchup(*primaryNodeStatus.LastCatchpoint)
 
-	currentRound = uint64(36)
-	targetRound = uint64(37)
+	currentRound = primaryNodeStatus.LastRound
+	targetRound = currentRound + 1
 	log.Infof("Second node catching up to round 36")
 	for {
-		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10000*time.Millisecond)
+		err = fixture.ClientWaitForRound(secondNodeRestClient, currentRound, 10*time.Second)
 		a.NoError(err)
 		if targetRound <= currentRound {
 			break

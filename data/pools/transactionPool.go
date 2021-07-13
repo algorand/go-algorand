@@ -48,9 +48,14 @@ import (
 // TransactionPool.AssembleBlock constructs a valid block for
 // proposal given a deadline.
 type TransactionPool struct {
-	// feePerByte is stored at the begining of this struct to ensure it has a 64 bit aligned address. This is needed as it's being used
+	// feePerByte is stored at the beginning of this struct to ensure it has a 64 bit aligned address. This is needed as it's being used
 	// with atomic operations which require 64 bit alignment on arm.
 	feePerByte uint64
+
+	// latestMeasuredDataExchangeRate is the average data exchange rate, as measured by the transaction sync.
+	// we use the latestMeasuredDataExchangeRate in order to determine the desired proposal size, so that it
+	// won't create undesired network bottlenecks.
+	latestMeasuredDataExchangeRate uint64
 
 	// const
 	logProcessBlockStats bool
@@ -127,7 +132,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 // poolAsmResults is used to syncronize the state of the block assembly process. The structure reading/writing is syncronized
 // via the pool.assemblyMu lock.
 type poolAsmResults struct {
-	// the ok variable indicates whther the assembly for the block roundStartedEvaluating was complete ( i.e. ok == true ) or
+	// the ok variable indicates whether the assembly for the block roundStartedEvaluating was complete ( i.e. ok == true ) or
 	// whether it's still in-progress.
 	ok    bool
 	blk   *ledger.ValidatedBlock
@@ -137,7 +142,7 @@ type poolAsmResults struct {
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
 	roundStartedEvaluating basics.Round
 	// assemblyCompletedOrAbandoned is *not* protected via the pool.assemblyMu lock and should be accessed only from the OnNewBlock goroutine.
-	// it's equivilent to the "ok" variable, and used for avoiding taking the lock.
+	// it's equivalent to the "ok" variable, and used for avoiding taking the lock.
 	assemblyCompletedOrAbandoned bool
 }
 
@@ -157,6 +162,14 @@ const (
 	// duration it would take to execute the GenerateBlock() function
 	generateBlockBaseDuration        = 2 * time.Millisecond
 	generateBlockTransactionDuration = 2155 * time.Nanosecond
+
+	// minMaxTxnBytesPerBlock is the minimal maximum block size that the evaluator would be asked to create, in case
+	// the local node doesn't have sufficient bandwidth to support higher throughputs.
+	// for example: a node that has a very low bandwidth of 10KB/s. If we will follow the block size calculations, we
+	// would get to an unrealistic block size of 20KB. This could be due to a temporary network bandwidth fluctuations
+	// or other measuring issue. In order to ensure we have some more realistic block sizes to
+	// work with, we clamp the block size to the range of [minMaxTxnBytesPerBlock .. proto.MaxTxnBytesPerBlock].
+	minMaxTxnBytesPerBlock = 100 * 1024
 )
 
 // ErrStaleBlockAssemblyRequest returned by AssembleBlock when requested block number is older than the current transaction pool round
@@ -554,7 +567,6 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	defer pool.cond.Broadcast()
-
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
 		// Adjust the pool fee threshold.  The rules are:
 		// - If there was less than one full block in the pool, reduce
@@ -736,7 +748,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, pool.calculateMaxTxnBytesPerBlock(next.BlockHeader.CurrentProtocol))
 	if err != nil {
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
@@ -937,7 +949,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
 	}
 	if pool.assemblyResults.roundStartedEvaluating > round {
-		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlocks
+		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlock
 		// with "jumps" between consecutive blocks ( which is why it's a warning )
 		// The "normal" usecase is evaluated on the top of the function.
 		pool.log.Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
@@ -965,10 +977,64 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 		return nil, err
 	}
 	next := bookkeeping.MakeBlock(prev)
-	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0)
+	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0, pool.calculateMaxTxnBytesPerBlock(next.BlockHeader.CurrentProtocol))
 	if err != nil {
 		err = fmt.Errorf("TransactionPool.assembleEmptyBlock: cannot start evaluator for %d: %v", round, err)
 		return nil, err
 	}
 	return blockEval.GenerateBlock()
+}
+
+// SetDataExchangeRate updates the data exchange rate this node is expected to have.
+func (pool *TransactionPool) SetDataExchangeRate(dataExchangeRate uint64) {
+	atomic.StoreUint64(&pool.latestMeasuredDataExchangeRate, dataExchangeRate)
+}
+
+// calculateMaxTxnBytesPerBlock computes the optimal block size for the current node, based
+// on it's effective network capabilities. This number is bound by the protocol MaxTxnBytesPerBlock.
+func (pool *TransactionPool) calculateMaxTxnBytesPerBlock(consensusVersion protocol.ConsensusVersion) int {
+	// get the latest data exchange rate we received from the transaction sync.
+	dataExchangeRate := atomic.LoadUint64(&pool.latestMeasuredDataExchangeRate)
+
+	// if we never received an update from the transaction sync connector about the data exchange rate,
+	// just let the evaluator use the consensus's default value.
+	if dataExchangeRate == 0 {
+		return 0
+	}
+
+	// get the consensus parameters for the given consensus version.
+	proto, ok := config.Consensus[consensusVersion]
+	if !ok {
+		// if we can't figure out the consensus version, just return 0.
+		return 0
+	}
+
+	// calculate the amount of data we can send in half of the agreement period.
+	halfMaxBlockSize := int(time.Duration(dataExchangeRate)*proto.AgreementFilterTimeoutPeriod0/time.Second) / 2
+
+	// if the amount of data is too high, bound it by the consensus parameters.
+	if halfMaxBlockSize > proto.MaxTxnBytesPerBlock {
+		return proto.MaxTxnBytesPerBlock
+	}
+
+	// if the amount of data is too low, use the low transaction bytes threshold.
+	if halfMaxBlockSize < minMaxTxnBytesPerBlock {
+		return minMaxTxnBytesPerBlock
+	}
+
+	return halfMaxBlockSize
+}
+
+// AssembleDevModeBlock assemble a new block from the existing transaction pool. The pending evaluator is being
+func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledger.ValidatedBlock, err error) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// drop the current block evaluator and start with a new one.
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round), 0)
+
+	// The above was already pregenerating the entire block,
+	// so there won't be any waiting on this call.
+	assembled, err = pool.AssembleBlock(pool.pendingBlockEvaluator.Round(), time.Now().Add(config.ProposalAssemblyTime))
+	return
 }

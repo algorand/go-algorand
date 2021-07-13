@@ -25,7 +25,7 @@ import (
 //go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example
 //go:generate $GOROOT/bin/go fmt local_defaults.go
 
-// AutogenLocal - this variable is the "input" for the config default generator which automatically updates the above defaultLocal varaible.
+// AutogenLocal - this variable is the "input" for the config default generator which automatically updates the above defaultLocal variable.
 // it's implemented in ./config/defaults_gen.go, and should be the only "consumer" of this exported variable
 var AutogenLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion())
 

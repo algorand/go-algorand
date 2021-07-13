@@ -1,0 +1,29 @@
+{
+  "Genesis": {
+    "NetworkName": "tbd",
+    "ConsensusProtocol": "https://github.com/algorandfoundation/specs/tree/ac2255d586c4474d4ebcf3809acccb59b7ef34ff",
+    "Wallets": [
+      {
+        "Name": "Wallet1",
+        "Stake": 50,
+        "Online": true
+      },
+      {
+        "Name": "Wallet2",
+        "Stake": 50,
+        "Online": true
+      }
+    ]
+  },
+  "Nodes": [
+    {
+      "Name": "Primary",
+      "IsRelay": true,
+      "Wallets": [{ "Name": "Wallet1", "ParticipationOnly": false }]
+    },
+    {
+      "Name": "Node",
+      "Wallets": [{ "Name": "Wallet2", "ParticipationOnly": false }]
+    }
+  ]
+}

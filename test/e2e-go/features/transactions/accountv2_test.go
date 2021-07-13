@@ -153,10 +153,11 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil,
-	)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
+	a.NoError(err)
+	wh, err = client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	signedTxn, err := client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)
@@ -204,6 +205,8 @@ int 1
 	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
+	a.NoError(err)
+	wh, err = client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	signedTxn, err = client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)

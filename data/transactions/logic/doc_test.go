@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -36,9 +37,17 @@ func TestOpDocs(t *testing.T) {
 	}
 	for op, seen := range opsSeen {
 		if !seen {
-			t.Errorf("error: doc for op %#v missing", op)
+			t.Errorf("error: doc for op %#v missing from opDocByName", op)
 		}
 	}
+
+	require.Len(t, txnFieldDocs, len(TxnFieldNames))
+	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
+	require.Len(t, globalFieldDocs, len(GlobalFieldNames))
+	require.Len(t, AssetHoldingFieldDocs, len(AssetHoldingFieldNames))
+	require.Len(t, AssetParamsFieldDocs, len(AssetParamsFieldNames))
+	require.Len(t, AppParamsFieldDocs, len(AppParamsFieldNames))
+	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
 }
 
 func TestOpGroupCoverage(t *testing.T) {
@@ -46,8 +55,8 @@ func TestOpGroupCoverage(t *testing.T) {
 	for _, op := range OpSpecs {
 		opsSeen[op.Name] = false
 	}
-	for _, og := range OpGroupList {
-		for _, name := range og.Ops {
+	for _, names := range OpGroups {
+		for _, name := range names {
 			_, exists := opsSeen[name]
 			if !exists {
 				t.Errorf("error: op %#v in group list but not in OpSpecs\n", name)
@@ -58,7 +67,7 @@ func TestOpGroupCoverage(t *testing.T) {
 	}
 	for name, seen := range opsSeen {
 		if !seen {
-			t.Errorf("warning: op %#v not in any group list\n", name)
+			t.Errorf("warning: op %#v not in any group of OpGroupList\n", name)
 		}
 	}
 }
@@ -75,6 +84,19 @@ func TestOpImmediateNote(t *testing.T) {
 	require.NotEmpty(t, xd)
 	xd = OpImmediateNote("+")
 	require.Empty(t, xd)
+}
+
+func TestAllImmediatesDocumented(t *testing.T) {
+	for _, op := range OpSpecs {
+		count := len(op.Details.Immediates)
+		note := OpImmediateNote(op.Name)
+		if count == 1 && op.Details.Immediates[0].kind >= immBytes {
+			// More elaborate than can be checked by easy count.
+			require.NotEmpty(t, note)
+			continue
+		}
+		require.Equal(t, count, strings.Count(note, "{"), "%s immediates doc is wrong", op.Name)
+	}
 }
 
 func TestOpDocExtra(t *testing.T) {

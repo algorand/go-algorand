@@ -53,7 +53,7 @@ fi
 
 scp -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance):/home/ubuntu/armv6_stretch/id_rsa ./id_rsa
 if [ "$?" != "0" ]; then
-    exitWithError 1 "Unable to retreive RasPI credentials from EC2 instance at $(cat instance)"
+    exitWithError 1 "Unable to retrieve RasPI credentials from EC2 instance at $(cat instance)"
 fi
 
 echo "Waiting for RasPI SSH connection at $(cat instance)"

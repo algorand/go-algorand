@@ -39,7 +39,6 @@ const (
 	// detached elements
 	profElementGetTxnsGroups
 	profElementAssembleMessage
-	profElementSendMessage
 	profElementMakeBloomFilter
 	profElementTxnsSelection
 
@@ -168,7 +167,6 @@ func (p *profiler) logProfile() {
 		NextOffsetOps:                uint64(len(p.elements[profElementNextOffset].times)),
 		GetTxnGroupsOps:              uint64(len(p.elements[profElementGetTxnsGroups].times)),
 		AssembleMessageOps:           uint64(len(p.elements[profElementAssembleMessage].times)),
-		SendMessageOps:               uint64(len(p.elements[profElementSendMessage].times)),
 		MakeBloomFilterOps:           uint64(len(p.elements[profElementMakeBloomFilter].times)),
 		SelectPendingTransactionsOps: uint64(len(p.elements[profElementTxnsSelection].times)),
 
@@ -182,7 +180,6 @@ func (p *profiler) logProfile() {
 		NextOffsetPercent:                float64(p.elements[profElementNextOffset].total) * 100.0 / float64(p.profileSum),
 		GetTxnGroupsPercent:              float64(p.elements[profElementGetTxnsGroups].total) * 100.0 / float64(p.profileSum),
 		AssembleMessagePercent:           float64(p.elements[profElementAssembleMessage].total) * 100.0 / float64(p.profileSum),
-		SendMessagePercent:               float64(p.elements[profElementSendMessage].total) * 100.0 / float64(p.profileSum),
 		MakeBloomFilterPercent:           float64(p.elements[profElementMakeBloomFilter].total) * 100.0 / float64(p.profileSum),
 		SelectPendingTransactionsPercent: float64(p.elements[profElementTxnsSelection].total) * 100.0 / float64(p.profileSum),
 	}

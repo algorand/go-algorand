@@ -367,17 +367,23 @@ function run_systemd_action() {
     local data_dir=$2
     local process_owner
 
+    # If the service is system-level, check if it's root or sudo
     if check_service system "$data_dir"; then
         process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
-        if $IS_ROOT || grep sudo <(groups "$process_owner" &> /dev/null); then
+        if $IS_ROOT; then
             if systemctl "$action" "algorand@$(systemd-escape "$data_dir")"; then
                 echo "systemd system service: $action"
                 return 0
             fi
+        elif grep sudo <(groups "$process_owner") &> /dev/null; then
+            if sudo -n systemctl "$action" "algorand@$(systemd-escape "$data_dir")"; then
+                echo "sudo -n systemd system service: $action"
+                return 0
+            fi
         fi
-    fi
 
-    if check_service user "$data_dir"; then
+    # If the service is user-level then run systemctl --user
+    elif check_service user "$data_dir"; then
         if systemctl --user "$action" "algorand@$(systemd-escape "${data_dir}")"; then
             echo "systemd user service: $action"
             return 0
@@ -387,37 +393,13 @@ function run_systemd_action() {
     return 1
 }
 
-function shutdown_node() {
-    echo Stopping node...
-    if [ "$(pgrep -x algod)" != "" ] || [ "$(pgrep -x kmd)" != "" ] ; then
-        if [ -f "${BINDIR}/goal" ]; then
-            for DD in "${DATADIRS[@]}"; do
-                if [ -f "${DD}/algod.pid" ] || [ -f "${DD}"/**/kmd.pid ] ; then
-                    echo "Stopping node with data directory ${DD} and waiting..."
-                    run_systemd_action stop "${DD}"
-                    "${BINDIR}/goal" node stop -d "${DD}"
-                    sleep 5
-                else
-                    echo "Node is running but not in ${DD} - not stopping"
-                    # Clean up zombie (algod|kmd).net files
-                    rm -f "${DD}/algod.net" "${DD}"/**/kmd.net
-                fi
-            done
-        fi
-    else
-        echo ... node not running
-    fi
-
-    RESTART_NODE=1
-}
-
 function backup_binaries() {
     echo Backing up current binary files...
     mkdir -p "${BINDIR}/backup"
     BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
     [ -f "${BINDIR}/node_exporter" ] && BACKUPFILES="${BACKUPFILES} node_exporter"
-    tar -zcf "${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz" -C "${BINDIR}" "${BACKUPFILES}" >/dev/null 2>&1
+    tar -zcf "${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz" -C "${BINDIR}" ${BACKUPFILES} >/dev/null 2>&1
 }
 
 function backup_data() {
@@ -427,12 +409,12 @@ function backup_data() {
     echo "Backing up current data files from ${CURDATADIR}..."
     mkdir -p "${BACKUPDIR}"
     BACKUPFILES="genesis.json wallet-genesis.id"
-    tar --no-recursion --exclude='*.log' --exclude='*.log.archive' --exclude='*.tar.gz' -zcf "${BACKUPDIR}/data-v${CURRENTVER}.tar.gz" -C "${CURDATADIR}" "${BACKUPFILES}" >/dev/null 2>&1
+    tar --no-recursion --exclude='*.log' --exclude='*.log.archive' --exclude='*.tar.gz' -zcf "${BACKUPDIR}/data-v${CURRENTVER}.tar.gz" -C "${CURDATADIR}" ${BACKUPFILES} >/dev/null 2>&1
 }
 
 function backup_current_version() {
     backup_binaries
-    for DD in "${DATADIRS[@]}"; do
+    for DD in ${DATADIRS[@]}; do
         backup_data "${DD}"
     done
 }
@@ -562,16 +544,16 @@ function startup_node() {
     fi
 
     CURDATADIR=$1
-    echo Starting node in ${CURDATADIR}...
+    echo Restarting node in ${CURDATADIR}...
 
     check_install_valid
     if [ $? -ne 0 ]; then
         fail_and_exit "Installation does not appear to be valid"
     fi
 
-    if ! run_systemd_action start "${CURDATADIR}"; then
-        echo "No systemd services, starting node with goal."
-        ${BINDIR}/goal node start -d "${CURDATADIR}" ${HOSTEDFLAG}
+    if ! run_systemd_action restart "${CURDATADIR}"; then
+        echo "No systemd services, restarting node with goal."
+        ${BINDIR}/goal node restart -d "${CURDATADIR}" ${HOSTEDFLAG}
     fi
 }
 
@@ -611,7 +593,7 @@ function apply_fixups() {
     # Delete obsolete algorand binary - renamed to 'goal'
     rm "${BINDIR}/algorand" >/dev/null 2>&1
 
-    for DD in "${DATADIRS[@]}"; do
+    for DD in ${DATADIRS[@]}; do
         clean_legacy_logs "${DD}"
 
         # Purge obsolete cadaver files (now agreement.cdv[.archive])
@@ -679,8 +661,8 @@ else
     determine_current_version
 fi
 
-# Shutdown node before backing up so data is consistent and files aren't locked / in-use.
-shutdown_node
+# Any fail_and_exit beyond this point will run a restart
+RESTART_NODE=1
 
 if ! $DRYRUN; then
     if [ ${SKIP_UPDATE} -eq 0 ]; then
@@ -695,7 +677,7 @@ if ! $DRYRUN; then
         fail_and_exit "Error installing new files"
     fi
 
-    for DD in "${DATADIRS[@]}"; do
+    for DD in ${DATADIRS[@]}; do
         if ! install_new_data "${DD}"; then
             fail_and_exit "Error installing data files into ${DD}"
         fi
@@ -703,7 +685,7 @@ if ! $DRYRUN; then
 
     copy_genesis_files
 
-    for DD in "${DATADIRS[@]}"; do
+    for DD in ${DATADIRS[@]}; do
         if ! check_for_new_ledger "${DD}"; then
             fail_and_exit "Error updating ledger in ${DD}"
         fi

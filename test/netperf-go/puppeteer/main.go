@@ -43,7 +43,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&deployFor, "for", "f", "", "Specify instance `for` tag")
 	rootCmd.MarkFlagRequired("for")
 	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbosed output")
-	rootCmd.Flags().StringVarP(&stageDir, "stageDir", "s", "", "staging directory for deployed networks (defaults to a temporary directroy)")
+	rootCmd.Flags().StringVarP(&stageDir, "stageDir", "s", "", "staging directory for deployed networks (defaults to a temporary directory)")
 	rootCmd.Flags().BoolVarP(&skipCleanup, "skipCleanup", "", false, "Skip clean up of the staging directory on exit")
 	rootCmd.Flags().BoolVarP(&skipReset, "skipReset", "", false, "Skip resetting of the staging directory during initialization")
 

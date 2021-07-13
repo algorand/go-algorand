@@ -98,7 +98,6 @@ type sendMessage struct {
 	peerEnqueued time.Time                            // the time at which the peer was attempting to enqueue the message
 	msgTags      map[protocol.Tag]bool                // when msgTags is speficied ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
 	callback     UnicastWebsocketMessageStateCallback // when non-nil, the callback function would be called after entry would be placed on the outgoing websocket queue
-	hash         crypto.Digest
 	ctx          context.Context
 }
 
@@ -201,7 +200,7 @@ type wsPeer struct {
 	// responseChannelsMutex guards the operations of responseChannels
 	responseChannelsMutex deadlock.RWMutex
 
-	// sendMessageTag is a map of allowed message to send to a peer. We don't use any syncronization on this map, and the
+	// sendMessageTag is a map of allowed message to send to a peer. We don't use any synchronization on this map, and the
 	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
 	sendMessageTag map[protocol.Tag]bool
 
@@ -608,7 +607,7 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 
 func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	if len(msg.data) > maxMessageLength {
-		wp.net.log.Errorf("trying to send a message longer than we would recieve: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
+		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
 		if msg.callback != nil {
 			// let the callback know that the message was not sent.
@@ -745,7 +744,7 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	msgs := make([]sendMessage, 0, len(includeIndices))
 	enqueueTime := time.Now()
 	for _, index := range includeIndices {
-		msgs = append(msgs, sendMessage{data: data[index], enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, hash: digest[index], ctx: ctx, callback: callback})
+		msgs = append(msgs, sendMessage{data: data[index], enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, ctx: ctx, callback: callback})
 	}
 
 	if highPrio {

@@ -382,7 +382,7 @@ func (c *Client) GenerateAddress(walletHandle []byte) (string, error) {
 	return resp.Address, nil
 }
 
-// CreateMultisigAccount takes a wallet handle, a list of (nonmultisig) addresses, and a threshold and creates (and returns) a multisig adress
+// CreateMultisigAccount takes a wallet handle, a list of (nonmultisig) addresses, and a threshold and creates (and returns) a multisig address
 // TODO: Should these be raw public keys instead of addresses so users can't shoot themselves in the foot by passing in a multisig addr? Probably will become irrelevant after CSID changes.
 func (c *Client) CreateMultisigAccount(walletHandle []byte, threshold uint8, addrs []string) (string, error) {
 	// convert the addresses into public keys

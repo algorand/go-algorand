@@ -1,0 +1,82 @@
+#pragma version 3
+        txn ApplicationID
+        bz skip                 // skip code on creation
+
+        int OptIn
+        txn OnCompletion
+        ==
+        bnz skip                 // skip code on opt-in
+
+main:
+        // This program allows the reading (checking) and writing of arbitrary state.
+        // ARGS = "write|check", "local"|"global, key, value
+        // If arg0 is "write", the value is written to the key, in local or global state
+        // If arg0 is "check", the key is read from local or global state, and succeeds if matches value
+
+        txna ApplicationArgs 2  // key
+        txna ApplicationArgs 3  // value
+
+
+        txna ApplicationArgs 0
+        byte "write"
+        ==
+        bnz write
+
+        txna ApplicationArgs 0
+        byte "check"
+        ==
+        bnz check
+
+        err
+
+write:
+        txna ApplicationArgs 1
+        byte "global"
+        ==
+        bnz gwrite
+
+        txna ApplicationArgs 1
+        byte "local"
+        ==
+        bnz lwrite
+        err
+gwrite:
+        app_global_put          // stores according to key/value from program start
+        int 1
+        return
+lwrite:
+        store 0
+        int 0
+        swap                    // shove the 0 down below the key
+        load 0
+        app_local_put           // stores according to key/value from program start
+        int 1
+        return
+
+
+check:
+        swap                    // move key to TOS
+        txna ApplicationArgs 1
+        byte "global"
+        ==
+        bnz gcheck
+
+        txna ApplicationArgs 1
+        byte "local"
+        ==
+        bnz lcheck
+        err
+gcheck:
+        app_global_get
+        ==                      // checks against value which is still on stack
+        return
+lcheck:
+        int 0
+        swap                    // shove the 0 down below the key
+        app_local_get
+        ==                      // checks against value which is still on stack
+        return
+
+skip:
+        int 1
+        return

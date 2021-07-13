@@ -22,8 +22,9 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/data"
-	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/txnsync"
@@ -55,11 +56,13 @@ func (tsnc *transcationSyncNodeConnector) Events() <-chan txnsync.Event {
 	return tsnc.eventsCh
 }
 
+// GetCurrentRoundSettings is called when the txsync is starting up, proving
+// round information.
 func (tsnc *transcationSyncNodeConnector) GetCurrentRoundSettings() txnsync.RoundSettings {
 	round := tsnc.node.ledger.Latest()
 	return txnsync.RoundSettings{
 		Round:             round,
-		FetchTransactions: tsnc.node.accountManager.HasLiveKeys(round, round),
+		FetchTransactions: tsnc.node.config.ForceFetchTransactions || tsnc.node.accountManager.HasLiveKeys(round, round),
 	}
 }
 
@@ -121,9 +124,14 @@ func (tsnc *transcationSyncNodeConnector) GetPeers() (peersInfo []txnsync.PeerIn
 	return peersInfo[:k]
 }
 
-func (tsnc *transcationSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Peer, netPeers []interface{}) {
+func (tsnc *transcationSyncNodeConnector) UpdatePeers(txsyncPeers []*txnsync.Peer, netPeers []interface{}, averageDataExchangeRate uint64) {
 	for i, netPeer := range netPeers {
 		tsnc.node.net.SetPeerData(netPeer, "txsync", txsyncPeers[i])
+	}
+	// The average peers data exchange rate has been updated.
+	if averageDataExchangeRate > 0 {
+		// update the transaction pool with the latest peers data exchange rate.
+		tsnc.node.transactionPool.SetDataExchangeRate(averageDataExchangeRate)
 	}
 }
 
@@ -158,17 +166,23 @@ func (tsnc *transcationSyncNodeConnector) onNewTransactionPoolEntry(transcationP
 	}
 }
 
-func (tsnc *transcationSyncNodeConnector) onNewRound(round basics.Round, hasParticipationKeys bool) {
+// OnNewBlock receives a notification that we've moved to a new round from the ledger.
+// This notification would be received before the transaction pool get a similar notification, due
+// the ordering of the block notifier registration.
+func (tsnc *transcationSyncNodeConnector) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+	blkRound := block.Round()
+
+	fetchTransactions := tsnc.node.config.ForceFetchTransactions || tsnc.node.accountManager.HasLiveKeys(blkRound, blkRound)
 	// if this is a relay, then we always want to fetch transactions, regardless if we have participation keys.
-	fetchTransactions := hasParticipationKeys
 	if tsnc.node.config.NetAddress != "" {
 		fetchTransactions = true
 	}
 
 	select {
-	case tsnc.eventsCh <- txnsync.MakeNewRoundEvent(round, fetchTransactions):
+	case tsnc.eventsCh <- txnsync.MakeNewRoundEvent(blkRound, fetchTransactions):
 	default:
 	}
+
 }
 
 func (tsnc *transcationSyncNodeConnector) start() {
@@ -211,12 +225,13 @@ func (tsnc *transcationSyncNodeConnector) stop() {
 	tsnc.txHandler.Stop()
 }
 
-func (tsnc *transcationSyncNodeConnector) IncomingTransactionGroups(networkPeer interface{}, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
+func (tsnc *transcationSyncNodeConnector) IncomingTransactionGroups(peer *txnsync.Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
 	// count the transactions that we are adding.
 	txCount := 0
 	for _, txGroup := range txGroups {
 		txCount += len(txGroup.Transactions)
 	}
-	tsnc.txHandler.HandleTransactionGroups(networkPeer, txGroups)
+
+	tsnc.txHandler.HandleTransactionGroups(peer.GetNetworkPeer(), peer.GetTransactionPoolAckChannel(), messageSeq, txGroups)
 	return tsnc.node.transactionPool.PendingCount() + txCount
 }

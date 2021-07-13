@@ -1,0 +1,46 @@
+#pragma version 4
+        txn ApplicationID
+        bz skip                 // skip code on creation
+
+        int OptIn
+        txn OnCompletion
+        ==
+        bnz skip                 // skip code on opt-in
+
+main:
+        // This program allows the reading (checking) and writing of scratch spaces.
+        // ARGS = "write|check", groupIndex, value (or expected value if checking)
+        // If arg0 is "write", the value is written to scratch space in the first slot, and groupIndex is ignored
+        // If arg0 is "check", the first slot of scratch space is copied from of the app call with index groupIndex
+        //   -> succeeds if it matches the expected value
+
+        txn ApplicationArgs 2  // value
+        txn ApplicationArgs 1  // groupIndex
+
+        txn ApplicationArgs 0
+        byte "write"
+        ==
+        bnz write
+
+        txn ApplicationArgs 0
+        byte "check"
+        ==
+        bnz check
+
+        err
+
+write:
+        pop                     // ignore groupIndex
+        store 0
+        int 1
+        return
+
+check:
+        btoi
+        gloads 0
+        ==
+        return
+
+skip:
+        int 1
+        return

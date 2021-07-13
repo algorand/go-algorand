@@ -24,7 +24,7 @@ import (
 )
 
 // lruAccounts provides a storage class for the most recently used accounts data.
-// It doesn't have any syncronization primitive on it's own and require to be
+// It doesn't have any synchronization primitive on it's own and require to be
 // syncronized by the caller.
 type lruAccounts struct {
 	// accountsList contain the list of persistedAccountData, where the front ones are the most "fresh"

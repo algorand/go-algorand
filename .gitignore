@@ -3,16 +3,15 @@
 *.out
 *.prof
 coverage.html
+coverage.txt
+cover.out
+cpu.out
+mem.out
+mutex.out
 
 # cadaver
 *.cdv
 *.cdv.archive
-
-# swagger
-swagger.json
-swagger.json.validated
-kmdSwaggerWrappers.go
-bundledSpecInject.go
 
 # Exclude GoLand files
 .idea/

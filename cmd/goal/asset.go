@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
 
@@ -214,6 +215,10 @@ var createAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -288,6 +293,10 @@ var destroyAssetCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(manager, firstValid, lastValid, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		if outFilename == "" {
@@ -378,6 +387,10 @@ var configAssetCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -446,6 +459,10 @@ var sendAssetCmd = &cobra.Command{
 		tx, err := client.MakeUnsignedAssetSendTx(assetID, amount, toAddressResolved, closeToAddressResolved, senderForClawback)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		tx.Note = parseNoteField(cmd)
@@ -523,6 +540,10 @@ var freezeAssetCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(freezer, firstValid, lastValid, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		if outFilename == "" {

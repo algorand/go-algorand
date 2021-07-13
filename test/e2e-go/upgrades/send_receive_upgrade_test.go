@@ -82,6 +82,9 @@ func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtoc
 		fastParams.MaxUpgradeWaitRounds = 0
 		fastParams.MaxVersionStringLen += len(consensusTestFastUpgrade(""))
 		fastParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
+		// set the small lambda to 500 for the duration of dependent tests.
+		fastParams.AgreementFilterTimeout = 500 * time.Millisecond
+		fastParams.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 
 		for ver := range params.ApprovedUpgrades {
 			fastParams.ApprovedUpgrades[consensusTestFastUpgrade(ver)] = 0
@@ -89,15 +92,12 @@ func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtoc
 
 		fastUpgradeProtocols[consensusTestFastUpgrade(proto)] = fastParams
 
-		// set the small lambda to 500 for the duration of dependent tests.
-		fastParams.AgreementFilterTimeout = time.Second
-		fastParams.AgreementFilterTimeoutPeriod0 = time.Second
 	}
 	return
 }
 
 func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
-	t.Parallel()
+	//t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := generateFastUpgradeConsensus()
@@ -141,23 +141,41 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	var pingTxids []string
 	var pongTxids []string
 
+	pongWalletHandle, err := pongClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	pingWalletHandle, err := pingClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
 	startTime := time.Now()
+	var lastTxnSendRound uint64
 	for curStatus.LastVersion == initialStatus.LastVersion {
-		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
-		a.NoError(err, "fixture should be able to send money (pong -> ping)")
-		pongTxids = append(pongTxids, pongTx.ID().String())
+		iterationStartTime := time.Now()
+		if lastTxnSendRound != curStatus.LastRound {
+			pongTx, err := pongClient.SendPaymentFromWallet(pongWalletHandle, nil, pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8), "", 0, 0)
+			a.NoError(err, "fixture should be able to send money (pong -> ping)")
+			pongTxids = append(pongTxids, pongTx.ID().String())
 
-		pingTx, err := pingClient.SendPaymentFromUnencryptedWallet(pingAccount, pongAccount, transactionFee, amountPingSendsPong, GenerateRandomBytes(8))
-		a.NoError(err, "fixture should be able to send money (ping -> pong)")
-		pingTxids = append(pingTxids, pingTx.ID().String())
+			pingTx, err := pingClient.SendPaymentFromWallet(pingWalletHandle, nil, pingAccount, pongAccount, transactionFee, amountPingSendsPong, GenerateRandomBytes(8), "", 0, 0)
+			a.NoError(err, "fixture should be able to send money (ping -> pong)")
+			pingTxids = append(pingTxids, pingTx.ID().String())
 
-		expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing
-		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
+			expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing
+			expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
+
+			lastTxnSendRound = curStatus.LastRound
+		}
 
 		curStatus, err = pongClient.Status()
 		a.NoError(err)
 
-		time.Sleep(time.Second)
+		pongWalletHandle, err = pongClient.GetUnencryptedWalletHandle()
+		a.NoError(err)
+		pingWalletHandle, err = pingClient.GetUnencryptedWalletHandle()
+		a.NoError(err)
+
+		iterationDuration := time.Now().Sub(iterationStartTime)
+		if iterationDuration < 500*time.Millisecond {
+			time.Sleep(500*time.Millisecond - iterationDuration)
+		}
 
 		if time.Now().After(startTime.Add(3 * time.Minute)) {
 			a.Fail("upgrade taking too long")
@@ -175,18 +193,32 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 		if curStatus.LastRound > initialStatus.LastRound+2 {
 			break
 		}
-		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
-		a.NoError(err, "fixture should be able to send money (pong -> ping)")
-		pongTxids = append(pongTxids, pongTx.ID().String())
 
-		pingTx, err := pingClient.SendPaymentFromUnencryptedWallet(pingAccount, pongAccount, transactionFee, amountPingSendsPong, GenerateRandomBytes(8))
-		a.NoError(err, "fixture should be able to send money (ping -> pong)")
-		pingTxids = append(pingTxids, pingTx.ID().String())
+		iterationStartTime := time.Now()
+		if lastTxnSendRound != curStatus.LastRound {
+			pongTx, err := pongClient.SendPaymentFromWallet(pongWalletHandle, nil, pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8), "", 0, 0)
+			a.NoError(err, "fixture should be able to send money (pong -> ping)")
+			pongTxids = append(pongTxids, pongTx.ID().String())
 
-		expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing
-		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
+			pingTx, err := pingClient.SendPaymentFromWallet(pingWalletHandle, nil, pingAccount, pongAccount, transactionFee, amountPingSendsPong, GenerateRandomBytes(8), "", 0, 0)
+			a.NoError(err, "fixture should be able to send money (ping -> pong)")
+			pingTxids = append(pingTxids, pingTx.ID().String())
 
-		time.Sleep(time.Second)
+			expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing
+			expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
+
+			lastTxnSendRound = curStatus.LastRound
+		}
+
+		pongWalletHandle, err = pongClient.GetUnencryptedWalletHandle()
+		a.NoError(err)
+		pingWalletHandle, err = pingClient.GetUnencryptedWalletHandle()
+		a.NoError(err)
+
+		iterationDuration := time.Now().Sub(iterationStartTime)
+		if iterationDuration < 500*time.Millisecond {
+			time.Sleep(500*time.Millisecond - iterationDuration)
+		}
 	}
 
 	curStatus, err = pongClient.Status()

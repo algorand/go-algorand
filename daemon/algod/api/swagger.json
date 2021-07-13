@@ -1,0 +1,2078 @@
+{
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "schemes": [
+    "http"
+  ],
+  "swagger": "2.0",
+  "info": {
+    "description": "API Endpoint for AlgoD Operations.",
+    "title": "Algod REST API.",
+    "contact": {
+      "email": "contact@algorand.com"
+    },
+    "version": "0.0.1"
+  },
+  "host": "localhost",
+  "basePath": "/",
+  "paths": {
+    "/genesis": {
+      "get": {
+        "description": "Returns the entire genesis file in json.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets the genesis information",
+        "operationId": "GenesisJSON",
+        "responses": {
+          "200": {
+            "description": "The current genesis information",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns OK if healthy.",
+        "operationId": "HealthCheck",
+        "responses": {
+          "200": {
+            "description": "OK."
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "produces": [
+          "text/plain"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Return metrics about algod functioning.",
+        "operationId": "Metrics",
+        "responses": {
+          "200": {
+            "description": "text with \\#-comments and key:value lines"
+          },
+          "404": {
+            "description": "metrics were compiled out"
+          }
+        }
+      }
+    },
+    "/swagger.json": {
+      "get": {
+        "description": "Returns the entire swagger spec in json.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets the current swagger spec.",
+        "operationId": "SwaggerJSON",
+        "responses": {
+          "200": {
+            "description": "The current swagger spec",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/account/{address}": {
+      "get": {
+        "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get account information.",
+        "operationId": "AccountInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountInformationResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/account/{address}/transaction/{txid}": {
+      "get": {
+        "description": "Given a wallet address and a transaction id, it returns the confirmed transaction information. This call scans up to \u003cCurrentProtocol\u003e.MaxTxnLife blocks in the past.\n",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a specific confirmed transaction.",
+        "operationId": "TransactionInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "pattern": "[A-Z0-9]+",
+            "type": "string",
+            "description": "A transaction id",
+            "name": "txid",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/TransactionResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "description": "Transaction Not Found",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/account/{address}/transactions": {
+      "get": {
+        "description": "Returns the list of confirmed transactions between within a date range. When indexer is disabled this call requires firstRound and lastRound and returns an error if firstRound is not available to the node. The transaction results start from the oldest round.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a list of confirmed transactions.",
+        "operationId": "Transactions",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "description": "Do not fetch any transactions before this round.",
+            "name": "firstRound",
+            "in": "query"
+          },
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "description": "Do not fetch any transactions after this round.",
+            "name": "lastRound",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "format": "date",
+            "description": "Do not fetch any transactions before this date. (enabled only with indexer)",
+            "name": "fromDate",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "format": "date",
+            "description": "Do not fetch any transactions after this date. (enabled only with indexer)",
+            "name": "toDate",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "maximum transactions to show (default to 100)",
+            "name": "max",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/TransactionsResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/account/{addr}/transactions/pending": {
+      "get": {
+        "description": "Get the list of pending transactions by address, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a list of unconfirmed transactions currently in the transaction pool by address.",
+        "operationId": "GetPendingTransactionsByAddress",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "addr",
+            "in": "path",
+            "required": true
+          },
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "description": "Truncated number of transactions to display. If max=0, returns all pending txns.",
+            "name": "max",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/PendingTransactionsResponse"
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/asset/{index}": {
+      "get": {
+        "description": "Given the asset's unique index, this call returns the asset's creator, manager, reserve, freeze, and clawback addresses\n",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get asset information.",
+        "operationId": "AssetInformation",
+        "parameters": [
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "Asset index",
+            "name": "index",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AssetInformationResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/assets": {
+      "get": {
+        "description": "Returns list of up to `max` assets, where the maximum assetIdx is \u003c= `assetIdx`",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "List assets",
+        "operationId": "Assets",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "description": "Fetch assets with asset index \u003c= assetIdx. If zero, fetch most recent assets.",
+            "name": "assetIdx",
+            "in": "query"
+          },
+          {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "description": "Fetch no more than this many assets",
+            "name": "max",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AssetsResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/block/{round}": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get the block for the given round.",
+        "operationId": "GetBlock",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "description": "The round from which to fetch block information.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "Return raw msgpack block bytes",
+            "name": "raw",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/ledger/supply": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get the current supply reported by the ledger.",
+        "operationId": "GetSupply",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/SupplyResponse"
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/status": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets the current node status.",
+        "operationId": "GetStatus",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/StatusResponse"
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/status/wait-for-block-after/{round}/": {
+      "get": {
+        "description": "Waits for a block to appear after round {round} and returns the node's status at the time.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets the node status after waiting for the given round.",
+        "operationId": "WaitForBlock",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "description": "The round to wait until returning status",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/StatusResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "Service",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/transaction/{txid}": {
+      "get": {
+        "description": "Returns the transaction information of the given txid. Works only if the indexer is enabled.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get an information of a single transaction.",
+        "operationId": "Transaction",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]+",
+            "type": "string",
+            "description": "A transaction id",
+            "name": "txid",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/TransactionResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "description": "Transaction Not Found",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/transactions": {
+      "post": {
+        "consumes": [
+          "application/x-binary"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Broadcasts a raw transaction to the network.",
+        "operationId": "RawTransaction",
+        "parameters": [
+          {
+            "description": "The byte encoded signed transaction to broadcast to network",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/TransactionIDResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/transactions/fee": {
+      "get": {
+        "description": "Suggested Fee is returned in units of micro-Algos per byte. Suggested Fee may fall to zero but submitted transactions must still have a fee of at least MinTxnFee for the current network protocol.\n",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get the suggested fee",
+        "operationId": "SuggestedFee",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/TransactionFeeResponse"
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/transactions/params": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get parameters for constructing a new transaction",
+        "operationId": "TransactionParams",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/TransactionParamsResponse"
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/transactions/pending": {
+      "get": {
+        "description": "Get the list of pending transactions, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a list of unconfirmed transactions currently in the transaction pool.",
+        "operationId": "GetPendingTransactions",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "description": "Truncated number of transactions to display. If max=0, returns all pending txns.",
+            "name": "max",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/PendingTransactionsResponse"
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v1/transactions/pending/{txid}": {
+      "get": {
+        "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0) - transaction still in the pool (committed round = 0, pool error = \"\") - transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a specific pending transaction.",
+        "operationId": "PendingTransactionInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]+",
+            "type": "string",
+            "description": "A transaction id",
+            "name": "txid",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/TransactionResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "description": "Transaction Not Found",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/versions": {
+      "get": {
+        "description": "Retrieves the current version",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "GetVersion",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/VersionsResponse"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Account": {
+      "description": "Account Description",
+      "type": "object",
+      "required": [
+        "round",
+        "address",
+        "amount",
+        "pendingrewards",
+        "amountwithoutpendingrewards",
+        "rewards",
+        "status"
+      ],
+      "properties": {
+        "address": {
+          "description": "Address indicates the account public key",
+          "type": "string",
+          "x-go-name": "Address"
+        },
+        "amount": {
+          "description": "Amount indicates the total number of MicroAlgos in the account",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Amount"
+        },
+        "amountwithoutpendingrewards": {
+          "description": "AmountWithoutPendingRewards specifies the amount of MicroAlgos in\nthe account, without the pending rewards.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "AmountWithoutPendingRewards"
+        },
+        "applocalstates": {
+          "description": "AppLocalStates is a map of local states for applications this\naccount has opted in to, as well as a copy of each application's\nLocalStateSchema",
+          "x-go-name": "AppLocalStates"
+        },
+        "appparams": {
+          "description": "AppParams is a map of application parameters for applications that\nwere created by this account. These parameters include the\napplication's global state map",
+          "x-go-name": "AppParams"
+        },
+        "assets": {
+          "description": "Assets specifies the holdings of assets by this account,\nindexed by the asset ID.",
+          "x-go-name": "Assets"
+        },
+        "participation": {
+          "$ref": "#/definitions/Participation"
+        },
+        "pendingrewards": {
+          "description": "PendingRewards specifies the amount of MicroAlgos of pending\nrewards in this account.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "PendingRewards"
+        },
+        "rewards": {
+          "description": "Rewards indicates the total rewards of MicroAlgos the account has received, including pending rewards.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Rewards"
+        },
+        "round": {
+          "description": "Round indicates the round for which this information is relevant",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Round"
+        },
+        "status": {
+          "description": "Status indicates the delegation status of the account's MicroAlgos\nOffline - indicates that the associated account is delegated.\nOnline  - indicates that the associated account used as part of the delegation pool.\nNotParticipating - indicates that the associated account is neither a delegator nor a delegate.",
+          "type": "string",
+          "x-go-name": "Status"
+        },
+        "thisassettotal": {
+          "description": "AssetParams specifies the parameters of assets created by this account.",
+          "x-go-name": "AssetParams"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "ApplicationCallTransactionType": {
+      "description": "ApplicationCallTransactionType contains the additional fields for an ApplicationCall transaction",
+      "type": "object",
+      "required": [
+        "id",
+        "accounts",
+        "foreignapps",
+        "foreignassets",
+        "appargs",
+        "approvprog",
+        "clearprog"
+      ],
+      "properties": {
+        "accounts": {
+          "description": "Accounts lists the accounts (in addition to the sender) that may be\naccessed from the application's ApprovalProgram and ClearStateProgram.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "Accounts"
+        },
+        "appargs": {
+          "description": "ApplicationArgs lists some transaction-specific arguments accessible\nfrom application logic",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "ApplicationArgs"
+        },
+        "approvprog": {
+          "description": "ApprovalProgram determines whether or not this ApplicationCall\ntransaction will be approved or not. It does not execute when\nOnCompletion == ClearStateOC, because clearing local state is always\nallowed.",
+          "type": "string",
+          "x-go-name": "ApprovalProgram"
+        },
+        "clearprog": {
+          "description": "ClearStateProgram executes when an ApplicationCall transaction\nexecutes with OnCompletion == ClearStateOC. However, this program\nmay not reject the transaction (only update state). If this program",
+          "type": "string",
+          "x-go-name": "ClearStateProgram"
+        },
+        "foreignapps": {
+          "description": "ForeignApps lists the applications (in addition to txn.ApplicationID)\nwhose global states may be accessed by this application's\nApprovalProgram and ClearStateProgram. The access is read-only.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "x-go-name": "ForeignApps"
+        },
+        "foreignassets": {
+          "description": "ForeignAssets lists the assets whose parameters may be accessed by\nthis application's ApprovalProgram and ClearStateProgram. The access\nis read-only.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "x-go-name": "ForeignAssets"
+        },
+        "globalschema": {
+          "$ref": "#/definitions/StateSchema"
+        },
+        "id": {
+          "description": "ApplicationID is the application being interacted with, or 0 if\ncreating a new application.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "ApplicationID"
+        },
+        "localschema": {
+          "$ref": "#/definitions/StateSchema"
+        },
+        "oncompletion": {
+          "description": "OnCompletion specifies what side effects this transaction will have\nif it successfully makes it into a block.\n\nrequire: true",
+          "type": "string",
+          "x-go-name": "OnCompletion"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "Asset": {
+      "description": "Asset specifies both the unique identifier and the parameters for an asset",
+      "type": "object",
+      "required": [
+        "AssetIndex",
+        "AssetParams"
+      ],
+      "properties": {
+        "AssetIndex": {
+          "description": "AssetIndex is the unique asset identifier",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "AssetParams": {
+          "$ref": "#/definitions/AssetParams"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "AssetConfigTransactionType": {
+      "description": "AssetConfigTransactionType contains the additional fields for an asset config transaction",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "AssetID is the asset being configured (or empty if creating)",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "AssetID"
+        },
+        "params": {
+          "$ref": "#/definitions/AssetParams"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "AssetFreezeTransactionType": {
+      "description": "AssetFreezeTransactionType contains the additional fields for an asset freeze transaction",
+      "type": "object",
+      "required": [
+        "id",
+        "acct",
+        "freeze"
+      ],
+      "properties": {
+        "acct": {
+          "description": "Account specifies the account where the asset is being frozen or thawed.",
+          "type": "string",
+          "x-go-name": "Account"
+        },
+        "freeze": {
+          "description": "NewFreezeStatus specifies the new freeze status.",
+          "type": "boolean",
+          "x-go-name": "NewFreezeStatus"
+        },
+        "id": {
+          "description": "AssetID is the asset being configured (or empty if creating)",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "AssetID"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "AssetList": {
+      "description": "AssetList contains a list of assets",
+      "type": "object",
+      "required": [
+        "assets"
+      ],
+      "properties": {
+        "assets": {
+          "description": "Assets is a list of assets",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Asset"
+          },
+          "x-go-name": "Assets"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "AssetParams": {
+      "type": "object",
+      "title": "AssetParams specifies the parameters for an asset.",
+      "required": [
+        "creator",
+        "total",
+        "decimals"
+      ],
+      "properties": {
+        "assetname": {
+          "description": "AssetName specifies the name of this asset,\nas supplied by the creator.",
+          "type": "string",
+          "x-go-name": "AssetName"
+        },
+        "clawbackaddr": {
+          "description": "ClawbackAddr specifies the address used to clawback holdings of\nthis asset.  If empty, clawback is not permitted.",
+          "type": "string",
+          "x-go-name": "ClawbackAddr"
+        },
+        "creator": {
+          "description": "Creator specifies the address that created this asset.\nThis is the address where the parameters for this asset\ncan be found, and also the address where unwanted asset\nunits can be sent in the worst case.",
+          "type": "string",
+          "x-go-name": "Creator"
+        },
+        "decimals": {
+          "description": "Decimals specifies the number of digits to use after the decimal\npoint when displaying this asset. If 0, the asset is not divisible.\nIf 1, the base unit of the asset is in tenths. If 2, the base unit\nof the asset is in hundredths, and so on.",
+          "type": "integer",
+          "format": "uint32",
+          "x-go-name": "Decimals"
+        },
+        "defaultfrozen": {
+          "description": "DefaultFrozen specifies whether holdings in this asset\nare frozen by default.",
+          "type": "boolean",
+          "x-go-name": "DefaultFrozen"
+        },
+        "freezeaddr": {
+          "description": "FreezeAddr specifies the address used to freeze holdings of\nthis asset.  If empty, freezing is not permitted.",
+          "type": "string",
+          "x-go-name": "FreezeAddr"
+        },
+        "managerkey": {
+          "description": "ManagerAddr specifies the address used to manage the keys of this\nasset and to destroy it.",
+          "type": "string",
+          "x-go-name": "ManagerAddr"
+        },
+        "metadatahash": {
+          "description": "MetadataHash specifies a commitment to some unspecified asset\nmetadata. The format of this metadata is up to the application.",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "MetadataHash"
+        },
+        "reserveaddr": {
+          "description": "ReserveAddr specifies the address holding reserve (non-minted)\nunits of this asset.",
+          "type": "string",
+          "x-go-name": "ReserveAddr"
+        },
+        "total": {
+          "description": "Total specifies the total number of units of this asset.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Total"
+        },
+        "unitname": {
+          "description": "UnitName specifies the name of a unit of this asset,\nas supplied by the creator.",
+          "type": "string",
+          "x-go-name": "UnitName"
+        },
+        "url": {
+          "description": "URL specifies a URL where more information about the asset can be\nretrieved",
+          "type": "string",
+          "x-go-name": "URL"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "AssetTransferTransactionType": {
+      "description": "AssetTransferTransactionType contains the additional fields for an asset transfer transaction",
+      "type": "object",
+      "required": [
+        "id",
+        "amt",
+        "rcv"
+      ],
+      "properties": {
+        "amt": {
+          "description": "Amount is the amount being transferred.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Amount"
+        },
+        "closeto": {
+          "description": "CloseTo is the destination for remaining funds (if closing).",
+          "type": "string",
+          "x-go-name": "CloseTo"
+        },
+        "closetoamount": {
+          "description": "CloseToAmount is amount of the remaining funds that were transferred to the close to address (if closing).",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "CloseToAmount"
+        },
+        "id": {
+          "description": "AssetID is the asset being configured (or empty if creating)",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "AssetID"
+        },
+        "rcv": {
+          "description": "Receiver is the recipient account.",
+          "type": "string",
+          "x-go-name": "Receiver"
+        },
+        "snd": {
+          "description": "Sender is the source account (if using clawback).",
+          "type": "string",
+          "x-go-name": "Sender"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "Block": {
+      "description": "Block contains a block information",
+      "type": "object",
+      "required": [
+        "currentProtocol",
+        "nextProtocol",
+        "nextProtocolApprovals",
+        "nextProtocolVoteBefore",
+        "nextProtocolSwitchOn",
+        "upgradePropose",
+        "upgradeApprove",
+        "hash",
+        "previousBlockHash",
+        "seed",
+        "proposer",
+        "round",
+        "period",
+        "txnRoot",
+        "timestamp",
+        "compactCertVoters",
+        "compactCertVotersTotal",
+        "compactCertNextRound"
+      ],
+      "properties": {
+        "compactCertNextRound": {
+          "description": "CompactCertNextRound is the next round for which a compact certificate is\nexpected.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "CompactCertNextRound"
+        },
+        "compactCertVoters": {
+          "description": "CompactCertVoters is the root of the merkle tree of voters for compact certs.",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "CompactCertVoters"
+        },
+        "compactCertVotersTotal": {
+          "description": "CompactCertVotersTotal is the total amount of microalgos held by the voters in\nthe CompactCertVoters merkle tree.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "CompactCertVotersTotal"
+        },
+        "currentProtocol": {
+          "description": "CurrentProtocol is a string that represents the current protocol",
+          "type": "string",
+          "x-go-name": "CurrentProtocol"
+        },
+        "frac": {
+          "description": "The number of leftover MicroAlgos after the distribution of RewardsRate/rewardUnits\nMicroAlgos for every reward unit in the next round.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "RewardsResidue"
+        },
+        "hash": {
+          "description": "Hash is the current block hash",
+          "type": "string",
+          "x-go-name": "Hash"
+        },
+        "nextProtocol": {
+          "description": "NextProtocol is a string that represents the next proposed protocol",
+          "type": "string",
+          "x-go-name": "NextProtocol"
+        },
+        "nextProtocolApprovals": {
+          "description": "NextProtocolApprovals is the number of blocks which approved the protocol upgrade",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "NextProtocolApprovals"
+        },
+        "nextProtocolSwitchOn": {
+          "description": "NextProtocolSwitchOn is the round on which the protocol upgrade will take effect",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "NextProtocolSwitchOn"
+        },
+        "nextProtocolVoteBefore": {
+          "description": "NextProtocolVoteBefore is the deadline round for this protocol upgrade (No votes will be consider after this round)",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "NextProtocolVoteBefore"
+        },
+        "period": {
+          "description": "Period is the period on which the block was confirmed",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Period"
+        },
+        "previousBlockHash": {
+          "description": "PreviousBlockHash is the previous block hash",
+          "type": "string",
+          "x-go-name": "PreviousBlockHash"
+        },
+        "proposer": {
+          "description": "Proposer is the address of this block proposer",
+          "type": "string",
+          "x-go-name": "Proposer"
+        },
+        "rate": {
+          "description": "The number of new MicroAlgos added to the participation stake from rewards at the next round.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "RewardsRate"
+        },
+        "reward": {
+          "description": "RewardsLevel specifies how many rewards, in MicroAlgos,\nhave been distributed to each config.Protocol.RewardUnit\nof MicroAlgos since genesis.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "RewardsLevel"
+        },
+        "round": {
+          "description": "Round is the current round on which this block was appended to the chain",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Round"
+        },
+        "seed": {
+          "description": "Seed is the sortition seed",
+          "type": "string",
+          "x-go-name": "Seed"
+        },
+        "timestamp": {
+          "description": "TimeStamp in seconds since epoch",
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "Timestamp"
+        },
+        "txnRoot": {
+          "description": "TransactionsRoot authenticates the set of transactions appearing in the block.\nMore specifically, it's the root of a merkle tree whose leaves are the block's Txids, in lexicographic order.\nFor the empty block, it's 0.\nNote that the TxnRoot does not authenticate the signatures on the transactions, only the transactions themselves.\nTwo blocks with the same transactions but in a different order and with different signatures will have the same TxnRoot.",
+          "type": "string",
+          "x-go-name": "TransactionsRoot"
+        },
+        "txns": {
+          "$ref": "#/definitions/TransactionList"
+        },
+        "upgradeApprove": {
+          "description": "UpgradeApprove indicates a yes vote for the current proposal",
+          "type": "boolean",
+          "x-go-name": "UpgradeApprove"
+        },
+        "upgradePropose": {
+          "description": "UpgradePropose indicates a proposed upgrade",
+          "type": "string",
+          "x-go-name": "UpgradePropose"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "BuildVersion": {
+      "type": "object",
+      "title": "BuildVersion contains the current algod build version information.",
+      "required": [
+        "major",
+        "minor",
+        "build_number",
+        "commit_hash",
+        "branch",
+        "channel"
+      ],
+      "properties": {
+        "branch": {
+          "type": "string",
+          "x-go-name": "Branch"
+        },
+        "build_number": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "BuildNumber"
+        },
+        "channel": {
+          "type": "string",
+          "x-go-name": "Channel"
+        },
+        "commit_hash": {
+          "type": "string",
+          "x-go-name": "CommitHash"
+        },
+        "major": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "Major"
+        },
+        "minor": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "Minor"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+    },
+    "CompactCertTransactionType": {
+      "description": "CompactCertTransactionType contains the additional fields for a compact cert transaction",
+      "type": "object",
+      "required": [
+        "rnd",
+        "cert"
+      ],
+      "properties": {
+        "cert": {
+          "description": "Cert is the msgpack encoding of the compact cert.",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "Cert"
+        },
+        "rnd": {
+          "description": "CertRound is the round whose block this compact cert refers to.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "CertRound"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "KeyregTransactionType": {
+      "description": "KeyregTransactionType contains the additional fields for a keyreg Transaction",
+      "type": "object",
+      "properties": {
+        "selkey": {
+          "description": "SelectionPK is the VRF public key used in key registration transactions",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "SelectionPK"
+        },
+        "votefst": {
+          "description": "VoteFirst is the first round this participation key is valid",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "VoteFirst"
+        },
+        "votekd": {
+          "description": "VoteKeyDilution is the dilution for the 2-level participation key",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "VoteKeyDilution"
+        },
+        "votekey": {
+          "description": "VotePK is the participation public key used in key registration transactions",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "VotePK"
+        },
+        "votelst": {
+          "description": "VoteLast is the last round this participation key is valid",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "VoteLast"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "NodeStatus": {
+      "description": "NodeStatus contains the information about a node status",
+      "type": "object",
+      "required": [
+        "lastRound",
+        "lastConsensusVersion",
+        "nextConsensusVersion",
+        "nextConsensusVersionRound",
+        "nextConsensusVersionSupported",
+        "timeSinceLastRound",
+        "catchupTime",
+        "hasSyncedSinceStartup",
+        "stoppedAtUnsupportedRound"
+      ],
+      "properties": {
+        "catchupTime": {
+          "description": "CatchupTime in nanoseconds",
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "CatchupTime"
+        },
+        "hasSyncedSinceStartup": {
+          "description": "HasSyncedSinceStartup indicates whether a round has completed since startup",
+          "type": "boolean",
+          "x-go-name": "HasSyncedSinceStartup"
+        },
+        "lastConsensusVersion": {
+          "description": "LastVersion indicates the last consensus version supported",
+          "type": "string",
+          "x-go-name": "LastVersion"
+        },
+        "lastRound": {
+          "description": "LastRound indicates the last round seen",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "LastRound"
+        },
+        "nextConsensusVersion": {
+          "description": "NextVersion of consensus protocol to use",
+          "type": "string",
+          "x-go-name": "NextVersion"
+        },
+        "nextConsensusVersionRound": {
+          "description": "NextVersionRound is the round at which the next consensus version will apply",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "NextVersionRound"
+        },
+        "nextConsensusVersionSupported": {
+          "description": "NextVersionSupported indicates whether the next consensus version is supported by this node",
+          "type": "boolean",
+          "x-go-name": "NextVersionSupported"
+        },
+        "stoppedAtUnsupportedRound": {
+          "description": "StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress",
+          "type": "boolean",
+          "x-go-name": "StoppedAtUnsupportedRound"
+        },
+        "timeSinceLastRound": {
+          "description": "TimeSinceLastRound in nanoseconds",
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "TimeSinceLastRound"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "Participation": {
+      "description": "Participation Description",
+      "type": "object",
+      "required": [
+        "partpkb64",
+        "vrfpkb64",
+        "votefst",
+        "votelst",
+        "votekd"
+      ],
+      "properties": {
+        "partpkb64": {
+          "description": "ParticipationPK is the root participation public key (if any) currently registered for this round",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "ParticipationPK"
+        },
+        "votefst": {
+          "description": "VoteFirst is the first round for which this participation is valid.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "VoteFirst"
+        },
+        "votekd": {
+          "description": "VoteKeyDilution is the number of subkeys in for each batch of participation keys.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "VoteKeyDilution"
+        },
+        "votelst": {
+          "description": "VoteLast is the last round for which this participation is valid.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "VoteLast"
+        },
+        "vrfpkb64": {
+          "description": "VRFPK is the selection public key (if any) currently registered for this round",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "VRFPK"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "PaymentTransactionType": {
+      "description": "PaymentTransactionType contains the additional fields for a payment Transaction",
+      "type": "object",
+      "required": [
+        "to",
+        "amount"
+      ],
+      "properties": {
+        "amount": {
+          "description": "Amount is the amount of MicroAlgos intended to be transferred",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Amount"
+        },
+        "close": {
+          "description": "CloseRemainderTo is the address the sender closed to",
+          "type": "string",
+          "x-go-name": "CloseRemainderTo"
+        },
+        "closeamount": {
+          "description": "CloseAmount is the amount sent to CloseRemainderTo, for committed transaction",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "CloseAmount"
+        },
+        "closerewards": {
+          "description": "CloseRewards is the amount of pending rewards applied to the CloseRemainderTo\naccount as part of this transaction.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "CloseRewards"
+        },
+        "to": {
+          "description": "To is the receiver's address",
+          "type": "string",
+          "x-go-name": "To"
+        },
+        "torewards": {
+          "description": "ToRewards is the amount of pending rewards applied to the To account\nas part of this transaction.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "ToRewards"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "PendingTransactions": {
+      "description": "PendingTransactions represents a potentially truncated list of transactions currently in the\nnode's transaction pool.",
+      "type": "object",
+      "required": [
+        "truncatedTxns",
+        "totalTxns"
+      ],
+      "properties": {
+        "totalTxns": {
+          "description": "TotalTxns",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "TotalTxns"
+        },
+        "truncatedTxns": {
+          "$ref": "#/definitions/TransactionList"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "StateSchema": {
+      "description": "swagger: model StateSchema",
+      "type": "object",
+      "title": "StateSchema represents a LocalStateSchema or GlobalStateSchema. These\nschemas determine how much storage may be used in a LocalState or\nGlobalState for an application. The more space used, the larger minimum\nbalance must be maintained in the account holding the data.",
+      "required": [
+        "uints",
+        "byteslices"
+      ],
+      "properties": {
+        "byteslices": {
+          "description": "NumByteSlice is the maximum number of TEAL byte slices that may be\nstored in the key/value store",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "NumByteSlice"
+        },
+        "uints": {
+          "description": "NumUint is the maximum number of TEAL uints that may be stored in\nthe key/value store",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "NumUint"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "Supply": {
+      "description": "Supply represents the current supply of MicroAlgos in the system",
+      "type": "object",
+      "required": [
+        "round",
+        "totalMoney",
+        "onlineMoney"
+      ],
+      "properties": {
+        "onlineMoney": {
+          "description": "OnlineMoney",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "OnlineMoney"
+        },
+        "round": {
+          "description": "Round",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Round"
+        },
+        "totalMoney": {
+          "description": "TotalMoney",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "TotalMoney"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "Transaction": {
+      "description": "Transaction contains all fields common to all transactions and serves as an envelope to all transactions\ntype",
+      "type": "object",
+      "required": [
+        "type",
+        "tx",
+        "from",
+        "fee",
+        "first-round",
+        "last-round",
+        "app",
+        "compactcert",
+        "genesisID",
+        "genesishashb64"
+      ],
+      "properties": {
+        "app": {
+          "$ref": "#/definitions/ApplicationCallTransactionType"
+        },
+        "compactcert": {
+          "$ref": "#/definitions/CompactCertTransactionType"
+        },
+        "curcfg": {
+          "$ref": "#/definitions/AssetConfigTransactionType"
+        },
+        "curfrz": {
+          "$ref": "#/definitions/AssetFreezeTransactionType"
+        },
+        "curxfer": {
+          "$ref": "#/definitions/AssetTransferTransactionType"
+        },
+        "fee": {
+          "description": "Fee is the transaction fee",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Fee"
+        },
+        "first-round": {
+          "description": "FirstRound indicates the first valid round for this transaction",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "FirstRound"
+        },
+        "from": {
+          "description": "From is the sender's address",
+          "type": "string",
+          "x-go-name": "From"
+        },
+        "fromrewards": {
+          "description": "FromRewards is the amount of pending rewards applied to the From\naccount as part of this transaction.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "FromRewards"
+        },
+        "genesisID": {
+          "description": "Genesis ID",
+          "type": "string",
+          "x-go-name": "GenesisID"
+        },
+        "genesishashb64": {
+          "description": "Genesis hash",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "GenesisHash"
+        },
+        "group": {
+          "description": "Group",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "Group"
+        },
+        "keyreg": {
+          "$ref": "#/definitions/KeyregTransactionType"
+        },
+        "last-round": {
+          "description": "LastRound indicates the last valid round for this transaction",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "LastRound"
+        },
+        "lease": {
+          "description": "Lease enforces mutual exclusion of transactions.  If this field is\nnonzero, then once the transaction is confirmed, it acquires the\nlease identified by the (Sender, Lease) pair of the transaction until\nthe LastValid round passes.  While this transaction possesses the\nlease, no other transaction specifying this lease can be confirmed.",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "Lease"
+        },
+        "noteb64": {
+          "description": "Note is a free form data",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "Note"
+        },
+        "payment": {
+          "$ref": "#/definitions/PaymentTransactionType"
+        },
+        "poolerror": {
+          "description": "PoolError indicates the transaction was evicted from this node's transaction\npool (if non-empty).  A non-empty PoolError does not guarantee that the\ntransaction will never be committed; other nodes may not have evicted the\ntransaction and may attempt to commit it in the future.",
+          "type": "string",
+          "x-go-name": "PoolError"
+        },
+        "round": {
+          "description": "ConfirmedRound indicates the block number this transaction appeared in",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "ConfirmedRound"
+        },
+        "tx": {
+          "description": "TxID is the transaction ID",
+          "type": "string",
+          "x-go-name": "TxID"
+        },
+        "txresults": {
+          "$ref": "#/definitions/TransactionResults"
+        },
+        "type": {
+          "description": "Type is the transaction type",
+          "type": "string",
+          "x-go-name": "Type"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "TransactionFee": {
+      "description": "TransactionFee contains the suggested fee",
+      "type": "object",
+      "required": [
+        "fee"
+      ],
+      "properties": {
+        "fee": {
+          "description": "Fee is transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Fee"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "TransactionList": {
+      "description": "TransactionList contains a list of transactions",
+      "type": "object",
+      "required": [
+        "transactions"
+      ],
+      "properties": {
+        "transactions": {
+          "description": "TransactionList is a list of transactions",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Transaction"
+          },
+          "x-go-name": "Transactions"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "TransactionParams": {
+      "description": "TransactionParams contains the parameters that help a client construct\na new transaction.",
+      "type": "object",
+      "required": [
+        "fee",
+        "genesisID",
+        "genesishashb64",
+        "lastRound",
+        "consensusVersion"
+      ],
+      "properties": {
+        "consensusVersion": {
+          "description": "ConsensusVersion indicates the consensus protocol version\nas of LastRound.",
+          "type": "string",
+          "x-go-name": "ConsensusVersion"
+        },
+        "fee": {
+          "description": "Fee is the suggested transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "Fee"
+        },
+        "genesisID": {
+          "description": "Genesis ID",
+          "type": "string",
+          "x-go-name": "GenesisID"
+        },
+        "genesishashb64": {
+          "description": "Genesis hash",
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "GenesisHash"
+        },
+        "lastRound": {
+          "description": "LastRound indicates the last round seen",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "LastRound"
+        },
+        "minFee": {
+          "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "MinTxnFee"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "TransactionResults": {
+      "description": "TransactionResults contains information about the side effects of a transaction",
+      "type": "object",
+      "properties": {
+        "createdapp": {
+          "description": "CreatedAppIndex indicates the app index of an app created by this txn",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "CreatedAppIndex"
+        },
+        "createdasset": {
+          "description": "CreatedAssetIndex indicates the asset index of an asset created by this txn",
+          "type": "integer",
+          "format": "uint64",
+          "x-go-name": "CreatedAssetIndex"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    },
+    "Version": {
+      "description": "Note that we annotate this as a model so that legacy clients\ncan directly import a swagger generated Version model.",
+      "type": "object",
+      "title": "Version contains the current algod version.",
+      "required": [
+        "versions",
+        "genesis_id",
+        "genesis_hash_b64",
+        "build"
+      ],
+      "properties": {
+        "build": {
+          "$ref": "#/definitions/BuildVersion"
+        },
+        "genesis_hash_b64": {
+          "type": "string",
+          "format": "byte",
+          "x-go-name": "GenesisHash"
+        },
+        "genesis_id": {
+          "type": "string",
+          "x-go-name": "GenesisID"
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "Versions"
+        }
+      },
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+    },
+    "transactionID": {
+      "description": "TransactionID Description",
+      "type": "object",
+      "required": [
+        "txId"
+      ],
+      "properties": {
+        "txId": {
+          "description": "TxId is the string encoding of the transaction hash",
+          "type": "string",
+          "x-go-name": "TxID"
+        }
+      },
+      "x-go-name": "TransactionID",
+      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+    }
+  },
+  "responses": {
+    "AccountInformationResponse": {
+      "description": "AccountInformationResponse contains an account information",
+      "schema": {
+        "$ref": "#/definitions/Account"
+      }
+    },
+    "AssetInformationResponse": {
+      "description": "AssetInformationResponse contains asset information",
+      "schema": {
+        "$ref": "#/definitions/AssetParams"
+      }
+    },
+    "AssetsResponse": {
+      "description": "AssetsResponse contains a list of assets",
+      "schema": {
+        "$ref": "#/definitions/AssetList"
+      }
+    },
+    "BlockResponse": {
+      "description": "BlockResponse contains block information",
+      "schema": {
+        "$ref": "#/definitions/Block"
+      }
+    },
+    "PendingTransactionsResponse": {
+      "description": "PendingTransactionsResponse contains a (potentially truncated) list of transactions and\nthe total number of transactions currently in the pool.",
+      "schema": {
+        "$ref": "#/definitions/PendingTransactions"
+      }
+    },
+    "StatusResponse": {
+      "description": "StatusResponse contains the node's status information",
+      "schema": {
+        "$ref": "#/definitions/NodeStatus"
+      }
+    },
+    "SupplyResponse": {
+      "description": "SupplyResponse contains the ledger supply information",
+      "schema": {
+        "$ref": "#/definitions/Supply"
+      }
+    },
+    "TransactionFeeResponse": {
+      "description": "TransactionFeeResponse contains a suggested fee",
+      "schema": {
+        "$ref": "#/definitions/TransactionFee"
+      }
+    },
+    "TransactionIDResponse": {
+      "description": "TransactionIDResponse contains a transaction information",
+      "schema": {
+        "$ref": "#/definitions/transactionID"
+      }
+    },
+    "TransactionParamsResponse": {
+      "description": "TransactionParamsResponse contains the parameters for\nconstructing a new transaction.",
+      "schema": {
+        "$ref": "#/definitions/TransactionParams"
+      }
+    },
+    "TransactionResponse": {
+      "description": "TransactionResponse contains a transaction information",
+      "schema": {
+        "$ref": "#/definitions/Transaction"
+      }
+    },
+    "TransactionsResponse": {
+      "description": "TransactionsResponse contains a list of transactions",
+      "schema": {
+        "$ref": "#/definitions/TransactionList"
+      }
+    },
+    "VersionsResponse": {
+      "description": "VersionsResponse is the response to 'GET /versions'",
+      "schema": {
+        "$ref": "#/definitions/Version"
+      }
+    }
+  },
+  "securityDefinitions": {
+    "api_key": {
+      "description": "Generated header parameter. This token can be generated using the Goal command line tool. Example value ='b7e384d0317b8050ce45900a94a1931e28540e1f69b2d242b424659c341b4697'",
+      "type": "apiKey",
+      "name": "X-Algo-API-Token",
+      "in": "header",
+      "x-example": "b7e384d0317b8050ce45900a94a1931e28540e1f69b2d242b424659c341b4697"
+    }
+  },
+  "security": [
+    {
+      "api_key": []
+    }
+  ]
+}

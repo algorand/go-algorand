@@ -108,8 +108,6 @@ type TransactionSyncProfilingMetrics struct {
 	GetTxnGroupsOps uint64
 	// number of times the transaction sync was assembling messages
 	AssembleMessageOps uint64
-	// number of times the transaction sync was sending messages
-	SendMessageOps uint64
 	// number of times the transaction sync was creating bloom filters
 	MakeBloomFilterOps uint64
 	// number of times the transaction sync was selecting pending transactions out of existing pool
@@ -135,8 +133,6 @@ type TransactionSyncProfilingMetrics struct {
 	GetTxnGroupsPercent float64
 	// percent of time the transaction sync was assembling messages
 	AssembleMessagePercent float64
-	// percent of time the transaction sync was sending messages
-	SendMessagePercent float64
 	// percent of time the transaction sync was creating bloom filter
 	MakeBloomFilterPercent float64
 	// percent of time the transaction sync was selecting transaction to be sent

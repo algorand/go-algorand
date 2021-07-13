@@ -1,0 +1,37 @@
+{
+  "Genesis": {
+    "NetworkName": "tbd",
+    "ConsensusProtocol": "shortpartkeysprotocol",
+    "Wallets": [
+      {
+        "Name": "Rich",
+        "Stake": 30,
+        "Online": true
+      },
+      {
+        "Name": "Partkey",
+        "Stake": 20,
+        "Online": false
+      },
+      {
+        "Name": "Offline",
+        "Stake": 50,
+        "Online": false
+      }
+    ]
+  },
+  "Nodes": [
+    {
+      "Name": "Primary",
+      "IsRelay": true,
+      "Wallets": [
+        { "Name": "Rich",
+          "ParticipationOnly": false },
+        { "Name": "Partkey",
+          "ParticipationOnly": true },
+        { "Name": "Offline",
+          "ParticipationOnly": true }
+      ]
+    }
+  ]
+}

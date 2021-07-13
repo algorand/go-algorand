@@ -32,6 +32,7 @@ type logicLedger struct {
 
 type cowForLogicLedger interface {
 	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
+	GetCreatableID(groupIdx int) basics.CreatableIndex
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
 	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (basics.EvalDelta, error)
@@ -84,6 +85,10 @@ func (al *logicLedger) MinBalance(addr basics.Address, proto *config.ConsensusPa
 	return record.MinBalance(proto), nil
 }
 
+func (al *logicLedger) GetCreatableID(groupIdx int) basics.CreatableIndex {
+	return al.cow.GetCreatableID(groupIdx)
+}
+
 func (al *logicLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
 	// Fetch the requested balance record
 	record, err := al.cow.Get(addr, false)
@@ -101,32 +106,60 @@ func (al *logicLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIn
 	return holding, nil
 }
 
-func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error) {
+func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, basics.Address, error) {
 	// Find asset creator
 	creator, ok, err := al.cow.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
 	if err != nil {
-		return basics.AssetParams{}, err
+		return basics.AssetParams{}, creator, err
 	}
 
 	// Ensure asset exists
 	if !ok {
-		return basics.AssetParams{}, fmt.Errorf("asset %d does not exist", assetIdx)
+		return basics.AssetParams{}, creator, fmt.Errorf("asset %d does not exist", assetIdx)
 	}
 
 	// Fetch the requested balance record
 	record, err := al.cow.Get(creator, false)
 	if err != nil {
-		return basics.AssetParams{}, err
+		return basics.AssetParams{}, creator, err
 	}
 
 	// Ensure account created the requested asset
 	params, ok := record.AssetParams[assetIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not created asset %d", creator, assetIdx)
-		return basics.AssetParams{}, err
+		return basics.AssetParams{}, creator, err
 	}
 
-	return params, nil
+	return params, creator, nil
+}
+
+func (al *logicLedger) AppParams(appIdx basics.AppIndex) (basics.AppParams, basics.Address, error) {
+	// Find app creator
+	creator, ok, err := al.cow.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
+	if err != nil {
+		return basics.AppParams{}, creator, err
+	}
+
+	// Ensure app exists
+	if !ok {
+		return basics.AppParams{}, creator, fmt.Errorf("app %d does not exist", appIdx)
+	}
+
+	// Fetch the requested balance record
+	record, err := al.cow.Get(creator, false)
+	if err != nil {
+		return basics.AppParams{}, creator, err
+	}
+
+	// Ensure account created the requested app
+	params, ok := record.AppParams[appIdx]
+	if !ok {
+		err = fmt.Errorf("account %s has not created app %d", creator, appIdx)
+		return basics.AppParams{}, creator, err
+	}
+
+	return params, creator, nil
 }
 
 func (al *logicLedger) Round() basics.Round {

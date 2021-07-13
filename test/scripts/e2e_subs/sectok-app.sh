@@ -19,9 +19,15 @@ BOB=$(${gcmd} account new|awk '{ print $6 }')
 CAROL=$(${gcmd} account new|awk '{ print $6 }')
 # MANAGER=$(${gcmd} account new|awk '{ print $6 }')
 
-${gcmd} clerk send -a 100000000 -f ${CREATOR} -t ${ALICE}
-${gcmd} clerk send -a 100000000 -f ${CREATOR} -t ${BOB}
-${gcmd} clerk send -a 100000000 -f ${CREATOR} -t ${CAROL}
+${gcmd} clerk send -a 100000000 -f ${CREATOR} -t ${ALICE} &
+WA=$!
+${gcmd} clerk send -a 100000000 -f ${CREATOR} -t ${BOB} &
+WB=$!
+${gcmd} clerk send -a 100000000 -f ${CREATOR} -t ${CAROL} &
+WC=$!
+wait $WA
+wait $WB
+wait $WC
 # ${gcmd} clerk send -a 100000000 -f ${CREATOR} -t ${MANAGER}
 
 ZERO='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ'
@@ -69,9 +75,15 @@ if [[ $RES != *"$ERR_APP_OI_STR1"* ]]; then
 fi
 
 # optin alice, bob, carol
-${xcmd} --from $ALICE opt-in
-${xcmd} --from $BOB opt-in
-${xcmd} --from $CAROL opt-in
+${xcmd} --from $ALICE opt-in &
+WA=$!
+${xcmd} --from $BOB opt-in &
+WB=$!
+${xcmd} --from $CAROL opt-in &
+WC=$!
+wait $WA
+wait $WB
+wait $WC
 
 RES=$(${qcmd} --from $ALICE transfer-group)
 if [[ $RES != '0' ]]; then
@@ -164,8 +176,12 @@ if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
 fi
 
 # minting/burning
-${xcmd} --from $CREATOR mint --target $ALICE --amount $XFER1
-${xcmd} --from $CREATOR mint --target $ALICE --amount $XFER1
+${xcmd} --from $CREATOR mint --target $ALICE --amount $XFER1 &
+WA=$!
+${xcmd} --from $CREATOR mint --target $ALICE --amount $XFER1 &
+WB=$!
+wait $WA
+wait $WB
 
 RES=$(${qcmd} --from $ALICE balance)
 if [[ $RES != $(( $XFER1 + $XFER1 )) ]]; then
@@ -198,12 +214,26 @@ if [[ $RES != *"$ERR_APP_REJ_STR3"* ]]; then
     false
 fi
 
-${xcmd} --from $ALICE set-max-balance --target $CAROL --max-balance $SUPPLY
-${xcmd} --from $ALICE set-max-balance --target $BOB --max-balance $SUPPLY
-${xcmd} --from $ALICE set-lock-until --target $CAROL --lock-until 1
-${xcmd} --from $ALICE set-lock-until --target $BOB --lock-until 1
-${xcmd} --from $ALICE set-transfer-group --target $CAROL --transfer-group 1
-${xcmd} --from $ALICE set-transfer-group --target $BOB --transfer-group 2
+${xcmd} --from $ALICE set-max-balance --target $CAROL --max-balance $SUPPLY &
+WA=$!
+${xcmd} --from $ALICE set-max-balance --target $BOB --max-balance $SUPPLY &
+WB=$!
+wait $WA
+wait $WB
+
+${xcmd} --from $ALICE set-lock-until --target $CAROL --lock-until 1 &
+WA=$!
+${xcmd} --from $ALICE set-lock-until --target $BOB --lock-until 1 &
+WB=$!
+wait $WA
+wait $WB
+
+${xcmd} --from $ALICE set-transfer-group --target $CAROL --transfer-group 1 &
+WA=$!
+${xcmd} --from $ALICE set-transfer-group --target $BOB --transfer-group 2 &
+WB=$!
+wait $WA
+wait $WB
 
 RES=$(${xcmd} --from $CAROL transfer --receiver $BOB --amount $XFER2 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR3"* ]]; then
@@ -219,3 +249,5 @@ if [[ $RES != *"$ERR_APP_REJ_STR3"* ]]; then
     date '+sectok-app FAIL reverse transfer (by group) should fail %Y%m%d_%H%M% S'
     false
 fi
+
+date '+sectok-app done %Y%m%d_%H%M%S'

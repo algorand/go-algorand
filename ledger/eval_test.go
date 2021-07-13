@@ -63,7 +63,7 @@ func TestBlockEvaluator(t *testing.T) {
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash
@@ -273,7 +273,7 @@ func TestRekeying(t *testing.T) {
 		// So the ValidatedBlock that comes out isn't necessarily actually a valid block. We'll call Validate ourselves.
 
 		newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
@@ -408,6 +408,7 @@ func TestPrepareEvalParams(t *testing.T) {
 			for j, present := range testCase.expected {
 				if present {
 					require.NotNil(t, res[j])
+					require.NotNil(t, res[j].PastSideEffects)
 					require.Equal(t, res[j].GroupIndex, j)
 					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
 					require.Equal(t, *res[j].Proto, eval.proto)
@@ -444,7 +445,7 @@ func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator,
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 	eval.validate = true
 	eval.generate = false
@@ -606,7 +607,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 
 	// test speed of block building
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(b, err)
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash
@@ -815,7 +816,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
 	require.NoError(t, err)
 
 	// won't work before funding bank

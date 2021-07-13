@@ -25,13 +25,6 @@ import (
 // swagger:ignore
 type APIV1Request interface{} // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
 
-// APIV1RequestEnvelope is a common envelope that all API V1 requests must embed
-//
-// swagger:model VersionsRequest
-type APIV1RequestEnvelope struct { // we need to tell swagger to ignore due to bug (go-swagger/issues/1436)
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-}
-
 // VersionsRequest is the request for `GET /versions`
 //
 // swagger:model VersionsRequest
@@ -43,14 +36,15 @@ type VersionsRequest struct {
 //
 // swagger:model ListWalletsRequest
 type APIV1GETWalletsRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 }
 
 // APIV1POSTWalletRequest is the request for `POST /v1/wallet`
 //
 // swagger:model CreateWalletRequest
 type APIV1POSTWalletRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletName          string                   `json:"wallet_name"`
 	WalletDriverName    string                   `json:"wallet_driver_name"`
 	WalletPassword      string                   `json:"wallet_password"`
@@ -61,7 +55,8 @@ type APIV1POSTWalletRequest struct {
 //
 // swagger:model InitWalletHandleTokenRequest
 type APIV1POSTWalletInitRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletID       string `json:"wallet_id"`
 	WalletPassword string `json:"wallet_password"`
 }
@@ -70,7 +65,8 @@ type APIV1POSTWalletInitRequest struct {
 //
 // swagger:model ReleaseWalletHandleTokenRequest
 type APIV1POSTWalletReleaseRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 }
 
@@ -78,7 +74,8 @@ type APIV1POSTWalletReleaseRequest struct {
 //
 // swagger:model RenewWalletHandleTokenRequest
 type APIV1POSTWalletRenewRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 }
 
@@ -86,7 +83,8 @@ type APIV1POSTWalletRenewRequest struct {
 //
 // swagger:model RenameWalletRequest
 type APIV1POSTWalletRenameRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletID       string `json:"wallet_id"`
 	WalletPassword string `json:"wallet_password"`
 	NewWalletName  string `json:"wallet_name"`
@@ -96,7 +94,8 @@ type APIV1POSTWalletRenameRequest struct {
 //
 // swagger:model WalletInfoRequest
 type APIV1POSTWalletInfoRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 }
 
@@ -104,7 +103,8 @@ type APIV1POSTWalletInfoRequest struct {
 //
 // swagger:model ExportMasterKeyRequest
 type APIV1POSTMasterKeyExportRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 	WalletPassword    string `json:"wallet_password"`
 }
@@ -113,7 +113,8 @@ type APIV1POSTMasterKeyExportRequest struct {
 //
 // swagger:model ImportKeyRequest
 type APIV1POSTKeyImportRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string            `json:"wallet_handle_token"`
 	PrivateKey        crypto.PrivateKey `json:"private_key"`
 }
@@ -122,7 +123,8 @@ type APIV1POSTKeyImportRequest struct {
 //
 // swagger:model ExportKeyRequest
 type APIV1POSTKeyExportRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 	Address           string `json:"address"`
 	WalletPassword    string `json:"wallet_password"`
@@ -132,7 +134,8 @@ type APIV1POSTKeyExportRequest struct {
 //
 // swagger:model GenerateKeyRequest
 type APIV1POSTKeyRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 	DisplayMnemonic   bool   `json:"display_mnemonic"`
 }
@@ -141,7 +144,8 @@ type APIV1POSTKeyRequest struct {
 //
 // swagger:model DeleteKeyRequest
 type APIV1DELETEKeyRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 	Address           string `json:"address"`
 	WalletPassword    string `json:"wallet_password"`
@@ -151,7 +155,8 @@ type APIV1DELETEKeyRequest struct {
 //
 // swagger:model ListKeysRequest
 type APIV1POSTKeyListRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 }
 
@@ -159,7 +164,8 @@ type APIV1POSTKeyListRequest struct {
 //
 // swagger:model SignTransactionRequest
 type APIV1POSTTransactionSignRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 	// Base64 encoding of msgpack encoding of a `Transaction` object
 	// Note: SDK and goal usually generate `SignedTxn` objects
@@ -176,7 +182,8 @@ type APIV1POSTTransactionSignRequest struct {
 //
 // swagger:model SignProgramRequest
 type APIV1POSTProgramSignRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 	Address           string `json:"address"`
 	// swagger:strfmt byte
@@ -188,7 +195,8 @@ type APIV1POSTProgramSignRequest struct {
 //
 // swagger:model ListMultisigRequest
 type APIV1POSTMultisigListRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 }
 
@@ -196,7 +204,8 @@ type APIV1POSTMultisigListRequest struct {
 //
 // swagger:model ImportMultisigRequest
 type APIV1POSTMultisigImportRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string             `json:"wallet_handle_token"`
 	Version           uint8              `json:"multisig_version"`
 	Threshold         uint8              `json:"threshold"`
@@ -207,7 +216,8 @@ type APIV1POSTMultisigImportRequest struct {
 //
 // swagger:model ExportMultisigRequest
 type APIV1POSTMultisigExportRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 	Address           string `json:"address"`
 }
@@ -216,7 +226,8 @@ type APIV1POSTMultisigExportRequest struct {
 //
 // swagger:model DeleteMultisigRequest
 type APIV1DELETEMultisigRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 	Address           string `json:"address"`
 	WalletPassword    string `json:"wallet_password"`
@@ -226,7 +237,8 @@ type APIV1DELETEMultisigRequest struct {
 //
 // swagger:model SignMultisigRequest
 type APIV1POSTMultisigTransactionSignRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 	// swagger:strfmt byte
 	Transaction    []byte             `json:"transaction"`
@@ -240,7 +252,8 @@ type APIV1POSTMultisigTransactionSignRequest struct {
 //
 // swagger:model SignProgramMultisigRequest
 type APIV1POSTMultisigProgramSignRequest struct {
-	APIV1RequestEnvelope
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	WalletHandleToken string `json:"wallet_handle_token"`
 	Address           string `json:"address"`
 	// swagger:strfmt byte

@@ -21,6 +21,17 @@ agents:
       - VERSION=$VERSION
     workDir: $HOME/projects/go-algorand
 
+  - name: rpm.centos8
+    dockerFilePath: docker/build/cicd.centos8.Dockerfile
+    image: algorand/go-algorand-ci-linux-centos8
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
+    workDir: $HOME/projects/go-algorand
+
   - name: docker
     dockerFilePath: docker/build/docker.ubuntu.Dockerfile
     image: algorand/go-algorand-docker-linux-ubuntu
@@ -46,6 +57,11 @@ tasks:
     target: mule-package-rpm
 
   - task: docker.Make
+    name: rpm.centos8
+    agent: rpm.centos8
+    target: mule-package-rpm.centos8
+
+  - task: docker.Make
     name: deb
     agent: deb
     target: mule-package-deb
@@ -61,6 +77,7 @@ jobs:
       - docker.Make.build
       - docker.Make.deb
       - docker.Make.rpm
+      - docker.Make.rpm.centos8
       - docker.Make.docker
 
   package-deb:
@@ -71,6 +88,7 @@ jobs:
     tasks:
       - docker.Make.build
       - docker.Make.rpm
+      - docker.Make.rpm.centos8
 
   package-docker:
     tasks:

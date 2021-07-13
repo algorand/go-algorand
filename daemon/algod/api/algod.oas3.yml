@@ -716,6 +716,10 @@
             },
             "type": "array"
           },
+          "apps-total-extra-pages": {
+            "description": "\\[teap\\] the sum of all extra application program pages for this account.",
+            "type": "integer"
+          },
           "apps-total-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
           },
@@ -900,6 +904,10 @@
             "description": "The address that created this application. This is the address where the parameters and global state for this application can be found.",
             "type": "string",
             "x-algorand-format": "Address"
+          },
+          "extra-program-pages": {
+            "description": "\\[epp\\] the amount of extra program pages available to this app.",
+            "type": "integer"
           },
           "global-state": {
             "$ref": "#/components/schemas/TealKeyValueStore"

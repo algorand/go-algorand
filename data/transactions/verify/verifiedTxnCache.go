@@ -29,12 +29,12 @@ import (
 const entriesPerBucket = 8179 // the default bucket size; a prime number could promote a lower hash collisions in case the hash function isn't perfect.
 const maxPinnedEntries = 500000
 
-// VerifiedTxnCacheError helps to identifiy the errors of a cache error and diffrenciate these from a general verification errors.
+// VerifiedTxnCacheError helps to identify the errors of a cache error and diffrenciate these from a general verification errors.
 type VerifiedTxnCacheError struct {
 	inner error
 }
 
-// Unwrap provides accesss to the underlying error
+// Unwrap provides access to the underlying error
 func (e *VerifiedTxnCacheError) Unwrap() error {
 	return e.inner
 }

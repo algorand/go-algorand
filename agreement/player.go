@@ -554,22 +554,35 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			return append(actions, ignoreAction(e, ef.(payloadProcessedEvent).Err))
 		case payloadPipelined:
 			ep := ef.(payloadProcessedEvent)
+
+			up := e.Input.UnauthenticatedProposal
+			uv := ef.(payloadProcessedEvent).Vote.u()
+
+			// relay proposal if it has been pipelined
+			ra := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
+
 			if ep.Round == p.Round {
-				return append(actions, verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned))
+				vpa := verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned)
+				return append(actions, vpa, ra)
 			}
+
+			actions = append(actions, ra)
 		}
 
-		var uv unauthenticatedVote
-		switch ef.t() {
-		case payloadPipelined, payloadAccepted:
-			uv = ef.(payloadProcessedEvent).Vote.u()
-		case proposalCommittable:
-			uv = ef.(committableEvent).Vote.u()
-		}
-		up := e.Input.UnauthenticatedProposal
+		// relay as the proposer
+		if e.Input.MessageHandle == nil {
+			var uv unauthenticatedVote
+			switch ef.t() {
+			case payloadPipelined, payloadAccepted:
+				uv = ef.(payloadProcessedEvent).Vote.u()
+			case proposalCommittable:
+				uv = ef.(committableEvent).Vote.u()
+			}
+			up := e.Input.UnauthenticatedProposal
 
-		a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
-		actions = append(actions, a)
+			a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
+			actions = append(actions, a)
+		}
 
 		// If the payload is valid, check it against any received cert threshold.
 		// Of course, this should only trigger for payloadVerified case.

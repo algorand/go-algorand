@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime/pprof"
@@ -176,8 +177,17 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	proto := config.Consensus[lastBlock.CurrentProtocol]
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
-	for _, acctdata := range initAccounts {
-		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+	if l.Latest() == 0 {
+		require.NotNil(t, initAccounts)
+		for _, acctdata := range initAccounts {
+			if acctdata.Status != basics.NotParticipating {
+				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+			}
+		}
+	} else {
+		totals, err := l.Totals(l.Latest())
+		require.NoError(t, err)
+		totalRewardUnits = totals.RewardUnits()
 	}
 	poolBal, err := l.Lookup(l.Latest(), poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
@@ -457,8 +467,11 @@ func TestLedgerSingleTx(t *testing.T) {
 	votePK[0] = 1
 	selPK[0] = 2
 	correctKeyregFields := transactions.KeyregTxnFields{
-		VotePK:      votePK,
-		SelectionPK: selPK,
+		VotePK:          votePK,
+		SelectionPK:     selPK,
+		VoteKeyDilution: proto.DefaultKeyDilution,
+		VoteFirst:       0,
+		VoteLast:        10000,
 	}
 
 	correctKeyreg := transactions.Transaction{
@@ -1125,8 +1138,11 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	votePK[0] = 1
 	selPK[0] = 2
 	correctKeyregFields := transactions.KeyregTxnFields{
-		VotePK:      votePK,
-		SelectionPK: selPK,
+		VotePK:          votePK,
+		SelectionPK:     selPK,
+		VoteKeyDilution: proto.DefaultKeyDilution,
+		VoteFirst:       0,
+		VoteLast:        10000,
 	}
 
 	correctKeyreg := transactions.Transaction{
@@ -1534,7 +1550,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 
 	// ******* All results are obtained from the cache. Empty database *******
 	// ******* No deletes                                              *******
-	// get random data. Inital batch, no deletes
+	// get random data. Initial batch, no deletes
 	randomCtbs, maxAsset, maxApp, err := generateCreatables(numElementsPerSegement)
 	require.NoError(t, err)
 
@@ -1698,4 +1714,42 @@ func TestLedgerMemoryLeak(t *testing.T) {
 			fmt.Printf("Profile %s created\n", memprofile)
 		}
 	}
+}
+
+func BenchmarkLedgerStartup(b *testing.B) {
+	log := logging.TestingLog(b)
+	tmpDir, err := ioutil.TempDir(os.TempDir(), "BenchmarkLedgerStartup")
+	require.NoError(b, err)
+	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion, 100)
+
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	testOpenLedger := func(b *testing.B, memory bool, cfg config.Local) {
+		b.StartTimer()
+		for n := 0; n < b.N; n++ {
+			ledger, err := OpenLedger(log, tmpDir, memory, genesisInitState, cfg)
+			require.NoError(b, err)
+			ledger.Close()
+			os.RemoveAll(tmpDir)
+			os.Mkdir(tmpDir, 0766)
+		}
+	}
+
+	b.Run("MemoryDatabase/NonArchival", func(b *testing.B) {
+		testOpenLedger(b, true, cfg)
+	})
+
+	b.Run("DiskDatabase/NonArchival", func(b *testing.B) {
+		testOpenLedger(b, false, cfg)
+	})
+
+	cfg.Archival = true
+	b.Run("MemoryDatabase/Archival", func(b *testing.B) {
+		testOpenLedger(b, true, cfg)
+	})
+
+	b.Run("DiskDatabase/Archival", func(b *testing.B) {
+		testOpenLedger(b, false, cfg)
+	})
+	os.RemoveAll(tmpDir)
 }

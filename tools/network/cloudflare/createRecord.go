@@ -141,7 +141,7 @@ type CreateDNSRecordResult struct {
 	Data       interface{} `json:"data"`
 }
 
-// parseCreateDNSRecordResponse parses the reponse that was received as a result of a ListDNSRecordRequest
+// parseCreateDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
 func parseCreateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResponse, error) {
 	defer response.Body.Close()
 	body, err := ioutil.ReadAll(response.Body)

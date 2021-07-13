@@ -101,7 +101,6 @@ func OpenLedger(
 	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
-
 	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
 	if verifiedCacheSize < cfg.TxPoolSize {
 		verifiedCacheSize = cfg.TxPoolSize
@@ -259,34 +258,43 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs
 	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
 	blockDBFilename = dbPathPrefix + ".block.sqlite"
 
-	trackerDBs, err = db.OpenPair(trackerDBFilename, dbMem)
-	if err != nil {
-		return
-	}
+	outErr := make(chan error, 2)
+	go func() {
+		var lerr error
+		trackerDBs, lerr = db.OpenPair(trackerDBFilename, dbMem)
+		outErr <- lerr
+	}()
 
-	blockDBs, err = db.OpenPair(blockDBFilename, dbMem)
+	go func() {
+		var lerr error
+		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
+		outErr <- lerr
+	}()
+
+	err = <-outErr
 	if err != nil {
 		return
 	}
+	err = <-outErr
 	return
 }
 
-// setSynchronousMode sets the writing database connections syncronous mode to the specified mode
+// setSynchronousMode sets the writing database connections synchronous mode to the specified mode
 func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.SynchronousMode) {
 	if synchronousMode < db.SynchronousModeOff || synchronousMode > db.SynchronousModeExtra {
-		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode : requested value %d is invalid", synchronousMode)
+		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode : requested value %d is invalid", synchronousMode)
 		return
 	}
 
 	err := l.blockDBs.Wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
-		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on blocks db: %v", err)
+		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode on blocks db: %v", err)
 		return
 	}
 
 	err = l.trackerDBs.Wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
-		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on trackers db: %v", err)
+		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode on trackers db: %v", err)
 		return
 	}
 }
@@ -322,26 +330,6 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockInit 2 %v", err)
 				return err
-			}
-		}
-
-		// Manually replace block 0, even if we already had it
-		// (necessary to normalize the payset commitment because of a
-		// bug that caused its value to change)
-		//
-		// Don't bother for non-archival nodes since they will toss
-		// block 0 almost immediately
-		//
-		// TODO remove this once a version containing this code has
-		// been deployed to archival nodes
-		if len(initBlocks) > 0 && initBlocks[0].Round() == basics.Round(0) {
-			updated, err := blockReplaceIfExists(tx, l.log, initBlocks[0], agreement.Certificate{})
-			if err != nil {
-				err = fmt.Errorf("initBlocksDB.blockReplaceIfExists %v", err)
-				return err
-			}
-			if updated {
-				l.log.Infof("initBlocksDB replaced block 0")
 			}
 		}
 	}
@@ -487,14 +475,6 @@ func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Ro
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl.Txlease)
-}
-
-// GetRoundTxIds returns a map of the transactions ids that we have for the given round
-// this function is currently not being used, but remains here as it might be useful in the future.
-func (l *Ledger) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.txTail.getRoundTxIds(rnd)
 }
 
 // Latest returns the latest known block round added to the ledger.

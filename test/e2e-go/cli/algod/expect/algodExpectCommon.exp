@@ -29,7 +29,7 @@ proc ::Algod::ReadTelemetry { TEST_ALGO_DIR } {
 
     if { [catch {
         puts "algod start with $TEST_ALGO_DIR"
-        spawn $env(GOPATH)/bin/algod -d $TEST_ALGO_DIR -g ../../../../../gen/testnet/genesis.json
+        spawn $env(GOPATH)/bin/algod -d $TEST_ALGO_DIR -g ../../../../../installer/genesis/testnet/genesis.json
         expect {
             "^Telemetry configured from '$::env(HOME)/.algorand/logging.config'*" {puts "Telemetry config correctly pulled from global location"; send '\003'; close}
             "^Telemetry configured from *" {puts "Telemetry config pulled from unexpected location"; send '\003'; close; exit 1}
@@ -37,7 +37,7 @@ proc ::Algod::ReadTelemetry { TEST_ALGO_DIR } {
         }
 
         exec cp $::env(HOME)/.algorand/logging.config $TEST_ALGO_DIR
-        spawn $env(GOPATH)/bin/algod -d $TEST_ALGO_DIR -g ../../../../../gen/testnet/genesis.json
+        spawn $env(GOPATH)/bin/algod -d $TEST_ALGO_DIR -g ../../../../../installer/genesis/testnet/genesis.json
         expect {
             timeout {send '\003'; close; puts "timeout occurred waiting for telemetry log"; exit 1}
             "^Telemetry configured from '$TEST_ALGO_DIR/logging.config'*" {puts "Telemetry config correctly pulled from local location"; send '\003'; close}

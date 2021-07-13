@@ -18,6 +18,7 @@ package txnsync
 
 import (
 	"testing"
+	"time"
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,7 @@ import (
 
 func TestTransactionCache(t *testing.T) {
 	var txid transactions.Txid
-	a := makeTransactionCache(5)
+	a := makeTransactionCache(5, 10, 20)
 	// add 5
 	for i := 0; i < 5; i++ {
 		txid[0] = byte(i)
@@ -67,4 +68,20 @@ func TestTransactionCache(t *testing.T) {
 	}
 	txid[0] = 1
 	require.False(t, a.contained(txid))
+}
+
+func TestTransactionCacheAddSlice(t *testing.T) {
+	tc := makeTransactionCache(5, 10, 20)
+	curTimestamp := time.Duration(0)
+	msgSeq := uint64(0)
+	slice := make([]transactions.Txid, 10)
+	for i := 0; i < 50; i++ {
+		tc.addSlice(slice, msgSeq, curTimestamp)
+		curTimestamp += cacheHistoryDuration / 10
+		msgSeq++
+		require.LessOrEqual(t, len(tc.ackPendingTxids), 11)
+	}
+	curTimestamp += cacheHistoryDuration
+	tc.addSlice(slice, msgSeq, curTimestamp)
+	require.LessOrEqual(t, len(tc.ackPendingTxids), 1)
 }

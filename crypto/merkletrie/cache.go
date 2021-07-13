@@ -24,7 +24,7 @@ import (
 	"sort"
 )
 
-// storedNodeIdentifier is the "equivilent" of a node-ptr, but oriented around persisting the
+// storedNodeIdentifier is the "equivalent" of a node-ptr, but oriented around persisting the
 // nodes to disk. ( i.e. think of a virtual memory address )
 type storedNodeIdentifier uint64
 
@@ -424,11 +424,11 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 	return stats, nil
 }
 
-// reallocatePendingPages is called by the commit() function, and is reponsible for performing two tasks -
+// reallocatePendingPages is called by the commit() function, and is responsible for performing two tasks -
 // 1. calculate the hashes of all the newly created nodes
 // 2. reornigize the pending flush nodes into an optimal page list, and construct a list of pages that need to be created, deleted and updated.
 func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToCreate []uint64, pagesToDelete map[uint64]bool, pagesToUpdate map[uint64]map[storedNodeIdentifier]*node, err error) {
-	// newPageThreshold is the threshold at which all the pages are newly created pages that were never commited.
+	// newPageThreshold is the threshold at which all the pages are newly created pages that were never committed.
 	newPageThreshold := uint64(mtc.mt.lastCommittedNodeID) / uint64(mtc.nodesPerPage)
 	if int64(mtc.mt.lastCommittedNodeID)%mtc.nodesPerPage > 0 {
 		newPageThreshold++

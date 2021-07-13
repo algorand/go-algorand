@@ -45,6 +45,8 @@ var (
 	approvalProgRawFile string
 	clearProgRawFile    string
 
+	extraPages uint32
+
 	createOnCompletion string
 
 	localSchemaUints      uint64
@@ -98,6 +100,7 @@ func init() {
 	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the application")
 	createAppCmd.Flags().StringVar(&createOnCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
+	createAppCmd.Flags().Uint32Var(&extraPages, "extra-pages", 0, "Additional program space for supporting larger TEAL assembly program. A maximum of 3 extra pages is allowed. A page is 1024 bytes.")
 
 	callAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call app from")
 	optInAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to opt in")
@@ -355,6 +358,7 @@ var createAppCmd = &cobra.Command{
 	Long:  `Issue a transaction that creates an application`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
@@ -379,7 +383,7 @@ var createAppCmd = &cobra.Command{
 			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", createOnCompletion)
 		}
 
-		tx, err := client.MakeUnsignedAppCreateTx(onCompletion, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps, foreignAssets)
+		tx, err := client.MakeUnsignedAppCreateTx(onCompletion, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps, foreignAssets, extraPages)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -397,6 +401,10 @@ var createAppCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(appCreator, fv, lv, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		if outFilename == "" {
@@ -476,6 +484,10 @@ var updateAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -548,6 +560,10 @@ var optInAppCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		// Broadcast or write transaction to file
@@ -622,6 +638,10 @@ var closeOutAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -694,6 +714,10 @@ var clearAppCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		// Broadcast or write transaction to file
@@ -768,6 +792,10 @@ var callAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
+		}
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -840,6 +868,10 @@ var deleteAppCmd = &cobra.Command{
 		tx, err = client.FillUnsignedTxTemplate(account, fv, lv, fee, tx)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
+		}
+		explicitFee := cmd.Flags().Changed("fee")
+		if explicitFee {
+			tx.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
 		// Broadcast or write transaction to file

@@ -78,7 +78,7 @@ func printResults(t *testing.T, r *RunResult) {
 		r.PostRecoveryLowRound, r.PostRecoveryHighRound,
 	)
 	if r.PreRecoveryHighRound != r.PreRecoveryLowRound {
-		// network got disupted by the filters.
+		// network got disputed by the filters.
 		fmt.Printf("%v partitioned the network ( %d - %d ), but recovered correctly reaching round %d\n", t.Name(), r.PreRecoveryLowRound, r.PreRecoveryHighRound, r.PostRecoveryHighRound)
 	} else {
 		if r.PreRecoveryHighRound == r.StartLowRound {

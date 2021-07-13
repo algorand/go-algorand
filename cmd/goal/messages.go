@@ -24,8 +24,8 @@ const (
 	errorGenesisIDFail          = "Error determining kmd folder (%s). Ensure the node is running in %s."
 	errorDirectoryNotExist      = "Specified directory '%s' does not exist."
 	errorParseAddr              = "Failed to parse addr: %v"
-	errorNonPrintableCharacters = "One or more non-printable characters were ommited from the following error message:"
-	infoNonPrintableCharacters  = "One or more non-printable characters were ommited from the subsequent line:"
+	errorNonPrintableCharacters = "One or more non-printable characters were omitted from the following error message:"
+	infoNonPrintableCharacters  = "One or more non-printable characters were omitted from the subsequent line:"
 
 	// Account
 	infoNoAccounts                 = "Did not find any account. Please import or create a new one."
@@ -169,6 +169,7 @@ const (
 	infoCreatedWallet            = "Created wallet '%s'"
 	infoBackupExplanation        = "Your new wallet has a backup phrase that can be used for recovery.\nKeeping this backup phrase safe is extremely important.\nWould you like to see it now? (Y/n): "
 	infoPrintedBackupPhrase      = "Your backup phrase is printed below.\nKeep this information safe -- never share it with anyone!"
+	infoBackupPhrase             = "\n%s"
 	infoNoWallets                = "No wallets found. You can create a wallet with `goal wallet new`"
 	errorCouldntCreateWallet     = "Couldn't create wallet: %s"
 	errorCouldntInitializeWallet = "Couldn't initialize wallet: %s"

@@ -19,6 +19,8 @@ package ledger
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -58,4 +60,31 @@ func TestRoundLRUBasic(t *testing.T) {
 	getEq(t, &cache, 3, "three")
 	getNone(t, &cache, 2)
 	getNone(t, &cache, 4)
+}
+
+func TestRoundLRUReIndex(t *testing.T) {
+	cache := heapLRUCache{
+		entries: lruHeap{
+			heap: []lruEntry{
+				{
+					useIndex: MaxInt - 2,
+				},
+				{
+					useIndex: MaxInt - 1,
+				},
+				{
+					useIndex: MaxInt - 3,
+				},
+			},
+		},
+		maxEntries:   3,
+		nextUseIndex: MaxInt - 1,
+	}
+
+	cache.inc()
+
+	require.Equal(t, 3, cache.nextUseIndex)
+	require.Equal(t, 1, cache.entries.heap[0].useIndex)
+	require.Equal(t, 2, cache.entries.heap[1].useIndex)
+	require.Equal(t, 0, cache.entries.heap[2].useIndex)
 }

@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
@@ -243,6 +244,14 @@ func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) b
 	return false
 }
 
+var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")
+var errKeyregTxnNonCoherentVotingKeys = errors.New("the following transaction fields need to be clear/set together : votekey, selkey, votekd")
+var errKeyregTxnOfflineTransactionHasVotingRounds = errors.New("on going offline key registration transaction, the vote first and vote last fields should not be set")
+var errKeyregTxnUnsupportedSwitchToNonParticipating = errors.New("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
+var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries to register keys to go online, but nonparticipatory flag is set")
+var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
+var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
+
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
 	switch tx.Type {
@@ -254,18 +263,48 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 
 	case protocol.KeyRegistrationTx:
+		if proto.EnableKeyregCoherencyCheck {
+			// ensure that the VoteLast is greater or equal to the VoteFirst
+			if tx.KeyregTxnFields.VoteFirst > tx.KeyregTxnFields.VoteLast {
+				return errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound
+			}
+
+			// The trio of [VotePK, SelectionPK, VoteKeyDilution] needs to be all zeros or all non-zero for the transaction to be valid.
+			if !((tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} && tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{} && tx.KeyregTxnFields.VoteKeyDilution == 0) ||
+				(tx.KeyregTxnFields.VotePK != crypto.OneTimeSignatureVerifier{} && tx.KeyregTxnFields.SelectionPK != crypto.VRFVerifier{} && tx.KeyregTxnFields.VoteKeyDilution != 0)) {
+				return errKeyregTxnNonCoherentVotingKeys
+			}
+
+			// if it's a going offline transaction
+			if tx.KeyregTxnFields.VoteKeyDilution == 0 {
+				// check that we don't have any VoteFirst/VoteLast fields.
+				if tx.KeyregTxnFields.VoteFirst != 0 || tx.KeyregTxnFields.VoteLast != 0 {
+					return errKeyregTxnOfflineTransactionHasVotingRounds
+				}
+			} else {
+				// going online
+				if tx.KeyregTxnFields.VoteLast == 0 {
+					return errKeyregTxnGoingOnlineWithZeroVoteLast
+				}
+				if tx.KeyregTxnFields.VoteFirst > tx.LastValid+1 {
+					return errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid
+				}
+			}
+		}
+
 		// check that, if this tx is marking an account nonparticipating,
 		// it supplies no key (as though it were trying to go offline)
 		if tx.KeyregTxnFields.Nonparticipation {
 			if !proto.SupportBecomeNonParticipatingTransactions {
 				// if the transaction has the Nonparticipation flag high, but the protocol does not support
 				// that type of transaction, it is invalid.
-				return fmt.Errorf("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
+				return errKeyregTxnUnsupportedSwitchToNonParticipating
 			}
 			suppliesNullKeys := tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} || tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{}
 			if !suppliesNullKeys {
-				return fmt.Errorf("transaction tries to register keys to go online, but nonparticipatory flag is set")
+				return errKeyregTxnGoingOnlineWithNonParticipating
 			}
+
 		}
 
 	case protocol.AssetConfigTx:
@@ -306,11 +345,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
-		// Schemas may only be set during application creation
+		// Schemas and ExtraProgramPages may only be set during application creation
 		if tx.ApplicationID != 0 {
 			if tx.LocalStateSchema != (basics.StateSchema{}) ||
 				tx.GlobalStateSchema != (basics.StateSchema{}) {
 				return fmt.Errorf("local and global state schemas are immutable")
+			}
+			if tx.ExtraProgramPages != 0 {
+				return fmt.Errorf("tx.ExtraProgramPages is immutable")
 			}
 		}
 
@@ -344,12 +386,26 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
 		}
 
-		if len(tx.ApprovalProgram) > proto.MaxAppProgramLen {
-			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxAppProgramLen)
+		// Limit the sum of all types of references that bring in account records
+		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets) > proto.MaxAppTotalTxnReferences {
+			return fmt.Errorf("tx has too many references, max is %d", proto.MaxAppTotalTxnReferences)
 		}
 
-		if len(tx.ClearStateProgram) > proto.MaxAppProgramLen {
-			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxAppProgramLen)
+		if tx.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
+			return fmt.Errorf("tx.ExtraProgramPages too large, max number of extra pages is %d", proto.MaxExtraAppProgramPages)
+		}
+
+		lap := len(tx.ApprovalProgram)
+		lcs := len(tx.ClearStateProgram)
+		pages := int(1 + tx.ExtraProgramPages)
+		if lap > pages*proto.MaxAppProgramLen {
+			return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+		}
+		if lcs > pages*proto.MaxAppProgramLen {
+			return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+		}
+		if lap+lcs > pages*proto.MaxAppTotalProgramLen {
+			return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
@@ -427,7 +483,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 	}
 
-	if tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
+	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
 		if tx.Type == protocol.CompactCertTx {
 			// Zero fee allowed for compact cert txn.
 		} else {

@@ -63,6 +63,26 @@ agents:
       - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
     workDir: $HOME/projects/go-algorand
 
+
+  - name: rpm.centos8
+    dockerFilePath: docker/build/cicd.centos8.Dockerfile
+    image: algorand/go-algorand-ci-linux-centos8
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - NETWORK=$NETWORK
+      - PACKAGES_DIR=$PACKAGES_DIR
+      - NO_DEPLOY=$NO_DEPLOY
+      - S3_SOURCE=$S3_SOURCE
+      - VERSION=$VERSION
+    volumes:
+      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
+      - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+    workDir: $HOME/projects/go-algorand
+
 tasks:
   - task: docker.Make
     name: docker
@@ -84,6 +104,11 @@ tasks:
     agent: rpm
     target: mule-deploy-rpm
 
+  - task: docker.Make
+    name: rpm.centos8
+    agent: rpm.centos8
+    target: mule-deploy-rpm-centos8
+
 jobs:
   package-deploy:
     tasks:
@@ -99,6 +124,7 @@ jobs:
   package-deploy-rpm:
     tasks:
       - docker.Make.rpm
+      - docker.Make.rpm.centos8
 
   docker-hub:
     tasks:

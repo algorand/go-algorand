@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
 )
@@ -72,6 +73,7 @@ type DebugParams struct {
 	Proto            string
 	TxnBlob          []byte
 	GroupIndex       int
+	PastSideEffects  []logic.EvalSideEffects
 	BalanceBlob      []byte
 	DdrBlob          []byte
 	IndexerURL       string

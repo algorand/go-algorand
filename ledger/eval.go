@@ -238,6 +238,10 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 	return acct, nil
 }
 
+func (cs *roundCowState) GetCreatableID(groupIdx int) basics.CreatableIndex {
+	return cs.getCreatableIndex(groupIdx)
+}
+
 func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return cs.getCreator(cidx, ctype)
 }
@@ -248,6 +252,11 @@ func (cs *roundCowState) Put(addr basics.Address, acct basics.AccountData) error
 
 func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	cs.put(addr, acct, newCreatable, deletedCreatable)
+
+	// store the creatable locator
+	if newCreatable != nil {
+		cs.trackCreatable(newCreatable.Index)
+	}
 	return nil
 }
 
@@ -346,8 +355,9 @@ type BlockEvaluator struct {
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
 
-	block        bookkeeping.Block
-	blockTxBytes int
+	block               bookkeeping.Block
+	blockTxBytes        int
+	maxTxnBytesPerBlock int
 
 	blockGenerated bool // prevent repeated GenerateBlock calls
 
@@ -372,15 +382,23 @@ type ledgerForCowBase interface {
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
-// passed, avoiding unnecessary payset slice growth.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*BlockEvaluator, error) {
-	return startEvaluator(l, hdr, paysetHint, true, true)
+// passed, avoiding unnecessary payset slice growth. The optional maxTxnBytesPerBlock parameter
+// provides a cap on the size of a single generated block size, when a non-zero value is passed.
+// If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
+// be used instead.
+func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
+	return startEvaluator(l, hdr, paysetHint, true, true, maxTxnBytesPerBlock)
 }
 
-func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHint int, validate bool, generate bool) (*BlockEvaluator, error) {
+func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHint int, validate bool, generate bool, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
 	proto, ok := config.Consensus[hdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(hdr.CurrentProtocol)
+	}
+
+	// if the caller did not provide a valid block size limit, default to the consensus params defaults.
+	if maxTxnBytesPerBlock <= 0 || maxTxnBytesPerBlock > proto.MaxTxnBytesPerBlock {
+		maxTxnBytesPerBlock = proto.MaxTxnBytesPerBlock
 	}
 
 	base := &roundCowBase{
@@ -395,12 +413,13 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 	}
 
 	eval := &BlockEvaluator{
-		validate:    validate,
-		generate:    generate,
-		block:       bookkeeping.Block{BlockHeader: hdr},
-		proto:       proto,
-		genesisHash: l.GenesisHash(),
-		l:           l,
+		validate:            validate,
+		generate:            generate,
+		block:               bookkeeping.Block{BlockHeader: hdr},
+		proto:               proto,
+		genesisHash:         l.GenesisHash(),
+		l:                   l,
+		maxTxnBytesPerBlock: maxTxnBytesPerBlock,
 	}
 
 	// Preallocate space for the payset so that we don't have to
@@ -668,6 +687,7 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 // transaction in the group
 func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWithAD) (res []*logic.EvalParams) {
 	var groupNoAD []transactions.SignedTxn
+	var pastSideEffects []logic.EvalSideEffects
 	var minTealVersion uint64
 	res = make([]*logic.EvalParams, len(txgroup))
 	for i, txn := range txgroup {
@@ -676,21 +696,23 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxnWi
 			continue
 		}
 
-		// Initialize group without ApplyData lazily
+		// Initialize side effects and group without ApplyData lazily
 		if groupNoAD == nil {
 			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
 			for j := range txgroup {
 				groupNoAD[j] = txgroup[j].SignedTxn
 			}
+			pastSideEffects = logic.MakePastSideEffects(len(txgroup))
 			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
 		}
 
 		res[i] = &logic.EvalParams{
-			Txn:            &groupNoAD[i],
-			Proto:          &eval.proto,
-			TxnGroup:       groupNoAD,
-			GroupIndex:     i,
-			MinTealVersion: &minTealVersion,
+			Txn:             &groupNoAD[i],
+			Proto:           &eval.proto,
+			TxnGroup:        groupNoAD,
+			GroupIndex:      i,
+			PastSideEffects: pastSideEffects,
+			MinTealVersion:  &minTealVersion,
 		}
 	}
 	return
@@ -723,6 +745,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
+		cow.setGroupIdx(gi)
 		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
@@ -732,7 +755,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 		if eval.validate {
 			groupTxBytes += txib.GetEncodedLength()
-			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
+			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
 				return ErrNoSpace
 			}
 		}
@@ -764,6 +787,49 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	eval.block.Payset = append(eval.block.Payset, txibs...)
 	eval.blockTxBytes += groupTxBytes
 	cow.commitToParent()
+
+	return nil
+}
+
+// Check the minimum balance requirement for the modified accounts in `cow`.
+func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
+	rewardlvl := cow.rewardsLevel()
+	for _, addr := range cow.modifiedAccounts() {
+		// Skip FeeSink, RewardsPool, and CompactCertSender MinBalance checks here.
+		// There's only a few accounts, so space isn't an issue, and we don't
+		// expect them to have low balances, but if they do, it may cause
+		// surprises.
+		if addr == eval.block.FeeSink || addr == eval.block.RewardsPool ||
+			addr == transactions.CompactCertSender {
+			continue
+		}
+
+		data, err := cow.lookup(addr)
+		if err != nil {
+			return err
+		}
+
+		// It's always OK to have the account move to an empty state,
+		// because the accounts DB can delete it.  Otherwise, we will
+		// enforce MinBalance.
+		if data.IsZero() {
+			continue
+		}
+
+		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
+		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
+		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
+			return fmt.Errorf("account %v balance %d below min %d (%d assets)",
+				addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
+		}
+
+		// Check if we have exceeded the maximum minimum balance
+		if eval.proto.MaximumMinimumBalance != 0 {
+			if effectiveMinBalance.Raw > eval.proto.MaximumMinimumBalance {
+				return fmt.Errorf("account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", addr, effectiveMinBalance.Raw, eval.proto.MaximumMinimumBalance)
+			}
+		}
+	}
 
 	return nil
 }
@@ -837,40 +903,13 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 
 	// Check if any affected accounts dipped below MinBalance (unless they are
 	// completely zero, which means the account will be deleted.)
-	rewardlvl := cow.rewardsLevel()
-	for _, addr := range cow.modifiedAccounts() {
-		// Skip FeeSink, RewardsPool, and CompactCertSender MinBalance checks here.
-		// There's only a few accounts, so space isn't an issue, and we don't
-		// expect them to have low balances, but if they do, it may cause
-		// surprises.
-		if addr == spec.FeeSink || addr == spec.RewardsPool || addr == transactions.CompactCertSender {
-			continue
-		}
-
-		data, err := cow.lookup(addr)
+	// Only do those checks if we are validating or generating. It is useful to skip them
+	// if we cannot provide account data that contains enough information to
+	// compute the correct minimum balance (the case with indexer which does not store it).
+	if eval.validate || eval.generate {
+		err := eval.checkMinBalance(cow)
 		if err != nil {
-			return err
-		}
-
-		// It's always OK to have the account move to an empty state,
-		// because the accounts DB can delete it.  Otherwise, we will
-		// enforce MinBalance.
-		if data.IsZero() {
-			continue
-		}
-
-		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
-		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
-			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
-				txid, addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
-		}
-
-		// Check if we have exceeded the maximum minimum balance
-		if eval.proto.MaximumMinimumBalance != 0 {
-			if effectiveMinBalance.Raw > eval.proto.MaximumMinimumBalance {
-				return fmt.Errorf("transaction %v: account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", txid, addr, effectiveMinBalance.Raw, eval.proto.MaximumMinimumBalance)
-			}
+			return fmt.Errorf("transaction %v: %w", txid, err)
 		}
 	}
 
@@ -916,7 +955,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, balanc
 		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, spec, &ad)
 
 	case protocol.KeyRegistrationTx:
-		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, spec, &ad)
+		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, spec, &ad, balances.round())
 
 	case protocol.AssetConfigTx:
 		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, spec, &ad, ctr)
@@ -1137,7 +1176,7 @@ func (validator *evalTxValidator) run() {
 // AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
 // tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
 func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
-	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
+	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false, 0)
 	if err != nil {
 		return ledgercore.StateDelta{}, err
 	}
@@ -1155,7 +1194,15 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		return ledgercore.StateDelta{}, err
 	}
 
-	paysetgroupsCh := loadAccounts(ctx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+	accountLoadingCtx, accountLoadingCancel := context.WithCancel(ctx)
+	paysetgroupsCh := loadAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+	// ensure that before we exit from this method, the account loading is no longer active.
+	defer func() {
+		accountLoadingCancel()
+		// wait for the paysetgroupsCh to get closed.
+		for range paysetgroupsCh {
+		}
+	}()
 
 	var txvalidator evalTxValidator
 	if validate {
@@ -1203,7 +1250,7 @@ transactionGroupLoop:
 		}
 	}
 
-	// Finally, procees any pending end-of-block state changes
+	// Finally, proceeds any pending end-of-block state changes
 	err = eval.endOfBlock()
 	if err != nil {
 		return ledgercore.StateDelta{}, err

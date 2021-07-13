@@ -19,7 +19,6 @@ package participation
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -132,9 +131,6 @@ func TestOnlineOfflineRewards(t *testing.T) {
 }
 
 func TestPartkeyOnlyRewards(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -292,8 +288,8 @@ func TestRewardUnitThreshold(t *testing.T) {
 	r.Truef(latestBalancePoorAccount.AmountWithoutPendingRewards >= updatedBalancePoorAccount.Amount+amountRichAccountPokesWith, "rewards should have been applied")
 
 	// Test e2e REST API convenience computations
-	r.Truef(latestBalanceNewAccount.PendingRewards >= (initialBalanceNewAccount+amountRichAccountPokesWith)/rewardUnit, "new account should have pending rewards (e2e)")
-	r.Truef(latestBalancePoorAccount.Rewards-latestBalancePoorAccount.PendingRewards >= updatedBalancePoorAccount.Rewards, "poor account rewards should have been applied")
+	r.GreaterOrEqualf(latestBalanceNewAccount.PendingRewards, (initialBalanceNewAccount+amountRichAccountPokesWith)/rewardUnit, "new account should have pending rewards (e2e)")
+	r.GreaterOrEqualf(latestBalancePoorAccount.Rewards-latestBalancePoorAccount.PendingRewards, updatedBalancePoorAccount.Rewards, "poor account rewards should have been applied")
 
 }
 
@@ -335,7 +331,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	minFee, minBal, err := fixture.MinFeeAndBalance(curStatus.LastRound)
 	r.NoError(err)
 	deadline := curStatus.LastRound + uint64(5)
-	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount)
+	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
 
 	blk, err := client.Block(curStatus.LastRound)
 	r.NoError(err)
@@ -361,7 +357,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	curStatus, err = client.Status()
 	r.NoError(err)
 	deadline = curStatus.LastRound + uint64(5)
-	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount)
+	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
 
 	rewardRecalcRound = rewardRecalcRound + consensusParams.RewardsRateRefreshInterval
 

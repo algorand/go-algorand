@@ -420,6 +420,21 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 		}
 	}
 
+	// ensure that at most one node per host claims any APIEndpoint port
+	for hosti, host := range network.Hosts {
+		seenAPIEndpoint := make(map[string]bool, 4)
+		for nodei, node := range host.Nodes {
+			if node.APIEndpoint != "" {
+				if seenAPIEndpoint[node.APIEndpoint] {
+					// squash dup
+					network.Hosts[hosti].Nodes[nodei].APIEndpoint = ""
+				} else {
+					seenAPIEndpoint[node.APIEndpoint] = true
+				}
+			}
+		}
+	}
+
 	return saveTemplateToDisk(network, templateFilename)
 }
 

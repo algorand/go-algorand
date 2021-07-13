@@ -31,6 +31,22 @@ agents:
       - VERSION=$VERSION
     workDir: $HOME/projects/go-algorand
 
+  - name: rpm-centos8
+    dockerFilePath: docker/build/cicd.centos8.Dockerfile
+    image: algorand/mule-linux-centos8
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - BRANCH=$BRANCH
+      - NETWORK=$NETWORK
+      - S3_SOURCE=$S3_SOURCE
+      - SHA=$SHA
+      - VERSION=$VERSION
+    workDir: $HOME/projects/go-algorand
+
 tasks:
   - task: docker.Make
     name: package-test-deb
@@ -42,11 +58,17 @@ tasks:
     agent: rpm
     target: mule-test-rpm
 
+  - task: docker.Make
+    name: package-test-rpm-centos8
+    agent: rpm-centos8
+    target: mule-test-rpm-centos8
+
 jobs:
   package-test:
     tasks:
       - docker.Make.package-test-deb
       - docker.Make.package-test-rpm
+      - docker.Make.package-test-rpm-centos8
 
   package-test-deb:
     tasks:
@@ -55,4 +77,5 @@ jobs:
   package-test-rpm:
     tasks:
       - docker.Make.package-test-rpm
+      - docker.Make.package-test-rpm-centos8
 

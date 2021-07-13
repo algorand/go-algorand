@@ -54,7 +54,11 @@ import (
 )
 
 const incomingThreads = 20
-const messageFilterSize = 5000 // messages greater than that size may be blocked by incoming/outgoing filter
+
+// messageFilterSize is the threshold beyond we send a request to the other peer to avoid sending us a message with that particular hash.
+// typically, this is beneficial for proposal messages, which tends to be large and uniform across the network. Non-uniform messages, such
+// as the transaction sync messages should not included in this filter.
+const messageFilterSize = 200000
 
 // httpServerReadHeaderTimeout is the amount of time allowed to read
 // request headers. The connection's read deadline is reset
@@ -374,7 +378,7 @@ type WebsocketNetwork struct {
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
-	// lastNetworkAdvanceMu syncronized teh access to lastNetworkAdvance
+	// lastNetworkAdvanceMu syncronized the access to lastNetworkAdvance
 	lastNetworkAdvanceMu deadlock.Mutex
 
 	// lastNetworkAdvance contains the last timestamp where the agreement protocol was able to make a notable progress.
@@ -405,6 +409,12 @@ type WebsocketNetwork struct {
 	// that messagesOfInterestEnc does not change once it is set during
 	// network start.
 	messagesOfInterestMu deadlock.Mutex
+
+	// peersConnectivityCheckTicker is the timer for testing that all the connected peers
+	// are still transmitting or receiving information. The channel produced by this ticker
+	// is consumed by any of the messageHandlerThread(s). The ticker itself is created during
+	// Start(), and being shut down when Stop() is called.
+	peersConnectivityCheckTicker *time.Ticker
 }
 
 type broadcastRequest struct {
@@ -422,6 +432,9 @@ func (wn *WebsocketNetwork) Address() (string, bool) {
 	parsedURL := url.URL{Scheme: wn.scheme}
 	var connected bool
 	if wn.listener == nil {
+		if wn.config.NetAddress == "" {
+			parsedURL.Scheme = ""
+		}
 		parsedURL.Host = wn.config.NetAddress
 		connected = false
 	} else {
@@ -432,7 +445,7 @@ func (wn *WebsocketNetwork) Address() (string, bool) {
 }
 
 // PublicAddress what we tell other nodes to connect to.
-// Might be different than our locally percieved network address due to NAT/etc.
+// Might be different than our locally perceived network address due to NAT/etc.
 // Returns config "PublicAddress" if available, otherwise local addr.
 func (wn *WebsocketNetwork) PublicAddress() string {
 	if len(wn.config.PublicAddress) > 0 {
@@ -792,9 +805,15 @@ func (wn *WebsocketNetwork) Start() {
 		wn.wg.Add(1)
 		go wn.pingThread()
 	}
+	// we shouldn't have any ticker here.. but in case we do - just stop it.
+	if wn.peersConnectivityCheckTicker != nil {
+		wn.peersConnectivityCheckTicker.Stop()
+	}
+	wn.peersConnectivityCheckTicker = time.NewTicker(connectionActivityMonitorInterval)
 	for i := 0; i < incomingThreads; i++ {
 		wn.wg.Add(1)
-		go wn.messageHandlerThread()
+		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
+		go wn.messageHandlerThread(wn.peersConnectivityCheckTicker.C)
 	}
 	wn.wg.Add(1)
 	go wn.broadcastThread()
@@ -835,6 +854,12 @@ func (wn *WebsocketNetwork) innerStop() {
 func (wn *WebsocketNetwork) Stop() {
 	wn.handlers.ClearHandlers([]Tag{})
 
+	// if we have a working ticker, just stop it and clear it out. The access to this variable is safe since the Start()/Stop() are synced by the
+	// caller, and the WebsocketNetwork doesn't access wn.peersConnectivityCheckTicker directly.
+	if wn.peersConnectivityCheckTicker != nil {
+		wn.peersConnectivityCheckTicker.Stop()
+		wn.peersConnectivityCheckTicker = nil
+	}
 	wn.innerStop()
 	var listenAddr string
 	if wn.listener != nil {
@@ -852,8 +877,11 @@ func (wn *WebsocketNetwork) Stop() {
 		wn.log.Debugf("closed %s", listenAddr)
 	}
 
+	// Wait for the requestsTracker to finish up to avoid potential race condition
+	<-wn.requestsTracker.getWaitUntilNoConnectionsChannel(5 * time.Millisecond)
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
+
 	wn.messagesOfInterestEncoded = false
 	wn.messagesOfInterestEnc = nil
 	wn.messagesOfInterest = nil
@@ -1114,6 +1142,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			InstanceName: trackedRequest.otherInstanceName,
 		})
 
+	// We are careful to encode this prior to starting the server to avoid needing 'messagesOfInterestMu' here.
 	if wn.messagesOfInterestEnc != nil {
 		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag, nil)
 		if err != nil {
@@ -1125,10 +1154,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
 }
 
-func (wn *WebsocketNetwork) messageHandlerThread() {
+func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan time.Time) {
 	defer wn.wg.Done()
-	inactivityCheckTicker := time.NewTicker(connectionActivityMonitorInterval)
-	defer inactivityCheckTicker.Stop()
+
 	for {
 		select {
 		case <-wn.ctx.Done():
@@ -1171,7 +1199,7 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 				}
 			default:
 			}
-		case <-inactivityCheckTicker.C:
+		case <-peersConnectivityCheckCh:
 			// go over the peers and ensure we have some type of communication going on.
 			wn.checkPeersConnectivity()
 		}
@@ -1345,7 +1373,7 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 		// clear out the unused portion of the peers array to allow the GC to cleanup unused peers.
 		remainderPeers := dest[len(wn.peers):cap(dest)]
 		for i := range remainderPeers {
-			// we want to delete only up to the first nil peer, since we're always writing to this array from the begining to the end
+			// we want to delete only up to the first nil peer, since we're always writing to this array from the beginning to the end
 			if remainderPeers[i] == nil {
 				break
 			}
@@ -1894,18 +1922,35 @@ var errBcastInvalidArray = errors.New("invalid broadcast array")
 
 var errBcastQFull = errors.New("broadcast queue full")
 
-// HostColonPortPattern matches "^[^:]+:\\d+$" e.g. "foo.com.:1234"
-var HostColonPortPattern = regexp.MustCompile("^[^:]+:\\d+$")
+var errURLNoHost = errors.New("could not parse a host from url")
+
+// HostColonPortPattern matches "^[-a-zA-Z0-9.]+:\\d+$" e.g. "foo.com.:1234"
+var HostColonPortPattern = regexp.MustCompile("^[-a-zA-Z0-9.]+:\\d+$")
 
 // ParseHostOrURL handles "host:port" or a full URL.
 // Standard library net/url.Parse chokes on "host:port".
 func ParseHostOrURL(addr string) (*url.URL, error) {
-	var parsedURL *url.URL
+	// If the entire addr is "host:port" grab that right away.
+	// Don't try url.Parse() because that will grab "host:" as if it were "scheme:"
 	if HostColonPortPattern.MatchString(addr) {
-		parsedURL = &url.URL{Scheme: "http", Host: addr}
-		return parsedURL, nil
+		return &url.URL{Scheme: "http", Host: addr}, nil
 	}
-	return url.Parse(addr)
+	parsed, err := url.Parse(addr)
+	if err == nil {
+		if parsed.Host == "" {
+			return nil, errURLNoHost
+		}
+		return parsed, nil
+	}
+	if strings.HasPrefix(addr, "http:") || strings.HasPrefix(addr, "https:") || strings.HasPrefix(addr, "ws:") || strings.HasPrefix(addr, "wss:") || strings.HasPrefix(addr, "://") || strings.HasPrefix(addr, "//") {
+		return parsed, err
+	}
+	// This turns "[::]:4601" into "http://[::]:4601" which url.Parse can do
+	parsed, e2 := url.Parse("http://" + addr)
+	if e2 == nil {
+		return parsed, nil
+	}
+	return parsed, err /* return original err, not our prefix altered try */
 }
 
 // addrToGossipAddr parses host:port or a URL and returns the URL to the websocket interface at that address.
@@ -1923,7 +1968,7 @@ func (wn *WebsocketNetwork) addrToGossipAddr(addr string) (string, error) {
 	return parsedURL.String(), nil
 }
 
-// tryConnectReserveAddr synchronously checks that addr is not already being connected to, returns (websocket URL or "", true if connection may procede)
+// tryConnectReserveAddr synchronously checks that addr is not already being connected to, returns (websocket URL or "", true if connection may proceed)
 func (wn *WebsocketNetwork) tryConnectReserveAddr(addr string) (gossipAddr string, ok bool) {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
@@ -1949,7 +1994,7 @@ func (wn *WebsocketNetwork) tryConnectReserveAddr(addr string) (gossipAddr strin
 	return gossipAddr, true
 }
 
-// tryConnectReleaseAddr should be called when connection succedes and becomes a peer or fails and is no longer being attempted
+// tryConnectReleaseAddr should be called when connection succeeds and becomes a peer or fails and is no longer being attempted
 func (wn *WebsocketNetwork) tryConnectReleaseAddr(addr, gossipAddr string) {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
@@ -2001,7 +2046,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	for _, supportedProtocolVersion := range SupportedProtocolVersions {
 		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
 	}
-	// for backward compatability, include the ProtocolVersion header as well.
+	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()

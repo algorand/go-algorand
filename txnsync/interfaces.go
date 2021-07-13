@@ -71,7 +71,12 @@ type NodeConnector interface {
 	Random(uint64) uint64
 	GetPeers() []PeerInfo
 	GetPeer(interface{}) PeerInfo // get a single peer given a network peer opaque interface
-	UpdatePeers([]*Peer, []interface{})
+	// UpdatePeers call is being made to inform the node that either a link need to be established
+	// between the set of the txsyncPeers peers and the set of netPeers, or that the peersAverageDataExchangeRate
+	// was recalculated and could potentially be updated.
+	// The peersAverageDataExchangeRate passed in here is the average communication rate ( measured in bytes per second )
+	// across all the connected peers.
+	UpdatePeers(txsyncPeers []*Peer, netPeers []interface{}, peersAverageDataExchangeRate uint64)
 	SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback)
 	// GetPendingTransactionGroups is called by the transaction sync when it needs to look into the transaction
 	// pool and get the updated set of pending transactions. The second returned argument is the latest group counter
@@ -80,7 +85,7 @@ type NodeConnector interface {
 	GetPendingTransactionGroups() (txGroups []transactions.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64)
 	// IncomingTransactionGroups is called by the transaction sync when transactions have been received and need
 	// to be stored in the transaction pool
-	IncomingTransactionGroups(interface{}, []transactions.SignedTxGroup) (transactionPoolSize int)
+	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int)
 	NotifyMonitor() chan struct{}
 }
 
