@@ -20,8 +20,24 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/algorand/go-deadlock"
 )
+
+// Gauge represent a single gauge variable.
+type Gauge struct {
+	deadlock.Mutex
+	name          string
+	description   string
+	labels        map[string]int       // map each label ( i.e. httpErrorCode ) to an index.
+	valuesIndices map[int]*gaugeValues // maps each set of labels into a concrete gauge
+}
+
+type gaugeValues struct {
+	gauge           float64
+	labels          map[string]string
+	formattedLabels string
+}
 
 // MakeGauge create a new gauge with the provided name and description.
 func MakeGauge(metric MetricName) *Gauge {
@@ -33,15 +49,6 @@ func MakeGauge(metric MetricName) *Gauge {
 	}
 	c.Register(nil)
 	return c
-}
-
-// TouchAll updates all the timestamps associated with this metric.
-func (gauge *Gauge) TouchAll() {
-	gauge.Lock()
-	defer gauge.Unlock()
-	for _, val := range gauge.valuesIndices {
-		val.timestamp = time.Now()
-	}
 }
 
 // Register registers the gauge with the default/specific registry
@@ -73,16 +80,14 @@ func (gauge *Gauge) Add(x float64, labels map[string]string) {
 	if gaugeObj, has := gauge.valuesIndices[labelIndex]; !has {
 		// we need to add a new gauge.
 		val := &gaugeValues{
-			gauge:     x,
-			labels:    labels,
-			timestamp: time.Now(),
+			gauge:  x,
+			labels: labels,
 		}
 		val.createFormattedLabel()
 		gauge.valuesIndices[labelIndex] = val
 	} else {
 		// update existing value.
 		gaugeObj.gauge += x
-		gaugeObj.timestamp = time.Now()
 	}
 }
 
@@ -97,16 +102,14 @@ func (gauge *Gauge) Set(x float64, labels map[string]string) {
 	if gaugeObj, has := gauge.valuesIndices[labelIndex]; !has {
 		// we need to add a new gauge.
 		val := &gaugeValues{
-			gauge:     x,
-			labels:    labels,
-			timestamp: time.Now(),
+			gauge:  x,
+			labels: labels,
 		}
 		val.createFormattedLabel()
 		gauge.valuesIndices[labelIndex] = val
 	} else {
 		// update existing value.
 		gaugeObj.gauge = x
-		gaugeObj.timestamp = time.Now()
 	}
 }
 
@@ -139,25 +142,10 @@ func (cv *gaugeValues) createFormattedLabel() {
 	cv.formattedLabels = buf.String()[1:]
 }
 
-// filterExpiredMetrics scans the gauge.valuesIndices map and removing all the gauges that
-// haven't been updated in the past <maxMetricRetensionDuration> units of time.
-func (gauge *Gauge) filterExpiredMetrics() {
-	// find out what the cut off date is
-	metricRetensionThreshold := time.Now().Add(-maxMetricRetensionDuration)
-
-	for gaugeKey, gaugeObj := range gauge.valuesIndices {
-		if gaugeObj.timestamp.Before(metricRetensionThreshold) {
-			delete(gauge.valuesIndices, gaugeKey)
-		}
-	}
-}
-
 // WriteMetric writes the metric into the output stream
 func (gauge *Gauge) WriteMetric(buf *strings.Builder, parentLabels string) {
 	gauge.Lock()
 	defer gauge.Unlock()
-
-	gauge.filterExpiredMetrics()
 
 	if len(gauge.valuesIndices) < 1 {
 		return
@@ -189,8 +177,6 @@ func (gauge *Gauge) WriteMetric(buf *strings.Builder, parentLabels string) {
 func (gauge *Gauge) AddMetric(values map[string]string) {
 	gauge.Lock()
 	defer gauge.Unlock()
-
-	gauge.filterExpiredMetrics()
 
 	if len(gauge.valuesIndices) < 1 {
 		return
