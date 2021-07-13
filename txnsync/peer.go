@@ -260,6 +260,8 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *
 		p.requestedTransactionsModulator = 1
 		p.dataExchangeRate = defaultRelayToRelayDataExchangeRate
 	}
+	// increase the number of total created peers.
+	txsyncCreatedPeersTotal.Inc(nil)
 	return p
 }
 

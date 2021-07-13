@@ -106,9 +106,20 @@ func (imq *incomingMessageQueue) clear(m incomingMessage) {
 
 // incomingMessageHandler
 // note - this message is called by the network go-routine dispatch pool, and is not syncronized with the rest of the transaction syncronizer
-func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64) error {
+func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *Peer, message []byte, sequenceNumber uint64) (err error) {
+	// increase number of incoming messages metric.
+	txsyncIncomingMessagesTotal.Inc(nil)
+
+	// check the return value when we exit this function. if we fail, we increase the metric.
+	defer func() {
+		if err != nil {
+			// increase number of unprocessed incoming messages metric.
+			txsyncUnprocessedIncomingMessagesTotal.Inc(nil)
+		}
+	}()
+
 	incomingMessage := incomingMessage{networkPeer: networkPeer, sequenceNumber: sequenceNumber, encodedSize: len(message), peer: peer}
-	_, err := incomingMessage.message.UnmarshalMsg(message)
+	_, err = incomingMessage.message.UnmarshalMsg(message)
 	if err != nil {
 		// if we recieved a message that we cannot parse, disconnect.
 		s.log.Infof("received unparsable transaction sync message from peer. disconnecting from peer.")
@@ -129,6 +140,8 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 			return errInvalidBloomFilter
 		}
 		incomingMessage.bloomFilter = bloomFilter
+		// increase number of decoded bloom filters.
+		txsyncDecodedBloomFiltersTotal.Inc(nil)
 	}
 
 	// if the peer sent us any transactions, decode these.
