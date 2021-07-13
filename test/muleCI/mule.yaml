@@ -25,19 +25,6 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
-  - name: cicd.centos8.amd64
-    dockerFilePath: docker/build/cicd.centos8.Dockerfile
-    image: algorand/go-algorand-ci-linux-centos8
-    version: scripts/configure_dev-deps.sh
-    arch: amd64
-    env:
-      - TRAVIS_BRANCH=${GIT_BRANCH}
-      - NETWORK=$NETWORK
-      - VERSION=$VERSION
-      - BUILD_NUMBER=$BUILD_NUMBER
-    buildArgs:
-      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
-      - ARCH=amd64
   - name: cicd.ubuntu.arm64
     dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
     image: algorand/go-algorand-ci-linux-ubuntu
@@ -112,18 +99,8 @@ tasks:
     target: archive
 
   - task: docker.Make
-    name: archive.amd64.centos8
-    agent: cicd.centos8.amd64
-    target: archive
-
-  - task: docker.Make
     name: rpm.amd64
     agent: cicd.centos.amd64
-    target: mule-package-rpm
-
-  - task: docker.Make
-    name: rpm.amd64.centos8
-    agent: cicd.centos8.amd64
     target: mule-package-rpm
 
   - task: docker.Make
@@ -230,13 +207,11 @@ jobs:
       - stash.Unstash.linux-arm
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
-      - docker.Make.rpm.amd64.centos8
       - stash.Stash.packages
   archive-linux-amd64:
     tasks:
       - stash.Unstash.packages
       - docker.Make.archive.amd64
-      - docker.Make.archive.amd64.centos8
   package-docker:
     tasks:
       - docker.Make.docker-image
