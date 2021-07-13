@@ -425,6 +425,18 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	return nil // note: deletion cannot cause us to violate maxCount
 }
 
+// AppendLog creates a new key-value {addr, aidx} in log
+func (cb *roundCowState) AppendLog(aidx basics.AppIndex, value basics.TealValue) error {
+	// Enforce maximum value length
+	if len(value.Bytes) > cb.proto.MaxAppBytesValueLen {
+		return fmt.Errorf("value too long, length was %d", len(value.Bytes))
+	}
+	// Write the value delta associated with this key/value
+	cb.logs[aidx] = append(cb.logs[aidx], value.Bytes)
+
+	return nil
+}
+
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
 func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
 	base := &roundCowBase{
@@ -471,8 +483,9 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	return pass, evalDelta, nil
 }
 
-// BuildEvalDelta converts internal sdeltas into basics.EvalDelta
+// BuildEvalDelta converts internal sdeltas and logs into basics.EvalDelta
 func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+	// sdeltas
 	foundGlobal := false
 	for addr, smod := range cb.sdeltas {
 		for aapp, sdelta := range smod {
@@ -519,6 +532,17 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 			}
 		}
 	}
+
+	// logDeltas
+	for appid, ldelta := range cb.logs {
+		// Check that all of these deltas are for the correct app
+		if appid != aidx {
+			err = fmt.Errorf("found log delta for different app during StatefulEval/BuildDelta: %d != %d", appid, aidx)
+			return basics.EvalDelta{}, err
+		}
+		evalDelta.Log = ldelta
+	}
+
 	return
 }
 

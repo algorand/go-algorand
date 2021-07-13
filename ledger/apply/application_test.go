@@ -814,6 +814,15 @@ func TestAppCallClearState(t *testing.T) {
 	a.Equal(0, len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
+
+	b.ResetWrites()
+	b.pass = true
+	b.err = nil
+	logs := map[basics.AppIndex][]string{appIdx: {"a"}}
+	b.delta = basics.EvalDelta{Log: []string{"a"}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{Log: logs[appIdx]}, ad.EvalDelta)
 }
 
 func TestAppCallApplyCloseOut(t *testing.T) {
@@ -896,6 +905,12 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	a.Equal(0, len(br.AppLocalStates))
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	a.Equal(basics.StateSchema{NumUint: 0}, br.TotalAppSchema)
+
+	logs := map[basics.AppIndex][]string{appIdx: {"a"}}
+	b.delta = basics.EvalDelta{Log: []string{"a"}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{Log: logs[appIdx]}, ad.EvalDelta)
 }
 
 func TestAppCallApplyUpdate(t *testing.T) {
@@ -962,6 +977,12 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	a.Equal([]byte{2}, br.AppParams[appIdx].ApprovalProgram)
 	a.Equal([]byte{2}, br.AppParams[appIdx].ClearStateProgram)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+
+	logs := map[basics.AppIndex][]string{appIdx: {"a"}}
+	b.delta = basics.EvalDelta{Log: []string{"a"}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{Log: logs[appIdx]}, ad.EvalDelta)
 }
 
 func TestAppCallApplyDelete(t *testing.T) {
@@ -1028,6 +1049,12 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 	a.Equal(uint32(0), br.TotalExtraAppPages)
+
+	logs := map[basics.AppIndex][]string{appIdx: {"a"}}
+	b.delta = basics.EvalDelta{Log: []string{"a"}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{Log: logs[appIdx]}, ad.EvalDelta)
 }
 
 func TestAppCallApplyCreateClearState(t *testing.T) {
@@ -1118,4 +1145,12 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	br := b.balances[creator]
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
+
+	logs := map[basics.AppIndex][]string{appIdx: {"a"}}
+	b.delta = basics.EvalDelta{Log: []string{"a"}}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+	a.Equal(appIdx, b.allocatedAppIdx)
+	a.Equal(basics.EvalDelta{Log: logs[appIdx]}, ad.EvalDelta)
+
 }

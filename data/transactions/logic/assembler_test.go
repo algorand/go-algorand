@@ -294,6 +294,7 @@ int 100
 
 const v5Nonsense = `
 app_params_get AppExtraProgramPages
+log
 `
 
 var nonsense = map[uint64]string{

@@ -4419,3 +4419,98 @@ func TestBytesConversions(t *testing.T) {
 	testAccepts(t, "byte 0x11; byte 0x10; b+; btoi; int 0x21; ==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x10; b+; btoi; int 0x21; ==", 4)
 }
+
+func TestLog(t *testing.T) {
+	t.Parallel()
+	proto := defaultEvalProtoWithVersion(LogicVersion)
+	txn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+		},
+	}
+	ledger := makeTestLedger(nil)
+	ledger.newApp(txn.Txn.Receiver, 100, basics.AppParams{})
+	sb := strings.Builder{}
+	ep := defaultEvalParams(&sb, &txn)
+	ep.Proto = &proto
+	ep.Ledger = ledger
+
+	source := `byte  "a logging message"; log; int 1`
+	source1 := `byte  "a logging message"; log; byte  "second logging message"; log; int 1`
+	source2 := fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, MaxLogCalls))
+	source3 := `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <; bnz loop;`
+	sources := []string{source, source1, source2, source3}
+
+	for _, s := range sources {
+		ops := testProg(t, s, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, source)
+
+		pass, err := EvalStateful(ops.Program, ep)
+		require.NoError(t, err)
+		require.True(t, pass)
+	}
+
+	type failCase struct {
+		source      string
+		runMode     runMode
+		errContains string
+	}
+
+	failCase0 := failCase{
+		source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", 1001)),
+		errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+		runMode:     runModeApplication,
+	}
+
+	msg := strings.Repeat("a", 400)
+	failCase1 := failCase{
+		source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
+		errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+		runMode:     runModeApplication,
+	}
+
+	failCase2 := failCase{
+		source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, MaxLogCalls+1)),
+		errContains: "too many log calls",
+		runMode:     runModeApplication,
+	}
+
+	failCase3 := failCase{
+		source:      `int 1; loop: byte "a"; log; int 1; +; dup; int 35; <; bnz loop;`,
+		errContains: "too many log calls",
+		runMode:     runModeApplication,
+	}
+
+	failCase4 := failCase{
+		source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
+		errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+		runMode:     runModeApplication,
+	}
+
+	failCase5 := failCase{
+		source:      `byte  "a logging message"; log; int 1`,
+		errContains: "log not allowed in current mode",
+		runMode:     runModeSignature,
+	}
+
+	failCases := []failCase{failCase0, failCase1, failCase2, failCase3, failCase4, failCase5}
+	for _, c := range failCases {
+		ops := testProg(t, c.source, AssemblerMaxVersion)
+
+		err := CheckStateful(ops.Program, ep)
+		require.NoError(t, err, source)
+
+		var pass bool
+		switch c.runMode {
+		case runModeApplication:
+			pass, err = EvalStateful(ops.Program, ep)
+		default:
+			pass, err = Eval(ops.Program, ep)
+
+		}
+		require.Contains(t, err.Error(), c.errContains)
+		require.False(t, pass)
+	}
+}

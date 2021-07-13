@@ -53,6 +53,12 @@ const MaxStringSize = 4096
 // MaxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
 const MaxByteMathSize = 64
 
+// MaxLogCalls is the limit of log opcode use in a program
+const MaxLogCalls = 32
+
+// MaxLogSize is the limit of total log size from n log calls in a program
+const MaxLogSize = 1000
+
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
@@ -159,6 +165,8 @@ type LedgerForLogic interface {
 	DelGlobal(key string) error
 
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
+
+	AppendLog(value basics.TealValue) error
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -281,7 +289,9 @@ type evalContext struct {
 	version   uint64
 	scratch   scratchSpace
 
-	cost int // cost incurred so far
+	cost     int // cost incurred so far
+	logCalls int // number of log calls so far
+	logSize  int // log size of the program so far
 
 	// Set of PC values that branches we've seen so far might
 	// go. So, if checkStep() skips one, that branch is trying to
@@ -3052,4 +3062,27 @@ func opAppParamsGet(cx *evalContext) {
 
 	cx.stack[last] = value
 	cx.stack = append(cx.stack, stackValue{Uint: exist})
+}
+
+func opLog(cx *evalContext) {
+	last := len(cx.stack) - 1
+
+	if cx.logCalls == MaxLogCalls {
+		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", MaxLogCalls)
+		return
+	}
+	cx.logCalls++
+	log := cx.stack[last]
+	cx.logSize += len(log.Bytes)
+	if cx.logSize > MaxLogSize {
+		cx.err = fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, MaxLogSize)
+		return
+	}
+	// write log to applyData
+	err := cx.Ledger.AppendLog(log.toTealValue())
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = cx.stack[:last]
 }
