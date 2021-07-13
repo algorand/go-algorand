@@ -348,4 +348,4 @@ jobs:
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
             $mingw64 scripts/travis/build_test.sh
-          shell: bash.exe
+          #shell: bash.exe
