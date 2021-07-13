@@ -209,7 +209,7 @@ var OpSpecs = []OpSpec{
 	{0x48, "pop", opPop, asmDefault, disDefault, oneAny, nil, 1, modeAny, opDefault},
 	{0x49, "dup", opDup, asmDefault, disDefault, oneAny, twoAny, 1, modeAny, opDefault},
 	{0x4a, "dup2", opDup2, asmDefault, disDefault, twoAny, twoAny.plus(twoAny), 2, modeAny, opDefault},
-	// There must be at least one thing on the stack for g, but
+	// There must be at least one thing on the stack for dig, but
 	// it would be nice if we did better checking than that.
 	{0x4b, "dig", opDig, asmDefault, disDefault, oneAny, twoAny, 3, modeAny, immediates("n")},
 	{0x4c, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, opDefault},

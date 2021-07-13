@@ -3084,7 +3084,7 @@ func opLog(cx *evalContext) {
 		return
 	}
 
-	//	write log to applyData
+	// write log to applyData
 	err := cx.Ledger.SetLog(log.toTealValue())
 	if err != nil {
 		cx.err = err

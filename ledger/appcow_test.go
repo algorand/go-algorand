@@ -595,7 +595,7 @@ func TestCowBuildDelta(t *testing.T) {
 		ed,
 	)
 
-	//	check logDelta is added
+	// check logDelta is added
 	cow.logdeltas = make(map[basics.AppIndex][]string)
 	cow.logdeltas[aidx] = append(cow.logdeltas[aidx], "hello,world")
 	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
