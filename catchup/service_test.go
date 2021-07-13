@@ -438,6 +438,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil, nil)
+	s.log = &periodicSyncLogger{Logger: logging.Base()}
 
 	// Start the service ( dummy )
 	s.testStart()
