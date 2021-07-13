@@ -19,6 +19,8 @@ package network
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -27,5 +29,52 @@ func BenchmarkGenerateMessageDigest(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		msgData := crypto.Hash([]byte{byte(i & 0xff), byte((i >> 8) & 0xff), byte((i >> 16) & 0xff), byte((i >> 24) & 0xff)})
 		generateMessageDigest(protocol.AgreementVoteTag, msgData[:])
+	}
+}
+
+func TestHashingFunctionChange(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		tag := make([]byte, 0, 2)
+		nonce := make([]byte, 0, 8)
+		msg := make([]byte, 0, 250)
+		crypto.RandBytes(tag[:])
+		crypto.RandBytes(nonce[:])
+		crypto.RandBytes(msg[:])
+
+		// calculate digest using the old method.
+		hasher := crypto.NewHash()
+		hasher.Write(nonce[:])
+		hasher.Write([]byte(tag))
+		hasher.Write(msg)
+		var oldDigest crypto.Digest
+		hasher.Sum(oldDigest[:0])
+
+		// calculate digest using the new method.
+		newDigest := crypto.Hash(append(append(nonce[:], []byte(tag)...), msg...))
+
+		// compare the two.
+		require.Equal(t, oldDigest, newDigest)
+	}
+
+	for i := 0; i < 10; i++ {
+		tag := make([]byte, 0, 2)
+		nonce := make([]byte, 0, 8)
+		msg := make([]byte, 0, 250)
+		crypto.RandBytes(tag[:])
+		crypto.RandBytes(nonce[:])
+		crypto.RandBytes(msg[:])
+
+		// calculate digest using the old method.
+		hasher := crypto.NewHash()
+		hasher.Write([]byte(tag))
+		hasher.Write(msg)
+		var oldDigest crypto.Digest
+		hasher.Sum(oldDigest[:0])
+
+		// calculate digest using the new method.
+		newDigest := crypto.Hash(append([]byte(tag), msg...))
+
+		// compare the two.
+		require.Equal(t, oldDigest, newDigest)
 	}
 }
