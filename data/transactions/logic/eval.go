@@ -54,7 +54,7 @@ const MaxStringSize = 4096
 const MaxByteMathSize = 64
 
 // MaxLogCalls is the limit of log opcode use in a program
-const MaxLogCalls = 8
+const MaxLogCalls = 32
 
 // MaxLogSize is the limit of total log size from n log calls in a program
 const MaxLogSize = 1000
