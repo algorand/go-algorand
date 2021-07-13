@@ -63,7 +63,7 @@ commands:
           shell: bash.exe
           command: |
             choco uninstall -y mingw
-            choco install -y msys2 pacman make
+            choco install -y msys2 pacman make wget
             choco install -y golang --version=1.14
             choco install -y python3 --version=3.7.3
             export MAKE=mingw32-make
