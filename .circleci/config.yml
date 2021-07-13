@@ -29,8 +29,16 @@ workflows:
       - arm64_e2e_subs:
           requires:
             - arm64_build
-  build_windows:
-    jobs:
+      - mac_amd64_build
+      - mac_amd64_test:
+          requires:
+            - mac_amd64_build
+      - mac_amd64_integration:
+          requires:
+            - mac_amd64_build
+      - mac_amd64_e2e_subs:
+          requires:
+            - mac_amd64_build
       - windows_x64_build
 
 commands:
@@ -52,20 +60,20 @@ commands:
     steps:
       - run:
           name: install deps
+          shell: bash.exe
           command: |
-            [[ ! -f C:/tools/msys64/msys2_shell.cmd ]] && rm -rf C:/tools/msys64
             choco uninstall -y mingw
-            choco upgrade --no-progress -y msys2
+            choco install -y msys2 pacman make
+            choco install -y golang --version=1.14
+            choco install -y python3 --version=3.7.3
+            export MAKE=mingw32-make
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
             export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
             export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
             export msys2+=" -msys2 -c "\"\$@"\" --"
-            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
-            ## Install more MSYS2 packages from https://packages.msys2.org/base here
-            taskkill //IM gpg-agent.exe //F  # https://travis-ci.community/t/4967
             export PATH=/C/tools/msys64/mingw64/bin:$PATH
-            export MAKE=mingw32-make  # so that Autotools can find it
+            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
 
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
@@ -109,12 +117,13 @@ commands:
           at: << parameters.circleci_home >>
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
-          name: Run short tests
+          name: Run full tests
           no_output_timeout: 45m
           command: |
             set -e
             set -x
             export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export KMD_NOUSB=True
             export GOPATH="<< parameters.circleci_home >>/go"
             export PATH="${PATH}:${GOPATH}/bin"
             export ALGORAND_DEADLOCK=enable
@@ -152,6 +161,7 @@ commands:
           command: |
             set -x
             export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export KMD_NOUSB=True
             export GOPATH="<< parameters.circleci_home >>/go"
             export PATH="${PATH}:${GOPATH}/bin"
             export ALGORAND_DEADLOCK=enable
@@ -203,7 +213,6 @@ jobs:
       - prepare_go
       - generic_shorttest:
           result_subdir: amd64-short
-
 
   amd64_integration:
     machine:
@@ -272,6 +281,56 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: arm64-e2e_subs
+
+  mac_amd64_build:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - checkout
+      - prepare_go
+      - generic_build:
+          circleci_home: /Users/distiller
+
+  mac_amd64_test:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    parallelism: 4
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_shorttest:
+          result_subdir: mac-amd64-short
+          circleci_home: /Users/distiller
+
+  mac_amd64_integration:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_integration:
+          result_subdir: mac-amd64-integration
+          circleci_home: /Users/distiller
+
+  mac_amd64_e2e_subs:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    environment:
+      E2E_SUBS_ONLY: "tsrue"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_integration:
+          result_subdir: mac-amd64-e2e_subs
+          circleci_home: /Users/distiller
 
   windows_x64_build:
     executor:
