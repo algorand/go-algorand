@@ -60,6 +60,7 @@ commands:
     steps:
       - run:
           name: install deps
+          shell: bash.exe
           command: |
             choco uninstall -y mingw
             choco install -y msys2 pacman make
