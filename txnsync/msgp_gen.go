@@ -248,12 +248,12 @@ import (
 //            |-----> (*) MsgIsZero
 //
 // txnGroups
-//     |-----> MarshalMsg
-//     |-----> CanMarshalMsg
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
 //     |-----> (*) CanUnmarshalMsg
-//     |-----> Msgsize
-//     |-----> MsgIsZero
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -35062,16 +35062,16 @@ func (z *txGroupsEncodingStub) MsgIsZero() bool {
 func (z *txGroupsEncodingStubOld) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(1)
-	var zb0003Mask uint8 /* 2 bits */
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
 	if len((*z).TxnGroups) == 0 {
-		zb0003Len--
-		zb0003Mask |= 0x2
+		zb0002Len--
+		zb0002Mask |= 0x2
 	}
-	// variable map header, size zb0003Len
-	o = append(o, 0x80|uint8(zb0003Len))
-	if zb0003Len != 0 {
-		if (zb0003Mask & 0x2) == 0 { // if not empty
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
 			if (*z).TxnGroups == nil {
@@ -35080,14 +35080,7 @@ func (z *txGroupsEncodingStubOld) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).TxnGroups)))
 			}
 			for zb0001 := range (*z).TxnGroups {
-				if (*z).TxnGroups[zb0001] == nil {
-					o = msgp.AppendNil(o)
-				} else {
-					o = msgp.AppendArrayHeader(o, uint32(len((*z).TxnGroups[zb0001])))
-				}
-				for zb0002 := range (*z).TxnGroups[zb0001] {
-					o = (*z).TxnGroups[zb0001][zb0002].MarshalMsg(o)
-				}
+				o = (*z).TxnGroups[zb0001].MarshalMsg(o)
 			}
 		}
 	}
@@ -35103,67 +35096,46 @@ func (_ *txGroupsEncodingStubOld) CanMarshalMsg(z interface{}) bool {
 func (z *txGroupsEncodingStubOld) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0003 int
-	var zb0004 bool
-	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
-			var zb0005 int
-			var zb0006 bool
-			zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0002 > 0 {
+			zb0002--
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "TxnGroups")
 				return
 			}
-			if zb0005 > maxEncodedTransactionGroup {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(maxEncodedTransactionGroup))
+			if zb0004 > maxEncodedTransactionGroup {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxEncodedTransactionGroup))
 				err = msgp.WrapError(err, "struct-from-array", "TxnGroups")
 				return
 			}
-			if zb0006 {
+			if zb0005 {
 				(*z).TxnGroups = nil
-			} else if (*z).TxnGroups != nil && cap((*z).TxnGroups) >= zb0005 {
-				(*z).TxnGroups = ((*z).TxnGroups)[:zb0005]
+			} else if (*z).TxnGroups != nil && cap((*z).TxnGroups) >= zb0004 {
+				(*z).TxnGroups = ((*z).TxnGroups)[:zb0004]
 			} else {
-				(*z).TxnGroups = make([]txnGroups, zb0005)
+				(*z).TxnGroups = make([]txnGroups, zb0004)
 			}
 			for zb0001 := range (*z).TxnGroups {
-				var zb0007 int
-				var zb0008 bool
-				zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				bts, err = (*z).TxnGroups[zb0001].UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "TxnGroups", zb0001)
 					return
 				}
-				if zb0007 > maxEncodedTransactionGroupEntries {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(maxEncodedTransactionGroupEntries))
-					err = msgp.WrapError(err, "struct-from-array", "TxnGroups", zb0001)
-					return
-				}
-				if zb0008 {
-					(*z).TxnGroups[zb0001] = nil
-				} else if (*z).TxnGroups[zb0001] != nil && cap((*z).TxnGroups[zb0001]) >= zb0007 {
-					(*z).TxnGroups[zb0001] = ((*z).TxnGroups[zb0001])[:zb0007]
-				} else {
-					(*z).TxnGroups[zb0001] = make(txnGroups, zb0007)
-				}
-				for zb0002 := range (*z).TxnGroups[zb0001] {
-					bts, err = (*z).TxnGroups[zb0001][zb0002].UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "struct-from-array", "TxnGroups", zb0001, zb0002)
-						return
-					}
-				}
 			}
 		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -35174,11 +35146,11 @@ func (z *txGroupsEncodingStubOld) UnmarshalMsg(bts []byte) (o []byte, err error)
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0004 {
+		if zb0003 {
 			(*z) = txGroupsEncodingStubOld{}
 		}
-		for zb0003 > 0 {
-			zb0003--
+		for zb0002 > 0 {
+			zb0002--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -35186,51 +35158,30 @@ func (z *txGroupsEncodingStubOld) UnmarshalMsg(bts []byte) (o []byte, err error)
 			}
 			switch string(field) {
 			case "t":
-				var zb0009 int
-				var zb0010 bool
-				zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "TxnGroups")
 					return
 				}
-				if zb0009 > maxEncodedTransactionGroup {
-					err = msgp.ErrOverflow(uint64(zb0009), uint64(maxEncodedTransactionGroup))
+				if zb0006 > maxEncodedTransactionGroup {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(maxEncodedTransactionGroup))
 					err = msgp.WrapError(err, "TxnGroups")
 					return
 				}
-				if zb0010 {
+				if zb0007 {
 					(*z).TxnGroups = nil
-				} else if (*z).TxnGroups != nil && cap((*z).TxnGroups) >= zb0009 {
-					(*z).TxnGroups = ((*z).TxnGroups)[:zb0009]
+				} else if (*z).TxnGroups != nil && cap((*z).TxnGroups) >= zb0006 {
+					(*z).TxnGroups = ((*z).TxnGroups)[:zb0006]
 				} else {
-					(*z).TxnGroups = make([]txnGroups, zb0009)
+					(*z).TxnGroups = make([]txnGroups, zb0006)
 				}
 				for zb0001 := range (*z).TxnGroups {
-					var zb0011 int
-					var zb0012 bool
-					zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					bts, err = (*z).TxnGroups[zb0001].UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "TxnGroups", zb0001)
 						return
-					}
-					if zb0011 > maxEncodedTransactionGroupEntries {
-						err = msgp.ErrOverflow(uint64(zb0011), uint64(maxEncodedTransactionGroupEntries))
-						err = msgp.WrapError(err, "TxnGroups", zb0001)
-						return
-					}
-					if zb0012 {
-						(*z).TxnGroups[zb0001] = nil
-					} else if (*z).TxnGroups[zb0001] != nil && cap((*z).TxnGroups[zb0001]) >= zb0011 {
-						(*z).TxnGroups[zb0001] = ((*z).TxnGroups[zb0001])[:zb0011]
-					} else {
-						(*z).TxnGroups[zb0001] = make(txnGroups, zb0011)
-					}
-					for zb0002 := range (*z).TxnGroups[zb0001] {
-						bts, err = (*z).TxnGroups[zb0001][zb0002].UnmarshalMsg(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "TxnGroups", zb0001, zb0002)
-							return
-						}
 					}
 				}
 			default:
@@ -35255,10 +35206,7 @@ func (_ *txGroupsEncodingStubOld) CanUnmarshalMsg(z interface{}) bool {
 func (z *txGroupsEncodingStubOld) Msgsize() (s int) {
 	s = 1 + 2 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).TxnGroups {
-		s += msgp.ArrayHeaderSize
-		for zb0002 := range (*z).TxnGroups[zb0001] {
-			s += (*z).TxnGroups[zb0001][zb0002].Msgsize()
-		}
+		s += (*z).TxnGroups[zb0001].Msgsize()
 	}
 	return
 }
@@ -35269,74 +35217,29 @@ func (z *txGroupsEncodingStubOld) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z txnGroups) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	if z == nil {
-		o = msgp.AppendNil(o)
-	} else {
-		o = msgp.AppendArrayHeader(o, uint32(len(z)))
-	}
-	for za0001 := range z {
-		o = z[za0001].MarshalMsg(o)
-	}
-	return
+func (z *txnGroups) MarshalMsg(b []byte) []byte {
+	return ((*(transactions.SignedTxnSlice))(z)).MarshalMsg(b)
 }
-
-func (_ txnGroups) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(txnGroups)
-	if !ok {
-		_, ok = (z).(*txnGroups)
-	}
+func (_ *txnGroups) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*txnGroups)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *txnGroups) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var zb0002 int
-	var zb0003 bool
-	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	if zb0002 > maxEncodedTransactionGroupEntries {
-		err = msgp.ErrOverflow(uint64(zb0002), uint64(maxEncodedTransactionGroupEntries))
-		err = msgp.WrapError(err)
-		return
-	}
-	if zb0003 {
-		(*z) = nil
-	} else if (*z) != nil && cap((*z)) >= zb0002 {
-		(*z) = (*z)[:zb0002]
-	} else {
-		(*z) = make(txnGroups, zb0002)
-	}
-	for zb0001 := range *z {
-		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
-		if err != nil {
-			err = msgp.WrapError(err, zb0001)
-			return
-		}
-	}
-	o = bts
-	return
+func (z *txnGroups) UnmarshalMsg(bts []byte) ([]byte, error) {
+	return ((*(transactions.SignedTxnSlice))(z)).UnmarshalMsg(bts)
 }
-
 func (_ *txnGroups) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*txnGroups)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z txnGroups) Msgsize() (s int) {
-	s = msgp.ArrayHeaderSize
-	for za0001 := range z {
-		s += z[za0001].Msgsize()
-	}
-	return
+func (z *txnGroups) Msgsize() int {
+	return ((*(transactions.SignedTxnSlice))(z)).Msgsize()
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z txnGroups) MsgIsZero() bool {
-	return len(z) == 0
+func (z *txnGroups) MsgIsZero() bool {
+	return ((*(transactions.SignedTxnSlice))(z)).MsgIsZero()
 }

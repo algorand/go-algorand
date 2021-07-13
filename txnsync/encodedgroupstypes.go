@@ -35,7 +35,7 @@ const maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
 var errInvalidTxType = errors.New("invalid txtype")
 
 //msgp:allocbound txnGroups maxEncodedTransactionGroupEntries
-type txnGroups []transactions.SignedTxn
+type txnGroups transactions.SignedTxnSlice
 
 // old data structure for encoding (only used for testing)
 type txGroupsEncodingStubOld struct {

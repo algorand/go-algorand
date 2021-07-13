@@ -841,7 +841,7 @@ func TestRemove(t *testing.T) {
 		{
 			Transactions:       []transactions.SignedTxn{signedTx},
 			GroupCounter:       1,
-			FirstTransactionID: signedTx.Txn.ID(),
+			GroupTransactionID: (transactions.SignedTxnSlice{signedTx}).ID(),
 			EncodedLength:      len(signedTx.MarshalMsg([]byte{})),
 		},
 	}, pendingTxGroups)
