@@ -22,6 +22,17 @@ int 1
 txn Fee
 int TMPL_FEE
 <=
+&& // is Payment and ok Fee
+txn CloseRemainderTo
+global ZeroAddress
+==
+txn Receiver
+addr TMPL_RCV
+==
+&&
+txn Amount
+int TMPL_AMT
+==
 &&
 txn FirstValid
 int TMPL_PERIOD
@@ -38,18 +49,7 @@ txn FirstValid
 txn Lease
 byte base64 TMPL_LEASE
 ==
-&& // is Payment and ok Fee and on period and correct duration and good lease
-txn CloseRemainderTo
-global ZeroAddress
-==
-txn Receiver
-addr TMPL_RCV
-==
-&&
-txn Amount
-int TMPL_AMT
-==
-&& // no close and good Receiver and good amount
+&& // on period and correct duration and good lease and no close and good Receiver and good amount
 txn CloseRemainderTo
 addr TMPL_RCV
 ==
@@ -59,7 +59,7 @@ global ZeroAddress
 &&
 txn FirstValid
 int TMPL_TIMEOUT
->
+>=
 &&
 txn Amount
 int 0
