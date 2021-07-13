@@ -26,9 +26,9 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -312,106 +312,4 @@ func TestLedgerSeed(t *testing.T) {
 		}
 	}
 	return
-}
-
-func TestConsensusVersion(t *testing.T) {
-	// find a consensus protocol that leads to ConsensusCurrentVersion
-	var previousProtocol protocol.ConsensusVersion
-	for ver, params := range config.Consensus {
-		if _, has := params.ApprovedUpgrades[protocol.ConsensusCurrentVersion]; has {
-			previousProtocol = ver
-			break
-		}
-	}
-	require.NotEqual(t, protocol.ConsensusVersion(""), previousProtocol)
-	consensusParams := config.Consensus[previousProtocol]
-
-	genesisInitState, _ := testGenerateInitState(t, previousProtocol)
-
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = false
-	log := logging.TestingLog(t)
-	log.SetLevel(logging.Warn)
-	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
-	require.NoError(t, err, "could not open ledger")
-	defer realLedger.Close()
-
-	l := Ledger{Ledger: realLedger}
-	require.NotNil(t, &l)
-
-	blk := genesisInitState.Block
-
-	// add 5 blocks.
-	for rnd := basics.Round(1); rnd < basics.Round(consensusParams.MaxTxnLife+5); rnd++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.Seed[0] = byte(uint64(rnd))
-		blk.BlockHeader.Seed[1] = byte(uint64(rnd) / 256)
-		blk.BlockHeader.Seed[2] = byte(uint64(rnd) / 65536)
-		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		blk.BlockHeader.CurrentProtocol = previousProtocol
-		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
-		l.WaitForCommit(rnd)
-	}
-	// ensure that all the first 5 has the expected version.
-	for rnd := basics.Round(consensusParams.MaxTxnLife); rnd < basics.Round(consensusParams.MaxTxnLife+5); rnd++ {
-		ver, err := l.ConsensusVersion(rnd)
-		require.NoError(t, err)
-		require.Equal(t, previousProtocol, ver)
-	}
-	// the next UpgradeVoteRounds can also be known to have the previous version.
-	for rnd := basics.Round(consensusParams.MaxTxnLife + 5); rnd < basics.Round(consensusParams.MaxTxnLife+5+consensusParams.UpgradeVoteRounds); rnd++ {
-		ver, err := l.ConsensusVersion(rnd)
-		require.NoError(t, err)
-		require.Equal(t, previousProtocol, ver)
-	}
-
-	// but two rounds ahead is not known.
-	ver, err := l.ConsensusVersion(basics.Round(consensusParams.MaxTxnLife + 6 + consensusParams.UpgradeVoteRounds))
-	require.Equal(t, protocol.ConsensusVersion(""), ver)
-	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(consensusParams.MaxTxnLife + 6 + consensusParams.UpgradeVoteRounds), Latest: basics.Round(consensusParams.MaxTxnLife + 4), Committed: basics.Round(consensusParams.MaxTxnLife + 4)}, err)
-
-	// check round #1 which was already dropped.
-	ver, err = l.ConsensusVersion(basics.Round(1))
-	require.Equal(t, protocol.ConsensusVersion(""), ver)
-	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(1), Latest: basics.Round(consensusParams.MaxTxnLife + 4), Committed: basics.Round(consensusParams.MaxTxnLife + 4)}, err)
-
-	// add another round, with upgrade
-	rnd := basics.Round(consensusParams.MaxTxnLife + 5)
-	blk.BlockHeader.Round++
-	blk.BlockHeader.Seed[0] = byte(uint64(rnd))
-	blk.BlockHeader.Seed[1] = byte(uint64(rnd) / 256)
-	blk.BlockHeader.Seed[2] = byte(uint64(rnd) / 65536)
-	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-	blk.BlockHeader.CurrentProtocol = previousProtocol
-	blk.BlockHeader.NextProtocol = protocol.ConsensusCurrentVersion
-	blk.BlockHeader.NextProtocolVoteBefore = basics.Round(rnd) + basics.Round(consensusParams.UpgradeVoteRounds)
-	blk.BlockHeader.NextProtocolSwitchOn = basics.Round(rnd) + basics.Round(consensusParams.UpgradeVoteRounds) + basics.Round(consensusParams.ApprovedUpgrades[protocol.ConsensusCurrentVersion])
-	require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
-	l.WaitForCommit(rnd)
-
-	for ; rnd < blk.BlockHeader.NextProtocolSwitchOn; rnd++ {
-		ver, err := l.ConsensusVersion(rnd)
-		require.NoError(t, err)
-		require.Equal(t, previousProtocol, ver)
-	}
-
-	for rnd = blk.BlockHeader.Round; rnd <= blk.BlockHeader.NextProtocolVoteBefore; rnd++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.Seed[0] = byte(uint64(rnd))
-		blk.BlockHeader.Seed[1] = byte(uint64(rnd) / 256)
-		blk.BlockHeader.Seed[2] = byte(uint64(rnd) / 65536)
-		blk.BlockHeader.NextProtocolApprovals++
-		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
-		l.WaitForCommit(rnd + 1)
-	}
-
-	ver, err = l.ConsensusVersion(blk.BlockHeader.NextProtocolSwitchOn)
-	require.NoError(t, err)
-	require.Equal(t, protocol.ConsensusCurrentVersion, ver)
-
-	ver, err = l.ConsensusVersion(blk.BlockHeader.NextProtocolSwitchOn + 1)
-	require.Equal(t, protocol.ConsensusVersion(""), ver)
-	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(blk.BlockHeader.NextProtocolSwitchOn + 1), Latest: basics.Round(blk.BlockHeader.Round), Committed: basics.Round(blk.BlockHeader.Round)}, err)
 }

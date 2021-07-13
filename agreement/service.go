@@ -23,7 +23,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/timers"
@@ -198,15 +197,18 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.log.Infof("decode (agreement): restored crash state from database (pending %v @ %+v)", a, status)
 		}
 	}
+
+checkNextRound:
 	// err will tell us if the restore/decode operations above completed successfully or not.
 	if err != nil || status.Round < s.Ledger.NextRound() {
 		// in this case, we don't have fresh and valid state
 		// pretend a new round has just started, and propose a block
 		nextRound := s.Ledger.NextRound()
-		nextVersion, err := s.Ledger.ConsensusVersion(nextRound)
+		nextVersion, err := s.Ledger.ConsensusVersion(ParamsRound(nextRound))
 		if err != nil {
-			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
-			nextVersion = protocol.ConsensusCurrentVersion
+			s.log.Errorf("unable to retrieve consensus version for round %d, waiting for successful Ledger.ConsensusVersion", nextRound)
+			time.Sleep(1 * time.Second)
+			goto checkNextRound
 		}
 		status = player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
 		router = makeRootRouter(status)

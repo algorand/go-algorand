@@ -313,53 +313,15 @@ func (l *Ledger) ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 }
 
 // ConsensusVersion gives the consensus version agreed on in a given round,
-// returning an error if the consensus version could not be figured using
-// either the block header for the given round, or the latest block header.
+// returning an error if we don't have that round or we have an
+// I/O error.
 // Implements agreement.Ledger.ConsensusVersion
 func (l *Ledger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, error) {
 	blockhdr, err := l.BlockHdr(r)
-	if err == nil {
-		return blockhdr.UpgradeState.CurrentProtocol, nil
-	}
-	// try to see if we can figure out what the version would be.
-	latestCommittedRound, latestRound := l.LatestCommitted()
-	// if the request round was for an older round, then just say the we don't know.
-	if r < latestRound {
+	if err != nil {
 		return "", err
 	}
-	// the request was for a future round. See if we have any known plans for the next round.
-	latestBlockhdr, err := l.BlockHdr(latestRound)
-	// if we have the lastest block header, look inside and try to figure out if we can deduce the
-	// protocol version for the given round.
-	if err == nil {
-		// check to see if we have a protocol upgrade.
-		if latestBlockhdr.NextProtocolSwitchOn == 0 {
-			// no protocol upgrade taking place, we have *at least* UpgradeVoteRounds before the protocol version would get changed.
-			// it's safe to ignore the error case here since we know that we couldn't reached to this "known" round
-			// without having the binary supporting this protocol version.
-			currentConsensusParams, _ := config.Consensus[latestBlockhdr.CurrentProtocol]
-			// we're using <= here since there is no current upgrade on this round, and if there will be one on the subsequent round
-			// it would still be correct until (latestBlockhdr.Round + currentConsensusParams.UpgradeVoteRounds)
-			if r <= latestBlockhdr.Round+basics.Round(currentConsensusParams.UpgradeVoteRounds) {
-				return latestBlockhdr.CurrentProtocol, nil
-			}
-			// otherwise, we can't really tell.
-			return "", ledgercore.ErrNoEntry{Round: r, Latest: latestRound, Committed: latestCommittedRound}
-		}
-		// in this case, we do have a protocol upgrade taking place.
-		if r < latestBlockhdr.NextProtocolSwitchOn {
-			// if we're in the voting duration or uprade waiting period, then the protocol version is the current version.
-			return latestBlockhdr.CurrentProtocol, nil
-		}
-		// if the requested round aligns with the protocol version switch version and we've passed the voting period, then we know that on the switching round
-		// we will be using the next protocol.
-		if r == latestBlockhdr.NextProtocolSwitchOn && latestBlockhdr.Round >= latestBlockhdr.NextProtocolVoteBefore {
-			return latestBlockhdr.NextProtocol, nil
-		}
-		err = ledgercore.ErrNoEntry{Round: r, Latest: latestRound, Committed: latestCommittedRound}
-	}
-	// otherwise, we can't really tell what the protocol version would be at round r.
-	return "", err
+	return blockhdr.UpgradeState.CurrentProtocol, nil
 }
 
 // EnsureValidatedBlock ensures that the block, and associated certificate c, are
