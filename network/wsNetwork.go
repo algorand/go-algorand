@@ -134,6 +134,9 @@ var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", De
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
 
+var incomingPeerAddr = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers_addr", Description: "IP addresses of the incoming peers."})
+var outgoingPeerAddr = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers_addr", Description: "IP addresses of the outgoing peers."})
+
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
 
@@ -1578,6 +1581,7 @@ func (wn *WebsocketNetwork) meshThread() {
 		// telemetry server; that would allow the telemetry server
 		// to construct a cross-node map of all the nodes interconnections.
 		wn.sendPeerConnectionsTelemetryStatus()
+		wn.sendPeerConnectionsMetricStatus()
 	}
 }
 
@@ -1729,6 +1733,41 @@ func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
 	}
 
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
+}
+
+// function to send periodic connected peer metrics
+// the peer information is stored as the metric's labels
+func (wn *WebsocketNetwork) sendPeerConnectionsMetricStatus() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			outPeerMap, inPeerMap := wn.updateConnectedPeersLabelMaps()
+			incomingPeerAddr.Set(1, inPeerMap)
+			outgoingPeerAddr.Set(1, outPeerMap)
+		case <-wn.ctx.Done():
+			return
+		}
+	}
+}
+
+// function to update the incoming and outgoing peer label maps
+// which will be used in the peer connection metrics
+func (wn *WebsocketNetwork) updateConnectedPeersLabelMaps() (map[string]string, map[string]string) {
+	outPeerMap := make(map[string]string)
+	inPeerMap := make(map[string]string)
+	wn.peersLock.RLock()
+	defer wn.peersLock.RUnlock()
+	for id, peer := range wn.peers {
+		key := fmt.Sprintf("%s_%d", "peer", id)
+		if peer.outgoing {
+			outPeerMap[key] = peer.GetAddress()
+		} else {
+			inPeerMap[key] = peer.GetAddress()
+		}
+	}
+	return outPeerMap, inPeerMap
 }
 
 // prioWeightRefreshTime controls how often we refresh the weights
