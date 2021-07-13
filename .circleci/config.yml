@@ -74,7 +74,6 @@ commands:
             export msys2+=" -msys2 -c "\"\$@"\" --"
             export PATH=/C/tools/msys64/mingw64/bin:$PATH
             $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
-            taskkill //IM gpg-agent.exe //F  # https://travis-ci.community/t/4967
 
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
