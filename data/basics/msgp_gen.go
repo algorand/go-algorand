@@ -4129,20 +4129,24 @@ func (z DeltaAction) MsgIsZero() bool {
 func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0007Len := uint32(2)
-	var zb0007Mask uint8 /* 3 bits */
+	zb0008Len := uint32(3)
+	var zb0008Mask uint8 /* 4 bits */
 	if len((*z).GlobalDelta) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x2
+		zb0008Len--
+		zb0008Mask |= 0x2
 	}
 	if len((*z).LocalDeltas) == 0 {
-		zb0007Len--
-		zb0007Mask |= 0x4
+		zb0008Len--
+		zb0008Mask |= 0x4
 	}
-	// variable map header, size zb0007Len
-	o = append(o, 0x80|uint8(zb0007Len))
-	if zb0007Len != 0 {
-		if (zb0007Mask & 0x2) == 0 { // if not empty
+	if len((*z).Log) == 0 {
+		zb0008Len--
+		zb0008Mask |= 0x8
+	}
+	// variable map header, size zb0008Len
+	o = append(o, 0x80|uint8(zb0008Len))
+	if zb0008Len != 0 {
+		if (zb0008Mask & 0x2) == 0 { // if not empty
 			// string "gd"
 			o = append(o, 0xa2, 0x67, 0x64)
 			if (*z).GlobalDelta == nil {
@@ -4162,7 +4166,7 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 				o = zb0002.MarshalMsg(o)
 			}
 		}
-		if (zb0007Mask & 0x4) == 0 { // if not empty
+		if (zb0008Mask & 0x4) == 0 { // if not empty
 			// string "ld"
 			o = append(o, 0xa2, 0x6c, 0x64)
 			if (*z).LocalDeltas == nil {
@@ -4197,6 +4201,18 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 				}
 			}
 		}
+		if (zb0008Mask & 0x8) == 0 { // if not empty
+			// string "lg"
+			o = append(o, 0xa2, 0x6c, 0x67)
+			if (*z).Log == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Log)))
+			}
+			for zb0007 := range (*z).Log {
+				o = msgp.AppendString(o, (*z).Log[zb0007])
+			}
+		}
 	}
 	return
 }
@@ -4210,38 +4226,38 @@ func (_ *EvalDelta) CanMarshalMsg(z interface{}) bool {
 func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0007 int
-	var zb0008 bool
-	zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0008 int
+	var zb0009 bool
+	zb0008, zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0007 > 0 {
-			zb0007--
-			var zb0009 int
-			var zb0010 bool
-			zb0009, zb0010, bts, err = msgp.ReadMapHeaderBytes(bts)
+		if zb0008 > 0 {
+			zb0008--
+			var zb0010 int
+			var zb0011 bool
+			zb0010, zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalDelta")
 				return
 			}
-			if zb0009 > config.MaxStateDeltaKeys {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(config.MaxStateDeltaKeys))
+			if zb0010 > config.MaxStateDeltaKeys {
+				err = msgp.ErrOverflow(uint64(zb0010), uint64(config.MaxStateDeltaKeys))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalDelta")
 				return
 			}
-			if zb0010 {
+			if zb0011 {
 				(*z).GlobalDelta = nil
 			} else if (*z).GlobalDelta == nil {
-				(*z).GlobalDelta = make(StateDelta, zb0009)
+				(*z).GlobalDelta = make(StateDelta, zb0010)
 			}
-			for zb0009 > 0 {
+			for zb0010 > 0 {
 				var zb0001 string
 				var zb0002 ValueDelta
-				zb0009--
+				zb0010--
 				zb0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "GlobalDelta")
@@ -4255,55 +4271,55 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).GlobalDelta[zb0001] = zb0002
 			}
 		}
-		if zb0007 > 0 {
-			zb0007--
-			var zb0011 int
-			var zb0012 bool
-			zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
+		if zb0008 > 0 {
+			zb0008--
+			var zb0012 int
+			var zb0013 bool
+			zb0012, zb0013, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
 				return
 			}
-			if zb0011 > config.MaxEvalDeltaAccounts {
-				err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxEvalDeltaAccounts))
+			if zb0012 > config.MaxEvalDeltaAccounts {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxEvalDeltaAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
 				return
 			}
-			if zb0012 {
+			if zb0013 {
 				(*z).LocalDeltas = nil
 			} else if (*z).LocalDeltas == nil {
-				(*z).LocalDeltas = make(map[uint64]StateDelta, zb0011)
+				(*z).LocalDeltas = make(map[uint64]StateDelta, zb0012)
 			}
-			for zb0011 > 0 {
+			for zb0012 > 0 {
 				var zb0003 uint64
 				var zb0004 StateDelta
-				zb0011--
+				zb0012--
 				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
 					return
 				}
-				var zb0013 int
-				var zb0014 bool
-				zb0013, zb0014, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0014 int
+				var zb0015 bool
+				zb0014, zb0015, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "LocalDeltas", zb0003)
 					return
 				}
-				if zb0013 > config.MaxStateDeltaKeys {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxStateDeltaKeys))
+				if zb0014 > config.MaxStateDeltaKeys {
+					err = msgp.ErrOverflow(uint64(zb0014), uint64(config.MaxStateDeltaKeys))
 					err = msgp.WrapError(err, "struct-from-array", "LocalDeltas", zb0003)
 					return
 				}
-				if zb0014 {
+				if zb0015 {
 					zb0004 = nil
 				} else if zb0004 == nil {
-					zb0004 = make(StateDelta, zb0013)
+					zb0004 = make(StateDelta, zb0014)
 				}
-				for zb0013 > 0 {
+				for zb0014 > 0 {
 					var zb0005 string
 					var zb0006 ValueDelta
-					zb0013--
+					zb0014--
 					zb0005, bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "LocalDeltas", zb0003)
@@ -4319,8 +4335,32 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).LocalDeltas[zb0003] = zb0004
 			}
 		}
-		if zb0007 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0007)
+		if zb0008 > 0 {
+			zb0008--
+			var zb0016 int
+			var zb0017 bool
+			zb0016, zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Log")
+				return
+			}
+			if zb0017 {
+				(*z).Log = nil
+			} else if (*z).Log != nil && cap((*z).Log) >= zb0016 {
+				(*z).Log = ((*z).Log)[:zb0016]
+			} else {
+				(*z).Log = make([]string, zb0016)
+			}
+			for zb0007 := range (*z).Log {
+				(*z).Log[zb0007], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Log", zb0007)
+					return
+				}
+			}
+		}
+		if zb0008 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0008)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -4331,11 +4371,11 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0008 {
+		if zb0009 {
 			(*z) = EvalDelta{}
 		}
-		for zb0007 > 0 {
-			zb0007--
+		for zb0008 > 0 {
+			zb0008--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -4343,27 +4383,27 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "gd":
-				var zb0015 int
-				var zb0016 bool
-				zb0015, zb0016, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0018 int
+				var zb0019 bool
+				zb0018, zb0019, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "GlobalDelta")
 					return
 				}
-				if zb0015 > config.MaxStateDeltaKeys {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(config.MaxStateDeltaKeys))
+				if zb0018 > config.MaxStateDeltaKeys {
+					err = msgp.ErrOverflow(uint64(zb0018), uint64(config.MaxStateDeltaKeys))
 					err = msgp.WrapError(err, "GlobalDelta")
 					return
 				}
-				if zb0016 {
+				if zb0019 {
 					(*z).GlobalDelta = nil
 				} else if (*z).GlobalDelta == nil {
-					(*z).GlobalDelta = make(StateDelta, zb0015)
+					(*z).GlobalDelta = make(StateDelta, zb0018)
 				}
-				for zb0015 > 0 {
+				for zb0018 > 0 {
 					var zb0001 string
 					var zb0002 ValueDelta
-					zb0015--
+					zb0018--
 					zb0001, bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "GlobalDelta")
@@ -4377,53 +4417,53 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).GlobalDelta[zb0001] = zb0002
 				}
 			case "ld":
-				var zb0017 int
-				var zb0018 bool
-				zb0017, zb0018, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0020 int
+				var zb0021 bool
+				zb0020, zb0021, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "LocalDeltas")
 					return
 				}
-				if zb0017 > config.MaxEvalDeltaAccounts {
-					err = msgp.ErrOverflow(uint64(zb0017), uint64(config.MaxEvalDeltaAccounts))
+				if zb0020 > config.MaxEvalDeltaAccounts {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxEvalDeltaAccounts))
 					err = msgp.WrapError(err, "LocalDeltas")
 					return
 				}
-				if zb0018 {
+				if zb0021 {
 					(*z).LocalDeltas = nil
 				} else if (*z).LocalDeltas == nil {
-					(*z).LocalDeltas = make(map[uint64]StateDelta, zb0017)
+					(*z).LocalDeltas = make(map[uint64]StateDelta, zb0020)
 				}
-				for zb0017 > 0 {
+				for zb0020 > 0 {
 					var zb0003 uint64
 					var zb0004 StateDelta
-					zb0017--
+					zb0020--
 					zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "LocalDeltas")
 						return
 					}
-					var zb0019 int
-					var zb0020 bool
-					zb0019, zb0020, bts, err = msgp.ReadMapHeaderBytes(bts)
+					var zb0022 int
+					var zb0023 bool
+					zb0022, zb0023, bts, err = msgp.ReadMapHeaderBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "LocalDeltas", zb0003)
 						return
 					}
-					if zb0019 > config.MaxStateDeltaKeys {
-						err = msgp.ErrOverflow(uint64(zb0019), uint64(config.MaxStateDeltaKeys))
+					if zb0022 > config.MaxStateDeltaKeys {
+						err = msgp.ErrOverflow(uint64(zb0022), uint64(config.MaxStateDeltaKeys))
 						err = msgp.WrapError(err, "LocalDeltas", zb0003)
 						return
 					}
-					if zb0020 {
+					if zb0023 {
 						zb0004 = nil
 					} else if zb0004 == nil {
-						zb0004 = make(StateDelta, zb0019)
+						zb0004 = make(StateDelta, zb0022)
 					}
-					for zb0019 > 0 {
+					for zb0022 > 0 {
 						var zb0005 string
 						var zb0006 ValueDelta
-						zb0019--
+						zb0022--
 						zb0005, bts, err = msgp.ReadStringBytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "LocalDeltas", zb0003)
@@ -4437,6 +4477,28 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						zb0004[zb0005] = zb0006
 					}
 					(*z).LocalDeltas[zb0003] = zb0004
+				}
+			case "lg":
+				var zb0024 int
+				var zb0025 bool
+				zb0024, zb0025, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Log")
+					return
+				}
+				if zb0025 {
+					(*z).Log = nil
+				} else if (*z).Log != nil && cap((*z).Log) >= zb0024 {
+					(*z).Log = ((*z).Log)[:zb0024]
+				} else {
+					(*z).Log = make([]string, zb0024)
+				}
+				for zb0007 := range (*z).Log {
+					(*z).Log[zb0007], bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Log", zb0007)
+						return
+					}
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -4481,12 +4543,16 @@ func (z *EvalDelta) Msgsize() (s int) {
 			}
 		}
 	}
+	s += 3 + msgp.ArrayHeaderSize
+	for zb0007 := range (*z).Log {
+		s += msgp.StringPrefixSize + len((*z).Log[zb0007])
+	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *EvalDelta) MsgIsZero() bool {
-	return (len((*z).GlobalDelta) == 0) && (len((*z).LocalDeltas) == 0)
+	return (len((*z).GlobalDelta) == 0) && (len((*z).LocalDeltas) == 0) && (len((*z).Log) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
