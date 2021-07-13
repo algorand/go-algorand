@@ -1,18 +1,9 @@
 ---
-name: Algorand Engineering Team Issue Template
-about: This is the template that Algorand internal team members use in conjunction
-  with their task management process. Feel free to use if you're an external contributor.
-title: ''
-labels: ''
-assignees: ''
+**Requirements Template**
+**Problem**: What is the problem that we’re trying to solve?
 
----
+**Solution**: What is the potential/suggested Solution? Document more than one if possible.
 
-## Summary
-<!-- *Describe the problem identified or the general goal of this issue* -->
+**Dependencies**: Does the solution have any team or design dependencies?
 
-## Scope/Requirements
-<!-- *What's involved in this issue? What's required to achieve the goal?* -->
-
-## Urgency/Relative Priority
-<!-- *How urgent is this issue? What are the timing considerations to take into account?* -->
+**Urgency**: What is the urgency here and why?
