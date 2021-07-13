@@ -2571,7 +2571,7 @@ func opSetByte(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-func extract(x []byte, start, length int) (out []byte, err error) {
+func opExtractImpl(x []byte, start, length int) (out []byte, err error) {
 	out = x
 	end := start + length
 	if start > len(x) || end > len(x) {
@@ -2579,33 +2579,32 @@ func extract(x []byte, start, length int) (out []byte, err error) {
 		return
 	}
 	out = x[start:end]
-	err = nil
 	return
 }
 
 func opExtract(cx *evalContext) {
 	last := len(cx.stack) - 1
-	start := cx.program[cx.pc+1]
-	length := cx.program[cx.pc+2]
+	startIdx := cx.program[cx.pc+1]
+	lengthIdx := cx.program[cx.pc+2]
 	// Shortcut: if length is 0, take bytes from start index to the end
-	l := int(length)
+	length := int(lengthIdx)
 	if length == 0 {
-		l = len(cx.stack[last].Bytes) - int(start)
+		length = len(cx.stack[last].Bytes) - int(startIdx)
 	}
-	cx.stack[last].Bytes, cx.err = extract(cx.stack[last].Bytes, int(start), l)
+	cx.stack[last].Bytes, cx.err = opExtractImpl(cx.stack[last].Bytes, int(startIdx), length)
 }
 
 func opExtract3(cx *evalContext) {
 	last := len(cx.stack) - 1 // length
 	prev := last - 1          // start
-	pprev := prev - 1         // bytes
-	start := cx.stack[prev].Uint
-	length := cx.stack[last].Uint
-	if start > math.MaxInt32 || length > math.MaxInt32 {
+	byteArrayIdx := prev - 1  // bytes
+	startIdx := cx.stack[prev].Uint
+	lengthIdx := cx.stack[last].Uint
+	if startIdx > math.MaxInt32 || lengthIdx > math.MaxInt32 {
 		cx.err = errors.New("extract range beyond length of string")
 		return
 	}
-	cx.stack[pprev].Bytes, cx.err = extract(cx.stack[pprev].Bytes, int(start), int(length))
+	cx.stack[byteArrayIdx].Bytes, cx.err = opExtractImpl(cx.stack[byteArrayIdx].Bytes, int(startIdx), int(lengthIdx))
 	cx.stack = cx.stack[:prev]
 }
 
@@ -2621,8 +2620,8 @@ func convertBytesToInt(x []byte) (out uint64) {
 func opExtractNBits(cx *evalContext, n int) {
 	last := len(cx.stack) - 1 // start
 	prev := last - 1          // bytes
-	start := cx.stack[last].Uint
-	cx.stack[prev].Bytes, cx.err = extract(cx.stack[prev].Bytes, int(start), n) // extract n bits
+	startIdx := cx.stack[last].Uint
+	cx.stack[prev].Bytes, cx.err = opExtractImpl(cx.stack[prev].Bytes, int(startIdx), n) // extract n bits
 
 	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
 	cx.stack[prev].Bytes = nil
