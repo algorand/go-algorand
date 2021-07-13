@@ -125,6 +125,10 @@ func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIn
 	return found, nil
 }
 
+func (c *mockCowForLogicLedger) AppendLog(aidx basics.AppIndex, value basics.TealValue) error {
+	return nil
+}
+
 func newCowMock(creatables []modsData) *mockCowForLogicLedger {
 	var m mockCowForLogicLedger
 	m.cr = make(map[creatableLocator]basics.Address, len(creatables))
@@ -1294,4 +1298,20 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk0"].Bytes, "local0")
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx], "lk1")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk1"].Bytes, "local1")
+}
+
+func TestLogicLedgerSetLog(t *testing.T) {
+	a := require.New(t)
+
+	addr := getRandomAddress(a)
+	aidx := basics.AppIndex(1)
+	c := newCowMock([]modsData{
+		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
+	})
+	l, err := newLogicLedger(c, aidx)
+	a.NoError(err)
+	a.NotNil(l)
+	tv := basics.TealValue{Type: basics.TealBytesType, Uint: 1}
+	err = l.SetLog(tv)
+	a.NoError(err)
 }

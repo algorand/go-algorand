@@ -424,6 +424,7 @@ func TestAppCallCreate(t *testing.T) {
 	a.Equal(ac.LocalStateSchema, params.LocalStateSchema)
 	a.Equal(ac.GlobalStateSchema, params.GlobalStateSchema)
 	a.True(len(b.putWithNew) > 0)
+
 }
 
 // TestAppCallApplyCreate carefully tracks and validates balance record updates
@@ -541,6 +542,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 	br = b.putWithBalances[creator]
 	a.Equal(uint32(1), br.AppParams[appIdx].ExtraProgramPages)
 	a.Equal(uint32(1), br.TotalExtraAppPages)
+
 }
 
 // TestAppCallApplyCreateOptIn checks balance record fields without tracking substages

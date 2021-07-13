@@ -744,7 +744,6 @@ func (cx *evalContext) checkStep() (int, error) {
 
 	if spec.Name == "log" {
 		cx.logCalls++
-		//cx.logSize+=
 	}
 
 	if cx.logCalls > MaxLogCalls {

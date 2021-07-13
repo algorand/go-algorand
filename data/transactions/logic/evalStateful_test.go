@@ -59,6 +59,7 @@ type testLedger struct {
 	appID             basics.AppIndex
 	creatorAddr       basics.Address
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
+	logs              map[basics.AppIndex][]string
 }
 
 func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
@@ -104,6 +105,7 @@ func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 	l.assets = make(map[basics.AssetIndex]asaParams)
 	l.trackedCreatables = make(map[int]basics.CreatableIndex)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
+	l.logs = make(map[basics.AppIndex][]string)
 	return l
 }
 
@@ -467,6 +469,14 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 }
 
 func (l *testLedger) SetLog(value basics.TealValue) error {
+	appIdx := l.appID
+	_, ok := l.applications[appIdx]
+	if !ok {
+		return fmt.Errorf("no such app")
+	}
+
+	// append logs
+	l.logs[appIdx] = append(l.logs[appIdx], string(value.Bytes))
 	return nil
 }
 
@@ -591,6 +601,8 @@ asset_params_get AssetTotal
 pop
 &&
 !=
+bytec_0
+log
 `
 	type desc struct {
 		source string
@@ -713,6 +725,7 @@ pop
 		"int 0\nint 0\nasset_holding_get AssetFrozen",
 		"int 0\nint 0\nasset_params_get AssetManager",
 		"int 0\nint 0\napp_params_get AppApprovalProgram",
+		"byte 0x01\nlog",
 	}
 
 	for _, source := range statefulOpcodeCalls {
@@ -791,6 +804,7 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 		require.NoError(t, err)
 		require.Empty(t, delta.GlobalDelta)
 		require.Empty(t, delta.LocalDeltas)
+		require.Empty(t, delta.LogDelta)
 		return delta
 	}
 	return basics.EvalDelta{}

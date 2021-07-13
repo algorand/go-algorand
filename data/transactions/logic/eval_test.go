@@ -4453,35 +4453,53 @@ func TestLog(t *testing.T) {
 
 	type failCase struct {
 		source      string
+		runMode     runMode
 		errContains string
 	}
 
 	failCase0 := failCase{
 		source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", 1001)),
 		errContains: fmt.Sprintf("Up to %v bytes are allowed", MaxLogSize),
+		runMode:     runModeApplication,
 	}
 
 	msg := strings.Repeat("a", 400)
 	failCase1 := failCase{
 		source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
 		errContains: fmt.Sprintf("Up to %v bytes are allowed", MaxLogSize),
+		runMode:     runModeApplication,
 	}
 
 	failCase2 := failCase{
 		source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a logging message"; log;`, MaxLogCalls+1)),
 		errContains: "too many log calls",
+		runMode:     runModeApplication,
 	}
-	failCases := []failCase{failCase0, failCase1, failCase2}
+
+	failCase3 := failCase{
+		source:      `byte  "a logging message"; log; int 1`,
+		errContains: "log not allowed in current mode",
+		runMode:     runModeSignature,
+	}
+
+	failCases := []failCase{failCase0, failCase1, failCase2, failCase3}
 	for _, c := range failCases {
 		ops := testProg(t, c.source, AssemblerMaxVersion)
 
 		err := CheckStateful(ops.Program, ep)
 		if err != nil {
 			require.Contains(t, err.Error(), c.errContains)
-			return
+			continue
 		}
 
-		pass, err := EvalStateful(ops.Program, ep)
+		var pass bool
+		switch c.runMode {
+		case runModeApplication:
+			pass, err = EvalStateful(ops.Program, ep)
+		default:
+			pass, err = Eval(ops.Program, ep)
+
+		}
 		require.Contains(t, err.Error(), c.errContains)
 		require.False(t, pass)
 	}
