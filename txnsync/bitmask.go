@@ -35,10 +35,10 @@ func (b *bitmask) setBit(index int) {
 }
 
 // trimBitmask compresses the bitmask into one of the 4 types:
-// type 0: intput bitmask bit pos x b -> output bitmask bit pos x b
-// type 1: intput bitmask bit pos x b -> output bitmask bit pos x !b
+// type 0: input bitmask bit pos x b -> output bitmask bit pos x b
+// type 1: input bitmask bit pos x b -> output bitmask bit pos x !b
 // type 2: stores the positions of bits where the bit value is 1
-//         intput bitmask first bit 1 at pos A, second bit 1 at pos B, ...
+//         input bitmask first bit 1 at pos A, second bit 1 at pos B, ...
 //         output bitmask stores A, B-A, ...
 // type 3: same as type 2, but stores the positons where the bit is 0
 func (b *bitmask) trimBitmask(entries int) {
