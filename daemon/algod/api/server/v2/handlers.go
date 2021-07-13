@@ -165,7 +165,12 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 	ledger := v2.Node.Ledger()
 	block, _, err := ledger.BlockCert(basics.Round(round))
 	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		switch errt := err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, errt, fmt.Sprintf(errRequestedBlockRoundIsNotAvailable, round), v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.

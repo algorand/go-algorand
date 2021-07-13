@@ -1568,7 +1568,12 @@ func GetBlock(ctx lib.ReqContext, context echo.Context) {
 	ledger := ctx.Node.Ledger()
 	b, c, err := ledger.BlockCert(basics.Round(queryRound))
 	if err != nil {
-		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+		switch errt := err.(type) {
+		case ledgercore.ErrNoEntry:
+			lib.ErrorResponse(w, http.StatusNotFound, errt, fmt.Sprintf(errRequestedBlockRoundIsNotAvailable, queryRound), ctx.Log)
+		default:
+			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
+		}
 		return
 	}
 
