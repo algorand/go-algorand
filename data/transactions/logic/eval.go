@@ -2608,6 +2608,8 @@ func opExtract3(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+// We convert the bytes manually here because we need to accept "short" byte arrays.
+// A single byte is a legal uint64 decoded this way.
 func convertBytesToInt(x []byte) (out uint64) {
 	out = uint64(0)
 	for _, b := range x {
