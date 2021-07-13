@@ -172,10 +172,10 @@ func buildSyntaxHighlight() *tmLanguage {
 				Name:  "keyword.other.unit.teal",
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(names, "|")),
 			})
-		// For these three, accumulate into allArithmetics,
+		// For these four, accumulate into allArithmetics,
 		// and only add to keyword.Patterns later, when all
 		// have been collected.
-		case "Arithmetic", "Byteslice Arithmetic", "Byteslice Logic":
+		case "Arithmetic", "Byte Array Slicing", "Byteslice Arithmetic", "Byteslice Logic":
 			escape := map[rune]bool{
 				'*': true,
 				'+': true,
