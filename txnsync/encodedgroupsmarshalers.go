@@ -43,7 +43,7 @@ func (stub *txGroupsEncodingStub) deconstructSignedTransactions(i int, txn *tran
 			stub.BitmaskSig = make(bitmask, bitmaskLen)
 			stub.Sig = make([]byte, 0, int(stub.TotalTransactionsCount)*len(crypto.Signature{}))
 		}
-		stub.BitmaskSig.SetBit(i)
+		stub.BitmaskSig.setBit(i)
 		stub.Sig = append(stub.Sig, txn.Sig[:]...)
 	}
 	stub.deconstructMsigs(i, txn)
@@ -53,7 +53,7 @@ func (stub *txGroupsEncodingStub) deconstructSignedTransactions(i int, txn *tran
 			stub.BitmaskAuthAddr = make(bitmask, bitmaskLen)
 			stub.AuthAddr = make([]byte, 0, int(stub.TotalTransactionsCount)*crypto.DigestSize)
 		}
-		stub.BitmaskAuthAddr.SetBit(i)
+		stub.BitmaskAuthAddr.setBit(i)
 		stub.AuthAddr = append(stub.AuthAddr, txn.AuthAddr[:]...)
 	}
 	return stub.deconstructTransactions(i, txn)
@@ -74,7 +74,7 @@ func (stub *txGroupsEncodingStub) deconstructMsigs(i int, txn *transactions.Sign
 			stub.BitmaskVersion = make(bitmask, bitmaskLen)
 			stub.Version = make([]byte, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskVersion.SetBit(i)
+		stub.BitmaskVersion.setBit(i)
 		stub.Version = append(stub.Version, txn.Msig.Version)
 	}
 	if txn.Msig.Threshold != 0 {
@@ -82,7 +82,7 @@ func (stub *txGroupsEncodingStub) deconstructMsigs(i int, txn *transactions.Sign
 			stub.BitmaskThreshold = make(bitmask, bitmaskLen)
 			stub.Threshold = make([]byte, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskThreshold.SetBit(i)
+		stub.BitmaskThreshold.setBit(i)
 		stub.Threshold = append(stub.Threshold, txn.Msig.Threshold)
 	}
 	if txn.Msig.Subsigs != nil {
@@ -90,7 +90,7 @@ func (stub *txGroupsEncodingStub) deconstructMsigs(i int, txn *transactions.Sign
 			stub.BitmaskSubsigs = make(bitmask, bitmaskLen)
 			stub.Subsigs = make([][]crypto.MultisigSubsig, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskSubsigs.SetBit(i)
+		stub.BitmaskSubsigs.setBit(i)
 		stub.Subsigs = append(stub.Subsigs, txn.Msig.Subsigs)
 	}
 }
@@ -108,7 +108,7 @@ func (stub *txGroupsEncodingStub) deconstructLsigs(i int, txn *transactions.Sign
 			stub.BitmaskLogic = make(bitmask, bitmaskLen)
 			stub.Logic = make([][]byte, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskLogic.SetBit(i)
+		stub.BitmaskLogic.setBit(i)
 		stub.Logic = append(stub.Logic, txn.Lsig.Logic)
 	}
 	if txn.Lsig.Args != nil {
@@ -116,7 +116,7 @@ func (stub *txGroupsEncodingStub) deconstructLsigs(i int, txn *transactions.Sign
 			stub.BitmaskLogicArgs = make(bitmask, bitmaskLen)
 			stub.LogicArgs = make([][][]byte, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskLogicArgs.SetBit(i)
+		stub.BitmaskLogicArgs.setBit(i)
 		stub.LogicArgs = append(stub.LogicArgs, txn.Lsig.Args)
 	}
 	if !txn.Lsig.Sig.MsgIsZero() {
@@ -124,7 +124,7 @@ func (stub *txGroupsEncodingStub) deconstructLsigs(i int, txn *transactions.Sign
 			stub.BitmaskSig = make(bitmask, bitmaskLen)
 			stub.Sig = make([]byte, 0, int(stub.TotalTransactionsCount)*len(crypto.Signature{}))
 		}
-		stub.BitmaskSig.SetBit(i)
+		stub.BitmaskSig.setBit(i)
 		stub.Sig = append(stub.Sig, txn.Lsig.Sig[:]...)
 	}
 	if txn.Lsig.Msig.Version != 0 {
@@ -132,7 +132,7 @@ func (stub *txGroupsEncodingStub) deconstructLsigs(i int, txn *transactions.Sign
 			stub.BitmaskVersion = make(bitmask, bitmaskLen)
 			stub.Version = make([]byte, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskVersion.SetBit(i)
+		stub.BitmaskVersion.setBit(i)
 		stub.Version = append(stub.Version, txn.Lsig.Msig.Version)
 	}
 	if txn.Lsig.Msig.Threshold != 0 {
@@ -140,7 +140,7 @@ func (stub *txGroupsEncodingStub) deconstructLsigs(i int, txn *transactions.Sign
 			stub.BitmaskThreshold = make(bitmask, bitmaskLen)
 			stub.Threshold = make([]byte, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskThreshold.SetBit(i)
+		stub.BitmaskThreshold.setBit(i)
 		stub.Threshold = append(stub.Threshold, txn.Lsig.Msig.Threshold)
 	}
 	if txn.Lsig.Msig.Subsigs != nil {
@@ -148,7 +148,7 @@ func (stub *txGroupsEncodingStub) deconstructLsigs(i int, txn *transactions.Sign
 			stub.BitmaskSubsigs = make(bitmask, bitmaskLen)
 			stub.Subsigs = make([][]crypto.MultisigSubsig, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskSubsigs.SetBit(i)
+		stub.BitmaskSubsigs.setBit(i)
 		stub.Subsigs = append(stub.Subsigs, txn.Lsig.Msig.Subsigs)
 	}
 }
@@ -217,7 +217,7 @@ func (stub *txGroupsEncodingStub) finishDeconstructTxType() {
 	newTxTypes := make([]byte, 0, stub.TotalTransactionsCount)
 	for i := 0; i < int(stub.TotalTransactionsCount); i++ {
 		if stub.TxType[i] != offset {
-			stub.BitmaskTxType.SetBit(i)
+			stub.BitmaskTxType.setBit(i)
 			newTxTypes = append(newTxTypes, stub.TxType[i])
 		}
 	}
@@ -234,7 +234,7 @@ func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn *transactions.
 			stub.BitmaskSender = make(bitmask, bitmaskLen)
 			stub.Sender = make([]byte, 0, int(stub.TotalTransactionsCount)*crypto.DigestSize)
 		}
-		stub.BitmaskSender.SetBit(i)
+		stub.BitmaskSender.setBit(i)
 		stub.Sender = append(stub.Sender, txn.Txn.Sender[:]...)
 	}
 	if !txn.Txn.Fee.MsgIsZero() {
@@ -242,7 +242,7 @@ func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn *transactions.
 			stub.BitmaskFee = make(bitmask, bitmaskLen)
 			stub.Fee = make([]basics.MicroAlgos, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskFee.SetBit(i)
+		stub.BitmaskFee.setBit(i)
 		stub.Fee = append(stub.Fee, txn.Txn.Fee)
 	}
 	if !txn.Txn.FirstValid.MsgIsZero() {
@@ -250,7 +250,7 @@ func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn *transactions.
 			stub.BitmaskFirstValid = make(bitmask, bitmaskLen)
 			stub.FirstValid = make([]basics.Round, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskFirstValid.SetBit(i)
+		stub.BitmaskFirstValid.setBit(i)
 		stub.FirstValid = append(stub.FirstValid, txn.Txn.FirstValid)
 	}
 	if !txn.Txn.LastValid.MsgIsZero() {
@@ -258,7 +258,7 @@ func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn *transactions.
 			stub.BitmaskLastValid = make(bitmask, bitmaskLen)
 			stub.LastValid = make([]basics.Round, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskLastValid.SetBit(i)
+		stub.BitmaskLastValid.setBit(i)
 		stub.LastValid = append(stub.LastValid, txn.Txn.LastValid)
 	}
 	if txn.Txn.Note != nil {
@@ -266,21 +266,21 @@ func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn *transactions.
 			stub.BitmaskNote = make(bitmask, bitmaskLen)
 			stub.Note = make([][]byte, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskNote.SetBit(i)
+		stub.BitmaskNote.setBit(i)
 		stub.Note = append(stub.Note, txn.Txn.Note)
 	}
 	if txn.Txn.GenesisID != "" {
 		if len(stub.BitmaskGenesisID) == 0 {
 			stub.BitmaskGenesisID = make(bitmask, bitmaskLen)
 		}
-		stub.BitmaskGenesisID.SetBit(i)
+		stub.BitmaskGenesisID.setBit(i)
 	}
 	if txn.Txn.Lease != ([32]byte{}) {
 		if len(stub.BitmaskLease) == 0 {
 			stub.BitmaskLease = make(bitmask, bitmaskLen)
 			stub.Lease = make([]byte, 0, int(stub.TotalTransactionsCount)*crypto.DigestSize)
 		}
-		stub.BitmaskLease.SetBit(i)
+		stub.BitmaskLease.setBit(i)
 		stub.Lease = append(stub.Lease, txn.Txn.Lease[:]...)
 	}
 	if !txn.Txn.RekeyTo.MsgIsZero() {
@@ -288,7 +288,7 @@ func (stub *txGroupsEncodingStub) deconstructTxnHeader(i int, txn *transactions.
 			stub.BitmaskRekeyTo = make(bitmask, bitmaskLen)
 			stub.RekeyTo = make([]byte, 0, int(stub.TotalTransactionsCount)*crypto.DigestSize)
 		}
-		stub.BitmaskRekeyTo.SetBit(i)
+		stub.BitmaskRekeyTo.setBit(i)
 		stub.RekeyTo = append(stub.RekeyTo, txn.Txn.RekeyTo[:]...)
 	}
 }
@@ -314,7 +314,7 @@ func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transac
 			stub.SelectionPK = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 			stub.VoteKeyDilution = make([]uint64, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskKeys.SetBit(i)
+		stub.BitmaskKeys.setBit(i)
 		stub.VotePK = append(stub.VotePK, txn.Txn.VotePK[:]...)
 		stub.SelectionPK = append(stub.SelectionPK, txn.Txn.SelectionPK[:]...)
 		stub.VoteKeyDilution = append(stub.VoteKeyDilution, txn.Txn.VoteKeyDilution)
@@ -324,7 +324,7 @@ func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transac
 			stub.BitmaskVoteFirst = make(bitmask, bitmaskLen)
 			stub.VoteFirst = make([]basics.Round, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskVoteFirst.SetBit(i)
+		stub.BitmaskVoteFirst.setBit(i)
 		stub.VoteFirst = append(stub.VoteFirst, txn.Txn.VoteFirst)
 	}
 	if !txn.Txn.VoteLast.MsgIsZero() {
@@ -332,14 +332,14 @@ func (stub *txGroupsEncodingStub) deconstructKeyregTxnFields(i int, txn *transac
 			stub.BitmaskVoteLast = make(bitmask, bitmaskLen)
 			stub.VoteLast = make([]basics.Round, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskVoteLast.SetBit(i)
+		stub.BitmaskVoteLast.setBit(i)
 		stub.VoteLast = append(stub.VoteLast, txn.Txn.VoteLast)
 	}
 	if txn.Txn.Nonparticipation {
 		if len(stub.BitmaskNonparticipation) == 0 {
 			stub.BitmaskNonparticipation = make(bitmask, bitmaskLen)
 		}
-		stub.BitmaskNonparticipation.SetBit(i)
+		stub.BitmaskNonparticipation.setBit(i)
 	}
 }
 
@@ -357,7 +357,7 @@ func (stub *txGroupsEncodingStub) deconstructPaymentTxnFields(i int, txn *transa
 			stub.BitmaskReceiver = make(bitmask, bitmaskLen)
 			stub.Receiver = make([]byte, 0, int(stub.TotalTransactionsCount)*crypto.DigestSize)
 		}
-		stub.BitmaskReceiver.SetBit(i)
+		stub.BitmaskReceiver.setBit(i)
 		stub.Receiver = append(stub.Receiver, txn.Txn.Receiver[:]...)
 	}
 	if !txn.Txn.Amount.MsgIsZero() {
@@ -365,7 +365,7 @@ func (stub *txGroupsEncodingStub) deconstructPaymentTxnFields(i int, txn *transa
 			stub.BitmaskAmount = make(bitmask, bitmaskLen)
 			stub.Amount = make([]basics.MicroAlgos, 0, int(stub.TotalTransactionsCount))
 		}
-		stub.BitmaskAmount.SetBit(i)
+		stub.BitmaskAmount.setBit(i)
 		stub.Amount = append(stub.Amount, txn.Txn.Amount)
 	}
 	if !txn.Txn.CloseRemainderTo.MsgIsZero() {
@@ -373,7 +373,7 @@ func (stub *txGroupsEncodingStub) deconstructPaymentTxnFields(i int, txn *transa
 			stub.BitmaskCloseRemainderTo = make(bitmask, bitmaskLen)
 			stub.CloseRemainderTo = make([]byte, 0, int(stub.TotalTransactionsCount)*crypto.DigestSize)
 		}
-		stub.BitmaskCloseRemainderTo.SetBit(i)
+		stub.BitmaskCloseRemainderTo.setBit(i)
 		stub.CloseRemainderTo = append(stub.CloseRemainderTo, txn.Txn.CloseRemainderTo[:]...)
 	}
 }
@@ -391,7 +391,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetConfigTxnFields(i int, txn *tr
 			stub.BitmaskConfigAsset = make(bitmask, bitmaskLen)
 			stub.ConfigAsset = make([]basics.AssetIndex, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskConfigAsset.SetBit(i)
+		stub.BitmaskConfigAsset.setBit(i)
 		stub.ConfigAsset = append(stub.ConfigAsset, txn.Txn.ConfigAsset)
 	}
 	stub.deconstructAssetParams(i, txn)
@@ -409,7 +409,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn *transaction
 			stub.BitmaskTotal = make(bitmask, bitmaskLen)
 			stub.Total = make([]uint64, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskTotal.SetBit(i)
+		stub.BitmaskTotal.setBit(i)
 		stub.Total = append(stub.Total, txn.Txn.AssetParams.Total)
 	}
 	if txn.Txn.AssetParams.Decimals != 0 {
@@ -417,21 +417,21 @@ func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn *transaction
 			stub.BitmaskDecimals = make(bitmask, bitmaskLen)
 			stub.Decimals = make([]uint32, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskDecimals.SetBit(i)
+		stub.BitmaskDecimals.setBit(i)
 		stub.Decimals = append(stub.Decimals, txn.Txn.AssetParams.Decimals)
 	}
 	if txn.Txn.AssetParams.DefaultFrozen {
 		if len(stub.BitmaskDefaultFrozen) == 0 {
 			stub.BitmaskDefaultFrozen = make(bitmask, bitmaskLen)
 		}
-		stub.BitmaskDefaultFrozen.SetBit(i)
+		stub.BitmaskDefaultFrozen.setBit(i)
 	}
 	if txn.Txn.AssetParams.UnitName != "" {
 		if len(stub.BitmaskUnitName) == 0 {
 			stub.BitmaskUnitName = make(bitmask, bitmaskLen)
 			stub.UnitName = make([]string, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskUnitName.SetBit(i)
+		stub.BitmaskUnitName.setBit(i)
 		stub.UnitName = append(stub.UnitName, txn.Txn.AssetParams.UnitName)
 	}
 	if txn.Txn.AssetParams.AssetName != "" {
@@ -439,7 +439,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn *transaction
 			stub.BitmaskAssetName = make(bitmask, bitmaskLen)
 			stub.AssetName = make([]string, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskAssetName.SetBit(i)
+		stub.BitmaskAssetName.setBit(i)
 		stub.AssetName = append(stub.AssetName, txn.Txn.AssetParams.AssetName)
 	}
 	if txn.Txn.AssetParams.URL != "" {
@@ -447,7 +447,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn *transaction
 			stub.BitmaskURL = make(bitmask, bitmaskLen)
 			stub.URL = make([]string, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskURL.SetBit(i)
+		stub.BitmaskURL.setBit(i)
 		stub.URL = append(stub.URL, txn.Txn.AssetParams.URL)
 	}
 	if txn.Txn.AssetParams.MetadataHash != [32]byte{} {
@@ -455,7 +455,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn *transaction
 			stub.BitmaskMetadataHash = make(bitmask, bitmaskLen)
 			stub.MetadataHash = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 		}
-		stub.BitmaskMetadataHash.SetBit(i)
+		stub.BitmaskMetadataHash.setBit(i)
 		stub.MetadataHash = append(stub.MetadataHash, txn.Txn.AssetParams.MetadataHash[:]...)
 	}
 	if !txn.Txn.AssetParams.Manager.MsgIsZero() {
@@ -463,7 +463,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn *transaction
 			stub.BitmaskManager = make(bitmask, bitmaskLen)
 			stub.Manager = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 		}
-		stub.BitmaskManager.SetBit(i)
+		stub.BitmaskManager.setBit(i)
 		stub.Manager = append(stub.Manager, txn.Txn.AssetParams.Manager[:]...)
 	}
 	if !txn.Txn.AssetParams.Reserve.MsgIsZero() {
@@ -471,7 +471,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn *transaction
 			stub.BitmaskReserve = make(bitmask, bitmaskLen)
 			stub.Reserve = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 		}
-		stub.BitmaskReserve.SetBit(i)
+		stub.BitmaskReserve.setBit(i)
 		stub.Reserve = append(stub.Reserve, txn.Txn.AssetParams.Reserve[:]...)
 	}
 	if !txn.Txn.AssetParams.Freeze.MsgIsZero() {
@@ -479,7 +479,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn *transaction
 			stub.BitmaskFreeze = make(bitmask, bitmaskLen)
 			stub.Freeze = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 		}
-		stub.BitmaskFreeze.SetBit(i)
+		stub.BitmaskFreeze.setBit(i)
 		stub.Freeze = append(stub.Freeze, txn.Txn.AssetParams.Freeze[:]...)
 	}
 	if !txn.Txn.AssetParams.Clawback.MsgIsZero() {
@@ -487,7 +487,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetParams(i int, txn *transaction
 			stub.BitmaskClawback = make(bitmask, bitmaskLen)
 			stub.Clawback = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 		}
-		stub.BitmaskClawback.SetBit(i)
+		stub.BitmaskClawback.setBit(i)
 		stub.Clawback = append(stub.Clawback, txn.Txn.AssetParams.Clawback[:]...)
 	}
 }
@@ -513,7 +513,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetTransferTxnFields(i int, txn *
 			stub.BitmaskXferAsset = make(bitmask, bitmaskLen)
 			stub.XferAsset = make([]basics.AssetIndex, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskXferAsset.SetBit(i)
+		stub.BitmaskXferAsset.setBit(i)
 		stub.XferAsset = append(stub.XferAsset, txn.Txn.XferAsset)
 	}
 	if txn.Txn.AssetAmount != 0 {
@@ -521,7 +521,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetTransferTxnFields(i int, txn *
 			stub.BitmaskAssetAmount = make(bitmask, bitmaskLen)
 			stub.AssetAmount = make([]uint64, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskAssetAmount.SetBit(i)
+		stub.BitmaskAssetAmount.setBit(i)
 		stub.AssetAmount = append(stub.AssetAmount, txn.Txn.AssetAmount)
 	}
 	if !txn.Txn.AssetSender.MsgIsZero() {
@@ -529,7 +529,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetTransferTxnFields(i int, txn *
 			stub.BitmaskAssetSender = make(bitmask, bitmaskLen)
 			stub.AssetSender = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 		}
-		stub.BitmaskAssetSender.SetBit(i)
+		stub.BitmaskAssetSender.setBit(i)
 		stub.AssetSender = append(stub.AssetSender, txn.Txn.AssetSender[:]...)
 	}
 	if !txn.Txn.AssetReceiver.MsgIsZero() {
@@ -537,7 +537,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetTransferTxnFields(i int, txn *
 			stub.BitmaskAssetReceiver = make(bitmask, bitmaskLen)
 			stub.AssetReceiver = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 		}
-		stub.BitmaskAssetReceiver.SetBit(i)
+		stub.BitmaskAssetReceiver.setBit(i)
 		stub.AssetReceiver = append(stub.AssetReceiver, txn.Txn.AssetReceiver[:]...)
 	}
 	if !txn.Txn.AssetCloseTo.MsgIsZero() {
@@ -545,7 +545,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetTransferTxnFields(i int, txn *
 			stub.BitmaskAssetCloseTo = make(bitmask, bitmaskLen)
 			stub.AssetCloseTo = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 		}
-		stub.BitmaskAssetCloseTo.SetBit(i)
+		stub.BitmaskAssetCloseTo.setBit(i)
 		stub.AssetCloseTo = append(stub.AssetCloseTo, txn.Txn.AssetCloseTo[:]...)
 	}
 }
@@ -565,7 +565,7 @@ func (stub *txGroupsEncodingStub) deconstructAssetFreezeTxnFields(i int, txn *tr
 			stub.BitmaskFreezeAccount = make(bitmask, bitmaskLen)
 			stub.FreezeAccount = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 		}
-		stub.BitmaskFreezeAccount.SetBit(i)
+		stub.BitmaskFreezeAccount.setBit(i)
 		stub.FreezeAccount = append(stub.FreezeAccount, txn.Txn.FreezeAccount[:]...)
 	}
 	if txn.Txn.FreezeAsset != 0 {
@@ -573,14 +573,14 @@ func (stub *txGroupsEncodingStub) deconstructAssetFreezeTxnFields(i int, txn *tr
 			stub.BitmaskFreezeAsset = make(bitmask, bitmaskLen)
 			stub.FreezeAsset = make([]basics.AssetIndex, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskFreezeAsset.SetBit(i)
+		stub.BitmaskFreezeAsset.setBit(i)
 		stub.FreezeAsset = append(stub.FreezeAsset, txn.Txn.FreezeAsset)
 	}
 	if txn.Txn.AssetFrozen {
 		if len(stub.BitmaskAssetFrozen) == 0 {
 			stub.BitmaskAssetFrozen = make(bitmask, bitmaskLen)
 		}
-		stub.BitmaskAssetFrozen.SetBit(i)
+		stub.BitmaskAssetFrozen.setBit(i)
 	}
 }
 
@@ -597,7 +597,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskApplicationID = make(bitmask, bitmaskLen)
 			stub.ApplicationID = make([]basics.AppIndex, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskApplicationID.SetBit(i)
+		stub.BitmaskApplicationID.setBit(i)
 		stub.ApplicationID = append(stub.ApplicationID, txn.Txn.ApplicationID)
 	}
 	if txn.Txn.OnCompletion != 0 {
@@ -605,7 +605,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskOnCompletion = make(bitmask, bitmaskLen)
 			stub.OnCompletion = make([]byte, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskOnCompletion.SetBit(i)
+		stub.BitmaskOnCompletion.setBit(i)
 		stub.OnCompletion = append(stub.OnCompletion, byte(txn.Txn.OnCompletion))
 	}
 	if txn.Txn.ApplicationArgs != nil {
@@ -613,7 +613,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskApplicationArgs = make(bitmask, bitmaskLen)
 			stub.ApplicationArgs = make([]applicationArgs, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskApplicationArgs.SetBit(i)
+		stub.BitmaskApplicationArgs.setBit(i)
 		stub.ApplicationArgs = append(stub.ApplicationArgs, txn.Txn.ApplicationArgs)
 	}
 	if txn.Txn.Accounts != nil {
@@ -621,7 +621,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskAccounts = make(bitmask, bitmaskLen)
 			stub.Accounts = make([]addresses, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskAccounts.SetBit(i)
+		stub.BitmaskAccounts.setBit(i)
 		stub.Accounts = append(stub.Accounts, txn.Txn.Accounts)
 	}
 	if txn.Txn.ForeignApps != nil {
@@ -629,7 +629,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskForeignApps = make(bitmask, bitmaskLen)
 			stub.ForeignApps = make([]appIndices, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskForeignApps.SetBit(i)
+		stub.BitmaskForeignApps.setBit(i)
 		stub.ForeignApps = append(stub.ForeignApps, txn.Txn.ForeignApps)
 	}
 	if txn.Txn.ForeignAssets != nil {
@@ -637,7 +637,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskForeignAssets = make(bitmask, bitmaskLen)
 			stub.ForeignAssets = make([]assetIndices, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskForeignAssets.SetBit(i)
+		stub.BitmaskForeignAssets.setBit(i)
 		stub.ForeignAssets = append(stub.ForeignAssets, txn.Txn.ForeignAssets)
 	}
 	if !txn.Txn.LocalStateSchema.MsgIsZero() {
@@ -645,7 +645,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskLocalNumUint = make(bitmask, bitmaskLen)
 			stub.LocalNumUint = make([]uint64, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskLocalNumUint.SetBit(i)
+		stub.BitmaskLocalNumUint.setBit(i)
 		stub.LocalNumUint = append(stub.LocalNumUint, txn.Txn.LocalStateSchema.NumUint)
 	}
 	if !txn.Txn.LocalStateSchema.MsgIsZero() {
@@ -653,7 +653,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskLocalNumByteSlice = make(bitmask, bitmaskLen)
 			stub.LocalNumByteSlice = make([]uint64, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskLocalNumByteSlice.SetBit(i)
+		stub.BitmaskLocalNumByteSlice.setBit(i)
 		stub.LocalNumByteSlice = append(stub.LocalNumByteSlice, txn.Txn.LocalStateSchema.NumByteSlice)
 	}
 	if !txn.Txn.GlobalStateSchema.MsgIsZero() {
@@ -661,7 +661,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskGlobalNumUint = make(bitmask, bitmaskLen)
 			stub.GlobalNumUint = make([]uint64, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskGlobalNumUint.SetBit(i)
+		stub.BitmaskGlobalNumUint.setBit(i)
 		stub.GlobalNumUint = append(stub.GlobalNumUint, txn.Txn.GlobalStateSchema.NumUint)
 	}
 	if !txn.Txn.GlobalStateSchema.MsgIsZero() {
@@ -669,7 +669,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskGlobalNumByteSlice = make(bitmask, bitmaskLen)
 			stub.GlobalNumByteSlice = make([]uint64, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskGlobalNumByteSlice.SetBit(i)
+		stub.BitmaskGlobalNumByteSlice.setBit(i)
 		stub.GlobalNumByteSlice = append(stub.GlobalNumByteSlice, txn.Txn.GlobalStateSchema.NumByteSlice)
 	}
 	if txn.Txn.ApprovalProgram != nil {
@@ -677,7 +677,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskApprovalProgram = make(bitmask, bitmaskLen)
 			stub.ApprovalProgram = make([]program, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskApprovalProgram.SetBit(i)
+		stub.BitmaskApprovalProgram.setBit(i)
 		stub.ApprovalProgram = append(stub.ApprovalProgram, txn.Txn.ApprovalProgram)
 	}
 	if txn.Txn.ClearStateProgram != nil {
@@ -685,7 +685,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskClearStateProgram = make(bitmask, bitmaskLen)
 			stub.ClearStateProgram = make([]program, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskClearStateProgram.SetBit(i)
+		stub.BitmaskClearStateProgram.setBit(i)
 		stub.ClearStateProgram = append(stub.ClearStateProgram, txn.Txn.ClearStateProgram)
 	}
 	if txn.Txn.ExtraProgramPages != 0 {
@@ -693,7 +693,7 @@ func (stub *txGroupsEncodingStub) deconstructApplicationCallTxnFields(i int, txn
 			stub.BitmaskExtraProgramPages = make(bitmask, bitmaskLen)
 			stub.ExtraProgramPages = make([]uint32, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskExtraProgramPages.SetBit(i)
+		stub.BitmaskExtraProgramPages.setBit(i)
 		stub.ExtraProgramPages = append(stub.ExtraProgramPages, txn.Txn.ExtraProgramPages)
 	}
 }
@@ -722,7 +722,7 @@ func (stub *txGroupsEncodingStub) deconstructCompactCertTxnFields(i int, txn *tr
 			stub.BitmaskCertRound = make(bitmask, bitmaskLen)
 			stub.CertRound = make([]basics.Round, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskCertRound.SetBit(i)
+		stub.BitmaskCertRound.setBit(i)
 		stub.CertRound = append(stub.CertRound, txn.Txn.CertRound)
 	}
 	if txn.Txn.CertType != 0 {
@@ -730,7 +730,7 @@ func (stub *txGroupsEncodingStub) deconstructCompactCertTxnFields(i int, txn *tr
 			stub.BitmaskCertType = make(bitmask, bitmaskLen)
 			stub.CertType = make([]protocol.CompactCertType, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskCertType.SetBit(i)
+		stub.BitmaskCertType.setBit(i)
 		stub.CertType = append(stub.CertType, txn.Txn.CertType)
 	}
 	stub.deconstructCert(i, txn)
@@ -749,7 +749,7 @@ func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.Signe
 			stub.BitmaskSigCommit = make(bitmask, bitmaskLen)
 			stub.SigCommit = make([]byte, 0, stub.TotalTransactionsCount*crypto.DigestSize)
 		}
-		stub.BitmaskSigCommit.SetBit(i)
+		stub.BitmaskSigCommit.setBit(i)
 		stub.SigCommit = append(stub.SigCommit, txn.Txn.Cert.SigCommit[:]...)
 	}
 	if txn.Txn.Cert.SignedWeight != 0 {
@@ -757,7 +757,7 @@ func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.Signe
 			stub.BitmaskSignedWeight = make(bitmask, bitmaskLen)
 			stub.SignedWeight = make([]uint64, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskSignedWeight.SetBit(i)
+		stub.BitmaskSignedWeight.setBit(i)
 		stub.SignedWeight = append(stub.SignedWeight, txn.Txn.Cert.SignedWeight)
 	}
 	if txn.Txn.Cert.SigProofs != nil {
@@ -765,7 +765,7 @@ func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.Signe
 			stub.BitmaskSigProofs = make(bitmask, bitmaskLen)
 			stub.SigProofs = make([]certProofs, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskSigProofs.SetBit(i)
+		stub.BitmaskSigProofs.setBit(i)
 		stub.SigProofs = append(stub.SigProofs, txn.Txn.Cert.SigProofs)
 	}
 	if txn.Txn.Cert.PartProofs != nil {
@@ -773,7 +773,7 @@ func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.Signe
 			stub.BitmaskPartProofs = make(bitmask, bitmaskLen)
 			stub.PartProofs = make([]certProofs, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskPartProofs.SetBit(i)
+		stub.BitmaskPartProofs.setBit(i)
 		stub.PartProofs = append(stub.PartProofs, txn.Txn.Cert.PartProofs)
 	}
 	if txn.Txn.Cert.Reveals != nil {
@@ -781,7 +781,7 @@ func (stub *txGroupsEncodingStub) deconstructCert(i int, txn *transactions.Signe
 			stub.BitmaskReveals = make(bitmask, bitmaskLen)
 			stub.Reveals = make([]revealMap, 0, stub.TotalTransactionsCount)
 		}
-		stub.BitmaskReveals.SetBit(i)
+		stub.BitmaskReveals.setBit(i)
 		stub.Reveals = append(stub.Reveals, txn.Txn.Cert.Reveals)
 	}
 }
