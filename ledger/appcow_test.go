@@ -596,8 +596,8 @@ func TestCowBuildDelta(t *testing.T) {
 	)
 
 	// check logDelta is added
-	cow.logdeltas = make(map[basics.AppIndex][]string)
-	cow.logdeltas[aidx] = append(cow.logdeltas[aidx], "hello,world")
+	cow.logs = make(map[basics.AppIndex][]string)
+	cow.logs[aidx] = append(cow.logs[aidx], "hello,world")
 	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
 		action: remainAllocAction,
 		kvCow: stateDelta{
@@ -1347,7 +1347,7 @@ func TestCowAppendLog(t *testing.T) {
 
 	val = "val"
 	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	c.logdeltas = map[basics.AppIndex][]string{}
+	c.logs = map[basics.AppIndex][]string{}
 	err = c.AppendLog(aidx, tv)
 	a.NoError(err)
 }

@@ -432,7 +432,7 @@ func (cb *roundCowState) AppendLog(aidx basics.AppIndex, value basics.TealValue)
 		return fmt.Errorf("value too long, length was %d", len(value.Bytes))
 	}
 	// Write the value delta associated with this key/value
-	cb.logdeltas[aidx] = append(cb.logdeltas[aidx], value.Bytes)
+	cb.logs[aidx] = append(cb.logs[aidx], value.Bytes)
 
 	return nil
 }
@@ -483,7 +483,7 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	return pass, evalDelta, nil
 }
 
-// BuildEvalDelta converts internal sdeltas and logdeltas into basics.EvalDelta
+// BuildEvalDelta converts internal sdeltas and logs into basics.EvalDelta
 func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
 	// sdeltas
 	foundGlobal := false
@@ -534,7 +534,7 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 	}
 
 	// logDeltas
-	for appid, ldelta := range cb.logdeltas {
+	for appid, ldelta := range cb.logs {
 		// Check that all of these deltas are for the correct app
 		if appid != aidx {
 			err = fmt.Errorf("found log delta for different app during StatefulEval/BuildDelta: %d != %d", appid, aidx)

@@ -64,7 +64,7 @@ type roundCowState struct {
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 
 	// logs populated in AppCall transaction
-	logdeltas map[basics.AppIndex][]string
+	logs map[basics.AppIndex][]string
 
 	// either or not maintain compatibility with original app refactoring behavior
 	// this is needed for generating old eval delta in new code
