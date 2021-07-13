@@ -35,8 +35,8 @@ type Service struct {
 	state syncState
 }
 
-// MakeTranscationSyncService creates a new Service object
-func MakeTranscationSyncService(log logging.Logger, conn NodeConnector, isRelay bool, genesisID string, genesisHash crypto.Digest, cfg config.Local, threadpool execpool.BacklogPool) *Service {
+// MakeTransactionSyncService creates a new Service object
+func MakeTransactionSyncService(log logging.Logger, conn NodeConnector, isRelay bool, genesisID string, genesisHash crypto.Digest, cfg config.Local, threadpool execpool.BacklogPool) *Service {
 	s := &Service{
 		state: syncState{
 			node:        conn,
