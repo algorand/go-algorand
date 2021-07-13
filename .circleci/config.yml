@@ -127,7 +127,7 @@ commands:
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
             export PARALLEL_FLAG="-p 1"
-            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
           path: /tmp/results
           destination: test-results
