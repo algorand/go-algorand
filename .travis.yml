@@ -236,7 +236,7 @@ addons:
 
 notifications:
   slack:
-    if: branch = "master"
+    if: branch = "rel/nightly"
     rooms:
       - secure: jx2gllL8A8QXkV/wVpfKBRfK7cMQkuHOxxFmN2eYEGR8AR6bAGfo5HVmb6VKBRpwVzOgXwhvjbxNdYlmRkKXeJ5o0DDDUG6YSKIrNkA38JulNKzdG3K3d6DoGJV3Iturp6O9W/IdweRSz2rjJsHP1RpYG3w39giSNTMR/Q4ent68CNoYHC3XEsUHmwGVA8bQpfu2AKfr98twgTzmTcvmx93B/ZHlR8GoLh+Vq2eAwiYuyYnoNYww3ekttqeqAr21X5xTjQyAwntnk1gfRKbdiEXcxlnNKCQn3yaD7qNorJZm9U/fhGiA1eLHOxtLLJD8HSEzLvNj9gShgw/YPaYjZJLZJe0kDpR4oFwVd+lVzBManVGOwfHJIsug8dnVxY1O/PLHPV4iM4tyGwcZfxSLOXsutN3PCJhYjKUrKaJ75+L5d1tXe3DoXtGH5e/GV2kGxWr25woAZrKCeBOPFZdhAc30XLOzTk3FN3hzRKVbL9O4zxFgJllOvQTWDQ9bmXxa3bk6cDwxaF8IJk+hP1k3VaOdaxmd28pnyR/X7xRF0l1W8S6SZfDFXAFBvVyH/Q1nfvXAez//cK0He959reubjUGM8HaSWw73n9Bj5Ri4ub92xfJqSAZItI5dS1hjfdh7moS50dYbBwSozgOgWdFXHdzGNnCv+/8v0LJcnSPRdT8=
 
