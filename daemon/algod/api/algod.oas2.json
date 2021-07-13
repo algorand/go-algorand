@@ -96,6 +96,43 @@
         }
       }
     },
+    "/consensus": {
+      "get": {
+        "description": "Returns the protocol consensus information.",
+        "tags": [
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets the protocol consensus information.",
+        "operationId": "GetConsensus",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "version",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The protocol consensus details in json.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "404": {
+            "description": "version not found"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/swagger.json": {
       "get": {
         "description": "Returns the entire swagger spec in json.",

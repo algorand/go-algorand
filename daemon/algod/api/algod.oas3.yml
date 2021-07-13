@@ -1415,6 +1415,45 @@
   },
   "openapi": "3.0.1",
   "paths": {
+    "/consensus": {
+      "get": {
+        "description": "Returns the protocol consensus information.",
+        "operationId": "GetConsensus",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "version",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The protocol consensus details in json."
+          },
+          "404": {
+            "content": {},
+            "description": "version not found"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets the protocol consensus information.",
+        "tags": [
+          "common"
+        ]
+      }
+    },
     "/genesis": {
       "get": {
         "description": "Returns the entire genesis file in json.",

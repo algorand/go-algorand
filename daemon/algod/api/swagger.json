@@ -20,6 +20,43 @@
   "host": "localhost",
   "basePath": "/",
   "paths": {
+    "/consensus": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns the protocol consensus information.",
+        "operationId": "Consensus",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Return information about a specific version, if exists.",
+            "name": "version",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The protocol consensus details in json",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "404": {
+            "description": "Version Not Found",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/genesis": {
       "get": {
         "description": "Returns the entire genesis file in json.",
