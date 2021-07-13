@@ -110,7 +110,7 @@ commands:
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
           name: Run short tests
-          no_output_timeout: 30m
+          no_output_timeout: 45m
           command: |
             set -e
             set -x
