@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -262,9 +264,48 @@ func (helper *Helper) GetPackageFilesVersion(channel string, pkgFiles string, sp
 	maxVersion = 0
 	maxVersionName = ""
 
-	prefix := fmt.Sprintf("channel/%s/%s", channel, pkgFiles)
 	svc := s3.New(helper.session)
-	input := &s3.ListObjectsInput{
+
+	// New path schema, try these first
+	// In the case of specificVersion == 0, this is much faster than the old schema.
+	// latest/{stable,beta,nightly,dev}/{RTIME}_{version}/{node,install,tools}_{channel}_{os}_{cpu_arch}_{version}.tar.gz
+	prefix := fmt.Sprintf("latest/%s", channel)
+	input := s3.ListObjectsInput{
+		Bucket:  &helper.bucket,
+		Prefix:  &prefix,
+		MaxKeys: aws.Int64(50),
+	}
+	if specificVersion != 0 {
+		input.MaxKeys = aws.Int64(1000)
+	}
+	result, err := svc.ListObjects(&input)
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			err = awsErr
+		}
+		return
+	}
+
+	for _, item := range result.Contents {
+		var version uint64
+		name := string(*item.Key)
+		version, err = GetVersionFromName(name)
+		if err != nil {
+			return
+		}
+		fname := path.Base(name)
+		if !strings.HasPrefix(fname, pkgFiles) {
+			continue
+		}
+		if (specificVersion == 0) || (version == specificVersion) {
+			return version, name, nil
+		}
+	}
+
+	// Old path schema
+	// channel/{stable,beta,nightly,dev}/{node,install,tools}_{channel}_{os}_{cpu_arch}_{version}.tar.gz
+	prefix = fmt.Sprintf("channel/%s/%s", channel, pkgFiles)
+	input = s3.ListObjectsInput{
 		Bucket:  &helper.bucket,
 		Prefix:  &prefix,
 		MaxKeys: aws.Int64(500),
@@ -272,7 +313,7 @@ func (helper *Helper) GetPackageFilesVersion(channel string, pkgFiles string, sp
 
 	fmt.Fprintf(os.Stdout, "Checking for files matching: '%s' in bucket %s\n", prefix, helper.bucket)
 
-	result, err := svc.ListObjects(input)
+	result, err = svc.ListObjects(&input)
 	if err != nil {
 		if awsErr, ok := err.(awserr.Error); ok {
 			err = awsErr
