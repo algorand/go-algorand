@@ -54,13 +54,7 @@ func RandomizeObject(template interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
 	v := reflect.New(tt.Elem())
-	hasAllocBound := checkBoundsLimitingTag(v.Elem(), v.Elem().Type().Name(), "codec:\",\"", false)
-	pseudoTag := ""
-	if hasAllocBound {
-		// we emulate a pseudo tag here on an item that has a alloc bound msgp directive.
-		pseudoTag = "codec:\",allocbound=1\""
-	}
-	err := randomizeValue(v.Elem(), tt.String(), pseudoTag)
+	err := randomizeValue(v.Elem(), tt.String(), "")
 	return v.Interface(), err
 }
 
@@ -119,28 +113,7 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 	return false
 }
 
-func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string, warnMissingAllocBound bool) (hasAllocBound bool) {
-	if structTag == "" {
-		return
-	}
-
-	testedDatatypesForAllocBoundMu.Lock()
-	defer testedDatatypesForAllocBoundMu.Unlock()
-	// make sure we test each datatype only once.
-	if val.Type().Name() == "" {
-		if testedDatatypesForAllocBound[datapath] {
-			hasAllocBound = true
-			return
-		}
-		testedDatatypesForAllocBound[datapath] = true
-	} else {
-		if testedDatatypesForAllocBound[val.Type().Name()] {
-			hasAllocBound = true
-			return
-		}
-		testedDatatypesForAllocBound[val.Type().Name()] = true
-	}
-
+func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string) (hasAllocBound bool) {
 	var objType string
 	if val.Kind() == reflect.Slice {
 		objType = "slice"
@@ -148,23 +121,46 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 		objType = "map"
 	}
 
-	tagsMap := parseStructTags(structTag)
+	if structTag != "" {
+		tagsMap := parseStructTags(structTag)
 
-	if tagsMap["allocbound"] == "-" {
-		printWarning(fmt.Sprintf("%s %s have an unbounded allocbound defined", objType, datapath))
-		return
-	}
-	if _, have := tagsMap["allocbound"]; have {
-		hasAllocBound = true
-		return
-	}
+		if tagsMap["allocbound"] == "-" {
+			printWarning(fmt.Sprintf("%s %s have an unbounded allocbound defined", objType, datapath))
+			return
+		}
 
+		if _, have := tagsMap["allocbound"]; have {
+			hasAllocBound = true
+			testedDatatypesForAllocBoundMu.Lock()
+			defer testedDatatypesForAllocBoundMu.Unlock()
+			if val.Type().Name() == "" {
+				testedDatatypesForAllocBound[datapath] = true
+			} else {
+				testedDatatypesForAllocBound[val.Type().Name()] = true
+			}
+			return
+		}
+	}
+	// no struct tag, or have a struct tag with no allocbound.
 	if val.Type().Name() != "" {
-		// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
-		hasAllocBound = checkMsgpAllocBoundDirective(val.Type())
+		testedDatatypesForAllocBoundMu.Lock()
+		var exists bool
+		hasAllocBound, exists = testedDatatypesForAllocBound[val.Type().Name()]
+		testedDatatypesForAllocBoundMu.Unlock()
+		if !exists {
+			// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
+			hasAllocBound = checkMsgpAllocBoundDirective(val.Type())
+			testedDatatypesForAllocBoundMu.Lock()
+			testedDatatypesForAllocBound[val.Type().Name()] = hasAllocBound
+			testedDatatypesForAllocBoundMu.Unlock()
+			return
+		} else if hasAllocBound {
+			return
+		}
 	}
-	if warnMissingAllocBound {
-		printWarning(fmt.Sprintf("%s %s does not have an allocbound defined - %s", objType, datapath, val.Type().PkgPath()))
+
+	if val.Type().Kind() == reflect.Slice || val.Type().Kind() == reflect.Map || val.Type().Kind() == reflect.Array {
+		printWarning(fmt.Sprintf("%s %s does not have an allocbound defined for %s %s", objType, datapath, val.Type().String(), val.Type().PkgPath()))
 	}
 	return
 }
@@ -213,7 +209,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 			}
 		}
 	case reflect.Slice:
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, true)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		l := rand.Int() % 32
 		if hasAllocBound {
 			l = 1
@@ -229,7 +225,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 	case reflect.Bool:
 		v.SetBool(rand.Uint32()%2 == 0)
 	case reflect.Map:
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, true)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		mt := v.Type()
 		v.Set(reflect.MakeMap(mt))
 		l := rand.Int() % 32
