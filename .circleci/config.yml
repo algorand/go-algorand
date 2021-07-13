@@ -39,8 +39,6 @@ workflows:
       - mac_amd64_e2e_subs:
           requires:
             - mac_amd64_build
-  build_windows:
-    jobs:
       - windows_x64_build
 
 commands:
@@ -64,17 +62,18 @@ commands:
           name: install deps
           command: |
             choco uninstall -y mingw
-            choco upgrade --no-progress -y msys2 pacman
+            choco install -y msys2 pacman make
+            choco install -y golang --version=1.14
+            choco install -y python3 --version=3.7.3
+            export MAKE=mingw32-make
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
             export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
             export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
             export msys2+=" -msys2 -c "\"\$@"\" --"
-            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
-            ## Install more MSYS2 packages from https://packages.msys2.org/base here
-            taskkill //IM gpg-agent.exe //F  # https://travis-ci.community/t/4967
             export PATH=/C/tools/msys64/mingw64/bin:$PATH
-            export MAKE=mingw32-make  # so that Autotools can find it
+            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
+            taskkill //IM gpg-agent.exe //F  # https://travis-ci.community/t/4967
 
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
@@ -347,4 +346,4 @@ jobs:
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
             $mingw64 scripts/travis/build_test.sh
-          #shell: bash.exe
+          shell: bash.exe
