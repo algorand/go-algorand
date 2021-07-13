@@ -135,7 +135,7 @@ type EvalDelta struct {
 	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
 	LocalDeltas map[uint64]StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
 
-	LogDelta []string `codec:"lg"`
+	Log []string `codec:"lg"`
 }
 
 // Equal compares two EvalDeltas and returns whether or not they are

@@ -227,6 +227,7 @@ var opDocExtras = map[string]string{
 	"asset_holding_get": "params: Txn.Accounts offset (or, since v4, an account address that appears in Txn.Accounts or is Txn.Sender), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"asset_params_get":  "params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.",
 	"app_params_get":    "params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.",
+	"log":               "`log` can be called up to 8 times in a program, and log up to a total of 1k bytes.",
 }
 
 // OpDocExtra returns extra documentation text about an op

@@ -166,7 +166,7 @@ type LedgerForLogic interface {
 
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
 
-	SetLog(value basics.TealValue) error
+	AppendLog(value basics.TealValue) error
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -741,15 +741,6 @@ func (cx *evalContext) checkStep() (int, error) {
 	if (cx.runModeFlags & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
-
-	if spec.Name == "log" {
-		cx.logCalls++
-	}
-
-	if cx.logCalls > MaxLogCalls {
-		return 0, fmt.Errorf("too many log calls. up to %v is allowed and program has %v log calls", MaxLogCalls, cx.logCalls)
-	}
-
 	deets := spec.Details
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
 		return 0, fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
@@ -3076,21 +3067,22 @@ func opAppParamsGet(cx *evalContext) {
 func opLog(cx *evalContext) {
 	last := len(cx.stack) - 1
 
-	log := cx.stack[last]
-	cx.logSize += len(log.Bytes)
-
-	if cx.logSize > MaxLogSize {
-		cx.err = fmt.Errorf("%v is too large. Up to %v bytes are allowed", cx.logSize, MaxLogSize)
+	if cx.logCalls == MaxLogCalls {
+		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", MaxLogCalls)
 		return
 	}
-
+	cx.logCalls++
+	log := cx.stack[last]
+	cx.logSize += len(log.Bytes)
+	if cx.logSize > MaxLogSize {
+		cx.err = fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, MaxLogSize)
+		return
+	}
 	// write log to applyData
-	err := cx.Ledger.SetLog(log.toTealValue())
+	err := cx.Ledger.AppendLog(log.toTealValue())
 	if err != nil {
 		cx.err = err
 		return
 	}
-
 	cx.stack = cx.stack[:last]
-
 }

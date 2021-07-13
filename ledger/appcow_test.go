@@ -620,7 +620,7 @@ func TestCowBuildDelta(t *testing.T) {
 					"key1": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
 				},
 			},
-			LogDelta: []string{"hello,world"},
+			Log: []string{"hello,world"},
 		},
 		ed,
 	)

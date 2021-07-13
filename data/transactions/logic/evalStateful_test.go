@@ -468,7 +468,7 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 	return
 }
 
-func (l *testLedger) SetLog(value basics.TealValue) error {
+func (l *testLedger) AppendLog(value basics.TealValue) error {
 	appIdx := l.appID
 	_, ok := l.applications[appIdx]
 	if !ok {
@@ -804,7 +804,7 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 		require.NoError(t, err)
 		require.Empty(t, delta.GlobalDelta)
 		require.Empty(t, delta.LocalDeltas)
-		require.Empty(t, delta.LogDelta)
+		require.Empty(t, delta.Log)
 		return delta
 	}
 	return basics.EvalDelta{}

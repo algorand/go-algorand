@@ -238,6 +238,6 @@ func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics
 	return al.cow.BuildEvalDelta(al.aidx, txn)
 }
 
-func (al *logicLedger) SetLog(value basics.TealValue) error {
+func (al *logicLedger) AppendLog(value basics.TealValue) error {
 	return al.cow.AppendLog(al.aidx, value)
 }

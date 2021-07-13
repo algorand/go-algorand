@@ -1312,6 +1312,6 @@ func TestLogicLedgerSetLog(t *testing.T) {
 	a.NoError(err)
 	a.NotNil(l)
 	tv := basics.TealValue{Type: basics.TealBytesType, Uint: 1}
-	err = l.SetLog(tv)
+	err = l.AppendLog(tv)
 	a.NoError(err)
 }

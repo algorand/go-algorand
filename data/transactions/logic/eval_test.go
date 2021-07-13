@@ -4429,7 +4429,7 @@ func TestLog(t *testing.T) {
 		},
 	}
 	ledger := makeTestLedger(nil)
-	ledger.appID = 10
+	ledger.newApp(txn.Txn.Receiver, 100, basics.AppParams{})
 	sb := strings.Builder{}
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Proto = &proto
@@ -4438,7 +4438,8 @@ func TestLog(t *testing.T) {
 	source := `byte  "a logging message"; log; int 1`
 	source1 := `byte  "a logging message"; log; byte  "second logging message"; log; int 1`
 	source2 := fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, MaxLogCalls))
-	sources := []string{source, source1, source2}
+	source3 := `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 5; <; bnz loop;`
+	sources := []string{source, source1, source2, source3}
 
 	for _, s := range sources {
 		ops := testProg(t, s, AssemblerMaxVersion)
@@ -4459,14 +4460,14 @@ func TestLog(t *testing.T) {
 
 	failCase0 := failCase{
 		source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", 1001)),
-		errContains: fmt.Sprintf("Up to %v bytes are allowed", MaxLogSize),
+		errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
 		runMode:     runModeApplication,
 	}
 
 	msg := strings.Repeat("a", 400)
 	failCase1 := failCase{
 		source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
-		errContains: fmt.Sprintf("Up to %v bytes are allowed", MaxLogSize),
+		errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
 		runMode:     runModeApplication,
 	}
 
@@ -4477,20 +4478,29 @@ func TestLog(t *testing.T) {
 	}
 
 	failCase3 := failCase{
+		source:      `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 10; <; bnz loop;`,
+		errContains: "too many log calls",
+		runMode:     runModeApplication,
+	}
+
+	failCase4 := failCase{
+		source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
+		errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+		runMode:     runModeApplication,
+	}
+
+	failCase5 := failCase{
 		source:      `byte  "a logging message"; log; int 1`,
 		errContains: "log not allowed in current mode",
 		runMode:     runModeSignature,
 	}
 
-	failCases := []failCase{failCase0, failCase1, failCase2, failCase3}
+	failCases := []failCase{failCase0, failCase1, failCase2, failCase3, failCase4, failCase5}
 	for _, c := range failCases {
 		ops := testProg(t, c.source, AssemblerMaxVersion)
 
 		err := CheckStateful(ops.Program, ep)
-		if err != nil {
-			require.Contains(t, err.Error(), c.errContains)
-			continue
-		}
+		require.NoError(t, err, source)
 
 		var pass bool
 		switch c.runMode {

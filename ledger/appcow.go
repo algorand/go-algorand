@@ -48,11 +48,6 @@ type storagePtr struct {
 	global bool
 }
 
-type logDelta struct {
-	kvCow      stateDelta
-	accountIdx uint64
-}
-
 // ok is false if the provided valueDelta is redundant,
 // which means that it encodes no update.
 func (vd valueDelta) serialize() (vdelta basics.ValueDelta, ok bool) {
@@ -545,7 +540,7 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 			err = fmt.Errorf("found log delta for different app during StatefulEval/BuildDelta: %d != %d", appid, aidx)
 			return basics.EvalDelta{}, err
 		}
-		evalDelta.LogDelta = ldelta
+		evalDelta.Log = ldelta
 	}
 
 	return

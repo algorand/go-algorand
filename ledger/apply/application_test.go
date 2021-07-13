@@ -819,10 +819,10 @@ func TestAppCallClearState(t *testing.T) {
 	b.pass = true
 	b.err = nil
 	logd := map[basics.AppIndex][]string{appIdx: {"a"}}
-	b.delta = basics.EvalDelta{LogDelta: []string{"a"}}
+	b.delta = basics.EvalDelta{Log: []string{"a"}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(basics.EvalDelta{LogDelta: logd[appIdx]}, ad.EvalDelta)
+	a.Equal(basics.EvalDelta{Log: logd[appIdx]}, ad.EvalDelta)
 }
 
 func TestAppCallApplyCloseOut(t *testing.T) {
@@ -907,10 +907,10 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	a.Equal(basics.StateSchema{NumUint: 0}, br.TotalAppSchema)
 
 	logd := map[basics.AppIndex][]string{appIdx: {"a"}}
-	b.delta = basics.EvalDelta{LogDelta: []string{"a"}}
+	b.delta = basics.EvalDelta{Log: []string{"a"}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(basics.EvalDelta{LogDelta: logd[appIdx]}, ad.EvalDelta)
+	a.Equal(basics.EvalDelta{Log: logd[appIdx]}, ad.EvalDelta)
 }
 
 func TestAppCallApplyUpdate(t *testing.T) {
@@ -979,10 +979,10 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 
 	logd := map[basics.AppIndex][]string{appIdx: {"a"}}
-	b.delta = basics.EvalDelta{LogDelta: []string{"a"}}
+	b.delta = basics.EvalDelta{Log: []string{"a"}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(basics.EvalDelta{LogDelta: logd[appIdx]}, ad.EvalDelta)
+	a.Equal(basics.EvalDelta{Log: logd[appIdx]}, ad.EvalDelta)
 }
 
 func TestAppCallApplyDelete(t *testing.T) {
@@ -1051,10 +1051,10 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.Equal(uint32(0), br.TotalExtraAppPages)
 
 	logd := map[basics.AppIndex][]string{appIdx: {"a"}}
-	b.delta = basics.EvalDelta{LogDelta: []string{"a"}}
+	b.delta = basics.EvalDelta{Log: []string{"a"}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(basics.EvalDelta{LogDelta: logd[appIdx]}, ad.EvalDelta)
+	a.Equal(basics.EvalDelta{Log: logd[appIdx]}, ad.EvalDelta)
 }
 
 func TestAppCallApplyCreateClearState(t *testing.T) {
@@ -1147,10 +1147,10 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
 
 	logd := map[basics.AppIndex][]string{appIdx: {"a"}}
-	b.delta = basics.EvalDelta{LogDelta: []string{"a"}}
+	b.delta = basics.EvalDelta{Log: []string{"a"}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(appIdx, b.allocatedAppIdx)
-	a.Equal(basics.EvalDelta{LogDelta: logd[appIdx]}, ad.EvalDelta)
+	a.Equal(basics.EvalDelta{Log: logd[appIdx]}, ad.EvalDelta)
 
 }
