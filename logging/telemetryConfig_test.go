@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -34,8 +35,8 @@ func Test_loadTelemetryConfig(t *testing.T) {
 		MinLogLevel:        4,
 		ReportHistoryLevel: 4,
 		// These credentials are here intentionally. Not a bug.
-		UserName: "telemetry-v9",
-		Password: "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
+		UserName: defaultTelemetryUsername,
+		Password: defaultTelemetryPassword,
 	}
 
 	a := require.New(t)
@@ -117,5 +118,56 @@ func TestLoadTelemetryConfig(t *testing.T) {
 	require.Equal(t, "test-user-name", tc.UserName)
 	// ensure we know how to default correctly if some of the fields in the configuration field aren't specified.
 	require.Equal(t, createTelemetryConfig().Password, tc.Password)
+
+}
+
+func TestLoadTelemetryConfigBlankUsernamePassword(t *testing.T) {
+
+	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test2"
+	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
+	require.NoError(t, err)
+	// make sure the user name was loaded from the specified file
+	require.Equal(t, defaultTelemetryUsername, tc.UserName)
+	// ensure we know how to default correctly if some of the fields in the configuration field aren't specified.
+	require.Equal(t, defaultTelemetryPassword, tc.Password)
+}
+
+func TestSaveTelemetryConfigBlankUsernamePassword(t *testing.T) {
+
+	testDir := os.Getenv("TESTDIR")
+
+	if testDir == "" {
+		testDir, _ = ioutil.TempDir("", "tmp")
+	}
+
+	a := require.New(t)
+
+	configsPath := filepath.Join(testDir, "logging.config")
+
+	config := createTelemetryConfig()
+
+	// Ensure that config has default username and password
+	config.UserName = defaultTelemetryUsername
+	config.Password = defaultTelemetryPassword
+
+	err := config.Save(configsPath)
+	a.NoError(err)
+
+	f, err := os.Open(configsPath)
+	a.NoError(err)
+	defer f.Close()
+
+	var cfg TelemetryConfig
+
+	var marshaledConfig MarshalingTelemetryConfig
+	marshaledConfig.TelemetryConfig = createTelemetryConfig()
+
+	dec := json.NewDecoder(f)
+	err = dec.Decode(&marshaledConfig)
+	a.NoError(err)
+
+	cfg = marshaledConfig.TelemetryConfig
+	a.Equal(cfg.UserName, "")
+	a.Equal(cfg.Password, "")
 
 }
