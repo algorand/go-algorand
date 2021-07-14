@@ -577,7 +577,7 @@ func (tx Transaction) blockProofPKWellFormed(proto config.ConsensusParams) error
 		return nil
 	}
 
-	if tx.IsOffline(proto) {
+	if tx.VotePK == (crypto.OneTimeSignatureVerifier{}) || tx.SelectionPK == (crypto.VRFVerifier{}) {
 		if tx.KeyregTxnFields.BlockProofPK != (crypto.VerifyingKey{}) {
 			return errKeyregTxnOfflineShouldBeEmptyBlockProofPK
 		}
