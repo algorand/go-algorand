@@ -192,7 +192,7 @@ jobs:
   codegen_verification:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: xlarge
+    resource_class: medium
     steps:
       - checkout
       - prepare_go
@@ -204,7 +204,7 @@ jobs:
   amd64_build:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: xlarge
+    resource_class: medium
     steps:
       - checkout
       - prepare_go
@@ -213,7 +213,7 @@ jobs:
   amd64_test:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: xlarge
+    resource_class: medium
     parallelism: 4
     steps:
       - prepare_go
@@ -224,7 +224,7 @@ jobs:
   amd64_integration:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: large
+    resource_class: medium
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -236,7 +236,7 @@ jobs:
   amd64_e2e_subs:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: large
+    resource_class: medium
     environment:
       E2E_SUBS_ONLY: "true"
     steps:
@@ -247,7 +247,7 @@ jobs:
   arm64_build:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.large
+    resource_class: arm.medium
     steps:
       - checkout
       - prepare_go
@@ -256,7 +256,7 @@ jobs:
   arm64_test:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.large
+    resource_class: arm.medium
     parallelism: 4
     steps:
       - checkout
@@ -268,7 +268,7 @@ jobs:
   arm64_integration:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.large
+    resource_class: arm.medium
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -281,7 +281,7 @@ jobs:
   arm64_e2e_subs:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.large
+    resource_class: arm.medium
     environment:
       E2E_SUBS_ONLY: "true"
     steps:
@@ -293,7 +293,7 @@ jobs:
   mac_amd64_build:
     macos:
       xcode: 12.0.1
-    resource_class: large
+    resource_class: medium
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - checkout
@@ -304,7 +304,7 @@ jobs:
   mac_amd64_test:
     macos:
       xcode: 12.0.1
-    resource_class: large
+    resource_class: medium
     parallelism: 4
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
@@ -317,7 +317,7 @@ jobs:
   mac_amd64_integration:
     macos:
       xcode: 12.0.1
-    resource_class: large
+    resource_class: medium
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -331,7 +331,7 @@ jobs:
   mac_amd64_e2e_subs:
     macos:
       xcode: 12.0.1
-    resource_class: large
+    resource_class: medium
     environment:
       E2E_SUBS_ONLY: "tsrue"
     steps:
