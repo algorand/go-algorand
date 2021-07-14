@@ -21,6 +21,8 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -29,18 +31,8 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
-func BenchmarkTxidToUint64(b *testing.B) {
-	txID := transactions.Txid{1, 2, 3, 4, 5}
-	for i := 0; i < b.N; i++ {
-		txidToUint64(txID)
-	}
-}
-
-func TestBloomFallback(t *testing.T) {
-	genesisHash := crypto.Hash([]byte("gh"))
-	genesisID := "gID"
-
-	txnGroups := []transactions.SignedTxGroup{
+func getTxnGroups(genesisHash crypto.Digest, genesisID string) []transactions.SignedTxGroup {
+	return []transactions.SignedTxGroup{
 		transactions.SignedTxGroup{
 			FirstTransactionID: transactions.Txid{1},
 			Transactions: []transactions.SignedTxn{
@@ -130,40 +122,189 @@ func TestBloomFallback(t *testing.T) {
 			},
 		},
 	}
+}
+
+func BenchmarkTxidToUint64(b *testing.B) {
+	txID := transactions.Txid{1, 2, 3, 4, 5}
+	for i := 0; i < b.N; i++ {
+		txidToUint64(txID)
+	}
+}
+
+func TestBloomFallback(t *testing.T) {
+	genesisHash := crypto.Hash([]byte("gh"))
+	genesisID := "gID"
 
 	var s syncState
 	s.node = &justRandomFakeNode{}
 	var encodingParams requestParams
 
-	encodingParams.Modulator = 1
+	for encodingParams.Modulator = 1; encodingParams.Modulator < 3; encodingParams.Modulator++ {
+		txnGroups := getTxnGroups(genesisHash, genesisID)
+		bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
+		switch bf.filter.(type) {
+		case *bloom.Filter:
+			t.Errorf("expected xorfilter but got classic bloom filter")
+		case *bloom.XorFilter:
+			// ok
+		case *bloom.XorFilter8:
+			// ok
+		default:
+			panic("unknown internal bloom filter object")
+		}
 
-	bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
-	switch bf.filter.(type) {
-	case *bloom.Filter:
-		t.Errorf("expected xorfilter but got classic bloom filter")
-	case *bloom.XorFilter:
-		// ok
-	case *bloom.XorFilter8:
-		// ok
-	default:
-		panic("unknown internal bloom filter object")
+		// Duplicate first entry. xorfilter can't handle
+		// duplicates. We _probably_ never have duplicate txid
+		// prefixes when we grab the first 8 bytes of 32 bytes, but
+		// that's not 100%, maybe only 99.999999%
+		stg := txnGroups[1]
+		txnGroups = append(txnGroups, stg)
+
+		bf = s.makeBloomFilter(encodingParams, txnGroups, nil)
+		switch bf.filter.(type) {
+		case *bloom.Filter:
+			// ok
+		case *bloom.XorFilter:
+			t.Errorf("expected bloom filter but got xor")
+		case *bloom.XorFilter8:
+			t.Errorf("expected bloom filter but got xor")
+		default:
+			panic("unknown internal bloom filter object")
+		}
 	}
+}
 
-	// Duplicate first entry. xorfilter can't handle duplicates. We _probably_ never have duplicate txid prefixes when we grab the first 8 bytes of 32 bytes, but that's not 100%, maybe only 99.999999%
-	stg := txnGroups[0]
-	txnGroups = append(txnGroups, stg)
+// TestHint tests that the hint is used only when it should be used
+func TestHint(t *testing.T) {
+	genesisHash := crypto.Hash([]byte("gh"))
+	genesisID := "gID"
 
-	bf = s.makeBloomFilter(encodingParams, txnGroups, nil)
-	switch bf.filter.(type) {
-	case *bloom.Filter:
-		// ok
-	case *bloom.XorFilter:
-		t.Errorf("expected bloom filter but got xor")
-	case *bloom.XorFilter8:
-		t.Errorf("expected bloom filter but got xor")
-	default:
-		panic("unknown internal bloom filter object")
+	var s syncState
+	s.node = &justRandomFakeNode{}
+	var encodingParams requestParams
+
+	for encodingParams.Modulator = 1; encodingParams.Modulator < 3; encodingParams.Modulator++ {
+		txnGroups := getTxnGroups(genesisHash, genesisID)
+		bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
+
+		switch bf.filter.(type) {
+		case *bloom.XorFilter8:
+			//ok
+		default:
+			t.Errorf("expect bloom.XorFilter")
+		}
+
+		// Change the filter of bf to XorFilter
+		bf.filter = filterFactoryXor32(len(txnGroups), &s)
+
+		// Pass bf as a hint.
+		bf2 := s.makeBloomFilter(encodingParams, txnGroups, &bf)
+
+		// If the filter of bf2 is XorFilter, then the hint was used.
+		switch bf2.filter.(type) {
+		case *bloom.XorFilter:
+			//ok
+		default:
+			t.Errorf("expect bloom.Filter")
+		}
+
+		// Now change txnGroups, so that the hint will not be used
+		txnGroups = txnGroups[2:]
+		bf2 = s.makeBloomFilter(encodingParams, txnGroups, &bf)
+
+		// If the filter of bf2 is XorFilter8, then the hint was not used
+		switch bf2.filter.(type) {
+		case *bloom.XorFilter8:
+			//ok
+		default:
+			t.Errorf("expect bloom.XorFilter")
+		}
 	}
+}
+
+func TestEmptyCases(t *testing.T) {
+	bf, err := decodeBloomFilter(encodedBloomFilter{})
+	require.Equal(t, errInvalidBloomFilterEncoding, err)
+	require.Equal(t, bloomFilter{}, bf)
+
+	var s syncState
+	bf2 := s.makeBloomFilter(requestParams{}, nil, nil)
+	require.Equal(t, bloomFilter{}, bf2)
+}
+
+// TestEncodingDecoding checks the encoding/decoding of the filters
+func TestEncodingDecoding(t *testing.T) {
+
+	genesisHash := crypto.Hash([]byte("gh"))
+	genesisID := "gID"
+
+	var s syncState
+	s.node = &justRandomFakeNode{}
+	var encodingParams requestParams
+
+	filters := []func(int, *syncState) bloom.GenericFilter{
+		filterFactoryXor8, filterFactoryXor32, filterFactoryBloom}
+
+	// For each filter type
+	for _, filterFactory = range filters {
+		// With varying modulator
+		for encodingParams.Modulator = 1; encodingParams.Modulator < 4; encodingParams.Modulator++ {
+
+			txnGroups := getTxnGroups(genesisHash, genesisID)
+			bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
+
+			encoded, err := bf.encode()
+			require.NoError(t, err)
+
+			bfDecoded, err := decodeBloomFilter(*encoded)
+			require.NoError(t, err)
+
+			// Check that the encoded and the encoded->decoded->encoded are the same
+			encodedAgain, err := bfDecoded.encode()
+			require.Equal(t, encoded, encodedAgain)
+		}
+	}
+}
+
+func TestDecodingErrors(t *testing.T) {
+	var ebf encodedBloomFilter
+	ebf.BloomFilterType = byte(multiHashBloomFilter)
+	_, err := decodeBloomFilter(ebf)
+
+	require.Error(t, err)
+}
+
+func TestBloomFilterTest(t *testing.T) {
+
+	filters := []func(int, *syncState) bloom.GenericFilter{
+		filterFactoryXor8, filterFactoryXor32, filterFactoryBloom}
+
+	for _, filterFactory = range filters {
+
+		genesisHash := crypto.Hash([]byte("gh"))
+		genesisID := "gID"
+
+		var s syncState
+		s.node = &justRandomFakeNode{}
+		var encodingParams requestParams
+
+		for encodingParams.Modulator = 1; encodingParams.Modulator < 3; encodingParams.Modulator++ {
+			txnGroups := getTxnGroups(genesisHash, genesisID)
+			bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
+			for _, tx := range txnGroups {
+				ans := bf.test(tx.FirstTransactionID)
+				if bf.encodingParams.Modulator <= 1 ||
+					txidToUint64(tx.FirstTransactionID)%uint64(bf.encodingParams.Modulator) ==
+						uint64(bf.encodingParams.Offset) {
+					require.True(t, ans)
+				} else {
+					require.False(t, ans)
+				}
+			}
+		}
+	}
+	var bf bloomFilter
+	require.False(t, bf.test(transactions.Txid{1}))
 }
 
 type justRandomFakeNode struct {
