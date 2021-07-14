@@ -2743,6 +2743,7 @@ func TestReturnTypes(t *testing.T) {
 		"pushint":           "pushint 7272",
 		"pushbytes":         `pushbytes "jojogoodgorilla"`,
 		"app_params_get":    "app_params_get AppGlobalNumUint",
+		"extract":           "extract 0 2",
 	}
 
 	byName := OpsByName[LogicVersion]
