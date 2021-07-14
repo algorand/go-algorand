@@ -65,7 +65,7 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 					if len(stub.BitmaskGroup) == 0 {
 						stub.BitmaskGroup = make(bitmask, bitmaskLen)
 					}
-					stub.BitmaskGroup.SetBit(index)
+					stub.BitmaskGroup.setBit(index)
 				}
 				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
 					return packedTransactionGroups{}, fmt.Errorf("failed to encodeTransactionGroups: %w", err)

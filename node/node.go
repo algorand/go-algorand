@@ -264,7 +264,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 	node.txnSyncConnector = makeTranscationSyncNodeConnector(node)
-	node.txnSyncService = txnsync.MakeTranscationSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash, node.config, node.lowPriorityCryptoVerificationPool)
+	node.txnSyncService = txnsync.MakeTransactionSyncService(node.log, &node.txnSyncConnector, cfg.NetAddress != "", node.genesisID, node.genesisHash, node.config, node.lowPriorityCryptoVerificationPool)
 
 	err = node.loadParticipationKeys()
 	if err != nil {
@@ -501,7 +501,7 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 
 // BroadcastSignedTxGroup broadcasts a transaction group that has already been signed.
 func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
-	// in developer mode, we need to take a lock, so that each new transaction group would truely
+	// in developer mode, we need to take a lock, so that each new transaction group would truly
 	// render into a unique block.
 	if node.devMode {
 		node.mu.Lock()
