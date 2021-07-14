@@ -9,10 +9,10 @@ if [ "${BUILD_TYPE}" = "integration" ]; then
     else
         SHORTTEST=-short
     fi
-    export SHORTTEST 
+    export SHORTTEST
     make integration
 elif [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
     make fulltest -j2
 else
-    make shorttest -j2
+    make fulltest -j2
 fi
