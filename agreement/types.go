@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"sort"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -24,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/timers"
 )
 
 var deadlineTimeout = config.Protocol.BigLambda + config.Protocol.SmallLambda
@@ -159,4 +161,64 @@ func (s step) committeeSize(proto config.ConsensusParams) uint64 {
 	default:
 		return proto.NextCommitteeSize
 	}
+}
+
+// clockManager managers multiple clocks used by different pipelined rounds.
+// XXX garbage-collect old rounds
+type clockManager struct {
+	m map[round]timers.Clock
+	f timers.ClockFactory
+}
+
+func makeClockManager(f timers.ClockFactory) *clockManager {
+	return &clockManager{m: make(map[round]timers.Clock), f: f}
+}
+
+func (cm *clockManager) setZero(r round) {
+	cm.m[r] = cm.f.Zero()
+}
+
+// nextDeadlineCh returns a timeout channel that will fire when the earliest Deadline among all of
+// the rounds described in externalDemuxSignals has occurred. It also returns the corresponding
+// round (including speculative branch) this timeout channel corresponds to.
+func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan time.Time, round) {
+	if len(es) == 0 {
+		return nil, roundZero
+	}
+	sort.Slice(es, func(i, j int) bool {
+		ti := cm.m[es[i].CurrentRound].GetTimeout(es[i].Deadline)
+		tj := cm.m[es[j].CurrentRound].GetTimeout(es[j].Deadline)
+		return ti.Before(tj)
+	})
+	return cm.m[es[0].CurrentRound].TimeoutAt(es[0].Deadline), es[0].CurrentRound
+}
+
+// nextFastDeadlineCh returns a timeout channel that will fire when the earliest FastRecoveryDeadline among all of
+// the rounds described in externalDemuxSignals has occurred. It also returns the corresponding
+// round (including speculative branch) this timeout channel corresponds to.
+func (cm clockManager) nextFastDeadlineCh(es []externalDemuxSignals) (<-chan time.Time, round) {
+	if len(es) == 0 {
+		return nil, roundZero
+	}
+	sort.Slice(es, func(i, j int) bool {
+		ti := cm.m[es[i].CurrentRound].GetTimeout(es[i].FastRecoveryDeadline)
+		tj := cm.m[es[j].CurrentRound].GetTimeout(es[j].FastRecoveryDeadline)
+		return ti.Before(tj)
+	})
+	return cm.m[es[0].CurrentRound].TimeoutAt(es[0].FastRecoveryDeadline), es[0].CurrentRound
+}
+
+func (cm *clockManager) Decode(data []byte) (*clockManager, error) {
+	m := make(map[round]timers.Clock)
+	err := protocol.DecodeReflect(data, m)
+	if err != nil {
+		logging.Base().Errorf("clockManager decode error: %v", err)
+	} else {
+		logging.Base().Debugf("clockManager decoded with map %+v", m)
+	}
+	return &clockManager{m: m, f: cm.f}, err
+}
+
+func (cm *clockManager) Encode() []byte {
+	return protocol.EncodeReflect(cm.m)
 }

@@ -27,6 +27,12 @@ type Clock interface {
 	// at which Zero was called as their reference point.
 	Zero() Clock
 
+	// GetZero returns the zero time stored in this clock.
+	GetZero() time.Time
+
+	// GetTimeout returns the absolute time of the timeout target stored in this clock for duration delta.
+	GetTimeout(delta time.Duration) time.Time
+
 	// TimeoutAt returns a channel that fires delta time after Zero was called.
 	// If delta has already passed, it returns a closed channel.
 	//
@@ -40,4 +46,10 @@ type Clock interface {
 	// A Clock which has been Decoded from an Encoded Clock should produce
 	// the same timeouts as the original Clock.
 	Decode([]byte) (Clock, error)
+}
+
+// ClockFactory provides a source of new Clock instances.
+type ClockFactory interface {
+	// Zero returns a new Clock, with zero set to now.
+	Zero() Clock
 }

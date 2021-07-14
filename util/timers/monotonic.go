@@ -86,3 +86,27 @@ func (m *Monotonic) Decode(data []byte) (Clock, error) {
 func (m *Monotonic) String() string {
 	return time.Time(m.zero).String()
 }
+
+// GetZero returns the zero time stored in this clock.
+func (m *Monotonic) GetZero() time.Time {
+	return m.zero
+}
+
+// GetTimeout returns the absolute time of the timeout target stored in this clock for duration delta.
+func (m *Monotonic) GetTimeout(delta time.Duration) time.Time {
+	return m.zero.Add(delta)
+}
+
+type MonotonicFactory struct{}
+
+// MakeMonotonicClockFactory returns a ClockFactory implementation that creates Monotonic clock instances.
+func MakeMonotonicClockFactory() ClockFactory {
+	return &MonotonicFactory{}
+}
+
+// Zero returns a new Monotonic clock, with zero set to now.
+func (m *MonotonicFactory) Zero() Clock {
+	z := time.Now()
+	logging.Base().Debugf("Clock zeroed to %v", z)
+	return MakeMonotonicClock(z)
+}

@@ -22,17 +22,15 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const pipelineDepth = 1 // XXX consensus param/flag
-
 // pipelinePlayer manages an ensemble of players and implements the actor interface.
 // It tracks the last committed agreement round, and manages speculative agreement rounds.
 type pipelinePlayer struct {
-	Round basics.Round
-	//players [pipelineDepth]*player
+	lastCommittedRound basics.Round
+	players            map[round]player
 }
 
 func makePipelinePlayer(nextRound basics.Round, nextVersion protocol.ConsensusVersion) pipelinePlayer {
-	ret := pipelinePlayer{Round: nextRound}
+	ret := pipelinePlayer{lastCommittedRound: nextRound}
 	// ret.players[0] = &player{
 	// 	Round:    makeRoundBranch(nextRound, crypto.Digest{}),
 	// 	Step:     soft,
@@ -43,7 +41,7 @@ func makePipelinePlayer(nextRound basics.Round, nextVersion protocol.ConsensusVe
 func (p *pipelinePlayer) T() stateMachineTag { return playerMachine } // XXX different tag?
 func (p *pipelinePlayer) underlying() actor  { return p }
 
-/// XXX while below was copied from player, this seems like routing -- move to pipelineRouter?
+// handle an event, usually by delegating to a child player implementation.
 func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 	var actions []action
 
@@ -86,41 +84,42 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 	return actions
 }
 
-// XXX should this be in router or player?
+// handleRoundEvent looks up a player for a given round to handle an event.
 func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e event, rnd round) []action {
-
-	pr := r.r.(*pipelineRouter) // pull pipelineRouter out of routerHandle
-
-	rr, ok := pr.Children[rnd]
+	state, ok := p.players[rnd]
 	if !ok {
-		// XXX typically router.update() creates Children before state machine handle()s are called
+		// XXXX haven't seen this round before; create player or drop event
 		logging.Base().Panicf("couldn't find child for rnd %+v", rnd)
 	}
 
+	// TODO move cadaver calls to somewhere cleaner
+	r.t.traceInput(state.Round, state.Period, state, e) // cadaver
+	r.t.ainTop(demultiplexer, playerMachine, state, e, roundZero, 0, 0)
+
 	// pass event to corresponding child player for this round
-	rr.submitTop(r.t, *rr.root.underlying().(*player), e)
-	return nil
+	a := state.handle(r, e)
+
+	r.t.aoutTop(demultiplexer, playerMachine, a, roundZero, 0, 0)
+	r.t.traceOutput(state.Round, state.Period, state, a) // cadaver
+
+	return a
 }
 
 func (p *pipelinePlayer) enterRound(r routerHandle, source event, target round) []action {
-	// XXX router owns all the per-player router.Children now
+	// XXXX create new players and GC old ones
 	return nil
 }
 
-// XXX should pipelineRouter or pipelinePlayer track this?
-func (p *pipelineRouter) externalDemuxSignals() []externalDemuxSignals {
-	//	ret := make([]externalDemuxSignals, len(p.players))
-	//	for i, p := range p.players {
-	ret := make([]externalDemuxSignals, len(p.Children))
+func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
+	s := make([]externalDemuxSignals, len(p.players))
 	i := 0
-	for _, rootRouter := range p.Children {
-		p := rootRouter.root.(*player)
-		ret[i] = externalDemuxSignals{
+	for _, p := range p.players {
+		s[i] = externalDemuxSignals{
 			Deadline:             p.Deadline,
 			FastRecoveryDeadline: p.FastRecoveryDeadline,
 			CurrentRound:         p.Round,
 		}
 		i += 1
 	}
-	return ret
+	return pipelineExternalDemuxSignals{signals: s, lastCommittedRound: p.lastCommittedRound}
 }

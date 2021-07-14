@@ -16,8 +16,6 @@
 
 package agreement
 
-import "github.com/algorand/go-algorand/data/basics"
-
 // A stateMachineTag uniquely identifies the type of a state machine.
 //
 // Rounds, periods, and steps may be used to further identify different state machine instances of the same type.
@@ -67,12 +65,6 @@ type router interface {
 	dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event
 }
 
-type pipelineRouter struct {
-	// XXX add contracts to check round/branch for messages/events to children
-	root     pipelinePlayer
-	Children map[round]*rootRouter // includes round + branch
-}
-
 type rootRouter struct {
 	root         actor    // playerMachine   (not restored: explicitly set on construction)
 	proposalRoot listener // proposalMachine
@@ -81,7 +73,7 @@ type rootRouter struct {
 	ProposalManager proposalManager
 	VoteAggregator  voteAggregator
 
-	Children map[basics.Round]*roundRouter // XXX not branch aware
+	Children map[round]*roundRouter
 }
 
 type roundRouter struct {
@@ -114,38 +106,12 @@ type stepRouter struct {
 	VoteTrackerContract voteTrackerContract
 }
 
-func makePipelineRouter(p pipelinePlayer) pipelineRouter {
-	return pipelineRouter{root: p}
-}
-
-func makeRootRouter(p player) (res rootRouter) {
+func makeRootRouter(p pipelinePlayer) (res rootRouter) {
 	res.root = checkedActor{actor: &p, actorContract: playerContract{}}
 	return
 }
 
-func (router *pipelineRouter) update(r round, gc bool) {
-	if router.Children == nil {
-		router.Children = make(map[round]*rootRouter)
-	}
-	if router.Children[r] == nil {
-		rootRouter := makeRootRouter(player{}) // XXXX create new router-player pairs on demand
-		router.Children[r] = &rootRouter
-	}
-
-	if gc {
-		// XXXX garbage collect branchRounds
-	}
-}
-
-func (router *pipelineRouter) submitTop(t *tracer, state pipelinePlayer, e event) (pipelinePlayer, []action) {
-	router.update(roundZero, true)
-	handle := routerHandle{t: t, r: router, src: playerMachine} // XXXX
-	a := router.root.handle(handle, e)                          // pass to pipelinePlayer
-	p := router.root.underlying().(*pipelinePlayer)
-	return *p, a
-}
-
-func (router *rootRouter) update(state player, r round, gc bool) {
+func (router *rootRouter) update(state pipelinePlayer, r round, gc bool) {
 	if router.proposalRoot == nil {
 		router.proposalRoot = checkedListener{listener: &router.ProposalManager, listenerContract: proposalManagerContract{}}
 	}
@@ -153,16 +119,17 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 		router.voteRoot = checkedListener{listener: &router.VoteAggregator, listenerContract: voteAggregatorContract{}}
 	}
 	if router.Children == nil {
-		router.Children = make(map[basics.Round]*roundRouter)
+		router.Children = make(map[round]*roundRouter)
 	}
-	if router.Children[r.number] == nil {
-		router.Children[r.number] = new(roundRouter)
+	if router.Children[r] == nil {
+		router.Children[r] = new(roundRouter)
 	}
 
 	if gc {
-		children := make(map[basics.Round]*roundRouter)
+		children := make(map[round]*roundRouter)
+		// XXX just considers last committed round number, ignores branch, OK?
 		for r, c := range router.Children {
-			if r >= state.Round.number {
+			if r.number >= state.lastCommittedRound {
 				children[r] = c
 			}
 		}
@@ -172,29 +139,34 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 
 // submitTop is a convenience method used to submit the event directly into the root of the state machine tree
 // (i.e., to the playerMachine).
-func (router *rootRouter) submitTop(t *tracer, state player, e event) (player, []action) {
-	// TODO move cadaver calls to somewhere cleaner
-	t.traceInput(state.Round, state.Period, state, e) // cadaver
-	t.ainTop(demultiplexer, playerMachine, state, e, roundZero, 0, 0)
-
+func (router *rootRouter) submitTop(t *tracer, state pipelinePlayer, e event) (pipelinePlayer, []action) {
 	router.update(state, roundZero, true)
+	// XXX trace calls moved to pipelinePlayer.handleRoundEvent
 	handle := routerHandle{t: t, r: router, src: playerMachine}
 	a := router.root.handle(handle, e)
-
-	t.aoutTop(demultiplexer, playerMachine, a, roundZero, 0, 0)
-	t.traceOutput(state.Round, state.Period, state, a) // cadaver
-
-	p := router.root.underlying().(*player)
+	p := router.root.underlying().(*pipelinePlayer)
 	return *p, a
 }
 
-func (router *pipelineRouter) dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event {
-	router.update(r, true)
-	return router.Children[r].dispatch(t, state, e, src, dest, r, p, s)
+func (router *rootRouter) submitTopAutopsyXXX(t *tracer, p player, e event) (player, []action) {
+	// TODO move cadaver calls to somewhere cleaner
+	//r.t.traceInput(state.Round, state.Period, state, e) // cadaver
+	//r.t.ainTop(demultiplexer, playerMachine, state, e, roundZero, 0, 0)
+
+	//router.update(state, roundZero, true)
+	//handle := routerHandle{t: t, r: router, src: playerMachine}
+	//a := router.root.handle(handle, e)
+
+	//r.t.aoutTop(demultiplexer, playerMachine, a, roundZero, 0, 0)
+	//r.t.traceOutput(state.Round, state.Period, state, a) // cadaver
+
+	//p := router.root.underlying().(*pipelinePlayer)
+	return p, nil
+
 }
 
 func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event {
-	router.update(state, r, true)
+	router.update(*router.root.underlying().(*pipelinePlayer), r, true) // XXX
 	if router.proposalRoot.T() == dest {
 		handle := routerHandle{t: t, r: router, src: proposalMachine}
 		return router.proposalRoot.handle(handle, state, e)
@@ -203,7 +175,7 @@ func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMa
 		handle := routerHandle{t: t, r: router, src: voteMachine}
 		return router.voteRoot.handle(handle, state, e)
 	}
-	return router.Children[r.number].dispatch(t, state, e, src, dest, r, p, s)
+	return router.Children[r].dispatch(t, state, e, src, dest, r, p, s)
 }
 
 func (router *roundRouter) update(state player, p period, gc bool) {

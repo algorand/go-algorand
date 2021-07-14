@@ -296,7 +296,7 @@ func (a rezeroAction) String() string {
 }
 
 func (a rezeroAction) do(ctx context.Context, s *Service) {
-	s.Clock = s.Clock.Zero()
+	s.clockManager.setZero(a.Round)
 }
 
 type pseudonodeAction struct {
@@ -379,7 +379,7 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 		switch err {
 		case nil:
 			// no error.
-			persistCompleteEvents := s.persistState(persistStateDone)
+			persistCompleteEvents := s.persistState(a.Round, a.Period, a.Step, persistStateDone)
 			// we want to place there two one after the other. That way, the second would not get executed up until the first one is complete.
 			s.demux.prioritize(persistCompleteEvents)
 			s.demux.prioritize(voteEvents)

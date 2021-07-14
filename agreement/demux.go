@@ -183,7 +183,7 @@ func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, 
 // next blocks until it observes an external input event of interest for the state machine.
 //
 // If ok is false, there are no more events so the agreement service should quit.
-func (d *demux) next(s *Service, extSignals []externalDemuxSignals) (e externalEvent, ok bool) {
+func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e externalEvent, ok bool) {
 	defer func() {
 		if !ok {
 			return
@@ -214,7 +214,7 @@ func (d *demux) next(s *Service, extSignals []externalDemuxSignals) (e externalE
 
 	}
 
-	nextRound := currentRound
+	nextRound := extSignals.lastCommittedRound
 	ok = true
 
 	rawVotes := d.rawVotes
@@ -235,23 +235,33 @@ func (d *demux) next(s *Service, extSignals []externalDemuxSignals) (e externalE
 		rawBundles = nil
 	}
 
-	ledgerNextRoundCh := s.Ledger.Wait(nextRound.number, nextRound.branch)
-	deadlineCh := s.Clock.TimeoutAt(deadline)
+	// XXX assert len(extSignals) > 0 and matches expected depth
+	// pick next deadlineCh from extSignals
+	ledgerNextRoundCh := s.Ledger.Wait(nextRound, crypto.Digest{})
+	deadlineCh, deadlineRound := s.clockManager.nextDeadlineCh(extSignals.signals)
 	var fastDeadlineCh <-chan time.Time
+	var fastDeadlineRound round
 
-	fastPartitionRecoveryEnabled := false
-	if proto, err := d.ledger.ConsensusVersion(paramsRoundBranch(currentRound)); err != nil {
-		logging.Base().Warnf("demux: could not get consensus parameters for round %d from round %+v: %v", ParamsRound(currentRound.number), currentRound, err)
-		// this might happen during catchup, since the Ledger.Wait fires as soon as a new block is received by the ledger, which could be
-		// far before it's being committed. In these cases, it should be safe to default to the current consensus version. On subsequent
-		// iterations, it will get "corrected" since the ledger would finish flushing the blocks to disk.
-		fastPartitionRecoveryEnabled = config.Consensus[protocol.ConsensusCurrentVersion].FastPartitionRecovery
-	} else {
-		fastPartitionRecoveryEnabled = config.Consensus[proto].FastPartitionRecovery
+	// pick next fastDeadlineCh from extSignals
+	var fastDeadlineRounds []externalDemuxSignals
+	for _, extSignal := range extSignals.signals {
+		fastPartitionRecoveryEnabled := false
+		if proto, err := d.ledger.ConsensusVersion(paramsRoundBranch(extSignal.CurrentRound)); err != nil {
+			logging.Base().Warnf("demux: could not get consensus parameters for round %d from round %+v: %v", ParamsRound(extSignal.CurrentRound.number), extSignal.CurrentRound, err)
+			// this might happen during catchup, since the Ledger.Wait fires as soon as a new block is received by the ledger, which could be
+			// far before it's being committed. In these cases, it should be safe to default to the current consensus version. On subsequent
+			// iterations, it will get "corrected" since the ledger would finish flushing the blocks to disk.
+			fastPartitionRecoveryEnabled = config.Consensus[protocol.ConsensusCurrentVersion].FastPartitionRecovery
+		} else {
+			fastPartitionRecoveryEnabled = config.Consensus[proto].FastPartitionRecovery
+		}
+		if fastPartitionRecoveryEnabled {
+			fastDeadlineRounds = append(fastDeadlineRounds, extSignal)
+		}
 	}
 
-	if fastPartitionRecoveryEnabled {
-		fastDeadlineCh = s.Clock.TimeoutAt(fastDeadline)
+	if len(fastDeadlineRounds) > 0 {
+		fastDeadlineCh, fastDeadlineRound = s.clockManager.nextFastDeadlineCh(fastDeadlineRounds)
 	}
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
@@ -270,7 +280,7 @@ func (d *demux) next(s *Service, extSignals []externalDemuxSignals) (e externalE
 		// the pseudonode channel got closed. remove it from the queue and try again.
 		d.queue = d.queue[1:]
 		d.UpdateEventsQueue(eventQueuePseudonode, 0)
-		return d.next(s, deadline, fastDeadline, currentRound)
+		return d.next(s, extSignals)
 
 	// control
 	case <-s.quit:
@@ -283,25 +293,24 @@ func (d *demux) next(s *Service, extSignals []externalDemuxSignals) (e externalE
 		// since we don't know how long we've been waiting in this select statement and we don't really know
 		// if the current next round has been increased by 1 or more, we need to sample it again.
 		previousRound := nextRound
-		nextRound = makeRoundBranch(s.Ledger.NextRound(), crypto.Digest{}) // use empty digest: not speculative
+		nextRoundBranch := makeRoundBranch(s.Ledger.NextRound(), crypto.Digest{}) // XXX uses empty digest: not speculative
 
 		logEvent := logspec.AgreementEvent{
-			Type:   logspec.RoundInterrupted,
-			Round:  uint64(previousRound.number),
-			Branch: previousRound.branch.String(),
+			Type:  logspec.RoundInterrupted,
+			Round: uint64(previousRound),
 		}
 
 		s.log.with(logEvent).Infof("agreement: round %d ended early due to concurrent write; next round is %d", previousRound, nextRound)
-		e = roundInterruptionEvent{Round: nextRound}
+		e = roundInterruptionEvent{Round: nextRoundBranch}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.monitor.inc(demuxCoserviceType)
 	case <-deadlineCh:
-		e = timeoutEvent{T: timeout, RandomEntropy: s.RandomSource.Uint64(), Round: nextRound}
+		e = timeoutEvent{T: timeout, RandomEntropy: s.RandomSource.Uint64(), Round: deadlineRound}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.monitor.inc(demuxCoserviceType)
 		d.monitor.dec(clockCoserviceType)
 	case <-fastDeadlineCh:
-		e = timeoutEvent{T: fastTimeout, RandomEntropy: s.RandomSource.Uint64(), Round: nextRound}
+		e = timeoutEvent{T: fastTimeout, RandomEntropy: s.RandomSource.Uint64(), Round: fastDeadlineRound}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.monitor.inc(demuxCoserviceType)
 		d.monitor.dec(clockCoserviceType)

@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/algorand/go-algorand/util/timers"
 )
 
 // diskState represents the state required by the agreement protocol to be persistent.
@@ -49,7 +48,7 @@ func persistent(as []action) bool {
 }
 
 // encode serializes the current state into a byte array.
-func encode(t timers.Clock, rr rootRouter, p player, a []action) []byte {
+func encode(t *clockManager, rr rootRouter, p pipelinePlayer, a []action) []byte {
 	var s diskState
 	s.Router = protocol.EncodeReflect(rr)
 	s.Player = protocol.EncodeReflect(p)
@@ -177,8 +176,8 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 // decode process the incoming raw bytes array and attempt to reconstruct the agreement state objects.
 //
 // In all decoding errors, it returns the error code in err
-func decode(raw []byte, t0 timers.Clock) (t timers.Clock, rr rootRouter, p pipelinePlayer, a []action, err error) {
-	var t2 timers.Clock
+func decode(raw []byte, t0 *clockManager) (t *clockManager, rr rootRouter, p pipelinePlayer, a []action, err error) {
+	var t2 *clockManager
 	var rr2 rootRouter
 	var p2 pipelinePlayer
 	a2 := []action{}
@@ -190,7 +189,7 @@ func decode(raw []byte, t0 timers.Clock) (t timers.Clock, rr rootRouter, p pipel
 		return
 	}
 
-	t2, err = t0.Decode(s.Clock)
+	t2, err = t0.Decode(s.Clock) // XXX backwards incompatible: changes what Clock []byte means in persistent state
 	if err != nil {
 		return
 	}
@@ -228,7 +227,7 @@ type persistentRequest struct {
 	step   step
 	raw    []byte
 	done   chan error
-	clock  timers.Clock
+	clock  *clockManager
 	events chan<- externalEvent
 }
 
@@ -250,7 +249,7 @@ func makeAsyncPersistenceLoop(log serviceLogger, crash db.Accessor, ledger Ledge
 	}
 }
 
-func (p *asyncPersistenceLoop) Enqueue(clock timers.Clock, round round, period period, step step, raw []byte, done chan error) (events <-chan externalEvent) {
+func (p *asyncPersistenceLoop) Enqueue(clockManager *clockManager, round round, period period, step step, raw []byte, done chan error) (events <-chan externalEvent) {
 	eventsChannel := make(chan externalEvent, 1)
 	p.pending <- persistentRequest{
 		round:  round,
@@ -258,7 +257,7 @@ func (p *asyncPersistenceLoop) Enqueue(clock timers.Clock, round round, period p
 		step:   step,
 		raw:    raw,
 		done:   done,
-		clock:  clock,
+		clock:  clockManager,
 		events: eventsChannel,
 	}
 	return eventsChannel
