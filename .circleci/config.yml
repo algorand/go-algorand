@@ -16,29 +16,101 @@ workflows:
       - amd64_integration:
           requires:
             - amd64_build
+          filters:
+            branches:
+              ignore: /rel\/nightly/
+      - amd64_integration_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: /rel\/nightly/
       - amd64_e2e_subs:
           requires:
             - amd64_build
+          filters:
+            branches:
+              ignore: /rel\/nightly/
+      - amd64_e2e_subs_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: /rel\/nightly/
       - arm64_build
       - arm64_test:
           requires:
             - arm64_build
+          filters:
+            branches:
+              ignore: /rel\/nightly/
+      - arm64_test_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: /rel\/nightly/
       - arm64_integration:
           requires:
             - arm64_build
+          filters:
+            branches:
+              ignore: /rel\/nightly/
+      - arm64_integration_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: /rel\/nightly/
       - arm64_e2e_subs:
           requires:
             - arm64_build
+          filters:
+            branches:
+              ignore: /rel\/nightly/
+      - arm64_e2e_subs_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: /rel\/nightly/
       - mac_amd64_build
       - mac_amd64_test:
           requires:
             - mac_amd64_build
+          filters:
+            branches:
+              ignore: /rel\/nightly/
+      - mac_amd64_test_nightly:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              only: /rel\/nightly/
       - mac_amd64_integration:
           requires:
             - mac_amd64_build
+          filters:
+            branches:
+              ignore: /rel\/nightly/
+      - mac_amd64_integration_nightly:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              only: /rel\/nightly/
       - mac_amd64_e2e_subs:
           requires:
             - mac_amd64_build
+          filters:
+            branches:
+              ignore: /rel\/nightly/
+      - mac_amd64_e2e_subs_nightly:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              ignore: /rel\/nightly/
       #- windows_x64_build
 
 commands:
@@ -102,7 +174,7 @@ commands:
             - .gimme
 
   generic_shorttest:
-    description: Run full tests from build workspace, for re-use by diferent architectures
+    description: Run short tests from build workspace, for re-use by diferent architectures
     parameters:
       circleci_home:
         type: string
@@ -114,7 +186,46 @@ commands:
           at: << parameters.circleci_home >>
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
-          name: Run full tests
+          name: Run short tests
+          no_output_timeout: 30m
+          command: |
+            set -e
+            set -x
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export KMD_NOUSB=True
+            export GOPATH="<< parameters.circleci_home >>/go"
+            export PATH="${PATH}:${GOPATH}/bin"
+            export ALGORAND_DEADLOCK=enable
+            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+            eval "$(~/gimme "${GOLANG_VERSION}")"
+            scripts/configure_dev.sh
+            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+            PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
+            export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
+            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
+            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            export PARALLEL_FLAG="-p 1"
+            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+      - store_artifacts:
+          path: /tmp/results
+          destination: test-results
+      - store_test_results:
+          path: /tmp/results
+
+  nightly_test:
+    description: Run nightly longer tests from build workspace, for re-use by diferent architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+      result_subdir:
+        type: string
+    steps:
+      - attach_workspace:
+          at: << parameters.circleci_home >>
+      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - run:
+          name: Run nightly tests
           no_output_timeout: 45m
           command: |
             set -e
@@ -168,7 +279,7 @@ commands:
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
-            export SHORTTEST=
+            export SHORTTEST=-short
             export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
@@ -179,6 +290,44 @@ commands:
       - store_test_results:
           path: /tmp/results
 
+  nightly_integration:
+    description: Run nightly integration tests from build workspace, for re-use by diferent architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+      result_subdir:
+        type: string
+    steps:
+      - attach_workspace:
+          at: << parameters.circleci_home >>
+      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - run:
+          name: Run integration tests
+          no_output_timeout: 30m
+          command: |
+            set -x
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export KMD_NOUSB=True
+            export GOPATH="<< parameters.circleci_home >>/go"
+            export PATH="${PATH}:${GOPATH}/bin"
+            export ALGORAND_DEADLOCK=enable
+            export BUILD_TYPE=integration
+            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+            eval "$(~/gimme "${GOLANG_VERSION}")"
+            scripts/configure_dev.sh
+            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+            export ALGOTEST=1
+            export SHORTTEST=
+            export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
+            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
+            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            test/scripts/run_integration_tests.sh
+      - store_artifacts:
+          path: /tmp/results
+          destination: test-results
+      - store_test_results:
+          path: /tmp/results
 jobs:
   codegen_verification:
     machine:
@@ -211,6 +360,16 @@ jobs:
       - generic_shorttest:
           result_subdir: amd64-short
 
+  amd64_test_nightly:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: xlarge
+    parallelism: 4
+    steps:
+      - prepare_go
+      - nightly_test:
+          result_subdir: amd64-nightly
+
   amd64_integration:
     machine:
       image: ubuntu-2004:202104-01
@@ -223,6 +382,18 @@ jobs:
       - generic_integration:
           result_subdir: amd64-integration
 
+  amd64_integration_nightly:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      - prepare_go
+      - nightly_integration:
+          result_subdir: amd64-integration-nightly
+
   amd64_e2e_subs:
     machine:
       image: ubuntu-2004:202104-01
@@ -233,6 +404,17 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: amd64-e2e_subs
+
+  amd64_e2e_subs_nightly:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      - prepare_go
+      - nightly_integration:
+          result_subdir: amd64-e2e_subs-nighly
 
   arm64_build:
     machine:
@@ -254,6 +436,17 @@ jobs:
       - generic_shorttest:
           result_subdir: arm64-short
 
+  arm64_test_nightly:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    parallelism: 4
+    steps:
+      - checkout
+      - prepare_go
+      - nightly_test:
+          result_subdir: arm64-nightly
+
   arm64_integration:
     machine:
       image: ubuntu-2004:202101-01
@@ -267,6 +460,19 @@ jobs:
       - generic_integration:
           result_subdir: arm64-integration
 
+  arm64_integration_nightly:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      - checkout
+      - prepare_go
+      - nightly_integration:
+          result_subdir: arm64-integration-nightly
+
   arm64_e2e_subs:
     machine:
       image: ubuntu-2004:202101-01
@@ -278,6 +484,18 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: arm64-e2e_subs
+
+  arm64_e2e_subs_nightly:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      - checkout
+      - prepare_go
+      - nightly_integration:
+          result_subdir: arm64-e2e_subs-nightly
 
   mac_amd64_build:
     macos:
@@ -302,6 +520,18 @@ jobs:
           result_subdir: mac-amd64-short
           circleci_home: /Users/distiller
 
+  mac_amd64_test_nightly:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    parallelism: 4
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - nighlty_test:
+          result_subdir: mac-amd64-nightly
+          circleci_home: /Users/distiller
+
   mac_amd64_integration:
     macos:
       xcode: 12.0.1
@@ -316,6 +546,20 @@ jobs:
           result_subdir: mac-amd64-integration
           circleci_home: /Users/distiller
 
+  mac_amd64_integration_nightly:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - nightly_integration:
+          result_subdir: mac-amd64-integration-nightly
+          circleci_home: /Users/distiller
+
   mac_amd64_e2e_subs:
     macos:
       xcode: 12.0.1
@@ -327,6 +571,19 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: mac-amd64-e2e_subs
+          circleci_home: /Users/distiller
+
+  mac_amd64_e2e_subs_nightly:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    environment:
+      E2E_SUBS_ONLY: "tsrue"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - nightly_integration:
+          result_subdir: mac-amd64-e2e_subs-nightly
           circleci_home: /Users/distiller
 
   windows_x64_build:
