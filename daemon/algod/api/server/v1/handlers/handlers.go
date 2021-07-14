@@ -24,8 +24,9 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/labstack/echo/v4"
 
@@ -163,6 +164,23 @@ func participationKeysEncode(r basics.AccountData) *v1.Participation {
 	return &apiParticipation
 }
 
+// sanitizePrintableUTF8String checks to see if the entire string is a UTF8 printable string.
+// If this is the case, the string is returned as is. Otherwise, the empty string is returned.
+func sanitizePrintableUTF8String(in string) string {
+	// check to see if all the characters in the input string are utf-8.
+	if !utf8.ValidString(in) {
+		return ""
+	}
+	// iterate throughout all the characters in the string to see if they are all printable.
+	for _, c := range in {
+		// is this a printable character ?
+		if !unicode.IsPrint(c) {
+			return ""
+		}
+	}
+	return in
+}
+
 func modelAssetParams(creator basics.Address, params basics.AssetParams) v1.AssetParams {
 	paramsModel := v1.AssetParams{
 		Total:         params.Total,
@@ -170,9 +188,9 @@ func modelAssetParams(creator basics.Address, params basics.AssetParams) v1.Asse
 		Decimals:      params.Decimals,
 	}
 
-	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
-	paramsModel.AssetName = strings.TrimRight(string(params.AssetName[:]), "\x00")
-	paramsModel.URL = strings.TrimRight(string(params.URL[:]), "\x00")
+	paramsModel.UnitName = sanitizePrintableUTF8String(params.UnitName)
+	paramsModel.AssetName = sanitizePrintableUTF8String(params.AssetName)
+	paramsModel.URL = sanitizePrintableUTF8String(params.URL)
 	if params.MetadataHash != [32]byte{} {
 		paramsModel.MetadataHash = params.MetadataHash[:]
 	}

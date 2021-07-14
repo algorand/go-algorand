@@ -1027,8 +1027,13 @@
             "type": "string"
           },
           "name": {
-            "description": "\\[an\\] Name of this asset, as supplied by the creator.",
+            "description": "\\[an\\] Name of this asset, as supplied by the creator. Field presents only if the asset name is composed of printable utf-8 characters.",
             "type": "string"
+          },
+          "name_b64": {
+            "description": "\\[an64\\] base64 encoded name of this asset, as supplied by the creator.",
+            "type": "string",
+            "x-algorand-format": "base64"
           },
           "reserve": {
             "description": "\\[r\\] Address of account holding reserve (non-minted) units of this asset.",
@@ -1040,12 +1045,22 @@
             "x-algorand-format": "uint64"
           },
           "unit-name": {
-            "description": "\\[un\\] Name of a unit of this asset, as supplied by the creator.",
+            "description": "\\[un\\] Name of a unit of this asset, as supplied by the creator. Field presents only if the name of a unit of this asset is composed of printable utf-8 characters.",
             "type": "string"
           },
+          "unit-name_b64": {
+            "description": "\\[un64\\] base64 encoded name of a unit of this asset, as supplied by the creator.",
+            "type": "string",
+            "x-algorand-format": "base64"
+          },
           "url": {
-            "description": "\\[au\\] URL where more information about the asset can be retrieved.",
+            "description": "\\[au\\] URL where more information about the asset can be retrieved. Field presents only if the URL is composed of printable utf-8 characters.",
             "type": "string"
+          },
+          "url_b64": {
+            "description": "\\[au64\\] base64 encoded URL where more information about the asset can be retrieved.",
+            "type": "string",
+            "x-algorand-format": "base64"
           }
         },
         "required": [
