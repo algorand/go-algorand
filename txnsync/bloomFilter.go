@@ -126,7 +126,7 @@ func filterFactoryXor8(numEntries int, s *syncState) (filter bloom.GenericFilter
 }
 
 func filterFactoryXor32(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) {
-	return bloom.NewXor(numEntries, &s.xorBuilder), xorBloomFilter 
+	return bloom.NewXor(numEntries, &s.xorBuilder), xorBloomFilter
 }
 
 var filterFactory func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) = filterFactoryXor8
