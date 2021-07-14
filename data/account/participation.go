@@ -113,7 +113,7 @@ func (part Participation) BlockProofSigner() *crypto.SignatureAlgorithm {
 }
 
 // GenerateRegistrationTransaction returns a transaction object for registering a Participation with its parent.
-func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) transactions.Transaction {
+func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte, cparams config.ConsensusParams) transactions.Transaction {
 	t := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
@@ -129,7 +129,9 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 		},
 	}
 	if cert := part.BlockProofSigner(); cert != nil {
-		t.KeyregTxnFields.BlockProofPK = cert.GetSigner().GetVerifyingKey()
+		if cparams.EnableBlockProofKeyregCheck {
+			t.KeyregTxnFields.BlockProofPK = cert.GetSigner().GetVerifyingKey()
+		}
 	}
 	t.KeyregTxnFields.VoteFirst = part.FirstValid
 	t.KeyregTxnFields.VoteLast = part.LastValid
