@@ -112,7 +112,7 @@ commands:
             mkdir tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - save_cache:
-          key: 'libsodium-{{ .Environment.CIRCLE_STAGE }}-{{ checksum tmp/libsodium.md5 }}'
+          key: 'libsodium-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
           paths:
             - crypto/libs/{{ .Environment.OS_TYPE }}/{{ .Environment.ARCH }}
 
@@ -126,7 +126,7 @@ commands:
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - restore_cache:
           keys:
-            - 'libsodium-{{ .Environment.CIRCLE_STAGE }}-{{ checksum tmp/libsodium.md5 }}'
+            - 'libsodium-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
 
   generic_shorttest:
     description: Run short tests from build workspace, for re-use by diferent architectures
