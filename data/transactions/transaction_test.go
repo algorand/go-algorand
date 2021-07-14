@@ -19,7 +19,6 @@ package transactions
 import (
 	"flag"
 	"fmt"
-	"log"
 	"math"
 	"strings"
 	"testing"
@@ -1185,9 +1184,6 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		/* 520 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, blockProofPK: crypto.VerifyingKey{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 0, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: true, err: nil},
 	}
 	for testcaseIdx, testCase := range keyRegTestCases {
-		if testcaseIdx == 517 {
-			log.Println()
-		}
 		err := runTestCase(testCase)
 		require.Equalf(t, testCase.err, err, "index: %d\ntest case: %#v", testcaseIdx, testCase)
 	}
