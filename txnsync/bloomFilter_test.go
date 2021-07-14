@@ -195,7 +195,7 @@ func TestHint(t *testing.T) {
 		}
 
 		// Change the filter of bf to XorFilter
-		bf.filter = filterFactoryXor32(len(txnGroups), &s)
+		bf.filter, bf.filterType = filterFactoryXor32(len(txnGroups), &s)
 
 		// Pass bf as a hint.
 		bf2 := s.makeBloomFilter(encodingParams, txnGroups, &bf)
@@ -232,7 +232,7 @@ func TestEncodingDecoding(t *testing.T) {
 	s.node = &justRandomFakeNode{}
 	var encodingParams requestParams
 
-	filters := []func(int, *syncState) bloom.GenericFilter{
+	filters := []func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes){
 		filterFactoryXor8, filterFactoryXor32, filterFactoryBloom}
 
 	// For each filter type
@@ -270,7 +270,7 @@ func TestDecodingErrors(t *testing.T) {
 
 func TestBloomFilterTest(t *testing.T) {
 
-	filters := []func(int, *syncState) bloom.GenericFilter{
+	filters := []func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes){
 		filterFactoryXor8, filterFactoryXor32, filterFactoryBloom}
 
 	for _, filterFactory = range filters {
