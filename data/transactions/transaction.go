@@ -584,11 +584,6 @@ func (tx Transaction) blockProofPKWellFormed(proto config.ConsensusParams) error
 		return errKeyRegEmptyBlockProofPK
 	}
 
-	// setting online cannot set invalid blockProofPK
-	if !tx.KeyregTxnFields.BlockProofPK.IsValid() {
-		return errKeyReginvalidBlockProofPK
-	}
-
 	return nil
 }
 
