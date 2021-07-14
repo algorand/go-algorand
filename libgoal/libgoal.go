@@ -17,6 +17,7 @@
 package libgoal
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -687,8 +688,39 @@ func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error)
 // AssetInformationV2 takes an asset's index and returns its information
 func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err error) {
 	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.AssetInformationV2(index)
+	if err != nil {
+		return
+	}
+	resp, err = algod.AssetInformationV2(index)
+	if err != nil {
+		return
+	}
+	nilString := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	if len(nilString(resp.Params.NameB64)) > 0 && len(nilString(resp.Params.Name)) == 0 {
+		var nameBytes []byte
+		// the Name is not a UTF-8 printable, but now we can decode that from the base64 version.
+		nameBytes, err = base64.StdEncoding.DecodeString(nilString(resp.Params.NameB64))
+		resp.Params.Name = new(string)
+		*resp.Params.Name = string(nameBytes)
+	}
+	if len(nilString(resp.Params.UnitNameB64)) > 0 && len(nilString(resp.Params.UnitName)) == 0 {
+		var unitNameBytes []byte
+		// the UnitName is not a UTF-8 printable, but now we can decode that from the base64 version.
+		unitNameBytes, err = base64.StdEncoding.DecodeString(nilString(resp.Params.UnitNameB64))
+		resp.Params.UnitName = new(string)
+		*resp.Params.UnitName = string(unitNameBytes)
+	}
+	if len(nilString(resp.Params.UrlB64)) > 0 && len(nilString(resp.Params.Url)) == 0 {
+		var urlBytes []byte
+		// the URL is not a UTF-8 printable, but now we can decode that from the base64 version.
+		urlBytes, err = base64.StdEncoding.DecodeString(nilString(resp.Params.UrlB64))
+		resp.Params.Name = new(string)
+		*resp.Params.Name = string(urlBytes)
 	}
 	return
 }
