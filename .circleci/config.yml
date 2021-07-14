@@ -110,7 +110,7 @@ commands:
           name: Get libsodium md5
           command: |
             mkdir tmp
-            find crypto/libsodium-fork -type f -exec md5 "{}" + | md5 |cut -d' ' -f1 > tmp/libsodium.md5
+            find crypto/libsodium-fork -type f -exec openssl md5 "{}" + | openssl md5 -out tmp/libsodium.md5
       - save_cache:
           key: 'libsodium-{{ .Environment.CIRCLE_STAGE }}-{{ checksum tmp/libsodium.md5 }}'
           paths:
@@ -123,7 +123,7 @@ commands:
           name: Get libsodium md5
           command: |
             mkdir tmp
-            find crypto/libsodium-fork -type f -exec md5 "{}" + | md5 |cut -d' ' -f1 > tmp/libsodium.md5
+            find crypto/libsodium-fork -type f -exec openssl md5 "{}" + | openssl md5 -out tmp/libsodium.md5
       - restore_cache:
           keys:
             - 'libsodium-{{ .Environment.CIRCLE_STAGE }}-{{ checksum tmp/libsodium.md5 }}'
