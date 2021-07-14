@@ -71,8 +71,6 @@ commands:
             export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
             export msys2+=" -msys2 -c "\"\$@"\" --"
             $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip autoconf automake gcc libtool
-            export PATH=/C/tools/msys64/mingw64/bin:$PATH
-            export MAKE=mingw32-make
 
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
@@ -345,5 +343,7 @@ jobs:
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
             export NO_GIMME=True
+            export PATH=/C/tools/msys64/mingw64/bin:$PATH
+            export MAKE=mingw32-make
             $msys2 scripts/travis/build_test.sh
           shell: bash.exe
