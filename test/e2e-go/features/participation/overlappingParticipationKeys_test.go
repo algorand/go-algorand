@@ -93,7 +93,7 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 		txEndRound := txStartRound + 10 + 4
 		regStartRound := round
 		regEndRound := regStartRound + 11 + 4
-		err = prepareParticipationKey(a, &fixture, acctIdx, txStartRound, txEndRound, regStartRound, regEndRound, genesisHash, rootKeys, regTransactions)
+		err = prepareParticipationKey(a, &fixture, acctIdx, txStartRound, txEndRound, regStartRound, regEndRound, genesisHash, rootKeys, regTransactions, config.Consensus[protocol.ConsensusCurrentVersion])
 		a.NoError(err)
 	}
 
@@ -110,6 +110,7 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 			endRound := startRound + 10 + 4 - 2
 			regStartRound := currentRound
 			regEndRound := regStartRound + 11 + 4
+
 			pk, err := addParticipationKey(a, &fixture, acctIdx, startRound, endRound, regTransactions)
 			a.NoError(err)
 			t.Logf("[.] Round %d, Added reg key for node %d range [%d..%d] %s\n", currentRound, acctIdx, regStartRound, regEndRound, hex.EncodeToString(pk[:8]))
@@ -142,7 +143,7 @@ func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixt
 	return signedTxn.Txn.KeyregTxnFields.VotePK, err
 }
 
-func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum uint64, txStartRound, txEndRound, regStartRound, regEndRound uint64, genesisHash crypto.Digest, rootKeys map[int]*account.Root, regTransactions map[int]transactions.SignedTxn) error {
+func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum, txStartRound, txEndRound, regStartRound, regEndRound uint64, genesisHash crypto.Digest, rootKeys map[int]*account.Root, regTransactions map[int]transactions.SignedTxn, c config.ConsensusParams) error {
 	dataDir := fixture.NodeDataDirs()[acctNum]
 
 	nc := fixture.GetNodeControllerForDataDir(dataDir)
@@ -204,7 +205,7 @@ func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClient
 	partkeyHandle.Vacuum(context.Background())
 	persistedParticipation.Close()
 
-	unsignedTxn := persistedParticipation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, basics.Round(txStartRound), basics.Round(txEndRound), [32]byte{})
+	unsignedTxn := persistedParticipation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, basics.Round(txStartRound), basics.Round(txEndRound), [32]byte{}, c)
 	copy(unsignedTxn.GenesisHash[:], genesisHash[:])
 	if err != nil {
 		a.NoError(err)
