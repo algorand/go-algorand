@@ -63,18 +63,17 @@ commands:
           shell: bash.exe
           command: |
             choco uninstall -y mingw
-            choco install -y msys2 pacman make wget
+            choco install -y msys2 pacman make
             choco install -y golang --version=1.14
             choco install -y python3 --version=3.7.3
+            export MAKE=mingw32-make
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
             export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
             export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
             export msys2+=" -msys2 -c "\"\$@"\" --"
-            export NO_GIMME=True
-            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
             export PATH=/C/tools/msys64/mingw64/bin:$PATH
-            export MAKE=mingw32-make
+            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
 
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
@@ -106,7 +105,7 @@ commands:
             - .gimme
 
   generic_shorttest:
-    description: Run full tests from build workspace, for re-use by diferent architectures
+    description: Run short tests from build workspace, for re-use by diferent architectures
     parameters:
       circleci_home:
         type: string
@@ -119,7 +118,7 @@ commands:
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
           name: Run full tests
-          no_output_timeout: 30m
+          no_output_timeout: 45m
           command: |
             set -e
             set -x
@@ -157,7 +156,7 @@ commands:
           at: << parameters.circleci_home >>
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
-          name: Run short integration tests
+          name: Run integration tests
           no_output_timeout: 30m
           command: |
             set -x
@@ -172,7 +171,7 @@ commands:
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
-            export SHORTTEST=-short
+            export SHORTTEST=
             export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
@@ -346,5 +345,5 @@ jobs:
             export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
-            $msys2 scripts/travis/build_test.sh
+            $mingw64 scripts/travis/build_test.sh
           shell: bash.exe
