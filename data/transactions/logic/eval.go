@@ -1703,35 +1703,31 @@ func opDig(cx *evalContext) {
 func opCover(cx *evalContext) {
 	depth := int(uint(cx.program[cx.pc+1]))
 	idx := len(cx.stack) - 1 - depth
-	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
+	// Need to check stack size explicitly here because checkArgs() doesn't understand cover
 	// so we can't expect our stack to be prechecked.
 	if idx < 0 {
 		cx.err = fmt.Errorf("cover %d with stack size = %d", depth, len(cx.stack))
 		return
 	}
-	topIndex := len(cx.stack) - 1
-	topsv := cx.stack[topIndex]
-	for i := topIndex; i > idx; i-- {
-		cx.stack[i] = cx.stack[i-1]
-	}
+	topidx := len(cx.stack) - 1
+	topsv := cx.stack[topidx]
+	copy(cx.stack[idx+1:],cx.stack[idx:])
 	cx.stack[idx] = topsv
 }
 
 func opUncover(cx *evalContext) {
 	depth := int(uint(cx.program[cx.pc+1]))
 	idx := len(cx.stack) - 1 - depth
-	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
+	// Need to check stack size explicitly here because checkArgs() doesn't understand uncover
 	// so we can't expect our stack to be prechecked.
 	if idx < 0 {
 		cx.err = fmt.Errorf("uncover %d with stack size = %d", depth, len(cx.stack))
 		return
 	}
-	topIndex := len(cx.stack) - 1
-	Idxsv := cx.stack[idx]
-	for i := idx; i < topIndex; i++ {
-		cx.stack[i] = cx.stack[i+1]
-	}
-	cx.stack[topIndex] = Idxsv
+	topidx := len(cx.stack) - 1
+	idxsv := cx.stack[idx]
+	copy(cx.stack[idx:],cx.stack[idx+1:])
+	cx.stack[topidx] = idxsv
 }
 
 func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
