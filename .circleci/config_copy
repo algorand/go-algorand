@@ -15,44 +15,44 @@ workflows:
             - amd64_build
           filters:
             branches:
-              only: /master/
+              ignore: /master/
       - amd64_integration:
           requires:
             - amd64_build
           filters:
             branches:
-              only: /master/
+              ignore: /master/
       - amd64_integration_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              ignore: /master/
+              only: /master/
       - amd64_e2e_subs:
           requires:
             - amd64_build
           filters:
             branches:
-              only: /master/
+              ignore: /master/
       - amd64_e2e_subs_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              ignore: /master/
+              only: /master/
       - arm64_build
       - arm64_test:
           requires:
             - arm64_build
           filters:
             branches:
-              only: /master/
+              ignore: /master/
       - arm64_test_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: /master/
+              only: /master/
       - arm64_integration:
           requires:
             - arm64_build
@@ -64,56 +64,56 @@ workflows:
             - arm64_build
           filters:
             branches:
-              ignore: /master/
+              only: /master/
       - arm64_e2e_subs:
           requires:
             - arm64_build
           filters:
             branches:
-              only: /master/
+              ignore: /master/
       - arm64_e2e_subs_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: /master/
+              only: /master/
       - mac_amd64_build
       - mac_amd64_test:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: /master/
+              ignore: /master/
       - mac_amd64_test_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: /master/
+              only: /master/
       - mac_amd64_integration:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: /master/
+              ignore: /master/
       - mac_amd64_integration_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: /master/
+              only: /master/
       - mac_amd64_e2e_subs:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: /master/
+              ignore: /master/
       - mac_amd64_e2e_subs_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: /master/
+              only: /master/
       #- windows_x64_build
 
 commands:
