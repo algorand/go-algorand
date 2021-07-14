@@ -222,16 +222,6 @@ func TestHint(t *testing.T) {
 	}
 }
 
-func TestEmptyCases(t *testing.T) {
-	bf, err := decodeBloomFilter(encodedBloomFilter{})
-	require.Equal(t, errInvalidBloomFilterEncoding, err)
-	require.Equal(t, bloomFilter{}, bf)
-
-	var s syncState
-	bf2 := s.makeBloomFilter(requestParams{}, nil, nil)
-	require.Equal(t, bloomFilter{}, bf2)
-}
-
 // TestEncodingDecoding checks the encoding/decoding of the filters
 func TestEncodingDecoding(t *testing.T) {
 
@@ -267,9 +257,13 @@ func TestEncodingDecoding(t *testing.T) {
 }
 
 func TestDecodingErrors(t *testing.T) {
+	bf, err := decodeBloomFilter(encodedBloomFilter{})
+	require.Equal(t, errInvalidBloomFilterEncoding, err)
+	require.Equal(t, bloomFilter{}, bf)
+
 	var ebf encodedBloomFilter
 	ebf.BloomFilterType = byte(multiHashBloomFilter)
-	_, err := decodeBloomFilter(ebf)
+	_, err = decodeBloomFilter(ebf)
 
 	require.Error(t, err)
 }
@@ -288,12 +282,14 @@ func TestBloomFilterTest(t *testing.T) {
 		s.node = &justRandomFakeNode{}
 		var encodingParams requestParams
 
-		for encodingParams.Modulator = 1; encodingParams.Modulator < 3; encodingParams.Modulator++ {
+		for encodingParams.Modulator = 0; encodingParams.Modulator < 3; encodingParams.Modulator++ {
 			txnGroups := getTxnGroups(genesisHash, genesisID)
 			bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
 			for _, tx := range txnGroups {
 				ans := bf.test(tx.FirstTransactionID)
-				if bf.encodingParams.Modulator <= 1 ||
+				if bf.encodingParams.Modulator == 0 {
+					require.False(t, ans)
+				} else if bf.encodingParams.Modulator <= 1 ||
 					txidToUint64(tx.FirstTransactionID)%uint64(bf.encodingParams.Modulator) ==
 						uint64(bf.encodingParams.Offset) {
 					require.True(t, ans)
