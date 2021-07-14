@@ -70,7 +70,7 @@ commands:
             export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
             export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
             export msys2+=" -msys2 -c "\"\$@"\" --"
-            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip
+            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain unzip autoconf automake gcc libtool
             export PATH=/C/tools/msys64/mingw64/bin:$PATH
             export MAKE=mingw32-make
 
