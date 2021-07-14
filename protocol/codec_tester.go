@@ -54,13 +54,7 @@ func RandomizeObject(template interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
 	v := reflect.New(tt.Elem())
-	hasAllocBound := checkBoundsLimitingTag(v.Elem(), v.Elem().Type().Name(), "codec:\",\"", false)
-	pseudoTag := ""
-	if hasAllocBound {
-		// we emulate a pseudo tag here on an item that has a alloc bound msgp directive.
-		pseudoTag = "codec:\",allocbound=1\""
-	}
-	err := randomizeValue(v.Elem(), tt.String(), pseudoTag)
+	err := randomizeValue(v.Elem(), tt.String(), "")
 	return v.Interface(), err
 }
 
@@ -215,7 +209,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 			}
 		}
 	case reflect.Slice:
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, true)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		l := rand.Int() % 32
 		if hasAllocBound {
 			l = 1
@@ -231,7 +225,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 	case reflect.Bool:
 		v.SetBool(rand.Uint32()%2 == 0)
 	case reflect.Map:
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, true)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		mt := v.Type()
 		v.Set(reflect.MakeMap(mt))
 		l := rand.Int() % 32
