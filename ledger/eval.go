@@ -488,10 +488,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits())
 	}
 	// set the eval state with the current header
-	eval.state, err = makeRoundCowState(base, eval.block.BlockHeader, eval.prevHeader.TimeStamp, paysetHint)
-	if err != nil {
-		return nil, err
-	}
+	eval.state = makeRoundCowState(base, eval.block.BlockHeader, eval.prevHeader.TimeStamp, paysetHint)
 
 	if validate {
 		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
@@ -795,7 +792,10 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	eval.block.Payset = append(eval.block.Payset, txibs...)
 	eval.blockTxBytes += groupTxBytes
-	cow.commitToParent()
+	err := cow.commitToParent()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -1135,10 +1135,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 		state: eval.state,
 	}
 	eval.blockGenerated = true
-	eval.state, err = makeRoundCowState(eval.state, eval.block.BlockHeader, eval.prevHeader.TimeStamp, len(eval.block.Payset))
-	if err != nil {
-		return nil, err
-	}
+	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader, eval.prevHeader.TimeStamp, len(eval.block.Payset))
 	return &vb, nil
 }
 

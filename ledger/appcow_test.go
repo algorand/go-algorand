@@ -196,8 +196,7 @@ func TestCowStorage(t *testing.T) {
 	ml := emptyLedger{}
 	var bh bookkeeping.BlockHeader
 	bh.CurrentProtocol = protocol.ConsensusCurrentVersion
-	cow, err := makeRoundCowState(&ml, bh, 0, 0)
-	require.NoError(t, err)
+	cow := makeRoundCowState(&ml, bh, 0, 0)
 	allSptrs, allAddrs := randomAddrApps(10)
 
 	st := makeStateTracker()
@@ -302,7 +301,8 @@ func TestCowStorage(t *testing.T) {
 
 		// Collapse a child
 		if childDepth > 0 && rand.Float32() < 0.1 {
-			cow.commitToParent()
+			err := cow.commitToParent()
+			require.NoError(t, err)
 			cow = lastParent
 			childDepth--
 		}

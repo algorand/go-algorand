@@ -161,18 +161,9 @@ func (v *validatedBlockAsLFE) LookupWithoutRewards(r basics.Round, a basics.Addr
 // Totals implements the ledgerForEvaluator interface.
 func (v *validatedBlockAsLFE) Totals(r basics.Round) (ledgercore.AccountTotals, error) {
 	if r == v.vb.blk.Round() {
-		return v.vb.state.modtotals, nil
+		return v.vb.state.totals()
 	}
 	return v.l.Totals(r)
-}
-
-func xxStartEvaluatorVB(vb *ValidatedBlock, hdr bookkeeping.BlockHeader, paysetHint int) (*BlockEvaluator, error) {
-	lfe, err := makeValidatedBlockAsLFE(vb)
-	if err != nil {
-		return nil, err
-	}
-
-	return startEvaluator(lfe, hdr, paysetHint, true, true)
 }
 
 // The speculationTracker tracks speculative blocks that have been proposed
@@ -242,7 +233,7 @@ func (st *speculationTracker) addSpeculativeBlockInMem(vblk ValidatedBlock) erro
 	return nil
 }
 
-func (st *speculationTracker) loadFromDisk(l ledgerForTracker) error {
+func (st *speculationTracker) loadFromDisk(l *Ledger) error {
 	st.l = l
 	st.dbs = st.l.trackerDB()
 	st.blocks = make(map[bookkeeping.BlockHash]*validatedBlockAsLFE)
@@ -288,9 +279,7 @@ func (st *speculationTracker) loadFromDisk(l ledgerForTracker) error {
 	for _, blk := range blocks {
 		var parentLedger ledgerForEvaluator
 		if blk.Round() == l.Latest() + 1 {
-			// XXX
-			// parentLedger = l
-			parentLedger = nil
+			parentLedger = l
 		} else {
 			parentHash := blk.Branch
 			parent, ok := st.blocks[parentHash]
@@ -360,6 +349,14 @@ func (st *speculationTracker) newBlock(blk bookkeeping.Block, delta ledgercore.S
 			}
 		}
 	}
+
+	err := st.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("DELETE FROM speculative WHERE rnd<=?", blk.Round())
+		return err
+	})
+	if err != nil {
+		st.l.trackerLog().Warnf("speculationTracker.newBlock: cannot delete blocks up to %d: %v", blk.Round(), err)
+	}
 }
 
 func (st *speculationTracker) invalidateChildren(branch bookkeeping.BlockHash) {
@@ -382,7 +379,14 @@ func (st *speculationTracker) close() {
 // to access speculative blocks.  This allows having methods with the same
 // name but different arguments, between Ledger and SpeculativeLedger.
 type SpeculativeLedger struct {
-	l *Ledger
+	*Ledger
+}
+
+// MakeSpeculativeLedger constructs a SpeculativeLedger around a Ledger.
+func MakeSpeculativeLedger(l *Ledger) *SpeculativeLedger {
+	return &SpeculativeLedger{
+		Ledger: l,
+	}
 }
 
 // leafNotFound is an error indicating that the leaf hash was not present
@@ -396,45 +400,73 @@ func (lnf leafNotFound) Error() string {
 	return fmt.Sprintf("SpeculativeLedger.blockHdr: leaf %v not found", lnf.h)
 }
 
-// blockHdr returns the block header for round r from the speculative
-// ledger.
-func (sl *SpeculativeLedger) blockHdr(r basics.Round, leaf bookkeeping.BlockHash) (bookkeeping.BlockHeader, error){
-	sl.l.trackerMu.Lock()
-	defer sl.l.trackerMu.Unlock()
+// LFE returns a ledgerForEvaluator for round r from the speculative ledger.
+func (sl *SpeculativeLedger) LFE(r basics.Round, leaf bookkeeping.BlockHash) (ledgerForEvaluator, error) {
+	sl.trackerMu.Lock()
+	defer sl.trackerMu.Unlock()
 
-	if leaf != (bookkeeping.BlockHash{}) {
-		lfe, ok := sl.l.speculate.blocks[leaf]
-		if !ok {
-			return bookkeeping.BlockHeader{}, leafNotFound{h: leaf}
-		}
-
-		return lfe.BlockHdr(r)
+	lfe, ok := sl.speculate.blocks[leaf]
+	if ok {
+		return lfe, nil
 	}
 
-	return sl.l.BlockHdr(r)
+	if r <= sl.Latest() {
+		return sl.Ledger, nil
+	}
+
+	return nil, leafNotFound{h: leaf}
+}
+
+// blockHdr returns the block header for round r from the speculative ledger.
+func (sl *SpeculativeLedger) blockHdr(r basics.Round, leaf bookkeeping.BlockHash) (bookkeeping.BlockHeader, error){
+	lfe, err := sl.LFE(r, leaf)
+	if err != nil {
+		return bookkeeping.BlockHeader{}, err
+	}
+
+	return lfe.BlockHdr(r)
 }
 
 // NextRound returns the next round for which no block has been committed.
 func (sl *SpeculativeLedger) NextRound() basics.Round {
-	return sl.l.Latest() + 1
+	return sl.Latest() + 1
 }
 
 // Wait returns a channel that closes once a given round is stored
-// durably in the non-speculative ledger, or that is already closed
-// if the block is already present in the speculative ledger.  The
-// channel will not close when the block is later added to the
-// speculative ledger.
+// durably.  If the block was added speculatively, Wait indicates
+// when the block is durably stored as a speculative block.  If the
+// block was added non-speculatively, Wait indicates when the block
+// is durably stored as a non-speculative block.
+//
+// Wait properly supports waiting for a round r that has already been
+// added (but perhaps not durably stored yet) for both speculative and
+// non-speculative blocks.
+//
+// Wait supports waiting for a round r that has not been added yet, but
+// only for non-speculative blocks.  It is not well-defined which speculative
+// block for round r, to be added later, we might want to wait for.
 func (sl *SpeculativeLedger) Wait(r basics.Round, leaf bookkeeping.BlockHash) chan struct{} {
-	sl.l.trackerMu.Lock()
-	lfe, ok := sl.l.speculate.blocks[leaf]
-	sl.l.trackerMu.Unlock()
+	// Check for a pending non-speculative block.  This might exist
+	// even if we already have a speculative block too.
+	if r <= sl.Latest() {
+		return sl.Ledger.Wait(r)
+	}
+
+	// Check if we have a speculative block for this round.  Speculative
+	// blocks are currently written to durable storage synchronously, so
+	// no waiting is needed.
+	sl.trackerMu.Lock()
+	lfe, ok := sl.speculate.blocks[leaf]
+	sl.trackerMu.Unlock()
 	if ok && r <= lfe.vb.blk.Round() {
 		closed := make(chan struct{})
 		close(closed)
 		return closed
 	}
 
-	return sl.l.Wait(r)
+	// No speculative block present, and not pending in the blockQ.
+	// Wait for the block to be inserted by someone else (e.g., catchup).
+	return sl.Ledger.Wait(r)
 }
 
 // Seed returns the VRF seed that in a given round's block header.
@@ -449,15 +481,9 @@ func (sl *SpeculativeLedger) Seed(r basics.Round, leaf bookkeeping.BlockHash) (c
 // Lookup returns the AccountData associated with some Address at the
 // conclusion of a given round.
 func (sl *SpeculativeLedger) Lookup(r basics.Round, leaf bookkeeping.BlockHash, addr basics.Address) (basics.AccountData, error) {
-	if leaf == (bookkeeping.BlockHash{}) {
-		return sl.l.Lookup(r, addr)
-	}
-
-	sl.l.trackerMu.Lock()
-	lfe, ok := sl.l.speculate.blocks[leaf]
-	sl.l.trackerMu.Unlock()
-	if !ok {
-		return basics.AccountData{}, leafNotFound{h: leaf}
+	lfe, err := sl.LFE(r, leaf)
+	if err != nil {
+		return basics.AccountData{}, err
 	}
 
 	data, _, err := lfe.LookupWithoutRewards(r, addr)
@@ -478,19 +504,9 @@ func (sl *SpeculativeLedger) Lookup(r basics.Round, leaf bookkeeping.BlockHash, 
 // Circulation returns the total amount of money in online accounts at the
 // conclusion of a given round.
 func (sl *SpeculativeLedger) Circulation(r basics.Round, leaf bookkeeping.BlockHash) (basics.MicroAlgos, error) {
-	if leaf == (bookkeeping.BlockHash{}) {
-		totals, err := sl.l.Totals(r)
-		if err != nil {
-			return basics.MicroAlgos{}, err
-		}
-		return totals.Online.Money, nil
-	}
-
-	sl.l.trackerMu.Lock()
-	lfe, ok := sl.l.speculate.blocks[leaf]
-	sl.l.trackerMu.Unlock()
-	if !ok {
-		return basics.MicroAlgos{}, leafNotFound{h: leaf}
+	lfe, err := sl.LFE(r, leaf)
+	if err != nil {
+		return basics.MicroAlgos{}, err
 	}
 
 	totals, err := lfe.Totals(r)
@@ -530,9 +546,9 @@ func (sl *SpeculativeLedger) ConsensusVersion(r basics.Round, leaf bookkeeping.B
 
 // AddSpeculativeBlock records a new speculative block.
 func (sl *SpeculativeLedger) AddSpeculativeBlock(vblk ValidatedBlock) error {
-	sl.l.trackerMu.Lock()
-	defer sl.l.trackerMu.Unlock()
-	return sl.l.speculate.addSpeculativeBlock(vblk)
+	sl.trackerMu.Lock()
+	defer sl.trackerMu.Unlock()
+	return sl.speculate.addSpeculativeBlock(vblk)
 }
 
 // Validate validates whether a block is valid, on a particular leaf branch.
@@ -550,18 +566,10 @@ func (sl *SpeculativeLedger) Validate(ctx context.Context, leaf bookkeeping.Bloc
 
 // eval evaluates a block on a particular leaf branch.
 func (sl *SpeculativeLedger) eval(ctx context.Context, leaf bookkeeping.BlockHash, blk bookkeeping.Block, validate bool, executionPool execpool.BacklogPool) (*roundCowState, error) {
-	var lfe ledgerForEvaluator
-	if leaf == (bookkeeping.BlockHash{}) {
-		lfe = sl.l
-	} else {
-		var ok bool
-		sl.l.trackerMu.Lock()
-		lfe, ok = sl.l.speculate.blocks[leaf]
-		sl.l.trackerMu.Unlock()
-		if !ok {
-			return nil, leafNotFound{h: leaf}
-		}
+	lfe, err := sl.LFE(blk.Round().SubSaturate(1), leaf)
+	if err != nil {
+		return nil, err
 	}
 
-	return eval(ctx, lfe, blk, validate, sl.l.verifiedTxnCache, executionPool)
+	return eval(ctx, lfe, blk, validate, sl.verifiedTxnCache, executionPool)
 }

@@ -60,6 +60,45 @@ func OMul(a uint64, b uint64) (res uint64, overflowed bool) {
 	return c, false
 }
 
+// OAddUS adds an unsigned and signed value, to produce an unsigned result, with overflow detection
+func OAddUS(a uint64, b int64) (res uint64, overflowed bool) {
+	res = a + uint64(b)
+	if b < 0 && res > a {
+		return 0, true
+	}
+	if b > 0 && res < a {
+		return 0, true
+	}
+	return res, false
+}
+
+// OAddS adds 2 signed values with overflow detection
+func OAddS(a int64, b int64) (res int64, overflowed bool) {
+	res = a + b
+	if (res^a) & (res^b) >> 63 != 0 {
+		return 0, true
+	}
+	return res, false
+}
+
+// OSubS performs a signed subtraction of b from a with overflow detection
+func OSubS(a int64, b int64) (res int64, overflowed bool) {
+	res = a - b
+	if (a^b) & (res^a) >> 63 != 0 {
+		return 0, true
+	}
+	return res, false
+}
+
+// OToS converts uint64 to int64 with overflow detection
+func OToS(a uint64) (res int64, overflowed bool) {
+	res = int64(a)
+	if res < 0 {
+		return 0, true
+	}
+	return res, false
+}
+
 // MulSaturate multiplies 2 values with saturation on overflow
 func MulSaturate(a uint64, b uint64) uint64 {
 	res, overflowed := OMul(a, b)
@@ -117,6 +156,42 @@ func (t *OverflowTracker) Sub(a uint64, b uint64) uint64 {
 // Mul multiplies b from a with overflow detection
 func (t *OverflowTracker) Mul(a uint64, b uint64) uint64 {
 	res, overflowed := OMul(a, b)
+	if overflowed {
+		t.Overflowed = true
+	}
+	return res
+}
+
+// AddUS adds an unsigned and signed value, to produce an unsigned result, with overflow detection
+func (t *OverflowTracker) AddUS(a uint64, b int64) uint64 {
+	res, overflowed := OAddUS(a, b)
+	if overflowed {
+		t.Overflowed = true
+	}
+	return res
+}
+
+// AddS adds 2 signed values with overflow detection
+func (t *OverflowTracker) AddS(a int64, b int64) int64 {
+	res, overflowed := OAddS(a, b)
+	if overflowed {
+		t.Overflowed = true
+	}
+	return res
+}
+
+// SubS performs signed subtraction of b from a with overflow detection
+func (t *OverflowTracker) SubS(a int64, b int64) int64 {
+	res, overflowed := OSubS(a, b)
+	if overflowed {
+		t.Overflowed = true
+	}
+	return res
+}
+
+// ToS converts uint64 to int64 with overflow detection
+func (t *OverflowTracker) ToS(a uint64) int64 {
+	res, overflowed := OToS(a)
 	if overflowed {
 		t.Overflowed = true
 	}

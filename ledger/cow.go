@@ -75,10 +75,10 @@ type roundCowState struct {
 	// track creatables created during each transaction in the round
 	trackedCreatables map[int]basics.CreatableIndex
 
-	modtotals ledgercore.AccountTotals
+	dtotals ledgercore.AccountTotalsDelta
 }
 
-func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) (*roundCowState, error) {
+func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
 	cb := roundCowState{
 		lookupParent:      b,
 		commitParent:      nil,
@@ -98,19 +98,9 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		cb.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
 	}
 
-	var err error
-	cb.modtotals, err = b.totals()
-	if err != nil {
-		return nil, err
-	}
+	cb.dtotals.SetRewardsLevel(hdr.RewardsLevel)
 
-	var ot basics.OverflowTracker
-	cb.modtotals.ApplyRewards(hdr.RewardsLevel, &ot)
-	if ot.Overflowed {
-		return nil, fmt.Errorf("makeRoundCowState: overflow applying rewards to totals")
-	}
-
-	return &cb, nil
+	return &cb
 }
 
 func (cb *roundCowState) deltas() ledgercore.StateDelta {
@@ -230,8 +220,8 @@ func (cb *roundCowState) put(addr basics.Address, old, new basics.AccountData, n
 	}
 
 	var ot basics.OverflowTracker
-	cb.modtotals.DelAccount(cb.proto, old, &ot)
-	cb.modtotals.AddAccount(cb.proto, new, &ot)
+	cb.dtotals.DelAccount(cb.proto, old, &ot)
+	cb.dtotals.AddAccount(cb.proto, new, &ot)
 	if ot.Overflowed {
 		return fmt.Errorf("roundCowState.put(): overflow updating totals")
 	}
@@ -271,6 +261,9 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 		ch.compatibilityMode = cb.compatibilityMode
 		ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
 	}
+
+	ch.dtotals.SetRewardsLevel(cb.dtotals.RewardsLevel)
+
 	return &ch
 }
 
@@ -279,7 +272,7 @@ func (cb *roundCowState) setGroupIdx(txnIdx int) {
 	cb.groupIdx = txnIdx
 }
 
-func (cb *roundCowState) commitToParent() {
+func (cb *roundCowState) commitToParent() error {
 	cb.commitParent.mods.Accts.MergeAccounts(cb.mods.Accts)
 
 	for txid, lv := range cb.mods.Txids {
@@ -306,7 +299,11 @@ func (cb *roundCowState) commitToParent() {
 		}
 	}
 	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
-	cb.commitParent.modtotals = cb.modtotals
+	err := cb.commitParent.dtotals.Add(&cb.dtotals)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
@@ -314,5 +311,15 @@ func (cb *roundCowState) modifiedAccounts() []basics.Address {
 }
 
 func (cb *roundCowState) totals() (ledgercore.AccountTotals, error) {
-	return cb.modtotals, nil
+	t, err := cb.lookupParent.totals()
+	if err != nil {
+		return ledgercore.AccountTotals{}, err
+	}
+
+	err = t.Add(&cb.dtotals)
+	if err != nil {
+		return ledgercore.AccountTotals{}, err
+	}
+
+	return t, nil
 }

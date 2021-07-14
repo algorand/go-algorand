@@ -188,17 +188,26 @@ func (l *Ledger) reloadLedger() error {
 		return err
 	}
 
-	l.trackers.register(&l.accts)    // update the balances
-	l.trackers.register(&l.time)     // tracks the block timestamps
-	l.trackers.register(&l.txTail)   // update the transaction tail, tracking the recent 1000 txn
-	l.trackers.register(&l.bulletin) // provide closed channel signaling support for completed rounds
-	l.trackers.register(&l.notifier) // send OnNewBlocks to subscribers
-	l.trackers.register(&l.metrics)  // provides metrics reporting support
+	l.trackers.registerLoader(&l.accts)    // update the balances
+	l.trackers.registerLoader(&l.time)     // tracks the block timestamps
+	l.trackers.registerLoader(&l.txTail)   // update the transaction tail, tracking the recent 1000 txn
+	l.trackers.registerLoader(&l.bulletin) // provide closed channel signaling support for completed rounds
+	l.trackers.registerLoader(&l.notifier) // send OnNewBlocks to subscribers
+	l.trackers.registerLoader(&l.metrics)  // provides metrics reporting support
 	l.trackers.register(&l.speculate)
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
 		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)
+		return err
+	}
+
+	// The speculation tracker needs access to the account state, so
+	// it's not purely a ledger tracker; it uses both the ledger and
+	// the acctupdates tracker.
+	err = l.speculate.loadFromDisk(l)
+	if err != nil {
+		err = fmt.Errorf("reloadLedger.loadFromDisk: speculationTracker: %v", err)
 		return err
 	}
 

@@ -774,7 +774,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
 	minMinSave := rnd
 	var minSave basics.Round
-	var cleanTracker ledgerTracker
+	var cleanTracker ledgerTrackerLoader
 	var trackerType reflect.Type
 	wl.l.trackerMu.RLock()
 	defer wl.l.trackerMu.RUnlock()
@@ -789,7 +789,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			wl.minQueriedBlock = rnd
 
 			trackerType = reflect.TypeOf(trk).Elem()
-			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
+			cleanTracker = reflect.New(trackerType).Interface().(ledgerTrackerLoader)
 
 			au = cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
@@ -803,7 +803,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			wl.minQueriedBlock = rnd
 
 			trackerType = reflect.TypeOf(trk).Elem()
-			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
+			cleanTracker = reflect.New(trackerType).Interface().(ledgerTrackerLoader)
 		}
 
 		cleanTracker.close()
