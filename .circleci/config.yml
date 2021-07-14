@@ -157,7 +157,7 @@ commands:
           at: << parameters.circleci_home >>
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
-          name: Run integration tests
+          name: Run short integration tests
           no_output_timeout: 30m
           command: |
             set -x
@@ -172,7 +172,7 @@ commands:
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
-            export SHORTTEST=
+            export SHORTTEST=-short
             export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
