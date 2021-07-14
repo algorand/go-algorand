@@ -53,9 +53,6 @@ const MaxStringSize = 4096
 // MaxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
 const MaxByteMathSize = 64
 
-// MaxLogCalls is the limit of log opcode use in a program
-const MaxLogCalls = 32
-
 // MaxLogSize is the limit of total log size from n log calls in a program
 const MaxLogSize = 1000
 
@@ -3067,8 +3064,8 @@ func opAppParamsGet(cx *evalContext) {
 func opLog(cx *evalContext) {
 	last := len(cx.stack) - 1
 
-	if cx.logCalls == MaxLogCalls {
-		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", MaxLogCalls)
+	if cx.logCalls == config.MaxLogCalls {
+		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", config.MaxLogCalls)
 		return
 	}
 	cx.logCalls++

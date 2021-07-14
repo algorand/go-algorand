@@ -4437,7 +4437,7 @@ func TestLog(t *testing.T) {
 
 	source := `byte  "a logging message"; log; int 1`
 	source1 := `byte  "a logging message"; log; byte  "second logging message"; log; int 1`
-	source2 := fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, MaxLogCalls))
+	source2 := fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, config.MaxLogCalls))
 	source3 := `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <; bnz loop;`
 	sources := []string{source, source1, source2, source3}
 
@@ -4472,7 +4472,7 @@ func TestLog(t *testing.T) {
 	}
 
 	failCase2 := failCase{
-		source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, MaxLogCalls+1)),
+		source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, config.MaxLogCalls+1)),
 		errContains: "too many log calls",
 		runMode:     runModeApplication,
 	}

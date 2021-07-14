@@ -420,6 +420,10 @@ var MaxEvalDeltaAccounts int
 // in a StateDelta, used for decoding purposes.
 var MaxStateDeltaKeys int
 
+// MaxLogCalls is the largest number of log calls that may appear in
+// an eval delta, used for decoding purposes.
+var MaxLogCalls int
+
 // MaxLogicSigMaxSize is the largest logical signature appear in any of the supported
 // protocols, used for decoding purposes.
 var MaxLogicSigMaxSize int
@@ -480,6 +484,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
 	// MaxAvailableAppProgramLen is the max of supported app program size
 	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
+	MaxLogCalls = 32
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.

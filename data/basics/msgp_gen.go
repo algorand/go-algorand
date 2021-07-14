@@ -4344,6 +4344,11 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Log")
 				return
 			}
+			if zb0016 > config.MaxLogCalls {
+				err = msgp.ErrOverflow(uint64(zb0016), uint64(config.MaxLogCalls))
+				err = msgp.WrapError(err, "struct-from-array", "Log")
+				return
+			}
 			if zb0017 {
 				(*z).Log = nil
 			} else if (*z).Log != nil && cap((*z).Log) >= zb0016 {
@@ -4483,6 +4488,11 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0025 bool
 				zb0024, zb0025, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
+					err = msgp.WrapError(err, "Log")
+					return
+				}
+				if zb0024 > config.MaxLogCalls {
+					err = msgp.ErrOverflow(uint64(zb0024), uint64(config.MaxLogCalls))
 					err = msgp.WrapError(err, "Log")
 					return
 				}
