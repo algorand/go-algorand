@@ -468,7 +468,7 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 	return
 }
 
-func (l *testLedger) AppendLog(value basics.TealValue) error {
+func (l *testLedger) AppendLog(value string) error {
 	appIdx := l.appID
 	_, ok := l.applications[appIdx]
 	if !ok {
@@ -476,7 +476,7 @@ func (l *testLedger) AppendLog(value basics.TealValue) error {
 	}
 
 	// append logs
-	l.logs[appIdx] = append(l.logs[appIdx], string(value.Bytes))
+	l.logs[appIdx] = append(l.logs[appIdx], value)
 	return nil
 }
 

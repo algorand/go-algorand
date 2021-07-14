@@ -1340,14 +1340,11 @@ func TestCowAppendLog(t *testing.T) {
 	})
 
 	val := strings.Repeat("a", 1001)
-	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	err := c.AppendLog(aidx, tv)
+	err := c.AppendLog(aidx, val)
 	a.Error(err)
 	a.Contains(err.Error(), "value too long")
 
-	val = "val"
-	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
 	c.logs = map[basics.AppIndex][]string{}
-	err = c.AppendLog(aidx, tv)
+	err = c.AppendLog(aidx, "val")
 	a.NoError(err)
 }

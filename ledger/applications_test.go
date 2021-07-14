@@ -125,7 +125,7 @@ func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIn
 	return found, nil
 }
 
-func (c *mockCowForLogicLedger) AppendLog(aidx basics.AppIndex, value basics.TealValue) error {
+func (c *mockCowForLogicLedger) AppendLog(aidx basics.AppIndex, value string) error {
 	return nil
 }
 
@@ -1311,7 +1311,6 @@ func TestLogicLedgerAppendLog(t *testing.T) {
 	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
-	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: "1"}
-	err = l.AppendLog(tv)
+	err = l.AppendLog("1")
 	a.NoError(err)
 }
