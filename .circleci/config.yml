@@ -343,7 +343,7 @@ jobs:
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
             export NO_GIMME=True
-            export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:$PATH
+            export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
             export MAKE=mingw32-make
             $msys2 scripts/travis/build_test.sh
           shell: bash.exe
