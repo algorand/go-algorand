@@ -236,7 +236,7 @@ jobs:
   amd64_e2e_subs:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: medium
+    resource_class: large
     environment:
       E2E_SUBS_ONLY: "true"
     steps:
@@ -281,7 +281,7 @@ jobs:
   arm64_e2e_subs:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.medium
+    resource_class: arm.large
     environment:
       E2E_SUBS_ONLY: "true"
     steps:
@@ -331,9 +331,9 @@ jobs:
   mac_amd64_e2e_subs:
     macos:
       xcode: 12.0.1
-    resource_class: medium
+    resource_class: large
     environment:
-      E2E_SUBS_ONLY: "tsrue"
+      E2E_SUBS_ONLY: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
