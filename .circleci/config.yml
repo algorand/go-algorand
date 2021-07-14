@@ -58,7 +58,7 @@ workflows:
             - arm64_build
           filters:
             branches:
-              ignore: /master/
+              only: /master/
       - arm64_integration_nightly:
           requires:
             - arm64_build
