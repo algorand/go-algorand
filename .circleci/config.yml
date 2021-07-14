@@ -39,7 +39,7 @@ workflows:
       - mac_amd64_e2e_subs:
           requires:
             - mac_amd64_build
-      - windows_x64_build
+      #- windows_x64_build
 
 commands:
   prepare_go:
@@ -70,8 +70,7 @@ commands:
             export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
             export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
             export msys2+=" -msys2 -c "\"\$@"\" --"
-            $msys2 pacman -S --noconfirm base-devel gcc vim cmake zip
-            $msys2 pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool
+            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake
 
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
@@ -344,7 +343,7 @@ jobs:
             export GOPATH="/home/circleci/go"
             export ALGORAND_DEADLOCK=enable
             export NO_GIMME=True
-            export PATH=/c/msys64/usr/bin:/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
+            export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
             export MAKE=mingw32-make
             $msys2 scripts/travis/build_test.sh
           shell: bash.exe
