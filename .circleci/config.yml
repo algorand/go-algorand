@@ -107,13 +107,11 @@ commands:
     description: Cache libsodium for build
     steps:
       - run:
-          name: Set variables
+          name: Get libsodium md5
           command: |
-            export OS_TYPE=$(scripts/ostype.sh)
-            export ARCH=$(scripts/archtype.sh)
-            export LIBSODIUM_MD5=$(find crypto/libsodium-fork -type f -exec md5 "{}" + | md5 |cut -d' ' -f1)
+            find crypto/libsodium-fork -type f -exec md5 "{}" + | md5 |cut -d' ' -f1 > tmp/libsodium.md5
       - save_cache:
-          key: 'libsodium-{{ .Environment.OS_TYPE }}-{{ .Environment.ARCH }}-{{ .Environment.LIBSODIUM_MD5 }}'
+          key: 'libsodium-{{ .Environment.CIRCLE_STAGE }}-{{ checksum tmp/libsodium.md5 }}'
           paths:
             - crypto/libs/{{ .Environment.OS_TYPE }}/{{ .Environment.ARCH }}
 
@@ -121,14 +119,12 @@ commands:
     description: Restore libsodium for build
     steps:
       - run:
-          name: Set variables
+          name: Get libsodium md5
           command: |
-            export OS_TYPE=$(scripts/ostype.sh)
-            export ARCH=$(scripts/archtype.sh)
-            export LIBSODIUM_MD5=$(find crypto/libsodium-fork -type f -exec md5 "{}" + | md5 |cut -d' ' -f1)
+            find crypto/libsodium-fork -type f -exec md5 "{}" + | md5 |cut -d' ' -f1 > tmp/libsodium.md5
       - restore_cache:
           keys:
-            - 'libsodium-{{ .Environment.OS_TYPE }}-{{ .Environment.ARCH }}-{{ .Environment.LIBSODIUM_MD5 }}'
+            - 'libsodium-{{ .Environment.CIRCLE_STAGE }}-{{ checksum tmp/libsodium.md5 }}'
 
   generic_shorttest:
     description: Run short tests from build workspace, for re-use by diferent architectures
