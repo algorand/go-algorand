@@ -215,6 +215,20 @@ func TestRetriveFromDBAtVersion2(t *testing.T) {
 	assertionForRestoringFromDBAtLowVersion(a, retrivedPart)
 }
 
+func TestKeyRegCreation(t *testing.T) {
+	a := require.New(t)
+
+	ppart := setupkeyWithNoDBS(t, a)
+
+	cur := config.Consensus[protocol.ConsensusCurrentVersion]
+	txn := ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, cur)
+	a.Equal(crypto.VerifyingKey{}, txn.BlockProofPK)
+
+	future := config.Consensus[protocol.ConsensusFuture]
+	txn = ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, future)
+	a.NotEqual(crypto.VerifyingKey{}, txn.BlockProofPK)
+}
+
 func closeDBS(dbAccessor ...db.Accessor) {
 	for _, accessor := range dbAccessor {
 		accessor.Close()
