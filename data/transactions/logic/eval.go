@@ -1709,10 +1709,10 @@ func opCover(cx *evalContext) {
 		cx.err = fmt.Errorf("cover %d with stack size = %d", depth, len(cx.stack))
 		return
 	}
-	topidx := len(cx.stack) - 1
-	topsv := cx.stack[topidx]
-	copy(cx.stack[idx+1:],cx.stack[idx:])
-	cx.stack[idx] = topsv
+	topIdx := len(cx.stack) - 1
+	sv := cx.stack[topIdx]
+	copy(cx.stack[idx+1:], cx.stack[idx:])
+	cx.stack[idx] = sv
 }
 
 func opUncover(cx *evalContext) {
@@ -1724,10 +1724,10 @@ func opUncover(cx *evalContext) {
 		cx.err = fmt.Errorf("uncover %d with stack size = %d", depth, len(cx.stack))
 		return
 	}
-	topidx := len(cx.stack) - 1
-	idxsv := cx.stack[idx]
-	copy(cx.stack[idx:],cx.stack[idx+1:])
-	cx.stack[topidx] = idxsv
+	topIdx := len(cx.stack) - 1
+	sv := cx.stack[idx]
+	copy(cx.stack[idx:], cx.stack[idx+1:])
+	cx.stack[topIdx] = sv
 }
 
 func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {

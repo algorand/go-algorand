@@ -2723,7 +2723,7 @@ func TestReturnTypes(t *testing.T) {
 		"gaid":              "gaid 0",
 		"dig":               "dig 0",
 		"cover":             "cover 0",
-		"uncover":           "uncover 0",	
+		"uncover":           "uncover 0",
 		"intc":              "intcblock 0; intc 0",
 		"intc_0":            "intcblock 0; intc_0",
 		"intc_1":            "intcblock 0 0; intc_1",
