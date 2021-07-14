@@ -4439,7 +4439,8 @@ func TestLog(t *testing.T) {
 	source1 := `byte  "a logging message"; log; byte  "second logging message"; log; int 1`
 	source2 := fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, config.MaxLogCalls))
 	source3 := `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <; bnz loop;`
-	sources := []string{source, source1, source2, source3}
+	source4 := fmt.Sprintf(`byte "%s"; log; int 1`, strings.Repeat("a", MaxLogSize))
+	sources := []string{source, source1, source2, source3, source4}
 
 	for _, s := range sources {
 		ops := testProg(t, s, AssemblerMaxVersion)
@@ -4452,50 +4453,50 @@ func TestLog(t *testing.T) {
 		require.True(t, pass)
 	}
 
-	type failCase struct {
+	msg := strings.Repeat("a", 400)
+
+	failCases := []struct {
 		source      string
 		runMode     runMode
 		errContains string
+	}{
+		{
+			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", MaxLogSize+1)),
+			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			runMode:     runModeApplication,
+		},
+		{
+			source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
+			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			runMode:     runModeApplication,
+		},
+		{
+			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, config.MaxLogCalls+1)),
+			errContains: "too many log calls",
+			runMode:     runModeApplication,
+		},
+		{
+			source:      `int 1; loop: byte "a"; log; int 1; +; dup; int 35; <; bnz loop;`,
+			errContains: "too many log calls",
+			runMode:     runModeApplication,
+		},
+		{
+			source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
+			errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
+			runMode:     runModeApplication,
+		},
+		{
+			source:      `load 0; log`,
+			errContains: "log arg 0 wanted []byte but got uint64",
+			runMode:     runModeApplication,
+		},
+		{
+			source:      `byte  "a logging message"; log; int 1`,
+			errContains: "log not allowed in current mode",
+			runMode:     runModeSignature,
+		},
 	}
 
-	failCase0 := failCase{
-		source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", 1001)),
-		errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
-		runMode:     runModeApplication,
-	}
-
-	msg := strings.Repeat("a", 400)
-	failCase1 := failCase{
-		source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
-		errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
-		runMode:     runModeApplication,
-	}
-
-	failCase2 := failCase{
-		source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log;`, config.MaxLogCalls+1)),
-		errContains: "too many log calls",
-		runMode:     runModeApplication,
-	}
-
-	failCase3 := failCase{
-		source:      `int 1; loop: byte "a"; log; int 1; +; dup; int 35; <; bnz loop;`,
-		errContains: "too many log calls",
-		runMode:     runModeApplication,
-	}
-
-	failCase4 := failCase{
-		source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
-		errContains: fmt.Sprintf(">  %d bytes limit", MaxLogSize),
-		runMode:     runModeApplication,
-	}
-
-	failCase5 := failCase{
-		source:      `byte  "a logging message"; log; int 1`,
-		errContains: "log not allowed in current mode",
-		runMode:     runModeSignature,
-	}
-
-	failCases := []failCase{failCase0, failCase1, failCase2, failCase3, failCase4, failCase5}
 	for _, c := range failCases {
 		ops := testProg(t, c.source, AssemblerMaxVersion)
 

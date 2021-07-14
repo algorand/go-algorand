@@ -1300,7 +1300,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk1"].Bytes, "local1")
 }
 
-func TestLogicLedgerSetLog(t *testing.T) {
+func TestLogicLedgerAppendLog(t *testing.T) {
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -1311,7 +1311,7 @@ func TestLogicLedgerSetLog(t *testing.T) {
 	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
-	tv := basics.TealValue{Type: basics.TealBytesType, Uint: 1}
+	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: "1"}
 	err = l.AppendLog(tv)
 	a.NoError(err)
 }

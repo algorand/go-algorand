@@ -163,7 +163,7 @@ type LedgerForLogic interface {
 
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
 
-	AppendLog(value basics.TealValue) error
+	AppendLog(value string) error
 }
 
 // EvalSideEffects contains data returned from evaluation
@@ -3064,6 +3064,11 @@ func opAppParamsGet(cx *evalContext) {
 func opLog(cx *evalContext) {
 	last := len(cx.stack) - 1
 
+	if cx.stack[last].argType() != StackBytes {
+		cx.err = fmt.Errorf("log arg 0 wanted type []byte got uint64")
+		return
+	}
+
 	if cx.logCalls == config.MaxLogCalls {
 		cx.err = fmt.Errorf("too many log calls in program. up to %d is allowed", config.MaxLogCalls)
 		return
@@ -3076,7 +3081,7 @@ func opLog(cx *evalContext) {
 		return
 	}
 	// write log to applyData
-	err := cx.Ledger.AppendLog(log.toTealValue())
+	err := cx.Ledger.AppendLog(string(log.Bytes))
 	if err != nil {
 		cx.err = err
 		return

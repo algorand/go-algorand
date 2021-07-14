@@ -426,13 +426,13 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 }
 
 // AppendLog creates a new key-value {addr, aidx} in log
-func (cb *roundCowState) AppendLog(aidx basics.AppIndex, value basics.TealValue) error {
+func (cb *roundCowState) AppendLog(aidx basics.AppIndex, value string) error {
 	// Enforce maximum value length
-	if len(value.Bytes) > cb.proto.MaxAppBytesValueLen {
-		return fmt.Errorf("value too long, length was %d", len(value.Bytes))
+	if len(value) > logic.MaxLogSize {
+		return fmt.Errorf("value too long, length was %d", len(value))
 	}
 	// Write the value delta associated with this key/value
-	cb.logs[aidx] = append(cb.logs[aidx], value.Bytes)
+	cb.logs[aidx] = append(cb.logs[aidx], value)
 
 	return nil
 }

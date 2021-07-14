@@ -1339,7 +1339,7 @@ func TestCowAppendLog(t *testing.T) {
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 	})
 
-	val := strings.Repeat("val", 100)
+	val := strings.Repeat("a", 1001)
 	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: val}
 	err := c.AppendLog(aidx, tv)
 	a.Error(err)
