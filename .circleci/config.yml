@@ -111,7 +111,7 @@ commands:
           command: |
             export OS_TYPE=$(scripts/ostype.sh)
             export ARCH=$(scripts/archtype.sh)
-            export LIBSODIUM_MD5=$(find crypto/libsodium-fork -type f -exec md5sum "{}" + | md5sum |cut -d' ' -f1)
+            export LIBSODIUM_MD5=$(find crypto/libsodium-fork -type f -exec md5 "{}" + | md5 |cut -d' ' -f1)
       - save_cache:
           key: 'libsodium-{{ .Environment.OS_TYPE }}-{{ .Environment.ARCH }}-{{ .Environment.LIBSODIUM_MD5 }}'
           paths:
@@ -125,7 +125,7 @@ commands:
           command: |
             export OS_TYPE=$(scripts/ostype.sh)
             export ARCH=$(scripts/archtype.sh)
-            export LIBSODIUM_MD5=$(find crypto/libsodium-fork -type f -exec md5sum "{}" + | md5sum |cut -d' ' -f1)
+            export LIBSODIUM_MD5=$(find crypto/libsodium-fork -type f -exec md5 "{}" + | md5 |cut -d' ' -f1)
       - restore_cache:
           keys:
             - 'libsodium-{{ .Environment.OS_TYPE }}-{{ .Environment.ARCH }}-{{ .Environment.LIBSODIUM_MD5 }}'
