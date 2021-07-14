@@ -43,8 +43,6 @@ func (p *pipelinePlayer) underlying() actor  { return p }
 
 // handle an event, usually by delegating to a child player implementation.
 func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
-	var actions []action
-
 	if e.t() == none {
 		return nil
 	}
@@ -80,8 +78,22 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 	default:
 		panic("bad event")
 	}
+}
 
-	return actions
+// protoForEvent returns the consensus version of an event, or error
+func protoForEvent(e event) (protocol.ConsensusVersion, error) {
+	switch e := e.(type) {
+	case messageEvent:
+		return e.Proto.Version, e.Proto.Err
+	case timeoutEvent:
+		return e.Proto.Version, e.Proto.Err
+	case roundInterruptionEvent:
+		return e.Proto.Version, e.Proto.Err
+	case thresholdEvent:
+		return e.Proto, nil
+	default:
+		panic("protoForEvent unsupported event")
+	}
 }
 
 // handleRoundEvent looks up a player for a given round to handle an event.
@@ -89,7 +101,21 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e event, rnd round) []
 	state, ok := p.players[rnd]
 	if !ok {
 		// XXXX haven't seen this round before; create player or drop event
-		logging.Base().Panicf("couldn't find child for rnd %+v", rnd)
+		switch e := e.(type) {
+		// for now, only create new players for messageEvents
+		case messageEvent:
+			cv, err := protoForEvent(e)
+			if err != nil {
+				// XXX check when ConsensusVersionView.Err is set by LedgerReader
+				logging.Base().Debugf("protoForEvent error %v", err)
+				return nil
+			}
+			state = player{Round: rnd, Step: soft, Deadline: FilterTimeout(0, cv)}
+			p.players[rnd] = state
+		}
+		// drop events that we don't have a player for
+		logging.Base().Debugf("couldn't find player for rnd %+v, dropping event", rnd)
+		return nil
 	}
 
 	// TODO move cadaver calls to somewhere cleaner

@@ -233,7 +233,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 
 	for {
 		output <- a
-		ready <- status.externalDemuxSignals() // XXXX handle multiple deadlines
+		ready <- status.externalDemuxSignals()
 		e, ok := <-input
 		if !ok {
 			break
