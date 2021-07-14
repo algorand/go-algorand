@@ -992,6 +992,10 @@ const globalV4TestProgram = globalV3TestProgram + `
 // No new globals in v4
 `
 
+const globalV5TestProgram = globalV4TestProgram + `
+// No new globals in v5
+`
+
 func TestGlobal(t *testing.T) {
 	testpartitioning.PartitionTest(t)
 
@@ -1017,6 +1021,10 @@ func TestGlobal(t *testing.T) {
 			CreatorAddress, globalV4TestProgram,
 			EvalStateful, CheckStateful,
 		},
+		5: {
+			CreatorAddress, globalV5TestProgram,
+			EvalStateful, CheckStateful,
+		},
 	}
 	ledger := makeTestLedger(nil)
 	ledger.appID = 42
@@ -1024,6 +1032,8 @@ func TestGlobal(t *testing.T) {
 	require.NoError(t, err)
 	ledger.creatorAddr = addr
 	for v := uint64(0); v <= AssemblerMaxVersion; v++ {
+		_, ok := tests[v]
+		require.True(t, ok)
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			last := tests[v].lastField
 			testProgram := tests[v].program
@@ -4282,6 +4292,14 @@ func TestBytes(t *testing.T) {
 	// it fails to copy).
 	testAccepts(t, `byte "john"; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
 	testAccepts(t, `byte "jo"; byte "hn"; concat; dup; int 2; int 105; setbyte; pop; byte "john"; ==`, 3)
+}
+
+func TestMethod(t *testing.T) {
+	t.Parallel()
+	// Although 'method' is new around the time of v5, it is a
+	// pseudo-op, so it's ok to use it earlier, as it compiles to
+	// existing opcodes.
+	testAccepts(t, "method \"add(uint64,uint64)uint128\"; byte 0x8aa3b61f; ==", 1)
 }
 
 func TestSwap(t *testing.T) {
