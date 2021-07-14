@@ -12,7 +12,7 @@ assignees: ''
 <!-- What is the problem that we’re trying to solve? -->
 
 ## Solution
-<!-- What is the potential/suggested Solution? Document more than one if possible. -->
+<!-- Do you have a potential/suggested solution? Document more than one if possible. -->
 
 ## Dependencies
 <!-- Does the solution have any team or design dependencies? -->
