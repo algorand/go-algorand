@@ -70,7 +70,8 @@ commands:
             export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
             export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
             export msys2+=" -msys2 -c "\"\$@"\" --"
-            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake-wrapper
+            $msys2 pacman -S --noconfirm unzip autoconf automake
+            $msys2 pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool
 
   generic_build:
     description: Run basic build and store in workspace for re-use by different architectures
