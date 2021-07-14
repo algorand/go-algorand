@@ -528,7 +528,7 @@ jobs:
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
-      - nighlty_test:
+      - nightly_test:
           result_subdir: mac-amd64-nightly
           circleci_home: /Users/distiller
 
