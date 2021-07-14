@@ -140,6 +140,15 @@ commands:
       - store_test_results:
           path: /tmp/results
 
+  upload_coverage:
+    description: Collect coverage reports and upload them
+    steps:
+      - run:
+          name: Upload Coverage Reports
+          no_output_timeout: 10m
+          command: |
+            scripts/travis/upload_coverage.sh || true
+
   generic_integration:
     description: Run integration tests from build workspace, for re-use by diferent architectures
     parameters:
@@ -210,6 +219,7 @@ jobs:
       - prepare_go
       - generic_shorttest:
           result_subdir: amd64-short
+      - upload_coverage
 
   amd64_integration:
     machine:
@@ -253,6 +263,7 @@ jobs:
       - prepare_go
       - generic_shorttest:
           result_subdir: arm64-short
+      - upload_coverage
 
   arm64_integration:
     machine:
@@ -301,6 +312,7 @@ jobs:
       - generic_shorttest:
           result_subdir: mac-amd64-short
           circleci_home: /Users/distiller
+      - upload_coverage
 
   mac_amd64_integration:
     macos:
