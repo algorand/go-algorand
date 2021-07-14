@@ -79,6 +79,7 @@ commands:
         type: string
         default: "/home/circleci"
     steps:
+      - restore_libsodium
       - restore_cache:
           keys:
             - 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
@@ -89,6 +90,7 @@ commands:
             export GOPATH="<< parameters.circleci_home >>/go"
             export ALGORAND_DEADLOCK=enable
             scripts/travis/build.sh --make_debug
+      - cache_libsodium
       - save_cache:
           key: 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
           paths:
@@ -100,6 +102,33 @@ commands:
             - go
             - gimme
             - .gimme
+
+  cache_libsodium:
+    description: Cache libsodium for build
+    steps:
+      - run:
+          name: Set variables
+          command: |
+            export OS_TYPE=$(scripts/ostype.sh)
+            export ARCH=$(scripts/archtype.sh)
+            export LIBSODIUM_MD5=$(find crypto/libsodium-fork -type f -exec md5sum "{}" + | md5sum |cut -d' ' -f1)
+      - save_cache:
+          key: 'libsodium-{{ .Environment.OS_TYPE }}-{{ .Environment.ARCH }}-{{ .Environment.LIBSODIUM_MD5 }}'
+          paths:
+            - crypto/libs/{{ .Environment.OS_TYPE }}/{{ .Environment.ARCH }}
+
+  restore_libsodium:
+    description: Restore libsodium for build
+    steps:
+      - run:
+          name: Set variables
+          command: |
+            export OS_TYPE=$(scripts/ostype.sh)
+            export ARCH=$(scripts/archtype.sh)
+            export LIBSODIUM_MD5=$(find crypto/libsodium-fork -type f -exec md5sum "{}" + | md5sum |cut -d' ' -f1)
+      - restore_cache:
+          keys:
+            - 'libsodium-{{ .Environment.OS_TYPE }}-{{ .Environment.ARCH }}-{{ .Environment.LIBSODIUM_MD5 }}'
 
   generic_shorttest:
     description: Run short tests from build workspace, for re-use by diferent architectures
@@ -294,6 +323,8 @@ jobs:
     macos:
       xcode: 12.0.1
     resource_class: medium
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - checkout
@@ -305,6 +336,8 @@ jobs:
     macos:
       xcode: 12.0.1
     resource_class: medium
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
     parallelism: 4
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
@@ -321,6 +354,7 @@ jobs:
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
+      HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
@@ -334,6 +368,7 @@ jobs:
     resource_class: large
     environment:
       E2E_SUBS_ONLY: "true"
+      HOMEBREW_NO_AUTO_UPDATE: "true"
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
