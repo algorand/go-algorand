@@ -110,7 +110,7 @@ workflows:
             - mac_amd64_build
           filters:
             branches:
-              ignore: /rel\/nightly/
+              only: /rel\/nightly/
       #- windows_x64_build
 
 commands:
