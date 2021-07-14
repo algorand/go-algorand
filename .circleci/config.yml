@@ -70,7 +70,7 @@ commands:
             export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
             export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
             export msys2+=" -msys2 -c "\"\$@"\" --"
-            $msys2 pacman -S base-devel gcc vim cmake zip
+            $msys2 pacman -S --noconfirm base-devel gcc vim cmake zip
             $msys2 pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool
 
   generic_build:
