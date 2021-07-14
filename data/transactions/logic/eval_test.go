@@ -4136,15 +4136,18 @@ func TestDig(t *testing.T) {
 
 func TestCover(t *testing.T) {
 	t.Parallel()
-	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; int 2; ==; return", 3)
-	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; pop; pop; int 1; ==; return", 3)
-	testPanics(t, "int 4; int 3; int 2; int 1; cover 11; int 2; ==; return", 3)
+	testAccepts(t, "int 4; int 3; int 2; int 1; cover 0; int 1; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; cover 1; int 2; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; int 2; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; pop; pop; int 1; ==; return", 5)
+	testPanics(t, "int 4; int 3; int 2; int 1; cover 11; int 2; ==; return", 5)
 }
 
 func TestUncover(t *testing.T) {
 	t.Parallel()
-	testAccepts(t, "int 3; int 2; int 1; dig 1; int 2; ==; return", 3)
-	testPanics(t, "int 3; int 2; int 1; dig 11; int 2; ==; return", 3)
+	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 2; int 3; ==; return", 5)
+	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 3; int 4; ==; return", 5)
+	testPanics(t, "int 4; int 3; int 2; int 1; uncover 11; int 3; ==; return", 5)
 }
 
 func TestPush(t *testing.T) {
