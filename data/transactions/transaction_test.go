@@ -19,7 +19,6 @@ package transactions
 import (
 	"flag"
 	"fmt"
-	"log"
 	"math"
 	"strings"
 	"testing"
@@ -567,6 +566,7 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 	}
 
 	runTestCase := func(testCase keyRegTestCase) error {
+
 		tx.KeyregTxnFields.VotePK = testCase.votePK
 		tx.KeyregTxnFields.SelectionPK = testCase.selectionPK
 		tx.KeyregTxnFields.VoteFirst = testCase.voteFirst
@@ -1179,11 +1179,10 @@ func TestWellFormedKeyRegistrationTx(t *testing.T) {
 		/* 516 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, blockProofPK: crypto.VerifyingKey{Type: math.MaxUint64}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: true, err: errKeyReginvalidBlockProofPK},
 		/* 517 */ keyRegTestCase{votePK: votePKValue, selectionPK: selectionPKValue, blockProofPK: crypto.VerifyingKey{Type: math.MaxUint64}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: true, err: errKeyregTxnNonParticipantShouldBeEmptyBlockProofPK},
 		/* 518 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, blockProofPK: crypto.VerifyingKey{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: true, err: nil},
+		/* 519 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, blockProofPK: blockProofPK, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: false, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: true, err: errKeyregTxnOfflineShouldBeEmptyBlockProofPK},
+		/* 520 */ keyRegTestCase{votePK: crypto.OneTimeSignatureVerifier{}, selectionPK: crypto.VRFVerifier{}, blockProofPK: crypto.VerifyingKey{}, voteFirst: basics.Round(5), voteLast: basics.Round(10), lastValid: basics.Round(3), voteKeyDilution: 10000, nonParticipation: true, supportBecomeNonParticipatingTransactions: true, enableKeyregCoherencyCheck: false, enableBlockProofKeyregCheck: true, err: nil},
 	}
 	for testcaseIdx, testCase := range keyRegTestCases {
-		if testcaseIdx == 517 {
-			log.Println()
-		}
 		err := runTestCase(testCase)
 		require.Equalf(t, testCase.err, err, "index: %d\ntest case: %#v", testcaseIdx, testCase)
 	}
