@@ -258,7 +258,23 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			for addr, data := range accts[rnd] {
 				pad, validThrough, err := au.LookupWithoutRewards(rnd, addr)
 				require.NoError(t, err)
-				require.Equal(t, pad.AccountData, data)
+
+				if len(pad.AccountData.Assets) != len(data.Assets) || len(pad.AccountData.AssetParams) != len(data.AssetParams) {
+					// AccountData might be flushed so lookup will return empty assets so use full lookup
+					pad.AccountData.Assets = nil
+					pad.AccountData.AssetParams = nil
+					dataNoExt := data
+					dataNoExt.Assets = nil
+					dataNoExt.AssetParams = nil
+					require.Equal(t, pad.AccountData, dataNoExt, fmt.Sprintf("base=%d latest=%d", base, latestRnd))
+					fullPad, err := au.LookupFullWithRewards(rnd, addr)
+					require.NoError(t, err)
+					require.Equal(t, fullPad.AccountData.AssetParams, data.AssetParams)
+					require.Equal(t, fullPad.AccountData.Assets, data.Assets)
+				} else {
+					require.Equal(t, pad.AccountData, data, fmt.Sprintf("base=%d latest=%d", base, latestRnd))
+				}
+
 				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 
 				rewardsDelta := rewards[rnd] - pad.AccountData.RewardsBase
@@ -1274,17 +1290,11 @@ func lookupFullTest(t *testing.T, spec []lookupFullTestSpec) {
 			pad, err := au.lookupWithRewards(rnd-1, addresses[i], true)
 			a.NoError(err)
 			if spec[i].params {
-				if spec[i].numAssets > uint64(testAssetsThreshold) && pad.NumAssetParams() > testAssetsThreshold {
-					ads[i].AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
-				}
 				ads[i].AssetParams[basics.AssetIndex(cidx)] = basics.AssetParams{Total: uint64(cidx), DefaultFrozen: true, AssetName: "test"}
 				pad.AccountData.AssetParams = ledgercore.CloneAssetParams(ads[i].AssetParams)
 				deltas.SetEntityDelta(addresses[i], cidx, ledgercore.ActionParamsCreate)
 			}
 			if spec[i].holdings {
-				if spec[i].numAssets > uint64(testAssetsThreshold) && pad.NumAssetHoldings() > testAssetsThreshold {
-					ads[i].Assets = make(map[basics.AssetIndex]basics.AssetHolding)
-				}
 				ads[i].Assets[basics.AssetIndex(cidx)] = basics.AssetHolding{Amount: uint64(cidx), Frozen: true}
 				pad.AccountData.Assets = ledgercore.CloneAssetHoldings(ads[i].Assets)
 				deltas.SetEntityDelta(addresses[i], cidx, ledgercore.ActionHoldingCreate)
@@ -1411,8 +1421,8 @@ func TestLargeAssetHoldingsLargeBlock(t *testing.T) {
 
 	pad, err = au.lookupWithRewards(rnd-1, addr, true)
 	a.NoError(err)
-	a.Equal(uint32(margin), pad.ExtendedAssetHolding.Count)
-	a.Equal(uint32(margin), pad.ExtendedAssetParams.Count)
+	a.Equal(int(margin), len(pad.Assets))
+	a.Equal(int(margin), len(pad.AssetParams))
 
 	if pad.NumAssetParams() > testAssetsThreshold {
 		ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
@@ -1446,8 +1456,8 @@ func TestLargeAssetHoldingsLargeBlock(t *testing.T) {
 
 	pad, err = au.lookupWithRewards(rnd-1, addr, true)
 	a.NoError(err)
-	a.Equal(uint32(numAssets), pad.ExtendedAssetHolding.Count)
-	a.Equal(uint32(numAssets), pad.ExtendedAssetParams.Count)
+	a.Equal(int(numAssets), len(pad.Assets))
+	a.Equal(int(numAssets), len(pad.AssetParams))
 }
 
 func TestIsWritingCatchpointFile(t *testing.T) {
@@ -1539,13 +1549,13 @@ func TestGetCatchpointStream(t *testing.T) {
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]ledgercore.PersistedAccountData, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	rows, err := tx.Query("SELECT rowid, address, data FROM accountbase")
 	if err != nil {
 		return
 	}
 	defer rows.Close()
 
-	stmt, err := tx.Prepare(loadAcctExtQuery)
+	stmt, err := tx.Prepare(loadAllAcctCreatableDataQuery)
 	if err != nil {
 		return
 	}
@@ -1553,9 +1563,10 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]ledgercore.PersistedAccoun
 
 	bals = make(map[basics.Address]ledgercore.PersistedAccountData)
 	for rows.Next() {
+		var rowid int64
 		var addrbuf []byte
 		var buf []byte
-		err = rows.Scan(&addrbuf, &buf)
+		err = rows.Scan(&rowid, &addrbuf, &buf)
 		if err != nil {
 			return
 		}
@@ -1571,20 +1582,13 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]ledgercore.PersistedAccoun
 			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
 			return
 		}
-		if pad.ExtendedAssetHolding.Count > 0 {
-			pad.AccountData.Assets, pad.ExtendedAssetHolding, err = loadHoldings(stmt, pad.ExtendedAssetHolding, 0)
-			if err != nil {
-				return
-			}
-		}
-		if pad.ExtendedAssetParams.Count > 0 {
-			pad.AccountData.AssetParams, pad.ExtendedAssetParams, err = loadParams(stmt, pad.ExtendedAssetParams, 0)
-			if err != nil {
-				return
-			}
-		}
-
 		copy(addr[:], addrbuf)
+		params, holdings, err := loadFullCreatableData(stmt, rowid, 0)
+		if err != nil {
+			return bals, err
+		}
+		pad.AccountData.AssetParams = params
+		pad.AccountData.Assets = holdings
 		bals[addr] = pad
 	}
 

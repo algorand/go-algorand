@@ -398,7 +398,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 		pad, ok := all[addr]
 		require.True(t, ok)
 		d := pad.AccountData
-		require.Equal(t, d, data)
+		require.Equal(t, d, data, fmt.Sprintf("addr %s", addr.String()))
 
 		switch d.Status {
 		case basics.Online:
@@ -489,7 +489,7 @@ func initTestAccountDB(tx *sql.Tx, initAccounts map[basics.Address]basics.Accoun
 	if err != nil {
 		return
 	}
-	err = createAccountExtTable(tx)
+	err = updateToExtendedAccountGadgetTable(tx)
 	return
 }
 
@@ -627,6 +627,19 @@ func TestAccountDBRound(t *testing.T) {
 		require.NoError(t, err)
 		err = updateAccountsRound(tx, round, 0)
 		require.NoError(t, err)
+
+		// rows, err := tx.Query("SELECT addrid, creatable, ctype FROM accountcreatabledata")
+		// require.NoError(t, err)
+		// for rows.Next() {
+		// 	var addrid, cidx, ctype int64
+		// 	err = rows.Scan(&addrid, &cidx, &ctype)
+		// 	if err != nil {
+		// 		fmt.Println(err.Error())
+		// 	}
+		// 	fmt.Printf("%4d %4d %4d\n", addrid, cidx, ctype)
+		// }
+		// rows.Close()
+
 		checkAccounts(t, tx, round, accts)
 		checkCreatables(t, tx, i, expectedDbImage)
 		round++
@@ -662,32 +675,12 @@ retry:
 			hd := updates.GetEntityHoldingDeltas(addr)
 			ad := accts[addr]
 			dbad, err := lookupFull(dbs.Rdb, addr)
-			prevEnd := uint64(0)
-			for _, g := range dbad.pad.ExtendedAssetHolding.Groups {
-				start := uint64(g.MinAssetIndex)
-				if start != 0 { // group 0 might start with 0, ignore
-					require.Less(t, prevEnd, start)
-				}
-				prevEnd = start + g.DeltaMaxAssetIndex
-			}
 			require.Equal(t, ad, dbad.pad.AccountData)
-			if len(ad.Assets) > testAssetsThreshold {
-				for aidx := range ad.Assets {
-					gi, ai := dbad.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
-					require.NotEqual(t, -1, gi)
-					require.NotEqual(t, -1, ai)
-				}
-			}
 			require.NoError(t, err)
 			for aidx, action := range hd {
 				if action == ledgercore.ActionHoldingDelete {
 					_, ok := ad.Assets[basics.AssetIndex(aidx)]
 					require.True(t, ok)
-					if len(ad.Assets) > testAssetsThreshold {
-						gi, ai := dbad.pad.ExtendedAssetHolding.FindAsset(basics.AssetIndex(aidx), 0)
-						require.NotEqual(t, -1, gi)
-						require.NotEqual(t, -1, ai)
-					}
 				}
 			}
 		}
@@ -858,8 +851,6 @@ func TestAccountDBRoundAssetHoldings(t *testing.T) {
 	dbad, err := lookupFull(dbs.Rdb, addr)
 	require.NoError(t, err)
 	require.Equal(t, origOwnedAssetsCount+newOwnedAssetsCount, len(dbad.pad.AccountData.Assets))
-	require.NotEmpty(t, dbad.pad.ExtendedAssetHolding)
-	require.Equal(t, origOwnedAssetsCount+newOwnedAssetsCount, int(dbad.pad.ExtendedAssetHolding.Count))
 
 	// remove all the assets first to make predictable assets distribution
 	updates = ledgercore.AccountDeltas{}
@@ -874,7 +865,6 @@ func TestAccountDBRoundAssetHoldings(t *testing.T) {
 	dbad, err = lookupFull(dbs.Rdb, addr)
 	require.NoError(t, err)
 	require.Empty(t, dbad.pad.AccountData.Assets)
-	require.Empty(t, dbad.pad.ExtendedAssetHolding)
 
 	// create 6 holding groups
 	holdingsNum := ledgercore.MaxHoldingGroupSize * 6
@@ -892,125 +882,6 @@ func TestAccountDBRoundAssetHoldings(t *testing.T) {
 	dbad, err = lookupFull(dbs.Rdb, addr)
 	require.NoError(t, err)
 	require.Equal(t, holdingsNum, len(dbad.pad.AccountData.Assets))
-	require.Equal(t, holdingsNum, int(dbad.pad.ExtendedAssetHolding.Count))
-	require.Equal(t, 6, len(dbad.pad.ExtendedAssetHolding.Groups))
-
-	// completely remove group 1, remove 32 assets from all other groups, update 32 other assets
-	updates = ledgercore.AccountDeltas{}
-	ad = dbad.pad.AccountData
-	for aidx := ledgercore.MaxHoldingGroupSize + 1; aidx <= 2*ledgercore.MaxHoldingGroupSize; aidx++ {
-		delete(ad.Assets, basics.AssetIndex(aidx))
-		updates.SetEntityDelta(addr, basics.CreatableIndex(aidx), ledgercore.ActionHoldingDelete)
-	}
-	updates.Upsert(addr, ledgercore.PersistedAccountData{AccountData: ad})
-	for _, gi := range []int{0, 2, 3, 4, 5} {
-		start := gi*ledgercore.MaxHoldingGroupSize + 1
-		end := (gi + 1) * ledgercore.MaxHoldingGroupSize
-		seq := make([]int, 0, ledgercore.MaxHoldingGroupSize)
-		for i := start; i <= end; i++ {
-			seq = append(seq, i)
-		}
-		rand.Shuffle(ledgercore.MaxHoldingGroupSize, func(i, j int) { seq[i], seq[j] = seq[j], seq[i] })
-		for _, aidx := range seq[:32] {
-			delete(ad.Assets, basics.AssetIndex(aidx))
-			updates.SetEntityDelta(addr, basics.CreatableIndex(aidx), ledgercore.ActionHoldingDelete)
-		}
-		for _, aidx := range seq[32:64] {
-			ad.Assets[basics.AssetIndex(aidx)] = basics.AssetHolding{Amount: uint64(aidx * 10)}
-		}
-		// remove rest from ad.Assets since they are not in the update
-		for _, aidx := range seq[64:] {
-			delete(ad.Assets, basics.AssetIndex(aidx))
-		}
-	}
-	updates.Upsert(addr, ledgercore.PersistedAccountData{AccountData: ad})
-	u.update(updates)
-
-	// verify update
-	dbad, err = lookupFull(dbs.Rdb, addr)
-	require.NoError(t, err)
-	require.Equal(t, holdingsNum-ledgercore.MaxHoldingGroupSize-5*32, len(dbad.pad.AccountData.Assets))
-	require.Equal(t, len(dbad.pad.AccountData.Assets), int(dbad.pad.ExtendedAssetHolding.Count))
-	require.Equal(t, 5, len(dbad.pad.ExtendedAssetHolding.Groups))
-	gi := 0
-	for _, ogi := range []int{0, 2, 3, 4, 5} {
-		g := dbad.pad.ExtendedAssetHolding.Groups[gi]
-		start := ogi*ledgercore.MaxHoldingGroupSize + 1
-		end := (ogi + 1) * ledgercore.MaxHoldingGroupSize
-		require.LessOrEqual(t, uint64(start), uint64(g.MinAssetIndex))
-		require.LessOrEqual(t, uint64(g.MinAssetIndex)+g.DeltaMaxAssetIndex, uint64(end))
-		aidx := g.MinAssetIndex
-		for ai, offset := range g.TestGetGroupData().AssetOffsets {
-			h := g.GetHolding(ai)
-			aidx += offset
-			require.True(t, h.Amount == uint64(aidx) || h.Amount == uint64(aidx*10))
-			require.GreaterOrEqual(t, uint64(aidx), uint64(g.MinAssetIndex))
-			require.LessOrEqual(t, uint64(aidx), uint64(g.MinAssetIndex)+g.DeltaMaxAssetIndex)
-		}
-		gi++
-	}
-
-	// create a new group
-
-	updates = ledgercore.AccountDeltas{}
-	ad = dbad.pad.AccountData
-	ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, ledgercore.MaxHoldingGroupSize)
-	for aidx := 6*ledgercore.MaxHoldingGroupSize + 1; aidx <= 7*ledgercore.MaxHoldingGroupSize; aidx++ {
-		updates.SetEntityDelta(addr, basics.CreatableIndex(aidx), ledgercore.ActionHoldingCreate)
-		ad.Assets[basics.AssetIndex(aidx)] = basics.AssetHolding{Amount: uint64(aidx)}
-	}
-	updates.Upsert(addr, ledgercore.PersistedAccountData{AccountData: ad})
-	u.update(updates)
-
-	// verify creation
-	dbad, err = lookupFull(dbs.Rdb, addr)
-	require.NoError(t, err)
-	require.Equal(t, holdingsNum-5*32, len(dbad.pad.AccountData.Assets))
-	require.Equal(t, len(dbad.pad.AccountData.Assets), int(dbad.pad.ExtendedAssetHolding.Count))
-	require.Equal(t, 6, len(dbad.pad.ExtendedAssetHolding.Groups))
-	gi = 0
-	for _, ogi := range []int{0, 2, 3, 4, 5, 6} {
-		g := dbad.pad.ExtendedAssetHolding.Groups[gi]
-		start := ogi*ledgercore.MaxHoldingGroupSize + 1
-		end := (ogi + 1) * ledgercore.MaxHoldingGroupSize
-		if ogi == 5 {
-			// group 5 accepted 32 assets
-			end += 32
-		}
-		require.LessOrEqual(t, uint64(start), uint64(g.MinAssetIndex))
-		require.LessOrEqual(t, uint64(g.MinAssetIndex)+g.DeltaMaxAssetIndex, uint64(end))
-		aidx := g.MinAssetIndex
-		for ai, offset := range g.TestGetGroupData().AssetOffsets {
-			h := g.GetHolding(ai)
-			aidx += offset
-			require.True(t, h.Amount == uint64(aidx) || h.Amount == uint64(aidx*10))
-			require.GreaterOrEqual(t, uint64(aidx), uint64(g.MinAssetIndex))
-			require.LessOrEqual(t, uint64(aidx), uint64(g.MinAssetIndex)+g.DeltaMaxAssetIndex)
-		}
-		gi++
-	}
-
-	// delete groups 0, 2, 4 and ensure holdins collapse back to ad.Assets
-	updates = ledgercore.AccountDeltas{}
-	ad = dbad.pad.AccountData
-	for _, gi := range []int{0, 2, 4} {
-		start := gi*ledgercore.MaxHoldingGroupSize + 1
-		end := (gi + 1) * ledgercore.MaxHoldingGroupSize
-		for aidx := start; aidx <= end; aidx++ {
-			delete(ad.Assets, basics.AssetIndex(aidx))
-			updates.SetEntityDelta(addr, basics.CreatableIndex(aidx), ledgercore.ActionHoldingDelete)
-		}
-	}
-
-	updates.Upsert(addr, ledgercore.PersistedAccountData{AccountData: ad})
-	u.update(updates)
-
-	// check removal
-	dbad1, err := lookupFull(dbs.Rdb, addr)
-	require.NoError(t, err)
-	require.Equal(t, holdingsNum-2*32-3*ledgercore.MaxHoldingGroupSize, len(dbad1.pad.AccountData.Assets))
-	require.Empty(t, dbad1.pad.ExtendedAssetHolding)
-
 	// delete the account
 	updates = ledgercore.AccountDeltas{}
 	updates.Upsert(addr, ledgercore.PersistedAccountData{})
@@ -1113,8 +984,6 @@ func TestAccountDBRoundAssetParams(t *testing.T) {
 	dbad, err := lookupFull(dbs.Rdb, addr)
 	require.NoError(t, err)
 	require.Equal(t, origOwnedAssetsCount+newOwnedAssetsCount, len(dbad.pad.AccountData.AssetParams))
-	require.NotEmpty(t, dbad.pad.ExtendedAssetParams)
-	require.Equal(t, origOwnedAssetsCount+newOwnedAssetsCount, int(dbad.pad.ExtendedAssetParams.Count))
 
 	// remove all the assets first to make predictable assets distribution
 	updates = ledgercore.AccountDeltas{}
@@ -1149,8 +1018,6 @@ func TestAccountDBRoundAssetParams(t *testing.T) {
 	dbad, err = lookupFull(dbs.Rdb, addr)
 	require.NoError(t, err)
 	require.Equal(t, paramsNum, len(dbad.pad.AccountData.AssetParams))
-	require.Equal(t, paramsNum, int(dbad.pad.ExtendedAssetParams.Count))
-	require.Equal(t, numGroups, len(dbad.pad.ExtendedAssetParams.Groups))
 
 	// completely remove group 1,
 	// remove ledgercore.MaxParamsGroupSize/8 assets from all other groups,
@@ -1194,19 +1061,6 @@ func TestAccountDBRoundAssetParams(t *testing.T) {
 	require.NoError(t, err)
 	expectedNumParams := paramsNum - ledgercore.MaxParamsGroupSize - (numGroups-1)*(ledgercore.MaxParamsGroupSize/8)
 	require.Equal(t, expectedNumParams, len(dbad.pad.AccountData.AssetParams))
-	require.Equal(t, len(dbad.pad.AccountData.AssetParams), int(dbad.pad.ExtendedAssetParams.Count))
-	require.Equal(t, expectedNumParams/ledgercore.MaxParamsGroupSize+1, len(dbad.pad.ExtendedAssetParams.Groups))
-	for gi := 0; gi < len(dbad.pad.ExtendedAssetParams.Groups); gi++ {
-		g := dbad.pad.ExtendedAssetParams.Groups[gi]
-		aidx := g.MinAssetIndex
-		for ai, offset := range g.TestGetGroupData().AssetOffsets {
-			h := g.GetParams(ai)
-			aidx += offset
-			require.True(t, h.Total == uint64(aidx) || h.Total == uint64(aidx*10))
-			require.GreaterOrEqual(t, uint64(aidx), uint64(g.MinAssetIndex))
-			require.LessOrEqual(t, uint64(aidx), uint64(g.MinAssetIndex)+g.DeltaMaxAssetIndex)
-		}
-	}
 
 	// create a new group
 	updates = ledgercore.AccountDeltas{}
@@ -1223,43 +1077,6 @@ func TestAccountDBRoundAssetParams(t *testing.T) {
 	dbad, err = lookupFull(dbs.Rdb, addr)
 	require.NoError(t, err)
 	require.Equal(t, expectedNumParams+ledgercore.MaxParamsGroupSize, len(dbad.pad.AccountData.AssetParams))
-	require.Equal(t, len(dbad.pad.AccountData.AssetParams), int(dbad.pad.ExtendedAssetParams.Count))
-	require.Equal(t, expectedNumParams/ledgercore.MaxParamsGroupSize+2, len(dbad.pad.ExtendedAssetParams.Groups))
-	for gi := 0; gi < len(dbad.pad.ExtendedAssetParams.Groups); gi++ {
-		g := dbad.pad.ExtendedAssetParams.Groups[gi]
-		aidx := g.MinAssetIndex
-		for ai, offset := range g.TestGetGroupData().AssetOffsets {
-			h := g.GetParams(ai)
-			aidx += offset
-			require.True(t, h.Total == uint64(aidx) || h.Total == uint64(aidx*10))
-			require.GreaterOrEqual(t, uint64(aidx), uint64(g.MinAssetIndex))
-			require.LessOrEqual(t, uint64(aidx), uint64(g.MinAssetIndex)+g.DeltaMaxAssetIndex)
-		}
-		gi++
-	}
-
-	// delete half of groups and ensure holdins collapse back to ad.AssetParams
-	updates = ledgercore.AccountDeltas{}
-	ad = dbad.pad.AccountData
-	for gi := 0; gi < len(dbad.pad.ExtendedAssetParams.Groups); gi += 2 {
-		g := dbad.pad.ExtendedAssetParams.Groups[gi]
-		aidx := g.MinAssetIndex
-		for _, offset := range g.TestGetGroupData().AssetOffsets {
-			aidx += offset
-			delete(ad.AssetParams, basics.AssetIndex(aidx))
-			updates.SetEntityDelta(addr, basics.CreatableIndex(aidx), ledgercore.ActionParamsDelete)
-		}
-	}
-
-	updates.Upsert(addr, ledgercore.PersistedAccountData{AccountData: ad})
-	u.update(updates)
-
-	// check removal
-	dbad1, err := lookupFull(dbs.Rdb, addr)
-	require.NoError(t, err)
-	expectedNumParams = expectedNumParams + ledgercore.MaxParamsGroupSize - (len(dbad.pad.ExtendedAssetParams.Groups)/2*ledgercore.MaxParamsGroupSize + 1)
-	require.Equal(t, expectedNumParams, len(dbad1.pad.AccountData.AssetParams))
-	require.Empty(t, dbad1.pad.ExtendedAssetParams)
 
 	// delete the account
 	updates = ledgercore.AccountDeltas{}
@@ -1450,7 +1267,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 	require.NoError(b, err)
 	err = accountsAddNormalizedBalance(tx, proto)
 	require.NoError(b, err)
-	err = createAccountExtTable(tx)
+	err = updateToExtendedAccountGadgetTable(tx)
 	require.NoError(b, err)
 
 	// create large holdings as an update because accountsInit does not know about accountext table
@@ -1587,16 +1404,10 @@ func BenchmarkReadingAllBalancesDiskLarge(b *testing.B) {
 }
 
 func benchLoadHolding(b *testing.B, qs *accountsDbQueries, dbad dbAccountData, aidx basics.AssetIndex) basics.AssetHolding {
-	gi, ai := dbad.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
-	require.NotEqual(b, -1, gi)
-	require.Equal(b, -1, ai)
-	var err error
-	fetcher := makeAssetFetcher(qs.loadAccountGroupDataStmt)
-	_, err = dbad.pad.ExtendedAssetHolding.Groups[gi].Fetch(fetcher, nil)
+	holding, _, exist, err := lookupAssetHolding(qs.lookupAcctCreatableData, dbad.rowid, aidx)
 	require.NoError(b, err)
-	_, ai = dbad.pad.ExtendedAssetHolding.FindAsset(aidx, gi)
-	require.NotEqual(b, -1, ai)
-	return dbad.pad.ExtendedAssetHolding.Groups[gi].GetHolding(ai)
+	require.True(b, exist)
+	return holding
 }
 
 func benchmarkReadingRandomBalances(b *testing.B, inMemory bool, maxHoldingsPerAccount int, largeAccountsRatio int, simple bool) {
@@ -2255,11 +2066,8 @@ func TestCompactAccountDeltas(t *testing.T) {
 // cleanPad copies and clears non-serializable loaded nad groupData fields to match account data
 func cleanPad(pad ledgercore.PersistedAccountData) ledgercore.PersistedAccountData {
 	clean := pad
-	if len(clean.ExtendedAssetHolding.Groups) > 0 {
-		clean.ExtendedAssetHolding.Groups = make([]ledgercore.AssetsHoldingGroup, len(pad.ExtendedAssetHolding.Groups))
-		copy(clean.ExtendedAssetHolding.Groups, pad.ExtendedAssetHolding.Groups)
-		clean.ExtendedAssetHolding.TestClearGroupData() // group data ignored on serialization, reset
-	}
+	clean.AssetParams = nil
+	clean.Assets = nil
 	return clean
 }
 
@@ -2284,10 +2092,37 @@ func TestAccountsNewCRUD(t *testing.T) {
 
 	allAccounts, err := dbs.Wdb.Handle.Prepare("SELECT address from accountbase")
 	a.NoError(err)
-	allExtData, err := dbs.Wdb.Handle.Prepare("SELECT data from accountext")
+	allExtData, err := dbs.Wdb.Handle.Prepare("SELECT creatable, ctype, data from accountcreatabledata")
 	a.NoError(err)
 
 	addr := randomAddress()
+
+	checkCreatableData := func(a *require.Assertions, ad basics.AccountData) int {
+		rows, err := allExtData.Query()
+		i := 0
+		var buf []byte
+		for rows.Next() {
+			var cidx basics.CreatableIndex
+			var ctype basics.CreatableType
+			err = rows.Scan(&cidx, &ctype, &buf)
+			a.NoError(err)
+			switch ctype {
+			case basics.AssetCreatable:
+				var params basics.AssetParams
+				a.NoError(protocol.Decode(buf, &params))
+				a.Equal(ad.AssetParams[basics.AssetIndex(cidx)], params)
+			case basics.AssetCreatableData:
+				var holding basics.AssetHolding
+				a.NoError(protocol.Decode(buf, &holding))
+				a.Equal(ad.Assets[basics.AssetIndex(cidx)], holding)
+			default:
+				a.Failf("Invalid creatable type", "%d", ctype)
+			}
+			i++
+		}
+		rows.Close()
+		return i
+	}
 
 	//----------------------------------------------------------------------------------------------
 	// test create and delete function
@@ -2312,7 +2147,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 			updatedAccountIdx := 0
 
 			updatedAccounts, err = accountsNewCreate(
-				q.insertStmt, q.insertGroupDataStmt,
+				q.insertStmt, q.insertAcctCreatableDataStmt,
 				addr, ledgercore.PersistedAccountData{AccountData: ad}, proto,
 				updatedAccounts, updatedAccountIdx,
 			)
@@ -2330,29 +2165,17 @@ func TestAccountsNewCRUD(t *testing.T) {
 			a.True(rowid.Valid)
 			a.NoError(protocol.Decode(buf, &pad))
 
-			mempad := cleanPad(updatedAccounts[updatedAccountIdx].pad)
-			a.Equal(mempad, pad)
+			a.Equal(updatedAccounts[updatedAccountIdx].pad, pad)
 
-			rows, err := allExtData.Query()
-			i := 0
-			for rows.Next() {
-				err = rows.Scan(&buf)
-				a.NoError(err)
-				var gd ledgercore.AssetsHoldingGroupData
-				a.NoError(protocol.Decode(buf, &gd))
-				a.Equal(updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups[i].TestGetGroupData(), gd)
-				i++
-			}
-			rows.Close()
-
-			numRowsExpected := test.count / ledgercore.MaxHoldingGroupSize
-			a.GreaterOrEqual(i, numRowsExpected)
+			num := checkCreatableData(a, ad)
+			numRowsExpected := test.count
+			a.GreaterOrEqual(num, numRowsExpected)
 
 			// check deletion
 			dbad, err := qs.lookup(addr)
 			a.NoError(err)
 			updatedAccounts, err = accountsNewDelete(
-				q.deleteByRowIDStmt, q.deleteGroupDataStmt,
+				q.deleteByRowIDStmt, q.deleteAllAcctCreatableDataStmt,
 				addr, dbad,
 				updatedAccounts, updatedAccountIdx,
 			)
@@ -2360,12 +2183,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 			dbad = updatedAccounts[updatedAccountIdx]
 			a.Empty(dbad.pad)
 
-			rows, err = allExtData.Query()
-			a.NoError(err)
-			a.False(rows.Next())
-			rows.Close()
-
-			rows, err = allAccounts.Query()
+			rows, err := allExtData.Query()
 			a.NoError(err)
 			a.False(rows.Next())
 			rows.Close()
@@ -2391,7 +2209,7 @@ func TestAccountsNewCRUD(t *testing.T) {
 	}
 
 	updatedAccounts, err = accountsNewCreate(
-		q.insertStmt, q.insertGroupDataStmt,
+		q.insertStmt, q.insertAcctCreatableDataStmt,
 		addr, ledgercore.PersistedAccountData{AccountData: ad}, proto,
 		updatedAccounts, updatedAccountIdx,
 	)
@@ -2403,17 +2221,19 @@ func TestAccountsNewCRUD(t *testing.T) {
 	updated := basics.AccountData{}
 	numNewAssets1 := 20
 	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numBaseAssets+numNewAssets1)
+	created := make(ledgercore.EntityDelta, numNewAssets1)
 	for k, v := range old.pad.Assets {
 		updated.Assets[k] = v
 	}
 	for i := 1001; i <= 1000+numNewAssets1; i++ {
 		updated.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
+		created[basics.CreatableIndex(i)] = ledgercore.ActionHoldingCreate
 	}
 
-	delta := accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}}
+	delta := accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}, createdDeletedHoldings: created}
 	updatedAccounts, err = accountsNewUpdate(
-		q.updateStmt, q.queryGroupDataStmt,
-		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+		q.updateStmt, q.updateAcctCreatableDataStmt,
+		q.insertAcctCreatableDataStmt, q.deleteAcctCreatableDataStmt,
 		addr, delta, proto,
 		updatedAccounts, updatedAccountIdx)
 
@@ -2434,16 +2254,24 @@ func TestAccountsNewCRUD(t *testing.T) {
 	a.NoError(protocol.Decode(buf, &pad))
 	a.Equal(updatedAccounts[updatedAccountIdx].pad, pad)
 
-	// check no records in accountext table
+	// check in extension table
 	rows, err := allExtData.Query()
 	a.NoError(err)
-	a.False(rows.Next())
+	i := 0
+	for rows.Next() {
+		i++
+	}
 	rows.Close()
+	a.Equal(numBaseAssets+numNewAssets1, i)
+
+	_, holdingMap, err := loadFullCreatableData(qs.loadAllAcctCreatableData, rowid.Int64, 0)
+	a.NoError(err)
+	a.Equal(numBaseAssets+numNewAssets1, len(holdingMap))
 
 	old, err = qs.lookup(addr)
-	a.Equal(numBaseAssets+numNewAssets1, len(old.pad.AccountData.Assets))
-	a.Equal(numBaseAssets+numNewAssets1, old.pad.NumAssetHoldings())
 	a.NotEmpty(old.rowid)
+	a.Equal(rowid.Int64, old.rowid)
+	a.Equal(0, len(old.pad.AccountData.Assets))
 
 	// case 2)
 	// now create additional 1000 assets to exceed assetsThreshold
@@ -2451,19 +2279,21 @@ func TestAccountsNewCRUD(t *testing.T) {
 	updated = basics.AccountData{}
 	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numBaseAssets+numNewAssets1+numNewAssets2)
 	savedAssets := make(map[basics.AssetIndex]bool, numBaseAssets+numNewAssets1+numNewAssets2)
-	for k, v := range old.pad.Assets {
+	for k, v := range holdingMap {
 		updated.Assets[k] = v
 		savedAssets[k] = true
 	}
+	created = make(ledgercore.EntityDelta, numNewAssets2)
 	for i := 2001; i <= 2000+numNewAssets2; i++ {
 		updated.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
 		savedAssets[basics.AssetIndex(i)] = true
+		created[basics.CreatableIndex(i)] = ledgercore.ActionHoldingCreate
 	}
 
-	delta = accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}}
+	delta = accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}, createdDeletedHoldings: created}
 	updatedAccounts, err = accountsNewUpdate(
-		q.updateStmt, q.queryGroupDataStmt,
-		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+		q.updateStmt, q.updateAcctCreatableDataStmt,
+		q.insertAcctCreatableDataStmt, q.deleteAcctCreatableDataStmt,
 		addr, delta, proto,
 		updatedAccounts, updatedAccountIdx)
 
@@ -2483,34 +2313,20 @@ func TestAccountsNewCRUD(t *testing.T) {
 	a.NoError(err)
 	a.True(rowid.Valid)
 	a.NoError(protocol.Decode(buf, &pad))
-	mempad := cleanPad(updatedAccounts[updatedAccountIdx].pad)
-	a.Equal(mempad, pad)
+	a.Equal(updatedAccounts[updatedAccountIdx].pad, pad)
 
-	// check records in accountext table
-	rows, err = allExtData.Query()
-	a.NoError(err)
-	i := 0
-	for rows.Next() {
-		err = rows.Scan(&buf)
-		a.NoError(err)
-		var gd ledgercore.AssetsHoldingGroupData
-		a.NoError(protocol.Decode(buf, &gd))
-		a.Equal(updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups[i].TestGetGroupData(), gd)
-		i++
-	}
-	rows.Close()
-
-	numRowsExpected := (numBaseAssets + numNewAssets1 + numNewAssets2) / ledgercore.MaxHoldingGroupSize
-	a.GreaterOrEqual(i, numRowsExpected)
+	// check records in extended table
+	num := checkCreatableData(a, delta.new.AccountData)
+	numRowsExpected := numBaseAssets + numNewAssets1 + numNewAssets2
+	a.Equal(num, numRowsExpected)
 
 	old, err = qs.lookup(addr)
 	a.NoError(err)
 	a.Equal(0, len(old.pad.AccountData.Assets))
-	a.Equal(numBaseAssets+numNewAssets1+numNewAssets2, old.pad.NumAssetHoldings())
-	for i := 0; i < len(old.pad.ExtendedAssetHolding.Groups); i++ {
-		a.False(old.pad.ExtendedAssetHolding.Groups[i].Loaded())
-		a.NotZero(old.pad.ExtendedAssetHolding.Groups[i].AssetGroupKey)
-	}
+
+	_, holdingMap, err = loadFullCreatableData(qs.loadAllAcctCreatableData, rowid.Int64, 0)
+	a.NoError(err)
+	a.Equal(numBaseAssets+numNewAssets1+numNewAssets2, len(holdingMap))
 
 	// case 3.1)
 	// old.ExtendedAssetHolding.Count > assetsThreshold
@@ -2519,25 +2335,11 @@ func TestAccountsNewCRUD(t *testing.T) {
 	del := []basics.AssetIndex{1, 2, 3, 10, 2900}
 	upd := []basics.AssetIndex{4, 5, 2999}
 	crt := []basics.AssetIndex{9001, 9501}
-	loaded := make(map[int]bool, numRowsExpected)
 	assets := make(map[basics.AssetIndex]basics.AssetHolding, len(del)+len(upd))
 	for _, aidx := range append(del, upd...) {
-		gi, ai := old.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
-		a.NotEqual(-1, gi, aidx)
-		g := &old.pad.ExtendedAssetHolding.Groups[gi]
-		if !g.Loaded() {
-			buf, _, err := loadGroupData(qs.loadAccountGroupDataStmt, g.AssetGroupKey)
-			a.NoError(err)
-			var groupData ledgercore.AssetsHoldingGroupData
-			err = protocol.Decode(buf, &groupData)
-			a.NoError(err)
-			g.Load(groupData)
-			loaded[gi] = true
-		}
-		gi, ai = old.pad.ExtendedAssetHolding.FindAsset(aidx, gi)
-		a.NotEqual(-1, gi)
-		a.NotEqual(-1, ai)
-		assets[aidx] = g.GetHolding(ai)
+		holding, ok := holdingMap[aidx]
+		a.True(ok)
+		assets[aidx] = holding
 	}
 
 	deltaHoldings := make(ledgercore.EntityDelta, len(del)+len(crt))
@@ -2561,27 +2363,31 @@ func TestAccountsNewCRUD(t *testing.T) {
 
 	delta = accountDelta{
 		old:                    old,
-		new:                    ledgercore.PersistedAccountData{AccountData: updated, ExtendedAssetHolding: old.pad.ExtendedAssetHolding},
+		new:                    ledgercore.PersistedAccountData{AccountData: updated},
 		createdDeletedHoldings: deltaHoldings,
 	}
 
 	updatedAccounts, err = accountsNewUpdate(
-		q.updateStmt, q.queryGroupDataStmt,
-		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+		q.updateStmt, q.updateAcctCreatableDataStmt,
+		q.insertAcctCreatableDataStmt, q.deleteAcctCreatableDataStmt,
 		addr, delta, proto,
 		updatedAccounts, updatedAccountIdx)
 
 	a.NoError(err)
 	// ensure correctness of the data written
 	a.NotEmpty(updatedAccounts[updatedAccountIdx])
-	expectedCount := numBaseAssets + numNewAssets1 + numNewAssets2 - len(del) + len(crt)
-	a.Equal(expectedCount, updatedAccounts[updatedAccountIdx].pad.NumAssetHoldings())
+	a.Equal(0, len(updatedAccounts[updatedAccountIdx].pad.Assets))
 
-	// ensure a single row
-	rows, err = allAccounts.Query()
-	a.True(rows.Next())
-	a.False(rows.Next())
+	rows, err = allExtData.Query()
+	a.NoError(err)
+	i = 0
+	for rows.Next() {
+		i++
+	}
 	rows.Close()
+
+	expectedCount := numBaseAssets + numNewAssets1 + numNewAssets2 - len(del) + len(crt)
+	a.Equal(expectedCount, i)
 
 	// check raw accountbase data
 	pad = ledgercore.PersistedAccountData{}
@@ -2589,68 +2395,40 @@ func TestAccountsNewCRUD(t *testing.T) {
 	a.NoError(err)
 	a.True(rowid.Valid)
 	a.NoError(protocol.Decode(buf, &pad))
-	mempad = cleanPad(updatedAccounts[updatedAccountIdx].pad)
-	a.Equal(mempad, pad)
+	a.Equal(updatedAccounts[updatedAccountIdx].pad, pad)
 
-	// check records in accountext table
-	rows, err = allExtData.Query()
-	a.NoError(err)
-	i = 0
-	j := 0
-	for rows.Next() {
-		err = rows.Scan(&buf)
-		a.NoError(err)
-		var gd ledgercore.AssetsHoldingGroupData
-		a.NoError(protocol.Decode(buf, &gd))
-		if loaded[i] {
-			a.Equal(updatedAccounts[updatedAccountIdx].pad.ExtendedAssetHolding.Groups[i].TestGetGroupData(), gd, i)
-			j++
-		}
-		i++
+	// check records in extended table
+	for _, aidx := range del {
+		delete(holdingMap, aidx)
 	}
-	rows.Close()
+	for _, aidx := range crt {
+		holdingMap[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
+	}
+	i = checkCreatableData(a, basics.AccountData{Assets: holdingMap})
 
-	numRowsExpected = expectedCount / ledgercore.MaxHoldingGroupSize
-	a.GreaterOrEqual(i, numRowsExpected)
-	a.Equal(len(loaded), j)
+	a.Equal(expectedCount, i)
 
 	old, err = qs.lookup(addr)
 	a.NoError(err)
 	a.Equal(0, len(old.pad.AccountData.Assets))
-	for _, aidx := range append(crt, upd...) {
-		gi, ai := old.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
-		a.NotEqual(-1, gi, aidx)
-		a.Equal(-1, ai) // not loaded
-	}
 
-	for gi := range old.pad.ExtendedAssetHolding.Groups {
-		g := &old.pad.ExtendedAssetHolding.Groups[gi]
-		if !g.Loaded() {
-			buf, _, err := loadGroupData(qs.loadAccountGroupDataStmt, g.AssetGroupKey)
-			var groupData ledgercore.AssetsHoldingGroupData
-			err = protocol.Decode(buf, &groupData)
-			a.NoError(err)
-			a.NoError(err)
-			g.Load(groupData)
-		}
-	}
 	for _, aidx := range append(crt, upd...) {
-		gi, ai := old.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
-		a.NotEqual(-1, gi, aidx)
-		a.NotEqual(-1, ai)
+		_, _, exist, err := lookupAssetHolding(qs.lookupAcctCreatableData, old.rowid, aidx)
+		a.NoError(err)
+		a.True(exist)
 	}
 
 	for _, aidx := range del {
-		gi, ai := old.pad.ExtendedAssetHolding.FindAsset(aidx, 0)
-		a.Equal(-1, gi, aidx)
-		a.Equal(-1, ai)
+		_, _, exist, err := lookupAssetHolding(qs.lookupAcctCreatableData, old.rowid, aidx)
+		a.NoError(err)
+		a.False(exist)
 	}
 
 	// case 3.2)
 	// old.ExtendedAssetHolding.Count > assetsThreshold
 	// new count > assetsThreshold => delete most and update, create some
 
-	holdingMap, _, err := loadHoldings(qs.loadAccountGroupDataStmt, old.pad.ExtendedAssetHolding, 0)
+	_, holdingMap, err = loadFullCreatableData(qs.loadAllAcctCreatableData, old.rowid, 0)
 	a.Equal(len(savedAssets), len(holdingMap))
 	for k := range savedAssets {
 		a.Contains(holdingMap, k)
@@ -2685,15 +2463,14 @@ func TestAccountsNewCRUD(t *testing.T) {
 	}
 
 	updatedAccounts, err = accountsNewUpdate(
-		q.updateStmt, q.queryGroupDataStmt,
-		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+		q.updateStmt, q.updateAcctCreatableDataStmt,
+		q.insertAcctCreatableDataStmt, q.deleteAcctCreatableDataStmt,
 		addr, delta, proto,
 		updatedAccounts, updatedAccountIdx)
 
 	a.NoError(err)
 	a.NotEmpty(updatedAccounts[updatedAccountIdx])
-	expectedCount = len(crt) + len(upd)
-	a.Equal(expectedCount, updatedAccounts[updatedAccountIdx].pad.NumAssetHoldings())
+	a.Equal(0, len(updatedAccounts[updatedAccountIdx].pad.Assets))
 
 	// ensure a single row
 	rows, err = allAccounts.Query()
@@ -2706,24 +2483,25 @@ func TestAccountsNewCRUD(t *testing.T) {
 	a.NoError(err)
 	a.True(rowid.Valid)
 	a.NoError(protocol.Decode(buf, &pad))
-	mempad = cleanPad(updatedAccounts[updatedAccountIdx].pad)
-	a.Equal(mempad, pad)
+	a.Equal(updatedAccounts[updatedAccountIdx].pad, pad)
 
-	// check no records in accountext table
+	expectedCount = len(crt) + len(upd)
+
+	// check no records in extension table
 	rows, err = allExtData.Query()
+	i = 0
+	for rows.Next() {
+		i++
+	}
+	err = rows.Close()
 	a.NoError(err)
-	a.False(rows.Next())
-	rows.Close()
+	a.Equal(expectedCount, i)
 
 	old, err = qs.lookup(addr)
-	a.Equal(expectedCount, len(old.pad.AccountData.Assets))
-	a.Equal(expectedCount, old.pad.NumAssetHoldings())
-	for _, aidx := range append(upd, crt...) {
-		a.Contains(old.pad.AccountData.Assets, aidx)
-	}
+	a.Equal(0, len(old.pad.AccountData.Assets))
 }
 
-// TestLoadHolding verifies ExtendedAssetHolding.Group copying, and baseRound error handling
+// TestLoadHolding verifies baseRound error handling
 func TestLoadHolding(t *testing.T) {
 	a := require.New(t)
 
@@ -2759,7 +2537,7 @@ func TestLoadHolding(t *testing.T) {
 	}
 
 	updatedAccounts, err = accountsNewCreate(
-		q.insertStmt, q.insertGroupDataStmt,
+		q.insertStmt, q.insertAcctCreatableDataStmt,
 		addr, ledgercore.PersistedAccountData{AccountData: ad}, proto,
 		updatedAccounts, updatedAccountIdx,
 	)
@@ -2771,17 +2549,21 @@ func TestLoadHolding(t *testing.T) {
 	numNewAssets := assetsThreshold
 	updated := basics.AccountData{}
 	updated.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numBaseAssets)
-	for k, v := range old.pad.Assets {
+	for k, v := range ad.Assets {
 		updated.Assets[k] = v
 	}
+	created := make(ledgercore.EntityDelta, numNewAssets)
 	for i := 2001; i <= 2000+numNewAssets; i++ {
 		updated.Assets[basics.AssetIndex(i)] = basics.AssetHolding{Amount: uint64(i), Frozen: true}
+		created[basics.CreatableIndex(i)] = ledgercore.ActionHoldingCreate
 	}
 
-	delta := accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}}
+	delta := accountDelta{old: old, new: ledgercore.PersistedAccountData{AccountData: updated}, createdDeletedHoldings: created}
+	a.Equal(numBaseAssets+numNewAssets, len(delta.new.Assets))
+
 	updatedAccounts, err = accountsNewUpdate(
-		q.updateStmt, q.queryGroupDataStmt,
-		q.updateGroupDataStmt, q.insertGroupDataStmt, q.deleteGroupDataStmt,
+		q.updateStmt, q.updateAcctCreatableDataStmt,
+		q.insertAcctCreatableDataStmt, q.deleteAcctCreatableDataStmt,
 		addr, delta, proto,
 		updatedAccounts, updatedAccountIdx)
 
@@ -2804,28 +2586,16 @@ func TestLoadHolding(t *testing.T) {
 
 	old, err = qs.lookup(addr)
 	a.Equal(0, len(old.pad.AccountData.Assets))
-	a.Equal(numBaseAssets+numNewAssets, old.pad.NumAssetHoldings())
-	a.NotEmpty(old.rowid)
+	a.Equal(rowid.Int64, old.rowid)
 
-	clone := func(s ledgercore.ExtendedAssetHolding) (t ledgercore.ExtendedAssetHolding) {
-		t = s
-		t.Groups = make([]ledgercore.AssetsHoldingGroup, len(s.Groups))
-		for i, g := range s.Groups {
-			t.Groups[i] = g
-		}
-		return
-	}
-
-	saved := clone(old.pad.ExtendedAssetHolding)
-	_, eah, err := loadHoldings(qs.loadAccountGroupDataStmt, old.pad.ExtendedAssetHolding, 0)
+	_, holdings, err := loadFullCreatableData(qs.loadAllAcctCreatableData, old.rowid, 0)
 	a.NoError(err)
-	a.Equal(saved, old.pad.ExtendedAssetHolding)
-	a.NotEqual(eah, old.pad.ExtendedAssetHolding)
+	a.Equal(delta.new.Assets, holdings)
 
-	_, eah, err = loadHoldings(qs.loadAccountGroupDataStmt, old.pad.ExtendedAssetHolding, old.round)
+	_, holdings, err = loadFullCreatableData(qs.loadAllAcctCreatableData, old.rowid, old.round)
 	a.NoError(err)
 
-	_, eah, err = loadHoldings(qs.loadAccountGroupDataStmt, old.pad.ExtendedAssetHolding, old.round+1)
+	_, holdings, err = loadFullCreatableData(qs.loadAllAcctCreatableData, old.rowid, old.round+1)
 	a.Error(err)
 	a.IsType(&MismatchingDatabaseRoundError{}, err)
 }

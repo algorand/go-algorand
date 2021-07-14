@@ -40,7 +40,7 @@ import (
 type roundCowParent interface {
 	// lookout with rewards
 	lookup(basics.Address) (ledgercore.PersistedAccountData, error)
-	lookupCreatableData(basics.Address, []creatableDataLocator) (ledgercore.PersistedAccountData, error)
+	lookupCreatableData(basics.Address, []basics.CreatableLocator) (ledgercore.PersistedAccountData, error)
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
@@ -171,44 +171,28 @@ func (cb *roundCowState) lookup(addr basics.Address) (pad ledgercore.PersistedAc
 }
 
 // lookupWithHolding is gets account data but also fetches asset holding or app local data for a specified creatable
-func (cb *roundCowState) lookupCreatableData(addr basics.Address, locators []creatableDataLocator) (data ledgercore.PersistedAccountData, err error) {
+func (cb *roundCowState) lookupCreatableData(addr basics.Address, locators []basics.CreatableLocator) (data ledgercore.PersistedAccountData, err error) {
 	pad, modified := cb.mods.Accts.Get(addr)
 	if modified {
-		foundInModified := make([]bool, 0, len(locators))
+		foundInModified := 0
 		for _, loc := range locators {
-			globalExist := false
-			localExist := false
-			if loc.ctype == basics.AssetCreatable {
-				if loc.global {
-					_, globalExist = pad.AccountData.AssetParams[basics.AssetIndex(loc.cidx)]
-				}
-				if loc.local {
-					_, localExist = pad.AccountData.Assets[basics.AssetIndex(loc.cidx)]
-				}
-			} else {
-				if loc.global {
-					_, globalExist = pad.AccountData.AppParams[basics.AppIndex(loc.cidx)]
-				}
-				if loc.local {
-					_, localExist = pad.AccountData.AppLocalStates[basics.AppIndex(loc.cidx)]
-				}
+			found := false
+			switch loc.Type {
+			case basics.AssetCreatable:
+				_, found = pad.AccountData.AssetParams[basics.AssetIndex(loc.Index)]
+			case basics.AssetCreatableData:
+				_, found = pad.AccountData.Assets[basics.AssetIndex(loc.Index)]
+			case basics.AppCreatable:
+				_, found = pad.AccountData.AppParams[basics.AppIndex(loc.Index)]
+			case basics.AppCreatableData:
+				_, found = pad.AccountData.AppLocalStates[basics.AppIndex(loc.Index)]
 			}
-
-			onlyGlobal := loc.global && globalExist && !loc.local
-			onlyLocal := loc.local && localExist && !loc.global
-			bothGlobalLocal := loc.global && globalExist && loc.local && localExist
-			found := onlyGlobal || onlyLocal || bothGlobalLocal
-			foundInModified = append(foundInModified, found)
-		}
-		found := 0
-		for _, val := range foundInModified {
-			if !val {
-				break
+			if found {
+				foundInModified++
 			}
-			found++
 		}
 		// all requested items were found in modified data => return
-		if found == len(locators) {
+		if foundInModified == len(locators) {
 			return pad, nil
 		}
 	}
@@ -222,35 +206,30 @@ func (cb *roundCowState) lookupCreatableData(addr basics.Address, locators []cre
 	// data from cb.mods.Accts is newer than from lookupParent -> lookupHolding/lookupParams
 	// so add assets if they do not exist in new
 	for _, loc := range locators {
-		if loc.ctype == basics.AssetCreatable {
-			if loc.global {
-				params, parentOk := parentPad.AccountData.AssetParams[basics.AssetIndex(loc.cidx)]
-				if _, ok := pad.AccountData.AssetParams[basics.AssetIndex(loc.cidx)]; !ok && parentOk {
-					pad.AccountData.AssetParams = ledgercore.CloneAssetParams(pad.AccountData.AssetParams)
-					pad.AccountData.AssetParams[basics.AssetIndex(loc.cidx)] = params
-				}
+		switch loc.Type {
+		case basics.AssetCreatable:
+			params, parentOk := parentPad.AccountData.AssetParams[basics.AssetIndex(loc.Index)]
+			if _, ok := pad.AccountData.AssetParams[basics.AssetIndex(loc.Index)]; !ok && parentOk {
+				pad.AccountData.AssetParams = ledgercore.CloneAssetParams(pad.AccountData.AssetParams)
+				pad.AccountData.AssetParams[basics.AssetIndex(loc.Index)] = params
 			}
-			if loc.local {
-				holding, parentOk := parentPad.AccountData.Assets[basics.AssetIndex(loc.cidx)]
-				if _, ok := pad.AccountData.Assets[basics.AssetIndex(loc.cidx)]; !ok && parentOk {
-					pad.AccountData.Assets = ledgercore.CloneAssetHoldings(pad.AccountData.Assets)
-					pad.AccountData.Assets[basics.AssetIndex(loc.cidx)] = holding
-				}
+		case basics.AssetCreatableData:
+			holding, parentOk := parentPad.AccountData.Assets[basics.AssetIndex(loc.Index)]
+			if _, ok := pad.AccountData.Assets[basics.AssetIndex(loc.Index)]; !ok && parentOk {
+				pad.AccountData.Assets = ledgercore.CloneAssetHoldings(pad.AccountData.Assets)
+				pad.AccountData.Assets[basics.AssetIndex(loc.Index)] = holding
 			}
-		} else {
-			if loc.global {
-				params, parentOk := parentPad.AccountData.AppParams[basics.AppIndex(loc.cidx)]
-				if _, ok := pad.AccountData.AppParams[basics.AppIndex(loc.cidx)]; !ok && parentOk {
-					pad.AccountData.AppParams = ledgercore.CloneAppParams(pad.AccountData.AppParams)
-					pad.AccountData.AppParams[basics.AppIndex(loc.cidx)] = params
-				}
+		case basics.AppCreatable:
+			params, parentOk := parentPad.AccountData.AppParams[basics.AppIndex(loc.Index)]
+			if _, ok := pad.AccountData.AppParams[basics.AppIndex(loc.Index)]; !ok && parentOk {
+				pad.AccountData.AppParams = ledgercore.CloneAppParams(pad.AccountData.AppParams)
+				pad.AccountData.AppParams[basics.AppIndex(loc.Index)] = params
 			}
-			if loc.local {
-				states, parentOk := parentPad.AccountData.AppLocalStates[basics.AppIndex(loc.cidx)]
-				if _, ok := pad.AccountData.AppLocalStates[basics.AppIndex(loc.cidx)]; !ok && parentOk {
-					pad.AccountData.AppLocalStates = ledgercore.CloneAppLocalStates(pad.AccountData.AppLocalStates)
-					pad.AccountData.AppLocalStates[basics.AppIndex(loc.cidx)] = states
-				}
+		case basics.AppCreatableData:
+			states, parentOk := parentPad.AccountData.AppLocalStates[basics.AppIndex(loc.Index)]
+			if _, ok := pad.AccountData.AppLocalStates[basics.AppIndex(loc.Index)]; !ok && parentOk {
+				pad.AccountData.AppLocalStates = ledgercore.CloneAppLocalStates(pad.AccountData.AppLocalStates)
+				pad.AccountData.AppLocalStates[basics.AppIndex(loc.Index)] = states
 			}
 		}
 	}
@@ -300,63 +279,14 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 		logging.Base().Errorf("address %s does not have entry in getPadCache", addr.String())
 
 		// Try to recover.
-		// Problem: getPadCache have to keep AccountData with the asset/app used in lookupCreatableData call,
-		// and put() has no idea what the client needed (that's why getPadCache exists).
-		// So need to preload all elements that makes sense:
-		// - for asset params they are either newCreatable or deletedCreatable
-		// - for asset holdings it is more complicated and need to load all data from new.Assets
 		pad, err := cb.lookup(addr)
 		if err != nil {
 			// well, seems like something really wrong, panic
 			panic(fmt.Sprintf("Recovering attempt after %s missing in getPadCache failed: %s", addr.String(), err.Error()))
 		}
 
-		if pad.ExtendedAssetParams.Count != 0 {
-			var target basics.CreatableIndex
-			if newCreatable != nil && newCreatable.Type == basics.AssetCreatable {
-				target = newCreatable.Index
-			}
-			if deletedCreatable != nil && deletedCreatable.Type == basics.AssetCreatable {
-				target = deletedCreatable.Index
-			}
-			if target != 0 {
-				pad2, err := cb.lookupCreatableData(addr, []creatableDataLocator{{cidx: target, ctype: basics.AssetCreatable, global: true, local: false}})
-				if err != nil {
-					// well, seems like something really wrong, panic
-					panic(fmt.Sprintf("Recovering attempt after %s missing in getPadCache and asset params %d failed: %s", addr.String(), target, err.Error()))
-				}
-				pad2.AccountData = new
-				cb.mods.Accts.Upsert(addr, pad2)
-			}
-		}
-
-		if pad.ExtendedAssetHolding.Count != 0 {
-			// There are some extension records, need to fetch all holdings that are in new
-			// to ensure underlying code has all needed data
-			locators := make([]creatableDataLocator, 0, len(new.Assets))
-			for aidx := range new.Assets {
-				locators = append(locators, creatableDataLocator{cidx: basics.CreatableIndex(aidx), ctype: basics.AssetCreatable, global: false, local: true})
-			}
-
-			pad2, err := cb.lookupCreatableData(addr, locators)
-			if err != nil {
-				// well, seems like something really wrong, panic
-				panic(fmt.Sprintf("Recovering attempt after %s missing in getPadCache and asset holdings failed: %s", addr.String(), err.Error()))
-			}
-			for i, g := range pad2.ExtendedAssetHolding.Groups {
-				if g.Loaded() {
-					pad.ExtendedAssetHolding.Groups[i] = g
-				}
-			}
-			pad.AccountData = new
-			cb.mods.Accts.Upsert(addr, pad)
-		}
-
-		if pad.ExtendedAssetParams.Count == 0 && pad.ExtendedAssetHolding.Count == 0 {
-			// if no extension records, store a value from regular lookup
-			pad.AccountData = new
-			cb.mods.Accts.Upsert(addr, pad)
-		}
+		pad.AccountData = new
+		cb.mods.Accts.Upsert(addr, pad)
 	}
 
 	if newCreatable != nil {

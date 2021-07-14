@@ -1823,8 +1823,8 @@ func TestLedgerAssetHoldingsLargeBlock(t *testing.T) {
 
 	pad, err = l.accts.lookupWithRewards(l.Latest(), addr, true)
 	require.NoError(t, err)
-	require.Equal(t, uint32(numAssets), pad.ExtendedAssetHolding.Count)
-	require.Equal(t, uint32(numAssets), pad.ExtendedAssetParams.Count)
+	require.Equal(t, int(numAssets), len(pad.Assets))
+	require.Equal(t, int(numAssets), len(pad.AssetParams))
 }
 
 func BenchmarkLedgerStartup(b *testing.B) {

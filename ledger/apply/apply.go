@@ -33,7 +33,7 @@ type Balances interface {
 
 	// GetEx is like Get(addr, false), but also loads specific creatable
 	// params and holding flags correspond to Params/AppGlobal and Assets/AppLocalState maps depending on creatable type
-	GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, params bool, holding bool) (basics.AccountData, error)
+	GetEx(addr basics.Address, cidx basics.CreatableIndex, ctypes []basics.CreatableType) (basics.AccountData, error)
 
 	Put(basics.Address, basics.AccountData) error
 

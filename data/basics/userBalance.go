@@ -309,6 +309,12 @@ const (
 
 	// AppCreatable is the CreatableType corresponds to apps
 	AppCreatable CreatableType = 1
+
+	// AssetCreatableData corresponds to asset holdings
+	AssetCreatableData CreatableType = 2
+
+	// AppCreatableData means apps local state
+	AppCreatableData CreatableType = 3
 )
 
 // CreatableLocator stores both the creator, whose balance record contains

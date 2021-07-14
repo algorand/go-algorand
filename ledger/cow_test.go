@@ -37,7 +37,7 @@ func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.PersistedAccountDa
 	return ledgercore.PersistedAccountData{AccountData: ml.balanceMap[addr]}, nil
 }
 
-func (ml *mockLedger) lookupCreatableData(addr basics.Address, locators []creatableDataLocator) (ledgercore.PersistedAccountData, error) {
+func (ml *mockLedger) lookupCreatableData(addr basics.Address, locators []basics.CreatableLocator) (ledgercore.PersistedAccountData, error) {
 	return ledgercore.PersistedAccountData{AccountData: ml.balanceMap[addr]}, nil
 }
 

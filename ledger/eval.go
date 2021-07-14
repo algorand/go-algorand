@@ -97,7 +97,7 @@ func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.PersistedAccountD
 	return pad, err
 }
 
-func (x *roundCowBase) lookupCreatableData(addr basics.Address, locators []creatableDataLocator) (data ledgercore.PersistedAccountData, err error) {
+func (x *roundCowBase) lookupCreatableData(addr basics.Address, locators []basics.CreatableLocator) (data ledgercore.PersistedAccountData, err error) {
 	return x.l.lookupCreatableDataWithoutRewards(x.rnd, addr, locators)
 }
 
@@ -242,12 +242,16 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 	return pad.AccountData, nil
 }
 
-func (cs *roundCowState) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, params bool, holding bool) (basics.AccountData, error) {
+func (cs *roundCowState) GetEx(addr basics.Address, cidx basics.CreatableIndex, ctypes []basics.CreatableType) (basics.AccountData, error) {
 	if !cs.proto.EnableUnlimitedAssets {
 		return cs.Get(addr, false)
 	}
 
-	pad, err := cs.lookupCreatableData(addr, []creatableDataLocator{{cidx: cidx, ctype: ctype, global: params, local: holding}})
+	locators := make([]basics.CreatableLocator, len(ctypes))
+	for i, ctype := range ctypes {
+		locators[i] = basics.CreatableLocator{Type: ctype, Index: cidx}
+	}
+	pad, err := cs.lookupCreatableData(addr, locators)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
@@ -370,17 +374,6 @@ type BlockEvaluator struct {
 	l ledgerForEvaluator
 }
 
-type creatableDataLocator struct {
-	// cidx is an asset or app index
-	cidx basics.CreatableIndex
-	// ctype is either asset or app
-	ctype basics.CreatableType
-	// global specified asset or app params lookup
-	global bool
-	// local specifies asset holding or app local state lookup
-	local bool
-}
-
 type ledgerForEvaluator interface {
 	ledgerForCowBase
 	GenesisHash() crypto.Digest
@@ -394,7 +387,7 @@ type ledgerForCowBase interface {
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 
 	lookupWithoutRewards(basics.Round, basics.Address) (ledgercore.PersistedAccountData, basics.Round, error)
-	lookupCreatableDataWithoutRewards(basics.Round, basics.Address, []creatableDataLocator) (ledgercore.PersistedAccountData, error)
+	lookupCreatableDataWithoutRewards(basics.Round, basics.Address, []basics.CreatableLocator) (ledgercore.PersistedAccountData, error)
 	checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	getCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
