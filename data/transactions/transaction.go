@@ -652,16 +652,6 @@ func (tx Transaction) EstimateEncodedSize() int {
 	return stx.GetEncodedLength()
 }
 
-func (z *KeyregTxnFields) IsOffline(cParams config.ConsensusParams) bool {
-	if cParams.EnableBlockProofKeyregCheck {
-		return z.VotePK == crypto.OneTimeSignatureVerifier{} ||
-			z.SelectionPK == crypto.VRFVerifier{} ||
-			z.BlockProofPK == (crypto.VerifyingKey{})
-	}
-	return z.VotePK == crypto.OneTimeSignatureVerifier{} ||
-		z.SelectionPK == crypto.VRFVerifier{}
-}
-
 // TxnContext describes the context in which a transaction can appear
 // (pretty much, a block, but we don't have the definition of a block
 // here, since that would be a circular dependency).  This is used to
