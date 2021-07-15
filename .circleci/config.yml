@@ -147,6 +147,9 @@ commands:
       - attach_workspace:
           at: << parameters.circleci_home >>
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - restore_cache:
+          keys:
+            - 'go-cache-{{ .Environment.CIRCLE_STAGE }}'
       - run:
           name: Run short tests
           no_output_timeout: 30m
@@ -173,6 +176,10 @@ commands:
           destination: test-results
       - store_test_results:
           path: /tmp/results
+      - save_cache:
+          key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}'
+          paths:
+            - tmp/go-cache
 
   upload_coverage:
     description: Collect coverage reports and upload them
