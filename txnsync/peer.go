@@ -373,7 +373,7 @@ scanLoop:
 			continue
 		}
 
-		// check if the peer alrady received these messages from a different source other than us.
+		// check if the peer already received these messages from a different source other than us.
 		for _, filterIdx := range effectiveBloomFilters {
 			if p.recentIncomingBloomFilters[filterIdx].filter.test(txID) {
 				//removedTxn++
