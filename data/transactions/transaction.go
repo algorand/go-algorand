@@ -296,24 +296,23 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 		}
 
-		if tx.KeyregTxnFields.Nonparticipation && !proto.SupportBecomeNonParticipatingTransactions {
-			// if the transaction has the Nonparticipation flag high, but the protocol does not support
-			// that type of transaction, it is invalid.
-			return errKeyregTxnUnsupportedSwitchToNonParticipating
-		}
-
-		if err := tx.blockProofPKWellFormed(proto); err != nil {
-			return err
-		}
-
 		// check that, if this tx is marking an account nonparticipating,
 		// it supplies no key (as though it were trying to go offline)
 		if tx.KeyregTxnFields.Nonparticipation {
+			if !proto.SupportBecomeNonParticipatingTransactions {
+				// if the transaction has the Nonparticipation flag high, but the protocol does not support
+				// that type of transaction, it is invalid.
+				return errKeyregTxnUnsupportedSwitchToNonParticipating
+			}
 			suppliesNullKeys := tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} || tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{}
 			if !suppliesNullKeys {
 				return errKeyregTxnGoingOnlineWithNonParticipating
 			}
 
+		}
+
+		if err := tx.blockProofPKWellFormed(proto); err != nil {
+			return err
 		}
 
 	case protocol.AssetConfigTx:
