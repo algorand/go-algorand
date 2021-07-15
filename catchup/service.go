@@ -602,7 +602,7 @@ func (s *Service) syncCert(cert *PendingUnmatchedCertificate) {
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	// is there any point attempting to retrieve the block ?
 	if s.nextRoundIsNotSupported(cert.Round) {
-		// we migth get here if the agreement was seeing the certs votes for the next
+		// we might get here if the agreement service was seeing the certs votes for the next
 		// block, without seeing the actual block. Since it hasn't seen the block, it couldn't
 		// tell that it's an unsupported protocol, and would try to request it from the catchup.
 		s.handleUnsupportedRound(cert.Round)
