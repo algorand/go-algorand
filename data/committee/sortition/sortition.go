@@ -30,39 +30,13 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
-//
-//// Select runs the sortition function and returns the number of time the key was selected
-//func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput crypto.Digest) uint64 {
-//	binomialN := float64(money)
-//	binomialP := expectedSize / float64(totalMoney)
-//
-//	t := &big.Int{}
-//	t.SetBytes(vrfOutput[:])
-//
-//	precision := uint(8 * (len(vrfOutput) + 1))
-//	max, b, err := big.ParseFloat("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0, precision, big.ToNearestEven)
-//	if b != 16 || err != nil {
-//		panic("failed to parse big float constant in sortition")
-//	}
-//
-//	h := big.Float{}
-//	h.SetPrec(precision)
-//	h.SetInt(t)
-//
-//	ratio := big.Float{}
-//	cratio, _ := ratio.Quo(&h, max).Float64()
-//
-//	//return uint64(C.sortition_binomial_cdf_walk(C.double(binomialN), C.double(binomialP), C.double(cratio), C.uint64_t(money)))
-//	return boostCdfWalk(binomialN, binomialP, cratio, money)
-//}
-//
+//TODO: take out
 func boostCdfWalk(binomialN, binomialP, cratio float64, money uint64) uint64 {
 	return uint64(C.sortition_binomial_cdf_walk(C.double(binomialN), C.double(binomialP), C.double(cratio), C.uint64_t(money)))
 }
 
 func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput crypto.Digest) uint64 {
-	//binomialN := float64(money)
-	binomialP := expectedSize / float64(totalMoney)
+	p := expectedSize / float64(totalMoney)
 
 	t := &big.Int{}
 	t.SetBytes(vrfOutput[:])
@@ -80,18 +54,20 @@ func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput cry
 	ratio := big.Float{}
 	cratio, _ := ratio.Quo(&h, max).Float64()
 
-	return sortitionPoissonCDFWalk(binomialP, cratio, money)
+	return sortitionPoissonCDFWalk(p, cratio, money)
 }
 
 func sortitionPoissonCDFWalk(p, ratio float64, n uint64) uint64 {
 	var (
-		dist = distuv.Poisson{Lambda: float64(n) * p} //TODO: rand src?
+		dist = distuv.Poisson{Lambda: float64(n) * p}
 		cdf  float64
 	)
 
 	for j := uint64(0); j < n; j++ {
-		// Get the cdf
+		// Get the probability mass and add it to
+		// cumulative density
 		cdf += dist.Prob(float64(j))
+
 		// Found the correct boundary, break
 		if ratio <= cdf {
 			return j
