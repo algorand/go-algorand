@@ -86,6 +86,10 @@ func (ml *mockLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 	return hdr, nil
 }
 
+func (ml *mockLedger) totals() (ledgercore.AccountTotals, error) {
+	return ledgercore.AccountTotals{}, nil
+}
+
 func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.AccountData) {
 	for addr, data := range accts {
 		d, err := cow.lookup(addr)
@@ -98,10 +102,13 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	require.Equal(t, d, basics.AccountData{})
 }
 
-func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
+func applyUpdates(t *testing.T, cow *roundCowState, updates ledgercore.AccountDeltas) {
 	for i := 0; i < updates.Len(); i++ {
 		addr, delta := updates.GetByIdx(i)
-		cow.put(addr, delta, nil, nil)
+		old, err := cow.lookup(addr)
+		require.NoError(t, err)
+		err = cow.put(addr, old, delta, nil, nil)
+		require.NoError(t, err)
 	}
 }
 
@@ -109,7 +116,8 @@ func TestCowBalance(t *testing.T) {
 	accts0 := randomAccounts(20, true)
 	ml := mockLedger{balanceMap: accts0}
 
-	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
+	c0, err := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
+	require.NoError(t, err)
 	checkCow(t, c0, accts0)
 
 	c1 := c0.child(0)
@@ -117,7 +125,7 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c1, accts0)
 
 	updates1, accts1, _ := randomDeltas(10, accts0, 0)
-	applyUpdates(c1, updates1)
+	applyUpdates(t, c1, updates1)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)
 
@@ -127,7 +135,7 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c2, accts1)
 
 	updates2, accts2, _ := randomDeltas(10, accts1, 0)
-	applyUpdates(c2, updates2)
+	applyUpdates(t, c2, updates2)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts1)
 	checkCow(t, c2, accts2)

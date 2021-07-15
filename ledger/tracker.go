@@ -89,7 +89,7 @@ type ledgerForTracker interface {
 	trackerDB() db.Pair
 	blockDB() db.Pair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (ledgercore.StateDelta, error)
+	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (*roundCowState, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)

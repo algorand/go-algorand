@@ -89,6 +89,10 @@ func (ml *emptyLedger) compactCertNext() basics.Round {
 	return basics.Round(0)
 }
 
+func (ml *emptyLedger) totals() (ledgercore.AccountTotals, error) {
+	return ledgercore.AccountTotals{}, nil
+}
+
 type modsData struct {
 	addr  basics.Address
 	cidx  basics.CreatableIndex
@@ -192,7 +196,8 @@ func TestCowStorage(t *testing.T) {
 	ml := emptyLedger{}
 	var bh bookkeeping.BlockHeader
 	bh.CurrentProtocol = protocol.ConsensusCurrentVersion
-	cow := makeRoundCowState(&ml, bh, 0, 0)
+	cow, err := makeRoundCowState(&ml, bh, 0, 0)
+	require.NoError(t, err)
 	allSptrs, allAddrs := randomAddrApps(10)
 
 	st := makeStateTracker()

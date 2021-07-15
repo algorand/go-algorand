@@ -49,6 +49,7 @@ type roundCowParent interface {
 	getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
+	totals() (ledgercore.AccountTotals, error)
 }
 
 type roundCowState struct {
@@ -73,9 +74,11 @@ type roundCowState struct {
 	groupIdx int
 	// track creatables created during each transaction in the round
 	trackedCreatables map[int]basics.CreatableIndex
+
+	modtotals ledgercore.AccountTotals
 }
 
-func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
+func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) (*roundCowState, error) {
 	cb := roundCowState{
 		lookupParent:      b,
 		commitParent:      nil,
@@ -94,7 +97,20 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		cb.compatibilityMode = true
 		cb.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
 	}
-	return &cb
+
+	var err error
+	cb.modtotals, err = b.totals()
+	if err != nil {
+		return nil, err
+	}
+
+	var ot basics.OverflowTracker
+	cb.modtotals.ApplyRewards(hdr.RewardsLevel, &ot)
+	if ot.Overflowed {
+		return nil, fmt.Errorf("makeRoundCowState: overflow applying rewards to totals")
+	}
+
+	return &cb, nil
 }
 
 func (cb *roundCowState) deltas() ledgercore.StateDelta {
@@ -194,7 +210,7 @@ func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 	return cb.lookupParent.blockHdr(r)
 }
 
-func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
+func (cb *roundCowState) put(addr basics.Address, old, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	cb.mods.Accts.Upsert(addr, new)
 
 	if newCreatable != nil {
@@ -212,6 +228,15 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 			Created: false,
 		}
 	}
+
+	var ot basics.OverflowTracker
+	cb.modtotals.DelAccount(cb.proto, old, &ot)
+	cb.modtotals.AddAccount(cb.proto, new, &ot)
+	if ot.Overflowed {
+		return fmt.Errorf("roundCowState.put(): overflow updating totals")
+	}
+
+	return nil
 }
 
 func (cb *roundCowState) trackCreatable(creatableIndex basics.CreatableIndex) {
@@ -281,8 +306,13 @@ func (cb *roundCowState) commitToParent() {
 		}
 	}
 	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
+	cb.commitParent.modtotals = cb.modtotals
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
 	return cb.mods.Accts.ModifiedAccounts()
+}
+
+func (cb *roundCowState) totals() (ledgercore.AccountTotals, error) {
+	return cb.modtotals, nil
 }

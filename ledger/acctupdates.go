@@ -1016,11 +1016,13 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 	}()
 
 	for blk := range blocksStream {
-		delta, err = au.ledger.trackerEvalVerified(blk, &accLedgerEval)
+		var state *roundCowState
+		state, err = au.ledger.trackerEvalVerified(blk, &accLedgerEval)
 		if err != nil {
 			close(blockEvalFailed)
 			return
 		}
+		delta = state.deltas()
 
 		au.newBlockImpl(blk, delta)
 
