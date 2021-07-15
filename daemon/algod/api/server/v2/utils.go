@@ -266,9 +266,9 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
 }
 
-// sanitizePrintableUTF8String checks to see if the entire string is a UTF8 printable string.
+// printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.
 // If this is the case, the string is returned as is. Otherwise, the empty string is returned.
-func sanitizePrintableUTF8String(in string) string {
+func printableUTF8OrEmpty(in string) string {
 	// iterate throughout all the characters in the string to see if they are all printable.
 	// when range iterating on go strings, go decode each element as a utf8 rune.
 	for _, c := range in {

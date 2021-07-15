@@ -164,9 +164,9 @@ func participationKeysEncode(r basics.AccountData) *v1.Participation {
 	return &apiParticipation
 }
 
-// sanitizePrintableUTF8String checks to see if the entire string is a UTF8 printable string.
+// printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.
 // If this is the case, the string is returned as is. Otherwise, the empty string is returned.
-func sanitizePrintableUTF8String(in string) string {
+func printableUTF8OrEmpty(in string) string {
 	// iterate throughout all the characters in the string to see if they are all printable.
 	// when range iterating on go strings, go decode each element as a utf8 rune.
 	for _, c := range in {
@@ -185,9 +185,9 @@ func modelAssetParams(creator basics.Address, params basics.AssetParams) v1.Asse
 		Decimals:      params.Decimals,
 	}
 
-	paramsModel.UnitName = sanitizePrintableUTF8String(params.UnitName)
-	paramsModel.AssetName = sanitizePrintableUTF8String(params.AssetName)
-	paramsModel.URL = sanitizePrintableUTF8String(params.URL)
+	paramsModel.UnitName = printableUTF8OrEmpty(params.UnitName)
+	paramsModel.AssetName = printableUTF8OrEmpty(params.AssetName)
+	paramsModel.URL = printableUTF8OrEmpty(params.URL)
 	if params.MetadataHash != [32]byte{} {
 		paramsModel.MetadataHash = params.MetadataHash[:]
 	}
