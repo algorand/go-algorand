@@ -264,7 +264,6 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 			if wallet.Online == basics.Online {
 				data.VoteID = part.VotingSecrets().OneTimeSignatureVerifier
 				data.SelectionID = part.VRFSecrets().PK
-				data.BlockProofID = part.BlockProofSigner().GetSigner().GetVerifyingKey()
 				data.VoteFirstValid = part.FirstValid
 				data.VoteLastValid = part.LastValid
 				data.VoteKeyDilution = part.KeyDilution
