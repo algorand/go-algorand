@@ -199,6 +199,15 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	// Fill in the new programs
 	record.AppParams = cloneAppParams(record.AppParams)
 	params := record.AppParams[appIdx]
+	proto := balances.ConsensusParams()
+	if proto.EnableExPagesOnAppUpdate {
+		allowed := int(1+params.ExtraProgramPages) * proto.MaxAppProgramLen
+		actual := len(ac.ApprovalProgram) + len(ac.ClearStateProgram)
+		if actual > allowed {
+			return fmt.Errorf("updateApplication app programs too long, %d. max total len %d bytes", actual, allowed)
+		}
+	}
+
 	params.ApprovalProgram = ac.ApprovalProgram
 	params.ClearStateProgram = ac.ClearStateProgram
 

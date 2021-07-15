@@ -447,6 +447,37 @@ func TestWellFormedErrors(t *testing.T) {
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx has too many references, max is 8"),
 		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     1,
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+					ExtraProgramPages: 0,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			spec:          specialAddr,
+			proto:         curProto,
+			expectedError: fmt.Errorf("app programs too long. max total len %d bytes", curProto.MaxAppProgramLen),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     1,
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+					ExtraProgramPages: 0,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			spec:  specialAddr,
+			proto: futureProto,
+		},
 	}
 	for _, usecase := range usecases {
 		err := usecase.tx.WellFormed(usecase.spec, usecase.proto)
