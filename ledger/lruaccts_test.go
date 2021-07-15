@@ -41,7 +41,7 @@ func TestBasicLRUAccounts(t *testing.T) {
 			rowid:       int64(i),
 			accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
 		}
-		baseAcct.write(acct)
+		baseAcct.write(&acct)
 	}
 
 	// verify that all these accounts are truly there.
@@ -224,7 +224,7 @@ func benchLruWrite(b *testing.B, fillerAccounts []persistedAccountData, accounts
 
 func fillLRUAccounts(baseAcct lruAccounts, fillerAccounts []persistedAccountData) lruAccounts {
 	for _, account := range fillerAccounts {
-		baseAcct.write(account)
+		baseAcct.write(&account)
 	}
 	return baseAcct
 }

@@ -68,7 +68,7 @@ func (m *lruAccounts) flushPendingWrites() {
 	for ; pendingEntriesCount > 0; pendingEntriesCount-- {
 		select {
 		case pendingAccountData := <-m.pendingAccounts:
-			m.write(pendingAccountData)
+			m.write(&pendingAccountData)
 		default:
 			return
 		}
@@ -91,17 +91,17 @@ func (m *lruAccounts) writePending(acct persistedAccountData) {
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
-func (m *lruAccounts) write(acctData persistedAccountData) {
+func (m *lruAccounts) write(acctData *persistedAccountData) {
 	if el := m.accounts[acctData.addr]; el != nil {
 		// already exists; is it a newer ?
-		if el.Value.before(&acctData) {
+		if el.Value.before(acctData) {
 			// we update with a newer version.
-			el.Value = &acctData
+			el.Value = acctData
 		}
 		m.accountsList.moveToFront(el)
 	} else {
 		// new entry.
-		m.accounts[acctData.addr] = m.accountsList.pushFront(&acctData)
+		m.accounts[acctData.addr] = m.accountsList.pushFront(acctData)
 	}
 }
 

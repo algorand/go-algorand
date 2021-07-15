@@ -1709,7 +1709,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
 			} else {
 				previousAccountData = acctData.accountData
-				au.baseAccounts.write(acctData)
+				au.baseAccounts.write(&acctData)
 			}
 		}
 
@@ -2291,8 +2291,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
-	for _, persistedAcct := range updatedPersistedAccounts {
-		au.baseAccounts.write(persistedAcct)
+	for i := range updatedPersistedAccounts {
+		au.baseAccounts.write(&updatedPersistedAccounts[i])
 	}
 
 	for cidx, modCrt := range compactCreatableDeltas {
