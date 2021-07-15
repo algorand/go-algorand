@@ -7,12 +7,12 @@ if [ "${BUILD_TYPE}" = "integration" ]; then
     if [[ "${TRAVIS_BRANCH}" =~ ^rel/nightly ]]; then
         SHORTTEST=
     else
-        SHORTTEST=-short
+        SHORTTEST=
     fi
-    export SHORTTEST 
+    export SHORTTEST
     make integration
 elif [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
     make fulltest -j2
 else
-    make shorttest -j2
+    make fulltest -j2
 fi
