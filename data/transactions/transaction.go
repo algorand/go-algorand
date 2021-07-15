@@ -651,7 +651,7 @@ func (tc ExplicitTxnContext) GenesisHash() crypto.Digest {
 //msgp: ignore SignedTxGroup
 type SignedTxGroup struct {
 	// Transactions contains the signed transactions that are included in this transaction group.
-	Transactions []SignedTxn
+	Transactions SignedTxnSlice
 	// LocallyOriginated specify whether the trancation group was inroduced via the REST API or
 	// by the transaction sync.
 	LocallyOriginated bool
@@ -660,12 +660,23 @@ type SignedTxGroup struct {
 	// can continue scanning the list from the place where it last stopped.
 	// GroupCounter is local, assigned when the group is first seen by the local transaction pool.
 	GroupCounter uint64
-	// FirstTransactionID is the transaction ID of the first transaction in this transaction group.
-	// TODO - make this more secure by making this the hash of the first signed transaction.
-	FirstTransactionID Txid
+	// GroupTransactionID is the hash of the entire transaction group.
+	GroupTransactionID Txid
 	// EncodedLength is the length, in bytes, of the messagepack encoding of all the transaction
 	// within this transaction group.
 	EncodedLength int
+}
+
+// SignedTxnSlice is a slice of SignedTxn(s), allowing us to
+// easily define the ID() function.
+//msgp:allocbound SignedTxnSlice config.MaxTxGroupSize
+type SignedTxnSlice []SignedTxn
+
+// ID calculate the hash of the signed transaction group.
+func (s SignedTxnSlice) ID() Txid {
+	enc := s.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.TxGroup)...))
+	defer protocol.PutEncodingBuf(enc)
+	return Txid(crypto.Hash(enc))
 }
 
 // InvalidSignedTxGroupCounter is used to represent an invalid GroupCounter value. It's being used to indicate

@@ -298,7 +298,7 @@ func (n *emulatedNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, 
 		n.txpoolIds[txID] = true
 		group.GroupCounter = n.txpoolGroupCounter
 		n.txpoolGroupCounter++
-		group.FirstTransactionID = txID
+		group.GroupTransactionID = group.Transactions.ID()
 		for _, txn := range group.Transactions {
 			encodingBuf = encodingBuf[:0]
 			group.EncodedLength += len(txn.MarshalMsg(encodingBuf))

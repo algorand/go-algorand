@@ -34,7 +34,7 @@ import (
 func getTxnGroups(genesisHash crypto.Digest, genesisID string) []transactions.SignedTxGroup {
 	return []transactions.SignedTxGroup{
 		transactions.SignedTxGroup{
-			FirstTransactionID: transactions.Txid{1},
+			GroupTransactionID: transactions.Txid{1},
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -54,7 +54,7 @@ func getTxnGroups(genesisHash crypto.Digest, genesisID string) []transactions.Si
 			},
 		},
 		transactions.SignedTxGroup{
-			FirstTransactionID: transactions.Txid{2},
+			GroupTransactionID: transactions.Txid{2},
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -86,7 +86,7 @@ func getTxnGroups(genesisHash crypto.Digest, genesisID string) []transactions.Si
 			},
 		},
 		transactions.SignedTxGroup{
-			FirstTransactionID: transactions.Txid{3},
+			GroupTransactionID: transactions.Txid{3},
 			Transactions: []transactions.SignedTxn{
 				{
 					Txn: transactions.Transaction{
@@ -286,11 +286,11 @@ func TestBloomFilterTest(t *testing.T) {
 			txnGroups := getTxnGroups(genesisHash, genesisID)
 			bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
 			for _, tx := range txnGroups {
-				ans := bf.test(tx.FirstTransactionID)
+				ans := bf.test(tx.GroupTransactionID)
 				if bf.encodingParams.Modulator == 0 {
 					require.False(t, ans)
 				} else if bf.encodingParams.Modulator <= 1 ||
-					txidToUint64(tx.FirstTransactionID)%uint64(bf.encodingParams.Modulator) ==
+					txidToUint64(tx.GroupTransactionID)%uint64(bf.encodingParams.Modulator) ==
 						uint64(bf.encodingParams.Offset) {
 					require.True(t, ans)
 				} else {

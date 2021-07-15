@@ -203,10 +203,10 @@ func (e *emulator) initNodes() {
 				copy(group.Transactions[0].Txn.Note[i*32:], digest[:])
 				randCounter++
 			}
-			group.FirstTransactionID = group.Transactions[0].ID()
+			group.GroupTransactionID = group.Transactions.ID()
 			encodingBuf = encodingBuf[:0]
 			group.EncodedLength = len(group.Transactions[0].MarshalMsg(encodingBuf))
-			node.txpoolIds[group.FirstTransactionID] = true
+			node.txpoolIds[group.Transactions[0].ID()] = true
 			node.txpoolEntries = append(node.txpoolEntries, group)
 		}
 		node.latestLocallyOriginatedGroupCounter = uint64(len(node.txpoolEntries) - 1)
