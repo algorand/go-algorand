@@ -1246,7 +1246,7 @@ type partkeyInfo struct {
 	LastValid       basics.Round                    `codec:"last"`
 	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID     crypto.VRFVerifier              `codec:"sel"`
-	BlockProofID    crypto.VerifyingKey             `codec:"blockProof"`
+	BlockProofID    crypto.VerifyingKey             `codec:"blkprf"`
 	VoteKeyDilution uint64                          `codec:"voteKD"`
 }
 
