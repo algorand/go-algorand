@@ -23,7 +23,7 @@ BUILDBRANCH      := $(shell ./scripts/compute_branch.sh)
 CHANNEL          ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
-GOCACHE          :=$(SRCPATH)/tmp/go-cache
+export GOCACHE=$(SRCPATH)/tmp/go-cache
 
 GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 
