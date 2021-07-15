@@ -5,7 +5,7 @@ orbs:
   go: circleci/go@1.7.0
 
 workflows:
-  version: 2
+  version: 2.1
   build_pr:
     jobs:
       - codegen_verification
