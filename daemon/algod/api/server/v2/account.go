@@ -21,8 +21,6 @@ import (
 	"errors"
 	"math"
 	"sort"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -422,23 +420,6 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 		},
 	}
 	return app
-}
-
-// sanitizePrintableUTF8String checks to see if the entire string is a UTF8 printable string.
-// If this is the case, the string is returned as is. Otherwise, the empty string is returned.
-func sanitizePrintableUTF8String(in string) string {
-	// check to see if all the characters in the input string are utf-8.
-	if !utf8.ValidString(in) {
-		return ""
-	}
-	// iterate throughout all the characters in the string to see if they are all printable.
-	for _, c := range in {
-		// is this a printable character ?
-		if !unicode.IsPrint(c) {
-			return ""
-		}
-	}
-	return in
 }
 
 // AssetParamsToAsset converts basics.AssetParams to generated.Asset

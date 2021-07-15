@@ -167,14 +167,11 @@ func participationKeysEncode(r basics.AccountData) *v1.Participation {
 // sanitizePrintableUTF8String checks to see if the entire string is a UTF8 printable string.
 // If this is the case, the string is returned as is. Otherwise, the empty string is returned.
 func sanitizePrintableUTF8String(in string) string {
-	// check to see if all the characters in the input string are utf-8.
-	if !utf8.ValidString(in) {
-		return ""
-	}
 	// iterate throughout all the characters in the string to see if they are all printable.
+	// when range iterating on go strings, go decode each element as a utf8 rune.
 	for _, c := range in {
-		// is this a printable character ?
-		if !unicode.IsPrint(c) {
+		// is this a printable character, or invalid rune ?
+		if c == utf8.RuneError || !unicode.IsPrint(c) {
 			return ""
 		}
 	}
