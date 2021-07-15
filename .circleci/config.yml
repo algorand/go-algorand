@@ -85,7 +85,7 @@ commands:
             - 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
       - restore_cache:
           keys:
-            - 'go-cache-{{ .Environment.CIRCLE_STAGE }}'
+            - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
@@ -99,7 +99,7 @@ commands:
           paths:
             - << parameters.circleci_home >>/go/pkg/mod
       - save_cache:
-          key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}'
+          key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
           paths:
             - tmp/go-cache
       - persist_to_workspace:
