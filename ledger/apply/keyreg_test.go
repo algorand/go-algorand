@@ -90,21 +90,7 @@ func TestKeyregApply(t *testing.T) {
 	vrfSecrets := crypto.GenerateVRFSecrets()
 	secretParticipation := keypair()
 
-	tx := transactions.Transaction{
-		Type: protocol.KeyRegistrationTx,
-		Header: transactions.Header{
-			Sender:     src,
-			Fee:        basics.MicroAlgos{Raw: 1},
-			FirstValid: basics.Round(100),
-			LastValid:  basics.Round(1000),
-		},
-		KeyregTxnFields: transactions.KeyregTxnFields{
-			VotePK:      crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
-			SelectionPK: vrfSecrets.PK,
-			VoteFirst:   0,
-			VoteLast:    100,
-		},
-	}
+	tx := createTestTxn(src, secretParticipation, vrfSecrets)
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.NoError(t, err)
 
@@ -179,11 +165,53 @@ func TestKeyregApply(t *testing.T) {
 }
 
 func testBlockProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal keyregTestBalances) {
-	tx.KeyregTxnFields.BlockProofPK = crypto.VerifyingKey{Type: crypto.PlaceHolderType}
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
 	require.NoError(t, err) // expects no error with empty keyRegistration attempt
 
 	rec, err := mockBal.Get(tx.Header.Sender, false)
 	require.NoError(t, err) // expects no error with empty keyRegistration attempt
 	require.Equal(t, tx.KeyregTxnFields.BlockProofPK, rec.BlockProofID)
+}
+
+func TestBlockProofPKKeyReg(t *testing.T) {
+	secretSrc := keypair()
+	src := basics.Address(secretSrc.SignatureVerifier)
+	vrfSecrets := crypto.GenerateVRFSecrets()
+	secretParticipation := keypair()
+
+	tx := createTestTxn(src, secretParticipation, vrfSecrets)
+	mockBal := makeMockBalances(protocol.ConsensusCurrentVersion)
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	require.NoError(t, err)
+
+	acct, err := mockBal.Get(tx.Src(), false)
+	require.NoError(t, err)
+	require.Equal(t, crypto.VerifyingKey{}, acct.BlockProofID)
+
+	mockBal = makeMockBalances(protocol.ConsensusFuture)
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	require.NoError(t, err)
+
+	acct, err = mockBal.Get(tx.Src(), false)
+	require.NoError(t, err)
+	require.NotEqual(t, crypto.VerifyingKey{}, acct.BlockProofID)
+}
+
+func createTestTxn(src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
+	return transactions.Transaction{
+		Type: protocol.KeyRegistrationTx,
+		Header: transactions.Header{
+			Sender:     src,
+			Fee:        basics.MicroAlgos{Raw: 1},
+			FirstValid: basics.Round(100),
+			LastValid:  basics.Round(1000),
+		},
+		KeyregTxnFields: transactions.KeyregTxnFields{
+			VotePK:       crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
+			SelectionPK:  vrfSecrets.PK,
+			BlockProofPK: crypto.NewSigner(crypto.PlaceHolderType).GetSigner().GetVerifyingKey(),
+			VoteFirst:    0,
+			VoteLast:     100,
+		},
+	}
 }
