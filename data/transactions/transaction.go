@@ -560,9 +560,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 }
 
 func (tx Transaction) blockProofPKWellFormed(proto config.ConsensusParams) error {
+	isEmptyBlock := tx.KeyregTxnFields.BlockProofPK == crypto.VerifyingKey{}
 	if !proto.EnableBlockProofKeyregCheck {
 		// make certain empty key is stored.
-		if (tx.KeyregTxnFields.BlockProofPK != crypto.VerifyingKey{}) {
+		if !isEmptyBlock {
 			return errKeyregTxnNotEmptyBLockProofPK
 		}
 		return nil
@@ -570,14 +571,14 @@ func (tx Transaction) blockProofPKWellFormed(proto config.ConsensusParams) error
 
 	if tx.Nonparticipation {
 		// make certain that set offline request clears the blockProofPK.
-		if (tx.KeyregTxnFields.BlockProofPK != crypto.VerifyingKey{}) {
+		if !isEmptyBlock {
 			return errKeyregTxnNonParticipantShouldBeEmptyBlockProofPK
 		}
 		return nil
 	}
 
 	if tx.VotePK == (crypto.OneTimeSignatureVerifier{}) || tx.SelectionPK == (crypto.VRFVerifier{}) {
-		if tx.KeyregTxnFields.BlockProofPK != (crypto.VerifyingKey{}) {
+		if !isEmptyBlock {
 			return errKeyregTxnOfflineShouldBeEmptyBlockProofPK
 		}
 		return nil
@@ -585,7 +586,7 @@ func (tx Transaction) blockProofPKWellFormed(proto config.ConsensusParams) error
 
 	// online transactions:
 	// setting online cannot set an empty blockProofPK
-	if (tx.KeyregTxnFields.BlockProofPK == crypto.VerifyingKey{}) {
+	if isEmptyBlock {
 		return errKeyRegEmptyBlockProofPK
 	}
 
