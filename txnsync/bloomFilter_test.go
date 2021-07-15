@@ -286,11 +286,11 @@ func TestBloomFilterTest(t *testing.T) {
 			txnGroups := getTxnGroups(genesisHash, genesisID)
 			bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
 			for _, tx := range txnGroups {
-				ans := bf.test(tx.FirstTransactionID)
+				ans := bf.test(tx.GroupTransactionID)
 				if bf.encodingParams.Modulator == 0 {
 					require.False(t, ans)
 				} else if bf.encodingParams.Modulator <= 1 ||
-					txidToUint64(tx.FirstTransactionID)%uint64(bf.encodingParams.Modulator) ==
+					txidToUint64(tx.GroupTransactionID)%uint64(bf.encodingParams.Modulator) ==
 						uint64(bf.encodingParams.Offset) {
 					require.True(t, ans)
 				} else {
