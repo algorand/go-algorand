@@ -54,7 +54,7 @@ const MaxStringSize = 4096
 const MaxByteMathSize = 64
 
 // MaxLogSize is the limit of total log size from n log calls in a program
-const MaxLogSize = 1000
+const MaxLogSize = 1024
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -164,6 +164,7 @@ type LedgerForLogic interface {
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
 
 	AppendLog(value string) error
+	GetLogs() []string
 }
 
 // EvalSideEffects contains data returned from evaluation

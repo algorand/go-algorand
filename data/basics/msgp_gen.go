@@ -4139,7 +4139,7 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 		zb0008Len--
 		zb0008Mask |= 0x4
 	}
-	if len((*z).Log) == 0 {
+	if len((*z).Logs) == 0 {
 		zb0008Len--
 		zb0008Mask |= 0x8
 	}
@@ -4204,13 +4204,13 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 		if (zb0008Mask & 0x8) == 0 { // if not empty
 			// string "lg"
 			o = append(o, 0xa2, 0x6c, 0x67)
-			if (*z).Log == nil {
+			if (*z).Logs == nil {
 				o = msgp.AppendNil(o)
 			} else {
-				o = msgp.AppendArrayHeader(o, uint32(len((*z).Log)))
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Logs)))
 			}
-			for zb0007 := range (*z).Log {
-				o = msgp.AppendString(o, (*z).Log[zb0007])
+			for zb0007 := range (*z).Logs {
+				o = msgp.AppendString(o, (*z).Logs[zb0007])
 			}
 		}
 	}
@@ -4341,25 +4341,25 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0017 bool
 			zb0016, zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Log")
+				err = msgp.WrapError(err, "struct-from-array", "Logs")
 				return
 			}
 			if zb0016 > config.MaxLogCalls {
 				err = msgp.ErrOverflow(uint64(zb0016), uint64(config.MaxLogCalls))
-				err = msgp.WrapError(err, "struct-from-array", "Log")
+				err = msgp.WrapError(err, "struct-from-array", "Logs")
 				return
 			}
 			if zb0017 {
-				(*z).Log = nil
-			} else if (*z).Log != nil && cap((*z).Log) >= zb0016 {
-				(*z).Log = ((*z).Log)[:zb0016]
+				(*z).Logs = nil
+			} else if (*z).Logs != nil && cap((*z).Logs) >= zb0016 {
+				(*z).Logs = ((*z).Logs)[:zb0016]
 			} else {
-				(*z).Log = make([]string, zb0016)
+				(*z).Logs = make([]string, zb0016)
 			}
-			for zb0007 := range (*z).Log {
-				(*z).Log[zb0007], bts, err = msgp.ReadStringBytes(bts)
+			for zb0007 := range (*z).Logs {
+				(*z).Logs[zb0007], bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Log", zb0007)
+					err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007)
 					return
 				}
 			}
@@ -4488,25 +4488,25 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0025 bool
 				zb0024, zb0025, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Log")
+					err = msgp.WrapError(err, "Logs")
 					return
 				}
 				if zb0024 > config.MaxLogCalls {
 					err = msgp.ErrOverflow(uint64(zb0024), uint64(config.MaxLogCalls))
-					err = msgp.WrapError(err, "Log")
+					err = msgp.WrapError(err, "Logs")
 					return
 				}
 				if zb0025 {
-					(*z).Log = nil
-				} else if (*z).Log != nil && cap((*z).Log) >= zb0024 {
-					(*z).Log = ((*z).Log)[:zb0024]
+					(*z).Logs = nil
+				} else if (*z).Logs != nil && cap((*z).Logs) >= zb0024 {
+					(*z).Logs = ((*z).Logs)[:zb0024]
 				} else {
-					(*z).Log = make([]string, zb0024)
+					(*z).Logs = make([]string, zb0024)
 				}
-				for zb0007 := range (*z).Log {
-					(*z).Log[zb0007], bts, err = msgp.ReadStringBytes(bts)
+				for zb0007 := range (*z).Logs {
+					(*z).Logs[zb0007], bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Log", zb0007)
+						err = msgp.WrapError(err, "Logs", zb0007)
 						return
 					}
 				}
@@ -4554,15 +4554,15 @@ func (z *EvalDelta) Msgsize() (s int) {
 		}
 	}
 	s += 3 + msgp.ArrayHeaderSize
-	for zb0007 := range (*z).Log {
-		s += msgp.StringPrefixSize + len((*z).Log[zb0007])
+	for zb0007 := range (*z).Logs {
+		s += msgp.StringPrefixSize + len((*z).Logs[zb0007])
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *EvalDelta) MsgIsZero() bool {
-	return (len((*z).GlobalDelta) == 0) && (len((*z).LocalDeltas) == 0) && (len((*z).Log) == 0)
+	return (len((*z).GlobalDelta) == 0) && (len((*z).LocalDeltas) == 0) && (len((*z).Logs) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

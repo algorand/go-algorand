@@ -40,7 +40,8 @@ type cowForLogicLedger interface {
 	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error
 	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error
 
-	AppendLog(aidx basics.AppIndex, value string) error
+	AppendLog(value string) error
+	GetLogs() []string
 
 	round() basics.Round
 	prevTimestamp() int64
@@ -239,5 +240,9 @@ func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics
 }
 
 func (al *logicLedger) AppendLog(value string) error {
-	return al.cow.AppendLog(al.aidx, value)
+	return al.cow.AppendLog(value)
+}
+
+func (al *logicLedger) GetLogs() []string {
+	return al.cow.GetLogs()
 }

@@ -4502,27 +4502,49 @@ func TestLog(t *testing.T) {
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Proto = &proto
 	ep.Ledger = ledger
+	testCases := []struct {
+		source string
+		loglen int
+	}{
+		{
+			source: `byte  "a logging message"; log; int 1`,
+			loglen: 1,
+		},
+		{
+			source: `byte  "a logging message"; log; byte  "second logging message"; log; int 1`,
+			loglen: 2,
+		},
+		{
+			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, config.MaxLogCalls)),
+			loglen: config.MaxLogCalls,
+		},
+		{
+			source: `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <; bnz loop;`,
+			loglen: 29,
+		},
+		{
+			source: fmt.Sprintf(`byte "%s"; log; int 1`, strings.Repeat("a", MaxLogSize)),
+			loglen: 1,
+		},
+	}
 
-	source := `byte  "a logging message"; log; int 1`
-	source1 := `byte  "a logging message"; log; byte  "second logging message"; log; int 1`
-	source2 := fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log;`, config.MaxLogCalls))
-	source3 := `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <; bnz loop;`
-	source4 := fmt.Sprintf(`byte "%s"; log; int 1`, strings.Repeat("a", MaxLogSize))
-	sources := []string{source, source1, source2, source3, source4}
-
-	for _, s := range sources {
-		ops := testProg(t, s, AssemblerMaxVersion)
+	//track expected number of logs in ep.Ledger
+	count := 0
+	for _, s := range testCases {
+		ops := testProg(t, s.source, AssemblerMaxVersion)
 
 		err := CheckStateful(ops.Program, ep)
-		require.NoError(t, err, source)
+		require.NoError(t, err, s)
 
 		pass, err := EvalStateful(ops.Program, ep)
 		require.NoError(t, err)
 		require.True(t, pass)
+
+		count += s.loglen
+		require.Equal(t, len(ep.Ledger.GetLogs()), count)
 	}
 
 	msg := strings.Repeat("a", 400)
-
 	failCases := []struct {
 		source      string
 		runMode     runMode
@@ -4569,7 +4591,7 @@ func TestLog(t *testing.T) {
 		ops := testProg(t, c.source, AssemblerMaxVersion)
 
 		err := CheckStateful(ops.Program, ep)
-		require.NoError(t, err, source)
+		require.NoError(t, err, c)
 
 		var pass bool
 		switch c.runMode {

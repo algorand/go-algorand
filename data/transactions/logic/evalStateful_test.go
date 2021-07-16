@@ -59,7 +59,7 @@ type testLedger struct {
 	appID             basics.AppIndex
 	creatorAddr       basics.Address
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
-	logs              map[basics.AppIndex][]string
+	logs              []string
 }
 
 func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
@@ -105,7 +105,6 @@ func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 	l.assets = make(map[basics.AssetIndex]asaParams)
 	l.trackedCreatables = make(map[int]basics.CreatableIndex)
 	l.mods = make(map[basics.AppIndex]map[string]basics.ValueDelta)
-	l.logs = make(map[basics.AppIndex][]string)
 	return l
 }
 
@@ -476,8 +475,12 @@ func (l *testLedger) AppendLog(value string) error {
 	}
 
 	// append logs
-	l.logs[appIdx] = append(l.logs[appIdx], value)
+	l.logs = append(l.logs, value)
 	return nil
+}
+
+func (l *testLedger) GetLogs() []string {
+	return l.logs
 }
 
 func TestEvalModes(t *testing.T) {
@@ -804,7 +807,7 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 		require.NoError(t, err)
 		require.Empty(t, delta.GlobalDelta)
 		require.Empty(t, delta.LocalDeltas)
-		require.Empty(t, delta.Log)
+		require.Empty(t, delta.Logs)
 		return delta
 	}
 	return basics.EvalDelta{}

@@ -425,16 +425,15 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	return nil // note: deletion cannot cause us to violate maxCount
 }
 
-// AppendLog creates a new key-value {addr, aidx} in log
-func (cb *roundCowState) AppendLog(aidx basics.AppIndex, value string) error {
-	// Enforce maximum value length
-	if len(value) > logic.MaxLogSize {
-		return fmt.Errorf("value too long, length was %d", len(value))
-	}
-	// Write the value delta associated with this key/value
-	cb.logs[aidx] = append(cb.logs[aidx], value)
-
+// AppendLog creates adds string in logs
+func (cb *roundCowState) AppendLog(value string) error {
+	cb.logs = append(cb.logs, value)
 	return nil
+}
+
+// GetLogs returns logs
+func (cb *roundCowState) GetLogs() []string {
+	return cb.logs
 }
 
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
@@ -533,15 +532,8 @@ func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.
 		}
 	}
 
-	// logDeltas
-	for appid, ldelta := range cb.logs {
-		// Check that all of these deltas are for the correct app
-		if appid != aidx {
-			err = fmt.Errorf("found log delta for different app during StatefulEval/BuildDelta: %d != %d", appid, aidx)
-			return basics.EvalDelta{}, err
-		}
-		evalDelta.Log = ldelta
-	}
+	// logs
+	evalDelta.Logs = cb.logs
 
 	return
 }

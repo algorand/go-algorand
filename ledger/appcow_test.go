@@ -596,8 +596,7 @@ func TestCowBuildDelta(t *testing.T) {
 	)
 
 	// check logDelta is added
-	cow.logs = make(map[basics.AppIndex][]string)
-	cow.logs[aidx] = append(cow.logs[aidx], "hello,world")
+	cow.logs = []string{"hello,world"}
 	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
 		action: remainAllocAction,
 		kvCow: stateDelta{
@@ -620,7 +619,7 @@ func TestCowBuildDelta(t *testing.T) {
 					"key1": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
 				},
 			},
-			Log: []string{"hello,world"},
+			Logs: []string{"hello,world"},
 		},
 		ed,
 	)
@@ -1339,12 +1338,7 @@ func TestCowAppendLog(t *testing.T) {
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 	})
 
-	val := strings.Repeat("a", 1001)
-	err := c.AppendLog(aidx, val)
-	a.Error(err)
-	a.Contains(err.Error(), "value too long")
-
-	c.logs = map[basics.AppIndex][]string{}
-	err = c.AppendLog(aidx, "val")
+	c.logs = []string{}
+	err := c.AppendLog("val")
 	a.NoError(err)
 }
