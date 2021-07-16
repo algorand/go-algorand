@@ -201,6 +201,7 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 		if !ok {
 			return fmt.Errorf("payload seed proof malformed (%v, %v)", prevSeed, p.SeedProof)
 		}
+		_ = vrfOut // ignoring output of Verify
 		// TODO remove the following Hash() call,
 		// redundant with the Verify() call above.
 		vrfOut, ok = p.SeedProof.Hash()

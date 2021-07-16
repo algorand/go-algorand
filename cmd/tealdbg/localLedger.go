@@ -187,6 +187,9 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	queryString := fmt.Sprintf("%s/v2/applications/%d", indexerURL, app)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("application request error: %s", err)
+	}
 	request.Header.Set("X-Indexer-API-Token", indexerToken)
 	resp, err := client.Do(request)
 	if err != nil {
@@ -215,6 +218,9 @@ func getBalanceFromIndexer(indexerURL string, indexerToken string, account basic
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
+	if err != nil {
+		return basics.AccountData{}, fmt.Errorf("account request error: %s", err)
+	}
 	request.Header.Set("X-Indexer-API-Token", indexerToken)
 	resp, err := client.Do(request)
 	if err != nil {

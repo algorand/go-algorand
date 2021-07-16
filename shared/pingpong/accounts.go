@@ -80,7 +80,6 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		}
 
 		if richestBalance >= cfg.MinAccountFunds {
-			srcAcctPresent = true
 			cfg.SrcAccount = richestAccount
 
 			fmt.Printf("Identified richest account to use for Source Account: %s -> %v\n", richestAccount, richestBalance)
