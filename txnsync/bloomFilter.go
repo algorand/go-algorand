@@ -98,7 +98,7 @@ func (bf *bloomFilter) encode() (out *encodedBloomFilter, err error) {
 			out = nil
 		} else {
 			bf.encoded = out
-			// increase the counter for a successfull bloom filter encoding
+			// increase the counter for a successful bloom filter encoding
 			txsyncEncodedBloomFiltersTotal.Inc(nil)
 		}
 	}
