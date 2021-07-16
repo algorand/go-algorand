@@ -174,7 +174,8 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 			},
 		},
 	}
-	addGroupHashes(inTxnGroups, 6, []byte{1})
+	err := addGroupHashes(inTxnGroups, 6, []byte{1})
+	require.NoError(t, err)
 	var s syncState
 	ptg, err := s.encodeTransactionGroups(inTxnGroups, 1000000000)
 	require.NoError(t, err)
@@ -460,8 +461,8 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 				Transactions: txns,
 			},
 		}
-		addGroupHashes(txnGroups, len(txns), []byte{1})
-
+		err = addGroupHashes(txnGroups, len(txns), []byte{1})
+		require.NoError(t, err)
 		var s syncState
 		ptg, err := s.encodeTransactionGroups(txnGroups, 0)
 		require.NoError(t, err)

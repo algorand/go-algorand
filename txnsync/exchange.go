@@ -26,7 +26,7 @@ const maxAcceptedMsgSeq = 64
 const maxEncodedTransactionGroupBytes = 10000000
 
 type transactionBlockMessage struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	Version              int32                   `codec:"v"`
 	Round                basics.Round            `codec:"r"`
@@ -37,7 +37,7 @@ type transactionBlockMessage struct {
 }
 
 type encodedBloomFilter struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	BloomFilterType byte          `codec:"t"`
 	EncodingParams  requestParams `codec:"p"`
@@ -46,7 +46,7 @@ type encodedBloomFilter struct {
 }
 
 type requestParams struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	Offset    byte `codec:"o"`
 	Modulator byte `codec:"m"`
@@ -58,7 +58,7 @@ const (
 )
 
 type packedTransactionGroups struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	Bytes                []byte `codec:"g,allocbound=maxEncodedTransactionGroupBytes"`
 	CompressionFormat    byte   `codec:"c"`
@@ -66,7 +66,7 @@ type packedTransactionGroups struct {
 }
 
 type timingParams struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	RefTxnBlockMsgSeq   uint64   `codec:"s"`
 	ResponseElapsedTime uint64   `codec:"r"`

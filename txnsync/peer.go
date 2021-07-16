@@ -88,7 +88,7 @@ type Peer struct {
 	// networkPeer is the network package exported peer. It's created on construction and never change afterward.
 	networkPeer interface{}
 	// isOutgoing defines whether the peer is an outgoing peer or not. For relays, this is meaningful as these have
-	// slighly different message timing logic.
+	// slightly different message timing logic.
 	isOutgoing bool
 	// state defines the peer state ( in terms of state machine state ). It's touched only by the sync main state machine
 	state peerState
@@ -101,7 +101,7 @@ type Peer struct {
 	incomingMessages messageOrderingHeap
 
 	// nextReceivedMessageSeq is a counter containing the next message sequence number that we expect to see from this peer.
-	nextReceivedMessageSeq uint64 // the next message seq that we expect to recieve from that peer; implies that all previous messages have been accepted.
+	nextReceivedMessageSeq uint64 // the next message seq that we expect to receive from that peer; implies that all previous messages have been accepted.
 
 	// recentIncomingBloomFilters contains the recent list of bloom filters sent from the peer. When considering sending transactions, we check this
 	// array to determine if the peer already has this message.
@@ -120,7 +120,7 @@ type Peer struct {
 
 	// lastSentMessageSequenceNumber is the last sequence number of the message that we sent.
 	lastSentMessageSequenceNumber uint64
-	// lastSentMessageRound is the round the last sent message was sent on. The timestamps are relative to the begining of the round
+	// lastSentMessageRound is the round the last sent message was sent on. The timestamps are relative to the beginning of the round
 	// and therefore need to be evaluated togather.
 	lastSentMessageRound basics.Round
 	// lastSentMessageTimestamp the timestamp at which the last message was sent.
@@ -145,7 +145,7 @@ type Peer struct {
 	localTransactionsBaseOffset byte
 
 	// lastTransactionSelectionTracker tracks the last transaction group counter that we've evaluated on the selectPendingTransactions method.
-	// it used to ensure that on subsequent calls, we won't need to scan the entire pending transactions array from the begining.
+	// it used to ensure that on subsequent calls, we won't need to scan the entire pending transactions array from the beginning.
 	// the implementation here is breaking it up per request params, so that we can apply the above logic per request params ( i.e. different
 	// offset/modulator ), as well as add retry attempts for multiple bloom filters.
 	lastTransactionSelectionTracker transactionGroupCounterTracker
@@ -315,7 +315,7 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		return nil, nil, false
 	}
 
-	// flush the recent sent transaction cache on the begining of a new round to give pending transactions another
+	// flush the recent sent transaction cache on the beginning of a new round to give pending transactions another
 	// chance of being transmitted.
 	if p.recentSentTransactionsRound != round {
 		p.recentSentTransactions.reset()
@@ -490,7 +490,7 @@ func (p *Peer) addIncomingBloomFilter(round basics.Round, incomingFilter bloomFi
 	p.lastTransactionSelectionTracker.roll(incomingFilter.encodingParams.Offset, incomingFilter.encodingParams.Modulator)
 
 	// scan the existing bloom filter, and ensure we have only one bloom filter for every
-	// set of encoding paramters. this would allow us to accumulate false positive
+	// set of encoding parameters. this would allow us to accumulate false positive
 	for idx, bloomFltr := range p.recentIncomingBloomFilters {
 		if bloomFltr.filter.encodingParams == incomingFilter.encodingParams {
 			// replace.
@@ -524,7 +524,7 @@ func (p *Peer) updateIncomingTransactionGroups(txnGroups []transactions.SignedTx
 
 func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, incomingMessageSize int) {
 	p.lastConfirmedMessageSeqReceived = timings.RefTxnBlockMsgSeq
-	// if we received a message that references our privious message, see if they occured on the same round
+	// if we received a message that references our privious message, see if they occurred on the same round
 	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound {
 		// if so, we might be able to calculate the bandwidth.
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp

@@ -43,7 +43,7 @@ func getMessageBuffer() []byte {
 // for encoding.  The caller gives up ownership of the byte slice when
 // passing it to releaseMessageBuffer().
 func releaseMessageBuffer(s []byte) {
-	msgBuffersPool.Put(s)
+	msgBuffersPool.Put(s) //nolint:staticcheck
 }
 
 // txidSlicePool holds temporary byte slice buffers used for encoding messages.
@@ -71,6 +71,6 @@ func getTxIDSliceBuffer(minSize int) []transactions.Txid {
 // passing it to releaseMessageBuffer().
 func releaseTxIDSliceBuffer(s []transactions.Txid) {
 	if cap(s) > 0 {
-		txidSlicePool.Put(s)
+		txidSlicePool.Put(s) //nolint:staticcheck
 	}
 }

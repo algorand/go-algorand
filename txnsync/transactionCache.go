@@ -70,7 +70,7 @@ func makeTransactionCache(shortTermSize, longTermSize, pendingAckTxids int) *tra
 	txnCache := &transactionCache{
 		shortTermCache: shortTermTransactionCache{
 			size:            shortTermSize,
-			transactionsIDs: make([]transactions.Txid, shortTermSize, shortTermSize),
+			transactionsIDs: make([]transactions.Txid, shortTermSize),
 			transactionsMap: make(map[transactions.Txid]bool, shortTermSize),
 		},
 		ackPendingTxids: make([]ackPendingTxids, 0, pendingAckTxids),

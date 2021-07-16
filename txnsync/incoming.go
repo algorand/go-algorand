@@ -121,7 +121,7 @@ func (s *syncState) asyncIncomingMessageHandler(networkPeer interface{}, peer *P
 	incomingMessage := incomingMessage{networkPeer: networkPeer, sequenceNumber: sequenceNumber, encodedSize: len(message), peer: peer}
 	_, err = incomingMessage.message.UnmarshalMsg(message)
 	if err != nil {
-		// if we recieved a message that we cannot parse, disconnect.
+		// if we received a message that we cannot parse, disconnect.
 		s.log.Infof("received unparsable transaction sync message from peer. disconnecting from peer.")
 		return err
 	}
@@ -217,7 +217,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 			break
 		}
 		if seq != peer.nextReceivedMessageSeq {
-			// if we recieve a message which wasn't in-order, just let it go.
+			// if we receive a message which wasn't in-order, just let it go.
 			s.log.Debugf("received message out of order; seq = %d, expecting seq = %d\n", seq, peer.nextReceivedMessageSeq)
 			break
 		}
@@ -262,7 +262,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		// before enqueing more data to the transaction pool, make sure we flush the ack channel
 		peer.dequeuePendingTransactionPoolAckMessages()
 
-		// if we recieved at least a single transaction group, then forward it to the transaction handler.
+		// if we received at least a single transaction group, then forward it to the transaction handler.
 		if len(incomingMsg.transactionGroups) > 0 {
 			// send the incoming transaction group to the node last, so that the txhandler could modify the underlaying array if needed.
 			transacationPoolSize = s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
