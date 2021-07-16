@@ -17,6 +17,8 @@
 package agreement
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -30,12 +32,10 @@ type pipelinePlayer struct {
 }
 
 func makePipelinePlayer(nextRound basics.Round, nextVersion protocol.ConsensusVersion) pipelinePlayer {
-	ret := pipelinePlayer{lastCommittedRound: nextRound}
-	// ret.players[0] = &player{
-	// 	Round:    makeRoundBranch(nextRound, crypto.Digest{}),
-	// 	Step:     soft,
-	// 	Deadline: FilterTimeout(0, nextVersion)}
-	return ret
+	return pipelinePlayer{
+		lastCommittedRound: nextRound,
+		players:            make(map[round]player),
+	}
 }
 
 func (p *pipelinePlayer) T() stateMachineTag { return playerMachine } // XXX different tag?
@@ -43,38 +43,23 @@ func (p *pipelinePlayer) underlying() actor  { return p }
 
 // handle an event, usually by delegating to a child player implementation.
 func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
-	if e.t() == none {
+	if e.t() == none { // ignore emptyEvent
 		return nil
 	}
 
+	ee, ok := e.(externalEvent)
+	if !ok {
+		panic("pipelinePlayer.handle didn't receive externalEvent")
+	}
+	rnd := ee.ConsensusRound()
+
 	switch e := e.(type) {
-	case messageEvent:
-		switch e.t() {
-		// always use UnauthenticatedX here?
-		case votePresent, voteVerified:
-			return p.handleRoundEvent(r, e, e.Input.UnauthenticatedVote.R.roundBranch())
-		case payloadPresent, payloadVerified:
-			return p.handleRoundEvent(r, e, e.Input.UnauthenticatedProposal.roundBranch())
-		case bundlePresent, bundleVerified:
-			return p.handleRoundEvent(r, e, e.Input.UnauthenticatedBundle.roundBranch())
-		default:
-			panic("bad messageEvent")
-		}
-	case thresholdEvent:
-		switch e.t() {
-		case certThreshold, softThreshold, nextThreshold:
-			return p.handleRoundEvent(r, e, e.Round)
-		default:
-			panic("bad thresholdEvent")
-		}
-	case timeoutEvent:
-		return p.handleRoundEvent(r, e, e.Round)
+	case messageEvent, timeoutEvent, checkpointEvent:
+		return p.handleRoundEvent(r, e, rnd)
 	case roundInterruptionEvent:
 		// XXX handle enterRound ourselves and reshuffle players
 		// could have come from ledgerNextRoundCh
 		return p.enterRound(r, e, e.Round)
-	case checkpointEvent:
-		return p.handleRoundEvent(r, e, e.Round)
 	default:
 		panic("bad event")
 	}
@@ -96,26 +81,32 @@ func protoForEvent(e event) (protocol.ConsensusVersion, error) {
 	}
 }
 
+func newPlayerForEvent(e event, rnd round) (player, err) {
+	switch e := e.(type) {
+	// for now, only create new players for messageEvents
+	case messageEvent:
+		cv, err := protoForEvent(e)
+		if err != nil {
+			return player{}, err
+		}
+		// XXX check when ConsensusVersionView.Err is set by LedgerReader
+		return player{Round: rnd, Step: soft, Deadline: FilterTimeout(0, cv)}, nil
+	default:
+		return player{}, fmt.Errorf("can't make player for event %+v", e)
+	}
+}
+
 // handleRoundEvent looks up a player for a given round to handle an event.
 func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e event, rnd round) []action {
 	state, ok := p.players[rnd]
 	if !ok {
 		// XXXX haven't seen this round before; create player or drop event
-		switch e := e.(type) {
-		// for now, only create new players for messageEvents
-		case messageEvent:
-			cv, err := protoForEvent(e)
-			if err != nil {
-				// XXX check when ConsensusVersionView.Err is set by LedgerReader
-				logging.Base().Debugf("protoForEvent error %v", err)
-				return nil
-			}
-			state = player{Round: rnd, Step: soft, Deadline: FilterTimeout(0, cv)}
-			p.players[rnd] = state
+		state, err := newPlayerForEvent(e, rnd)
+		if err != nil {
+			logging.Base().Debugf("couldn't make player for rnd %+v, dropping event", rnd)
+			return nil
 		}
-		// drop events that we don't have a player for
-		logging.Base().Debugf("couldn't find player for rnd %+v, dropping event", rnd)
-		return nil
+		p.players[rnd] = state
 	}
 
 	// TODO move cadaver calls to somewhere cleaner
