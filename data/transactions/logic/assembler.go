@@ -1067,9 +1067,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 func typeSwap(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	topTwo := oneAny.plus(oneAny)
 	top := len(ops.typeStack) - 1
-	if top > 0 {
+	if top >= 0 {
 		topTwo[1] = ops.typeStack[top]
-		if top > 1 {
+		if top >= 1 {
 			topTwo[0] = ops.typeStack[top-1]
 		}
 	}

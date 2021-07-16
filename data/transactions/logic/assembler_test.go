@@ -2041,6 +2041,7 @@ func TestSwapTypeCheck(t *testing.T) {
 	testProg(t, "int 1; byte 0x1234; +", AssemblerMaxVersion, expect{3, "+ arg 1..."})
 	/* despite swap, we track types */
 	testProg(t, "int 1; byte 0x1234; swap; +", AssemblerMaxVersion, expect{4, "+ arg 0..."})
+	testProg(t, "byte 0x1234; int 1; swap; +", AssemblerMaxVersion, expect{4, "+ arg 1..."})
 }
 
 func TestDigTypeCheck(t *testing.T) {
