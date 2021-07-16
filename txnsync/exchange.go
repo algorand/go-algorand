@@ -25,6 +25,7 @@ const txnBlockMessageVersion = 1
 const maxBloomFilterSize = 100000
 const maxAcceptedMsgSeq = 64
 const maxEncodedTransactionGroupBytes = 10000000
+const maxProposalSize = 350000
 
 type transactionBlockMessage struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -35,7 +36,7 @@ type transactionBlockMessage struct {
 	UpdatedRequestParams requestParams           `codec:"p"`
 	TransactionGroups    packedTransactionGroups `codec:"g"`
 	MsgSync              timingParams            `codec:"t"`
-	ProposalData         relayedProposal         `codec:"pd"`
+	RelayedProposal      relayedProposal         `codec:"rp"`
 }
 
 type encodedBloomFilter struct {
@@ -79,14 +80,12 @@ type timingParams struct {
 const (
 	noProposal byte = iota
 	transactionsForProposal
-	proposalByte
-	proposalFilter
 )
 
 type relayedProposal struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ProposalBytes   []byte        `codec:"pb,allocbound=maxEncodedTransactionGroupBytes"`
-	ProposalFilter  crypto.Digest `codec:"pf"`
-	ProposalMsgType byte          `codec:"mt"`
+	RawBytes        []byte        `codec:"b,allocbound=maxProposalSize"`
+	ExcludeProposal crypto.Digest `codec:"e"`
+	Content         byte          `codec:"c"`
 }

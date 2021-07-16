@@ -232,7 +232,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		peer.nextReceivedMessageSeq++
 
 		// skip txnsync messages with proposalData for now
-		if incomingMsg.message.ProposalData.ProposalMsgType != noProposal {
+		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
 			continue
 		}
 

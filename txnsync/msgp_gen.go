@@ -26350,15 +26350,15 @@ func (z *relayedProposal) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 4 bits */
-	if (*z).ProposalMsgType == 0 {
+	if len((*z).RawBytes) == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if len((*z).ProposalBytes) == 0 {
+	if (*z).Content == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).ProposalFilter.MsgIsZero() {
+	if (*z).ExcludeProposal.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -26366,19 +26366,19 @@ func (z *relayedProposal) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "mt"
-			o = append(o, 0xa2, 0x6d, 0x74)
-			o = msgp.AppendByte(o, (*z).ProposalMsgType)
+			// string "b"
+			o = append(o, 0xa1, 0x62)
+			o = msgp.AppendBytes(o, (*z).RawBytes)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "pb"
-			o = append(o, 0xa2, 0x70, 0x62)
-			o = msgp.AppendBytes(o, (*z).ProposalBytes)
+			// string "c"
+			o = append(o, 0xa1, 0x63)
+			o = msgp.AppendByte(o, (*z).Content)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "pf"
-			o = append(o, 0xa2, 0x70, 0x66)
-			o = (*z).ProposalFilter.MarshalMsg(o)
+			// string "e"
+			o = append(o, 0xa1, 0x65)
+			o = (*z).ExcludeProposal.MarshalMsg(o)
 		}
 	}
 	return
@@ -26407,32 +26407,32 @@ func (z *relayedProposal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0003 int
 			zb0003, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposalBytes")
+				err = msgp.WrapError(err, "struct-from-array", "RawBytes")
 				return
 			}
-			if zb0003 > maxEncodedTransactionGroupBytes {
-				err = msgp.ErrOverflow(uint64(zb0003), uint64(maxEncodedTransactionGroupBytes))
+			if zb0003 > maxProposalSize {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(maxProposalSize))
 				return
 			}
-			(*z).ProposalBytes, bts, err = msgp.ReadBytesBytes(bts, (*z).ProposalBytes)
+			(*z).RawBytes, bts, err = msgp.ReadBytesBytes(bts, (*z).RawBytes)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposalBytes")
+				err = msgp.WrapError(err, "struct-from-array", "RawBytes")
 				return
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ProposalFilter.UnmarshalMsg(bts)
+			bts, err = (*z).ExcludeProposal.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposalFilter")
+				err = msgp.WrapError(err, "struct-from-array", "ExcludeProposal")
 				return
 			}
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).ProposalMsgType, bts, err = msgp.ReadByteBytes(bts)
+			(*z).Content, bts, err = msgp.ReadByteBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposalMsgType")
+				err = msgp.WrapError(err, "struct-from-array", "Content")
 				return
 			}
 		}
@@ -26459,32 +26459,32 @@ func (z *relayedProposal) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "pb":
+			case "b":
 				var zb0004 int
 				zb0004, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ProposalBytes")
+					err = msgp.WrapError(err, "RawBytes")
 					return
 				}
-				if zb0004 > maxEncodedTransactionGroupBytes {
-					err = msgp.ErrOverflow(uint64(zb0004), uint64(maxEncodedTransactionGroupBytes))
+				if zb0004 > maxProposalSize {
+					err = msgp.ErrOverflow(uint64(zb0004), uint64(maxProposalSize))
 					return
 				}
-				(*z).ProposalBytes, bts, err = msgp.ReadBytesBytes(bts, (*z).ProposalBytes)
+				(*z).RawBytes, bts, err = msgp.ReadBytesBytes(bts, (*z).RawBytes)
 				if err != nil {
-					err = msgp.WrapError(err, "ProposalBytes")
+					err = msgp.WrapError(err, "RawBytes")
 					return
 				}
-			case "pf":
-				bts, err = (*z).ProposalFilter.UnmarshalMsg(bts)
+			case "e":
+				bts, err = (*z).ExcludeProposal.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ProposalFilter")
+					err = msgp.WrapError(err, "ExcludeProposal")
 					return
 				}
-			case "mt":
-				(*z).ProposalMsgType, bts, err = msgp.ReadByteBytes(bts)
+			case "c":
+				(*z).Content, bts, err = msgp.ReadByteBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ProposalMsgType")
+					err = msgp.WrapError(err, "Content")
 					return
 				}
 			default:
@@ -26507,13 +26507,13 @@ func (_ *relayedProposal) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *relayedProposal) Msgsize() (s int) {
-	s = 1 + 3 + msgp.BytesPrefixSize + len((*z).ProposalBytes) + 3 + (*z).ProposalFilter.Msgsize() + 3 + msgp.ByteSize
+	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).RawBytes) + 2 + (*z).ExcludeProposal.Msgsize() + 2 + msgp.ByteSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *relayedProposal) MsgIsZero() bool {
-	return (len((*z).ProposalBytes) == 0) && ((*z).ProposalFilter.MsgIsZero()) && ((*z).ProposalMsgType == 0)
+	return (len((*z).RawBytes) == 0) && ((*z).ExcludeProposal.MsgIsZero()) && ((*z).Content == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -26979,11 +26979,11 @@ func (z *transactionBlockMessage) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (*z).ProposalData.MsgIsZero() {
+	if (*z).Round.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if (*z).Round.MsgIsZero() {
+	if (*z).RelayedProposal.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
@@ -27036,14 +27036,14 @@ func (z *transactionBlockMessage) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
-			// string "pd"
-			o = append(o, 0xa2, 0x70, 0x64)
-			o = (*z).ProposalData.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = (*z).Round.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "rp"
+			o = append(o, 0xa2, 0x72, 0x70)
+			o = (*z).RelayedProposal.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x40) == 0 { // if not empty
 			// string "t"
@@ -27191,9 +27191,9 @@ func (z *transactionBlockMessage) UnmarshalMsg(bts []byte) (o []byte, err error)
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ProposalData.UnmarshalMsg(bts)
+			bts, err = (*z).RelayedProposal.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ProposalData")
+				err = msgp.WrapError(err, "struct-from-array", "RelayedProposal")
 				return
 			}
 		}
@@ -27320,10 +27320,10 @@ func (z *transactionBlockMessage) UnmarshalMsg(bts []byte) (o []byte, err error)
 					err = msgp.WrapError(err, "MsgSync")
 					return
 				}
-			case "pd":
-				bts, err = (*z).ProposalData.UnmarshalMsg(bts)
+			case "rp":
+				bts, err = (*z).RelayedProposal.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ProposalData")
+					err = msgp.WrapError(err, "RelayedProposal")
 					return
 				}
 			default:
@@ -27346,13 +27346,13 @@ func (_ *transactionBlockMessage) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *transactionBlockMessage) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Int32Size + 2 + (*z).Round.Msgsize() + 2 + (*z).TxnBloomFilter.Msgsize() + 2 + 1 + 2 + msgp.ByteSize + 2 + msgp.ByteSize + 2 + (*z).TransactionGroups.Msgsize() + 2 + (*z).MsgSync.Msgsize() + 3 + (*z).ProposalData.Msgsize()
+	s = 1 + 2 + msgp.Int32Size + 2 + (*z).Round.Msgsize() + 2 + (*z).TxnBloomFilter.Msgsize() + 2 + 1 + 2 + msgp.ByteSize + 2 + msgp.ByteSize + 2 + (*z).TransactionGroups.Msgsize() + 2 + (*z).MsgSync.Msgsize() + 3 + (*z).RelayedProposal.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *transactionBlockMessage) MsgIsZero() bool {
-	return ((*z).Version == 0) && ((*z).Round.MsgIsZero()) && ((*z).TxnBloomFilter.MsgIsZero()) && (((*z).UpdatedRequestParams.Offset == 0) && ((*z).UpdatedRequestParams.Modulator == 0)) && ((*z).TransactionGroups.MsgIsZero()) && ((*z).MsgSync.MsgIsZero()) && ((*z).ProposalData.MsgIsZero())
+	return ((*z).Version == 0) && ((*z).Round.MsgIsZero()) && ((*z).TxnBloomFilter.MsgIsZero()) && (((*z).UpdatedRequestParams.Offset == 0) && ((*z).UpdatedRequestParams.Modulator == 0)) && ((*z).TransactionGroups.MsgIsZero()) && ((*z).MsgSync.MsgIsZero()) && ((*z).RelayedProposal.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
