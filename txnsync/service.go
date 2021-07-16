@@ -40,7 +40,7 @@ func MakeTransactionSyncService(log logging.Logger, conn NodeConnector, isRelay 
 	s := &Service{
 		state: syncState{
 			node:        conn,
-			log:         wrapLogger(log),
+			log:         wrapLogger(log, &cfg),
 			isRelay:     isRelay,
 			genesisID:   genesisID,
 			genesisHash: genesisHash,
