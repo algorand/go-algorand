@@ -65,7 +65,7 @@ func (s *syncState) encodeTransactionGroups(inTxnGroups []transactions.SignedTxG
 					if len(stub.BitmaskGroup) == 0 {
 						stub.BitmaskGroup = make(bitmask, bitmaskLen)
 					}
-					stub.BitmaskGroup.SetBit(index)
+					stub.BitmaskGroup.setBit(index)
 				}
 				if err := stub.deconstructSignedTransactions(index, &txn); err != nil {
 					return packedTransactionGroups{}, fmt.Errorf("failed to encodeTransactionGroups: %w", err)
@@ -108,7 +108,7 @@ func (s *syncState) compressTransactionGroupsBytes(data []byte) ([]byte, byte) {
 	_, out, err := compress.Compress(data, b, 1)
 	if err != nil {
 		if errors.Is(err, compress.ErrShortBuffer) {
-			s.log.Infof("compression had negative effect, made message bigger: original msg length: %d", len(data))
+			s.log.Debugf("compression had negative effect, made message bigger: original msg length: %d", len(data))
 		} else {
 			s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(data), err)
 		}
@@ -171,7 +171,10 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 		txnCounter += size
 	}
 
-	addGroupHashes(txnGroups, int(stub.TotalTransactionsCount), stub.BitmaskGroup)
+	err = addGroupHashes(txnGroups, int(stub.TotalTransactionsCount), stub.BitmaskGroup)
+	if err != nil {
+		return nil, err
+	}
 
 	return txnGroups, nil
 }

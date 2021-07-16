@@ -35,17 +35,17 @@ const maxAddressBytes = maxEncodedTransactionGroupEntries * crypto.DigestSize
 var errInvalidTxType = errors.New("invalid txtype")
 
 //msgp:allocbound txnGroups maxEncodedTransactionGroupEntries
-type txnGroups []transactions.SignedTxn
+type txnGroups transactions.SignedTxnSlice //nolint:unused
 
 // old data structure for encoding (only used for testing)
-type txGroupsEncodingStubOld struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+type txGroupsEncodingStubOld struct { //nolint:unused
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	TxnGroups []txnGroups `codec:"t,allocbound=maxEncodedTransactionGroup"`
 }
 
 type txGroupsEncodingStub struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	TotalTransactionsCount uint64 `codec:"ttc"`
 	TransactionGroupCount  uint64 `codec:"tgc"`
@@ -55,7 +55,7 @@ type txGroupsEncodingStub struct {
 }
 
 type encodedSignedTxns struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	Sig        []byte  `codec:"sig,allocbound=maxSignatureBytes"`
 	BitmaskSig bitmask `codec:"sigbm"`
@@ -70,7 +70,7 @@ type encodedSignedTxns struct {
 }
 
 type encodedMsigs struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	Version          []byte  `codec:"msigv,allocbound=maxEncodedTransactionGroup"`
 	BitmaskVersion   bitmask `codec:"msigvbm"`
@@ -82,7 +82,7 @@ type encodedMsigs struct {
 }
 
 type encodedLsigs struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	Logic            [][]byte   `codec:"lsigl,allocbound=maxEncodedTransactionGroup,allocbound=config.MaxLogicSigMaxSize"`
 	BitmaskLogic     bitmask    `codec:"lsiglbm"`
@@ -91,7 +91,7 @@ type encodedLsigs struct {
 }
 
 type encodedTxns struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	TxType        []byte  `codec:"type,allocbound=maxEncodedTransactionGroup"`
 	BitmaskTxType bitmask `codec:"typebm"`
@@ -108,7 +108,7 @@ type encodedTxns struct {
 }
 
 type encodedTxnHeaders struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	Sender            []byte              `codec:"snd,allocbound=maxAddressBytes"`
 	BitmaskSender     bitmask             `codec:"sndbm"`
@@ -132,7 +132,8 @@ type encodedTxnHeaders struct {
 }
 
 type encodedKeyregTxnFields struct {
-	_struct                 struct{}       `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
+
 	VotePK                  []byte         `codec:"votekey,allocbound=maxAddressBytes"`
 	SelectionPK             []byte         `codec:"selkey,allocbound=maxAddressBytes"`
 	VoteFirst               []basics.Round `codec:"votefst,allocbound=maxEncodedTransactionGroup"`
@@ -145,7 +146,7 @@ type encodedKeyregTxnFields struct {
 }
 
 type encodedPaymentTxnFields struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	Receiver        []byte              `codec:"rcv,allocbound=maxAddressBytes"`
 	BitmaskReceiver bitmask             `codec:"rcvbm"`
@@ -157,7 +158,7 @@ type encodedPaymentTxnFields struct {
 }
 
 type encodedAssetConfigTxnFields struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	ConfigAsset        []basics.AssetIndex `codec:"caid,allocbound=maxEncodedTransactionGroup"`
 	BitmaskConfigAsset bitmask             `codec:"caidbm"`
@@ -166,7 +167,7 @@ type encodedAssetConfigTxnFields struct {
 }
 
 type encodedAssetParams struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	Total        []uint64 `codec:"t,allocbound=maxEncodedTransactionGroup"`
 	BitmaskTotal bitmask  `codec:"tbm"`
@@ -202,7 +203,7 @@ type encodedAssetParams struct {
 }
 
 type encodedAssetTransferTxnFields struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	XferAsset        []basics.AssetIndex `codec:"xaid,allocbound=maxEncodedTransactionGroup"`
 	BitmaskXferAsset bitmask             `codec:"xaidbm"`
@@ -221,7 +222,7 @@ type encodedAssetTransferTxnFields struct {
 }
 
 type encodedAssetFreezeTxnFields struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	FreezeAccount        []byte  `codec:"fadd,allocbound=maxAddressBytes"`
 	BitmaskFreezeAccount bitmask `codec:"faddbm"`
@@ -248,7 +249,7 @@ type assetIndices []basics.AssetIndex
 type program []byte
 
 type encodedApplicationCallTxnFields struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	ApplicationID        []basics.AppIndex `codec:"apid,allocbound=maxEncodedTransactionGroup"`
 	BitmaskApplicationID bitmask           `codec:"apidbm"`
@@ -289,7 +290,7 @@ type encodedApplicationCallTxnFields struct {
 }
 
 type encodedCompactCertTxnFields struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	CertRound        []basics.Round `codec:"certrnd,allocbound=maxEncodedTransactionGroup"`
 	BitmaskCertRound bitmask        `codec:"certrndbm"`
@@ -311,7 +312,7 @@ type revealMap map[uint64]compactcert.Reveal
 type SortUint64 = compactcert.SortUint64
 
 type encodedCert struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
 
 	SigCommit        []byte  `codec:"certc,allocbound=maxAddressBytes"`
 	BitmaskSigCommit bitmask `codec:"certcbm"`

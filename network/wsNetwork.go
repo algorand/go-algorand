@@ -1881,8 +1881,8 @@ var SupportedProtocolVersions = []string{"2.5", "2.1"}
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
  *  1   Catchup service over websocket connections with unicast messages between peers
- *  2.1 Introducted topic key/data pairs and enabled services over the gossip connections
- *  2.5 Introducted new transaction gossiping protocol
+ *  2.1 Introduced topic key/data pairs and enabled services over the gossip connections
+ *  2.5 Introduced new transaction gossiping protocol
  */
 const ProtocolVersion = "2.5"
 

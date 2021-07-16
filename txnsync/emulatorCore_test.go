@@ -164,7 +164,7 @@ func (e *emulator) initNodes() {
 		e.nodes[i] = makeEmulatedNode(e, i)
 	}
 	for i := 0; i < e.nodeCount; i++ {
-		syncer := MakeTranscationSyncService(
+		syncer := MakeTransactionSyncService(
 			makeNodeLogger(e.log, e.nodes[i]),
 			e.nodes[i],
 			e.scenario.netConfig.nodes[i].isRelay,
@@ -203,10 +203,10 @@ func (e *emulator) initNodes() {
 				copy(group.Transactions[0].Txn.Note[i*32:], digest[:])
 				randCounter++
 			}
-			group.FirstTransactionID = group.Transactions[0].ID()
+			group.GroupTransactionID = group.Transactions.ID()
 			encodingBuf = encodingBuf[:0]
 			group.EncodedLength = len(group.Transactions[0].MarshalMsg(encodingBuf))
-			node.txpoolIds[group.FirstTransactionID] = true
+			node.txpoolIds[group.Transactions[0].ID()] = true
 			node.txpoolEntries = append(node.txpoolEntries, group)
 		}
 		node.latestLocallyOriginatedGroupCounter = uint64(len(node.txpoolEntries) - 1)

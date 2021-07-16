@@ -17,7 +17,9 @@
 package catchup
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"net/http"
 	"testing"
 	"time"
@@ -253,6 +255,7 @@ func TestHistoricData(t *testing.T) {
 	var counters [5]int
 	for i := 0; i < 1000; i++ {
 		psp, getPeerErr := peerSelector.getNextPeer()
+		require.NoError(t, getPeerErr)
 		peer := psp.Peer
 
 		switch peer.(*mockHTTPPeer).address {
@@ -266,11 +269,11 @@ func TestHistoricData(t *testing.T) {
 			counters[3]++
 		case "b2":
 			counters[4]++
+		default:
+			require.Fail(t, "unexpected peer address `%s`", peer.(*mockHTTPPeer).address)
 		}
 
-		require.NoError(t, getPeerErr)
-		randVal := float64(crypto.RandUint64()%uint64(100)) / 100
-		randVal = randVal + 1
+		randVal := peerSelectorTestRandVal(t, i)
 		if randVal < 1.98 {
 			var duration time.Duration
 			switch peer.(*mockHTTPPeer).address {
@@ -294,6 +297,14 @@ func TestHistoricData(t *testing.T) {
 	require.Equal(t, counters[4], 0)
 }
 
+func peerSelectorTestRandVal(t *testing.T, seed int) float64 {
+	iterationDigest := crypto.Hash([]byte{byte(seed), byte(seed >> 8), byte(seed >> 16)})
+	randUint64, err := binary.ReadUvarint(bytes.NewReader(append([]byte{0}, iterationDigest[:]...)))
+	require.NoError(t, err)
+	randVal := float64(randUint64%uint64(100)) / 100
+	randVal = randVal + 1
+	return randVal
+}
 func TestPeersDownloadFailed(t *testing.T) {
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
@@ -334,8 +345,7 @@ func TestPeersDownloadFailed(t *testing.T) {
 		require.NoError(t, getPeerErr)
 
 		if i < 500 || peerAddress(peer) == "b1" || peerAddress(peer) == "b2" {
-			randVal := float64(crypto.RandUint64()%uint64(100)) / 100
-			randVal = randVal + 1
+			randVal := peerSelectorTestRandVal(t, i)
 			if randVal < 1.98 {
 				duration := time.Duration(100 * float64(time.Millisecond) * randVal)
 				peerRank := peerSelector.peerDownloadDurationToRank(psp, duration)

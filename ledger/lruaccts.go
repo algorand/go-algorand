@@ -17,8 +17,6 @@
 package ledger
 
 import (
-	"container/list"
-
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 )
@@ -29,9 +27,9 @@ import (
 type lruAccounts struct {
 	// accountsList contain the list of persistedAccountData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
-	accountsList *list.List
+	accountsList *persistedAccountDataList
 	// accounts provides fast access to the various elements in the list by using the account address
-	accounts map[basics.Address]*list.Element
+	accounts map[basics.Address]*persistedAccountDataListNode
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
 	pendingAccounts chan persistedAccountData
@@ -44,8 +42,8 @@ type lruAccounts struct {
 // init initializes the lruAccounts for use.
 // thread locking semantics : write lock
 func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
-	m.accountsList = list.New()
-	m.accounts = make(map[basics.Address]*list.Element)
+	m.accountsList = newPersistedAccountList().allocateFreeNodes(pendingWrites)
+	m.accounts = make(map[basics.Address]*persistedAccountDataListNode, pendingWrites)
 	m.pendingAccounts = make(chan persistedAccountData, pendingWrites)
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
@@ -55,7 +53,7 @@ func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesW
 // thread locking semantics : read lock
 func (m *lruAccounts) read(addr basics.Address) (data persistedAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
-		return el.Value.(persistedAccountData), true
+		return *el.Value, true
 	}
 	return persistedAccountData{}, false
 }
@@ -96,15 +94,14 @@ func (m *lruAccounts) writePending(acct persistedAccountData) {
 func (m *lruAccounts) write(acctData persistedAccountData) {
 	if el := m.accounts[acctData.addr]; el != nil {
 		// already exists; is it a newer ?
-		existing := el.Value.(persistedAccountData)
-		if existing.before(&acctData) {
+		if el.Value.before(&acctData) {
 			// we update with a newer version.
-			el.Value = acctData
+			el.Value = &acctData
 		}
-		m.accountsList.MoveToFront(el)
+		m.accountsList.moveToFront(el)
 	} else {
 		// new entry.
-		m.accounts[acctData.addr] = m.accountsList.PushFront(acctData)
+		m.accounts[acctData.addr] = m.accountsList.pushFront(&acctData)
 	}
 }
 
@@ -116,9 +113,9 @@ func (m *lruAccounts) prune(newSize int) (removed int) {
 		if len(m.accounts) <= newSize {
 			break
 		}
-		back := m.accountsList.Back()
-		delete(m.accounts, back.Value.(persistedAccountData).addr)
-		m.accountsList.Remove(back)
+		back := m.accountsList.back()
+		delete(m.accounts, back.Value.addr)
+		m.accountsList.remove(back)
 		removed++
 	}
 	return

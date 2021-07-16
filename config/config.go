@@ -418,6 +418,16 @@ type Local struct {
 	// features like catchpoint catchup would be rendered completly non-operational, and many of the node inner
 	// working would be completly dis-functional.
 	DisableNetworking bool `version[16]:"false"`
+
+	// ForceFetchTransactions allows to explicitly configure a node to retrieve all the transactions
+	// into it's transaction pool, even if those would not be required as the node doesn't
+	// participate in the consensus or used to relay transactions.
+	ForceFetchTransactions bool `version[17]:"false"`
+
+	// EnableVerbosedTransactionSyncLogging enables the transaction sync to write extensive
+	// message exchange information to the log file. This option is disabled by default,
+	// so that the log files would not grow too rapidly.
+	EnableVerbosedTransactionSyncLogging bool `version[17]:"false"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

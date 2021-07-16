@@ -24,6 +24,8 @@ import (
 	"github.com/algorand/go-algorand/util/bloom"
 )
 
+// bloomFilterFalsePositiveRate is used as the target false positive rate for the multiHashBloomFilter implementation.
+// the xor based bloom filters have their own hard-coded false positive rate, and thefore require no configuration.
 const bloomFilterFalsePositiveRate = 0.01
 
 var errInvalidBloomFilterEncoding = errors.New("invalid bloom filter encoding")
@@ -34,16 +36,20 @@ type bloomFilterTypes byte
 const (
 	invalidBloomFilter bloomFilterTypes = iota
 	multiHashBloomFilter
-	xorBloomFilter
+	xorBloomFilter32
 	xorBloomFilter8
-	// xorBloomFilter - todo.
 )
 
+// transactionsRange helps us to identify a subset of the transaction pool pending transaction groups.
+// it's being used as part of an optimization when we're attempting to recreate a bloom filter :
+// if the new bloom filter shares the same set of parameters, then the result is expected to be the
+// same and thefore the old bloom filter can be used.
 type transactionsRange struct {
 	firstCounter      uint64
 	lastCounter       uint64
 	transactionsCount uint64
 }
+
 type bloomFilter struct {
 	encodingParams requestParams
 
@@ -52,13 +58,15 @@ type bloomFilter struct {
 	containedTxnsRange transactionsRange
 
 	encoded *encodedBloomFilter
+
+	filterType bloomFilterTypes
 }
 
 func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error) {
 	switch bloomFilterTypes(enc.BloomFilterType) {
 	case multiHashBloomFilter:
 		outFilter.filter, err = bloom.UnmarshalBinary(enc.BloomFilter)
-	case xorBloomFilter:
+	case xorBloomFilter32:
 		outFilter.filter = new(bloom.XorFilter)
 		err = outFilter.filter.UnmarshalBinary(enc.BloomFilter)
 	case xorBloomFilter8:
@@ -71,6 +79,7 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error
 	if err != nil {
 		return bloomFilter{}, err
 	}
+	outFilter.filterType = bloomFilterTypes(enc.BloomFilterType)
 	outFilter.encodingParams = enc.EncodingParams
 	return outFilter, nil
 }
@@ -83,25 +92,19 @@ func (bf *bloomFilter) encode() (out *encodedBloomFilter, err error) {
 	out.BloomFilterType = byte(invalidBloomFilter)
 	out.EncodingParams = bf.encodingParams
 	if bf.filter != nil {
-		switch bf.filter.(type) {
-		case *bloom.Filter:
-			out.BloomFilterType = byte(multiHashBloomFilter)
-		case *bloom.XorFilter:
-			out.BloomFilterType = byte(xorBloomFilter)
-		case *bloom.XorFilter8:
-			out.BloomFilterType = byte(xorBloomFilter8)
-		default:
-			panic("unknown internal bloom filter object")
-		}
+		out.BloomFilterType = byte(bf.filterType)
 		out.BloomFilter, err = bf.filter.MarshalBinary()
 		if err != nil {
 			out = nil
 		} else {
 			bf.encoded = out
+			// increase the counter for a successful bloom filter encoding
+			txsyncEncodedBloomFiltersTotal.Inc(nil)
 		}
 	}
 	return
 }
+
 func (bf *bloomFilter) sameParams(other bloomFilter) bool {
 	return (bf.encodingParams == other.encodingParams) && (bf.containedTxnsRange == other.containedTxnsRange)
 }
@@ -118,24 +121,21 @@ func (bf *bloomFilter) test(txID transactions.Txid) bool {
 	return false
 }
 
-func filterFactoryBloom(numEntries int, s *syncState) bloom.GenericFilter {
+func filterFactoryBloom(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) {
 	shuffler := uint32(s.node.Random(0xffffffff))
 	sizeBits, numHashes := bloom.Optimal(numEntries, bloomFilterFalsePositiveRate)
-	return bloom.New(sizeBits, numHashes, shuffler)
+	return bloom.New(sizeBits, numHashes, shuffler), multiHashBloomFilter
 }
 
-func filterFactoryXor8(numEntries int, s *syncState) bloom.GenericFilter {
-	return bloom.NewXor8(numEntries, &s.xorBuilder)
+func filterFactoryXor8(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) { //nolint:deadcode,unused
+	return bloom.NewXor8(numEntries, &s.xorBuilder), xorBloomFilter8
 }
 
-func filterFactoryXor32(numEntries int, s *syncState) bloom.GenericFilter {
-	return bloom.NewXor(numEntries, &s.xorBuilder)
+func filterFactoryXor32(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) {
+	return bloom.NewXor(numEntries, &s.xorBuilder), xorBloomFilter32
 }
 
-var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryXor8
-
-//var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryXor32
-//var filterFactory func(int, *syncState) bloom.GenericFilter = filterFactoryBloom
+var filterFactory func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) = filterFactoryXor32
 
 func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams
@@ -157,16 +157,16 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 			}
 		}
 
-		result.filter = filterFactory(len(txnGroups), s)
+		result.filter, result.filterType = filterFactory(len(txnGroups), s)
 		for _, group := range txnGroups {
-			result.filter.Set(group.FirstTransactionID[:])
+			result.filter.Set(group.GroupTransactionID[:])
 		}
 		_, err := result.encode()
 		if err != nil {
 			// fall back to standard bloom filter
-			result.filter = filterFactoryBloom(len(txnGroups), s)
+			result.filter, result.filterType = filterFactoryBloom(len(txnGroups), s)
 			for _, group := range txnGroups {
-				result.filter.Set(group.FirstTransactionID[:])
+				result.filter.Set(group.GroupTransactionID[:])
 			}
 		}
 	default:
@@ -176,7 +176,7 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 		defer releaseTxIDSliceBuffer(filtedTransactionsIDs)
 
 		for _, group := range txnGroups {
-			txID := group.FirstTransactionID
+			txID := group.GroupTransactionID
 			if txidToUint64(txID)%uint64(encodingParams.Modulator) != uint64(encodingParams.Offset) {
 				continue
 			}
@@ -195,7 +195,7 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 			}
 		}
 
-		result.filter = filterFactory(len(filtedTransactionsIDs), s)
+		result.filter, result.filterType = filterFactory(len(filtedTransactionsIDs), s)
 
 		for _, txid := range filtedTransactionsIDs {
 			result.filter.Set(txid[:])
@@ -203,7 +203,7 @@ func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []tr
 		_, err := result.encode()
 		if err != nil {
 			// fall back to standard bloom filter
-			result.filter = filterFactoryBloom(len(txnGroups), s)
+			result.filter, result.filterType = filterFactoryBloom(len(txnGroups), s)
 			for _, txid := range filtedTransactionsIDs {
 				result.filter.Set(txid[:])
 			}

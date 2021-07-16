@@ -347,7 +347,7 @@ func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []transactio
 }
 
 // processDecodedArray receives a slice of transaction groups and attempt to add them to the transaction pool.
-// The processDecodedArray returns whether the node should be disconnecting from the source of these transctions ( in case a malicious transaction is found )
+// The processDecodedArray returns whether the node should be disconnecting from the source of these transactions ( in case a malicious transaction is found )
 // as well as whether all the provided transactions were included in the transaction pool by the time the method returns.
 func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.SignedTxGroup) (disconnect, allTransactionIncluded bool) {
 	var nonDuplicatedFilteredGroups bool
@@ -415,7 +415,7 @@ func (handler *TxHandler) SolicitedTxHandler() SolicitedTxHandler {
 func (handler *solicitedTxHandler) Handle(txgroup []transactions.SignedTxn) error {
 	disconnect := handler.txHandler.processDecoded(txgroup)
 	if disconnect {
-		return fmt.Errorf("invlid transaction")
+		return fmt.Errorf("invalid transaction")
 	}
 	return nil
 }
@@ -494,7 +494,7 @@ func (handler *solicitedAyncTxHandler) loop(ctx context.Context) {
 		} else if allTransactionsIncluded {
 			select {
 			case groups.ackCh <- groups.messageSeq:
-				// all good, write was successfull.
+				// all good, write was successful.
 			default:
 				// unable to write since channel was full - log this:
 				logging.Base().Warnf("solicitedAyncTxHandler was unable to ack transaction groups inclusion since the acknowledgement channel was full")

@@ -41,97 +41,6 @@ var blockDBFilename = flag.String("db", "", "Location of block db")
 var startRound = flag.Int("start", 0, "Starting round")
 var endRound = flag.Int("end", 10, "Ending round")
 
-func TestBitmaskType0And2(t *testing.T) {
-	entries := 80
-	b := make(bitmask, 12)
-	b.SetBit(0)
-	b.SetBit(2)
-	b.SetBit(69)
-	iterated := make([]bool, entries)
-	b.Iterate(entries, 3, func(i int, index int) error {
-		iterated[i] = true
-		return nil
-	})
-	for i := 0; i < entries; i++ {
-		exists := b.EntryExists(i, entries)
-		if i == 0 || i == 2 || i == 69 {
-			require.True(t, exists)
-			require.True(t, iterated[i], i)
-		} else {
-			require.False(t, exists)
-			require.False(t, iterated[i], i)
-		}
-	}
-	b.trimBitmask(entries)
-	iterated = make([]bool, entries)
-	b.Iterate(entries, 3, func(i int, index int) error {
-		iterated[i] = true
-		return nil
-	})
-	for i := 0; i < entries; i++ {
-		exists := b.EntryExists(i, entries)
-		if i == 0 || i == 2 || i == 69 {
-			require.True(t, exists)
-			require.True(t, iterated[i], i)
-		} else {
-			require.False(t, exists)
-			require.False(t, iterated[i], i)
-		}
-	}
-}
-
-func TestBitmaskType1(t *testing.T) {
-	entries := 80
-	b := make(bitmask, 12)
-	for i := 0; i < entries; i++ {
-		if i%3 != 0 {
-			b.SetBit(i)
-		}
-	}
-	b.trimBitmask(entries)
-	iterated := make([]bool, entries)
-	b.Iterate(entries, 53, func(i int, index int) error {
-		iterated[i] = true
-		return nil
-	})
-	for i := 0; i < entries; i++ {
-		exists := b.EntryExists(i, entries)
-		if i%3 == 0 {
-			require.False(t, exists)
-			require.False(t, iterated[i], i)
-		} else {
-			require.True(t, exists)
-			require.True(t, iterated[i], i)
-		}
-	}
-}
-
-func TestBitmaskType3(t *testing.T) {
-	entries := 80
-	b := make(bitmask, 12)
-	for i := 0; i < entries; i++ {
-		if i != 0 && i != 2 && i != 69 {
-			b.SetBit(i)
-		}
-	}
-	b.trimBitmask(entries)
-	iterated := make([]bool, entries)
-	b.Iterate(entries, 77, func(i int, index int) error {
-		iterated[i] = true
-		return nil
-	})
-	for i := 0; i < entries; i++ {
-		exists := b.EntryExists(i, entries)
-		if i == 0 || i == 2 || i == 69 {
-			require.False(t, exists)
-			require.False(t, iterated[i], i)
-		} else {
-			require.True(t, exists)
-			require.True(t, iterated[i], i)
-		}
-	}
-}
-
 func TestNibble(t *testing.T) {
 	var b []byte
 	for i := 0; i < 10; i++ {
@@ -151,7 +60,7 @@ func encodeTransactionGroupsOld(inTxnGroups []transactions.SignedTxGroup) []byte
 		TxnGroups: make([]txnGroups, len(inTxnGroups)),
 	}
 	for i := range inTxnGroups {
-		stub.TxnGroups[i] = inTxnGroups[i].Transactions
+		stub.TxnGroups[i] = txnGroups(inTxnGroups[i].Transactions)
 	}
 
 	return stub.MarshalMsg(protocol.GetEncodingBuf()[:0])
@@ -169,7 +78,7 @@ func decodeTransactionGroupsOld(bytes []byte) (txnGroups []transactions.SignedTx
 	}
 	txnGroups = make([]transactions.SignedTxGroup, len(stub.TxnGroups))
 	for i := range stub.TxnGroups {
-		txnGroups[i].Transactions = stub.TxnGroups[i]
+		txnGroups[i].Transactions = transactions.SignedTxnSlice(stub.TxnGroups[i])
 	}
 	return txnGroups, nil
 }
@@ -265,7 +174,8 @@ func TestTxnGroupEncodingSmall(t *testing.T) {
 			},
 		},
 	}
-	addGroupHashes(inTxnGroups, 6, []byte{1})
+	err := addGroupHashes(inTxnGroups, 6, []byte{1})
+	require.NoError(t, err)
 	var s syncState
 	ptg, err := s.encodeTransactionGroups(inTxnGroups, 1000000000)
 	require.NoError(t, err)
@@ -551,8 +461,8 @@ func TestTxnGroupEncodingReflection(t *testing.T) {
 				Transactions: txns,
 			},
 		}
-		addGroupHashes(txnGroups, len(txns), []byte{1})
-
+		err = addGroupHashes(txnGroups, len(txns), []byte{1})
+		require.NoError(t, err)
 		var s syncState
 		ptg, err := s.encodeTransactionGroups(txnGroups, 0)
 		require.NoError(t, err)
