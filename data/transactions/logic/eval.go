@@ -2649,11 +2649,11 @@ func convertBytesToInt(x []byte) (out uint64) {
 	return
 }
 
-func opExtractNBits(cx *evalContext, n int) {
+func opExtractNBytes(cx *evalContext, n int) {
 	last := len(cx.stack) - 1 // start
 	prev := last - 1          // bytes
 	startIdx := cx.stack[last].Uint
-	cx.stack[prev].Bytes, cx.err = opExtractImpl(cx.stack[prev].Bytes, int(startIdx), n) // extract n bits
+	cx.stack[prev].Bytes, cx.err = opExtractImpl(cx.stack[prev].Bytes, int(startIdx), n) // extract n bytes
 
 	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
 	cx.stack[prev].Bytes = nil
@@ -2661,15 +2661,15 @@ func opExtractNBits(cx *evalContext, n int) {
 }
 
 func opExtract16Bits(cx *evalContext) {
-	opExtractNBits(cx, 2) // extract 16 bits
+	opExtractNBytes(cx, 2) // extract 2 bytes
 }
 
 func opExtract32Bits(cx *evalContext) {
-	opExtractNBits(cx, 4) // extract 32 bits
+	opExtractNBytes(cx, 4) // extract 4 bytes
 }
 
 func opExtract64Bits(cx *evalContext) {
-	opExtractNBits(cx, 8) // extract 64 bits
+	opExtractNBytes(cx, 8) // extract 8 bytes
 }
 
 func accountReference(cx *evalContext, account stackValue) (basics.Address, uint64, error) {
