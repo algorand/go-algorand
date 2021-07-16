@@ -127,7 +127,7 @@ func filterFactoryBloom(numEntries int, s *syncState) (filter bloom.GenericFilte
 	return bloom.New(sizeBits, numHashes, shuffler), multiHashBloomFilter
 }
 
-func filterFactoryXor8(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) {
+func filterFactoryXor8(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) { //nolint:deadcode,unused
 	return bloom.NewXor8(numEntries, &s.xorBuilder), xorBloomFilter8
 }
 

@@ -26,13 +26,6 @@ import (
 
 var errDataMissing = errors.New("failed to decode: data missing")
 
-func getSlice(b []byte, index int, size int) ([]byte, error) {
-	if index*size+size > len(b) {
-		return nil, errDataMissing
-	}
-	return b[index*size : index*size+size], nil
-}
-
 // the nextSlice definition - copy the next slice and slide the src window.
 func nextSlice(src *[]byte, dst []byte, size int) error {
 	if len(*src) < size {
@@ -54,7 +47,7 @@ func getNibble(b []byte, index int) (byte, error) {
 	return b[index/2] % 16, nil
 }
 
-func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitmask) {
+func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitmask) (err error) {
 	index := 0
 	txGroupHashes := make([]crypto.Digest, 16)
 	tStart := 0
@@ -90,10 +83,14 @@ func addGroupHashes(txnGroups []transactions.SignedTxGroup, txnCount int, b bitm
 	}
 	// addGroupHashesFunc will be called for each set bit. Between set bits, all transactions
 	// in groups of more than 1 transactions will have the hashes added.
-	b.iterate(txnCount, txnCount, addGroupHashesFunc)
-	// One more call to addGroupHashesFunc to cover all the remaining transactions in groups of
-	// more than 1 transaction that were not added because no groups with one transaction are left.
-	addGroupHashesFunc(txnCount+1, -1)
+	err = b.iterate(txnCount, txnCount, addGroupHashesFunc)
+
+	if err == nil {
+		// One more call to addGroupHashesFunc to cover all the remaining transactions in groups of
+		// more than 1 transaction that were not added because no groups with one transaction are left.
+		err = addGroupHashesFunc(txnCount+1, -1)
+	}
+	return
 }
 
 func (stub *txGroupsEncodingStub) reconstructSignedTransactions(signedTxns []transactions.SignedTxn, genesisID string, genesisHash crypto.Digest) (err error) {

@@ -21,7 +21,6 @@ import (
 	"errors"
 )
 
-var errIndexOutOfBounds = errors.New("invalid bitmask: index out of bounds")
 var errIndexNotFound = errors.New("invalid bitmask: index not found")
 var errInvalidBitmaskType = errors.New("invalid bitmask type")
 

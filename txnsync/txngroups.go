@@ -171,7 +171,10 @@ func decodeTransactionGroups(ptg packedTransactionGroups, genesisID string, gene
 		txnCounter += size
 	}
 
-	addGroupHashes(txnGroups, int(stub.TotalTransactionsCount), stub.BitmaskGroup)
+	err = addGroupHashes(txnGroups, int(stub.TotalTransactionsCount), stub.BitmaskGroup)
+	if err != nil {
+		return nil, err
+	}
 
 	return txnGroups, nil
 }
