@@ -1078,6 +1078,9 @@ func typeSwap(ops *OpStream, args []string) (StackTypes, StackTypes) {
 }
 
 func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	if len(args) == 0 {
+		return oneAny, oneAny
+	}
 	n, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return oneAny, oneAny

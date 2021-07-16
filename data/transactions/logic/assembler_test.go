@@ -2044,8 +2044,11 @@ func TestSwapTypeCheck(t *testing.T) {
 	testProg(t, "byte 0x1234; int 1; swap; +", AssemblerMaxVersion, expect{4, "+ arg 1..."})
 }
 
-func TestDigTypeCheck(t *testing.T) {
+func TestDigAsm(t *testing.T) {
 	t.Parallel()
+	testProg(t, "int 1; dig; +", AssemblerMaxVersion, expect{2, "dig expects 1 immediate..."})
+	testProg(t, "int 1; dig junk; +", AssemblerMaxVersion, expect{2, "...invalid syntax..."})
+
 	testProg(t, "int 1; byte 0x1234; int 2; dig 2; +", AssemblerMaxVersion)
 	testProg(t, "byte 0x32; byte 0x1234; int 2; dig 2; +", AssemblerMaxVersion,
 		expect{5, "+ arg 1..."})
