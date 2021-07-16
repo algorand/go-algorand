@@ -2052,4 +2052,9 @@ func TestDigTypeCheck(t *testing.T) {
 		expect{4, "dig 3 expects 4..."})
 	testProg(t, "int 1; byte 0x1234; int 2; dig 12; +", AssemblerMaxVersion,
 		expect{4, "dig 12 expects 13..."})
+
+	// Confirm that digging something out does not ruin our knowledge about the types in the middle
+	testProg(t, "int 1; byte 0x1234; byte 0x1234; dig 2; dig 3; +; pop; +", AssemblerMaxVersion,
+		expect{6, "+ arg 1..."})
+
 }
