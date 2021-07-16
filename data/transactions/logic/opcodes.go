@@ -60,9 +60,9 @@ func costly(cost int) opDetails {
 }
 
 func immediates(names ...string) opDetails {
-	var immediates []immediate
-	for _, name := range names {
-		immediates = append(immediates, immediate{name, immByte})
+	immediates := make([]immediate, len(names))
+	for i, name := range names {
+		immediates[i] = immediate{name, immByte}
 	}
 	return opDetails{1, 1 + len(immediates), nil, immediates, nil}
 }
