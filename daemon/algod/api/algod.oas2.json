@@ -1422,7 +1422,7 @@
         "name-b64": {
           "description": "Base64 encoded name of this asset, as supplied by the creator.",
           "type": "string",
-          "x-algorand-format": "base64"
+          "format": "byte"
         },
         "reserve": {
           "description": "\\[r\\] Address of account holding reserve (non-minted) units of this asset.",
@@ -1440,7 +1440,7 @@
         "unit-name-b64": {
           "description": "Base64 encoded name of a unit of this asset, as supplied by the creator.",
           "type": "string",
-          "x-algorand-format": "base64"
+          "format": "byte"
         },
         "url": {
           "description": "\\[au\\] URL where more information about the asset can be retrieved. Included only when the URL is composed of printable utf-8 characters.",
@@ -1449,7 +1449,7 @@
         "url-b64": {
           "description": "Base64 encoded URL where more information about the asset can be retrieved.",
           "type": "string",
-          "x-algorand-format": "base64"
+          "format": "byte"
         }
       }
     },
