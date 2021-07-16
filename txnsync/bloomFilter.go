@@ -24,6 +24,8 @@ import (
 	"github.com/algorand/go-algorand/util/bloom"
 )
 
+// bloomFilterFalsePositiveRate is used as the target false positive rate for the multiHashBloomFilter implementation.
+// the xor based bloom filters have their own hard-coded false positive rate, and thefore require no configuration.
 const bloomFilterFalsePositiveRate = 0.01
 
 var errInvalidBloomFilterEncoding = errors.New("invalid bloom filter encoding")
@@ -34,16 +36,20 @@ type bloomFilterTypes byte
 const (
 	invalidBloomFilter bloomFilterTypes = iota
 	multiHashBloomFilter
-	xorBloomFilter
+	xorBloomFilter32
 	xorBloomFilter8
-	// xorBloomFilter - todo.
 )
 
+// transactionsRange helps us to identify a subset of the transaction pool pending transaction groups.
+// it's being used as part of an optimization when we're attempting to recreate a bloom filter :
+// if the new bloom filter shares the same set of parameters, then the result is expected to be the
+// same and thefore the old bloom filter can be used.
 type transactionsRange struct {
 	firstCounter      uint64
 	lastCounter       uint64
 	transactionsCount uint64
 }
+
 type bloomFilter struct {
 	encodingParams requestParams
 
@@ -60,7 +66,7 @@ func decodeBloomFilter(enc encodedBloomFilter) (outFilter bloomFilter, err error
 	switch bloomFilterTypes(enc.BloomFilterType) {
 	case multiHashBloomFilter:
 		outFilter.filter, err = bloom.UnmarshalBinary(enc.BloomFilter)
-	case xorBloomFilter:
+	case xorBloomFilter32:
 		outFilter.filter = new(bloom.XorFilter)
 		err = outFilter.filter.UnmarshalBinary(enc.BloomFilter)
 	case xorBloomFilter8:
@@ -126,10 +132,10 @@ func filterFactoryXor8(numEntries int, s *syncState) (filter bloom.GenericFilter
 }
 
 func filterFactoryXor32(numEntries int, s *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) {
-	return bloom.NewXor(numEntries, &s.xorBuilder), xorBloomFilter
+	return bloom.NewXor(numEntries, &s.xorBuilder), xorBloomFilter32
 }
 
-var filterFactory func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) = filterFactoryXor8
+var filterFactory func(int, *syncState) (filter bloom.GenericFilter, filterType bloomFilterTypes) = filterFactoryXor32
 
 func (s *syncState) makeBloomFilter(encodingParams requestParams, txnGroups []transactions.SignedTxGroup, hintPrevBloomFilter *bloomFilter) (result bloomFilter) {
 	result.encodingParams = encodingParams

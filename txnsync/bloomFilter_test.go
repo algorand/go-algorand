@@ -150,7 +150,7 @@ func TestBloomFallback(t *testing.T) {
 		case *bloom.XorFilter8:
 			// ok
 		default:
-			panic("unknown internal bloom filter object")
+			t.Errorf("unknown internal bloom filter object : %#v", bf.filter)
 		}
 
 		// Duplicate first entry. xorfilter can't handle
@@ -169,7 +169,7 @@ func TestBloomFallback(t *testing.T) {
 		case *bloom.XorFilter8:
 			t.Errorf("expected bloom filter but got xor")
 		default:
-			panic("unknown internal bloom filter object")
+			t.Errorf("unknown internal bloom filter object : %#v", bf.filter)
 		}
 	}
 }
@@ -187,22 +187,26 @@ func TestHint(t *testing.T) {
 		txnGroups := getTxnGroups(genesisHash, genesisID)
 		bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
 
+		defaultFilterType := xorBloomFilter32
 		switch bf.filter.(type) {
-		case *bloom.XorFilter8:
+		case *bloom.XorFilter:
 			//ok
 		default:
 			t.Errorf("expect bloom.XorFilter")
 		}
+		require.Equal(t, defaultFilterType, bf.filterType)
 
-		// Change the filter of bf to XorFilter
-		bf.filter, bf.filterType = filterFactoryXor32(len(txnGroups), &s)
+		// Change the filter of bf to other than the default filter i.e. XorFilter8
+		bf.filter, bf.filterType = filterFactoryXor8(len(txnGroups), &s)
 
 		// Pass bf as a hint.
 		bf2 := s.makeBloomFilter(encodingParams, txnGroups, &bf)
 
-		// If the filter of bf2 is XorFilter, then the hint was used.
+		// If the filter of bf2 is not defaultFilterType (i.e. is XorFilter8), then the hint was used.
+		// The hint must be used, and the filter should not be the default filter.
+		require.NotEqual(t, defaultFilterType, bf2.filterType)
 		switch bf2.filter.(type) {
-		case *bloom.XorFilter:
+		case *bloom.XorFilter8:
 			//ok
 		default:
 			t.Errorf("expect bloom.Filter")
@@ -212,13 +216,14 @@ func TestHint(t *testing.T) {
 		txnGroups = txnGroups[2:]
 		bf2 = s.makeBloomFilter(encodingParams, txnGroups, &bf)
 
-		// If the filter of bf2 is XorFilter8, then the hint was not used
+		// If the filter of bf2 is XorFilter (i.e. defaultFilterType), then the hint was not used
 		switch bf2.filter.(type) {
-		case *bloom.XorFilter8:
+		case *bloom.XorFilter:
 			//ok
 		default:
 			t.Errorf("expect bloom.XorFilter")
 		}
+		require.Equal(t, defaultFilterType, bf2.filterType)
 	}
 }
 
