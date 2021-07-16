@@ -1030,8 +1030,8 @@
             "description": "\\[an\\] Name of this asset, as supplied by the creator. Included only when the asset name is composed of printable utf-8 characters.",
             "type": "string"
           },
-          "name_b64": {
-            "description": "\\[an64\\] base64 encoded name of this asset, as supplied by the creator.",
+          "name-b64": {
+            "description": "Base64 encoded name of this asset, as supplied by the creator.",
             "type": "string",
             "x-algorand-format": "base64"
           },
@@ -1048,8 +1048,8 @@
             "description": "\\[un\\] Name of a unit of this asset, as supplied by the creator. Included only when the name of a unit of this asset is composed of printable utf-8 characters.",
             "type": "string"
           },
-          "unit-name_b64": {
-            "description": "\\[un64\\] base64 encoded name of a unit of this asset, as supplied by the creator.",
+          "unit-name-b64": {
+            "description": "Base64 encoded name of a unit of this asset, as supplied by the creator.",
             "type": "string",
             "x-algorand-format": "base64"
           },
@@ -1057,8 +1057,8 @@
             "description": "\\[au\\] URL where more information about the asset can be retrieved. Included only when the URL is composed of printable utf-8 characters.",
             "type": "string"
           },
-          "url_b64": {
-            "description": "\\[au64\\] base64 encoded URL where more information about the asset can be retrieved.",
+          "url-b64": {
+            "description": "Base64 encoded URL where more information about the asset can be retrieved.",
             "type": "string",
             "x-algorand-format": "base64"
           }
