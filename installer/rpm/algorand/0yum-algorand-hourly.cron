@@ -1,2 +1,0 @@
-#!/bin/bash
-exec /usr/sbin/yum-cron /etc/yum/yum-cron-algorand.conf

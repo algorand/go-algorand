@@ -161,6 +161,22 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	require.Equal(t, rr, lr)
 }
 
+type periodicSyncLogger struct {
+	logging.Logger
+	WarnfCallback func(string, ...interface{})
+}
+
+func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
+	// filter out few non-interesting warnings.
+	switch s {
+	case "fetchAndWrite(%v): lookback block doesn't exist, cannot authenticate new block":
+		return
+	case "fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v":
+		return
+	}
+	cl.Logger.Warnf(s, args...)
+}
+
 func TestPeriodicSync(t *testing.T) {
 	// Make Ledger
 	local := new(mockedLedger)
@@ -191,18 +207,29 @@ func TestPeriodicSync(t *testing.T) {
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
+	s.log = &periodicSyncLogger{Logger: logging.Base()}
 	s.deadlineTimeout = 2 * time.Second
 
 	s.Start()
 	defer s.Stop()
+	// wait past the initial sync - which is known to fail due to the above "auth"
 	time.Sleep(s.deadlineTimeout*2 - 200*time.Millisecond)
 	require.Equal(t, initialLocalRound, local.LastRound())
 	auth.alter(-1, false)
-	time.Sleep(2 * time.Second)
 
+	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
+	// until the synchronization is complete.
+	waitStart := time.Now()
+	for time.Now().Sub(waitStart) < 10*s.deadlineTimeout {
+		if remote.LastRound() == local.LastRound() {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	// Asserts that the last block is the one we expect
 	rr, lr := remote.LastRound(), local.LastRound()
 	require.Equal(t, rr, lr)
+
 	for r := basics.Round(1); r < remote.LastRound(); r++ {
 		localBlock, err := local.Block(r)
 		require.NoError(t, err)
@@ -411,6 +438,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil, nil)
+	s.log = &periodicSyncLogger{Logger: logging.Base()}
 
 	// Start the service ( dummy )
 	s.testStart()
