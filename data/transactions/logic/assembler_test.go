@@ -397,7 +397,8 @@ type expect struct {
 	s string
 }
 
-func testMatch(t *testing.T, actual, expected string) {
+func testMatch(t testing.TB, actual, expected string) {
+	t.Helper()
 	if strings.HasPrefix(expected, "...") && strings.HasSuffix(expected, "...") {
 		require.Contains(t, actual, expected[3:len(expected)-3])
 	} else if strings.HasPrefix(expected, "...") {
@@ -409,7 +410,8 @@ func testMatch(t *testing.T, actual, expected string) {
 	}
 }
 
-func testProg(t *testing.T, source string, ver uint64, expected ...expect) *OpStream {
+func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpStream {
+	t.Helper()
 	program := strings.ReplaceAll(source, ";", "\n")
 	ops, err := AssembleStringWithVersion(program, ver)
 	if len(expected) == 0 {
@@ -1495,16 +1497,16 @@ func TestAssembleAsset(t *testing.T) {
 	introduction := OpsByName[LogicVersion]["asset_holding_get"].Version
 	for v := introduction; v <= AssemblerMaxVersion; v++ {
 		testProg(t, "asset_holding_get ABC 1", v,
-			expect{1, "asset_holding_get arg 1..."})
+			expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
 		testProg(t, "int 1; asset_holding_get ABC 1", v,
-			expect{2, "asset_holding_get arg 0..."})
+			expect{2, "asset_holding_get ABC 1 expects 2 stack arguments..."})
 		testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
 			expect{3, "asset_holding_get expects one argument"})
 		testProg(t, "int 1; int 1; asset_holding_get ABC", v,
 			expect{3, "asset_holding_get unknown arg: \"ABC\""})
 
 		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
-			expect{2, "asset_params_get arg 0 wanted type uint64..."})
+			expect{2, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
 
 		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects one argument")
 		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown arg: \"ABC\"")
@@ -2031,4 +2033,23 @@ flip:                 // [x]
 	err = ops.assemble(sr)
 	require.NoError(t, err)
 	require.Empty(t, ops.Warnings)
+}
+
+func TestSwapTypeCheck(t *testing.T) {
+	t.Parallel()
+	/* reconfirm that we detect this type error */
+	testProg(t, "int 1; byte 0x1234; +", AssemblerMaxVersion, expect{3, "+ arg 1..."})
+	/* despite swap, we track types */
+	testProg(t, "int 1; byte 0x1234; swap; +", AssemblerMaxVersion, expect{4, "+ arg 0..."})
+}
+
+func TestDigTypeCheck(t *testing.T) {
+	t.Parallel()
+	testProg(t, "int 1; byte 0x1234; int 2; dig 2; +", AssemblerMaxVersion)
+	testProg(t, "byte 0x32; byte 0x1234; int 2; dig 2; +", AssemblerMaxVersion,
+		expect{5, "+ arg 1..."})
+	testProg(t, "byte 0x32; byte 0x1234; int 2; dig 3; +", AssemblerMaxVersion,
+		expect{4, "dig 3 expects 4..."})
+	testProg(t, "int 1; byte 0x1234; int 2; dig 12; +", AssemblerMaxVersion,
+		expect{4, "dig 12 expects 13..."})
 }
