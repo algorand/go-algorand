@@ -131,11 +131,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	for _, peer := range peers {
 		msgEncoder := &messageAsyncEncoder{state: s, roundClock: s.clock, peerDataExchangeRate: peer.dataExchangeRate}
 		profAssembleMessage.start()
-		var err error
-		msgEncoder.messageData, err = s.assemblePeerMessage(peer, &pendingTransactions)
-		if err != nil {
-			s.log.Errorf("failed to send peer msg: %v", err)
-		}
+		msgEncoder.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
 		profAssembleMessage.end()
 		isPartialMessage := msgEncoder.messageData.partialMessage
 		msgEncoder.enqueue()
@@ -164,7 +160,7 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	}
 }
 
-func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata, err error) {
+func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pendingTransactionGroupsSnapshot) (metaMessage sentMessageMetadata) {
 	metaMessage = sentMessageMetadata{
 		peer: peer,
 		message: &transactionBlockMessage{

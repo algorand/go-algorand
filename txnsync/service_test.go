@@ -128,7 +128,7 @@ func TestMakeTransactionSyncService(t *testing.T) {
 	a.NotNil(service1)
 
 	a.Equal(service1.state.node, mNodeConnector)
-	a.Equal(service1.state.log, wrapLogger(mLogger))
+	a.Equal(service1.state.log, wrapLogger(mLogger, &cfg))
 	a.Equal(service1.state.isRelay, true)
 	a.Equal(service1.state.genesisID, "GENID")
 	a.Equal(service1.state.genesisHash, hashDigest)
@@ -142,7 +142,7 @@ func TestMakeTransactionSyncService(t *testing.T) {
 	a.NotNil(service1)
 
 	a.Equal(service2.state.node, mNodeConnector)
-	a.Equal(service2.state.log, wrapLogger(mLogger))
+	a.Equal(service2.state.log, wrapLogger(mLogger, &cfg))
 	a.Equal(service2.state.isRelay, false)
 	a.Equal(service2.state.genesisID, "GENID2")
 	a.Equal(service2.state.genesisHash, hashDigest)
