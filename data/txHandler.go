@@ -347,7 +347,7 @@ func (handler *TxHandler) filterAlreadyCommitted(unverifiedTxGroups []transactio
 }
 
 // processDecodedArray receives a slice of transaction groups and attempt to add them to the transaction pool.
-// The processDecodedArray returns whether the node should be disconnecting from the source of these transitions ( in case a malicious transaction is found )
+// The processDecodedArray returns whether the node should be disconnecting from the source of these transactions ( in case a malicious transaction is found )
 // as well as whether all the provided transactions were included in the transaction pool by the time the method returns.
 func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.SignedTxGroup) (disconnect, allTransactionIncluded bool) {
 	var nonDuplicatedFilteredGroups bool
