@@ -108,7 +108,7 @@ func (s *syncState) compressTransactionGroupsBytes(data []byte) ([]byte, byte) {
 	_, out, err := compress.Compress(data, b, 1)
 	if err != nil {
 		if errors.Is(err, compress.ErrShortBuffer) {
-			s.log.Infof("compression had negative effect, made message bigger: original msg length: %d", len(data))
+			s.log.Debugf("compression had negative effect, made message bigger: original msg length: %d", len(data))
 		} else {
 			s.log.Warnf("failed to compress %d bytes txnsync msg: %v", len(data), err)
 		}

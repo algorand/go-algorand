@@ -250,7 +250,9 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		// if the peer's round is more than a single round behind the local node, then we don't want to
 		// try and load the transactions. The other peer should first catch up before getting transactions.
 		if (peer.lastRound + 1) < s.round {
-			s.log.Infof("Incoming Txsync #%d late round %d", seq, peer.lastRound)
+			if s.config.EnableVerbosedTransactionSyncLogging {
+				s.log.Infof("Incoming Txsync #%d late round %d", seq, peer.lastRound)
+			}
 			continue
 		}
 

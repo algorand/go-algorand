@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 )
@@ -47,18 +48,24 @@ type Logger interface {
 
 type basicMsgLogger struct {
 	algodlogger
+	config *config.Local
 }
 
-func wrapLogger(l logging.Logger) Logger {
+func wrapLogger(l logging.Logger, config *config.Local) Logger {
 	if ll, ok := l.(Logger); ok {
 		return ll
 	}
-	out := new(basicMsgLogger)
-	out.algodlogger = l
+	out := &basicMsgLogger{
+		algodlogger: l,
+		config:      config,
+	}
 	return out
 }
 
 func (l *basicMsgLogger) logMessage(mstat msgStats, mode, tofrom string) {
+	if !l.config.EnableVerbosedTransactionSyncLogging {
+		return
+	}
 	l.Infof(
 		"%s Txsync #%d round %d transacations %d request [%d/%d] bloom %d nextTS %d %s '%s'",
 		mode,
