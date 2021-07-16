@@ -150,7 +150,7 @@ func TestBloomFallback(t *testing.T) {
 		case *bloom.XorFilter8:
 			// ok
 		default:
-			panic("unknown internal bloom filter object")
+			t.Errorf("unknown internal bloom filter object : %#v", bf.filter)
 		}
 
 		// Duplicate first entry. xorfilter can't handle
@@ -169,7 +169,7 @@ func TestBloomFallback(t *testing.T) {
 		case *bloom.XorFilter8:
 			t.Errorf("expected bloom filter but got xor")
 		default:
-			panic("unknown internal bloom filter object")
+			t.Errorf("unknown internal bloom filter object : %#v", bf.filter)
 		}
 	}
 }
@@ -188,11 +188,12 @@ func TestHint(t *testing.T) {
 		bf := s.makeBloomFilter(encodingParams, txnGroups, nil)
 
 		switch bf.filter.(type) {
-		case *bloom.XorFilter8:
+		case *bloom.XorFilter:
 			//ok
 		default:
 			t.Errorf("expect bloom.XorFilter")
 		}
+		require.Equal(t, xorBloomFilter32, bf.filterType)
 
 		// Change the filter of bf to XorFilter
 		bf.filter, bf.filterType = filterFactoryXor32(len(txnGroups), &s)
@@ -214,11 +215,12 @@ func TestHint(t *testing.T) {
 
 		// If the filter of bf2 is XorFilter8, then the hint was not used
 		switch bf2.filter.(type) {
-		case *bloom.XorFilter8:
+		case *bloom.XorFilter:
 			//ok
 		default:
 			t.Errorf("expect bloom.XorFilter")
 		}
+		require.Equal(t, xorBloomFilter32, bf2.filterType)
 	}
 }
 
