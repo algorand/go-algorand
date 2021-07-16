@@ -680,5 +680,5 @@ func (s SignedTxnSlice) ID() Txid {
 }
 
 // InvalidSignedTxGroupCounter is used to represent an invalid GroupCounter value. It's being used to indicate
-// the absense of an entry within a []SignedTxGroup with a particular GroupCounter value.
+// the absence of an entry within a []SignedTxGroup with a particular GroupCounter value.
 const InvalidSignedTxGroupCounter = uint64(math.MaxUint64)
