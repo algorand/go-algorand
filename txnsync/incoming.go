@@ -231,6 +231,11 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		// increase the message sequence number, since we're processing this message.
 		peer.nextReceivedMessageSeq++
 
+		// skip txnsync messages with proposalData for now
+		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
+			continue
+		}
+
 		// update the round number if needed.
 		if incomingMsg.message.Round > peer.lastRound {
 			peer.lastRound = incomingMsg.message.Round
