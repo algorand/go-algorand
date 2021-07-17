@@ -447,11 +447,11 @@ func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
 }
 func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		ops.error("bytec operation needs one argument")
+		return ops.error("bytec operation needs one argument")
 	}
 	constIndex, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		ops.error(err)
+		return ops.error(err)
 	}
 	ops.Bytec(uint(constIndex))
 	return nil
@@ -459,11 +459,11 @@ func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
 
 func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		ops.errorf("%s needs one argument", spec.Name)
+		return ops.errorf("%s needs one argument", spec.Name)
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		ops.error(err)
+		return ops.error(err)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
@@ -473,7 +473,7 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 }
 func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		ops.errorf("%s needs one argument", spec.Name)
+		return ops.errorf("%s needs one argument", spec.Name)
 	}
 	val, _, err := parseBinaryArgs(args)
 	if err != nil {

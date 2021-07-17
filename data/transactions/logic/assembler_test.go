@@ -1389,6 +1389,22 @@ func TestConstantDisassembly(t *testing.T) {
 
 }
 
+func TestConstantArgs(t *testing.T) {
+	t.Parallel()
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "int", v, expect{1, "int needs one argument"})
+		testProg(t, "intc", v, expect{1, "intc operation needs one argument"})
+		testProg(t, "byte", v, expect{1, "byte operation needs byte literal argument"})
+		testProg(t, "bytec", v, expect{1, "bytec operation needs one argument"})
+		testProg(t, "addr", v, expect{1, "addr operation needs one argument"})
+	}
+	for v := uint64(3); v <= AssemblerMaxVersion; v++ {
+		testProg(t, "pushint", v, expect{1, "pushint needs one argument"})
+		testProg(t, "pushbytes", v, expect{1, "pushbytes needs one argument"})
+	}
+
+}
+
 func TestAssembleDisassembleErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
