@@ -220,8 +220,8 @@ type AssetParams struct {
 	// \[an\] Name of this asset, as supplied by the creator. Included only when the asset name is composed of printable utf-8 characters.
 	Name *string `json:"name,omitempty"`
 
-	// \[an64\] base64 encoded name of this asset, as supplied by the creator.
-	NameB64 *string `json:"name_b64,omitempty"`
+	// Base64 encoded name of this asset, as supplied by the creator.
+	NameB64 *[]byte `json:"name-b64,omitempty"`
 
 	// \[r\] Address of account holding reserve (non-minted) units of this asset.
 	Reserve *string `json:"reserve,omitempty"`
@@ -232,14 +232,14 @@ type AssetParams struct {
 	// \[un\] Name of a unit of this asset, as supplied by the creator. Included only when the name of a unit of this asset is composed of printable utf-8 characters.
 	UnitName *string `json:"unit-name,omitempty"`
 
-	// \[un64\] base64 encoded name of a unit of this asset, as supplied by the creator.
-	UnitNameB64 *string `json:"unit-name_b64,omitempty"`
+	// Base64 encoded name of a unit of this asset, as supplied by the creator.
+	UnitNameB64 *[]byte `json:"unit-name-b64,omitempty"`
 
 	// \[au\] URL where more information about the asset can be retrieved. Included only when the URL is composed of printable utf-8 characters.
 	Url *string `json:"url,omitempty"`
 
-	// \[au64\] base64 encoded URL where more information about the asset can be retrieved.
-	UrlB64 *string `json:"url_b64,omitempty"`
+	// Base64 encoded URL where more information about the asset can be retrieved.
+	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
 // BuildVersion defines model for BuildVersion.
