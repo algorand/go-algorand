@@ -79,8 +79,9 @@ type VerifyingKey struct {
 	Pack PackedVerifyingKey `codec:"pubKeys"`
 }
 
-func (v *VerifyingKey) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.VerifyingKey, protocol.Encode(v)
+// ToBeHashed makes it easier to hash the VeryfyingKey struct.
+func (z *VerifyingKey) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.VerifyingKey, protocol.Encode(z)
 }
 
 // IsValid Makes certain struct is valid.

@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2021 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package merklekeystore
 
 import (
@@ -99,7 +115,7 @@ func TestSigning(t *testing.T) {
 
 	sig, err := signer.Sign(hashable, start+1)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().verify(hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(hashable, sig))
 
 	_, err = signer.Sign(hashable, start-1)
 	a.Error(err)
@@ -112,37 +128,37 @@ func TestSigning(t *testing.T) {
 		sig := sig
 		bs := make([]byte, len(sig.ByteSignature))
 		copy(bs, sig.ByteSignature)
-		bs[0] += 1
+		bs[0]++
 		sig.ByteSignature = bs
-		a.Error(signer.GetVerifier().verify(hashable, sig))
+		a.Error(signer.GetVerifier().Verify(hashable, sig))
 	})
 
 	t.Run("incorrect merkle proof", func(t *testing.T) {
 		t.Parallel()
 		sig := sig
 		sig.Proof = sig.Proof[:len(sig.Proof)-1]
-		a.Error(signer.GetVerifier().verify(hashable, sig))
+		a.Error(signer.GetVerifier().Verify(hashable, sig))
 
 		sig2 := sig
 		someDigest := crypto.Digest{}
 		rand.Read(someDigest[:])
 		sig2.Proof[0] = someDigest
-		a.Error(signer.GetVerifier().verify(hashable, sig))
+		a.Error(signer.GetVerifier().Verify(hashable, sig))
 	})
 
 	t.Run("bad leaf position in signature", func(t *testing.T) {
 		t.Parallel()
 		sig := sig
-		sig.pos += 1
-		a.Error(signer.GetVerifier().verify(hashable, sig))
+		sig.pos++
+		a.Error(signer.GetVerifier().Verify(hashable, sig))
 
 		sig2 := sig
 		sig2.pos = uint64(end + 1)
-		a.Error(signer.GetVerifier().verify(hashable, sig2))
+		a.Error(signer.GetVerifier().Verify(hashable, sig2))
 
 		sig3 := sig
 		sig3.pos = uint64(start - 1)
-		a.Error(signer.GetVerifier().verify(hashable, sig3))
+		a.Error(signer.GetVerifier().Verify(hashable, sig3))
 	})
 
 }
