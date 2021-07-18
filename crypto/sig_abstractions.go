@@ -16,7 +16,10 @@
 
 package crypto
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/algorand/go-algorand/protocol"
+)
 
 // AlgorithmType enum type for signing algorithms
 type AlgorithmType uint64
@@ -65,6 +68,7 @@ type SignatureAlgorithm struct {
 
 // VerifyingKey is an abstraction of a key store of verifying keys.
 // it can return the correct key according to the underlying algorithm.
+// Implements Hashable too.
 //
 // NOTE: The VerifyingKey key might not be a valid key if a malicious client sent it over the network
 // make certain it is valid.
@@ -73,6 +77,10 @@ type VerifyingKey struct {
 
 	Type AlgorithmType      `codec:"verType"`
 	Pack PackedVerifyingKey `codec:"pubKeys"`
+}
+
+func (v *VerifyingKey) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.VerifyingKey, protocol.Encode(v)
 }
 
 // IsValid Makes certain struct is valid.
