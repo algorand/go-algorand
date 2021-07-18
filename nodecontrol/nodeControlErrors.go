@@ -34,6 +34,6 @@ func (e *errAlgodExitedEarly) Error() string {
 	return fmt.Sprintf("node exited with an error code, check node.log for more details : %v", e.innerError)
 }
 
-func (e *errAlgodExitedEarly) Unwrap(err error) error {
+func (e *errAlgodExitedEarly) Unwrap() error {
 	return e.innerError
 }

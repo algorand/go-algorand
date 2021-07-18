@@ -97,7 +97,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 			data.AssetParams[basics.AssetIndex(lastCreatableID)] = ap
 		}
 	}
-	if 1 == (crypto.RandUint64() % 2) {
+	if 1 == (crypto.RandUint64()%2) && lastCreatableID > 0 {
 		// if account owns assets
 		data.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 		ownedAssetsCount := crypto.RandUint64()%20 + 1
@@ -113,7 +113,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 		crypto.RandBytes(data.AuthAddr[:])
 	}
 
-	if 1 == (crypto.RandUint64() % 3) {
+	if 1 == (crypto.RandUint64()%3) && lastCreatableID > 0 {
 		data.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
 		appStatesCount := crypto.RandUint64()%20 + 1
 		for i := uint64(0); i < appStatesCount; i++ {

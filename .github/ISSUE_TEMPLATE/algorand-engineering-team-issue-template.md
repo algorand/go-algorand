@@ -8,11 +8,14 @@ assignees: ''
 
 ---
 
-## Summary
-<!-- *Describe the problem identified or the general goal of this issue* -->
+## Problem
+<!-- What is the problem that we’re trying to solve? -->
 
-## Scope/Requirements
-<!-- *What's involved in this issue? What's required to achieve the goal?* -->
+## Solution
+<!-- Do you have a potential/suggested solution? Document more than one if possible. -->
 
-## Urgency/Relative Priority
-<!-- *How urgent is this issue? What are the timing considerations to take into account?* -->
+## Dependencies
+<!-- Does the solution have any team or design dependencies? -->
+
+## Urgency
+<!-- What is the urgency here and why? -->

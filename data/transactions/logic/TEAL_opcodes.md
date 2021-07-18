@@ -18,7 +18,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA256 hash of value X, yields [32]byte
 - **Cost**:
    - 7 (LogicSigVersion = 1)
-   - 35 (2 <= LogicSigVersion <= 4)
+   - 35 (2 <= LogicSigVersion <= 5)
 
 ## keccak256
 
@@ -28,7 +28,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Keccak256 hash of value X, yields [32]byte
 - **Cost**:
    - 26 (LogicSigVersion = 1)
-   - 130 (2 <= LogicSigVersion <= 4)
+   - 130 (2 <= LogicSigVersion <= 5)
 
 ## sha512_256
 
@@ -38,7 +38,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - SHA512_256 hash of value X, yields [32]byte
 - **Cost**:
    - 9 (LogicSigVersion = 1)
-   - 45 (2 <= LogicSigVersion <= 4)
+   - 45 (2 <= LogicSigVersion <= 5)
 
 ## ed25519verify
 
@@ -374,17 +374,17 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 2 | FirstValid | uint64 | round number |
 | 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 | round number |
-| 5 | Note | []byte |  |
-| 6 | Lease | []byte |  |
+| 5 | Note | []byte | Any data up to 1024 bytes |
+| 6 | Lease | []byte | 32 byte lease value |
 | 7 | Receiver | []byte | 32 byte address |
 | 8 | Amount | uint64 | micro-Algos |
 | 9 | CloseRemainderTo | []byte | 32 byte address |
 | 10 | VotePK | []byte | 32 byte address |
 | 11 | SelectionPK | []byte | 32 byte address |
-| 12 | VoteFirst | uint64 |  |
-| 13 | VoteLast | uint64 |  |
-| 14 | VoteKeyDilution | uint64 |  |
-| 15 | Type | []byte |  |
+| 12 | VoteFirst | uint64 | The first round that the participation key is valid. |
+| 13 | VoteLast | uint64 | The last round that the participation key is valid. |
+| 14 | VoteKeyDilution | uint64 | Dilution for the 2-level participation key |
+| 15 | Type | []byte | Transaction type as bytes |
 | 16 | TypeEnum | uint64 | See table below |
 | 17 | XferAsset | uint64 | Asset ID |
 | 18 | AssetAmount | uint64 | value in Asset's units |
@@ -722,6 +722,46 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - pop a byte-array A, integer B, and small integer C (between 0..255). Set the Bth byte of A to C, and push the result
 - LogicSigVersion >= 3
 
+## extract s l
+
+- Opcode: 0x57 {uint8 start position} {uint8 length}
+- Pops: *... stack*, []byte
+- Pushes: []byte
+- pop a byte-array A. For immediate values in 0..255 S and L: extract a range of bytes from A starting at S up to but not including S+L, push the substring result. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails
+- LogicSigVersion >= 5
+
+## extract3
+
+- Opcode: 0x58
+- Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
+- Pushes: []byte
+- pop a byte-array A and two integers B and C. Extract a range of bytes from A starting at B up to but not including B+C, push the substring result. If B or B+C is larger than the array length, the program fails
+- LogicSigVersion >= 5
+
+## extract16bits
+
+- Opcode: 0x59
+- Pops: *... stack*, {[]byte A}, {uint64 B}
+- Pushes: uint64
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+2, convert bytes as big endian and push the uint64 result. If B or B+2 is larger than the array length, the program fails
+- LogicSigVersion >= 5
+
+## extract32bits
+
+- Opcode: 0x5a
+- Pops: *... stack*, {[]byte A}, {uint64 B}
+- Pushes: uint64
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+4, convert bytes as big endian and push the uint64 result. If B or B+4 is larger than the array length, the program fails
+- LogicSigVersion >= 5
+
+## extract64bits
+
+- Opcode: 0x5b
+- Pops: *... stack*, {[]byte A}, {uint64 B}
+- Pushes: uint64
+- pop a byte-array A and integer B. Extract a range of bytes from A starting at B up to but not including B+8, convert bytes as big endian and push the uint64 result. If B or B+8 is larger than the array length, the program fails
+- LogicSigVersion >= 5
+
 ## balance
 
 - Opcode: 0x60
@@ -877,9 +917,35 @@ params: Txn.Accounts offset (or, since v4, an account address that appears in Tx
 | 8 | AssetReserve | []byte | Reserve address |
 | 9 | AssetFreeze | []byte | Freeze address |
 | 10 | AssetClawback | []byte | Clawback address |
+| 11 | AssetCreator | []byte | Creator address |
 
 
 params: Before v4, Txn.ForeignAssets offset. Since v4, Txn.ForeignAssets offset or an asset id that appears in Txn.ForeignAssets. Return: did_exist flag (1 if exist and 0 otherwise), value.
+
+## app_params_get i
+
+- Opcode: 0x72 {uint8 app params field index}
+- Pops: *... stack*, uint64
+- Pushes: *... stack*, any, uint64
+- read from app A params field X (imm arg) => {0 or 1 (top), value}
+- LogicSigVersion >= 5
+- Mode: Application
+
+`app_params_get` Fields:
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AppApprovalProgram | []byte | Bytecode of Approval Program |
+| 1 | AppClearStateProgram | []byte | Bytecode of Clear State Program |
+| 2 | AppGlobalNumUint | uint64 | Number of uint64 values allowed in Global State |
+| 3 | AppGlobalNumByteSlice | uint64 | Number of byte array values allowed in Global State |
+| 4 | AppLocalNumUint | uint64 | Number of uint64 values allowed in Local State |
+| 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
+| 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
+| 7 | AppCreator | []byte | Creator address |
+
+
+params: Txn.ForeignApps offset or an app id that appears in Txn.ForeignApps. Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## min_balance
 

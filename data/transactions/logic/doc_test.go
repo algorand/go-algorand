@@ -40,6 +40,14 @@ func TestOpDocs(t *testing.T) {
 			t.Errorf("error: doc for op %#v missing from opDocByName", op)
 		}
 	}
+
+	require.Len(t, txnFieldDocs, len(TxnFieldNames))
+	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
+	require.Len(t, globalFieldDocs, len(GlobalFieldNames))
+	require.Len(t, AssetHoldingFieldDocs, len(AssetHoldingFieldNames))
+	require.Len(t, AssetParamsFieldDocs, len(AssetParamsFieldNames))
+	require.Len(t, AppParamsFieldDocs, len(AppParamsFieldNames))
+	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
 }
 
 func TestOpGroupCoverage(t *testing.T) {
