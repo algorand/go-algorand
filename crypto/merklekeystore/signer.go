@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2021 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package merklekeystore
 
 import (
@@ -32,6 +48,7 @@ type Signature struct {
 	pos uint64
 }
 
+// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
 type Signer struct {
 	root crypto.Digest
 	// these keys are the keys used to sign in a round.
@@ -43,6 +60,7 @@ type Signer struct {
 
 var errStartBiggerThanEndRound = fmt.Errorf("cannot create merkleKeyStore because end round is smaller then start round")
 
+// New Generates a merklekeystore.Signer
 func New(startRound, endRound uint64) (*Signer, error) {
 	if startRound > endRound {
 		return nil, errStartBiggerThanEndRound
@@ -64,8 +82,9 @@ func New(startRound, endRound uint64) (*Signer, error) {
 	}, nil
 }
 
-func (m *Signer) GetVerifier() *verifier {
-	return &verifier{
+// GetVerifier can be used to store the commitment and verifier for this signer.
+func (m *Signer) GetVerifier() *Verifier {
+	return &Verifier{
 		root: m.root,
 	}
 }
