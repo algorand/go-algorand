@@ -57,4 +57,5 @@ const (
 	TxnMerkleLeaf     HashID = "TL"
 	Transaction       HashID = "TX"
 	Vote              HashID = "VO"
+	VerifyingKey      HashID = "VK"
 )
