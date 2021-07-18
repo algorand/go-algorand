@@ -124,7 +124,6 @@ func TestSigning(t *testing.T) {
 	a.Error(err)
 
 	t.Run("incorrect byte signature", func(t *testing.T) {
-		t.Parallel()
 		sig := sig
 		bs := make([]byte, len(sig.ByteSignature))
 		copy(bs, sig.ByteSignature)
@@ -134,7 +133,6 @@ func TestSigning(t *testing.T) {
 	})
 
 	t.Run("incorrect merkle proof", func(t *testing.T) {
-		t.Parallel()
 		sig := sig
 		sig.Proof = sig.Proof[:len(sig.Proof)-1]
 		a.Error(signer.GetVerifier().Verify(hashable, sig))
@@ -147,7 +145,6 @@ func TestSigning(t *testing.T) {
 	})
 
 	t.Run("bad leaf position in signature", func(t *testing.T) {
-		t.Parallel()
 		sig := sig
 		sig.pos++
 		a.Error(signer.GetVerifier().Verify(hashable, sig))
