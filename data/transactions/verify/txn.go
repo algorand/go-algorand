@@ -385,9 +385,9 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 						}
 					}
 					if batchVerifier.GetNumberOfEnqueuedSignatures() != 0 {
-						verify_err := batchVerifier.Verify()
-						if verify_err != nil {
-							return verify_err
+						verifyErr := batchVerifier.Verify()
+						if verifyErr != nil {
+							return verifyErr
 						}
 					}
 					cache.AddPayset(txnGroups, groupCtxs)
