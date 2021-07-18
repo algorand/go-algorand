@@ -600,6 +600,15 @@ func (s *Service) syncCert(cert *PendingUnmatchedCertificate) {
 
 // TODO this doesn't actually use the digest from cert!
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
+	// is there any point attempting to retrieve the block ?
+	if s.nextRoundIsNotSupported(cert.Round) {
+		// we might get here if the agreement service was seeing the certs votes for the next
+		// block, without seeing the actual block. Since it hasn't seen the block, it couldn't
+		// tell that it's an unsupported protocol, and would try to request it from the catchup.
+		s.handleUnsupportedRound(cert.Round)
+		return
+	}
+
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	peerSelector := s.createPeerSelector(false)
 	for s.ledger.LastRound() < cert.Round {

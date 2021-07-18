@@ -1,0 +1,2 @@
+#!/bin/bash
+exec /usr/bin/dnf-automatic /etc/dnf/dnf-cron-algorand.conf

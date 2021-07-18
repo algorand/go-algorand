@@ -49,27 +49,32 @@ type opDetails struct {
 	Size       int
 	checkFunc  opCheckFunc
 	Immediates []immediate
+	typeFunc   opTypeFunc
 }
 
-var opDefault = opDetails{1, 1, nil, nil}
-var opBranch = opDetails{1, 3, checkBranch, []immediate{{"target", immLabel}}}
+var opDefault = opDetails{1, 1, nil, nil, nil}
+var opBranch = opDetails{1, 3, checkBranch, []immediate{{"target", immLabel}}, nil}
 
 func costly(cost int) opDetails {
-	return opDetails{cost, 1, nil, nil}
+	return opDetails{cost, 1, nil, nil, nil}
 }
 
-func immediates(name string, rest ...string) opDetails {
-	num := 1 + len(rest)
-	immediates := make([]immediate, num)
-	immediates[0] = immediate{name, immByte}
-	for i, n := range rest {
-		immediates[i+1] = immediate{n, immByte}
+func immediates(names ...string) opDetails {
+	immediates := make([]immediate, len(names))
+	for i, name := range names {
+		immediates[i] = immediate{name, immByte}
 	}
-	return opDetails{1, 1 + num, nil, immediates}
+	return opDetails{1, 1 + len(immediates), nil, immediates, nil}
+}
+
+func stacky(typer opTypeFunc, imms ...string) opDetails {
+	d := immediates(imms...)
+	d.typeFunc = typer
+	return d
 }
 
 func varies(checker opCheckFunc, name string, kind immKind) opDetails {
-	return opDetails{1, 0, checker, []immediate{{name, kind}}}
+	return opDetails{1, 0, checker, []immediate{{name, kind}}, nil}
 }
 
 // immType describes the immediate arguments to an opcode
@@ -211,8 +216,8 @@ var OpSpecs = []OpSpec{
 	{0x4a, "dup2", opDup2, asmDefault, disDefault, twoAny, twoAny.plus(twoAny), 2, modeAny, opDefault},
 	// There must be at least one thing on the stack for dig, but
 	// it would be nice if we did better checking than that.
-	{0x4b, "dig", opDig, asmDefault, disDefault, oneAny, twoAny, 3, modeAny, immediates("n")},
-	{0x4c, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, opDefault},
+	{0x4b, "dig", opDig, asmDefault, disDefault, oneAny, twoAny, 3, modeAny, stacky(typeDig, "n")},
+	{0x4c, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, stacky(typeSwap)},
 	{0x4d, "select", opSelect, asmDefault, disDefault, twoAny.plus(oneInt), oneAny, 3, modeAny, opDefault},
 
 	{0x50, "concat", opConcat, asmDefault, disDefault, twoBytes, oneBytes, 2, modeAny, opDefault},
@@ -222,6 +227,11 @@ var OpSpecs = []OpSpec{
 	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneAny, 3, modeAny, opDefault},
 	{0x55, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opDefault},
 	{0x56, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opDefault},
+	{0x57, "extract", opExtract, asmDefault, disDefault, oneBytes, oneBytes, 5, modeAny, immediates("s", "l")},
+	{0x58, "extract3", opExtract3, asmDefault, disDefault, byteIntInt, oneBytes, 5, modeAny, opDefault},
+	{0x59, "extract16bits", opExtract16Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
+	{0x5a, "extract32bits", opExtract32Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
+	{0x5b, "extract64bits", opExtract64Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
 
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opDefault},
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},

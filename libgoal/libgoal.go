@@ -687,8 +687,33 @@ func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error)
 // AssetInformationV2 takes an asset's index and returns its information
 func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err error) {
 	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.AssetInformationV2(index)
+	if err != nil {
+		return
+	}
+	resp, err = algod.AssetInformationV2(index)
+	if err != nil {
+		return generatedV2.Asset{}, err
+	}
+
+	byteLen := func(p *[]byte) int {
+		if p == nil {
+			return 0
+		}
+		return len(*p)
+	}
+
+	// these conversions are in case the strings are not a UTF-8 printable
+	if byteLen(resp.Params.NameB64) > 0 {
+		resp.Params.Name = new(string)
+		*resp.Params.Name = string(*resp.Params.NameB64)
+	}
+	if byteLen(resp.Params.UnitNameB64) > 0 {
+		resp.Params.UnitName = new(string)
+		*resp.Params.UnitName = string(*resp.Params.UnitNameB64)
+	}
+	if byteLen(resp.Params.UrlB64) > 0 {
+		resp.Params.Url = new(string)
+		*resp.Params.Url = string(*resp.Params.UrlB64)
 	}
 	return
 }
