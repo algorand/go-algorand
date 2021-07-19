@@ -521,7 +521,8 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					}
 					result.LocalDeltas = &localDeltas
 				}
-				result.Logs = &delta.Logs
+
+				result.Logs = EncodeLogStrings(delta.Logs)
 				if pass {
 					messages = append(messages, "PASS")
 				} else {
@@ -562,6 +563,18 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 	}
 
 	return &gsd
+}
+
+// EncodeLogStrings encodes EvalDelta.Logs using base64
+func EncodeLogStrings(logs []string) *[]string {
+	if len(logs) == 0 {
+		return nil
+	}
+	encodedLogs := make([]string, 0, len(logs))
+	for i := range logs {
+		encodedLogs = append(encodedLogs, base64.StdEncoding.EncodeToString([]byte(logs[i])))
+	}
+	return &encodedLogs
 }
 
 // MergeAppParams merges values, existing in "base" take priority over new in "update"

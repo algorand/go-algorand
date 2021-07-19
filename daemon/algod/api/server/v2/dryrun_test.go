@@ -332,19 +332,6 @@ done:
 
 var localStateCheckProg []byte
 
-const LogsCheckSource = `
-#pragma version 5
-int 1
-loop: byte "a"
-log
-int 1
-+
-dup
-int 30
-<
-bnz loop
-`
-
 var logsCheckProgram []byte
 
 func init() {
@@ -358,12 +345,6 @@ func init() {
 		panic(err)
 	}
 	localStateCheckProg = ops.Program
-
-	ops, err = logic.AssembleString(LogsCheckSource)
-	if err != nil {
-		panic(err)
-	}
-	logsCheckProgram = ops.Program
 
 	// legder requires proto string and proto params set
 	var proto config.ConsensusParams
