@@ -58,8 +58,8 @@ func TestDisposableKeyPositions(t *testing.T) {
 		a.Equal(uint64(i), pos)
 	}
 
-	_, err = signer.getKeyPosition(100)
-	a.NoError(err)
+	_, err = signer.getKeyPosition(101)
+	a.Error(err)
 
 	signer, err = New(1000, 1100, crypto.PlaceHolderType)
 	a.NoError(err)
