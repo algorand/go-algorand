@@ -256,10 +256,12 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 // the done channel would get closed once operation complete successfully, or return an
 // error if not.
 // usage semantics : caller should ensure to call this function only when we have participation
-// keys for the given voting round.
+// keys for the given voting round. // XXXX why
 func (s *Service) persistState(round round, period period, step step, done chan error) (events <-chan externalEvent) {
+	// get state of all players
+	allRPS := s.persistStatus.allPlayersRPS()
 	raw := encode(s.clockManager, s.persistRouter, s.persistStatus, s.persistActions)
-	return s.persistenceLoop.Enqueue(s.clockManager, round, period, step, raw, done)
+	return s.persistenceLoop.Enqueue(s.clockManager, allRPS, RPS{round: round, period: period, step: step}, raw, done)
 }
 
 func (s *Service) do(ctx context.Context, as []action) {

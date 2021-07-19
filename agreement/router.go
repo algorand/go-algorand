@@ -139,7 +139,7 @@ func (router *rootRouter) update(state pipelinePlayer, r round, gc bool) {
 
 // submitTop is a convenience method used to submit the event directly into the root of the state machine tree
 // (i.e., to the playerMachine).
-func (router *rootRouter) submitTop(t *tracer, state pipelinePlayer, e event) (pipelinePlayer, []action) {
+func (router *rootRouter) submitTop(t *tracer, state pipelinePlayer, e externalEvent) (pipelinePlayer, []action) {
 	router.update(state, roundZero, true)
 	// XXX trace calls moved to pipelinePlayer.handleRoundEvent
 	handle := routerHandle{t: t, r: router, src: playerMachine}

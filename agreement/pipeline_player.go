@@ -28,13 +28,13 @@ import (
 // It tracks the last committed agreement round, and manages speculative agreement rounds.
 type pipelinePlayer struct {
 	lastCommittedRound basics.Round
-	players            map[round]player
+	players            map[round]*player
 }
 
 func makePipelinePlayer(nextRound basics.Round, nextVersion protocol.ConsensusVersion) pipelinePlayer {
 	return pipelinePlayer{
 		lastCommittedRound: nextRound,
-		players:            make(map[round]player),
+		players:            make(map[round]*player),
 	}
 }
 
@@ -55,7 +55,7 @@ func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
 
 	switch e := e.(type) {
 	case messageEvent, timeoutEvent, checkpointEvent:
-		return p.handleRoundEvent(r, e, rnd)
+		return p.handleRoundEvent(r, ee, rnd)
 	case roundInterruptionEvent:
 		// XXX handle enterRound ourselves and reshuffle players
 		// could have come from ledgerNextRoundCh
@@ -81,23 +81,23 @@ func protoForEvent(e event) (protocol.ConsensusVersion, error) {
 	}
 }
 
-func newPlayerForEvent(e event, rnd round) (player, err) {
+func newPlayerForEvent(e externalEvent, rnd round) (*player, error) {
 	switch e := e.(type) {
 	// for now, only create new players for messageEvents
 	case messageEvent:
 		cv, err := protoForEvent(e)
 		if err != nil {
-			return player{}, err
+			return nil, err
 		}
 		// XXX check when ConsensusVersionView.Err is set by LedgerReader
-		return player{Round: rnd, Step: soft, Deadline: FilterTimeout(0, cv)}, nil
+		return &player{Round: rnd, Step: soft, Deadline: FilterTimeout(0, cv)}, nil
 	default:
-		return player{}, fmt.Errorf("can't make player for event %+v", e)
+		return nil, fmt.Errorf("can't make player for event %+v", e)
 	}
 }
 
 // handleRoundEvent looks up a player for a given round to handle an event.
-func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e event, rnd round) []action {
+func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd round) []action {
 	state, ok := p.players[rnd]
 	if !ok {
 		// XXXX haven't seen this round before; create player or drop event
@@ -109,15 +109,15 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e event, rnd round) []
 		p.players[rnd] = state
 	}
 
-	// TODO move cadaver calls to somewhere cleaner
-	r.t.traceInput(state.Round, state.Period, state, e) // cadaver
-	r.t.ainTop(demultiplexer, playerMachine, state, e, roundZero, 0, 0)
+	// TODO move cadaver calls to somewhere cleanerxtern
+	r.t.traceInput(state.Round, state.Period, *state, e) // cadaver
+	r.t.ainTop(demultiplexer, playerMachine, *state, e, roundZero, 0, 0)
 
 	// pass event to corresponding child player for this round
 	a := state.handle(r, e)
 
 	r.t.aoutTop(demultiplexer, playerMachine, a, roundZero, 0, 0)
-	r.t.traceOutput(state.Round, state.Period, state, a) // cadaver
+	r.t.traceOutput(state.Round, state.Period, *state, a) // cadaver
 
 	return a
 }
@@ -127,6 +127,8 @@ func (p *pipelinePlayer) enterRound(r routerHandle, source event, target round) 
 	return nil
 }
 
+// externalDemuxSignals returns a list of per-player signals allowing demux.next to wait for
+// multiple pipelined per-round deadlines, as well as the last committed round.
 func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
 	s := make([]externalDemuxSignals, len(p.players))
 	i := 0
@@ -136,7 +138,19 @@ func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
 			FastRecoveryDeadline: p.FastRecoveryDeadline,
 			CurrentRound:         p.Round,
 		}
-		i += 1
+		i++
 	}
 	return pipelineExternalDemuxSignals{signals: s, lastCommittedRound: p.lastCommittedRound}
+}
+
+// allPlayersRPS returns a list of per-player (round, period, step) tuples reflecting the current
+// state of the pipelinePlayer's child players.
+func (p *pipelinePlayer) allPlayersRPS() []RPS {
+	ret := make([]RPS, len(p.players))
+	i := 0
+	for _, p := range p.players {
+		ret[i] = RPS{round: p.Round, period: p.Period, step: p.Step}
+		i++
+	}
+	return ret
 }

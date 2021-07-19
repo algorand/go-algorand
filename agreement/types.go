@@ -68,6 +68,13 @@ type (
 	period uint64
 )
 
+// RPS captures a round, period, and step.
+type RPS struct {
+	round  round
+	period period
+	step   step
+}
+
 // Algorand 2.0 steps
 const (
 	propose step = iota
