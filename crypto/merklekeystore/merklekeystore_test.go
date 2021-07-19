@@ -38,6 +38,8 @@ func TestSignerCreation(t *testing.T) {
 	_, err := New(1, 0, crypto.PlaceHolderType)
 	a.Error(err)
 
+	_, err = New(0, 0, crypto.PlaceHolderType)
+	a.Error(err)
 }
 func TestDisposableKeyPositions(t *testing.T) {
 	a := require.New(t)
@@ -121,8 +123,7 @@ func TestSigning(t *testing.T) {
 	_, err = signer.Sign(hashable, end+1)
 	a.Error(err)
 
-
-		TestBadLeafPositionInSignature(t)
+	TestBadLeafPositionInSignature(t)
 
 }
 
