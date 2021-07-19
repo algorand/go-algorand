@@ -896,6 +896,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	a.Equal(0, len(br.AppLocalStates))
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	a.Equal(basics.StateSchema{NumUint: 0}, br.TotalAppSchema)
+
 }
 
 func TestAppCallApplyUpdate(t *testing.T) {
@@ -935,7 +936,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.balances[creator] = cp
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
-	b.SetProto(protocol.ConsensusFuture)
+	b.SetProto(protocol.ConsensusV27)
 	proto := b.ConsensusParams()
 	ep.Proto = &proto
 
@@ -962,6 +963,48 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	a.Equal([]byte{2}, br.AppParams[appIdx].ApprovalProgram)
 	a.Equal([]byte{2}, br.AppParams[appIdx].ClearStateProgram)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+
+	// check app program len
+	appr := make([]byte, 6050, 6050)
+
+	for i := range appr {
+		appr[i] = 2
+	}
+	appr[0] = 5
+	ac = transactions.ApplicationCallTxnFields{
+		ApplicationID:     appIdx,
+		OnCompletion:      transactions.UpdateApplicationOC,
+		ApprovalProgram:   appr,
+		ClearStateProgram: []byte{2},
+	}
+	params = basics.AppParams{
+		ApprovalProgram: []byte{1},
+		StateSchemas: basics.StateSchemas{
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		},
+		ExtraProgramPages: 1,
+	}
+	h = transactions.Header{
+		Sender: sender,
+	}
+
+	b.balances = make(map[basics.Address]basics.AccountData)
+	cbr = basics.AccountData{
+		AppParams: map[basics.AppIndex]basics.AppParams{appIdx: params},
+	}
+	cp = basics.AccountData{
+		AppParams: map[basics.AppIndex]basics.AppParams{appIdx: params},
+	}
+	b.balances[creator] = cp
+	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
+
+	b.SetProto(protocol.ConsensusFuture)
+	proto = b.ConsensusParams()
+	ep.Proto = &proto
+
+	b.pass = true
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.Contains(err.Error(), "updateApplication app programs too long")
 }
 
 func TestAppCallApplyDelete(t *testing.T) {
