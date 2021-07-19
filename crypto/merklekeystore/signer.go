@@ -60,13 +60,13 @@ type Signer struct {
 var errStartBiggerThanEndRound = fmt.Errorf("cannot create merkleKeyStore because end round is smaller then start round")
 
 // New Generates a merklekeystore.Signer
-func New(startRound, endRound uint64) (*Signer, error) {
+func New(startRound, endRound uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
 	if startRound > endRound {
 		return nil, errStartBiggerThanEndRound
 	}
 	keys := make(ephemeralKeys, endRound-startRound)
 	for i := range keys {
-		keys[i] = crypto.NewSigner(crypto.PlaceHolderType)
+		keys[i] = crypto.NewSigner(sigAlgoType)
 	}
 	tree, err := merklearray.Build(keys)
 	if err != nil {
