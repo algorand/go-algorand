@@ -1700,7 +1700,7 @@ func opDig(cx *evalContext) {
 }
 
 func opCover(cx *evalContext) {
-	depth := int(uint(cx.program[cx.pc+1]))
+	depth := int(cx.program[cx.pc+1])
 	idx := len(cx.stack) - 1 - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand cover
 	// so we can't expect our stack to be prechecked.
@@ -1715,7 +1715,7 @@ func opCover(cx *evalContext) {
 }
 
 func opUncover(cx *evalContext) {
-	depth := int(uint(cx.program[cx.pc+1]))
+	depth := int(cx.program[cx.pc+1])
 	idx := len(cx.stack) - 1 - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand uncover
 	// so we can't expect our stack to be prechecked.
