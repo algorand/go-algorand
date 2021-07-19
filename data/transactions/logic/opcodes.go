@@ -21,7 +21,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 4
+const LogicVersion = 5
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -222,6 +222,11 @@ var OpSpecs = []OpSpec{
 	{0x54, "setbit", opSetBit, asmDefault, disDefault, anyIntInt, oneAny, 3, modeAny, opDefault},
 	{0x55, "getbyte", opGetByte, asmDefault, disDefault, byteInt, oneInt, 3, modeAny, opDefault},
 	{0x56, "setbyte", opSetByte, asmDefault, disDefault, byteIntInt, oneBytes, 3, modeAny, opDefault},
+	{0x57, "extract", opExtract, asmDefault, disDefault, oneBytes, oneBytes, 5, modeAny, immediates("s", "l")},
+	{0x58, "extract3", opExtract3, asmDefault, disDefault, byteIntInt, oneBytes, 5, modeAny, opDefault},
+	{0x59, "extract16bits", opExtract16Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
+	{0x5a, "extract32bits", opExtract32Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
+	{0x5b, "extract64bits", opExtract64Bits, asmDefault, disDefault, byteInt, oneInt, 5, modeAny, opDefault},
 
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opDefault},
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},
@@ -243,6 +248,7 @@ var OpSpecs = []OpSpec{
 	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, immediates("i")},
 	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, oneAny.plus(oneInt), oneAny.plus(oneInt), directRefEnabledVersion, runModeApplication, immediates("i")},
 	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, immediates("i")},
+	{0x72, "app_params_get", opAppParamsGet, assembleAppParams, disAppParams, oneInt, oneAny.plus(oneInt), 5, runModeApplication, immediates("i")},
 
 	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneInt, oneInt, 3, runModeApplication, opDefault},
 	{0x78, "min_balance", opMinBalance, asmDefault, disDefault, oneAny, oneInt, directRefEnabledVersion, runModeApplication, opDefault},

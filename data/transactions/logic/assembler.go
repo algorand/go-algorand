@@ -19,6 +19,7 @@ package logic
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha512"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
@@ -643,6 +644,24 @@ func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+// method "add(uint64,uint64)uint64"
+func assembleMethod(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) == 0 {
+		return ops.error("method requires a literal argument")
+	}
+	arg := args[0]
+	if len(arg) > 1 && arg[0] == '"' && arg[len(arg)-1] == '"' {
+		val, err := parseStringLiteral(arg)
+		if err != nil {
+			return ops.error(err)
+		}
+		hash := sha512.Sum512_256(val)
+		ops.ByteLiteral(hash[0:4])
+		return nil
+	}
+	return ops.error("Unable to parse method signature")
+}
+
 func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
@@ -961,11 +980,11 @@ func assembleGtxnsa(ops *OpStream, spec *OpSpec, args []string) error {
 
 func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("global expects one argument")
+		return ops.errorf("%s expects one argument", spec.Name)
 	}
 	fs, ok := globalFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("global unknown field: %#v", args[0])
+		return ops.errorf("%s unknown field: %#v", spec.Name, args[0])
 	}
 	if fs.version > ops.Version {
 		// no return here. we may as well continue to maintain typestack
@@ -982,11 +1001,11 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 
 func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("asset_holding_get expects one argument")
+		return ops.errorf("%s expects one argument", spec.Name)
 	}
 	val, ok := assetHoldingFields[args[0]]
 	if !ok {
-		return ops.errorf("asset_holding_get unknown arg: %#v", args[0])
+		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
@@ -996,15 +1015,29 @@ func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 
 func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("asset_params_get expects one argument")
+		return ops.errorf("%s expects one argument", spec.Name)
 	}
 	val, ok := assetParamsFields[args[0]]
 	if !ok {
-		return ops.errorf("asset_params_get unknown arg: %#v", args[0])
+		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(uint8(val))
 	ops.returns(AssetParamsFieldTypes[val], StackUint64)
+	return nil
+}
+
+func assembleAppParams(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return ops.errorf("%s expects one argument", spec.Name)
+	}
+	val, ok := appParamsFields[args[0]]
+	if !ok {
+		return ops.errorf("%s unknown arg: %#v", spec.Name, args[0])
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(uint8(val))
+	ops.returns(AppParamsFieldTypes[val], StackUint64)
 	return nil
 }
 
@@ -1036,7 +1069,8 @@ var keywords = map[string]OpSpec{
 	"byte": {0, "byte", nil, assembleByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
 	// parse basics.Address, actually just another []byte constant
 	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
-}
+	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
+	"method": {0, "method", nil, assembleMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}}}
 
 type lineError struct {
 	Line int
@@ -1228,6 +1262,9 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		spec, ok := OpsByName[ops.Version][opstring]
 		if !ok {
 			spec, ok = keywords[opstring]
+			if spec.Version > 1 && spec.Version > ops.Version {
+				ok = false
+			}
 		}
 		if ok {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
@@ -1242,6 +1279,9 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		}
 		// unknown opcode, let's report a good error if version problem
 		spec, ok = OpsByName[AssemblerMaxVersion][opstring]
+		if !ok {
+			spec, ok = keywords[opstring]
+		}
 		if ok {
 			ops.errorf("%s opcode was introduced in TEAL v%d", opstring, spec.Version)
 		} else {
@@ -2134,7 +2174,7 @@ func disGlobal(dis *disassembleState, spec *OpSpec) (string, error) {
 	if int(garg) >= len(GlobalFieldNames) {
 		return "", fmt.Errorf("invalid global arg index %d at pc=%d", garg, dis.pc)
 	}
-	return fmt.Sprintf("global %s", GlobalFieldNames[garg]), nil
+	return fmt.Sprintf("%s %s", spec.Name, GlobalFieldNames[garg]), nil
 }
 
 func disBranch(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -2176,7 +2216,7 @@ func disAssetHolding(dis *disassembleState, spec *OpSpec) (string, error) {
 	if int(arg) >= len(AssetHoldingFieldNames) {
 		return "", fmt.Errorf("invalid asset holding arg index %d at pc=%d", arg, dis.pc)
 	}
-	return fmt.Sprintf("asset_holding_get %s", AssetHoldingFieldNames[arg]), nil
+	return fmt.Sprintf("%s %s", spec.Name, AssetHoldingFieldNames[arg]), nil
 }
 
 func disAssetParams(dis *disassembleState, spec *OpSpec) (string, error) {
@@ -2190,7 +2230,21 @@ func disAssetParams(dis *disassembleState, spec *OpSpec) (string, error) {
 	if int(arg) >= len(AssetParamsFieldNames) {
 		return "", fmt.Errorf("invalid asset params arg index %d at pc=%d", arg, dis.pc)
 	}
-	return fmt.Sprintf("asset_params_get %s", AssetParamsFieldNames[arg]), nil
+	return fmt.Sprintf("%s %s", spec.Name, AssetParamsFieldNames[arg]), nil
+}
+
+func disAppParams(dis *disassembleState, spec *OpSpec) (string, error) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		return "", fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+	}
+	dis.nextpc = dis.pc + 2
+	arg := dis.program[dis.pc+1]
+	if int(arg) >= len(AppParamsFieldNames) {
+		return "", fmt.Errorf("invalid app params arg index %d at pc=%d", arg, dis.pc)
+	}
+	return fmt.Sprintf("%s %s", spec.Name, AppParamsFieldNames[arg]), nil
 }
 
 type disInfo struct {

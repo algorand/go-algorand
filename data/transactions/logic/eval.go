@@ -143,7 +143,8 @@ type LedgerForLogic interface {
 	LatestTimestamp() int64
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
-	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, error)
+	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
+	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
 	ApplicationID() basics.AppIndex
 	CreatorAddress() basics.Address
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
@@ -782,7 +783,7 @@ func opAssert(cx *evalContext) {
 		cx.stack = cx.stack[:last]
 		return
 	}
-	cx.err = errors.New("assert failed")
+	cx.err = fmt.Errorf("assert failed pc=%d", cx.pc)
 }
 
 func opSwap(cx *evalContext) {
@@ -1718,7 +1719,7 @@ func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, fie
 	return
 }
 
-func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field uint64) (sv stackValue, err error) {
+func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, creator basics.Address, field uint64) (sv stackValue, err error) {
 	switch AssetParamsField(field) {
 	case AssetTotal:
 		sv.Uint = params.Total
@@ -1742,6 +1743,8 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 		sv.Bytes = params.Freeze[:]
 	case AssetClawback:
 		sv.Bytes = params.Clawback[:]
+	case AssetCreator:
+		sv.Bytes = creator[:]
 	default:
 		err = fmt.Errorf("invalid asset params field %d", field)
 		return
@@ -1751,6 +1754,37 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 	assetParamsFieldType := AssetParamsFieldTypes[assetParamsField]
 	if !typecheck(assetParamsFieldType, sv.argType()) {
 		err = fmt.Errorf("%s expected field type is %s but got %s", assetParamsField.String(), assetParamsFieldType.String(), sv.argType().String())
+	}
+	return
+}
+
+func (cx *evalContext) appParamsEnumToValue(params *basics.AppParams, creator basics.Address, field uint64) (sv stackValue, err error) {
+	switch AppParamsField(field) {
+	case AppApprovalProgram:
+		sv.Bytes = params.ApprovalProgram[:]
+	case AppClearStateProgram:
+		sv.Bytes = params.ClearStateProgram[:]
+	case AppGlobalNumUint:
+		sv.Uint = params.GlobalStateSchema.NumUint
+	case AppGlobalNumByteSlice:
+		sv.Uint = params.GlobalStateSchema.NumByteSlice
+	case AppLocalNumUint:
+		sv.Uint = params.LocalStateSchema.NumUint
+	case AppLocalNumByteSlice:
+		sv.Uint = params.LocalStateSchema.NumByteSlice
+	case AppExtraProgramPages:
+		sv.Uint = uint64(params.ExtraProgramPages)
+	case AppCreator:
+		sv.Bytes = creator[:]
+	default:
+		err = fmt.Errorf("invalid app params field %d", field)
+		return
+	}
+
+	appParamsField := AppParamsField(field)
+	appParamsFieldType := AppParamsFieldTypes[appParamsField]
+	if !typecheck(appParamsFieldType, sv.argType()) {
+		err = fmt.Errorf("%s expected field type is %s but got %s", appParamsField.String(), appParamsFieldType.String(), sv.argType().String())
 	}
 	return
 }
@@ -2537,6 +2571,77 @@ func opSetByte(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
+func opExtractImpl(x []byte, start, length int) (out []byte, err error) {
+	out = x
+	end := start + length
+	if start > len(x) || end > len(x) {
+		err = errors.New("extract range beyond length of string")
+		return
+	}
+	out = x[start:end]
+	return
+}
+
+func opExtract(cx *evalContext) {
+	last := len(cx.stack) - 1
+	startIdx := cx.program[cx.pc+1]
+	lengthIdx := cx.program[cx.pc+2]
+	// Shortcut: if length is 0, take bytes from start index to the end
+	length := int(lengthIdx)
+	if length == 0 {
+		length = len(cx.stack[last].Bytes) - int(startIdx)
+	}
+	cx.stack[last].Bytes, cx.err = opExtractImpl(cx.stack[last].Bytes, int(startIdx), length)
+}
+
+func opExtract3(cx *evalContext) {
+	last := len(cx.stack) - 1 // length
+	prev := last - 1          // start
+	byteArrayIdx := prev - 1  // bytes
+	startIdx := cx.stack[prev].Uint
+	lengthIdx := cx.stack[last].Uint
+	if startIdx > math.MaxInt32 || lengthIdx > math.MaxInt32 {
+		cx.err = errors.New("extract range beyond length of string")
+		return
+	}
+	cx.stack[byteArrayIdx].Bytes, cx.err = opExtractImpl(cx.stack[byteArrayIdx].Bytes, int(startIdx), int(lengthIdx))
+	cx.stack = cx.stack[:prev]
+}
+
+// We convert the bytes manually here because we need to accept "short" byte arrays.
+// A single byte is a legal uint64 decoded this way.
+func convertBytesToInt(x []byte) (out uint64) {
+	out = uint64(0)
+	for _, b := range x {
+		out = out << 8
+		out = out | (uint64(b) & 0x0ff)
+	}
+	return
+}
+
+func opExtractNBytes(cx *evalContext, n int) {
+	last := len(cx.stack) - 1 // start
+	prev := last - 1          // bytes
+	startIdx := cx.stack[last].Uint
+	cx.stack[prev].Bytes, cx.err = opExtractImpl(cx.stack[prev].Bytes, int(startIdx), n) // extract n bytes
+
+	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
+	cx.stack[prev].Bytes = nil
+	cx.stack = cx.stack[:last]
+}
+
+func opExtract16Bits(cx *evalContext) {
+	opExtractNBytes(cx, 2) // extract 2 bytes
+}
+
+func opExtract32Bits(cx *evalContext) {
+	opExtractNBytes(cx, 4) // extract 4 bytes
+}
+
+func opExtract64Bits(cx *evalContext) {
+	opExtractNBytes(cx, 8) // extract 8 bytes
+}
+
 func accountReference(cx *evalContext, account stackValue) (basics.Address, uint64, error) {
 	if account.argType() == StackUint64 {
 		addr, err := cx.Txn.Txn.AddressByIndex(account.Uint, cx.Txn.Txn.Sender)
@@ -2974,10 +3079,42 @@ func opAssetParamsGet(cx *evalContext) {
 
 	var exist uint64 = 0
 	var value stackValue
-	if params, err := cx.Ledger.AssetParams(asset); err == nil {
+	if params, creator, err := cx.Ledger.AssetParams(asset); err == nil {
 		// params exist, read the value
 		exist = 1
-		value, err = cx.assetParamsEnumToValue(&params, paramIdx)
+		value, err = cx.assetParamsEnumToValue(&params, creator, paramIdx)
+		if err != nil {
+			cx.err = err
+			return
+		}
+	}
+
+	cx.stack[last] = value
+	cx.stack = append(cx.stack, stackValue{Uint: exist})
+}
+
+func opAppParamsGet(cx *evalContext) {
+	last := len(cx.stack) - 1 // app
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	paramIdx := uint64(cx.program[cx.pc+1])
+
+	app, err := appReference(cx, cx.stack[last].Uint, true)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	var exist uint64 = 0
+	var value stackValue
+	if params, creator, err := cx.Ledger.AppParams(app); err == nil {
+		// params exist, read the value
+		exist = 1
+		value, err = cx.appParamsEnumToValue(&params, creator, paramIdx)
 		if err != nil {
 			cx.err = err
 			return

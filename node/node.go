@@ -488,7 +488,7 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 
 // BroadcastSignedTxGroup broadcasts a transaction group that has already been signed.
 func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
-	// in developer mode, we need to take a lock, so that each new transaction group would truely
+	// in developer mode, we need to take a lock, so that each new transaction group would truly
 	// render into a unique block.
 	if node.devMode {
 		node.mu.Lock()
