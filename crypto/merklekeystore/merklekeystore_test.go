@@ -72,7 +72,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 	a.NoError(err)
 
 	s := crypto.SignatureAlgorithm{}
-	for _, key := range signer.disposableKeys {
+	for _, key := range signer.ephemeralKeys {
 		a.NotEqual(s, key)
 	}
 }
@@ -91,7 +91,7 @@ func TestSignatureStructure(t *testing.T) {
 	a.Equal(uint64(1), pos)
 	a.Equal(sig.pos, pos)
 
-	key := signer.disposableKeys[pos]
+	key := signer.ephemeralKeys[pos]
 	a.Equal(*sig.VerifyingKey, key.GetSigner().GetVerifyingKey())
 
 	proof, err := signer.tree.Prove([]uint64{1})

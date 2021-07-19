@@ -22,15 +22,15 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 )
 
-type disposableKeys []*crypto.SignatureAlgorithm
+type ephemeralKeys []*crypto.SignatureAlgorithm
 
 //Length returns the amount of disposable keys
-func (d disposableKeys) Length() uint64 {
+func (d ephemeralKeys) Length() uint64 {
 	return uint64(len(d))
 }
 
 // GetHash Gets the hash of the VerifyingKey tied to the signatureAlgorithm in pos.
-func (d disposableKeys) GetHash(pos uint64) (crypto.Digest, error) {
+func (d ephemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 	return disposableKeyHash(d[pos])
 }
 
@@ -53,7 +53,7 @@ type Signer struct {
 	root crypto.Digest
 	// these keys are the keys used to sign in a round.
 	// should be disposed of once possible.
-	disposableKeys
+	ephemeralKeys
 	startRound uint64
 	tree       *merklearray.Tree
 }
@@ -65,7 +65,7 @@ func New(startRound, endRound uint64) (*Signer, error) {
 	if startRound > endRound {
 		return nil, errStartBiggerThanEndRound
 	}
-	keys := make(disposableKeys, endRound-startRound)
+	keys := make(ephemeralKeys, endRound-startRound)
 	for i := range keys {
 		keys[i] = crypto.NewSigner(crypto.PlaceHolderType)
 	}
@@ -75,10 +75,10 @@ func New(startRound, endRound uint64) (*Signer, error) {
 	}
 
 	return &Signer{
-		root:           tree.Root(),
-		disposableKeys: keys,
-		startRound:     startRound,
-		tree:           tree,
+		root:          tree.Root(),
+		ephemeralKeys: keys,
+		startRound:    startRound,
+		tree:          tree,
 	}, nil
 }
 
@@ -102,7 +102,7 @@ func (m *Signer) Sign(hashable crypto.Hashable, round int) (Signature, error) {
 		return Signature{}, err
 	}
 
-	signer := m.disposableKeys[pos].GetSigner()
+	signer := m.ephemeralKeys[pos].GetSigner()
 	vkey := signer.GetVerifyingKey()
 	return Signature{
 		ByteSignature: signer.Sign(hashable),
@@ -120,7 +120,7 @@ func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 	}
 
 	pos := round - m.startRound
-	if pos >= uint64(len(m.disposableKeys)) {
+	if pos >= uint64(len(m.ephemeralKeys)) {
 		return 0, errOutOfBounds
 	}
 	return pos, nil
