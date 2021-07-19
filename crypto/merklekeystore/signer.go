@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 type (
@@ -63,19 +64,22 @@ type Signer struct {
 	// these keys are the keys used to sign in a round.
 	// should be disposed of once possible.
 	EphemeralKeys    `codec:"keys,allocbound=-"`
-	StartRound       uint64 `codec:"sround"`
+	FirstRound       basics.Round `codec:"sround"`
 	merklearray.Tree `codec:"tree"`
 }
 
 var errStartBiggerThanEndRound = fmt.Errorf("cannot create merkleKeyStore because end round is smaller then start round")
 
 // New Generates a merklekeystore.Signer
-// Note that the signer will have keys for the rounds  [StartRound, endRound)
-func New(startRound, endRound uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
-	if startRound > endRound {
+// Note that the signer will have keys for the rounds  [firstValid, lastValid]
+func New(firstValid, lastValid basics.Round, keyDilution uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
+	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
 	}
-	keys := make(EphemeralKeys, endRound-startRound+1)
+	//firstID := basics.OneTimeIDForRound(basics.Round(firstValid), keyDilution)
+	//lastID := basics.OneTimeIDForRound(lastValid, keyDilution)
+	//numBatches := lastID.Batch - firstID.Batch + 1
+	keys := make(EphemeralKeys, lastValid-firstValid+1)
 	for i := range keys {
 		keys[i] = *crypto.NewSigner(sigAlgoType)
 	}
@@ -86,7 +90,7 @@ func New(startRound, endRound uint64, sigAlgoType crypto.AlgorithmType) (*Signer
 
 	return &Signer{
 		EphemeralKeys: keys,
-		StartRound:    startRound,
+		FirstRound:    firstValid,
 		Tree:          *tree,
 	}, nil
 }
@@ -99,8 +103,8 @@ func (m *Signer) GetVerifier() *Verifier {
 }
 
 // Sign outputs a signature + proof for the signing key.
-func (m *Signer) Sign(hashable crypto.Hashable, round int) (Signature, error) {
-	pos, err := m.getKeyPosition(uint64(round))
+func (m *Signer) Sign(hashable crypto.Hashable, round basics.Round) (Signature, error) {
+	pos, err := m.getKeyPosition(round)
 	if err != nil {
 		return Signature{}, err
 	}
@@ -121,14 +125,14 @@ func (m *Signer) Sign(hashable crypto.Hashable, round int) (Signature, error) {
 
 var errOutOfBounds = fmt.Errorf("cannot find signing key for given round")
 
-func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
-	if round < m.StartRound {
+func (m *Signer) getKeyPosition(round basics.Round) (uint64, error) {
+	if round < m.FirstRound {
 		return 0, errOutOfBounds
 	}
 
-	pos := round - m.StartRound
-	if pos >= uint64(len(m.EphemeralKeys)) {
+	pos := round - m.FirstRound
+	if pos >= basics.Round(len(m.EphemeralKeys)) {
 		return 0, errOutOfBounds
 	}
-	return pos, nil
+	return uint64(pos), nil
 }
