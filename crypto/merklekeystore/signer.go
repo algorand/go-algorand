@@ -72,10 +72,10 @@ var errStartBiggerThanEndRound = fmt.Errorf("cannot create merkleKeyStore becaus
 // New Generates a merklekeystore.Signer
 // Note that the signer will have keys for the rounds  [StartRound, endRound)
 func New(startRound, endRound uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
-	if startRound >= endRound {
+	if startRound > endRound {
 		return nil, errStartBiggerThanEndRound
 	}
-	keys := make(EphemeralKeys, endRound-startRound)
+	keys := make(EphemeralKeys, endRound-startRound+1)
 	for i := range keys {
 		keys[i] = *crypto.NewSigner(sigAlgoType)
 	}
