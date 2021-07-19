@@ -23,7 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func randomAddress() basics.Address {
@@ -33,7 +33,7 @@ func randomAddress() basics.Address {
 }
 
 func TestAccountDeltas(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 

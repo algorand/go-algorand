@@ -24,11 +24,11 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestEmptyEncoding(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	var b Block
 	require.Equal(t, 1, len(protocol.Encode(&b)))
@@ -38,7 +38,7 @@ func TestEmptyEncoding(t *testing.T) {
 }
 
 func TestBlockWithTxnEncoding(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	txn := transactions.Transaction{
 		Type: protocol.PaymentTx,

@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -116,7 +116,7 @@ func (ef *ExpectFixture) Run() {
 	for testName := range ef.expectFiles {
 		if match, _ := regexp.MatchString(ef.testFilter, testName); match {
 			ef.t.Run(testName, func(t *testing.T) {
-				testpartitioning.PartitionTest(t) // Check if this expect test should by run, may SKIP
+				partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 
 				syncTest := SynchronizedTest(t)
 				workingDir, algoDir, err := ef.getTestDir(testName)

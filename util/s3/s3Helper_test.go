@@ -21,12 +21,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetS3UploadBucket(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	tests := []struct {
 		name           string
@@ -53,7 +53,7 @@ func TestGetS3UploadBucket(t *testing.T) {
 }
 
 func TestGetS3ReleaseBucket(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	tests := []struct {
 		name           string
@@ -80,7 +80,7 @@ func TestGetS3ReleaseBucket(t *testing.T) {
 }
 
 func Test_getS3Region(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	tests := []struct {
 		name       string
@@ -107,7 +107,7 @@ func Test_getS3Region(t *testing.T) {
 }
 
 func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	const bucket1 = "test-bucket"
 	const publicUploadBucket = "algorand-uploads"
@@ -151,7 +151,7 @@ func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
 }
 
 func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	const bucket1 = "test-bucket"
 	const publicReleaseBucket = "algorand-releases"
@@ -195,7 +195,7 @@ func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
 }
 
 func TestGetVersionFromName(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	type args struct {
 		name     string
@@ -219,7 +219,7 @@ func TestGetVersionFromName(t *testing.T) {
 }
 
 func TestGetPartsFromVersion(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	type args struct {
 		name     string

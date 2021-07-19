@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type sentMessage struct {
@@ -339,7 +339,7 @@ func spinNetworkImpl(domain *whiteholeDomain) (whiteholeNet *whiteholeNetwork, c
 }
 
 func TestNetworkImpl(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 

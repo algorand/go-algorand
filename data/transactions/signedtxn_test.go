@@ -23,11 +23,11 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestEncoding(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	secrets := keypair()
 	zeroPayment := Transaction{Type: protocol.PaymentTx}
@@ -63,7 +63,7 @@ func TestEncoding(t *testing.T) {
 }
 
 func TestDecodeNil(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// This is a regression test for improper decoding of a nil SignedTxn.
 	// This is a subtle case because decoding a msgpack nil does not run
@@ -79,7 +79,7 @@ func TestDecodeNil(t *testing.T) {
 }
 
 func TestSignedTxnInBlockHash(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	var stib SignedTxnInBlock
 	crypto.RandBytes(stib.Txn.Sender[:])

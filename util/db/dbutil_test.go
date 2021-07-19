@@ -33,11 +33,11 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestInMemoryDisposal(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestInMemoryDisposal(t *testing.T) {
 }
 
 func TestInMemoryUniqueDB(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
@@ -118,7 +118,7 @@ func TestInMemoryUniqueDB(t *testing.T) {
 }
 
 func TestDBConcurrency(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	defer cleanupSqliteDb(t, fn)
@@ -236,7 +236,7 @@ func cleanupSqliteDb(t *testing.T, path string) {
 }
 
 func TestDBConcurrencyRW(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	dbFolder := "/dev/shm"
 	os := runtime.GOOS
@@ -360,7 +360,7 @@ func (wlc *WarningLogCounter) With(key string, value interface{}) logging.Logger
 
 // Test resetting warning notification
 func TestResettingTransactionWarnDeadline(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	t.Run("expectedWarning", func(t *testing.T) {
 		t.Parallel()
@@ -399,7 +399,7 @@ func TestResettingTransactionWarnDeadline(t *testing.T) {
 
 // Test the SetSynchronousMode function
 func TestSetSynchronousMode(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	setSynchrounousModeHelper := func(mem bool, ctx context.Context, mode SynchronousMode, fullfsync bool) error {
 		acc, err := MakeAccessor("fn.db", false, mem)
@@ -436,7 +436,7 @@ func TestSetSynchronousMode(t *testing.T) {
 // it demonstrates that at any time before we're calling Commit, the database content can be read, and it's containing it's pre-transaction
 // value.
 func TestReadingWhileWriting(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	writeAcc, err := MakeAccessor("fn.db", false, false)
 	require.NoError(t, err)

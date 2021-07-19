@@ -25,11 +25,11 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestDeadlockLogging(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	logFn := fmt.Sprintf("/tmp/test.%s.%d.log", t.Name(), crypto.RandUint64())
 	archiveFn := fmt.Sprintf("%s.archive", logFn)
@@ -60,7 +60,7 @@ func TestDeadlockLogging(t *testing.T) {
 }
 
 func TestDeadlockOnPotentialDeadlock(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	logFn := fmt.Sprintf("/tmp/test.%s.%d.log", t.Name(), crypto.RandUint64())
 	archiveFn := fmt.Sprintf("%s.archive", logFn)

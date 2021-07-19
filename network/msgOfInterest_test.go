@@ -22,11 +22,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestUnmarshallMessageOfInterestErrors(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	tags, err := unmarshallMessageOfInterest([]byte{0x88})
 	require.Equal(t, errUnableUnmarshallMessage, err)
@@ -49,7 +49,7 @@ func TestUnmarshallMessageOfInterestErrors(t *testing.T) {
 }
 
 func TestMarshallMessageOfInterest(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	bytes := MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
 	tags, err := unmarshallMessageOfInterest(bytes)

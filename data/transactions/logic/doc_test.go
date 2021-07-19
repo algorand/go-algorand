@@ -20,12 +20,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestOpDocs(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
@@ -54,7 +54,7 @@ func TestOpDocs(t *testing.T) {
 }
 
 func TestOpGroupCoverage(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
@@ -78,7 +78,7 @@ func TestOpGroupCoverage(t *testing.T) {
 }
 
 func TestOpDoc(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	xd := OpDoc("txn")
 	require.NotEmpty(t, xd)
@@ -87,7 +87,7 @@ func TestOpDoc(t *testing.T) {
 }
 
 func TestOpImmediateNote(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	xd := OpImmediateNote("txn")
 	require.NotEmpty(t, xd)
@@ -109,7 +109,7 @@ func TestAllImmediatesDocumented(t *testing.T) {
 }
 
 func TestOpDocExtra(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	xd := OpDocExtra("bnz")
 	require.NotEmpty(t, xd)
@@ -118,7 +118,7 @@ func TestOpDocExtra(t *testing.T) {
 }
 
 func TestOpAllCosts(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	a := OpAllCosts("+")
 	require.Len(t, a, 1)
@@ -132,7 +132,7 @@ func TestOpAllCosts(t *testing.T) {
 }
 
 func TestOnCompletionDescription(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	desc := OnCompletionDescription(0)
 	require.Equal(t, "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.", desc)
@@ -142,7 +142,7 @@ func TestOnCompletionDescription(t *testing.T) {
 }
 
 func TestFieldDocs(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	txnFields := TxnFieldDocs()
 	require.Greater(t, len(txnFields), 0)

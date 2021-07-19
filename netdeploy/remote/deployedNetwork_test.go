@@ -24,11 +24,11 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestCreateSignedTx(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	var networkState netState
 	networkState.nApplications = 2
@@ -115,7 +115,7 @@ func TestCreateSignedTx(t *testing.T) {
 }
 
 func TestAccountsNeeded(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 	params.MaxAppsCreated = 10
