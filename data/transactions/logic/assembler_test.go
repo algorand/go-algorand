@@ -2093,5 +2093,6 @@ func TestUncoverAsm(t *testing.T) {
 	t.Parallel()
 	testProg(t, `int 4; byte "john"; int 5; uncover 2; +`, AssemblerMaxVersion)
 	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; pop; +`, AssemblerMaxVersion)
+	testProg(t, `int 1; byte "jj"; byte "ayush"; byte "john"; int 5; uncover 4; +`, AssemblerMaxVersion)
 	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; +`, AssemblerMaxVersion, expect{5,"+ arg 1..."})
 }
