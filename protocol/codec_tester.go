@@ -92,7 +92,30 @@ var testedDatatypesForAllocBoundMu = deadlock.Mutex{}
 func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 	// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
 	gopath := os.Getenv("GOPATH")
+	const repositoryRoot = "go-algorand/"
 	packageFilesPath := path.Join(gopath, "src", dataType.PkgPath())
+
+	if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
+		// no such directory. Try to assemble the path based on the current working directory.
+		cwd, err := os.Getwd()
+		if err != nil {
+			return false
+		}
+		if cwdPaths := strings.SplitAfter(cwd, repositoryRoot); len(cwdPaths) == 2 {
+			cwd = cwdPaths[0]
+		} else {
+			return false
+		}
+
+		relPkdPath := strings.SplitAfter(dataType.PkgPath(), repositoryRoot)
+		if len(relPkdPath) != 2 {
+			return false
+		}
+		packageFilesPath = path.Join(cwd, relPkdPath[1])
+		if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
+			return false
+		}
+	}
 	packageFiles := []string{}
 	filepath.Walk(packageFilesPath, func(path string, info os.FileInfo, err error) error {
 		if filepath.Ext(path) == ".go" {

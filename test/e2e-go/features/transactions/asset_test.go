@@ -423,7 +423,7 @@ func TestAssetInformation(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV24.json"))
 	defer fixture.Shutdown()
 
 	client := fixture.LibGoalClient
