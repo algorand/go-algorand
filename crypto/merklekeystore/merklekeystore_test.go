@@ -19,7 +19,6 @@ package merklekeystore
 import (
 	"crypto/rand"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
@@ -30,9 +29,9 @@ func TestSignerCreation(t *testing.T) {
 
 	h := genHashableForTest()
 	for i := uint64(0); i < 20; i++ {
-		signer, err := New(basics.Round(i), basics.Round(i+1), crypto.PlaceHolderType)
+		signer, err := New(i, i+1, crypto.PlaceHolderType)
 		a.NoError(err)
-		_, err = signer.Sign(h, basics.Round(i))
+		_, err = signer.Sign(h, i)
 		a.NoError(err)
 	}
 
@@ -52,10 +51,10 @@ func TestDisposableKeyPositions(t *testing.T) {
 	signer, err := New(0, 100, crypto.PlaceHolderType)
 	a.NoError(err)
 
-	for i := 0; i < 100; i++ {
-		pos, err := signer.getKeyPosition(basics.Round(i))
+	for i := uint64(0); i < 100; i++ {
+		pos, err := signer.getKeyPosition(i)
 		a.NoError(err, i)
-		a.Equal(uint64(i), pos)
+		a.Equal(i, pos)
 	}
 
 	_, err = signer.getKeyPosition(101)
@@ -64,10 +63,10 @@ func TestDisposableKeyPositions(t *testing.T) {
 	signer, err = New(1000, 1100, crypto.PlaceHolderType)
 	a.NoError(err)
 
-	for i := 1000; i < 1100; i++ {
-		pos, err := signer.getKeyPosition(basics.Round(i))
+	for i := uint64(1000); i < 1100; i++ {
+		pos, err := signer.getKeyPosition(i)
 		a.NoError(err, i)
-		a.Equal(uint64(i-1000), pos)
+		a.Equal(i-1000, pos)
 	}
 
 	_, err = signer.getKeyPosition(999)
@@ -119,14 +118,14 @@ func TestSigning(t *testing.T) {
 
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
 
-	sig, err := signer.Sign(hashable, basics.Round(start+1))
+	sig, err := signer.Sign(hashable, start+1)
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(hashable, sig))
 
-	_, err = signer.Sign(hashable, basics.Round(start-1))
+	_, err = signer.Sign(hashable, start-1)
 	a.Error(err)
 
-	_, err = signer.Sign(hashable, basics.Round(end+1))
+	_, err = signer.Sign(hashable, end+1)
 	a.Error(err)
 }
 
@@ -180,18 +179,18 @@ func TestIncorrectByteSignature(t *testing.T) {
 	a.Error(signer.GetVerifier().Verify(hashable, sig2))
 }
 
-func makeSig(signer *Signer, start int, a *require.Assertions) (crypto.Hashable, Signature) {
+func makeSig(signer *Signer, start uint64, a *require.Assertions) (crypto.Hashable, Signature) {
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
 
-	sig, err := signer.Sign(hashable, basics.Round(start+1))
+	sig, err := signer.Sign(hashable, start+1)
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(hashable, sig))
 	return hashable, sig
 }
 
-func getValidSig(a *require.Assertions) (int, int, *Signer) {
-	start, end := 50, 100
-	signer, err := New(basics.Round(start), basics.Round(end), crypto.PlaceHolderType)
+func getValidSig(a *require.Assertions) (uint64, uint64, *Signer) {
+	start, end := uint64(50), uint64(100)
+	signer, err := New(start, end, crypto.PlaceHolderType)
 	a.NoError(err)
 	return start, end, signer
 }
