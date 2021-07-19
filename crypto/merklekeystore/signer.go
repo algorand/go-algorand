@@ -22,16 +22,24 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 )
 
-type ephemeralKeys []*crypto.SignatureAlgorithm
+type (
+	//EphemeralKeys represent the possible keys inside the keystore.
+	//msgp:allocbound EphemeralKeys -
+	EphemeralKeys []crypto.SignatureAlgorithm
+
+	//Proof represent the merkle proof in each signature.
+	//msgp:allocbound Proof -
+	Proof []crypto.Digest
+)
 
 //Length returns the amount of disposable keys
-func (d ephemeralKeys) Length() uint64 {
+func (d EphemeralKeys) Length() uint64 {
 	return uint64(len(d))
 }
 
 // GetHash Gets the hash of the VerifyingKey tied to the signatureAlgorithm in pos.
-func (d ephemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
-	return disposableKeyHash(d[pos])
+func (d EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
+	return disposableKeyHash(&d[pos])
 }
 
 func disposableKeyHash(s *crypto.SignatureAlgorithm) (crypto.Digest, error) {
@@ -41,33 +49,35 @@ func disposableKeyHash(s *crypto.SignatureAlgorithm) (crypto.Digest, error) {
 
 // Signature is a byte signature on a crypto.Hashable object, and includes a merkle proof for the signing key.
 type Signature struct {
-	crypto.ByteSignature
-	Proof []crypto.Digest
-	*crypto.VerifyingKey
-	// the lead position of the VerifyingKey
-	pos uint64
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	crypto.ByteSignature `codec:"bsig"`
+	Proof                `codec:"prf"`
+	VerifyingKey         crypto.VerifyingKey `codec:"vkey"`
+	Pos                  uint64              `codec:"pos"`
 }
 
 // Signer is a merkleKeyStore, contain multiple keys which can be used per round.
 type Signer struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// these keys are the keys used to sign in a round.
 	// should be disposed of once possible.
-	ephemeralKeys `codec:"keys"`
-	startRound    uint64            `codec:"sround"`
-	tree          *merklearray.Tree `codec:"tree"`
+	EphemeralKeys    `codec:"keys,allocbound=-"`
+	StartRound       uint64 `codec:"sround"`
+	merklearray.Tree `codec:"tree"`
 }
 
 var errStartBiggerThanEndRound = fmt.Errorf("cannot create merkleKeyStore because end round is smaller then start round")
 
 // New Generates a merklekeystore.Signer
-// Note that the signer will have keys for the rounds  [startRound, endRound)
+// Note that the signer will have keys for the rounds  [StartRound, endRound)
 func New(startRound, endRound uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
 	if startRound >= endRound {
 		return nil, errStartBiggerThanEndRound
 	}
-	keys := make(ephemeralKeys, endRound-startRound)
+	keys := make(EphemeralKeys, endRound-startRound)
 	for i := range keys {
-		keys[i] = crypto.NewSigner(sigAlgoType)
+		keys[i] = *crypto.NewSigner(sigAlgoType)
 	}
 	tree, err := merklearray.Build(keys)
 	if err != nil {
@@ -75,16 +85,16 @@ func New(startRound, endRound uint64, sigAlgoType crypto.AlgorithmType) (*Signer
 	}
 
 	return &Signer{
-		ephemeralKeys: keys,
-		startRound:    startRound,
-		tree:          tree,
+		EphemeralKeys: keys,
+		StartRound:    startRound,
+		Tree:          *tree,
 	}, nil
 }
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (m *Signer) GetVerifier() *Verifier {
 	return &Verifier{
-		root: m.tree.Root(),
+		root: m.Root(),
 	}
 }
 
@@ -95,30 +105,29 @@ func (m *Signer) Sign(hashable crypto.Hashable, round int) (Signature, error) {
 		return Signature{}, err
 	}
 
-	proof, err := m.tree.Prove([]uint64{pos})
+	proof, err := m.Prove([]uint64{pos})
 	if err != nil {
 		return Signature{}, err
 	}
 
-	signer := m.ephemeralKeys[pos].GetSigner()
-	vkey := signer.GetVerifyingKey()
+	signer := m.EphemeralKeys[pos].GetSigner()
 	return Signature{
 		ByteSignature: signer.Sign(hashable),
 		Proof:         proof,
-		VerifyingKey:  &vkey,
-		pos:           pos,
+		VerifyingKey:  signer.GetVerifyingKey(),
+		Pos:           pos,
 	}, nil
 }
 
 var errOutOfBounds = fmt.Errorf("cannot find signing key for given round")
 
 func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
-	if round < m.startRound {
+	if round < m.StartRound {
 		return 0, errOutOfBounds
 	}
 
-	pos := round - m.startRound
-	if pos >= uint64(len(m.ephemeralKeys)) {
+	pos := round - m.StartRound
+	if pos >= uint64(len(m.EphemeralKeys)) {
 		return 0, errOutOfBounds
 	}
 	return pos, nil
