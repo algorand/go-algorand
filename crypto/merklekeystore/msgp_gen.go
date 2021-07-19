@@ -432,8 +432,8 @@ func (z *Signer) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0003Mask & 0x8) == 0 { // if not empty
-			// string "sround"
-			o = append(o, 0xa6, 0x73, 0x72, 0x6f, 0x75, 0x6e, 0x64)
+			// string "srnd"
+			o = append(o, 0xa4, 0x73, 0x72, 0x6e, 0x64)
 			o = (*z).FirstRound.MarshalMsg(o)
 		}
 	}
@@ -535,7 +535,7 @@ func (z *Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				}
-			case "sround":
+			case "srnd":
 				bts, err = (*z).FirstRound.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstRound")
@@ -565,7 +565,7 @@ func (z *Signer) Msgsize() (s int) {
 	for zb0001 := range (*z).EphemeralKeys {
 		s += (*z).EphemeralKeys[zb0001].Msgsize()
 	}
-	s += 7 + (*z).FirstRound.Msgsize()
+	s += 5 + (*z).FirstRound.Msgsize()
 	return
 }
 
