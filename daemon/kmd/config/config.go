@@ -45,6 +45,7 @@ type KMDConfig struct {
 // DriverConfig contains config info specific to each wallet driver
 type DriverConfig struct {
 	SQLiteWalletDriverConfig SQLiteWalletDriverConfig `json:"sqlite"`
+	LedgerWalletDriverConfig LedgerWalletDriverConfig `json:"ledger"`
 }
 
 // SQLiteWalletDriverConfig is configuration specific to the SQLiteWalletDriver
@@ -52,6 +53,11 @@ type SQLiteWalletDriverConfig struct {
 	WalletsDir   string       `json:"wallets_dir"`
 	UnsafeScrypt bool         `json:"allow_unsafe_scrypt"`
 	ScryptParams ScryptParams `json:"scrypt"`
+}
+
+// LedgerWalletDriverConfig is configuration specific to the LedgerWalletDriver
+type LedgerWalletDriverConfig struct {
+	Disable bool `json:"disable"`
 }
 
 // ScryptParams stores the parameters used for key derivation. This allows

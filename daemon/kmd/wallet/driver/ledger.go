@@ -62,6 +62,7 @@ type LedgerWalletDriver struct {
 	mu      deadlock.Mutex
 	wallets map[string]*LedgerWallet
 	log     logging.Logger
+	cfg     config.LedgerWalletDriverConfig
 }
 
 // LedgerWallet represents a particular wallet under the
@@ -106,6 +107,10 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 	// Initialize wallets map
 	if lwd.wallets == nil {
 		lwd.wallets = make(map[string]*LedgerWallet)
+	}
+
+	if lwd.cfg.Disable {
+		return nil
 	}
 
 	// Enumerate attached wallet devices
@@ -179,6 +184,8 @@ func (lwd *LedgerWalletDriver) InitWithConfig(cfg config.KMDConfig, log logging.
 	defer lwd.mu.Unlock()
 
 	lwd.log = log
+	lwd.cfg = cfg.DriverConfig.LedgerWalletDriverConfig
+
 	return lwd.scanWalletsLocked()
 }
 

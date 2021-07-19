@@ -19,12 +19,12 @@ package config
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConsensusParams(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	for proto, params := range Consensus {
 		// Our implementation of Payset.Commit() assumes that
@@ -42,7 +42,7 @@ func TestConsensusParams(t *testing.T) {
 
 // TestConsensusUpgradeWindow ensures that the upgrade window is a non-zero value, and confirm to be within the valid range.
 func TestConsensusUpgradeWindow(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	for proto, params := range Consensus {
 		require.GreaterOrEqualf(t, params.MaxUpgradeWaitRounds, params.MinUpgradeWaitRounds, "Version :%v", proto)

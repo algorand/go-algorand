@@ -25,11 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestLoadConfig(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -42,7 +42,7 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestLoadMissingConfig(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -53,7 +53,7 @@ func TestLoadMissingConfig(t *testing.T) {
 }
 
 func TestGenerateGenesis(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -73,7 +73,7 @@ func TestGenerateGenesis(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 

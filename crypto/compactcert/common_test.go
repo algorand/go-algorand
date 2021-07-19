@@ -20,11 +20,11 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestHashCoin(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	var slots [32]uint64
 	var sigcom [32]byte
@@ -87,7 +87,7 @@ func BenchmarkHashCoin(b *testing.B) {
 }
 
 func TestNumReveals(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	billion := uint64(1000 * 1000 * 1000)
 	microalgo := uint64(1000 * 1000)

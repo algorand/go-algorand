@@ -14,10 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package testpartitioning
+package partitiontest
 
 import (
+	"hash/fnv"
 	"os"
+	"runtime"
 	"strconv"
 	"testing"
 )
@@ -38,16 +40,16 @@ func PartitionTest(t *testing.T) {
 		return
 	}
 	name := t.Name()
-	nameNumber := stringToUint64(name)
-	if nameNumber%uint64(partitions) != uint64(partitionID) {
-		t.Skip()
+	_, file, _, _ := runtime.Caller(1) // get filename of caller to PartitionTest
+	nameNumber := stringToUint64(file + ":" + name)
+	idx := nameNumber % uint64(partitions)
+	if idx != uint64(partitionID) {
+		t.Skipf("skipping %s due to partitioning: assigned to %d but I am %d of %d", name, idx, partitionID, partitions)
 	}
 }
 
 func stringToUint64(str string) uint64 {
-	sum := uint64(0)
-	for _, x := range str {
-		sum += uint64(x)
-	}
-	return sum
+	h := fnv.New64a()
+	h.Write([]byte(str))
+	return h.Sum64()
 }
