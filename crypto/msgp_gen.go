@@ -3474,13 +3474,13 @@ func (z *VerifyingKey) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "pubKeys"
-			o = append(o, 0xa7, 0x70, 0x75, 0x62, 0x4b, 0x65, 0x79, 0x73)
+			// string "pks"
+			o = append(o, 0xa3, 0x70, 0x6b, 0x73)
 			o = (*z).Pack.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "verType"
-			o = append(o, 0xa7, 0x76, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65)
+			// string "type"
+			o = append(o, 0xa4, 0x74, 0x79, 0x70, 0x65)
 			o = msgp.AppendUint64(o, uint64((*z).Type))
 		}
 	}
@@ -3548,7 +3548,7 @@ func (z *VerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
-			case "verType":
+			case "type":
 				{
 					var zb0004 uint64
 					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
@@ -3558,7 +3558,7 @@ func (z *VerifyingKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					(*z).Type = AlgorithmType(zb0004)
 				}
-			case "pubKeys":
+			case "pks":
 				bts, err = (*z).Pack.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Pack")
@@ -3584,7 +3584,7 @@ func (_ *VerifyingKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *VerifyingKey) Msgsize() (s int) {
-	s = 1 + 8 + msgp.Uint64Size + 8 + (*z).Pack.Msgsize()
+	s = 1 + 5 + msgp.Uint64Size + 4 + (*z).Pack.Msgsize()
 	return
 }
 

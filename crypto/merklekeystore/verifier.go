@@ -24,12 +24,14 @@ import (
 // Verifier Is a way to verify a Signature produced by merklekeystore.Signer.
 // it also serves as a commit over all keys contained in the merklekeystore.Signer.
 type Verifier struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	root       crypto.Digest `codec:"r"`
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
 func (v *Verifier) Verify(obj crypto.Hashable, sig Signature) error {
-	isInTree := merklearray.Verify(v.root, map[uint64]crypto.Digest{sig.pos: crypto.HashObj(sig.VerifyingKey)}, sig.Proof)
+	isInTree := merklearray.Verify(v.root, map[uint64]crypto.Digest{sig.Pos: crypto.HashObj(&sig.VerifyingKey)}, sig.Proof)
 	if isInTree != nil {
 		return isInTree
 	}

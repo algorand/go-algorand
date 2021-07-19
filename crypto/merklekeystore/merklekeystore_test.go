@@ -74,7 +74,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 	a.NoError(err)
 
 	s := crypto.SignatureAlgorithm{}
-	for _, key := range signer.ephemeralKeys {
+	for _, key := range signer.EphemeralKeys {
 		a.NotEqual(s, key)
 	}
 }
@@ -91,14 +91,14 @@ func TestSignatureStructure(t *testing.T) {
 	pos, err := signer.getKeyPosition(51)
 	a.NoError(err)
 	a.Equal(uint64(1), pos)
-	a.Equal(sig.pos, pos)
+	a.Equal(sig.Pos, pos)
 
-	key := signer.ephemeralKeys[pos]
-	a.Equal(*sig.VerifyingKey, key.GetSigner().GetVerifyingKey())
+	key := signer.EphemeralKeys[pos]
+	a.Equal(sig.VerifyingKey, key.GetSigner().GetVerifyingKey())
 
-	proof, err := signer.tree.Prove([]uint64{1})
+	proof, err := signer.Prove([]uint64{1})
 	a.NoError(err)
-	a.Equal(proof, sig.Proof)
+	a.Equal(Proof(proof), sig.Proof)
 }
 
 func genHashableForTest() crypto.Hashable {
@@ -134,15 +134,15 @@ func TestBadLeafPositionInSignature(t *testing.T) {
 	hashable, sig := makeSig(signer, start, a)
 
 	sig2 := sig
-	sig2.pos++
+	sig2.Pos++
 	a.Error(signer.GetVerifier().Verify(hashable, sig2))
 
 	sig3 := sig2
-	sig3.pos = uint64(end + 1)
+	sig3.Pos = uint64(end + 1)
 	a.Error(signer.GetVerifier().Verify(hashable, sig3))
 
 	sig4 := sig2
-	sig4.pos = uint64(start - 1)
+	sig4.Pos = uint64(start - 1)
 	a.Error(signer.GetVerifier().Verify(hashable, sig4))
 }
 
