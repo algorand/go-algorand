@@ -107,9 +107,7 @@ func genHashableForTest() crypto.Hashable {
 func TestSigning(t *testing.T) {
 	a := require.New(t)
 
-	start, end := 50, 100
-	signer, err := New(uint64(start), uint64(end), crypto.PlaceHolderType)
-	a.NoError(err)
+	start, end, signer := getValidSig(a)
 
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
 
@@ -123,39 +121,73 @@ func TestSigning(t *testing.T) {
 	_, err = signer.Sign(hashable, end+1)
 	a.Error(err)
 
-	t.Run("incorrect byte signature", func(t *testing.T) {
-		sig := sig
-		bs := make([]byte, len(sig.ByteSignature))
-		copy(bs, sig.ByteSignature)
-		bs[0]++
-		sig.ByteSignature = bs
-		a.Error(signer.GetVerifier().Verify(hashable, sig))
-	})
 
-	t.Run("incorrect merkle proof", func(t *testing.T) {
-		sig := sig
-		sig.Proof = sig.Proof[:len(sig.Proof)-1]
-		a.Error(signer.GetVerifier().Verify(hashable, sig))
+		TestBadLeafPositionInSignature(t)
 
-		sig2 := sig
-		someDigest := crypto.Digest{}
-		rand.Read(someDigest[:])
-		sig2.Proof[0] = someDigest
-		a.Error(signer.GetVerifier().Verify(hashable, sig))
-	})
+}
 
-	t.Run("bad leaf position in signature", func(t *testing.T) {
-		sig := sig
-		sig.pos++
-		a.Error(signer.GetVerifier().Verify(hashable, sig))
+func TestBadLeafPositionInSignature(t *testing.T) {
+	a := require.New(t)
+	start, end, signer := getValidSig(a)
 
-		sig2 := sig
-		sig2.pos = uint64(end + 1)
-		a.Error(signer.GetVerifier().Verify(hashable, sig2))
+	hashable, sig := makeSig(signer, start, a)
 
-		sig3 := sig
-		sig3.pos = uint64(start - 1)
-		a.Error(signer.GetVerifier().Verify(hashable, sig3))
-	})
+	sig2 := sig
+	sig2.pos++
+	a.Error(signer.GetVerifier().Verify(hashable, sig2))
 
+	sig3 := sig2
+	sig3.pos = uint64(end + 1)
+	a.Error(signer.GetVerifier().Verify(hashable, sig3))
+
+	sig4 := sig2
+	sig4.pos = uint64(start - 1)
+	a.Error(signer.GetVerifier().Verify(hashable, sig4))
+}
+
+func TestBadMerkleProofInSignature(t *testing.T) {
+	a := require.New(t)
+	start, _, signer := getValidSig(a)
+
+	hashable, sig := makeSig(signer, start, a)
+
+	sig2 := sig
+	sig2.Proof = sig2.Proof[:len(sig2.Proof)-1]
+	a.Error(signer.GetVerifier().Verify(hashable, sig2))
+
+	sig3 := sig2
+	someDigest := crypto.Digest{}
+	rand.Read(someDigest[:])
+	sig3.Proof[0] = someDigest
+	a.Error(signer.GetVerifier().Verify(hashable, sig3))
+}
+
+func TestIncorrectByteSignature(t *testing.T) {
+	a := require.New(t)
+	start, _, signer := getValidSig(a)
+
+	hashable, sig := makeSig(signer, start, a)
+
+	sig2 := sig
+	bs := make([]byte, len(sig.ByteSignature))
+	copy(bs, sig2.ByteSignature)
+	bs[0]++
+	sig2.ByteSignature = bs
+	a.Error(signer.GetVerifier().Verify(hashable, sig2))
+}
+
+func makeSig(signer *Signer, start int, a *require.Assertions) (crypto.Hashable, Signature) {
+	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
+
+	sig, err := signer.Sign(hashable, start+1)
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().Verify(hashable, sig))
+	return hashable, sig
+}
+
+func getValidSig(a *require.Assertions) (int, int, *Signer) {
+	start, end := 50, 100
+	signer, err := New(uint64(start), uint64(end), crypto.PlaceHolderType)
+	a.NoError(err)
+	return start, end, signer
 }
