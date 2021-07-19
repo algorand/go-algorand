@@ -29,19 +29,19 @@ func TestSignerCreation(t *testing.T) {
 
 	h := genHashableForTest()
 	for i := uint64(0); i < 20; i++ {
-		signer, err := New(i, i+1)
+		signer, err := New(i, i+1, crypto.PlaceHolderType)
 		a.NoError(err)
 		_, err = signer.Sign(h, int(i))
 		a.NoError(err)
 	}
 
-	_, err := New(1, 0)
+	_, err := New(1, 0, crypto.PlaceHolderType)
 	a.Error(err)
 
 }
 func TestDisposableKeyPositions(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 100)
+	signer, err := New(0, 100, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	for i := 0; i < 100; i++ {
@@ -53,7 +53,7 @@ func TestDisposableKeyPositions(t *testing.T) {
 	_, err = signer.getKeyPosition(uint64(100))
 	a.Error(err)
 
-	signer, err = New(1000, 1100)
+	signer, err = New(1000, 1100, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	for i := 1000; i < 1100; i++ {
@@ -68,7 +68,7 @@ func TestDisposableKeyPositions(t *testing.T) {
 
 func TestNonEmptyDisposableKeys(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 100)
+	signer, err := New(0, 100, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	s := crypto.SignatureAlgorithm{}
@@ -79,7 +79,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 
 func TestSignatureStructure(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(50, 100)
+	signer, err := New(50, 100, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	hashable := genHashableForTest()
@@ -108,7 +108,7 @@ func TestSigning(t *testing.T) {
 	a := require.New(t)
 
 	start, end := 50, 100
-	signer, err := New(uint64(start), uint64(end))
+	signer, err := New(uint64(start), uint64(end), crypto.PlaceHolderType)
 	a.NoError(err)
 
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
