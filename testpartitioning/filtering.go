@@ -42,9 +42,9 @@ func PartitionTest(t *testing.T) {
 	name := t.Name()
 	_, file, _, _ := runtime.Caller(1) // get filename of caller to PartitionTest
 	nameNumber := stringToUint64(file + ":" + name)
-	idx := nameNumber%uint64(partitions)
+	idx := nameNumber % uint64(partitions)
 	if idx != uint64(partitionID) {
-		t.Skip("skipping due to partitioning, assigned to partition %d", idx)
+		t.Skipf("skipping %s due to partitioning: assigned to %d but I am %d of %d", name, idx, partitionID, partitions)
 	}
 }
 
