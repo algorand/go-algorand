@@ -513,6 +513,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		ReceiverRewards    *uint64                        `codec:"receiver-rewards,omitempty"`
 		SenderRewards      *uint64                        `codec:"sender-rewards,omitempty"`
 		Txn                transactions.SignedTxn         `codec:"txn"`
+		Logs               *[]string                      `codec:"logs,omitempty"`
 	}{
 		Txn: txn.Txn,
 	}
@@ -536,6 +537,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
 
 		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
+		response.Logs = &txn.ApplyData.EvalDelta.Logs
 	}
 
 	data, err := encode(handle, response)

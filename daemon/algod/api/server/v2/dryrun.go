@@ -521,6 +521,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					}
 					result.LocalDeltas = &localDeltas
 				}
+				result.Logs = &delta.Logs
 				if pass {
 					messages = append(messages, "PASS")
 				} else {

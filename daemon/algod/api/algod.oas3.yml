@@ -493,6 +493,13 @@
                   },
                   "type": "array"
                 },
+                "logs": {
+                  "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
                 "pool-error": {
                   "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
                   "type": "string"
@@ -1247,6 +1254,12 @@
           "logic-sig-trace": {
             "items": {
               "$ref": "#/components/schemas/DryrunState"
+            },
+            "type": "array"
+          },
+          "logs": {
+            "items": {
+              "type": "string"
             },
             "type": "array"
           }
@@ -3322,6 +3335,13 @@
                       },
                       "type": "array"
                     },
+                    "logs": {
+                      "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "pool-error": {
                       "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
                       "type": "string"
@@ -3383,6 +3403,13 @@
                       "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
                       "items": {
                         "$ref": "#/components/schemas/AccountStateDelta"
+                      },
+                      "type": "array"
+                    },
+                    "logs": {
+                      "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+                      "items": {
+                        "type": "string"
                       },
                       "type": "array"
                     },

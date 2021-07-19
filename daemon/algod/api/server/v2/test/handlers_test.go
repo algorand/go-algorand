@@ -176,8 +176,14 @@ func pendingTransactionInformationTest(t *testing.T, txidToUse int, format strin
 	}
 	params := generatedV2.PendingTransactionInformationParams{Format: &format}
 	err := handler.PendingTransactionInformation(c, txid, params)
+
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+
+	if txidToUse == 1 {
+		require.Contains(t, rec.Body.String(), "logs")
+	}
+
 }
 
 func TestPendingTransactionInformation(t *testing.T) {
@@ -187,6 +193,8 @@ func TestPendingTransactionInformation(t *testing.T) {
 	pendingTransactionInformationTest(t, 0, "msgpack", 200)
 	pendingTransactionInformationTest(t, -1, "json", 400)
 	pendingTransactionInformationTest(t, 0, "bad format", 400)
+	// app call txn
+	pendingTransactionInformationTest(t, 1, "json", 200)
 }
 
 func getPendingTransactionsTest(t *testing.T, format string, max uint64, expectedCode int) {

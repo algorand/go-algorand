@@ -115,7 +115,12 @@ func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 }
 
 func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
-	res = node.TxnWithStatus{}
+	res = node.TxnWithStatus{ApplyData: transactions.ApplyData{
+		EvalDelta: basics.EvalDelta{
+			Logs: []string{"a"},
+		},
+	}}
+	res.ConfirmedRound = 1
 	found = true
 	return
 }
@@ -267,7 +272,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		panic(err)
 	}
 
-	tx := make([]transactions.SignedTxn, TXs)
+	tx := make([]transactions.SignedTxn, 2*TXs)
 	latest := ledger.Latest()
 	if latest != 0 {
 		panic(fmt.Errorf("newly created ledger doesn't start on round 0"))
@@ -310,6 +315,64 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 			PaymentTxnFields: transactions.PaymentTxnFields{
 				Receiver: raddr,
 				Amount:   amt,
+			},
+		}
+
+		rand.Read(t.Note)
+		tx[i] = t.Sign(roots[send].Secrets())
+
+		sbal := bal[saddr]
+		sbal.MicroAlgos.Raw -= fee.Raw
+		sbal.MicroAlgos.Raw -= amt.Raw
+		bal[saddr] = sbal
+
+		ibal := bal[poolAddr]
+		ibal.MicroAlgos.Raw += fee.Raw
+		bal[poolAddr] = ibal
+
+		rbal := bal[raddr]
+		rbal.MicroAlgos.Raw += amt.Raw
+		bal[raddr] = rbal
+	}
+
+	// make app call txns
+	for i := TXs; i < 2*TXs; i++ {
+		send := gen.Int() % P
+		recv := gen.Int() % P
+
+		saddr := roots[send].Address()
+		raddr := roots[recv].Address()
+
+		if proto.MinTxnFee+uint64(maxFee) > bal[saddr].MicroAlgos.Raw {
+			continue
+		}
+
+		xferMax := transferredMoney
+		if uint64(xferMax) > bal[saddr].MicroAlgos.Raw-proto.MinTxnFee-uint64(maxFee) {
+			xferMax = int(bal[saddr].MicroAlgos.Raw - proto.MinTxnFee - uint64(maxFee))
+		}
+
+		if xferMax == 0 {
+			continue
+		}
+
+		amt := basics.MicroAlgos{Raw: uint64(gen.Int() % xferMax)}
+		fee := basics.MicroAlgos{Raw: uint64(gen.Int()%maxFee) + proto.MinTxnFee}
+
+		t := transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: transactions.Header{
+				Sender:      saddr,
+				Fee:         fee,
+				FirstValid:  ledger.LastRound(),
+				LastValid:   ledger.LastRound() + lastValid,
+				Note:        make([]byte, 4),
+				GenesisHash: genesisHash,
+			},
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   []byte("#pragma version 5\nint 1\nloop: byte \"a\"\nlog\nint 1\n+\ndup\nint 30\n<\nbnz loop"),
+				ClearStateProgram: []byte("#pragma version 5\nint 1"),
 			},
 		}
 
