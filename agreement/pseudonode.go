@@ -33,7 +33,8 @@ import (
 
 // TODO put these in config
 const (
-	pseudonodeVerificationBacklog = 32
+	pseudonodeVerificationBacklog   = 32
+	maxPseudonodeOutputWaitDuration = 2 * time.Second
 )
 
 var errPseudonodeBacklogFull = fmt.Errorf("pseudonode input channel is full")
@@ -367,13 +368,20 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	unverifiedVotes := t.node.makeVotes(t.round, t.period, t.step, t.prop, t.participation)
 	t.node.log.Infof("pseudonode: made %v votes", len(unverifiedVotes))
 	results := make(chan asyncVerifyVoteResponse, len(unverifiedVotes))
+	orderedResults := make([]asyncVerifyVoteResponse, len(unverifiedVotes))
+	asyncVerifyingVotes := len(unverifiedVotes)
 	for i, uv := range unverifiedVotes {
 		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
+		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
+		if err != nil {
+			orderedResults[i].err = err
+			t.node.log.Infof("pseudonode.makeVotes: failed to enqueue vote verification for (%d, %d): %v", t.round, t.period, err)
+			asyncVerifyingVotes--
+			continue
+		}
 	}
 
-	orderedResults := make([]asyncVerifyVoteResponse, len(unverifiedVotes))
-	for i := 0; i < len(unverifiedVotes); i++ {
+	for i := 0; i < asyncVerifyingVotes; i++ {
 		resp := <-results
 		orderedResults[resp.index] = resp
 	}
@@ -441,14 +449,37 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	t.node.monitor.dec(pseudonodeCoserviceType)
 
 	// push results into channel.
+	var outputTimeout <-chan time.Time
 	for _, r := range verifiedResults {
 		select {
 		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+			continue
 		case <-quit:
 			return
 		case <-t.context.Done():
 			// we done care about the output anymore; just exit.
 			return
+		default:
+		}
+
+		if outputTimeout == nil {
+			outputTimeout = time.After(maxPseudonodeOutputWaitDuration)
+		}
+
+		select {
+		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+			continue
+		case <-quit:
+			return
+		case <-t.context.Done():
+			// we done care about the output anymore; just exit.
+			return
+		case <-outputTimeout:
+			// we've been waiting for too long for this vote to be written to the output.
+			t.node.log.Infof("pseudonode.makeVotes: unable to write vote to output channel for round %d, period %d", t.round, t.period)
+			tmpTimeoutCh := make(chan time.Time)
+			close(tmpTimeoutCh)
+			outputTimeout = tmpTimeoutCh
 		}
 	}
 }
@@ -477,13 +508,20 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	// For now, don't log at all, and revisit when the metric becomes more important.
 
 	results := make(chan asyncVerifyVoteResponse, len(votes))
+	cryptoOutputs := make([]asyncVerifyVoteResponse, len(votes))
+	asyncVerifyingVotes := len(votes)
 	for i, uv := range votes {
 		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
+		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
+		if err != nil {
+			cryptoOutputs[i].err = err
+			t.node.log.Infof("pseudonode.makeProposals: failed to enqueue vote verification for (%d, %d): %v", t.round, t.period, err)
+			asyncVerifyingVotes--
+			continue
+		}
 	}
 
-	cryptoOutputs := make([]asyncVerifyVoteResponse, len(votes))
-	for i := 0; i < len(votes); i++ {
+	for i := 0; i < asyncVerifyingVotes; i++ {
 		resp := <-results
 		cryptoOutputs[resp.index] = resp
 	}
@@ -527,15 +565,38 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	}
 	t.node.monitor.dec(pseudonodeCoserviceType)
 
+	var outputTimeout <-chan time.Time
 	// push results into channel.
 	for _, r := range verifiedVotes {
 		select {
 		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+			continue
 		case <-quit:
 			return
 		case <-t.context.Done():
 			// we done care about the output anymore; just exit.
 			return
+		default:
+		}
+		if outputTimeout == nil {
+			outputTimeout = time.After(maxPseudonodeOutputWaitDuration)
+		}
+
+		// the out channel was full. Place a limit on the time we want to wait for this channel.
+		select {
+		case t.out <- messageEvent{T: voteVerified, Input: r.message, Err: makeSerErr(r.err)}:
+			continue
+		case <-quit:
+			return
+		case <-t.context.Done():
+			// we done care about the output anymore; just exit.
+			return
+		case <-outputTimeout:
+			// we've been waiting for too long for this vote to be written to the output.
+			t.node.log.Infof("pseudonode.makeProposals: unable to write proposal vote to output channel for round %d, period %d", t.round, t.period)
+			tmpTimeoutCh := make(chan time.Time)
+			close(tmpTimeoutCh)
+			outputTimeout = tmpTimeoutCh
 		}
 	}
 
@@ -543,11 +604,33 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 		msg := message{Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: payload.u(), Proposal: payload}
 		select {
 		case t.out <- messageEvent{T: payloadVerified, Input: msg}:
+			continue
 		case <-quit:
 			return
 		case <-t.context.Done():
 			// we done care about the output anymore; just exit.
 			return
+		default:
+		}
+
+		if outputTimeout == nil {
+			outputTimeout = time.After(maxPseudonodeOutputWaitDuration)
+		}
+		// the out channel was full. Place a limit on the time we want to wait for this channel.
+		select {
+		case t.out <- messageEvent{T: payloadVerified, Input: msg}:
+			continue
+		case <-quit:
+			return
+		case <-t.context.Done():
+			// we done care about the output anymore; just exit.
+			return
+		case <-outputTimeout:
+			// we've been waiting for too long for this vote to be written to the output.
+			t.node.log.Infof("pseudonode.makeProposals: unable to write proposal payload to output channel for round %d, period %d", t.round, t.period)
+			tmpTimeoutCh := make(chan time.Time)
+			close(tmpTimeoutCh)
+			outputTimeout = tmpTimeoutCh
 		}
 	}
 }
