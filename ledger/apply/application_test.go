@@ -1015,6 +1015,24 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.pass = true
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Contains(err.Error(), "updateApplication app programs too long")
+
+	// check extraProgramPages is used
+	appr = make([]byte, 3072, 3072)
+
+	for i := range appr {
+		appr[i] = 2
+	}
+	appr[0] = 4
+	ac = transactions.ApplicationCallTxnFields{
+		ApplicationID:     appIdx,
+		OnCompletion:      transactions.UpdateApplicationOC,
+		ApprovalProgram:   appr,
+		ClearStateProgram: []byte{2},
+	}
+	b.pass = true
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
+	a.NoError(err)
+
 }
 
 func TestAppCallApplyDelete(t *testing.T) {

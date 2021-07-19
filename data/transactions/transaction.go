@@ -355,7 +355,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 				return fmt.Errorf("tx.ExtraProgramPages is immutable")
 			}
 
-			if proto.EnableExPagesOnAppUpdate {
+			if proto.EnableExtraPagesOnAppUpdate {
 				effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
 			}
 

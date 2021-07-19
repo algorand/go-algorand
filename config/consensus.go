@@ -382,7 +382,7 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
-	EnableExPagesOnAppUpdate bool
+	EnableExtraPagesOnAppUpdate bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -990,7 +990,7 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 5
 
 	// Enable ExtraProgramPages for application update
-	vFuture.EnableExPagesOnAppUpdate = true
+	vFuture.EnableExtraPagesOnAppUpdate = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
