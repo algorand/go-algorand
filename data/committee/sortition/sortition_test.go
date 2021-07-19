@@ -63,7 +63,7 @@ func TestSortitionBasic(t *testing.T) {
 	}
 }
 
-var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 1000, "number of sortition tests to run")
+var runcountP *uint64 = flag.Uint64("sortition-exausting-test-count", 10000, "number of sortition tests to run")
 
 func TestSortitionExhausting(t *testing.T) {
 	rand.Seed(time.Now().Unix())

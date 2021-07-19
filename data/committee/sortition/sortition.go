@@ -35,6 +35,7 @@ func boostCdfWalk(binomialN, binomialP, cratio float64, money uint64) uint64 {
 	return uint64(C.sortition_binomial_cdf_walk(C.double(binomialN), C.double(binomialP), C.double(cratio), C.uint64_t(money)))
 }
 
+// Select determines the weighting for selection as a member in a committe
 func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput crypto.Digest) uint64 {
 	p := expectedSize / float64(totalMoney)
 
@@ -69,7 +70,7 @@ func sortitionPoissonCDFWalk(p, ratio float64, n uint64) uint64 {
 		cdf += dist.Prob(float64(j))
 
 		// Found the correct boundary, break
-		if ratio <= cdf {
+		if cdf >= ratio {
 			return j
 		}
 	}
