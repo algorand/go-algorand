@@ -19,6 +19,7 @@ package merklekeystore
 import (
 	"crypto/rand"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
@@ -29,16 +30,16 @@ func TestSignerCreation(t *testing.T) {
 
 	h := genHashableForTest()
 	for i := uint64(0); i < 20; i++ {
-		signer, err := New(i, i+1, crypto.PlaceHolderType)
+		signer, err := New(basics.Round(i), basics.Round(i+1), 1, crypto.PlaceHolderType)
 		a.NoError(err)
-		_, err = signer.Sign(h, int(i))
+		_, err = signer.Sign(h, basics.Round(i))
 		a.NoError(err)
 	}
 
-	_, err := New(1, 0, crypto.PlaceHolderType)
+	_, err := New(1, 0, 1, crypto.PlaceHolderType)
 	a.Error(err)
 
-	signer, err := New(0, 0, crypto.PlaceHolderType)
+	signer, err := New(0, 0, 1, crypto.PlaceHolderType)
 	a.NoError(err)
 	sig, err := signer.Sign(genHashableForTest(), 0)
 	a.NoError(err)
@@ -47,34 +48,34 @@ func TestSignerCreation(t *testing.T) {
 }
 func TestDisposableKeyPositions(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 100, crypto.PlaceHolderType)
+	signer, err := New(0, 100, 1, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	for i := 0; i < 100; i++ {
-		pos, err := signer.getKeyPosition(uint64(i))
+		pos, err := signer.getKeyPosition(basics.Round(i))
 		a.NoError(err, i)
 		a.Equal(uint64(i), pos)
 	}
 
-	_, err = signer.getKeyPosition(uint64(100))
+	_, err = signer.getKeyPosition(100)
 	a.NoError(err)
 
-	signer, err = New(1000, 1100, crypto.PlaceHolderType)
+	signer, err = New(1000, 1100, 1, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	for i := 1000; i < 1100; i++ {
-		pos, err := signer.getKeyPosition(uint64(i))
+		pos, err := signer.getKeyPosition(basics.Round(i))
 		a.NoError(err, i)
 		a.Equal(uint64(i-1000), pos)
 	}
 
-	_, err = signer.getKeyPosition(uint64(999))
+	_, err = signer.getKeyPosition(999)
 	a.Error(err)
 }
 
 func TestNonEmptyDisposableKeys(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 100, crypto.PlaceHolderType)
+	signer, err := New(0, 100, 1, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	s := crypto.SignatureAlgorithm{}
@@ -85,7 +86,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 
 func TestSignatureStructure(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(50, 100, crypto.PlaceHolderType)
+	signer, err := New(50, 100, 1, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	hashable := genHashableForTest()
@@ -117,14 +118,14 @@ func TestSigning(t *testing.T) {
 
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
 
-	sig, err := signer.Sign(hashable, start+1)
+	sig, err := signer.Sign(hashable, basics.Round(start+1))
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(hashable, sig))
 
-	_, err = signer.Sign(hashable, start-1)
+	_, err = signer.Sign(hashable, basics.Round(start-1))
 	a.Error(err)
 
-	_, err = signer.Sign(hashable, end+1)
+	_, err = signer.Sign(hashable, basics.Round(end+1))
 	a.Error(err)
 
 	TestBadLeafPositionInSignature(t)
@@ -184,7 +185,7 @@ func TestIncorrectByteSignature(t *testing.T) {
 func makeSig(signer *Signer, start int, a *require.Assertions) (crypto.Hashable, Signature) {
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
 
-	sig, err := signer.Sign(hashable, start+1)
+	sig, err := signer.Sign(hashable, basics.Round(start+1))
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(hashable, sig))
 	return hashable, sig
@@ -192,7 +193,7 @@ func makeSig(signer *Signer, start int, a *require.Assertions) (crypto.Hashable,
 
 func getValidSig(a *require.Assertions) (int, int, *Signer) {
 	start, end := 50, 100
-	signer, err := New(uint64(start), uint64(end), crypto.PlaceHolderType)
+	signer, err := New(basics.Round(start), basics.Round(end), 1, crypto.PlaceHolderType)
 	a.NoError(err)
 	return start, end, signer
 }
