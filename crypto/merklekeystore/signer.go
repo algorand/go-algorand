@@ -64,7 +64,7 @@ type Signer struct {
 	// these keys are the keys used to sign in a round.
 	// should be disposed of once possible.
 	EphemeralKeys    `codec:"keys,allocbound=-"`
-	FirstRound       basics.Round `codec:"sround"`
+	FirstRound       basics.Round `codec:"srnd"`
 	merklearray.Tree `codec:"tree"`
 }
 
