@@ -30,16 +30,16 @@ func TestSignerCreation(t *testing.T) {
 
 	h := genHashableForTest()
 	for i := uint64(0); i < 20; i++ {
-		signer, err := New(basics.Round(i), basics.Round(i+1), 1, crypto.PlaceHolderType)
+		signer, err := New(basics.Round(i), basics.Round(i+1), crypto.PlaceHolderType)
 		a.NoError(err)
 		_, err = signer.Sign(h, basics.Round(i))
 		a.NoError(err)
 	}
 
-	_, err := New(1, 0, 1, crypto.PlaceHolderType)
+	_, err := New(1, 0, crypto.PlaceHolderType)
 	a.Error(err)
 
-	signer, err := New(0, 0, 1, crypto.PlaceHolderType)
+	signer, err := New(0, 0, crypto.PlaceHolderType)
 	a.NoError(err)
 	sig, err := signer.Sign(genHashableForTest(), 0)
 	a.NoError(err)
@@ -48,7 +48,7 @@ func TestSignerCreation(t *testing.T) {
 }
 func TestDisposableKeyPositions(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 100, 1, crypto.PlaceHolderType)
+	signer, err := New(0, 100, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	for i := 0; i < 100; i++ {
@@ -60,7 +60,7 @@ func TestDisposableKeyPositions(t *testing.T) {
 	_, err = signer.getKeyPosition(100)
 	a.NoError(err)
 
-	signer, err = New(1000, 1100, 1, crypto.PlaceHolderType)
+	signer, err = New(1000, 1100, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	for i := 1000; i < 1100; i++ {
@@ -75,7 +75,7 @@ func TestDisposableKeyPositions(t *testing.T) {
 
 func TestNonEmptyDisposableKeys(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 100, 1, crypto.PlaceHolderType)
+	signer, err := New(0, 100, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	s := crypto.SignatureAlgorithm{}
@@ -86,7 +86,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 
 func TestSignatureStructure(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(50, 100, 1, crypto.PlaceHolderType)
+	signer, err := New(50, 100, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	hashable := genHashableForTest()
@@ -193,7 +193,7 @@ func makeSig(signer *Signer, start int, a *require.Assertions) (crypto.Hashable,
 
 func getValidSig(a *require.Assertions) (int, int, *Signer) {
 	start, end := 50, 100
-	signer, err := New(basics.Round(start), basics.Round(end), 1, crypto.PlaceHolderType)
+	signer, err := New(basics.Round(start), basics.Round(end), crypto.PlaceHolderType)
 	a.NoError(err)
 	return start, end, signer
 }

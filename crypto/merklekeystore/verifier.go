@@ -26,7 +26,7 @@ import (
 type Verifier struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	root       crypto.Digest `codec:"r"`
+	root crypto.Digest `codec:"r"`
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.

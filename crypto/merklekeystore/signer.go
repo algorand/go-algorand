@@ -72,13 +72,11 @@ var errStartBiggerThanEndRound = fmt.Errorf("cannot create merkleKeyStore becaus
 
 // New Generates a merklekeystore.Signer
 // Note that the signer will have keys for the rounds  [firstValid, lastValid]
-func New(firstValid, lastValid basics.Round, keyDilution uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
+func New(firstValid, lastValid basics.Round, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
 	}
-	//firstID := basics.OneTimeIDForRound(basics.Round(firstValid), keyDilution)
-	//lastID := basics.OneTimeIDForRound(lastValid, keyDilution)
-	//numBatches := lastID.Batch - firstID.Batch + 1
+
 	keys := make(EphemeralKeys, lastValid-firstValid+1)
 	for i := range keys {
 		keys[i] = *crypto.NewSigner(sigAlgoType)
