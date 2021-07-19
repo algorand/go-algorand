@@ -412,7 +412,7 @@ func (z *Signer) MarshalMsg(b []byte) (o []byte) {
 		zb0003Len--
 		zb0003Mask |= 0x2
 	}
-	if (*z).FirstRound.MsgIsZero() {
+	if (*z).FirstRound == 0 {
 		zb0003Len--
 		zb0003Mask |= 0x8
 	}
@@ -434,7 +434,7 @@ func (z *Signer) MarshalMsg(b []byte) (o []byte) {
 		if (zb0003Mask & 0x8) == 0 { // if not empty
 			// string "srnd"
 			o = append(o, 0xa4, 0x73, 0x72, 0x6e, 0x64)
-			o = (*z).FirstRound.MarshalMsg(o)
+			o = msgp.AppendUint64(o, (*z).FirstRound)
 		}
 	}
 	return
@@ -484,7 +484,7 @@ func (z *Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			bts, err = (*z).FirstRound.UnmarshalMsg(bts)
+			(*z).FirstRound, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FirstRound")
 				return
@@ -536,7 +536,7 @@ func (z *Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "srnd":
-				bts, err = (*z).FirstRound.UnmarshalMsg(bts)
+				(*z).FirstRound, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstRound")
 					return
@@ -565,13 +565,13 @@ func (z *Signer) Msgsize() (s int) {
 	for zb0001 := range (*z).EphemeralKeys {
 		s += (*z).EphemeralKeys[zb0001].Msgsize()
 	}
-	s += 5 + (*z).FirstRound.Msgsize()
+	s += 5 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Signer) MsgIsZero() bool {
-	return (len((*z).EphemeralKeys) == 0) && ((*z).FirstRound.MsgIsZero())
+	return (len((*z).EphemeralKeys) == 0) && ((*z).FirstRound == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
