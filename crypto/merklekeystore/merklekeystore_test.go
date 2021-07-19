@@ -44,6 +44,7 @@ func TestSignerCreation(t *testing.T) {
 	sig, err := signer.Sign(genHashableForTest(), 0)
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(genHashableForTest(), sig))
+	a.Equal(1, len(signer.EphemeralKeys))
 
 }
 func TestDisposableKeyPositions(t *testing.T) {
