@@ -22,7 +22,14 @@ import (
 )
 
 // AlgorithmType enum type for signing algorithms
-type AlgorithmType uint64
+
+type (
+	//ByteSignature using unspecified bound.
+	//msgp:allocbound ByteSignature
+	ByteSignature []byte
+
+	AlgorithmType uint64
+)
 
 // all AlgorithmType enums
 const (
@@ -36,9 +43,6 @@ const (
 func (t AlgorithmType) isValidType() bool {
 	return minAlgorithmType < t && t < maxAlgorithmType
 }
-
-// ByteSignature is a cryptographic signature represented by bytes.
-type ByteSignature []byte
 
 // Signer interface represents the possible operations that can be done with a signing key.
 type Signer interface {
@@ -75,8 +79,8 @@ type SignatureAlgorithm struct {
 type VerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Type AlgorithmType      `codec:"verType"`
-	Pack PackedVerifyingKey `codec:"pubKeys"`
+	Type AlgorithmType      `codec:"type"`
+	Pack PackedVerifyingKey `codec:"pks"`
 }
 
 // ToBeHashed makes it easier to hash the VeryfyingKey struct.
