@@ -1114,7 +1114,7 @@ func typeCover(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	for i := range anys {
 		anys[i] = StackAny
 	}
-	returns := make(StackTypes,depth)
+	returns := make(StackTypes, depth)
 	for i := range returns {
 		returns[i] = StackAny
 	}
@@ -1142,14 +1142,14 @@ func typeUncover(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	for i := range anys {
 		anys[i] = StackAny
 	}
-	returns := make(StackTypes,depth)
+	returns := make(StackTypes, depth)
 	for i := range returns {
 		returns[i] = StackAny
 	}
 	idx := len(ops.typeStack) - depth
 	if idx >= 0 {
 		sv := ops.typeStack[idx]
-		for i := idx+1; i < len(ops.typeStack); i++ {
+		for i := idx + 1; i < len(ops.typeStack); i++ {
 			returns[i-idx-1] = ops.typeStack[i]
 		}
 		returns[len(returns)-1] = sv
@@ -1157,6 +1157,7 @@ func typeUncover(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	fmt.Println(returns)
 	return anys, returns
 }
+
 // keywords handle parsing and assembling special asm language constructs like 'addr'
 // We use OpSpec here, but somewhat degenerate, since they don't have opcodes or eval functions
 var keywords = map[string]OpSpec{
