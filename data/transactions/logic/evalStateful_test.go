@@ -1260,7 +1260,7 @@ func TestAssets(t *testing.T) {
 
 	// it wasn't legal to use a direct ref for account
 	testProg(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 54; asset_holding_get AssetBalance`,
-		directRefEnabledVersion-1, expect{3, "asset_holding_get arg 0 wanted type uint64..."})
+		directRefEnabledVersion-1, expect{3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
 	// but it is now (empty asset yields 0,0 on stack)
 	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, now)
 	// This is receiver, who is in Assets array
@@ -1303,7 +1303,7 @@ func TestAssets(t *testing.T) {
 	testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), now)
 
 	// but old code cannot
-	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, expect{3, "asset_holding_get arg 0 wanted type uint64..."})
+	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, expect{3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
 	testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), pre, "invalid Asset ref")
 	testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), pre, "err opcode")
 
@@ -2741,6 +2741,7 @@ func TestReturnTypes(t *testing.T) {
 		"pushint":           "pushint 7272",
 		"pushbytes":         `pushbytes "jojogoodgorilla"`,
 		"app_params_get":    "app_params_get AppGlobalNumUint",
+		"extract":           "extract 0 2",
 	}
 
 	byName := OpsByName[LogicVersion]

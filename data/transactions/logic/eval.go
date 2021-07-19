@@ -346,7 +346,6 @@ func (pe PanicError) Error() string {
 	return fmt.Sprintf("panic in TEAL Eval: %v\n%s", pe.PanicValue, pe.StackTrace)
 }
 
-var errLoopDetected = errors.New("loop detected")
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
@@ -1034,7 +1033,7 @@ func opEq(cx *evalContext) {
 	}
 	var cond bool
 	if ta == StackBytes {
-		cond = bytes.Compare(cx.stack[prev].Bytes, cx.stack[last].Bytes) == 0
+		cond = bytes.Equal(cx.stack[prev].Bytes, cx.stack[last].Bytes)
 	} else {
 		cond = cx.stack[prev].Uint == cx.stack[last].Uint
 	}
@@ -2569,6 +2568,77 @@ func opSetByte(cx *evalContext) {
 	cx.stack[pprev].Bytes = append([]byte(nil), cx.stack[pprev].Bytes...)
 	cx.stack[pprev].Bytes[cx.stack[prev].Uint] = byte(cx.stack[last].Uint)
 	cx.stack = cx.stack[:prev]
+}
+
+func opExtractImpl(x []byte, start, length int) (out []byte, err error) {
+	out = x
+	end := start + length
+	if start > len(x) || end > len(x) {
+		err = errors.New("extract range beyond length of string")
+		return
+	}
+	out = x[start:end]
+	return
+}
+
+func opExtract(cx *evalContext) {
+	last := len(cx.stack) - 1
+	startIdx := cx.program[cx.pc+1]
+	lengthIdx := cx.program[cx.pc+2]
+	// Shortcut: if length is 0, take bytes from start index to the end
+	length := int(lengthIdx)
+	if length == 0 {
+		length = len(cx.stack[last].Bytes) - int(startIdx)
+	}
+	cx.stack[last].Bytes, cx.err = opExtractImpl(cx.stack[last].Bytes, int(startIdx), length)
+}
+
+func opExtract3(cx *evalContext) {
+	last := len(cx.stack) - 1 // length
+	prev := last - 1          // start
+	byteArrayIdx := prev - 1  // bytes
+	startIdx := cx.stack[prev].Uint
+	lengthIdx := cx.stack[last].Uint
+	if startIdx > math.MaxInt32 || lengthIdx > math.MaxInt32 {
+		cx.err = errors.New("extract range beyond length of string")
+		return
+	}
+	cx.stack[byteArrayIdx].Bytes, cx.err = opExtractImpl(cx.stack[byteArrayIdx].Bytes, int(startIdx), int(lengthIdx))
+	cx.stack = cx.stack[:prev]
+}
+
+// We convert the bytes manually here because we need to accept "short" byte arrays.
+// A single byte is a legal uint64 decoded this way.
+func convertBytesToInt(x []byte) (out uint64) {
+	out = uint64(0)
+	for _, b := range x {
+		out = out << 8
+		out = out | (uint64(b) & 0x0ff)
+	}
+	return
+}
+
+func opExtractNBytes(cx *evalContext, n int) {
+	last := len(cx.stack) - 1 // start
+	prev := last - 1          // bytes
+	startIdx := cx.stack[last].Uint
+	cx.stack[prev].Bytes, cx.err = opExtractImpl(cx.stack[prev].Bytes, int(startIdx), n) // extract n bytes
+
+	cx.stack[prev].Uint = convertBytesToInt(cx.stack[prev].Bytes)
+	cx.stack[prev].Bytes = nil
+	cx.stack = cx.stack[:last]
+}
+
+func opExtract16Bits(cx *evalContext) {
+	opExtractNBytes(cx, 2) // extract 2 bytes
+}
+
+func opExtract32Bits(cx *evalContext) {
+	opExtractNBytes(cx, 4) // extract 4 bytes
+}
+
+func opExtract64Bits(cx *evalContext) {
+	opExtractNBytes(cx, 8) // extract 8 bytes
 }
 
 func accountReference(cx *evalContext, account stackValue) (basics.Address, uint64, error) {

@@ -281,6 +281,8 @@ func (ops *OpStream) ReferToLabel(pc int, label string) {
 	ops.labelReferences = append(ops.labelReferences, labelReference{ops.sourceLine, pc, label})
 }
 
+type opTypeFunc func(ops *OpStream, immediates []string) (StackTypes, StackTypes)
+
 // returns allows opcodes like `txn` to be specific about their return
 // value types, based on the field requested, rather than use Any as
 // specified by opSpec.
@@ -445,11 +447,11 @@ func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
 }
 func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		ops.error("bytec operation needs one argument")
+		return ops.error("bytec operation needs one argument")
 	}
 	constIndex, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		ops.error(err)
+		return ops.error(err)
 	}
 	ops.Bytec(uint(constIndex))
 	return nil
@@ -457,11 +459,11 @@ func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
 
 func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		ops.errorf("%s needs one argument", spec.Name)
+		return ops.errorf("%s needs one argument", spec.Name)
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		ops.error(err)
+		return ops.error(err)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
@@ -471,7 +473,7 @@ func asmPushInt(ops *OpStream, spec *OpSpec, args []string) error {
 }
 func asmPushBytes(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		ops.errorf("%s needs one argument", spec.Name)
+		return ops.errorf("%s needs one argument", spec.Name)
 	}
 	val, _, err := parseBinaryArgs(args)
 	if err != nil {
@@ -1062,15 +1064,53 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+func typeSwap(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	topTwo := oneAny.plus(oneAny)
+	top := len(ops.typeStack) - 1
+	if top >= 0 {
+		topTwo[1] = ops.typeStack[top]
+		if top >= 1 {
+			topTwo[0] = ops.typeStack[top-1]
+		}
+	}
+	reversed := StackTypes{topTwo[1], topTwo[0]}
+	return topTwo, reversed
+}
+
+func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	if len(args) == 0 {
+		return oneAny, oneAny
+	}
+	n, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return oneAny, oneAny
+	}
+	depth := int(n) + 1
+	anys := make(StackTypes, depth)
+	for i := range anys {
+		anys[i] = StackAny
+	}
+	returns := anys.plus(oneAny)
+	idx := len(ops.typeStack) - depth
+	if idx >= 0 {
+		returns[len(returns)-1] = ops.typeStack[idx]
+		for i := idx + 1; i < len(ops.typeStack); i++ {
+			returns[i-idx-1] = ops.typeStack[i]
+		}
+	}
+	return anys, returns
+}
+
 // keywords handle parsing and assembling special asm language constructs like 'addr'
 // We use OpSpec here, but somewhat degenerate, since they don't have opcodes or eval functions
 var keywords = map[string]OpSpec{
-	"int":  {0, "int", nil, assembleInt, nil, nil, oneInt, 1, modeAny, opDetails{1, 2, nil, nil}},
-	"byte": {0, "byte", nil, assembleByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
+	"int":  {0, "int", nil, assembleInt, nil, nil, oneInt, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+	"byte": {0, "byte", nil, assembleByte, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 	// parse basics.Address, actually just another []byte constant
-	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}},
+	"addr": {0, "addr", nil, assembleAddr, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
-	"method": {0, "method", nil, assembleMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil}}}
+	"method": {0, "method", nil, assembleMethod, nil, nil, oneBytes, 1, modeAny, opDetails{1, 2, nil, nil, nil}},
+}
 
 type lineError struct {
 	Line int
@@ -1179,35 +1219,45 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 }
 
 // checks (and pops) arg types from arg type stack
-func (ops *OpStream) checkArgs(spec OpSpec) {
-	firstPop := true
-	for i := len(spec.Args) - 1; i >= 0; i-- {
-		argType := spec.Args[i]
-		stype := ops.tpop()
-		if firstPop {
-			firstPop = false
-			ops.trace("pops(%s", argType.String())
+func (ops *OpStream) checkStack(args StackTypes, returns StackTypes, instruction []string) {
+	argcount := len(args)
+	if argcount > len(ops.typeStack) {
+		err := fmt.Errorf("%s expects %d stack arguments but stack height is %d", strings.Join(instruction, " "), argcount, len(ops.typeStack))
+		if len(ops.labelReferences) > 0 {
+			ops.warnf("%w; but branches have happened and assembler does not precisely track the stack in this case", err)
 		} else {
-			ops.trace(", %s", argType.String())
+			ops.error(err)
 		}
-		if !typecheck(argType, stype) {
-			err := fmt.Errorf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
-			if len(ops.labelReferences) > 0 {
-				ops.warnf("%w; but branches have happened and assembler does not precisely track types in this case", err)
+	} else {
+		firstPop := true
+		for i := argcount - 1; i >= 0; i-- {
+			argType := args[i]
+			stype := ops.tpop()
+			if firstPop {
+				firstPop = false
+				ops.trace("pops(%s", argType.String())
 			} else {
-				ops.error(err)
+				ops.trace(", %s", argType.String())
+			}
+			if !typecheck(argType, stype) {
+				err := fmt.Errorf("%s arg %d wanted type %s got %s", strings.Join(instruction, " "), i, argType.String(), stype.String())
+				if len(ops.labelReferences) > 0 {
+					ops.warnf("%w; but branches have happened and assembler does not precisely track types in this case", err)
+				} else {
+					ops.error(err)
+				}
 			}
 		}
-	}
-	if !firstPop {
-		ops.trace(")")
+		if !firstPop {
+			ops.trace(")")
+		}
 	}
 
-	if len(spec.Returns) > 0 {
-		ops.tpusha(spec.Returns)
-		ops.trace(" pushes(%s", spec.Returns[0].String())
-		if len(spec.Returns) > 1 {
-			for _, rt := range spec.Returns[1:] {
+	if len(returns) > 0 {
+		ops.tpusha(returns)
+		ops.trace(" pushes(%s", returns[0].String())
+		if len(returns) > 1 {
+			for _, rt := range returns[1:] {
 				ops.trace(", %s", rt.String())
 			}
 		}
@@ -1272,7 +1322,11 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			if spec.Modes == runModeApplication {
 				ops.HasStatefulOps = true
 			}
-			ops.checkArgs(spec)
+			args, returns := spec.Args, spec.Returns
+			if spec.Details.typeFunc != nil {
+				args, returns = spec.Details.typeFunc(ops, fields[1:])
+			}
+			ops.checkStack(args, returns, fields)
 			spec.asm(ops, &spec, fields[1:])
 			ops.trace("\n")
 			continue

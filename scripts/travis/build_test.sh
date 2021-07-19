@@ -15,7 +15,7 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine
-    "${SCRIPTPATH}/build.sh" --make_debug
+    "${SCRIPTPATH}/travis_wait.sh" 30 "${SCRIPTPATH}/build.sh" --make_debug
     # Need to call travis_retry first, if travis_wait calls travis_retry
     # it doesn't show the output.
     "${SCRIPTPATH}/travis_retry.sh" "${SCRIPTPATH}/travis_wait.sh" 90 "${SCRIPTPATH}/test.sh"
