@@ -21,13 +21,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// AlgorithmType enum type for signing algorithms
-
 type (
 	//ByteSignature using unspecified bound.
 	//msgp:allocbound ByteSignature
 	ByteSignature []byte
 
+	// AlgorithmType enum type for signing algorithms
 	AlgorithmType uint64
 )
 
