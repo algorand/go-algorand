@@ -127,9 +127,6 @@ func TestSigning(t *testing.T) {
 
 	_, err = signer.Sign(hashable, basics.Round(end+1))
 	a.Error(err)
-
-	TestBadLeafPositionInSignature(t)
-
 }
 
 func TestBadLeafPositionInSignature(t *testing.T) {
