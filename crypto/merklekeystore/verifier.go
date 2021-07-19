@@ -25,8 +25,6 @@ import (
 // it also serves as a commit over all keys contained in the merklekeystore.Signer.
 type Verifier struct {
 	root       crypto.Digest `codec:"r"`
-	startRound uint64
-	endRound   uint64
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
