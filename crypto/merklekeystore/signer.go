@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
-	"github.com/algorand/go-algorand/data/basics"
 )
 
 type (
@@ -64,7 +63,7 @@ type Signer struct {
 	// these keys are the keys used to sign in a round.
 	// should be disposed of once possible.
 	EphemeralKeys    `codec:"keys,allocbound=-"`
-	FirstRound       basics.Round `codec:"srnd"`
+	FirstRound       uint64 `codec:"srnd"`
 	merklearray.Tree `codec:"tree"`
 }
 
@@ -72,7 +71,7 @@ var errStartBiggerThanEndRound = fmt.Errorf("cannot create merkleKeyStore becaus
 
 // New Generates a merklekeystore.Signer
 // Note that the signer will have keys for the rounds  [firstValid, lastValid]
-func New(firstValid, lastValid basics.Round, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
+func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
 	}
@@ -101,7 +100,7 @@ func (m *Signer) GetVerifier() *Verifier {
 }
 
 // Sign outputs a signature + proof for the signing key.
-func (m *Signer) Sign(hashable crypto.Hashable, round basics.Round) (Signature, error) {
+func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
 	pos, err := m.getKeyPosition(round)
 	if err != nil {
 		return Signature{}, err
@@ -123,14 +122,14 @@ func (m *Signer) Sign(hashable crypto.Hashable, round basics.Round) (Signature, 
 
 var errOutOfBounds = fmt.Errorf("cannot find signing key for given round")
 
-func (m *Signer) getKeyPosition(round basics.Round) (uint64, error) {
+func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 	if round < m.FirstRound {
 		return 0, errOutOfBounds
 	}
 
 	pos := round - m.FirstRound
-	if pos >= basics.Round(len(m.EphemeralKeys)) {
+	if pos >= uint64(len(m.EphemeralKeys)) {
 		return 0, errOutOfBounds
 	}
-	return uint64(pos), nil
+	return pos, nil
 }
