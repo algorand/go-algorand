@@ -94,7 +94,6 @@ func (m *Signer) Sign(hashable crypto.Hashable, round int) (Signature, error) {
 		return Signature{}, err
 	}
 
-	// should never happen:
 	proof, err := m.tree.Prove([]uint64{pos})
 	if err != nil {
 		return Signature{}, err
