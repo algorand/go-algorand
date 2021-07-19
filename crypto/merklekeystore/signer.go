@@ -50,12 +50,11 @@ type Signature struct {
 
 // Signer is a merkleKeyStore, contain multiple keys which can be used per round.
 type Signer struct {
-	root crypto.Digest
 	// these keys are the keys used to sign in a round.
 	// should be disposed of once possible.
-	ephemeralKeys
-	startRound uint64
-	tree       *merklearray.Tree
+	ephemeralKeys `codec:"keys"`
+	startRound    uint64            `codec:"sround"`
+	tree          *merklearray.Tree `codec:"tree"`
 }
 
 var errStartBiggerThanEndRound = fmt.Errorf("cannot create merkleKeyStore because end round is smaller then start round")
@@ -75,7 +74,6 @@ func New(startRound, endRound uint64) (*Signer, error) {
 	}
 
 	return &Signer{
-		root:          tree.Root(),
 		ephemeralKeys: keys,
 		startRound:    startRound,
 		tree:          tree,
@@ -85,7 +83,7 @@ func New(startRound, endRound uint64) (*Signer, error) {
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (m *Signer) GetVerifier() *Verifier {
 	return &Verifier{
-		root: m.root,
+		root: m.tree.Root(),
 	}
 }
 
