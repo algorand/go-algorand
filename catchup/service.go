@@ -52,7 +52,9 @@ type PendingUnmatchedCertificate struct {
 // Ledger represents the interface of a block database which the
 // catchup server should interact with.
 type Ledger interface {
-	agreement.LedgerReader
+	Wait(r basics.Round) chan struct{}
+	NextRound() basics.Round
+	ConsensusParams(round basics.Round) (config.ConsensusParams, error)
 	AddBlock(bookkeeping.Block, agreement.Certificate) error
 	EnsureBlock(block *bookkeeping.Block, c agreement.Certificate)
 	LastRound() basics.Round
@@ -637,7 +639,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		// As a failsafe, if the cert we fetched is valid but for the wrong block, panic as loudly as possible
 		if cert.Round == fetchedCert.Round &&
 			cert.Proposal.BlockDigest != fetchedCert.Proposal.BlockDigest &&
-			fetchedCert.Authenticate(*block, s.ledger, verifier) == nil {
+			s.auth.Authenticate(block, fetchedCert) == nil {
 			s := "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
 			s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
 			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"

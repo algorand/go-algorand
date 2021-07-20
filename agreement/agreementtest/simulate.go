@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -114,6 +115,14 @@ func (i *instant) HasPending(queueName string) bool {
 	return true
 }
 
+func (i *instant) GetTimeout(delta time.Duration) time.Time {
+	return i.GetZero().Add(delta)
+}
+
+func (i *instant) GetZero() time.Time {
+	return time.Time{}
+}
+
 type blackhole struct {
 	mocks.MockNetwork
 }
@@ -152,7 +161,7 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 	parameters := agreement.Parameters{
 		Logger:         log,
 		Accessor:       accessor,
-		Clock:          stopwatch,
+		ClockFactory:   stopwatch,
 		Network:        gossip.WrapNetwork(new(blackhole), log),
 		Ledger:         ledger,
 		BlockFactory:   proposalFactory,
@@ -180,7 +189,7 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 		}
 
 		select {
-		case <-ledger.Wait(r):
+		case <-ledger.Wait(r, bookkeeping.BlockHash{}):
 		case <-deadlineCh:
 			return fmt.Errorf("agreementtest.Simulate: round %d failed to complete by the deadline (%v)", r, roundDeadline)
 		}
