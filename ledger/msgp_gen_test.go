@@ -8,13 +8,10 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalCatchpointFileHeader(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	v := CatchpointFileHeader{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -35,8 +32,6 @@ func TestMarshalUnmarshalCatchpointFileHeader(t *testing.T) {
 }
 
 func TestRandomizedEncodingCatchpointFileHeader(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &CatchpointFileHeader{})
 }
 
@@ -76,8 +71,6 @@ func BenchmarkUnmarshalCatchpointFileHeader(b *testing.B) {
 }
 
 func TestMarshalUnmarshalcatchpointFileBalancesChunk(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	v := catchpointFileBalancesChunk{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -98,8 +91,6 @@ func TestMarshalUnmarshalcatchpointFileBalancesChunk(t *testing.T) {
 }
 
 func TestRandomizedEncodingcatchpointFileBalancesChunk(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &catchpointFileBalancesChunk{})
 }
 
@@ -139,8 +130,6 @@ func BenchmarkUnmarshalcatchpointFileBalancesChunk(b *testing.B) {
 }
 
 func TestMarshalUnmarshalencodedBalanceRecord(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	v := encodedBalanceRecord{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -161,8 +150,6 @@ func TestMarshalUnmarshalencodedBalanceRecord(t *testing.T) {
 }
 
 func TestRandomizedEncodingencodedBalanceRecord(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &encodedBalanceRecord{})
 }
 

@@ -8,13 +8,10 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalCredential(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	v := Credential{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -35,8 +32,6 @@ func TestMarshalUnmarshalCredential(t *testing.T) {
 }
 
 func TestRandomizedEncodingCredential(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Credential{})
 }
 
@@ -76,8 +71,6 @@ func BenchmarkUnmarshalCredential(b *testing.B) {
 }
 
 func TestMarshalUnmarshalSeed(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	v := Seed{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -98,8 +91,6 @@ func TestMarshalUnmarshalSeed(t *testing.T) {
 }
 
 func TestRandomizedEncodingSeed(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Seed{})
 }
 
@@ -139,8 +130,6 @@ func BenchmarkUnmarshalSeed(b *testing.B) {
 }
 
 func TestMarshalUnmarshalUnauthenticatedCredential(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	v := UnauthenticatedCredential{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -161,8 +150,6 @@ func TestMarshalUnmarshalUnauthenticatedCredential(t *testing.T) {
 }
 
 func TestRandomizedEncodingUnauthenticatedCredential(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &UnauthenticatedCredential{})
 }
 
@@ -202,8 +189,6 @@ func BenchmarkUnmarshalUnauthenticatedCredential(b *testing.B) {
 }
 
 func TestMarshalUnmarshalhashableCredential(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	v := hashableCredential{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -224,8 +209,6 @@ func TestMarshalUnmarshalhashableCredential(t *testing.T) {
 }
 
 func TestRandomizedEncodinghashableCredential(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &hashableCredential{})
 }
 

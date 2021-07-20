@@ -8,13 +8,10 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalAccountTotals(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	v := AccountTotals{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -35,8 +32,6 @@ func TestMarshalUnmarshalAccountTotals(t *testing.T) {
 }
 
 func TestRandomizedEncodingAccountTotals(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &AccountTotals{})
 }
 
@@ -76,8 +71,6 @@ func BenchmarkUnmarshalAccountTotals(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAlgoCount(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	v := AlgoCount{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -98,8 +91,6 @@ func TestMarshalUnmarshalAlgoCount(t *testing.T) {
 }
 
 func TestRandomizedEncodingAlgoCount(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &AlgoCount{})
 }
 
