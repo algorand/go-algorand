@@ -16,8 +16,8 @@ workflows:
       - build-and-test:
           filters:
             branches:
-              ignore: \pull\/*\
+              ignore: \pull\/.*\
       - build-test-and-push:
           filters:
             branches:
-              only: \pull\/*\
+              only: \pull\/.*\
