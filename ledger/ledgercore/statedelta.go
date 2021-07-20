@@ -85,7 +85,7 @@ type StateDelta struct {
 // AccountDeltas stores ordered accounts and allows fast lookup by address
 type AccountDeltas struct {
 	// actual data
-	accts []basics.BalanceRecord
+	Accts []basics.BalanceRecord
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
 }
@@ -96,7 +96,7 @@ type AccountDeltas struct {
 func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int, compactCertNext basics.Round) StateDelta {
 	return StateDelta{
 		Accts: AccountDeltas{
-			accts:      make([]basics.BalanceRecord, 0, hint*2),
+			Accts:      make([]basics.BalanceRecord, 0, hint*2),
 			acctsCache: make(map[basics.Address]int, hint*2),
 		},
 		Txids:    make(map[transactions.Txid]basics.Round, hint),
@@ -116,34 +116,34 @@ func (ad *AccountDeltas) Get(addr basics.Address) (basics.AccountData, bool) {
 	if !ok {
 		return basics.AccountData{}, false
 	}
-	return ad.accts[idx].AccountData, true
+	return ad.Accts[idx].AccountData, true
 }
 
 // ModifiedAccounts returns list of addresses of modified accounts
 func (ad *AccountDeltas) ModifiedAccounts() []basics.Address {
-	result := make([]basics.Address, len(ad.accts))
-	for i := 0; i < len(ad.accts); i++ {
-		result[i] = ad.accts[i].Addr
+	result := make([]basics.Address, len(ad.Accts))
+	for i := 0; i < len(ad.Accts); i++ {
+		result[i] = ad.Accts[i].Addr
 	}
 	return result
 }
 
 // MergeAccounts applies other accounts into this StateDelta accounts
 func (ad *AccountDeltas) MergeAccounts(other AccountDeltas) {
-	for new := range other.accts {
-		ad.upsert(other.accts[new])
+	for new := range other.Accts {
+		ad.upsert(other.Accts[new])
 	}
 }
 
 // Len returns number of stored accounts
 func (ad *AccountDeltas) Len() int {
-	return len(ad.accts)
+	return len(ad.Accts)
 }
 
 // GetByIdx returns address and AccountData
 // It does NOT check boundaries.
 func (ad *AccountDeltas) GetByIdx(i int) (basics.Address, basics.AccountData) {
-	return ad.accts[i].Addr, ad.accts[i].AccountData
+	return ad.Accts[i].Addr, ad.Accts[i].AccountData
 }
 
 // Upsert adds new or updates existing account account
@@ -154,12 +154,12 @@ func (ad *AccountDeltas) Upsert(addr basics.Address, data basics.AccountData) {
 func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
 	addr := br.Addr
 	if idx, exist := ad.acctsCache[addr]; exist { // nil map lookup is OK
-		ad.accts[idx] = br
+		ad.Accts[idx] = br
 		return
 	}
 
-	last := len(ad.accts)
-	ad.accts = append(ad.accts, br)
+	last := len(ad.Accts)
+	ad.Accts = append(ad.Accts, br)
 
 	if ad.acctsCache == nil {
 		ad.acctsCache = make(map[basics.Address]int)
@@ -171,10 +171,10 @@ func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
 // For each data structure, reallocate if it would save us at least 50MB aggregate
 func (sd *StateDelta) OptimizeAllocatedMemory(proto config.ConsensusParams) {
 	// accts takes up 232 bytes per entry, and is saved for 320 rounds
-	if uint64(cap(sd.Accts.accts)-len(sd.Accts.accts))*accountArrayEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
+	if uint64(cap(sd.Accts.Accts)-len(sd.Accts.Accts))*accountArrayEntrySize*proto.MaxBalLookback > stateDeltaTargetOptimizationThreshold {
 		accts := make([]basics.BalanceRecord, len(sd.Accts.acctsCache))
-		copy(accts, sd.Accts.accts)
-		sd.Accts.accts = accts
+		copy(accts, sd.Accts.Accts)
+		sd.Accts.Accts = accts
 	}
 
 	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
