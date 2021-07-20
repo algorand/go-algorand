@@ -27,9 +27,6 @@ type Clock interface {
 	// at which Zero was called as their reference point.
 	Zero() Clock
 
-	// GetZero returns the zero time stored in this clock.
-	GetZero() time.Time
-
 	// GetTimeout returns the absolute time of the timeout target stored in this clock for duration delta.
 	GetTimeout(delta time.Duration) time.Time
 

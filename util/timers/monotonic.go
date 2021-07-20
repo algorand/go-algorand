@@ -87,11 +87,6 @@ func (m *Monotonic) String() string {
 	return time.Time(m.zero).String()
 }
 
-// GetZero returns the zero time stored in this clock.
-func (m *Monotonic) GetZero() time.Time {
-	return m.zero
-}
-
 // GetTimeout returns the absolute time of the timeout target stored in this clock for duration delta.
 func (m *Monotonic) GetTimeout(delta time.Duration) time.Time {
 	return m.zero.Add(delta)
