@@ -998,15 +998,6 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.balances[creator] = cp
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
-	// check program len check doesn't happen in current consensus proto version
-	b.SetProto(protocol.ConsensusV28)
-	proto = b.ConsensusParams()
-	ep.Proto = &proto
-
-	b.pass = true
-	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
-	a.NoError(err)
-
 	//check program len check happens in future consensus proto version
 	b.SetProto(protocol.ConsensusFuture)
 	proto = b.ConsensusParams()
