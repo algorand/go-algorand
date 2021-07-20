@@ -200,6 +200,7 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	record.AppParams = cloneAppParams(record.AppParams)
 	params := record.AppParams[appIdx]
 	proto := balances.ConsensusParams()
+	// when proto.EnableExtraPageOnAppUpdate is false, WellFormed rejects all updates with a multiple-page program
 	if proto.EnableExtraPagesOnAppUpdate {
 		allowed := int(1+params.ExtraProgramPages) * proto.MaxAppProgramLen
 		actual := len(ac.ApprovalProgram) + len(ac.ClearStateProgram)
