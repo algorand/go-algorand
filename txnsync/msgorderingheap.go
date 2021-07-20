@@ -68,7 +68,7 @@ func (p *messageOrderingHeap) Less(i, j int) bool {
 func (p *messageOrderingHeap) enqueue(msg incomingMessage) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if len(p.messages) > messageOrderingHeapLimit {
+	if len(p.messages) >= messageOrderingHeapLimit {
 		return errHeapReachedCapacity
 	}
 	heap.Push(p, messageHeapItem(msg))

@@ -38,7 +38,9 @@ type mockLogger struct {
 
 type mockNodeConnector struct {
 	NodeConnector
-	calledEvents *bool
+	calledEvents  *bool
+	peerInfo      PeerInfo
+	updatingPeers bool
 }
 
 func makeMockNodeConnector(calledEvents *bool) mockNodeConnector {
@@ -65,9 +67,12 @@ func (fn *mockNodeConnector) Random(rng uint64) uint64 {
 
 func (fn *mockNodeConnector) GetPeers() []PeerInfo { return nil }
 
-func (fn *mockNodeConnector) GetPeer(interface{}) (out PeerInfo) { return }
+func (fn *mockNodeConnector) GetPeer(interface{}) (out PeerInfo) {
+	return fn.peerInfo
+}
 
 func (fn *mockNodeConnector) UpdatePeers(txsyncPeers []*Peer, netPeers []interface{}, peersAverageDataExchangeRate uint64) {
+	fn.updatingPeers = true
 }
 func (fn *mockNodeConnector) SendPeerMessage(netPeer interface{}, msg []byte, callback SendMessageCallback) {
 }
