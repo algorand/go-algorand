@@ -1748,7 +1748,7 @@
         "logs": {
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/LogItem"
           }
         }
       }
@@ -1914,6 +1914,24 @@
         "minor": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "LogItem": {
+      "description": "Application Log",
+      "type": "object",
+      "required": [
+        "app-id",
+        "text"
+      ],
+      "properties": {
+        "app-id": {
+          "description": "unique application identifier",
+          "type": "integer"
+        },
+        "text": {
+          "description": "log message",
+          "type": "string"
         }
       }
     }
@@ -2317,7 +2335,7 @@
             "description": "\\[lg\\] Logs for the application being executed by this transaction.",
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/definitions/LogItem"
             }
           },
           "txn": {

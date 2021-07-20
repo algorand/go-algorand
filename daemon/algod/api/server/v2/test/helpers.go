@@ -119,7 +119,10 @@ func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWit
 		EvalDelta: basics.EvalDelta{
 			Logs: []string{"a"},
 		},
-	}}
+	},
+	}
+	blk, _ := m.ledger.Block(m.ledger.Latest())
+	fmt.Println(blk)
 	res.ConfirmedRound = 1
 	found = true
 	return
@@ -278,7 +281,6 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		panic(fmt.Errorf("newly created ledger doesn't start on round 0"))
 	}
 	bal := genesis // the current balance record is the same as the genesis balance record
-
 	for i := 0; i < TXs; i++ {
 		send := gen.Int() % P
 		recv := gen.Int() % P

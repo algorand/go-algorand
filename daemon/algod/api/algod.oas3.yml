@@ -496,7 +496,7 @@
                 "logs": {
                   "description": "\\[lg\\] Logs for the application being executed by this transaction.",
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/LogItem"
                   },
                   "type": "array"
                 },
@@ -1277,7 +1277,7 @@
           },
           "logs": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/LogItem"
             },
             "type": "array"
           }
@@ -1337,6 +1337,24 @@
         "required": [
           "key",
           "value"
+        ],
+        "type": "object"
+      },
+      "LogItem": {
+        "description": "Application Log",
+        "properties": {
+          "app-id": {
+            "description": "unique application identifier",
+            "type": "integer"
+          },
+          "text": {
+            "description": "log message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app-id",
+          "text"
         ],
         "type": "object"
       },
@@ -3356,7 +3374,7 @@
                     "logs": {
                       "description": "\\[lg\\] Logs for the application being executed by this transaction.",
                       "items": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/LogItem"
                       },
                       "type": "array"
                     },
@@ -3427,7 +3445,7 @@
                     "logs": {
                       "description": "\\[lg\\] Logs for the application being executed by this transaction.",
                       "items": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/LogItem"
                       },
                       "type": "array"
                     },

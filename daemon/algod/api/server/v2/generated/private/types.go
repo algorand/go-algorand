@@ -307,7 +307,7 @@ type DryrunTxnResult struct {
 	LocalDeltas      *[]AccountStateDelta `json:"local-deltas,omitempty"`
 	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
 	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
-	Logs             *[]string            `json:"logs,omitempty"`
+	Logs             *[]LogItem           `json:"logs,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -335,6 +335,16 @@ type EvalDeltaKeyValue struct {
 
 	// Represents a TEAL value delta.
 	Value EvalDelta `json:"value"`
+}
+
+// LogItem defines model for LogItem.
+type LogItem struct {
+
+	// unique application identifier
+	AppId uint64 `json:"app-id"`
+
+	// log message
+	Text string `json:"text"`
 }
 
 // StateDelta defines model for StateDelta.
@@ -567,7 +577,7 @@ type PendingTransactionResponse struct {
 	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
 
 	// \[lg\] Logs for the application being executed by this transaction.
-	Logs *[]string `json:"logs,omitempty"`
+	Logs *[]LogItem `json:"logs,omitempty"`
 
 	// Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
 	PoolError string `json:"pool-error"`
