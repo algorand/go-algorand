@@ -221,7 +221,7 @@ type AssetParams struct {
 	Name *string `json:"name,omitempty"`
 
 	// Base64 encoded name of this asset, as supplied by the creator.
-	NameB64 *string `json:"name-b64,omitempty"`
+	NameB64 *[]byte `json:"name-b64,omitempty"`
 
 	// \[r\] Address of account holding reserve (non-minted) units of this asset.
 	Reserve *string `json:"reserve,omitempty"`
@@ -233,13 +233,13 @@ type AssetParams struct {
 	UnitName *string `json:"unit-name,omitempty"`
 
 	// Base64 encoded name of a unit of this asset, as supplied by the creator.
-	UnitNameB64 *string `json:"unit-name-b64,omitempty"`
+	UnitNameB64 *[]byte `json:"unit-name-b64,omitempty"`
 
 	// \[au\] URL where more information about the asset can be retrieved. Included only when the URL is composed of printable utf-8 characters.
 	Url *string `json:"url,omitempty"`
 
 	// Base64 encoded URL where more information about the asset can be retrieved.
-	UrlB64 *string `json:"url-b64,omitempty"`
+	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
 // BuildVersion defines model for BuildVersion.
