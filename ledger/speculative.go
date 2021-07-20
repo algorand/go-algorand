@@ -418,7 +418,7 @@ func (sl *SpeculativeLedger) LFE(r basics.Round, leaf bookkeeping.BlockHash) (le
 }
 
 // blockHdr returns the block header for round r from the speculative ledger.
-func (sl *SpeculativeLedger) blockHdr(r basics.Round, leaf bookkeeping.BlockHash) (bookkeeping.BlockHeader, error){
+func (sl *SpeculativeLedger) BlockHdr(r basics.Round, leaf bookkeeping.BlockHash) (bookkeeping.BlockHeader, error){
 	lfe, err := sl.LFE(r, leaf)
 	if err != nil {
 		return bookkeeping.BlockHeader{}, err
@@ -471,7 +471,7 @@ func (sl *SpeculativeLedger) Wait(r basics.Round, leaf bookkeeping.BlockHash) ch
 
 // Seed returns the VRF seed that in a given round's block header.
 func (sl *SpeculativeLedger) Seed(r basics.Round, leaf bookkeeping.BlockHash) (committee.Seed, error) {
-	blockhdr, err := sl.blockHdr(r, leaf)
+	blockhdr, err := sl.BlockHdr(r, leaf)
 	if err != nil {
 		return committee.Seed{}, err
 	}
@@ -519,7 +519,7 @@ func (sl *SpeculativeLedger) Circulation(r basics.Round, leaf bookkeeping.BlockH
 
 // LookupDigest returns the Digest of the block that was agreed on in a given round.
 func (sl *SpeculativeLedger) LookupDigest(r basics.Round, leaf bookkeeping.BlockHash) (crypto.Digest, error) {
-	blockhdr, err := sl.blockHdr(r, leaf)
+	blockhdr, err := sl.BlockHdr(r, leaf)
 	if err != nil {
 		return crypto.Digest{}, err
 	}
@@ -528,7 +528,7 @@ func (sl *SpeculativeLedger) LookupDigest(r basics.Round, leaf bookkeeping.Block
 
 // ConsensusParams returns the consensus parameters for a given round.
 func (sl *SpeculativeLedger) ConsensusParams(r basics.Round, leaf bookkeeping.BlockHash) (config.ConsensusParams, error) {
-	blockhdr, err := sl.blockHdr(r, leaf)
+	blockhdr, err := sl.BlockHdr(r, leaf)
 	if err != nil {
 		return config.ConsensusParams{}, err
 	}
@@ -537,7 +537,7 @@ func (sl *SpeculativeLedger) ConsensusParams(r basics.Round, leaf bookkeeping.Bl
 
 // ConsensusVersion returns the consensus version for a given round.
 func (sl *SpeculativeLedger) ConsensusVersion(r basics.Round, leaf bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
-	blockhdr, err := sl.blockHdr(r, leaf)
+	blockhdr, err := sl.BlockHdr(r, leaf)
 	if err != nil {
 		return "", err
 	}
@@ -572,4 +572,16 @@ func (sl *SpeculativeLedger) eval(ctx context.Context, leaf bookkeeping.BlockHas
 	}
 
 	return eval(ctx, lfe, blk, validate, sl.verifiedTxnCache, executionPool)
+}
+
+// StartEvaluator starts a block evaluator with a particular block header.
+// The block header's Branch value determines which speculative branch is used.
+// This is intended to be used by the transaction pool assembly code.
+func (sl *SpeculativeLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*BlockEvaluator, error) {
+	lfe, err := sl.LFE(hdr.Round.SubSaturate(1), hdr.Branch)
+	if err != nil {
+		return nil, err
+	}
+
+	return startEvaluator(lfe, hdr, paysetHint, true, true)
 }

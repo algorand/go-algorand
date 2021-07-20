@@ -57,7 +57,7 @@ type TransactionPool struct {
 	logAssembleStats     bool
 	expFeeFactor         uint64
 	txPoolMaxSize        int
-	ledger               *ledger.Ledger
+	ledger               *ledger.SpeculativeLedger
 
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
@@ -91,7 +91,7 @@ type TransactionPool struct {
 }
 
 // MakeTransactionPool makes a transaction pool.
-func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger) *TransactionPool {
+func MakeTransactionPool(ledger *ledger.SpeculativeLedger, cfg config.Local, log logging.Logger) *TransactionPool {
 	if cfg.TxPoolExponentialIncreaseFactor < 1 {
 		cfg.TxPoolExponentialIncreaseFactor = 1
 	}
@@ -626,7 +626,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
-	prev, err := pool.ledger.BlockHdr(latest)
+	prev, err := pool.ledger.BlockHdr(latest, bookkeeping.BlockHash{})
 	if err != nil {
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot get prev header for %d: %v",
 			latest, err)
@@ -807,7 +807,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		pool.log.Infof("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d-2", pool.assemblyResults.roundStartedEvaluating, round)
 		stats.StopReason = telemetryspec.AssembleBlockEmpty
 		pool.assemblyMu.Unlock()
-		return pool.assembleEmptyBlock(round)
+		return pool.assembleEmptyBlock(round, bookkeeping.BlockHash{})
 	}
 
 	defer pool.assemblyMu.Unlock()
@@ -832,7 +832,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		// start preparing an empty block in case we'll miss the extra time (assemblyWaitEps).
 		// the assembleEmptyBlock is using the database, so we want to unlock here and take the lock again later on.
 		pool.assemblyMu.Unlock()
-		emptyBlock, emptyBlockErr := pool.assembleEmptyBlock(round)
+		emptyBlock, emptyBlockErr := pool.assembleEmptyBlock(round, bookkeeping.BlockHash{})
 		pool.assemblyMu.Lock()
 
 		if pool.assemblyResults.roundStartedEvaluating > round {
@@ -873,7 +873,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	} else if pool.assemblyResults.roundStartedEvaluating == round.SubSaturate(1) {
 		pool.log.Warnf("AssembleBlock: assembled block round did not catch up to requested round: %d != %d", pool.assemblyResults.roundStartedEvaluating, round)
 		stats.StopReason = telemetryspec.AssembleBlockTimeout
-		return pool.assembleEmptyBlock(round)
+		return pool.assembleEmptyBlock(round, bookkeeping.BlockHash{})
 	} else if pool.assemblyResults.roundStartedEvaluating < round {
 		return nil, fmt.Errorf("AssembleBlock: assembled block round much behind requested round: %d != %d",
 			pool.assemblyResults.roundStartedEvaluating, round)
@@ -885,9 +885,9 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 // assembleEmptyBlock construct a new block for the given round. Internally it's using the ledger database calls, so callers
 // need to be aware that it might take a while before it would return.
-func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *ledger.ValidatedBlock, err error) {
+func (pool *TransactionPool) assembleEmptyBlock(round basics.Round, branch bookkeeping.BlockHash) (assembled *ledger.ValidatedBlock, err error) {
 	prevRound := round - 1
-	prev, err := pool.ledger.BlockHdr(prevRound)
+	prev, err := pool.ledger.BlockHdr(prevRound, branch)
 	if err != nil {
 		err = fmt.Errorf("TransactionPool.assembleEmptyBlock: cannot get prev header for %d: %v", prevRound, err)
 		return nil, err
