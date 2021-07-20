@@ -36,7 +36,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-deadlock"
 	//"github.com/algorand/go-algorand/protocol"
 )
