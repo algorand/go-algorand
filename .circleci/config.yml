@@ -4,20 +4,20 @@ jobs:
     docker:
       - image: cimg/base:stable
     steps:
-      - run: echo "hello"
+      - run: echo "ignore-test"
   build-test-and-push:
     docker:
       - image: cimg/base:stable
     steps:
-      - run: echo "hello"
+      - run: echo "only-test"
 workflows:
   basic-workflow:
     jobs:
       - build-and-test:
           filters:
             branches:
-              ignore: some-branch
+              ignore: master
       - build-test-and-push:
           filters:
             branches:
-              only: some-branch
+              only: master
