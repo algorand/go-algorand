@@ -16,8 +16,8 @@ workflows:
       - build-and-test:
           filters:
             branches:
-              ignore: \pull\/.*\
+              ignore: /pull\/[0-9]+/
       - build-test-and-push:
           filters:
             branches:
-              only: "barbara/circleCInightly"
+              only: /pull\/[0-9]+/
