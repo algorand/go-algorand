@@ -115,14 +115,22 @@ func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 }
 
 func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
-	res = node.TxnWithStatus{ApplyData: transactions.ApplyData{
-		EvalDelta: basics.EvalDelta{
-			Logs: []string{"a"},
+	t := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID:     0,
+			ApprovalProgram:   []byte("#pragma version 5\nint 1\nloop: byte \"a\"\nlog\nint 1\n+\ndup\nint 30\n<\nbnz loop"),
+			ClearStateProgram: []byte("#pragma version 5\nint 1"),
 		},
-	},
 	}
-	blk, _ := m.ledger.Block(m.ledger.Latest())
-	fmt.Println(blk)
+
+	res = node.TxnWithStatus{Txn: transactions.SignedTxn{Txn: t},
+		ApplyData: transactions.ApplyData{
+			EvalDelta: basics.EvalDelta{
+				Logs: []string{"a"},
+			},
+		},
+	}
 	res.ConfirmedRound = 1
 	found = true
 	return
@@ -276,6 +284,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 	}
 
 	tx := make([]transactions.SignedTxn, 2*TXs)
+
 	latest := ledger.Latest()
 	if latest != 0 {
 		panic(fmt.Errorf("newly created ledger doesn't start on round 0"))
@@ -335,6 +344,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		rbal := bal[raddr]
 		rbal.MicroAlgos.Raw += amt.Raw
 		bal[raddr] = rbal
+
 	}
 
 	// make app call txns
