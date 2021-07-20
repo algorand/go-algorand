@@ -229,7 +229,7 @@ func (n *Fuzzer) initAccountsAndBalances(rootSeed []byte, onlineNodes []bool) er
 	return nil
 }
 
-// Disconnect would disconnect node diconnectingNode from node disconnectedNode ensuring that no futher messages
+// Disconnect would disconnect node diconnectingNode from node disconnectedNode ensuring that no further messages
 // from disconnectedNode would reach diconnectingNode
 func (n *Fuzzer) Disconnect(diconnectingNode, disconnectedNode int) {
 	n.disconnectMu.Lock()

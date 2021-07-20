@@ -36,6 +36,12 @@ while getopts ":o:h" opt; do
 done
 shift $((OPTIND -1))
 
+if [ "$#" -ne 0 ]; then
+  echo "Unexpected positional arguments passed to script: $@"
+  exit 1
+fi
+
+
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 pushd .
 cd ${SCRIPTPATH}
@@ -76,7 +82,7 @@ function install_go_module {
 
 if [[ "${BUILDTOOLS_INSTALL}" != "ALL" ]]; then
   install_go_module "${BUILDTOOLS_INSTALL}"
-  return
+  exit 0
 fi
 
 install_go_module golang.org/x/lint golang.org/x/lint/golint

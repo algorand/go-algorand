@@ -71,7 +71,7 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 }
 
 // indexOf returns the index into the children array of the first child whose hashIndex field is less or equal to b
-// it's being used in conjuction with the bitset, so we test only the equality path ( i.e. get the index of the
+// it's being used in conjunction with the bitset, so we test only the equality path ( i.e. get the index of the
 // child that has hashIndex of value x )
 func (n *node) indexOf(b byte) byte {
 	// find the child using binary search:
@@ -224,7 +224,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 
 // calculateHash calculate the hash of the non-leaf nodes
 // when this function is called, the hashes of all the child node are expected
-// to have been calculated already. This is achived by doing the following:
+// to have been calculated already. This is achieved by doing the following:
 // 1. all node id allocations are done in incremental monolitic order, from the bottom up.
 // 2. hash calculations are being doing in node id incremental ordering
 func (n *node) calculateHash(cache *merkleTrieCache) error {

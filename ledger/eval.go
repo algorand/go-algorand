@@ -1240,7 +1240,7 @@ transactionGroupLoop:
 		}
 	}
 
-	// Finally, procees any pending end-of-block state changes
+	// Finally, proceeds any pending end-of-block state changes
 	err = eval.endOfBlock()
 	if err != nil {
 		return ledgercore.StateDelta{}, err

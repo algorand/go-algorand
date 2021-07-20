@@ -432,7 +432,7 @@ func (nc NodeController) SetConsensus(consensus config.ConsensusProtocols) error
 	return config.SaveConfigurableConsensus(nc.algodDataDir, consensus)
 }
 
-// GetConsensus rebuild the consensus version from the data directroy
+// GetConsensus rebuild the consensus version from the data directory
 func (nc NodeController) GetConsensus() (config.ConsensusProtocols, error) {
 	return config.PreloadConfigurableConsensusProtocols(nc.algodDataDir)
 }

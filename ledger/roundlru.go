@@ -121,7 +121,7 @@ func (hlc *heapLRUCache) inc() {
 	}
 }
 func (hlc *heapLRUCache) reIndex() {
-	if hlc.entries.heap != nil || len(hlc.entries.heap) == 0 {
+	if len(hlc.entries.heap) == 0 {
 		return
 	}
 	minprio := hlc.entries.heap[0].useIndex

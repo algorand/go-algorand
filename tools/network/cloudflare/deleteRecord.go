@@ -52,7 +52,7 @@ type DeleteDNSRecordResult struct {
 	ID string `json:"id"`
 }
 
-// ParseDeleteDNSRecordResponse parses the reponse that was received as a result of a ListDNSRecordRequest
+// ParseDeleteDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
 func parseDeleteDNSRecordResponse(response *http.Response) (*DeleteDNSRecordResponse, error) {
 	defer response.Body.Close()
 	body, err := ioutil.ReadAll(response.Body)

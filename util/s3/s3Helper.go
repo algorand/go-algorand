@@ -160,7 +160,7 @@ func getAWSCredentials() (awsID string, awsKey string) {
 
 func validateS3Credentials(awsID string, awsKey string) (err error) {
 	if awsID == "" || awsKey == "" {
-		err = fmt.Errorf("AWS credentials must be specified in enviroment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
+		err = fmt.Errorf("AWS credentials must be specified in environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
 		return
 	}
 	return
