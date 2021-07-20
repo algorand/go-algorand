@@ -17,8 +17,8 @@
 package agreement
 
 import (
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 )
 
 // ParamsRound returns the round from which consensus parameters
@@ -29,6 +29,6 @@ func ParamsRound(rnd basics.Round) basics.Round {
 
 // paramsRoundBranch returns the target round and leaf branch from which consensus parameters
 // should be used for agreement on round rnd.
-func paramsRoundBranch(rnd round) (basics.Round, crypto.Digest) {
+func paramsRoundBranch(rnd round) (basics.Round, bookkeeping.BlockHash) {
 	return ParamsRound(rnd.number), rnd.branch
 }

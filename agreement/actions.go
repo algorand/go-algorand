@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -251,7 +252,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 	logEventStart := logEvent
 	logEventStart.Type = logspec.RoundStart
 	s.log.with(logEventStart).Infof("finished round %d", a.Certificate.Round)
-	s.tracer.timeR().StartRound(round{number: a.Certificate.Round + 1, branch: a.Certificate.Proposal.BlockDigest})
+	s.tracer.timeR().StartRound(round{number: a.Certificate.Round + 1, branch: bookkeeping.BlockHash(a.Certificate.Proposal.BlockDigest)})
 	s.tracer.timeR().RecStep(0, propose, bottom)
 }
 

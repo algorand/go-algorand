@@ -22,8 +22,8 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -214,7 +214,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		// in this case, we don't have fresh and valid state
 		// pretend a new round has just started, and propose a block
 		nextRound := s.Ledger.NextRound()
-		nextVersion, err := s.Ledger.ConsensusVersion(nextRound, crypto.Digest{}) // XXX correct?
+		nextVersion, err := s.Ledger.ConsensusVersion(nextRound, bookkeeping.BlockHash{}) // XXX correct?
 		if err != nil {
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
@@ -222,7 +222,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 		status = makePipelinePlayer(nextRound, nextVersion)
 		router = makeRootRouter(status)
 
-		a1 := pseudonodeAction{T: assemble, Round: makeRoundBranch(s.Ledger.NextRound(), crypto.Digest{})}
+		a1 := pseudonodeAction{T: assemble, Round: makeRoundBranch(s.Ledger.NextRound(), bookkeeping.BlockHash{})}
 		a2 := rezeroAction{Round: a1.Round}
 
 		a = make([]action, 0)

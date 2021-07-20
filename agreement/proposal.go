@@ -66,7 +66,7 @@ func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 func (p unauthenticatedProposal) roundBranch() round {
-	return round{number: p.Round(), branch: crypto.Digest(p.Branch)}
+	return round{number: p.Round(), branch: p.Branch}
 }
 
 // value returns the proposal-value associated with this proposal.
@@ -169,7 +169,7 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 	if rerand < basics.Round(cparams.SeedLookback) {
 		digrnd := rnd.number.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
 		// XXXX need to remember branch from 160 rounds ago or assert that it is long enough ago to be confirmed
-		oldDigest, err := ledger.LookupDigest(digrnd, crypto.Digest{})
+		oldDigest, err := ledger.LookupDigest(digrnd, bookkeeping.BlockHash{})
 		if err != nil {
 			reterr = fmt.Errorf("could not lookup old entry digest (for seed) from round %d: %v", digrnd, err)
 			return
@@ -189,7 +189,7 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	}
 
 	balanceRound := balanceRound(rnd.number, cparams)
-	proposerRecord, err := ledger.Lookup(balanceRound, crypto.Digest{}, value.OriginalProposer)
+	proposerRecord, err := ledger.Lookup(balanceRound, bookkeeping.BlockHash{}, value.OriginalProposer)
 	if err != nil {
 		return fmt.Errorf("failed to obtain balance record for address %v in round %d: %v", value.OriginalProposer, balanceRound, err)
 	}
@@ -223,7 +223,7 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	rerand := rnd.number % basics.Round(cparams.SeedLookback*cparams.SeedRefreshInterval)
 	if rerand < basics.Round(cparams.SeedLookback) {
 		digrnd := rnd.number.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
-		oldDigest, err := ledger.LookupDigest(digrnd, crypto.Digest{})
+		oldDigest, err := ledger.LookupDigest(digrnd, bookkeeping.BlockHash{})
 		if err != nil {
 			return fmt.Errorf("could not lookup old entry digest (for seed) from round %d: %v", digrnd, err)
 		}
@@ -238,7 +238,7 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
 	rnd := round{
 		number: ve.Block().Round(),
-		branch: crypto.Digest(ve.Block().Branch),
+		branch: ve.Block().Branch,
 	}
 	newSeed, seedProof, err := deriveNewSeed(address, vrf, rnd, period, ledger)
 	if err != nil {

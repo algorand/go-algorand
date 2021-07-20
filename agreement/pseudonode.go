@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -204,7 +204,7 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []a
 		return n.participationKeys
 	}
 
-	cparams, err := n.ledger.ConsensusParams(ParamsRound(voteRound), crypto.Digest{}) // XXX ignores branch
+	cparams, err := n.ledger.ConsensusParams(ParamsRound(voteRound), bookkeeping.BlockHash{}) // XXX ignores branch
 	if err != nil {
 		// if we cannot figure out the balance round number, reset the parameters so that we won't be sending
 		// any vote.

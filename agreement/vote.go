@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -29,13 +30,13 @@ import (
 type (
 	// rawVote is the inner struct which is authenticated with keys
 	rawVote struct {
-		_struct  struct{}       `codec:",omitempty,omitemptyarray"`
-		Sender   basics.Address `codec:"snd"`
-		Round    basics.Round   `codec:"rnd"`
-		Period   period         `codec:"per"`
-		Step     step           `codec:"step"`
-		Branch   crypto.Digest  `codec:"prev"`
-		Proposal proposalValue  `codec:"prop"`
+		_struct  struct{}              `codec:",omitempty,omitemptyarray"`
+		Sender   basics.Address        `codec:"snd"`
+		Round    basics.Round          `codec:"rnd"`
+		Period   period                `codec:"per"`
+		Step     step                  `codec:"step"`
+		Branch   bookkeeping.BlockHash `codec:"prev"`
+		Proposal proposalValue         `codec:"prop"`
 	}
 
 	// unauthenticatedVote is a vote which has not been verified
@@ -62,7 +63,7 @@ type (
 		Round     basics.Round                        `codec:"rnd"`
 		Period    period                              `codec:"per"`
 		Step      step                                `codec:"step"`
-		Branch    crypto.Digest                       `codec:"prev"`
+		Branch    bookkeeping.BlockHash               `codec:"prev"`
 		Cred      committee.UnauthenticatedCredential `codec:"cred"`
 		Proposals [2]proposalValue                    `codec:"props"`
 		Sigs      [2]crypto.OneTimeSignature          `codec:"sigs"`
@@ -81,7 +82,7 @@ type (
 		Round     basics.Round               `codec:"rnd"`
 		Period    period                     `codec:"per"`
 		Step      step                       `codec:"step"`
-		Branch    crypto.Digest              `codec:"prev"`
+		Branch    bookkeeping.BlockHash      `codec:"prev"`
 		Cred      committee.Credential       `codec:"cred"`
 		Proposals [2]proposalValue           `codec:"props"`
 		Sigs      [2]crypto.OneTimeSignature `codec:"sigs"`

@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -237,7 +237,7 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 
 	// XXX assert len(extSignals) > 0 and matches expected depth
 	// pick next deadlineCh from extSignals
-	ledgerNextRoundCh := s.Ledger.Wait(nextRound, crypto.Digest{})
+	ledgerNextRoundCh := s.Ledger.Wait(nextRound, bookkeeping.BlockHash{})
 	deadlineCh, deadlineRound := s.clockManager.nextDeadlineCh(extSignals.signals)
 	var fastDeadlineCh <-chan time.Time
 	var fastDeadlineRound round
@@ -293,7 +293,7 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 		// since we don't know how long we've been waiting in this select statement and we don't really know
 		// if the current next round has been increased by 1 or more, we need to sample it again.
 		previousRound := nextRound
-		nextRoundBranch := makeRoundBranch(s.Ledger.NextRound(), crypto.Digest{}) // XXX uses empty digest: not speculative
+		nextRoundBranch := makeRoundBranch(s.Ledger.NextRound(), bookkeeping.BlockHash{}) // XXX uses empty digest: not speculative
 
 		logEvent := logspec.AgreementEvent{
 			Type:  logspec.RoundInterrupted,

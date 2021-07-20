@@ -88,7 +88,7 @@ type BlockFactory interface {
 	// produce a ValidatedBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
-	AssembleBlock(basics.Round, crypto.Digest, time.Time) (ValidatedBlock, error)
+	AssembleBlock(basics.Round, bookkeeping.BlockHash, time.Time) (ValidatedBlock, error)
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.
@@ -114,7 +114,7 @@ type LedgerReader interface {
 
 	// Wait returns a channel which fires when the specified round
 	// completes and is durably stored on disk.
-	Wait(round basics.Round, leafBranch crypto.Digest) chan struct{}
+	Wait(round basics.Round, leafBranch bookkeeping.BlockHash) chan struct{}
 
 	// Seed returns the VRF seed that was agreed upon in a given round.
 	//
@@ -130,7 +130,7 @@ type LedgerReader interface {
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	Seed(round basics.Round, leafBranch crypto.Digest) (committee.Seed, error)
+	Seed(round basics.Round, leafBranch bookkeeping.BlockHash) (committee.Seed, error)
 
 	// Lookup returns the AccountData associated with some Address
 	// at the conclusion of a given round.
@@ -143,7 +143,7 @@ type LedgerReader interface {
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	Lookup(round basics.Round, leafBranch crypto.Digest, addr basics.Address) (basics.AccountData, error)
+	Lookup(round basics.Round, leafBranch bookkeeping.BlockHash, addr basics.Address) (basics.AccountData, error)
 
 	// Circulation returns the total amount of money in circulation at the
 	// conclusion of a given round.
@@ -156,7 +156,7 @@ type LedgerReader interface {
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	Circulation(round basics.Round, leafBranch crypto.Digest) (basics.MicroAlgos, error)
+	Circulation(round basics.Round, leafBranch bookkeeping.BlockHash) (basics.MicroAlgos, error)
 
 	// LookupDigest returns the Digest of the entry that was agreed on in a
 	// given round.
@@ -176,7 +176,7 @@ type LedgerReader interface {
 	// A LedgerReader need only keep track of the digest from the most
 	// recent multiple of (config.Protocol.BalLookback/2). All other
 	// digests may be forgotten without hurting liveness.
-	LookupDigest(round basics.Round, leafBranch crypto.Digest) (crypto.Digest, error)
+	LookupDigest(round basics.Round, leafBranch bookkeeping.BlockHash) (crypto.Digest, error)
 
 	// ConsensusParams returns the consensus parameters that are correct
 	// for the given round.
@@ -191,7 +191,7 @@ type LedgerReader interface {
 	// protocol may lose liveness.
 	//
 	// TODO replace with ConsensusVersion
-	ConsensusParams(round basics.Round, leafBranch crypto.Digest) (config.ConsensusParams, error)
+	ConsensusParams(round basics.Round, leafBranch bookkeeping.BlockHash) (config.ConsensusParams, error)
 
 	// ConsensusVersion returns the consensus version that is correct
 	// for the given round.
@@ -200,7 +200,7 @@ type LedgerReader interface {
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	ConsensusVersion(round basics.Round, leafBranch crypto.Digest) (protocol.ConsensusVersion, error)
+	ConsensusVersion(round basics.Round, leafBranch bookkeeping.BlockHash) (protocol.ConsensusVersion, error)
 }
 
 // A LedgerWriter allows writing entries to the ledger.
