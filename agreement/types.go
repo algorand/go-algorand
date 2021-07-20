@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/timers"
@@ -48,12 +48,12 @@ func DeadlineTimeout() time.Duration {
 
 type roundBranch struct {
 	number basics.Round
-	branch crypto.Digest
+	branch bookkeeping.BlockHash
 }
 
 var roundZero = round{number: 0}
 
-func makeRoundBranch(n basics.Round, b crypto.Digest) round {
+func makeRoundBranch(n basics.Round, b bookkeeping.BlockHash) round {
 	return round{number: n, branch: b}
 }
 

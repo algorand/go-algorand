@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 )
@@ -283,7 +284,7 @@ func (b unauthenticatedBundle) Certificate() Certificate {
 }
 
 func (b unauthenticatedBundle) roundBranch() round {
-	return round{number: b.Round, branch: b.Branch}
+	return round{number: b.Round, branch: bookkeeping.BlockHash(b.Branch)}
 }
 
 func (b bundle) u() unauthenticatedBundle {

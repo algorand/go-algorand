@@ -20,8 +20,8 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -31,11 +31,11 @@ import (
 type selector struct {
 	_struct struct{} `codec:""` // not omitempty
 
-	Seed   committee.Seed `codec:"seed"`
-	Round  basics.Round   `codec:"rnd"`
-	Period period         `codec:"per"`
-	Step   step           `codec:"step"`
-	Branch crypto.Digest  `codec:"prev"`
+	Seed   committee.Seed        `codec:"seed"`
+	Round  basics.Round          `codec:"rnd"`
+	Period period                `codec:"per"`
+	Step   step                  `codec:"step"`
+	Branch bookkeeping.BlockHash `codec:"prev"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
@@ -66,13 +66,13 @@ func membership(l LedgerReader, addr basics.Address, r round, p period, s step) 
 	balanceRound := balanceRound(r.number, cparams)
 	seedRound := seedRound(r.number, cparams)
 
-	record, err := l.Lookup(balanceRound, crypto.Digest{}, addr) // assumes balance was confirmed
+	record, err := l.Lookup(balanceRound, bookkeeping.BlockHash{}, addr) // assumes balance was confirmed
 	if err != nil {
 		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain balance record for address %v in round %d: %w", r, addr, balanceRound, err)
 		return
 	}
 
-	total, err := l.Circulation(balanceRound, crypto.Digest{})
+	total, err := l.Circulation(balanceRound, bookkeeping.BlockHash{})
 	if err != nil {
 		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain total circulation in round %d: %v", r, balanceRound, err)
 		return

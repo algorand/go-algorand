@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -274,7 +275,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
-			as := p.enterRound(r, e, round{number: p.Round.number + 1, branch: cert.Proposal.BlockDigest})
+			as := p.enterRound(r, e, round{number: p.Round.number + 1, branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
 			return append(actions, as...)
 		}
 		// we don't have the block! We need to ensure we will be able to receive the block.
@@ -593,7 +594,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				as := p.enterRound(r, delegatedE, round{number: cert.Round + 1, branch: cert.Proposal.BlockDigest})
+				as := p.enterRound(r, delegatedE, round{number: cert.Round + 1, branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
 				return append(actions, as...)
 			}
 		}

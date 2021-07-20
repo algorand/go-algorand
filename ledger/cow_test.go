@@ -116,8 +116,7 @@ func TestCowBalance(t *testing.T) {
 	accts0 := randomAccounts(20, true)
 	ml := mockLedger{balanceMap: accts0}
 
-	c0, err := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
-	require.NoError(t, err)
+	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
 	checkCow(t, c0, accts0)
 
 	c1 := c0.child(0)
@@ -140,10 +139,12 @@ func TestCowBalance(t *testing.T) {
 	checkCow(t, c1, accts1)
 	checkCow(t, c2, accts2)
 
-	c2.commitToParent()
+	err := c2.commitToParent()
+	require.NoError(t, err)
 	checkCow(t, c0, accts0)
 	checkCow(t, c1, accts2)
 
-	c1.commitToParent()
+	err = c1.commitToParent()
+	require.NoError(t, err)
 	checkCow(t, c0, accts2)
 }

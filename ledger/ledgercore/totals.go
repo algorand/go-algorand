@@ -17,6 +17,8 @@
 package ledgercore
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -122,4 +124,109 @@ func (at *AccountTotals) RewardUnits() uint64 {
 		logging.Base().Panicf("AccountTotals.RewardUnits(): overflow %v + %v", at.Online, at.Offline)
 	}
 	return res
+}
+
+// add adds in the delta from an algoDelta
+func (ac *AlgoCount) add(delta *algoDelta, ot *basics.OverflowTracker) {
+	ac.Money.Raw = ot.AddUS(ac.Money.Raw, delta.microAlgos)
+	ac.RewardUnits = ot.AddUS(ac.RewardUnits, delta.rewardUnits)
+}
+
+// Add adds in the delta from an AccountTotalsDelta
+func (at *AccountTotals) Add(delta *AccountTotalsDelta) error {
+	if at.RewardsLevel != delta.RewardsLevel {
+		return fmt.Errorf("AccountTotals.Add(): mismatched reward levels: %d != %d", at.RewardsLevel, delta.RewardsLevel)
+	}
+
+	var ot basics.OverflowTracker
+	at.Online.add(&delta.online, &ot)
+	at.Offline.add(&delta.offline, &ot)
+	at.NotParticipating.add(&delta.notParticipating, &ot)
+	if ot.Overflowed {
+		return fmt.Errorf("AccountTotals.Add(): overflow")
+	}
+
+	return nil
+}
+
+// algoDelta represents a change in algos and reward units for a particular
+// class of accounts (online, offline, etc).  Such deltas are used in tracking
+// cumulative updates to some base totals.  These deltas are not serialized.
+// Since the delta can be negative, we use int64, and in particular, we don't
+// use the basics.MicroAlgos type, which is always a positive amount.
+type algoDelta struct {
+	microAlgos  int64
+	rewardUnits int64
+}
+
+// AccountTotalsDelta represents a change to the totals of algos in the system
+// grouped by different account status values.
+type AccountTotalsDelta struct {
+	// Change to money held by accounts of a particular status.
+	online           algoDelta
+	offline          algoDelta
+	notParticipating algoDelta
+
+	// Total number of algos received per reward unit since genesis
+	RewardsLevel uint64
+}
+
+func (ad *AccountTotalsDelta) statusField(status basics.Status) *algoDelta {
+	switch status {
+	case basics.Online:
+		return &ad.online
+	case basics.Offline:
+		return &ad.offline
+	case basics.NotParticipating:
+		return &ad.notParticipating
+	default:
+		logging.Base().Panicf("AccountTotalsDelta: unknown status %v", status)
+
+		// Go's compiler does not know that Panicf() will not return.
+		return nil
+	}
+}
+
+// AddAccount adds an account to the delta
+func (ad *AccountTotalsDelta) AddAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
+	sum := ad.statusField(data.Status)
+	algos, _ := data.Money(proto, ad.RewardsLevel)
+	sum.microAlgos = ot.AddS(sum.microAlgos, ot.ToS(algos.Raw))
+	sum.rewardUnits = ot.AddS(sum.rewardUnits, ot.ToS(data.MicroAlgos.RewardUnits(proto)))
+}
+
+// DelAccount removes an account from the delta
+func (ad *AccountTotalsDelta) DelAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
+	sum := ad.statusField(data.Status)
+	algos, _ := data.Money(proto, ad.RewardsLevel)
+	sum.microAlgos = ot.SubS(sum.microAlgos, ot.ToS(algos.Raw))
+	sum.rewardUnits = ot.SubS(sum.rewardUnits, ot.ToS(data.MicroAlgos.RewardUnits(proto)))
+}
+
+// SetRewardsLevel initializes the new rewards level
+func (ad *AccountTotalsDelta) SetRewardsLevel(newRewardsLevel uint64) {
+	ad.RewardsLevel = newRewardsLevel
+}
+
+// add adds the delta from another algoDelta
+func (ad *algoDelta) add(other *algoDelta, ot *basics.OverflowTracker) {
+	ad.microAlgos = ot.AddS(ad.microAlgos, other.microAlgos)
+	ad.rewardUnits = ot.AddS(ad.rewardUnits, other.rewardUnits)
+}
+
+// Add adds in the delta from another AccountTotalsDelta
+func (ad *AccountTotalsDelta) Add(other *AccountTotalsDelta) error {
+	if ad.RewardsLevel != other.RewardsLevel {
+		return fmt.Errorf("AccountTotalsDelta.Add(): mismatched reward levels: %d != %d", ad.RewardsLevel, other.RewardsLevel)
+	}
+
+	var ot basics.OverflowTracker
+	ad.online.add(&other.online, &ot)
+	ad.offline.add(&other.offline, &ot)
+	ad.notParticipating.add(&other.notParticipating, &ot)
+	if ot.Overflowed {
+		return fmt.Errorf("AccountTotalsDelta.Add(): overflow")
+	}
+
+	return nil
 }
