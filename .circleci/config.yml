@@ -16,8 +16,8 @@ workflows:
       - build-and-test:
           filters:
             branches:
-              ignore: master
+              ignore: pull
       - build-test-and-push:
           filters:
             branches:
-              only: master
+              only: pull
