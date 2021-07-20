@@ -204,7 +204,8 @@ build: buildsrc
 # to cache binaries from time to time on empty NFS
 # dirs
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
-	mkdir -p tmp/go-cache && \
+	mkdir -p "${GOCACHE}" && \
+	touch "${GOCACHE}"/file.txt && \
 	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:
