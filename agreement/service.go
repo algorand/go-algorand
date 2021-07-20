@@ -57,7 +57,7 @@ type Service struct {
 	monitor *coserviceMonitor
 
 	persistRouter  rootRouter
-	persistStatus  pipelinePlayer
+	persistStatus  serializableActor
 	persistActions []action
 
 	clockManager *clockManager
@@ -196,7 +196,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	// setup
 	var clockManager *clockManager
 	var router rootRouter
-	var status pipelinePlayer
+	var status serializableActor
 	var a []action
 	var err error
 	raw, err := restore(s.log, s.Accessor)
@@ -210,7 +210,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	}
 	// err will tell us if the restore/decode operations above completed successfully or not.
 	// XXXX handle restoring multiple player states and using NextRound to check last confirmed
-	if nr := s.Ledger.NextRound(); err != nil || status.lastCommittedRound < nr { // XXX double-check with branch
+	if nr := s.Ledger.NextRound(); err != nil || status.forgetBeforeRound() < nr { // XXX double-check with branch
 		// in this case, we don't have fresh and valid state
 		// pretend a new round has just started, and propose a block
 		nextRound := s.Ledger.NextRound()
@@ -219,7 +219,9 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		status = makePipelinePlayer(nextRound, nextVersion)
+		pl := makePipelinePlayer(nextRound, nextVersion)
+		//pl := player{Round: makeRoundBranch(nextRound, bookkeeping.BlockHash{}), Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+		status = &pl
 		router = makeRootRouter(status)
 
 		a1 := pseudonodeAction{T: assemble, Round: makeRoundBranch(s.Ledger.NextRound(), bookkeeping.BlockHash{})}
@@ -239,7 +241,9 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			break
 		}
 
-		status, a = router.submitTop(s.tracer, status, e)
+		var ac actor
+		ac, a = router.submitTop(s.tracer, status, e)
+		status = ac.(serializableActor)
 
 		// XXXX only persist specific sub-player states when they return persistent actions
 		if persistent(a) {
@@ -261,7 +265,7 @@ func (s *Service) persistState(round round, period period, step step, done chan 
 	// get state of all players
 	allRPS := s.persistStatus.allPlayersRPS()
 	raw := encode(s.clockManager, s.persistRouter, s.persistStatus, s.persistActions)
-	return s.persistenceLoop.Enqueue(s.clockManager, allRPS, RPS{round: round, period: period, step: step}, raw, done)
+	return s.persistenceLoop.Enqueue(s.clockManager, allRPS, RPS{Round: round, Period: period, Step: step}, raw, done)
 }
 
 func (s *Service) do(ctx context.Context, as []action) {

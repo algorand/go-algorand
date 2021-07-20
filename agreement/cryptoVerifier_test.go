@@ -41,7 +41,7 @@ var _ = fmt.Printf
 func findSenders(l Ledger, Round basics.Round, Period period, Step step, addresses []basics.Address, selections []*crypto.VRFSecrets) []int {
 	senders := []int{}
 	for i, sender := range addresses {
-		m, _ := membership(l, sender, Round, Period, Step)
+		m, _ := membership(l, sender, makeRound(Round), Period, Step)
 		cred := committee.MakeCredential(&selections[i].SK, m.Selector)
 		if _, err := cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m); err == nil {
 			senders = append(senders, i)
@@ -58,16 +58,17 @@ func findSender(l Ledger, Round basics.Round, Period period, Step step, addresse
 	return idxs[0]
 }
 
-func makeUnauthenticatedVote(l Ledger, sender basics.Address, selection *crypto.VRFSecrets, voting crypto.OneTimeSigner, Round basics.Round, Period period, Step step, Proposal proposalValue) unauthenticatedVote {
+func makeUnauthenticatedVote(l Ledger, sender basics.Address, selection *crypto.VRFSecrets, voting crypto.OneTimeSigner, Round round, Period period, Step step, Proposal proposalValue) unauthenticatedVote {
 	rv := rawVote{
 		Sender:   sender,
-		Round:    Round,
+		Round:    Round.Number,
+		Branch:   Round.Branch,
 		Period:   Period,
 		Step:     Step,
 		Proposal: Proposal,
 	}
 
-	m, _ := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
+	m, _ := membership(l, rv.Sender, Round, rv.Period, rv.Step)
 	cred := committee.MakeCredential(&selection.SK, m.Selector)
 	ephID := basics.OneTimeIDForRound(rv.Round, voting.KeyDilution(config.Consensus[protocol.ConsensusCurrentVersion]))
 	sig := voting.Sign(ephID, rv)
@@ -78,7 +79,7 @@ func makeUnauthenticatedVote(l Ledger, sender basics.Address, selection *crypto.
 		Cred: cred,
 	}
 }
-func makeMessage(msgHandle int, tag protocol.Tag, sender basics.Address, l Ledger, selection *crypto.VRFSecrets, voting crypto.OneTimeSigner, Round basics.Round, Period period, Step step) message {
+func makeMessage(msgHandle int, tag protocol.Tag, sender basics.Address, l Ledger, selection *crypto.VRFSecrets, voting crypto.OneTimeSigner, Round round, Period period, Step step) message {
 	switch tag {
 	case protocol.AgreementVoteTag:
 		e := makeRandomBlock(1)
@@ -109,7 +110,8 @@ func makeMessage(msgHandle int, tag protocol.Tag, sender basics.Address, l Ledge
 			MessageHandle: MessageHandle(msgHandle),
 			Tag:           tag,
 			UnauthenticatedBundle: unauthenticatedBundle{
-				Round:    Round,
+				Round:    Round.Number,
+				Branch:   Round.Branch,
 				Period:   Period,
 				Step:     Step,
 				Proposal: makeProposalValue(Period, sender),
@@ -149,6 +151,7 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 	msgIDs := rand.Perm(20000)
 	usedMsgIDs := make(map[MessageHandle]struct{})
 	senderIdx := findSender(ledger, basics.Round(300), 0, 0, addresses, selections)
+	msgRound := makeRound(300)
 	for _, msgType := range msgTypes {
 		assert.False(t, verifier.ChannelFull(msgType))
 		// enqueue enough messages to fill up the queues.
@@ -159,11 +162,11 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 			usedMsgIDs[msgID] = struct{}{}
 			switch msgType {
 			case protocol.AgreementVoteTag:
-				verifier.VerifyVote(ctx, cryptoVoteRequest{message: makeMessage(msgID, msgType, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
+				verifier.VerifyVote(ctx, cryptoVoteRequest{message: makeMessage(msgID, msgType, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], msgRound, 0, 0), Round: makeRound(ledger.NextRound())})
 			case protocol.ProposalPayloadTag:
-				verifier.VerifyProposal(ctx, cryptoProposalRequest{message: makeMessage(msgID, msgType, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
+				verifier.VerifyProposal(ctx, cryptoProposalRequest{message: makeMessage(msgID, msgType, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], msgRound, 0, 0), Round: makeRound(ledger.NextRound())})
 			case protocol.VoteBundleTag:
-				verifier.VerifyBundle(ctx, cryptoBundleRequest{message: makeMessage(msgID, msgType, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
+				verifier.VerifyBundle(ctx, cryptoBundleRequest{message: makeMessage(msgID, msgType, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], msgRound, 0, 0), Round: makeRound(ledger.NextRound())})
 			}
 		}
 		// test to see that queues are full
@@ -205,11 +208,11 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 
 					switch tag {
 					case protocol.AgreementVoteTag:
-						verifier.VerifyVote(ctx, cryptoVoteRequest{message: makeMessage(msgID, tag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
+						verifier.VerifyVote(ctx, cryptoVoteRequest{message: makeMessage(msgID, tag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], msgRound, 0, 0), Round: makeRound(ledger.NextRound())})
 					case protocol.ProposalPayloadTag:
-						verifier.VerifyProposal(ctx, cryptoProposalRequest{message: makeMessage(msgID, tag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
+						verifier.VerifyProposal(ctx, cryptoProposalRequest{message: makeMessage(msgID, tag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], msgRound, 0, 0), Round: makeRound(ledger.NextRound())})
 					case protocol.VoteBundleTag:
-						verifier.VerifyBundle(ctx, cryptoBundleRequest{message: makeMessage(msgID, tag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()})
+						verifier.VerifyBundle(ctx, cryptoBundleRequest{message: makeMessage(msgID, tag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], msgRound, 0, 0), Round: makeRound(ledger.NextRound())})
 					}
 				} else {
 					atomic.AddInt32(&writeTotals, -1)
@@ -283,7 +286,8 @@ func BenchmarkCryptoVerifierVoteVertification(b *testing.B) {
 	c := verifier.Verified(protocol.AgreementVoteTag)
 
 	senderIdx := findSender(ledger, basics.Round(300), 0, 0, addresses, selections)
-	request := cryptoVoteRequest{message: makeMessage(0, protocol.AgreementVoteTag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], 300, 0, 0), Round: ledger.NextRound()}
+	msgRound := makeRound(300)
+	request := cryptoVoteRequest{message: makeMessage(0, protocol.AgreementVoteTag, addresses[senderIdx], ledger, selections[senderIdx], votings[senderIdx], msgRound, 0, 0), Round: makeRound(ledger.NextRound())}
 	b.ResetTimer()
 	go func() {
 		for n := 0; n < b.N; n++ {
@@ -317,10 +321,10 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 	}
 
 	Period := period(0)
-	pn.loadRoundParticipationKeys(ledger.NextRound())
+	pn.loadRoundParticipationKeys(makeRoundRandomBranch(ledger.NextRound()))
 	participation := pn.participationKeys
 
-	proposals, _ := pn.makeProposals(ledger.NextRound(), Period, participation)
+	proposals, _ := pn.makeProposals(makeRound(ledger.NextRound()), Period, participation)
 
 	ctx := context.Background()
 
@@ -333,7 +337,7 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 			UnauthenticatedProposal: proposals[0].unauthenticatedProposal,
 		},
 		TaskIndex: 0,
-		Round:     ledger.NextRound(),
+		Round:     makeRound(ledger.NextRound()),
 	}
 	b.ResetTimer()
 	go func() {
@@ -355,9 +359,9 @@ func BenchmarkCryptoVerifierBundleVertification(b *testing.B) {
 	Step := step(5)
 	senders := findSenders(ledger, ledger.NextRound(), 0, Step, addresses, selections)
 
-	request := cryptoBundleRequest{message: makeMessage(0, protocol.VoteBundleTag, addresses[senders[0]], ledger, selections[senders[0]], votings[senders[0]], ledger.NextRound(), 0, Step), Round: ledger.NextRound()}
+	request := cryptoBundleRequest{message: makeMessage(0, protocol.VoteBundleTag, addresses[senders[0]], ledger, selections[senders[0]], votings[senders[0]], makeRound(ledger.NextRound()), 0, Step), Round: makeRound(ledger.NextRound())}
 	for _, senderIdx := range senders {
-		uv := makeUnauthenticatedVote(ledger, addresses[senderIdx], selections[senderIdx], votings[senderIdx], request.message.UnauthenticatedBundle.Round, request.message.UnauthenticatedBundle.Period, Step, request.message.UnauthenticatedBundle.Proposal)
+		uv := makeUnauthenticatedVote(ledger, addresses[senderIdx], selections[senderIdx], votings[senderIdx], makeRoundBranch(request.message.UnauthenticatedBundle.Round, request.message.UnauthenticatedBundle.Branch), request.message.UnauthenticatedBundle.Period, Step, request.message.UnauthenticatedBundle.Proposal)
 		v, err := uv.verify(ledger)
 		if err != nil {
 			b.Errorf("unable to verify created vote : %+v", err)

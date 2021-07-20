@@ -60,7 +60,7 @@ func TestBlockAssemblerPipeline(t *testing.T) {
 
 	round := player.Round
 	period := player.Period
-	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
+	testBlockFactory, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	accountIndex := 0
@@ -126,7 +126,7 @@ func TestBlockAssemblerBind(t *testing.T) {
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
+	testBlockFactory, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 
 	accountIndex := 0
@@ -192,7 +192,7 @@ func TestBlockAssemblerAuthenticator(t *testing.T) {
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
+	testBlockFactory, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
@@ -256,7 +256,7 @@ func TestBlockAssemblerTrim(t *testing.T) {
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
+	testBlockFactory, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
@@ -328,7 +328,7 @@ func TestProposalStoreT(t *testing.T) {
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
+	testBlockFactory, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
@@ -400,7 +400,7 @@ func TestProposalStoreUnderlying(t *testing.T) {
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
+	testBlockFactory, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
@@ -458,16 +458,16 @@ func TestProposalStoreUnderlying(t *testing.T) {
 }
 
 func TestProposalStoreHandle(t *testing.T) {
-	player, router, accounts, factory, ledger := testPlayerSetup()
+	pl, router, accounts, factory, ledger := testPlayerSetup()
 
-	proposalVoteEventBatch, proposalPayloadEventBatch, _ := generateProposalEvents(t, player, accounts, factory, ledger)
+	proposalVoteEventBatch, proposalPayloadEventBatch, _ := generateProposalEvents(t, pl, accounts, factory, ledger)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
-	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
+	testBlockFactory, err := factory.AssembleBlock(pl.Round.Number, pl.Round.Branch, time.Now().Add(time.Minute))
+	require.NoError(t, err, "Could not generate a proposal for round %d: %v", pl.Round, err)
 	accountIndex := 0
-	_, proposalV0, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
+	_, proposalV0, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, pl.Period, ledger)
 	accountIndex++
-	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
+	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, pl.Period, ledger)
 
 	currentAccount := accounts.addresses[accountIndex]
 
@@ -477,7 +477,7 @@ func TestProposalStoreHandle(t *testing.T) {
 
 	block, _ := makeRandomBlock(1), randomBlockHash()
 
-	tempVote, err := makeVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, player.Round, player.Period, cert, block.Digest())
+	tempVote, err := makeVoteTesting(currentAccount, accounts.vrfs[accountIndex], accounts.ots[accountIndex], ledger, pl.Round, pl.Period, cert, block.Digest())
 	require.NoError(t, err)
 
 	voteAuthenticators = append(voteAuthenticators, tempVote)
@@ -491,14 +491,16 @@ func TestProposalStoreHandle(t *testing.T) {
 	}
 
 	relevantMap := make(map[period]proposalValue)
-	relevantMap[player.Period] = proposalV
+	relevantMap[pl.Period] = proposalV
 
 	assemblers := make(map[proposalValue]blockAssembler)
 	assemblers[proposalV] = blockAssembly
 
-	player, _ = router.submitTop(&proposalStoreTracer, player, proposalVoteEventBatch[0])
-
-	player, _ = router.submitTop(&proposalStoreTracer, player, proposalPayloadEventBatch[0])
+	var ac actor
+	ac, _ = router.submitTop(&proposalStoreTracer, &pl, proposalVoteEventBatch[0])
+	pl = *ac.(*player)
+	ac, _ = router.submitTop(&proposalStoreTracer, &pl, proposalPayloadEventBatch[0])
+	pl = *ac.(*player)
 
 	// create proposal Store
 	testProposalStore := proposalStore{
@@ -517,22 +519,22 @@ func TestProposalStoreHandle(t *testing.T) {
 	// Test a proposal payload event with non valid proposal payload
 	msg := message{Tag: protocol.ProposalPayloadTag, Proposal: proposalPayload, UnauthenticatedProposal: proposalPayload.unauthenticatedProposal}
 	testEvent := messageEvent{T: payloadPresent, Input: msg}
-	returnEvent := testProposalStore.handle(rHandle, player, testEvent)
+	returnEvent := testProposalStore.handle(rHandle, pl, testEvent)
 	require.Equal(t, returnEvent.(payloadProcessedEvent).T, payloadRejected)
 	require.Equal(t, makeSerErrStr("proposalStore: no accepting blockAssembler found on payloadPresent"), returnEvent.(payloadProcessedEvent).Err)
 
 	// Test a valid proposal payload event
 	testProposalStore.Assemblers[proposalV] = blockAssembly
-	testProposalStore.Relevant[player.Period] = proposalV
+	testProposalStore.Relevant[pl.Period] = proposalV
 	testProposalStore.Pinned = proposalV
 
-	returnEvent = testProposalStore.handle(rHandle, player, testEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testEvent)
 	require.Equal(t, payloadPipelined, returnEvent.(payloadProcessedEvent).T)
 
 	// Test with blockAssembly in filled state which will fail pipeline test
 	blockAssembly.Filled = true
 
-	returnEvent = testProposalStore.handle(rHandle, player, testEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testEvent)
 	require.Equal(t, returnEvent.(payloadProcessedEvent).T, payloadRejected)
 	require.Equal(t, makeSerErrStr("blockAssembler.pipeline: already filled"), returnEvent.(payloadProcessedEvent).Err)
 
@@ -546,41 +548,41 @@ func TestProposalStoreHandle(t *testing.T) {
 	// Test a proposal payload verified event with non valid proposal payload
 	msg = message{Tag: protocol.ProposalPayloadTag, Proposal: proposalPayload, UnauthenticatedProposal: proposalPayload.unauthenticatedProposal}
 	testEvent = messageEvent{T: payloadVerified, Input: msg}
-	returnEvent = testProposalStore.handle(rHandle, player, testEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testEvent)
 	require.Equal(t, returnEvent.(payloadProcessedEvent).T, payloadRejected)
 	require.Equal(t, makeSerErrStr("proposalStore: no accepting blockAssembler found on payloadVerified"), returnEvent.(payloadProcessedEvent).Err)
 
 	// Test a valid payload verified event
 	testProposalStore.Assemblers[proposalV] = blockAssembly
-	testProposalStore.Relevant[player.Period] = proposalV
-	testProposalStore.Relevant[player.Period+3] = proposalV0
+	testProposalStore.Relevant[pl.Period] = proposalV
+	testProposalStore.Relevant[pl.Period+3] = proposalV0
 	testProposalStore.Pinned = proposalV
 
-	returnEvent = testProposalStore.handle(rHandle, player, testEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testEvent)
 	require.Equal(t, payloadAccepted, returnEvent.(payloadProcessedEvent).T)
 
 	// Test a valid payload verified event with already assembled block assembly
 	blockAssembly.Assembled = true
 
-	returnEvent = testProposalStore.handle(rHandle, player, testEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testEvent)
 	require.Equal(t, payloadRejected, returnEvent.(payloadProcessedEvent).T)
 	require.Equal(t, makeSerErrStr("blockAssembler.pipeline: already assembled"), returnEvent.(payloadProcessedEvent).Err)
 
 	// Test a valid payload newPeriod event
 	testProposalStore.Assemblers[proposalV] = blockAssembly
-	testProposalStore.Relevant[player.Period] = proposalV
+	testProposalStore.Relevant[pl.Period] = proposalV
 	testProposalStore.Pinned = proposalV
 
 	msg = message{Tag: protocol.ProposalPayloadTag, Proposal: proposalPayload, UnauthenticatedProposal: proposalPayload.unauthenticatedProposal}
-	testPeriodEvent := newPeriodEvent{Period: player.Period + 3, Proposal: proposalV}
+	testPeriodEvent := newPeriodEvent{Period: pl.Period + 3, Proposal: proposalV}
 
-	returnEvent = testProposalStore.handle(rHandle, player, testPeriodEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testPeriodEvent)
 	require.Equal(t, emptyEvent{}, returnEvent)
 
 	msg = message{Tag: protocol.ProposalPayloadTag, Proposal: proposalPayload, UnauthenticatedProposal: proposalPayload.unauthenticatedProposal}
-	testPeriodEvent = newPeriodEvent{Period: player.Period + 3, Proposal: bottom}
+	testPeriodEvent = newPeriodEvent{Period: pl.Period + 3, Proposal: bottom}
 
-	returnEvent = testProposalStore.handle(rHandle, player, testPeriodEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testPeriodEvent)
 	require.Equal(t, emptyEvent{}, returnEvent)
 
 	msg = message{Tag: protocol.ProposalPayloadTag, Proposal: proposalPayload, UnauthenticatedProposal: proposalPayload.unauthenticatedProposal}
@@ -588,43 +590,43 @@ func TestProposalStoreHandle(t *testing.T) {
 
 	// trigger too many assemblers panic in new Round event handling
 	logging.Base().SetOutput(nullWriter{})
-	require.Panics(t, func() { testProposalStore.handle(rHandle, player, testNewRoundEvent) })
+	require.Panics(t, func() { testProposalStore.handle(rHandle, pl, testNewRoundEvent) })
 	logging.Base().SetOutput(os.Stderr)
 
 	// return a payload pipelined event
 	testProposalStore.Relevant = make(map[period]proposalValue)
 	testProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
 	testProposalStore.Assemblers[proposalV] = blockAssembly
-	testProposalStore.Relevant[player.Period] = proposalV
+	testProposalStore.Relevant[pl.Period] = proposalV
 
-	returnEvent = testProposalStore.handle(rHandle, player, testNewRoundEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testNewRoundEvent)
 	require.Equal(t, payloadPipelined, returnEvent.(payloadProcessedEvent).T)
 
 	// test soft threshold event
 	testThresholdEvent := thresholdEvent{
 		T:        softThreshold,
-		Round:    player.Round,
-		Period:   player.Period,
-		Step:     player.Step,
+		Round:    pl.Round,
+		Period:   pl.Period,
+		Step:     pl.Step,
 		Proposal: proposalV,
 		Bundle:   unauthenticatedBundle{},
 	}
-	returnEvent = testProposalStore.handle(rHandle, player, testThresholdEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testThresholdEvent)
 	require.Equal(t, testProposalStore.Pinned, returnEvent.(committableEvent).Proposal)
 
 	testStagingValueEvent := stagingValueEvent{
-		Round:  player.Round,
-		Period: player.Period,
+		Round:  pl.Round,
+		Period: pl.Period,
 	}
-	returnEvent = testProposalStore.handle(rHandle, player, testStagingValueEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testStagingValueEvent)
 	require.Equal(t, proposalV, returnEvent.(stagingValueEvent).Proposal)
 	require.Equal(t, proposalPayload, returnEvent.(stagingValueEvent).Payload)
 	require.True(t, returnEvent.(stagingValueEvent).Committable)
 
 	testPinnedValueEvent := pinnedValueEvent{
-		Round: player.Round,
+		Round: pl.Round,
 	}
-	returnEvent = testProposalStore.handle(rHandle, player, testPinnedValueEvent)
+	returnEvent = testProposalStore.handle(rHandle, pl, testPinnedValueEvent)
 	require.Equal(t, proposalV, returnEvent.(pinnedValueEvent).Proposal)
 	require.Equal(t, proposalPayload, returnEvent.(pinnedValueEvent).Payload)
 	require.True(t, returnEvent.(pinnedValueEvent).PayloadOK)
@@ -634,17 +636,17 @@ func TestProposalStoreHandle(t *testing.T) {
 
 	// trigger panic from non supported message type
 	logging.Base().SetOutput(nullWriter{})
-	require.Panics(t, func() { testProposalStore.handle(rHandle, player, testEvent) })
+	require.Panics(t, func() { testProposalStore.handle(rHandle, pl, testEvent) })
 	logging.Base().SetOutput(os.Stderr)
 
 	// test trim
-	testProposalStore.trim(player)
+	testProposalStore.trim(pl)
 }
 
 func TestProposalStoreGetPinnedValue(t *testing.T) {
 	// create proposal Store
 	player, router, accounts, factory, ledger := testPlayerSetup()
-	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
+	testBlockFactory, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	// create a route handler for the proposal store
@@ -698,7 +700,7 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 	var rv rawVote
 	var propVal proposalValue
 	var propPay proposal
-	curRound := round(10)
+	curRound := makeRoundRandomBranch(10)
 	proposer := basics.Address(randomBlockHash())
 
 	propPay = proposal{
@@ -715,7 +717,8 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 	}
 	rv = rawVote{
 		Sender:   proposer,
-		Round:    curRound,
+		Round:    curRound.Number,
+		Branch:   curRound.Branch,
 		Period:   1,
 		Proposal: propVal,
 	}
@@ -744,7 +747,8 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 	}
 	rv = rawVote{
 		Sender:   proposer,
-		Round:    curRound,
+		Round:    curRound.Number,
+		Branch:   curRound.Branch,
 		Period:   2,
 		Proposal: propVal,
 	}
@@ -773,6 +777,7 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 
 		var router router
 		rr := routerFixture
+		rr.root = &player
 		router = &rr
 
 		var res event
@@ -807,7 +812,7 @@ func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
 	var rv rawVote
 	var propVal proposalValue
 	var propPay proposal
-	curRound := round(10)
+	curRound := makeRoundRandomBranch(10)
 	proposer := basics.Address(randomBlockHash())
 
 	propPay = proposal{
@@ -824,7 +829,8 @@ func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
 	}
 	rv = rawVote{
 		Sender:   proposer,
-		Round:    curRound,
+		Round:    curRound.Number,
+		Branch:   curRound.Branch,
 		Period:   1,
 		Proposal: propVal,
 	}
@@ -853,7 +859,8 @@ func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
 	}
 	rv = rawVote{
 		Sender:   proposer,
-		Round:    curRound,
+		Round:    curRound.Number,
+		Branch:   curRound.Branch,
 		Period:   2,
 		Proposal: propVal,
 	}
@@ -879,6 +886,7 @@ func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
 
 	var router router
 	rr := routerFixture
+	rr.root = &player
 	router = &rr
 
 	var res event

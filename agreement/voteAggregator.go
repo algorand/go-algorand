@@ -103,9 +103,9 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		if err != nil {
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
 		}
-		if v.R.Round == pr.Round.number { // XXX timer doesn't know branches
+		if v.R.Round == pr.Round.Number { // XXX timer doesn't know branches
 			r.t.timeR().RecVoteReceived(v)
-		} else if v.R.Round == pr.Round.number+1 { // XXX
+		} else if v.R.Round == pr.Round.Number+1 { // XXX
 			r.t.timeRPlus1().RecVoteReceived(v)
 		}
 
@@ -116,7 +116,7 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		}
 		if tE.(thresholdEvent).Round == e.FreshnessData.PlayerRound {
 			return tE
-		} else if tE.(thresholdEvent).Round.number == e.FreshnessData.PlayerRound.number+1 { // XXX freshness data R+1 check not branch-aware
+		} else if tE.(thresholdEvent).Round.Number == e.FreshnessData.PlayerRound.Number+1 { // XXX freshness data R+1 check not branch-aware
 			return emptyEvent{}
 		}
 		logging.Base().Panicf("bad round (%v, %v)", tE.(thresholdEvent).Round, e.FreshnessData.PlayerRound) // TODO this should be a postcondition check; move it
@@ -250,11 +250,11 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 		return nil
 	}
 
-	if freshData.PlayerRound != vote.R.roundBranch() && freshData.PlayerRound.number+1 != vote.R.Round { // XXX ignores branch for r+1 check
+	if freshData.PlayerRound != vote.R.roundBranch() && freshData.PlayerRound.Number+1 != vote.R.Round { // XXX ignores branch for r+1 check
 		return fmt.Errorf("filtered vote from bad round: player.Round=%v; vote.Round=%v", freshData.PlayerRound, vote.R.Round)
 	}
 
-	if freshData.PlayerRound.number+1 == vote.R.Round { // XXX ignores branch
+	if freshData.PlayerRound.Number+1 == vote.R.Round { // XXX ignores branch
 		if vote.R.Period > 0 {
 			return fmt.Errorf("filtered future vote from bad period: player.Round=%v; vote.(Round,Period,Step)=(%v,%v,%v)", freshData.PlayerRound, vote.R.Round, vote.R.Period, vote.R.Step)
 		}

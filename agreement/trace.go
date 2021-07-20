@@ -98,7 +98,7 @@ func makeTracer(log serviceLogger, cadaverFilename string, cadaverSizeTarget uin
 
 // call this method to setup timing generators before entering target round, pipelining properly.
 func (t *tracer) resetTimingWithPipeline(target round) {
-	if t.tRPlus1 != nil && t.tRPlus1.i.Round == uint64(target.number) { // XXX
+	if t.tRPlus1 != nil && t.tRPlus1.i.Round == uint64(target.Number) { // XXX
 		t.tR = t.tRPlus1
 	} else {
 		t.tR = nil
@@ -184,8 +184,8 @@ func (t *tracer) logTimeout(p player) {
 	}
 	logEvent := logspec.AgreementEvent{
 		Type:   logspec.StepTimeout,
-		Round:  uint64(p.Round.number),
-		Branch: p.Round.branch.String(),
+		Round:  uint64(p.Round.Number),
+		Branch: p.Round.Branch.String(),
 		Period: uint64(p.Period),
 		Step:   uint64(p.Step),
 	}
@@ -198,8 +198,8 @@ func (t *tracer) logFastTimeout(p player) {
 	}
 	logEvent := logspec.AgreementEvent{
 		Type:   logspec.StepTimeout,
-		Round:  uint64(p.Round.number),
-		Branch: p.Round.branch.String(),
+		Round:  uint64(p.Round.Number),
+		Branch: p.Round.Branch.String(),
 		Period: uint64(p.Period),
 		Step:   uint64(p.Step),
 	}
@@ -210,8 +210,8 @@ func (t *tracer) logProposalFrozen(prop proposalValue, propRound round, propPeri
 	logEvent := logspec.AgreementEvent{
 		Type:         logspec.ProposalFrozen,
 		Hash:         prop.BlockDigest.String(),
-		ObjectRound:  uint64(propRound.number),
-		ObjectBranch: propRound.branch.String(),
+		ObjectRound:  uint64(propRound.Number),
+		ObjectBranch: propRound.Branch.String(),
 		ObjectPeriod: uint64(propPeriod),
 	}
 	t.log.with(logEvent).Infof("froze proposal %v for (%v, %v)", prop, propRound, propPeriod)
@@ -221,11 +221,11 @@ func (t *tracer) logPeriodConcluded(p player, target period, prop proposalValue)
 	logEvent := logspec.AgreementEvent{
 		Type:         logspec.PeriodConcluded,
 		Hash:         prop.BlockDigest.String(),
-		Round:        uint64(p.Round.number),
-		Branch:       p.Round.branch.String(),
+		Round:        uint64(p.Round.Number),
+		Branch:       p.Round.Branch.String(),
 		Period:       uint64(p.Period),
-		ObjectRound:  uint64(p.Round.number),
-		ObjectBranch: p.Round.branch.String(),
+		ObjectRound:  uint64(p.Round.Number),
+		ObjectBranch: p.Round.Branch.String(),
 		ObjectPeriod: uint64(target),
 	}
 	t.log.with(logEvent).Infof("entering non-zero period (%v - %v) with value %v", p.Period, target, prop)
@@ -235,12 +235,12 @@ func (t *tracer) logPeriodConcluded(p player, target period, prop proposalValue)
 	}
 	// we should rarely need to enter a new period under common case operation.
 	t.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.NewPeriodEvent, telemetryspec.NewRoundPeriodDetails{
-		OldRound:  uint64(p.Round.number),
-		OldBranch: p.Round.branch.String(),
+		OldRound:  uint64(p.Round.Number),
+		OldBranch: p.Round.Branch.String(),
 		OldPeriod: uint64(p.Period),
 		OldStep:   uint64(p.Step),
-		NewRound:  uint64(p.Round.number),
-		NewBranch: p.Round.branch.String(),
+		NewRound:  uint64(p.Round.Number),
+		NewBranch: p.Round.Branch.String(),
 		NewPeriod: uint64(target),
 		NewStep:   uint64(soft),
 		LocalTime: time.Now(),
@@ -264,8 +264,8 @@ func (t *tracer) logBundleBroadcast(p player, b unauthenticatedBundle) {
 	logEvent := logspec.AgreementEvent{
 		Type:         logspec.BundleBroadcast,
 		Hash:         b.Proposal.BlockDigest.String(),
-		Round:        uint64(p.Round.number),
-		Branch:       p.Round.branch.String(),
+		Round:        uint64(p.Round.Number),
+		Branch:       p.Round.Branch.String(),
 		Period:       uint64(p.Period),
 		Step:         uint64(p.Step),
 		ObjectRound:  uint64(b.Round),
@@ -282,8 +282,8 @@ func (t *tracer) logProposalRepropagate(prop proposalValue, propRound round, pro
 	logEvent := logspec.AgreementEvent{
 		Type:   logspec.BlockResent,
 		Hash:   prop.BlockDigest.String(),
-		Round:  uint64(propRound.number),
-		Branch: propRound.branch.String(),
+		Round:  uint64(propRound.Number),
+		Branch: propRound.Branch.String(),
 		Period: uint64(propPeriod),
 	}
 	t.log.with(logEvent).Infof("resent block for (%v, %v)", propRound, propPeriod)
@@ -299,8 +299,8 @@ func (t *tracer) logProposalManagerResult(p player, input messageEvent, output e
 		uv := input.Input.UnauthenticatedVote
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.ProposalRejected,
-			Round:        uint64(p.Round.number),
-			Branch:       p.Round.branch.String(),
+			Round:        uint64(p.Round.Number),
+			Branch:       p.Round.Branch.String(),
 			Period:       uint64(p.Period),
 			Step:         uint64(p.Step),
 			Hash:         uv.R.Proposal.BlockDigest.String(),
@@ -322,8 +322,8 @@ func (t *tracer) logProposalManagerResult(p player, input messageEvent, output e
 		up := input.Input.UnauthenticatedProposal
 		logEvent := logspec.AgreementEvent{
 			Type:   logspec.BlockRejected,
-			Round:  uint64(p.Round.number),
-			Branch: p.Round.branch.String(),
+			Round:  uint64(p.Round.Number),
+			Branch: p.Round.Branch.String(),
 			Period: uint64(p.Period),
 			Step:   uint64(p.Step),
 			Hash:   up.Digest().String(),
@@ -342,14 +342,14 @@ func (t *tracer) logProposalManagerResult(p player, input messageEvent, output e
 		up := input.Input.UnauthenticatedProposal
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.BlockPipelined,
-			Round:        uint64(p.Round.number),
-			Branch:       p.Round.branch.String(),
+			Round:        uint64(p.Round.Number),
+			Branch:       p.Round.Branch.String(),
 			Period:       uint64(p.Period),
 			Step:         uint64(p.Step),
 			Sender:       up.OriginalProposer.String(),
 			Hash:         up.Digest().String(),
-			ObjectRound:  uint64(pipelinedRound.number),
-			ObjectBranch: pipelinedRound.branch.String(),
+			ObjectRound:  uint64(pipelinedRound.Number),
+			ObjectBranch: pipelinedRound.Branch.String(),
 			ObjectPeriod: uint64(pipelinedPeriod),
 		}
 		t.log.with(logEvent).Infof("pipelined block for (%v, %v): %v", pipelinedRound, pipelinedPeriod, output.(payloadProcessedEvent).Err)
@@ -362,14 +362,14 @@ func (t *tracer) logProposalManagerResult(p player, input messageEvent, output e
 		pev := output.(proposalAcceptedEvent)
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.ProposalAccepted,
-			Round:        uint64(p.Round.number),
-			Branch:       p.Round.branch.String(),
+			Round:        uint64(p.Round.Number),
+			Branch:       p.Round.Branch.String(),
 			Period:       uint64(p.Period),
 			Step:         uint64(p.Step),
 			Sender:       uv.R.Sender.String(),
 			Hash:         pev.Proposal.BlockDigest.String(),
-			ObjectRound:  uint64(pev.Round.number),
-			ObjectBranch: pev.Round.branch.String(),
+			ObjectRound:  uint64(pev.Round.Number),
+			ObjectBranch: pev.Round.Branch.String(),
 			ObjectPeriod: uint64(pev.Period),
 		}
 		t.log.with(logEvent).Infof("proposal %v accepted at (%v, %v)", pev.Proposal, pev.Round, pev.Period)
@@ -386,13 +386,13 @@ func (t *tracer) logProposalManagerResult(p player, input messageEvent, output e
 		}
 
 		logEvent := logspec.AgreementEvent{
-			Round:        uint64(p.Round.number),
-			Branch:       p.Round.branch.String(),
+			Round:        uint64(p.Round.Number),
+			Branch:       p.Round.Branch.String(),
 			Period:       uint64(p.Period),
 			Sender:       prop.OriginalProposer.String(),
 			Hash:         prop.BlockDigest.String(),
-			ObjectRound:  uint64(p.Round.number),
-			ObjectBranch: p.Round.branch.String(),
+			ObjectRound:  uint64(p.Round.Number),
+			ObjectBranch: p.Round.Branch.String(),
 			ObjectPeriod: uint64(prop.OriginalPeriod),
 		}
 
@@ -416,8 +416,8 @@ func (t *tracer) logVoteAggregatorResult(input filterableMessageEvent, output ev
 		uv := input.Input.UnauthenticatedVote
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.VoteRejected,
-			Round:        uint64(t.playerInfo.Round.number),
-			Branch:       t.playerInfo.Round.branch.String(),
+			Round:        uint64(t.playerInfo.Round.Number),
+			Branch:       t.playerInfo.Round.Branch.String(),
 			Period:       uint64(t.playerInfo.Period),
 			Step:         uint64(t.playerInfo.Step),
 			Sender:       uv.R.Sender.String(),
@@ -442,8 +442,8 @@ func (t *tracer) logVoteAggregatorResult(input filterableMessageEvent, output ev
 		ub := input.Input.UnauthenticatedBundle
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.BundleRejected,
-			Round:        uint64(t.playerInfo.Round.number),
-			Branch:       t.playerInfo.Round.branch.String(),
+			Round:        uint64(t.playerInfo.Round.Number),
+			Branch:       t.playerInfo.Round.Branch.String(),
 			Period:       uint64(t.playerInfo.Period),
 			Step:         uint64(t.playerInfo.Step),
 			Hash:         ub.Proposal.BlockDigest.String(),
@@ -484,8 +484,8 @@ func (t *tracer) logVoteTrackerResult(p player, input voteAcceptedEvent, output 
 	// [TODO] Add Metrics here to capture telemetryspec.VoteAcceptedEvent details
 	logEvent := logspec.AgreementEvent{
 		Type:         logspec.VoteAccepted,
-		Round:        uint64(p.Round.number),
-		Branch:       p.Round.branch.String(),
+		Round:        uint64(p.Round.Number),
+		Branch:       p.Round.Branch.String(),
 		Period:       uint64(p.Period),
 		Step:         uint64(p.Step),
 		Sender:       input.Vote.R.Sender.String(),
@@ -502,13 +502,13 @@ func (t *tracer) logVoteTrackerResult(p player, input voteAcceptedEvent, output 
 	if output.T != none {
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.ThresholdReached,
-			Round:        uint64(p.Round.number),
-			Branch:       p.Round.branch.String(),
+			Round:        uint64(p.Round.Number),
+			Branch:       p.Round.Branch.String(),
 			Period:       uint64(p.Period),
 			Step:         uint64(p.Step),
 			Hash:         output.Proposal.BlockDigest.String(),
-			ObjectRound:  uint64(output.Round.number),
-			ObjectBranch: output.Round.branch.String(),
+			ObjectRound:  uint64(output.Round.Number),
+			ObjectBranch: output.Round.Branch.String(),
 			ObjectPeriod: uint64(output.Period),
 			ObjectStep:   uint64(output.Step),
 			Weight:       outputTotal,

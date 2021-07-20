@@ -25,7 +25,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -198,13 +197,13 @@ func (n asyncPseudonode) MakeVotes(ctx context.Context, r round, p period, s ste
 
 // load the participation keys from the account manager ( as needed ) for the
 // current round.
-func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []account.Participation {
+func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound round) []account.Participation {
 	// if we've already loaded up the keys, then just skip loading them.
-	if n.participationKeysRound == voteRound {
+	if n.participationKeysRound == voteRound.Number { // XXX ignoring branch
 		return n.participationKeys
 	}
 
-	cparams, err := n.ledger.ConsensusParams(ParamsRound(voteRound), bookkeeping.BlockHash{}) // XXX ignores branch
+	cparams, err := n.ledger.ConsensusParams(ParamsRound(voteRound.Number), voteRound.Branch)
 	if err != nil {
 		// if we cannot figure out the balance round number, reset the parameters so that we won't be sending
 		// any vote.
@@ -213,11 +212,11 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []a
 		n.participationKeys = nil
 		return nil
 	}
-	balanceRound := balanceRound(voteRound, cparams)
+	balanceRound := balanceRound(voteRound.Number, cparams) // ommitting branch because this is 320 XXX
 
 	// otherwise, we want to load the participation keys.
-	n.participationKeys = n.keys.VotingKeys(voteRound, balanceRound)
-	n.participationKeysRound = voteRound
+	n.participationKeys = n.keys.VotingKeys(voteRound.Number, balanceRound)
+	n.participationKeysRound = voteRound.Number
 	return n.participationKeys
 }
 
@@ -269,7 +268,7 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round round, period period, accounts []account.Participation) ([]proposal, []unauthenticatedVote) {
 	deadline := time.Now().Add(config.ProposalAssemblyTime)
-	ve, err := n.factory.AssembleBlock(round.number, round.branch, deadline)
+	ve, err := n.factory.AssembleBlock(round.Number, round.Branch, deadline)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
 			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
@@ -287,7 +286,7 @@ func (n asyncPseudonode) makeProposals(round round, period period, accounts []ac
 		}
 
 		// attempt to make the vote
-		rv := rawVote{Sender: account.Address(), Round: round.number, Branch: round.branch, Period: period, Step: propose, Proposal: proposal}
+		rv := rawVote{Sender: account.Address(), Round: round.Number, Branch: round.Branch, Period: period, Step: propose, Proposal: proposal}
 		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), n.ledger)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", err)
@@ -307,7 +306,7 @@ func (n asyncPseudonode) makeProposals(round round, period period, accounts []ac
 func (n asyncPseudonode) makeVotes(round round, period period, step step, proposal proposalValue, participation []account.Participation) []unauthenticatedVote {
 	votes := make([]unauthenticatedVote, 0)
 	for _, account := range participation {
-		rv := rawVote{Sender: account.Address(), Round: round.number, Branch: round.branch, Period: period, Step: step, Proposal: proposal}
+		rv := rawVote{Sender: account.Address(), Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
 		uv, err := makeVote(rv, account.VotingSigner(), account.VRFSecrets(), n.ledger)
 		if err != nil {
 			n.log.Warnf("pseudonode.makeVotes: could not create vote: %v", err)
@@ -345,7 +344,7 @@ func (pv *pseudonodeVerifier) verifierLoop(n *asyncPseudonode) {
 // task with the loaded participation keys. It returns whether we have any participation keys
 // for the given round.
 func (t *pseudonodeBaseTask) populateParticipationKeys(r round) bool {
-	t.participation = t.node.loadRoundParticipationKeys(r.number) // XXX likely OK to ignore branch?
+	t.participation = t.node.loadRoundParticipationKeys(r)
 	return len(t.participation) > 0
 }
 

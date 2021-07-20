@@ -27,7 +27,7 @@ import (
 func setupManager(t *testing.T, r round) (pWhite *proposalManager, pMachine ioAutomata, helper *voteMakerHelper) {
 	// Set up a composed test machine starting at specified rps
 	rRouter := new(rootRouter)
-	rRouter.update(player{Round: r}, r, false)
+	rRouter.update(&player{Round: r}, r, false)
 
 	pMachine = &ioAutomataConcrete{
 		listener:  rRouter.proposalRoot,
@@ -44,7 +44,7 @@ func setupManager(t *testing.T, r round) (pWhite *proposalManager, pMachine ioAu
 func TestProposalManagerThresholdSoftFastForward(t *testing.T) {
 	// sanity check that manager tells underlings to fast forward new period
 	const p = 1
-	const r = 10
+	r := makeRoundRandomBranch(10)
 	_, pM, helper := setupManager(t, r)
 
 	// create a soft threshold.
@@ -71,7 +71,7 @@ func TestProposalManagerThresholdSoftFastForward(t *testing.T) {
 func TestProposalManagerThresholdSoftStage(t *testing.T) {
 	// sanity check that manager tells underlings to deal with soft threshold
 	const p = 1
-	const r = 10
+	r := makeRoundRandomBranch(10)
 	_, pM, helper := setupManager(t, r)
 
 	// create a soft threshold.
@@ -106,7 +106,7 @@ func TestProposalManagerThresholdSoftStage(t *testing.T) {
 
 func TestProposalManagerThresholdCert(t *testing.T) {
 	const p = 10
-	const r = 1
+	r := makeRoundRandomBranch(1)
 	_, pM, helper := setupManager(t, r)
 
 	// create a cert threshold.
@@ -142,7 +142,7 @@ func TestProposalManagerThresholdCert(t *testing.T) {
 func TestProposalManagerThresholdNext(t *testing.T) {
 	// check that manager tells the Tracker to increase period +1
 	const p = 10
-	const r = 1
+	r := makeRoundRandomBranch(1)
 	_, pM, helper := setupManager(t, r)
 
 	// create a next threshold.
@@ -169,11 +169,11 @@ func TestProposalManagerThresholdNext(t *testing.T) {
 func TestProposalManagerResetsRoundInterruption(t *testing.T) {
 	// check that manager tells Store to increase round + 1
 	const p = 10
-	const r = 1
+	r := makeRoundRandomBranch(1)
 	_, pM, _ := setupManager(t, r)
 
 	// create a newRound message. We may eventually want to offload this logic to the helper.
-	err, panicErr := pM.transition(roundInterruptionEvent{Round: r + 2})
+	err, panicErr := pM.transition(roundInterruptionEvent{Round: makeRoundRandomBranch(r.Number + 2)})
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
@@ -184,7 +184,7 @@ func TestProposalManagerResetsRoundInterruption(t *testing.T) {
 
 func TestProposalManagerRejectsUnknownEvent(t *testing.T) {
 	// check that manager discards unknown events.
-	_, pM, _ := setupManager(t, 0)
+	_, pM, _ := setupManager(t, makeRoundRandomBranch(0))
 
 	// create a verified bundle
 	inMsg := messageEvent{
@@ -199,7 +199,9 @@ func TestProposalManagerRejectsUnknownEvent(t *testing.T) {
 func TestProposalFreshAdjacentPeriods(t *testing.T) {
 	// votes from periods that are non-adjacent to current period are not fresh
 	// unfortunately, this is more of an end-to-end test as the proposeTracker will also filter
-	const r = 100
+	r := makeRoundRandomBranch(100)
+	rp1 := makeRoundRandomBranch(r.Number + 1)
+	rp2 := makeRoundRandomBranch(r.Number + 2)
 	const p = 3
 	const s = soft
 	_, pM, helper := setupManager(t, r)
@@ -269,7 +271,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 
 	// vote in r + 1 should be filtered unless period 0
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, r+1, 1, s, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, rp1, 1, s, *pV)
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -282,7 +284,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, r+1, 0, s, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, rp1, 0, s, *pV)
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -296,7 +298,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 
 	// vote > r + 1 should be filtered
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, r+2, 0, s, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, rp2, 0, s, *pV)
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -317,7 +319,9 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 	// verbatim copy of above test case, but with verified votes
 	// votes from periods that are non-adjacent to current period are not fresh
 	// unfortunately, this is more of an end-to-end test as the proposeTracker will also filter
-	const r = 129
+	r := makeRoundRandomBranch(129)
+	rp1 := makeRoundRandomBranch(r.Number + 1)
+	rp2 := makeRoundRandomBranch(r.Number + 2)
 	const p = 8
 	const s = soft
 	_, pM, helper := setupManager(t, r)
@@ -391,7 +395,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 
 	// vote in r + 1 should be filtered unless period 0
 	pV = helper.MakeRandomProposalValue()
-	v = helper.MakeVerifiedVote(t, 0, r+1, 1, s, *pV)
+	v = helper.MakeVerifiedVote(t, 0, rp1, 1, s, *pV)
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -405,7 +409,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	pV = helper.MakeRandomProposalValue()
-	v = helper.MakeVerifiedVote(t, 0, r+1, 0, s, *pV)
+	v = helper.MakeVerifiedVote(t, 0, rp1, 0, s, *pV)
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -420,7 +424,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 
 	// vote > r + 1 should be filtered
 	pV = helper.MakeRandomProposalValue()
-	v = helper.MakeVerifiedVote(t, 0, r+2, 0, s, *pV)
+	v = helper.MakeVerifiedVote(t, 0, rp2, 0, s, *pV)
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -439,7 +443,7 @@ func TestProposalFreshAdjacentPeriodsVerified(t *testing.T) {
 }
 
 func TestProposalManagerCancelledVoteFiltered(t *testing.T) {
-	const r = 100000
+	r := makeRoundRandomBranch(100000)
 	const p = 2
 	const s = cert
 	_, pM, helper := setupManager(t, r)

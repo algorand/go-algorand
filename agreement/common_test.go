@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -119,6 +120,10 @@ func generateEnvironment(numAccounts int) (map[basics.Address]basics.AccountData
 	return genesis, addrs, vrfSecrets, otSecrets
 }
 
+func makeRoundRandomBranch(r basics.Round) round {
+	return makeRoundBranch(r, bookkeeping.BlockHash(randomBlockHash()))
+}
+
 func randomBlockHash() (h crypto.Digest) {
 	rand.Read(h[:])
 	return
@@ -180,8 +185,12 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round, deadline time.Time) (ValidatedBlock, error) {
-	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
+func (f testBlockFactory) AssembleBlock(r basics.Round, prev bookkeeping.BlockHash, deadline time.Time) (ValidatedBlock, error) {
+	return testValidatedBlock{Inside: bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			Round:  r,
+			Branch: bookkeeping.BlockHash(prev),
+		}}}, nil
 }
 
 // If we try to read from high rounds, we panic and do not emit an error to find bugs during testing.
@@ -266,7 +275,7 @@ func (l *testLedger) NextRound() basics.Round {
 	return l.nextRound
 }
 
-func (l *testLedger) Wait(r basics.Round) chan struct{} {
+func (l *testLedger) Wait(r basics.Round, leafBranch bookkeeping.BlockHash) chan struct{} {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -291,7 +300,7 @@ func (l *testLedger) notify(r basics.Round) {
 	l.notifications[r] = l.notifications[r].fire()
 }
 
-func (l *testLedger) Seed(r basics.Round) (committee.Seed, error) {
+func (l *testLedger) Seed(r basics.Round, leafBranch bookkeeping.BlockHash) (committee.Seed, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -304,7 +313,7 @@ func (l *testLedger) Seed(r basics.Round) (committee.Seed, error) {
 	return b.Seed(), nil
 }
 
-func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
+func (l *testLedger) LookupDigest(r basics.Round, leafBranch bookkeeping.BlockHash) (crypto.Digest, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -313,14 +322,14 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 		panic(err)
 	}
 
-	if l.maxNumBlocks != 0 && r+round(l.maxNumBlocks) < l.nextRound {
+	if l.maxNumBlocks != 0 && r+basics.Round(l.maxNumBlocks) < l.nextRound {
 		return crypto.Digest{}, &LedgerDroppedRoundError{}
 	}
 
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountData, error) {
+func (l *testLedger) Lookup(r basics.Round, leafBranch bookkeeping.BlockHash, a basics.Address) (basics.AccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -329,14 +338,14 @@ func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountDat
 		panic(err)
 	}
 
-	if l.maxNumBlocks != 0 && r+round(l.maxNumBlocks) < l.nextRound {
+	if l.maxNumBlocks != 0 && r+basics.Round(l.maxNumBlocks) < l.nextRound {
 		return basics.AccountData{}, &LedgerDroppedRoundError{}
 	}
 
 	return l.state[a], nil
 }
 
-func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
+func (l *testLedger) Circulation(r basics.Round, leafBranch bookkeeping.BlockHash) (basics.MicroAlgos, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -401,15 +410,15 @@ func (l *testLedger) EnsureDigest(c Certificate, verifier *AsyncVoteVerifier) {
 	return
 }
 
-func (l *testLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
-	version, err := l.ConsensusVersion(r)
+func (l *testLedger) ConsensusParams(r basics.Round, leafBranch bookkeeping.BlockHash) (config.ConsensusParams, error) {
+	version, err := l.ConsensusVersion(r, leafBranch)
 	if err != nil {
 		return config.ConsensusParams{}, err
 	}
 	return config.Consensus[version], nil
 }
 
-func (l *testLedger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, error) {
+func (l *testLedger) ConsensusVersion(r basics.Round, leafBranch bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
 	return l.consensusVersion(r)
 }
 
@@ -421,8 +430,9 @@ type testAccountData struct {
 	ots       []crypto.OneTimeSigner
 }
 
-func makeProposalsTesting(accs testAccountData, round basics.Round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
-	ve, err := factory.AssembleBlock(round, time.Now().Add(time.Minute))
+func makeProposalsTesting(accs testAccountData, round round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
+	// XXX passing empty leaf
+	ve, err := factory.AssembleBlock(round.Number, round.Branch, time.Now().Add(time.Minute))
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
@@ -439,7 +449,7 @@ func makeProposalsTesting(accs testAccountData, round basics.Round, period perio
 		}
 
 		// attempt to make the vote
-		rv := rawVote{Sender: accs.addresses[i], Round: round, Period: period, Step: propose, Proposal: proposal}
+		rv := rawVote{Sender: accs.addresses[i], Round: round.Number, Branch: round.Branch, Period: period, Step: propose, Proposal: proposal}
 		uv, err := makeVote(rv, accs.ots[i], accs.vrfs[i], ledger)
 		if err != nil {
 			logging.Base().Errorf("AccountManager.makeVotes: Could not create vote: %v", err)
@@ -459,11 +469,11 @@ func makeProposalsTesting(accs testAccountData, round basics.Round, period perio
 
 // makeVotes creates a slice of votes for a given proposal value in a given
 // round, period, and step.
-func makeVotesTesting(accs testAccountData, round basics.Round, period period, step step, proposal proposalValue, ledger Ledger) (vs []vote) {
+func makeVotesTesting(accs testAccountData, round round, period period, step step, proposal proposalValue, ledger Ledger) (vs []vote) {
 	// TODO this common code should be refactored out
 	votes := make([]vote, 0)
 	for i := range accs.addresses {
-		rv := rawVote{Sender: accs.addresses[i], Round: round, Period: period, Step: step, Proposal: proposal}
+		rv := rawVote{Sender: accs.addresses[i], Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
 		uv, err := makeVote(rv, accs.ots[i], accs.vrfs[i], ledger)
 		if err != nil {
 			logging.Base().Errorf("AccountManager.makeVotes: Could not create vote: %v", err)
@@ -479,7 +489,7 @@ func makeVotesTesting(accs testAccountData, round basics.Round, period period, s
 	return votes
 }
 
-func makeRandomBlock(rnd round) bookkeeping.Block {
+func makeRandomBlock(rnd basics.Round) bookkeeping.Block {
 	return bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: rnd, Branch: bookkeeping.BlockHash(randomBlockHash())}}
 }
 
@@ -532,13 +542,36 @@ func (v *voteMakerHelper) MakeRandomProposalValue() *proposalValue {
 	}
 }
 
+func (v *voteMakerHelper) MakeRandomBlock(t *testing.T, r round) ValidatedBlock {
+	f := testBlockFactory{Owner: 1}
+	ve, err := f.AssembleBlock(r.Number, r.Branch, time.Now().Add(time.Minute))
+	require.NoError(t, err)
+	return ve
+}
+
+func (v *voteMakerHelper) MakeProposalPayload(t *testing.T, r round, ve ValidatedBlock) (*proposal, *proposalValue) {
+	var payload unauthenticatedProposal
+	payload.Block = ve.Block()
+	require.Equal(t, r.Number, payload.Round())
+	require.Equal(t, r.Branch, payload.Branch)
+	payload.SeedProof = randomVRFProof()
+
+	propVal := proposalValue{
+		BlockDigest:    payload.Digest(),
+		EncodingDigest: crypto.HashObj(payload),
+	}
+
+	return &proposal{unauthenticatedProposal: payload, ve: ve}, &propVal
+}
+
 func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*proposal, *proposalValue) {
 	f := testBlockFactory{Owner: 1}
-	ve, err := f.AssembleBlock(r, time.Now().Add(time.Minute))
+	ve, err := f.AssembleBlock(r.Number, r.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 
 	var payload unauthenticatedProposal
 	payload.Block = ve.Block()
+	require.Equal(t, r.Branch, payload.Branch)
 	payload.SeedProof = randomVRFProof()
 
 	propVal := proposalValue{
@@ -558,7 +591,7 @@ func (v *voteMakerHelper) MakeRawVote(t *testing.T, index int, r round, p period
 	if _, ok := v.addresses[index]; !ok {
 		v.addresses[index] = basics.Address(randomBlockHash())
 	}
-	return rawVote{Sender: v.addresses[index], Round: r, Period: p, Step: s, Proposal: value}
+	return rawVote{Sender: v.addresses[index], Round: r.Number, Branch: r.Branch, Period: p, Step: s, Proposal: value}
 }
 
 func (v *voteMakerHelper) MakeVerifiedVote(t *testing.T, index int, r round, p period, s step, value proposalValue) vote {
@@ -575,7 +608,8 @@ func (v *voteMakerHelper) MakeEquivocationVote(t *testing.T, index int, r round,
 	pV2 := v.MakeRandomProposalValue()
 	return equivocationVote{
 		Sender:    v.addresses[index],
-		Round:     r,
+		Round:     r.Number,
+		Branch:    r.Branch,
 		Period:    p,
 		Step:      s,
 		Cred:      committee.Credential{Weight: weight},
@@ -586,7 +620,7 @@ func (v *voteMakerHelper) MakeEquivocationVote(t *testing.T, index int, r round,
 // make a vote for specified proposal value
 func (v *voteMakerHelper) MakeValidVoteAcceptedVal(t *testing.T, index int, step step, value proposalValue) voteAcceptedEvent {
 	// these unit tests assume that the vote tracker doesn't validate the integrity of the vote event itself
-	vt := v.MakeVerifiedVote(t, index, round(0), period(8), step, value)
+	vt := v.MakeVerifiedVote(t, index, roundZero, period(8), step, value) // XXX round(0) ?
 	return voteAcceptedEvent{vt, protocol.ConsensusCurrentVersion}
 }
 
@@ -608,7 +642,8 @@ func (v *voteMakerHelper) MakeVerifiedBundle(t *testing.T, r round, p period, s 
 		votes[i] = v.MakeVerifiedVote(t, i, r, p, s, value)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Step:     s,
 		Proposal: value,
@@ -617,4 +652,20 @@ func (v *voteMakerHelper) MakeVerifiedBundle(t *testing.T, r round, p period, s 
 		U:     bun,
 		Votes: votes,
 	}
+}
+
+type simpleKeyManager []account.Participation
+
+func (m simpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
+	var km []account.Participation
+	for _, acc := range m {
+		if acc.OverlapsInterval(votingRound, votingRound) {
+			km = append(km, acc)
+		}
+	}
+	return km
+}
+
+func (m simpleKeyManager) DeleteOldKeys(basics.Round) {
+	// noop
 }

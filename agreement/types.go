@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"sort"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -25,7 +24,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/timers"
 )
 
 var deadlineTimeout = config.Protocol.BigLambda + config.Protocol.SmallLambda
@@ -47,14 +45,18 @@ func DeadlineTimeout() time.Duration {
 }
 
 type roundBranch struct {
-	number basics.Round
-	branch bookkeeping.BlockHash
+	Number basics.Round
+	Branch bookkeeping.BlockHash
 }
 
-var roundZero = round{number: 0}
+var roundZero = round{Number: 0}
 
 func makeRoundBranch(n basics.Round, b bookkeeping.BlockHash) round {
-	return round{number: n, branch: b}
+	return round{Number: n, Branch: b}
+}
+
+func makeRound(n basics.Round) round {
+	return round{Number: n, Branch: bookkeeping.BlockHash{}}
 }
 
 type (
@@ -70,9 +72,9 @@ type (
 
 // RPS captures a round, period, and step.
 type RPS struct {
-	round  round
-	period period
-	step   step
+	Round  round
+	Period period
+	Step   step
 }
 
 // Algorand 2.0 steps
@@ -168,64 +170,4 @@ func (s step) committeeSize(proto config.ConsensusParams) uint64 {
 	default:
 		return proto.NextCommitteeSize
 	}
-}
-
-// clockManager managers multiple clocks used by different pipelined rounds.
-// XXX garbage-collect old rounds
-type clockManager struct {
-	m map[round]timers.Clock
-	f timers.ClockFactory
-}
-
-func makeClockManager(f timers.ClockFactory) *clockManager {
-	return &clockManager{m: make(map[round]timers.Clock), f: f}
-}
-
-func (cm *clockManager) setZero(r round) {
-	cm.m[r] = cm.f.Zero()
-}
-
-// nextDeadlineCh returns a timeout channel that will fire when the earliest Deadline among all of
-// the rounds described in externalDemuxSignals has occurred. It also returns the corresponding
-// round (including speculative branch) this timeout channel corresponds to.
-func (cm *clockManager) nextDeadlineCh(es []externalDemuxSignals) (<-chan time.Time, round) {
-	if len(es) == 0 {
-		return nil, roundZero
-	}
-	sort.Slice(es, func(i, j int) bool {
-		ti := cm.m[es[i].CurrentRound].GetTimeout(es[i].Deadline)
-		tj := cm.m[es[j].CurrentRound].GetTimeout(es[j].Deadline)
-		return ti.Before(tj)
-	})
-	return cm.m[es[0].CurrentRound].TimeoutAt(es[0].Deadline), es[0].CurrentRound
-}
-
-// nextFastDeadlineCh returns a timeout channel that will fire when the earliest FastRecoveryDeadline among all of
-// the rounds described in externalDemuxSignals has occurred. It also returns the corresponding
-// round (including speculative branch) this timeout channel corresponds to.
-func (cm clockManager) nextFastDeadlineCh(es []externalDemuxSignals) (<-chan time.Time, round) {
-	if len(es) == 0 {
-		return nil, roundZero
-	}
-	sort.Slice(es, func(i, j int) bool {
-		ti := cm.m[es[i].CurrentRound].GetTimeout(es[i].FastRecoveryDeadline)
-		tj := cm.m[es[j].CurrentRound].GetTimeout(es[j].FastRecoveryDeadline)
-		return ti.Before(tj)
-	})
-	return cm.m[es[0].CurrentRound].TimeoutAt(es[0].FastRecoveryDeadline), es[0].CurrentRound
-}
-
-func (cm *clockManager) Decode(data []byte) (*clockManager, error) {
-	m := make(map[round]timers.Clock)
-	err := protocol.DecodeReflect(data, m)
-	if err != nil {
-		logging.Base().Errorf("clockManager decode error: %v", err)
-	} else {
-		logging.Base().Debugf("clockManager decoded with map %+v", m)
-	}
-	return &clockManager{m: m, f: cm.f}, err
-}
-
-func (cm *clockManager) Encode() []byte {
-	return protocol.EncodeReflect(cm.m)
 }

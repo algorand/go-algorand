@@ -106,12 +106,12 @@ type stepRouter struct {
 	VoteTrackerContract voteTrackerContract
 }
 
-func makeRootRouter(p pipelinePlayer) (res rootRouter) {
-	res.root = checkedActor{actor: &p, actorContract: playerContract{}}
+func makeRootRouter(p actor) (res rootRouter) {
+	res.root = checkedActor{actor: p, actorContract: playerContract{}}
 	return
 }
 
-func (router *rootRouter) update(state pipelinePlayer, r round, gc bool) {
+func (router *rootRouter) update(state actor, r round, gc bool) {
 	if router.proposalRoot == nil {
 		router.proposalRoot = checkedListener{listener: &router.ProposalManager, listenerContract: proposalManagerContract{}}
 	}
@@ -129,7 +129,7 @@ func (router *rootRouter) update(state pipelinePlayer, r round, gc bool) {
 		children := make(map[round]*roundRouter)
 		// XXX just considers last committed round number, ignores branch, OK?
 		for r, c := range router.Children {
-			if r.number >= state.lastCommittedRound {
+			if r.Number >= state.forgetBeforeRound() {
 				children[r] = c
 			}
 		}
@@ -139,13 +139,13 @@ func (router *rootRouter) update(state pipelinePlayer, r round, gc bool) {
 
 // submitTop is a convenience method used to submit the event directly into the root of the state machine tree
 // (i.e., to the playerMachine).
-func (router *rootRouter) submitTop(t *tracer, state pipelinePlayer, e externalEvent) (pipelinePlayer, []action) {
+func (router *rootRouter) submitTop(t *tracer, state actor, e event) (actor, []action) {
 	router.update(state, roundZero, true)
 	// XXX trace calls moved to pipelinePlayer.handleRoundEvent
 	handle := routerHandle{t: t, r: router, src: playerMachine}
 	a := router.root.handle(handle, e)
-	p := router.root.underlying().(*pipelinePlayer)
-	return *p, a
+	p := router.root.underlying()
+	return p, a
 }
 
 func (router *rootRouter) submitTopAutopsyXXX(t *tracer, p player, e event) (player, []action) {
@@ -166,7 +166,7 @@ func (router *rootRouter) submitTopAutopsyXXX(t *tracer, p player, e event) (pla
 }
 
 func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event {
-	router.update(*router.root.underlying().(*pipelinePlayer), r, true) // XXX
+	router.update(router.root.underlying(), r, true)
 	if router.proposalRoot.T() == dest {
 		handle := routerHandle{t: t, r: router, src: proposalMachine}
 		return router.proposalRoot.handle(handle, state, e)

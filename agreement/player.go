@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -60,6 +61,40 @@ func (p *player) T() stateMachineTag {
 
 func (p *player) underlying() actor {
 	return p
+}
+
+func (p *player) forgetBeforeRound() basics.Round {
+	return p.Round.Number - 1
+}
+
+// decode implements serializableActor
+func (*player) decode(buf []byte) (serializableActor, error) {
+	ret := player{}
+	err := protocol.DecodeReflect(buf, &ret)
+	if err != nil {
+		return nil, err
+	}
+	return &ret, nil
+}
+
+// encode implements serializableActor
+func (p *player) encode() []byte {
+	return protocol.EncodeReflect(p)
+}
+
+func (p *player) externalDemuxSignals() pipelineExternalDemuxSignals {
+	return pipelineExternalDemuxSignals{
+		lastCommittedRound: p.Round.Number - 1,
+		signals: []externalDemuxSignals{{
+			Deadline:             p.Deadline,
+			FastRecoveryDeadline: p.FastRecoveryDeadline,
+			CurrentRound:         p.Round,
+		}},
+	}
+}
+
+func (p *player) allPlayersRPS() []RPS {
+	return []RPS{{Round: p.Round, Period: p.Period, Step: p.Step}}
 }
 
 // Precondition: passed-in player is equal to player
@@ -275,7 +310,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
-			as := p.enterRound(r, e, round{number: p.Round.number + 1, branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
+			as := p.enterRound(r, e, round{Number: p.Round.Number + 1, Branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
 			return append(actions, as...)
 		}
 		// we don't have the block! We need to ensure we will be able to receive the block.
@@ -594,7 +629,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				as := p.enterRound(r, delegatedE, round{number: cert.Round + 1, branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
+				as := p.enterRound(r, delegatedE, round{Number: cert.Round + 1, Branch: bookkeeping.BlockHash(cert.Proposal.BlockDigest)})
 				return append(actions, as...)
 			}
 		}

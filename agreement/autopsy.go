@@ -209,7 +209,7 @@ func (a *Autopsy) DumpString(filter AutopsyFilter, w0 io.Writer) (version string
 			player := tr.x
 
 			if filter.Enabled {
-				if player.Round.number < filter.First || player.Round.number > filter.Last {
+				if player.Round.Number < filter.First || player.Round.Number > filter.Last {
 					w.Disable()
 				} else {
 					w.Enable()
@@ -315,7 +315,7 @@ func (a *Autopsy) DumpMessagePack(filter AutopsyFilter, w0 io.WriteCloser) (vers
 			router.root = p
 
 			if filter.Enabled {
-				if player.Round.number < filter.First || player.Round.number > filter.Last {
+				if player.Round.Number < filter.First || player.Round.Number > filter.Last {
 					w.Disable()
 				} else {
 					w.Enable()
@@ -394,12 +394,12 @@ func (a *Autopsy) extractNextCdv(ch chan<- autopsyTrace) (bounds AutopsyBounds, 
 			}
 			expectAction = false
 
-			bounds.EndRound = uint64(acc.x.Round.number)
+			bounds.EndRound = uint64(acc.x.Round.Number)
 			bounds.EndPeriod = uint64(acc.x.Period)
 
 			if !recording {
 				// first time
-				bounds.StartRound = uint64(acc.x.Round.number)
+				bounds.StartRound = uint64(acc.x.Round.Number)
 				bounds.StartPeriod = uint64(acc.x.Period)
 			}
 			recording = true

@@ -192,7 +192,7 @@ func (rv rawVote) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 func (rv rawVote) roundBranch() round {
-	return round{number: rv.Round, branch: rv.Branch}
+	return round{Number: rv.Round, Branch: rv.Branch}
 }
 
 func (v vote) u() unauthenticatedVote {

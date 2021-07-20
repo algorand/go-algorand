@@ -49,4 +49,5 @@ type Clock interface {
 type ClockFactory interface {
 	// Zero returns a new Clock, with zero set to now.
 	Zero() Clock
+	Decode([]byte) (Clock, error)
 }

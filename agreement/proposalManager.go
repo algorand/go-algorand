@@ -154,9 +154,9 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 			return filteredEvent{T: voteFiltered, Err: err}
 		}
 
-		if v.R.Round == p.Round.number { // XXX timing for round/branch
+		if v.R.Round == p.Round.Number { // XXX timing for round/branch
 			r.t.timeR().RecVoteReceived(v)
-		} else if v.R.Round == p.Round.number+1 { // XXX
+		} else if v.R.Round == p.Round.Number+1 { // XXX
 			r.t.timeRPlus1().RecVoteReceived(v)
 		}
 
@@ -240,14 +240,14 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 // voteFresh determines whether a proposal satisfies freshness rules.
 func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
 	switch vote.R.Round {
-	case freshData.PlayerRound.number: // XXX check branch
+	case freshData.PlayerRound.Number: // XXX check branch
 		if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > vote.R.Period {
 			return fmt.Errorf("filtered stale proposal: period %d - 1 > %d", freshData.PlayerPeriod, vote.R.Period)
 		}
 		if freshData.PlayerPeriod+1 < vote.R.Period {
 			return fmt.Errorf("filtered premature proposal: period %d + 1 < %d", freshData.PlayerPeriod, vote.R.Period)
 		}
-	case freshData.PlayerRound.number + 1: // XXX check branch
+	case freshData.PlayerRound.Number + 1: // XXX check branch
 		if vote.R.Period != 0 {
 			return fmt.Errorf("filtered premature proposal from next round: period %d > 0", vote.R.Period)
 		}

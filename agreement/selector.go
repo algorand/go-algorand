@@ -63,8 +63,8 @@ func membership(l LedgerReader, addr basics.Address, r round, p period, s step) 
 	if err != nil {
 		return
 	}
-	balanceRound := balanceRound(r.number, cparams)
-	seedRound := seedRound(r.number, cparams)
+	balanceRound := balanceRound(r.Number, cparams)
+	seedRound := seedRound(r.Number, cparams)
 
 	record, err := l.Lookup(balanceRound, bookkeeping.BlockHash{}, addr) // assumes balance was confirmed
 	if err != nil {
@@ -78,14 +78,14 @@ func membership(l LedgerReader, addr basics.Address, r round, p period, s step) 
 		return
 	}
 
-	seed, err := l.Seed(seedRound, r.branch)
+	seed, err := l.Seed(seedRound, r.Branch)
 	if err != nil {
 		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain seed in round %d: %v", r, seedRound, err)
 		return
 	}
 
 	m.Record = committee.BalanceRecord{AccountData: record, Addr: addr}
-	m.Selector = selector{Seed: seed, Round: r.number, Branch: r.branch, Period: p, Step: s}
+	m.Selector = selector{Seed: seed, Round: r.Number, Branch: r.Branch, Period: p, Step: s}
 	m.TotalMoney = total
 	return m, nil
 }

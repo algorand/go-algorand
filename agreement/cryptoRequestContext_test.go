@@ -33,7 +33,7 @@ func forEachTagDo(fn func(protocol.Tag)) {
 
 func TestCryptoRequestContextAddCancelRound(t *testing.T) {
 	pending := makePendingRequestsContext()
-	rnd := round(10)
+	rnd := makeRound(10)
 	per := period(10)
 	forEachTagDo(func(tag protocol.Tag) {
 		var ctx context.Context
@@ -66,7 +66,7 @@ func TestCryptoRequestContextAddCancelRound(t *testing.T) {
 
 func TestCryptoRequestContextAddCancelPeriod(t *testing.T) {
 	pending := makePendingRequestsContext()
-	rnd := round(10)
+	rnd := makeRound(10)
 	per := period(10)
 
 	forEachTagDo(func(tag protocol.Tag) {
@@ -100,7 +100,7 @@ func TestCryptoRequestContextAddCancelPeriod(t *testing.T) {
 
 func TestCryptoRequestContextAddCancelProposal(t *testing.T) {
 	pending := makePendingRequestsContext()
-	rnd := round(10)
+	rnd := makeRound(10)
 	per := period(10)
 	proposal := cryptoProposalRequest{message: message{Tag: protocol.ProposalPayloadTag}, Round: rnd, Period: per}
 	ctx := pending.addProposal(proposal)
@@ -124,7 +124,7 @@ func TestCryptoRequestContextAddCancelProposal(t *testing.T) {
 
 func TestCryptoRequestContextAddCancelPinnedProposal(t *testing.T) {
 	pending := makePendingRequestsContext()
-	rnd := round(10)
+	rnd := makeRound(10)
 	proposal := cryptoProposalRequest{message: message{Tag: protocol.ProposalPayloadTag}, Round: rnd, Pinned: true}
 	ctx := pending.addProposal(proposal)
 
@@ -147,7 +147,7 @@ func TestCryptoRequestContextAddCancelPinnedProposal(t *testing.T) {
 
 func TestCryptoRequestContextAddNoCancelPinnedProposal(t *testing.T) {
 	pending := makePendingRequestsContext()
-	rnd := round(10)
+	rnd := makeRound(10)
 	per := period(10)
 	proposal := cryptoProposalRequest{message: message{Tag: protocol.ProposalPayloadTag}, Round: rnd, Pinned: true}
 	ctx := pending.addProposal(proposal)
@@ -170,7 +170,7 @@ func TestCryptoRequestContextAddNoCancelPinnedProposal(t *testing.T) {
 
 func TestCryptoRequestContextAddNoInterferencePinnedProposal(t *testing.T) {
 	pending := makePendingRequestsContext()
-	rnd := round(10)
+	rnd := makeRound(10)
 	per := period(10)
 	proposal := cryptoProposalRequest{message: message{Tag: protocol.ProposalPayloadTag}, Round: rnd, Period: per}
 	ctx := pending.addProposal(proposal)
@@ -193,7 +193,7 @@ func TestCryptoRequestContextAddNoInterferencePinnedProposal(t *testing.T) {
 
 func TestCryptoRequestContextCleanupByRound(t *testing.T) {
 	pending := makePendingRequestsContext()
-	rnd := round(10)
+	rnd := makeRound(10)
 	per := period(10)
 
 	forEachTagDo(func(tag protocol.Tag) {
@@ -216,14 +216,14 @@ func TestCryptoRequestContextCleanupByRound(t *testing.T) {
 		_, hasPeriod := pending[rnd].periods[cryptoRequestCtxKey{period: per}]
 		require.True(t, hasPeriod)
 
-		pending.clearStaleContexts(rnd+1, 20, false, false)
+		pending.clearStaleContexts(makeRound(rnd.Number+1), 20, false, false)
 		select {
 		case <-ctx.Done():
 			t.Errorf("cancelled request")
 		default:
 		}
 
-		pending.clearStaleContexts(rnd+2, 20, false, false)
+		pending.clearStaleContexts(makeRound(rnd.Number+2), 20, false, false)
 		select {
 		case <-ctx.Done():
 		default:
@@ -240,7 +240,7 @@ func TestCryptoRequestContextCleanupByRound(t *testing.T) {
 
 func TestCryptoRequestContextCleanupByRoundPinnedCertify(t *testing.T) {
 	pending := makePendingRequestsContext()
-	rnd := round(10)
+	rnd := makeRound(10)
 
 	forEachTagDo(func(tag protocol.Tag) {
 		var ctx context.Context
@@ -269,14 +269,14 @@ func TestCryptoRequestContextCleanupByRoundPinnedCertify(t *testing.T) {
 			require.True(t, hasPeriod)
 		}
 
-		pending.clearStaleContexts(rnd+1, 20, false, false)
+		pending.clearStaleContexts(makeRound(rnd.Number+1), 20, false, false)
 		select {
 		case <-ctx.Done():
 			t.Errorf("cancelled request")
 		default:
 		}
 
-		pending.clearStaleContexts(rnd+2, 20, false, false)
+		pending.clearStaleContexts(makeRound(rnd.Number+2), 20, false, false)
 		select {
 		case <-ctx.Done():
 		default:
@@ -301,7 +301,7 @@ func TestCryptoRequestContextCleanupByRoundPinnedCertify(t *testing.T) {
 
 func TestCryptoRequestContextCleanupByPeriod(t *testing.T) {
 	pending := makePendingRequestsContext()
-	rnd := round(10)
+	rnd := makeRound(10)
 	per := period(10)
 
 	forEachTagDo(func(tag protocol.Tag) {
@@ -362,7 +362,7 @@ func TestCryptoRequestContextCleanupByPeriod(t *testing.T) {
 
 func TestCryptoRequestContextCleanupByPeriodPinned(t *testing.T) {
 	pending := makePendingRequestsContext()
-	rnd := round(10)
+	rnd := makeRound(10)
 
 	forEachTagDo(func(tag protocol.Tag) {
 		var ctx context.Context

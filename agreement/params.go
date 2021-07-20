@@ -30,5 +30,5 @@ func ParamsRound(rnd basics.Round) basics.Round {
 // paramsRoundBranch returns the target round and leaf branch from which consensus parameters
 // should be used for agreement on round rnd.
 func paramsRoundBranch(rnd round) (basics.Round, bookkeeping.BlockHash) {
-	return ParamsRound(rnd.number), rnd.branch
+	return ParamsRound(rnd.Number), rnd.Branch
 }

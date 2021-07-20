@@ -1,3 +1,5 @@
+// +build demux
+
 // Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
@@ -418,7 +420,7 @@ func TestDemuxNext(t *testing.T) {
 	dt.Test()
 }
 
-// implement timers.Clock
+// implement timers.Clock and timers.ClockFactory
 func (t *demuxTester) Zero() timers.Clock {
 	// we don't care about this function in this test.
 	return t
@@ -441,6 +443,12 @@ func (t *demuxTester) TimeoutAt(delta time.Duration) <-chan time.Time {
 }
 
 // implement timers.Clock
+func (t *demuxTester) GetTimeout(delta time.Duration) time.Time {
+	// we don't care about this function in this test.
+	return time.Time{}
+}
+
+// implement timers.Clock
 func (t *demuxTester) Encode() []byte {
 	// we don't care about this function in this test.
 	return []byte{}
@@ -458,7 +466,7 @@ func (t *demuxTester) NextRound() basics.Round {
 }
 
 // implement Ledger
-func (t *demuxTester) Wait(basics.Round) chan struct{} {
+func (t *demuxTester) Wait(basics.Round, bookkeeping.BlockHash) chan struct{} {
 	c := make(chan struct{})
 	if t.currentUsecase.ledgerRoundReached {
 		// return a closed channel.
@@ -469,37 +477,37 @@ func (t *demuxTester) Wait(basics.Round) chan struct{} {
 }
 
 // implement Ledger
-func (t *demuxTester) Seed(basics.Round) (committee.Seed, error) {
+func (t *demuxTester) Seed(basics.Round, bookkeeping.BlockHash) (committee.Seed, error) {
 	// we don't care about this function in this test.
 	return committee.Seed{}, nil
 }
 
 // implement Ledger
-func (t *demuxTester) LookupDigest(basics.Round) (crypto.Digest, error) {
+func (t *demuxTester) LookupDigest(basics.Round, bookkeeping.BlockHash) (crypto.Digest, error) {
 	// we don't care about this function in this test.
 	return crypto.Digest{}, nil
 }
 
 // implement Ledger
-func (t *demuxTester) Lookup(basics.Round, basics.Address) (basics.AccountData, error) {
+func (t *demuxTester) Lookup(basics.Round, bookkeeping.BlockHash, basics.Address) (basics.AccountData, error) {
 	// we don't care about this function in this test.
 	return basics.AccountData{}, nil
 }
 
 // implement Ledger
-func (t *demuxTester) Circulation(basics.Round) (basics.MicroAlgos, error) {
+func (t *demuxTester) Circulation(basics.Round, bookkeeping.BlockHash) (basics.MicroAlgos, error) {
 	// we don't care about this function in this test.
 	return basics.MicroAlgos{}, nil
 }
 
 // implement Ledger
-func (t *demuxTester) ConsensusParams(basics.Round) (config.ConsensusParams, error) {
+func (t *demuxTester) ConsensusParams(basics.Round, bookkeeping.BlockHash) (config.ConsensusParams, error) {
 	// we don't care about this function in this test.
 	return config.Consensus[protocol.ConsensusCurrentVersion], nil
 }
 
 // implement Ledger
-func (t *demuxTester) ConsensusVersion(basics.Round) (protocol.ConsensusVersion, error) {
+func (t *demuxTester) ConsensusVersion(basics.Round, bookkeeping.BlockHash) (protocol.ConsensusVersion, error) {
 	// we don't care about this function in this test.
 	return protocol.ConsensusCurrentVersion, nil
 }
@@ -659,7 +667,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 
 	s := &Service{}
 	s.quit = make(chan struct{})
-	s.Clock = t
+	s.clockManager = makeClockManager(t)
 	s.Ledger = t
 	s.RandomSource = t
 	s.log = serviceLogger{logging.Base()}
@@ -667,7 +675,14 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 		close(s.quit)
 	}
 
-	e, ok := dmx.next(s, time.Second, fastTimeoutChTime, 300)
+	extSignals := pipelineExternalDemuxSignals{
+		lastCommittedRound: 299,
+		signals: []externalDemuxSignals{{
+			Deadline:             time.Second,
+			FastRecoveryDeadline: fastTimeoutChTime,
+			CurrentRound:         makeRoundRandomBranch(300),
+		}}}
+	e, ok := dmx.next(s, extSignals)
 
 	if !assert.Equal(t, testcase.ok, ok) {
 		return false

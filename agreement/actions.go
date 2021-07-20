@@ -252,7 +252,7 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 	logEventStart := logEvent
 	logEventStart.Type = logspec.RoundStart
 	s.log.with(logEventStart).Infof("finished round %d", a.Certificate.Round)
-	s.tracer.timeR().StartRound(round{number: a.Certificate.Round + 1, branch: bookkeeping.BlockHash(a.Certificate.Proposal.BlockDigest)})
+	s.tracer.timeR().StartRound(round{Number: a.Certificate.Round + 1, Branch: bookkeeping.BlockHash(a.Certificate.Proposal.BlockDigest)})
 	s.tracer.timeR().RecStep(0, propose, bottom)
 }
 
@@ -341,8 +341,8 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 	case repropose:
 		logEvent := logspec.AgreementEvent{
 			Type:   logspec.VoteAttest,
-			Round:  uint64(a.Round.number),
-			Branch: a.Round.branch.String(),
+			Round:  uint64(a.Round.Number),
+			Branch: a.Round.Branch.String(),
 			Period: uint64(a.Period),
 			Step:   uint64(propose),
 			Hash:   a.Proposal.BlockDigest.String(),
@@ -366,8 +366,8 @@ func (a pseudonodeAction) do(ctx context.Context, s *Service) {
 	case attest:
 		logEvent := logspec.AgreementEvent{
 			Type:   logspec.VoteAttest,
-			Round:  uint64(a.Round.number),
-			Branch: a.Round.branch.String(),
+			Round:  uint64(a.Round.Number),
+			Branch: a.Round.Branch.String(),
 			Period: uint64(a.Period),
 			Step:   uint64(a.Step),
 			Hash:   a.Proposal.BlockDigest.String(),
@@ -487,8 +487,8 @@ func (c checkpointAction) persistent() bool {
 func (c checkpointAction) do(ctx context.Context, s *Service) {
 	logEvent := logspec.AgreementEvent{
 		Type:   logspec.Persisted,
-		Round:  uint64(c.Round.number),
-		Branch: c.Round.branch.String(),
+		Round:  uint64(c.Round.Number),
+		Branch: c.Round.Branch.String(),
 		Period: uint64(c.Period),
 		Step:   uint64(c.Step),
 	}

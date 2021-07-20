@@ -37,7 +37,7 @@ func init() {
 
 func TestVoteAggregatorVotes(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
+	round := makeRoundRandomBranch(ledger.NextRound())
 	period := period(0)
 	player := player{Round: round, Period: period}
 
@@ -45,6 +45,7 @@ func TestVoteAggregatorVotes(t *testing.T) {
 
 	var router router
 	rr := routerFixture
+	rr.root = &player
 	rr.voteRoot = l
 	router = &rr
 
@@ -55,7 +56,7 @@ func TestVoteAggregatorVotes(t *testing.T) {
 		for i := range addresses {
 			address := addresses[i]
 			step := step(s)
-			rv := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
+			rv := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
 			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			assert.NoError(t, err)
 
@@ -84,7 +85,7 @@ func TestVoteAggregatorVotes(t *testing.T) {
 
 func TestVoteAggregatorBundles(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
+	round := makeRoundRandomBranch(ledger.NextRound())
 	period := period(0)
 	player := player{Round: round, Period: period}
 
@@ -92,6 +93,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 
 	var router router
 	rr := routerFixture
+	rr.root = &player
 	rr.voteRoot = l
 	router = &rr
 
@@ -107,7 +109,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 		for i := range addresses {
 			address := addresses[i]
 			step := step(s)
-			rv := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
+			rv := rawVote{Sender: address, Round: round.Number, Branch: round.Branch, Period: period, Step: step, Proposal: proposal}
 			uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			assert.NoError(t, err)
 
@@ -141,7 +143,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 			PlayerLastConcluding: 0,
 		}}
 
-		router.dispatch(&voteAggregatorTracer, player, e, playerMachine, voteMachine, bundle.U.Round, bundle.U.Period, bundle.U.Step)
+		router.dispatch(&voteAggregatorTracer, player, e, playerMachine, voteMachine, makeRoundBranch(bundle.U.Round, bundle.U.Branch), bundle.U.Period, bundle.U.Step)
 	}
 }
 
@@ -152,7 +154,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
-	rRouter.update(player{}, 0, false)
+	rRouter.update(&player{}, roundZero, false)
 	voteM := &ioAutomataConcrete{
 		listener:  rRouter.voteRoot,
 		routerCtx: rRouter,
@@ -161,10 +163,14 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	helper.Setup()
 	b := testCaseBuilder{}
 
+	r1 := makeRoundRandomBranch(1)
+	r2 := makeRoundRandomBranch(2)
+	r100 := makeRoundRandomBranch(100)
+
 	// define a current player state for freshness testing
 	msgTemplate := filterableMessageEvent{
 		FreshnessData: freshnessData{
-			PlayerRound:          round(1),
+			PlayerRound:          r1,
 			PlayerPeriod:         period(0),
 			PlayerStep:           cert,
 			PlayerLastConcluding: 0,
@@ -172,7 +178,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	}
 	// generate stale vote, make sure it is rejected
 	pV := helper.MakeRandomProposalValue()
-	uv := helper.MakeUnauthenticatedVote(t, 0, round(100), period(1), soft, *pV)
+	uv := helper.MakeUnauthenticatedVote(t, 0, r100, period(1), soft, *pV)
 	inMsg := msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -183,7 +189,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 	// fresh vote should not be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, round(1), period(1), next, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r1, period(1), next, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -194,7 +200,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 	// vote from next round not rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, round(2), period(0), soft, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r2, period(0), soft, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -206,7 +212,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 	b.AddInOutPair(inMsg, emptyEvent{})
 
 	// duplicate vote rejected
-	v := helper.MakeVerifiedVote(t, 1, round(2), period(0), soft, *pV)
+	v := helper.MakeVerifiedVote(t, 1, r2, period(0), soft, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: voteVerified, // have the vote machine log the vote
@@ -216,7 +222,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
-	uv = helper.MakeUnauthenticatedVote(t, 1, round(2), period(0), soft, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r2, period(0), soft, *pV)
 	inMsg = msgTemplate
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -236,7 +242,7 @@ func TestVoteAggregatorFiltersVotePresentStale(t *testing.T) {
 func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
-	rRouter.update(player{}, 0, false)
+	rRouter.update(&player{}, roundZero, false)
 	voteM := &ioAutomataConcrete{
 		listener:  rRouter.voteRoot,
 		routerCtx: rRouter,
@@ -245,10 +251,14 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	helper.Setup()
 	b := testCaseBuilder{}
 
+	r1 := makeRoundRandomBranch(1)
+	r2 := makeRoundRandomBranch(2)
+	r100 := makeRoundRandomBranch(100)
+
 	// define a current player state for freshness testing
 	msgTemplate := filterableMessageEvent{
 		FreshnessData: freshnessData{
-			PlayerRound:          round(1),
+			PlayerRound:          r1,
 			PlayerPeriod:         period(0),
 			PlayerStep:           cert,
 			PlayerLastConcluding: 0,
@@ -256,7 +266,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	}
 	// generate stale vote, make sure it is rejected
 	pV := helper.MakeRandomProposalValue()
-	uv := helper.MakeVerifiedVote(t, 0, round(100), period(1), soft, *pV)
+	uv := helper.MakeVerifiedVote(t, 0, r100, period(1), soft, *pV)
 	inMsg := msgTemplate // copy
 	// Err is all nil, should be fine
 	inMsg.messageEvent = messageEvent{
@@ -268,7 +278,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 	// fresh vote should not be rejected
-	uv = helper.MakeVerifiedVote(t, 1, round(1), period(1), next, *pV)
+	uv = helper.MakeVerifiedVote(t, 1, r1, period(1), next, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: voteVerified,
@@ -279,7 +289,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 	// vote from next round not rejected
-	uv = helper.MakeVerifiedVote(t, 1, round(2), period(0), soft, *pV)
+	uv = helper.MakeVerifiedVote(t, 1, r2, period(0), soft, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: voteVerified,
@@ -290,7 +300,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 	// malformed vote rejected
-	uv = helper.MakeVerifiedVote(t, 1, round(2), period(0), soft, *pV)
+	uv = helper.MakeVerifiedVote(t, 1, r2, period(0), soft, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: voteVerified,
@@ -311,7 +321,7 @@ func TestVoteAggregatorFiltersVoteVerifiedStale(t *testing.T) {
 func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
-	rRouter.update(player{}, 0, false)
+	rRouter.update(&player{}, roundZero, false)
 	voteM := &ioAutomataConcrete{
 		listener:  rRouter.voteRoot,
 		routerCtx: rRouter,
@@ -320,10 +330,13 @@ func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 	helper.Setup()
 	b := testCaseBuilder{}
 
+	r1 := makeRoundRandomBranch(1)
+	r2 := makeRoundRandomBranch(2)
+
 	// define a current player state for freshness testing
 	msgTemplate := filterableMessageEvent{
 		FreshnessData: freshnessData{
-			PlayerRound:          round(1),
+			PlayerRound:          r1,
 			PlayerPeriod:         period(0),
 			PlayerStep:           cert,
 			PlayerLastConcluding: 0,
@@ -332,7 +345,7 @@ func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 	// generate threshold, make sure we see it
 	// (this is based on the composition of machines...)
 	pV := helper.MakeRandomProposalValue()
-	v := helper.MakeVerifiedVote(t, 0, round(1), period(1), soft, *pV)
+	v := helper.MakeVerifiedVote(t, 0, r1, period(1), soft, *pV)
 	v.Cred = committee.Credential{Weight: soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])}
 	inMsg := msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
@@ -345,7 +358,7 @@ func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 	b.AddInOutPair(inMsg, thresholdEvent{T: softThreshold, Proposal: *pV})
 
 	// same threshold for next round should not be emitted
-	v = helper.MakeVerifiedVote(t, 0, round(2), period(0), soft, *pV)
+	v = helper.MakeVerifiedVote(t, 0, r2, period(0), soft, *pV)
 	v.Cred = committee.Credential{Weight: soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])}
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
@@ -366,7 +379,7 @@ func TestVoteAggregatorFiltersVoteVerifiedThreshold(t *testing.T) {
 func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
-	rRouter.update(player{}, 0, false)
+	rRouter.update(&player{}, roundZero, false)
 	voteM := &ioAutomataConcrete{
 		listener:  rRouter.voteRoot,
 		routerCtx: rRouter,
@@ -375,10 +388,14 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 	helper.Setup()
 	b := testCaseBuilder{}
 
+	r1000 := makeRoundRandomBranch(1000)
+	r1001 := makeRoundRandomBranch(1001)
+	r1002 := makeRoundRandomBranch(1002)
+
 	// define a current player state for freshness testing
 	msgTemplate := filterableMessageEvent{
 		FreshnessData: freshnessData{
-			PlayerRound:          round(1001),
+			PlayerRound:          r1001,
 			PlayerPeriod:         period(2),
 			PlayerStep:           soft,
 			PlayerLastConcluding: 0,
@@ -386,7 +403,8 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 	}
 	// generate acceptable bundles
 	bun := unauthenticatedBundle{
-		Round:  round(1001),
+		Round:  r1001.Number,
+		Branch: r1001.Branch,
 		Period: period(2),
 	}
 	inMsg := msgTemplate // copy
@@ -401,7 +419,8 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 
 	// another acceptable bundle from future period
 	bun = unauthenticatedBundle{
-		Round:  round(1001),
+		Round:  r1001.Number,
+		Branch: r1001.Branch,
 		Period: period(200),
 	}
 	inMsg = msgTemplate // copy
@@ -416,7 +435,8 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 
 	// generate bad bundle with r_bundle < r
 	bun = unauthenticatedBundle{
-		Round:  round(1000),
+		Round:  r1000.Number,
+		Branch: r1000.Branch,
 		Period: period(0),
 	}
 	inMsg = msgTemplate // copy
@@ -431,7 +451,8 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 
 	// generate bad bundle with r_bundle > r
 	bun = unauthenticatedBundle{
-		Round:  round(1002),
+		Round:  r1002.Number,
+		Branch: r1002.Branch,
 		Period: period(0),
 	}
 	inMsg = msgTemplate // copy
@@ -446,7 +467,8 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 
 	// generate bad bundle with p_k + 1 < p
 	bun = unauthenticatedBundle{
-		Round:  round(1001),
+		Round:  r1001.Number,
+		Branch: r1001.Branch,
 		Period: period(0),
 	}
 	inMsg = msgTemplate // copy
@@ -468,7 +490,7 @@ func TestVoteAggregatorFiltersBundlePresent(t *testing.T) {
 func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
-	rRouter.update(player{}, 0, false)
+	rRouter.update(&player{}, roundZero, false)
 	voteM := &ioAutomataConcrete{
 		listener:  rRouter.voteRoot,
 		routerCtx: rRouter,
@@ -477,10 +499,12 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 	helper.Setup()
 	b := testCaseBuilder{}
 
+	r2099 := makeRoundRandomBranch(2099)
+
 	// define a current player state for freshness testing
 	msgTemplate := filterableMessageEvent{
 		FreshnessData: freshnessData{
-			PlayerRound:          round(2099),
+			PlayerRound:          r2099,
 			PlayerPeriod:         period(201),
 			PlayerStep:           soft,
 			PlayerLastConcluding: 0,
@@ -488,7 +512,8 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 	}
 	// generate malformed bundle
 	bun := unauthenticatedBundle{
-		Round:  round(2099),
+		Round:  r2099.Number,
+		Branch: r2099.Branch,
 		Period: period(201),
 	}
 	inMsg := msgTemplate // copy
@@ -506,7 +531,8 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 
 	// generate empty bundle
 	bun = unauthenticatedBundle{
-		Round:  round(2099),
+		Round:  r2099.Number,
+		Branch: r2099.Branch,
 		Period: period(201),
 	}
 	inMsg = msgTemplate // copy
@@ -525,14 +551,15 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 	// note, as long as err != nil the bundles should be taken
 	// to be valid...
 	pV := helper.MakeRandomProposalValue()
-	r := round(2099)
+	r := r2099
 	p := period(201)
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV)
 	}
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -551,14 +578,15 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 
 	// another broken bundle from future period with soft vote
 	pV = helper.MakeRandomProposalValue()
-	r = round(2099)
+	r = r2099
 	p = period(2000)
 	votes = make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
 	}
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -584,7 +612,7 @@ func TestVoteAggregatorFiltersBundleVerifiedThresholdStale(t *testing.T) {
 func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
-	rRouter.update(player{}, 0, false)
+	rRouter.update(&player{}, roundZero, false)
 	voteM := &ioAutomataConcrete{
 		listener:  rRouter.voteRoot,
 		routerCtx: rRouter,
@@ -593,10 +621,12 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 	helper.Setup()
 	b := testCaseBuilder{}
 
+	r2099 := makeRoundRandomBranch(2099)
+
 	// define a current player state for freshness testing
 	msgTemplate := filterableMessageEvent{
 		FreshnessData: freshnessData{
-			PlayerRound:          round(2099),
+			PlayerRound:          r2099,
 			PlayerPeriod:         period(201),
 			PlayerStep:           soft,
 			PlayerLastConcluding: 0,
@@ -607,14 +637,15 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 	// note, as long as err != nil the bundles should be taken
 	// to be valid...
 	pV := helper.MakeRandomProposalValue()
-	r := round(2099)
+	r := r2099
 	p := period(201)
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -633,14 +664,15 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 
 	// an unacceptable bundle from old period
 	pV = helper.MakeRandomProposalValue()
-	r = round(2099)
+	r = r2099
 	p = period(198)
 	votes = make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
 	}
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -660,7 +692,7 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 
 	// an acceptable bundle from same period, with equivocations
 	pV = helper.MakeRandomProposalValue()
-	r = round(2099)
+	r = r2099
 	p = period(201)
 	votes = make([]vote, 1)
 	votes[0] = helper.MakeVerifiedVote(t, 0, r, p, cert, *pV)
@@ -668,7 +700,8 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 	equivocationVotes := make([]equivocationVote, 1)
 	equivocationVotes[0] = helper.MakeEquivocationVote(t, 1, r, p, cert, cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])-1)
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -696,7 +729,7 @@ func TestVoteAggregatorFiltersBundleVerifiedRelayStale(t *testing.T) {
 func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
-	rRouter.update(player{}, 0, false)
+	rRouter.update(&player{}, roundZero, false)
 	voteM := &ioAutomataConcrete{
 		listener:  rRouter.voteRoot,
 		routerCtx: rRouter,
@@ -705,11 +738,14 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	helper.Setup()
 	b := testCaseBuilder{}
 
+	r10 := makeRoundRandomBranch(10)
+	r11 := makeRoundRandomBranch(11)
+
 	// define a current player state for freshness testing
 	lastConcludingStep := next
 	msgTemplate := filterableMessageEvent{
 		FreshnessData: freshnessData{
-			PlayerRound:          round(10),
+			PlayerRound:          r10,
 			PlayerPeriod:         period(10),
 			PlayerStep:           next + 5,
 			PlayerLastConcluding: lastConcludingStep,
@@ -717,7 +753,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	}
 	// generate old next vote in same period, make sure it is rejected
 	pV := helper.MakeRandomProposalValue()
-	uv := helper.MakeUnauthenticatedVote(t, 0, round(10), period(10), next+3, *pV)
+	uv := helper.MakeUnauthenticatedVote(t, 0, r10, period(10), next+3, *pV)
 	inMsg := msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -728,7 +764,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// super far away vote, even in same period, should be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, round(10), period(10), next+7, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r10, period(10), next+7, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -739,7 +775,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// me.next+1 should not be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, round(10), period(10), next+6, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r10, period(10), next+6, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -750,7 +786,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 	b.AddInOutPair(inMsg, emptyEvent{})
 
 	// relevant next vote from previous period should not be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, round(10), period(9), lastConcludingStep, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r10, period(9), lastConcludingStep, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -762,7 +798,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 
 	// a vote from subsequent round > period 0.next should be filtered
 	// they generally "don't matter"
-	uv = helper.MakeUnauthenticatedVote(t, 1, round(11), period(1), soft, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r11, period(1), soft, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -781,7 +817,7 @@ func TestVoteAggregatorFiltersVotePresentPeriod(t *testing.T) {
 func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 	// Set up a composed test machine
 	rRouter := new(rootRouter)
-	rRouter.update(player{}, 0, false)
+	rRouter.update(&player{}, roundZero, false)
 	voteM := &ioAutomataConcrete{
 		listener:  rRouter.voteRoot,
 		routerCtx: rRouter,
@@ -790,11 +826,14 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 	helper.Setup()
 	b := testCaseBuilder{}
 
+	r10 := makeRoundRandomBranch(10)
+	r11 := makeRoundRandomBranch(11)
+
 	// define a current player state for freshness testing
 	lastConcludingStep := next
 	msgTemplate := filterableMessageEvent{
 		FreshnessData: freshnessData{
-			PlayerRound:          round(10),
+			PlayerRound:          r10,
 			PlayerPeriod:         period(10),
 			PlayerStep:           next + 5,
 			PlayerLastConcluding: lastConcludingStep,
@@ -802,7 +841,7 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 	}
 	// generate old next vote in next round, period 0, step 1; make sure it is accepted
 	pV := helper.MakeRandomProposalValue()
-	uv := helper.MakeUnauthenticatedVote(t, 0, round(11), period(0), soft, *pV)
+	uv := helper.MakeUnauthenticatedVote(t, 0, r11, period(0), soft, *pV)
 	inMsg := msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -813,7 +852,7 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 	b.AddInOutPair(inMsg, emptyEvent{})
 
 	// next round, period 0, step > next should be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, round(11), period(0), next+1, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r11, period(0), next+1, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,
@@ -824,7 +863,7 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// next round, period 1 should be rejected
-	uv = helper.MakeUnauthenticatedVote(t, 1, round(11), period(1), soft, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 1, r11, period(1), soft, *pV)
 	inMsg = msgTemplate // copy
 	inMsg.messageEvent = messageEvent{
 		T: votePresent,

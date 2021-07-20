@@ -1,3 +1,5 @@
+// +build perm
+
 // Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
@@ -31,7 +33,7 @@ import (
 
 func makeRandomProposalPayload(r round) *proposal {
 	f := testBlockFactory{Owner: 1}
-	ve, _ := f.AssembleBlock(r, time.Time{})
+	ve, _ := f.AssembleBlock(r.number, r.branch, time.Time{})
 
 	var payload unauthenticatedProposal
 	payload.Block = ve.Block()
@@ -55,7 +57,8 @@ const (
 )
 
 func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper) {
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
+	rp1 := makeRoundRandomBranch(210)
 	const p = period(0)
 	var payload = makeRandomProposalPayload(r)
 	var pV = payload.value()
@@ -63,7 +66,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 	case playerSameRound: // same round and period as proposal
 		return setupP(t, r, p, soft)
 	case playerNextRound: // one round ahead of proposal
-		return setupP(t, r+1, p, soft)
+		return setupP(t, rp1, p, soft)
 	case playerPrevRoundPendingPayloadPresent:
 		plyr, pMachine, helper = setupP(t, r-1, p, soft)
 		plyr.Pending.push(&messageEvent{
@@ -151,7 +154,7 @@ const (
 )
 
 func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e messageEvent) {
-	const r = round(209)
+	const r = makeRoundRandomBranch(209)
 	const p = period(0)
 	var payload = makeRandomProposalPayload(r)
 	var pV = payload.value()
@@ -365,7 +368,7 @@ func requireTraceContains(t *testing.T, trace ioTrace, expected event, playerN, 
 }
 
 func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, helper *voteMakerHelper, trace ioTrace) {
-	const r = round(209)
+	const r = makeRoundRandomBranch(209)
 	const p = period(0)
 	var payload = makeRandomProposalPayload(r)
 	var pV = payload.value()

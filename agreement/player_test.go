@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -79,9 +80,11 @@ func generateVoteEvents(t *testing.T, player player, step step, accs testAccount
 	return batch
 }
 
-func simulateProposalVotes(t *testing.T, router *rootRouter, player *player, batch []event) {
+func simulateProposalVotes(t *testing.T, router *rootRouter, p *player, batch []event) {
 	for _, e := range batch {
-		*player, _ = router.submitTop(&playerTracer, *player, e)
+		var ac actor
+		ac, _ = router.submitTop(&playerTracer, p, e)
+		*p = *ac.(*player)
 	}
 }
 
@@ -95,10 +98,12 @@ func (prop proposalValue) matches(dig, encdig crypto.Digest) error {
 	return nil
 }
 
-func simulateProposalPayloads(t *testing.T, router *rootRouter, player *player, expected proposalValue, batch []event) {
+func simulateProposalPayloads(t *testing.T, router *rootRouter, p *player, expected proposalValue, batch []event) {
 	for _, e := range batch {
 		var res []action
-		*player, res = router.submitTop(&playerTracer, *player, e)
+		var ac actor
+		ac, res = router.submitTop(&playerTracer, p, e)
+		*p = *ac.(*player)
 		for _, a := range res {
 			if a.t() != relay {
 				continue
@@ -112,13 +117,15 @@ func simulateProposalPayloads(t *testing.T, router *rootRouter, player *player, 
 	}
 }
 
-func simulateProposals(t *testing.T, router *rootRouter, player *player, voteBatch []event, payloadBatch []event) {
+func simulateProposals(t *testing.T, router *rootRouter, p *player, voteBatch []event, payloadBatch []event) {
 	for i, e := range voteBatch {
 		var res []action
-		*player, res = router.submitTop(&playerTracer, *player, e)
-
+		var ac actor
+		ac, res = router.submitTop(&playerTracer, p, e)
+		*p = *ac.(*player)
 		earlier := res
-		*player, res = router.submitTop(&playerTracer, *player, payloadBatch[i])
+		ac, res = router.submitTop(&playerTracer, p, payloadBatch[i])
+		*p = *ac.(*player)
 		if len(res) != len(earlier) {
 			panic("proposal action mismatch")
 		}
@@ -130,10 +137,12 @@ func simulateProposals(t *testing.T, router *rootRouter, player *player, voteBat
 	}
 }
 
-func simulateTimeoutExpectSoft(t *testing.T, router *rootRouter, player *player, expected proposalValue) {
+func simulateTimeoutExpectSoft(t *testing.T, router *rootRouter, p *player, expected proposalValue) {
 	var res []action
 	e := makeTimeoutEvent()
-	*player, res = router.submitTop(&playerTracer, *player, e)
+	var ac actor
+	ac, res = router.submitTop(&playerTracer, p, e)
+	*p = *ac.(*player)
 	if len(res) != 1 {
 		panic("wrong number of actions")
 	}
@@ -151,16 +160,18 @@ func simulateTimeoutExpectSoft(t *testing.T, router *rootRouter, player *player,
 		panic("bad soft step")
 	}
 
-	if player.Napping {
+	if p.Napping {
 		panic("player is napping")
 	}
 }
 
 // TODO this should check that player.Deadline is set correctly
-func simulateTimeoutExpectAlarm(t *testing.T, router *rootRouter, player *player) {
+func simulateTimeoutExpectAlarm(t *testing.T, router *rootRouter, p *player) {
 	var res []action
 	e := makeTimeoutEvent()
-	*player, res = router.submitTop(&playerTracer, *player, e)
+	var ac actor
+	ac, res = router.submitTop(&playerTracer, p, e)
+	*p = *ac.(*player)
 
 	for _, a := range res {
 		if a.t() == noop {
@@ -168,15 +179,17 @@ func simulateTimeoutExpectAlarm(t *testing.T, router *rootRouter, player *player
 		}
 		panic("got some non-noop action")
 	}
-	if player.Napping {
+	if p.Napping {
 		panic("player is napping")
 	}
 }
 
-func simulateTimeoutExpectNext(t *testing.T, router *rootRouter, player *player, expected proposalValue, step step) {
+func simulateTimeoutExpectNext(t *testing.T, router *rootRouter, p *player, expected proposalValue, step step) {
 	var res []action
 	e := makeTimeoutEvent()
-	*player, res = router.submitTop(&playerTracer, *player, e)
+	var ac actor
+	ac, res = router.submitTop(&playerTracer, p, e)
+	*p = *ac.(*player)
 
 	if len(res) != 1 {
 		panic("wrong number of actions")
@@ -195,15 +208,17 @@ func simulateTimeoutExpectNext(t *testing.T, router *rootRouter, player *player,
 		panic("bad next step")
 	}
 
-	if player.Napping {
+	if p.Napping {
 		panic("player is napping")
 	}
 }
 
-func simulateTimeoutExpectNextPartitioned(t *testing.T, router *rootRouter, player *player, expected proposalValue, step step) {
+func simulateTimeoutExpectNextPartitioned(t *testing.T, router *rootRouter, p *player, expected proposalValue, step step) {
 	var res []action
 	e := makeTimeoutEvent()
-	*player, res = router.submitTop(&playerTracer, *player, e)
+	var ac actor
+	ac, res = router.submitTop(&playerTracer, p, e)
+	*p = *ac.(*player)
 
 	if len(res) != 2 && len(res) != 3 {
 		panic("wrong number of actions not in [2, 3]")
@@ -249,28 +264,32 @@ func simulateTimeoutExpectNextPartitioned(t *testing.T, router *rootRouter, play
 		panic("bad next step")
 	}
 
-	if player.Napping {
+	if p.Napping {
 		panic("player is napping")
 	}
 }
 
-func simulateTimeoutExpectNextNap(t *testing.T, router *rootRouter, player *player, expected proposalValue, step step) {
+func simulateTimeoutExpectNextNap(t *testing.T, router *rootRouter, p *player, expected proposalValue, step step) {
 	var res []action
 	e := makeTimeoutEvent()
-	*player, res = router.submitTop(&playerTracer, *player, e)
+	var ac actor
+	ac, res = router.submitTop(&playerTracer, p, e)
+	*p = *ac.(*player)
 	if len(res) != 0 {
 		panic("some event emitted")
 	}
-	if !player.Napping {
+	if !p.Napping {
 		panic("player is not napping")
 	}
 }
 
-func simulateSoftExpectAttest(t *testing.T, router *rootRouter, player *player, expected proposalValue, batch []event) {
+func simulateSoftExpectAttest(t *testing.T, router *rootRouter, p *player, expected proposalValue, batch []event) {
 	var softActions []action
 	for _, e := range batch {
 		var res []action
-		*player, res = router.submitTop(&playerTracer, *player, e)
+		var ac actor
+		ac, res = router.submitTop(&playerTracer, p, e)
+		*p = *ac.(*player)
 		softActions = append(softActions, res...)
 	}
 
@@ -295,11 +314,13 @@ func simulateSoftExpectAttest(t *testing.T, router *rootRouter, player *player, 
 	}
 }
 
-func simulateSoftExpectNoAttest(t *testing.T, router *rootRouter, player *player, batch []event) {
+func simulateSoftExpectNoAttest(t *testing.T, router *rootRouter, p *player, batch []event) {
 	var softActions []action
 	for _, e := range batch {
 		var res []action
-		*player, res = router.submitTop(&playerTracer, *player, e)
+		var ac actor
+		ac, res = router.submitTop(&playerTracer, p, e)
+		*p = *ac.(*player)
 		softActions = append(softActions, res...)
 	}
 
@@ -310,11 +331,13 @@ func simulateSoftExpectNoAttest(t *testing.T, router *rootRouter, player *player
 	}
 }
 
-func simulateCertExpectEnsureAssemble(t *testing.T, router *rootRouter, player *player, expected proposalValue, batch []event) (act ensureAction) {
+func simulateCertExpectEnsureAssemble(t *testing.T, router *rootRouter, p *player, expected proposalValue, batch []event) (act ensureAction) {
 	var certActions []action
 	for _, e := range batch {
 		var res []action
-		*player, res = router.submitTop(&playerTracer, *player, e)
+		var ac actor
+		ac, res = router.submitTop(&playerTracer, p, e)
+		*p = *ac.(*player)
 		certActions = append(certActions, res...)
 	}
 
@@ -357,11 +380,13 @@ func simulateCertExpectEnsureAssemble(t *testing.T, router *rootRouter, player *
 	return act
 }
 
-func simulateNextExpectRecover(t *testing.T, router *rootRouter, player *player, expected proposalValue, batch []event) {
+func simulateNextExpectRecover(t *testing.T, router *rootRouter, p *player, expected proposalValue, batch []event) {
 	var certActions []action
 	for _, e := range batch {
 		var res []action
-		*player, res = router.submitTop(&playerTracer, *player, e)
+		var ac actor
+		ac, res = router.submitTop(&playerTracer, p, e)
+		*p = *ac.(*player)
 		certActions = append(certActions, res...)
 	}
 
@@ -414,7 +439,7 @@ func testPlayerSetup() (player, rootRouter, testAccountData, testBlockFactory, L
 	accs := testAccountData{addresses: addresses, vrfs: vrfSecrets, ots: otSecrets}
 	round := ledger.NextRound()
 	period := period(0)
-	player := player{Round: round, Period: period, Step: soft}
+	player := player{Round: makeRoundRandomBranch(round), Period: period, Step: soft} // XXX
 
 	var p actor = ioLoggedActor{checkedActor{actor: &player, actorContract: playerContract{}}, playerTracer}
 	router := routerFixture
@@ -492,7 +517,7 @@ func TestPlayerLateBlockProposalPeriod0(t *testing.T) {
 
 func setupP(t *testing.T, r round, p period, s step) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper) {
 	// Set up a composed test machine starting at specified rps
-	rRouter := makeRootRouter(player{Round: r, Period: p, Step: s, Deadline: FilterTimeout(p, protocol.ConsensusCurrentVersion)})
+	rRouter := makeRootRouter(&player{Round: r, Period: p, Step: s, Deadline: FilterTimeout(p, protocol.ConsensusCurrentVersion)})
 	concreteMachine := ioAutomataConcretePlayer{rootRouter: &rRouter}
 	plyr = concreteMachine.underlying()
 	pMachine = &concreteMachine
@@ -505,7 +530,7 @@ func setupP(t *testing.T, r round, p period, s step) (plyr *player, pMachine ioA
 // ISV = Issue Soft Vote
 func TestPlayerISVDoesNotSoftVoteBottom(t *testing.T) {
 	// every soft vote is associated with a proposalValue != bottom.
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(1)
 	_, pM, helper := setupP(t, r, p, soft)
 
@@ -530,7 +555,7 @@ func TestPlayerISVDoesNotSoftVoteBottom(t *testing.T) {
 func TestPlayerISVVoteForStartingValue(t *testing.T) {
 	// if we see a next value quorum, and no next bottom quorum, vote for that value regardless
 	// every soft vote is associated with a proposalValue != bottom.
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(11)
 	_, pM, helper := setupP(t, r, p, soft)
 
@@ -540,7 +565,8 @@ func TestPlayerISVVoteForStartingValue(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Step:     next,
 		Proposal: *pV,
@@ -573,7 +599,7 @@ func TestPlayerISVVoteForStartingValue(t *testing.T) {
 func TestPlayerISVVoteNoVoteSansProposal(t *testing.T) {
 	// if we see no proposal, even if we see a next-value bottom quorum, do not issue a soft vote
 
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(11)
 	_, pM, helper := setupP(t, r, p, soft)
 
@@ -583,7 +609,8 @@ func TestPlayerISVVoteNoVoteSansProposal(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Step:     next,
 		Proposal: *pV,
@@ -625,7 +652,7 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 	// even if we saw bottom, if we see reproposal, and a next value quorum, vote for it
 	// why do reproposals need to be associated with next value quorums? (instead of just a next
 	// bottom quorum) - seems to be important for seed biasing
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(11)
 	_, pM, helper := setupP(t, r, p, soft)
 
@@ -635,7 +662,8 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Step:     next,
 		Proposal: *pV,
@@ -663,7 +691,8 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next+1, *pV)
 	}
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Step:     (next + 1),
 		Proposal: *pV,
@@ -710,7 +739,7 @@ func TestPlayerISVVoteForReProposal(t *testing.T) {
 
 func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
 	// if there's no next value quorum, don't support the reproposal
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(11)
 	_, pM, helper := setupP(t, r, p, soft)
 
@@ -721,7 +750,8 @@ func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Step:     next,
 		Proposal: *pV,
@@ -769,7 +799,7 @@ func TestPlayerISVNoVoteForUnsupportedReProposal(t *testing.T) {
 func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
 	// basic cert vote check.
 	// This also tests cert vote even if freeze timer has not yet fired
-	const r = round(12)
+	r := makeRoundRandomBranch(12)
 	const p = period(1)
 	_, pM, helper := setupP(t, r, p, soft)
 
@@ -808,7 +838,8 @@ func TestPlayerICVOnSoftThresholdSamePeriod(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Step:     soft,
 		Proposal: *pV,
@@ -843,7 +874,7 @@ func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
 	// before a proposal payload. Should still generate cert vote.
 
 	// This also tests cert vote even if freeze timer has not yet fired
-	const r = round(12)
+	r := makeRoundRandomBranch(12)
 	const p = period(1)
 	_, pM, helper := setupP(t, r, p, soft)
 
@@ -854,7 +885,8 @@ func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Step:     soft,
 		Proposal: *pV,
@@ -910,7 +942,7 @@ func TestPlayerICVOnSoftThresholdPrePayload(t *testing.T) {
 
 func TestPlayerICVOnSoftThresholdThenPayloadNoProposalVote(t *testing.T) {
 	// if there's no proposal vote, a soft threshold should still trigger a cert vote
-	const r = round(12)
+	r := makeRoundRandomBranch(12)
 	const p = period(1)
 	_, pM, helper := setupP(t, r, p, soft)
 
@@ -921,7 +953,8 @@ func TestPlayerICVOnSoftThresholdThenPayloadNoProposalVote(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Step:     soft,
 		Proposal: *pV,
@@ -961,7 +994,7 @@ func TestPlayerICVOnSoftThresholdThenPayloadNoProposalVote(t *testing.T) {
 }
 
 func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
-	const r = round(12)
+	r := makeRoundRandomBranch(12)
 	const p = period(1)
 	pWhite, pM, helper := setupP(t, r, p, soft)
 
@@ -988,7 +1021,8 @@ func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Step:     soft,
 		Proposal: *pV,
@@ -1016,7 +1050,7 @@ func TestPlayerICVNoVoteForUncommittableProposal(t *testing.T) {
 }
 
 func TestPlayerICVPanicOnSoftBottomThreshold(t *testing.T) {
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(1)
 	_, pM, helper := setupP(t, r, p, 0)
 	// make sure a next vote bottom for a future period fast forwards us to that period
@@ -1026,7 +1060,8 @@ func TestPlayerICVPanicOnSoftBottomThreshold(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -1049,7 +1084,7 @@ func TestPlayerICVPanicOnSoftBottomThreshold(t *testing.T) {
 // FF = Fast Forwarding
 func TestPlayerFFSoftThreshold(t *testing.T) {
 	// future periods
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
@@ -1062,7 +1097,8 @@ func TestPlayerFFSoftThreshold(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p+100, soft, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p + 100,
 		Step:     soft,
 		Proposal: *pV,
@@ -1088,7 +1124,7 @@ func TestPlayerFFSoftThreshold(t *testing.T) {
 func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
 	// future periods
 	// must also cert vote
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
@@ -1129,7 +1165,8 @@ func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p+100, soft, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p + 100,
 		Step:     soft,
 		Proposal: *pV,
@@ -1158,7 +1195,7 @@ func TestPlayerFFSoftThresholdWithPayload(t *testing.T) {
 
 func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
 	// should cert vote after fast forwarding due to soft bundle, if we see late payload
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
@@ -1169,7 +1206,8 @@ func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p+100, soft, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p + 100,
 		Step:     soft,
 		Proposal: *pV,
@@ -1228,7 +1266,7 @@ func TestPlayerFFSoftThresholdLatePayloadCert(t *testing.T) {
 
 func TestPlayerFFNextThresholdBottom(t *testing.T) {
 	// Set up a composed test machine starting at period 0
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	pWhite, pM, helper := setupP(t, r, period(0), soft)
 
 	// make sure a next vote bottom for a future period fast forwards us to that period
@@ -1239,7 +1277,8 @@ func TestPlayerFFNextThresholdBottom(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, futureP, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   futureP,
 		Proposal: *pV,
 	}
@@ -1262,7 +1301,7 @@ func TestPlayerFFNextThresholdBottom(t *testing.T) {
 
 func TestPlayerFFNextThresholdValue(t *testing.T) {
 	// Set up a composed test machine starting at period 0
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	pWhite, pM, helper := setupP(t, r, period(0), soft)
 
 	// make sure a next vote bottom for a future period fast forwards us to that period
@@ -1273,7 +1312,8 @@ func TestPlayerFFNextThresholdValue(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, futureP, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   futureP,
 		Proposal: *pV,
 	}
@@ -1297,7 +1337,7 @@ func TestPlayerFFNextThresholdValue(t *testing.T) {
 func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 	// thresholds/bundles with p_k < p are useless and should not cause any logic
 	// (though, in the process of generating the threshold, it should update cached next bundle)
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(11)
 	pWhite, pM, helper := setupP(t, r, p-1, soft)
 
@@ -1307,7 +1347,8 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1335,7 +1376,8 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, (next + 1), *pV)
 	}
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1384,7 +1426,7 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 func TestPlayerProposesBottomBundle(t *testing.T) {
 	// sanity check that player actually proposes something
 	// player should create a new proposal
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(11)
 	pWhite, pM, helper := setupP(t, r, p-1, soft)
 
@@ -1395,7 +1437,8 @@ func TestPlayerProposesBottomBundle(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1421,14 +1464,15 @@ func TestPlayerProposesBottomBundle(t *testing.T) {
 
 func TestPlayerProposesNewRound(t *testing.T) {
 	// player should create a new proposal on new round
-	const r = round(209)
+	rm1 := makeRoundRandomBranch(208)
 	const p = period(0)
-	pWhite, pM, helper := setupP(t, r-1, p, soft)
-	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+	pWhite, pM, helper := setupP(t, rm1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, rm1)
+	r := makeRoundBranch(209, bookkeeping.BlockHash(pV.BlockDigest))
 
 	// send a payload
 	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, rm1, p, propose, *pV)
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1453,10 +1497,11 @@ func TestPlayerProposesNewRound(t *testing.T) {
 	// gen cert to move into the next round
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r-1, p, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p, cert, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r - 1,
+		Round:    rm1.Number,
+		Branch:   rm1.Branch,
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -1483,18 +1528,20 @@ func TestPlayerProposesNewRound(t *testing.T) {
 
 func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
 	// player should create a new proposal on new round
-	const r = round(209)
+	rm1 := makeRoundRandomBranch(208)
 	const p = period(0)
-	pWhite, pM, helper := setupP(t, r-1, p, soft)
-	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+	pWhite, pM, helper := setupP(t, rm1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, rm1)
+	r := makeRoundBranch(209, bookkeeping.BlockHash(pV.BlockDigest))
 
 	// gen cert; this should not advance into next round
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r-1, p, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p, cert, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r - 1,
+		Round:    rm1.Number,
+		Branch:   rm1.Branch,
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -1513,7 +1560,7 @@ func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	require.Equalf(t, r-1, pWhite.Round, "player entered new round but shouldn't have without payload")
+	require.Equalf(t, rm1, pWhite.Round, "player entered new round but shouldn't have without payload")
 	assembleEvent := ev(pseudonodeAction{T: assemble, Round: r, Period: 0})
 	require.Falsef(t, pM.getTrace().Contains(assembleEvent), "Player should not try to assemble new proposal without new round")
 
@@ -1536,7 +1583,7 @@ func TestPlayerCertificateThenPayloadEntersNewRound(t *testing.T) {
 
 func TestPlayerReproposesNextValueBundleWithoutPayload(t *testing.T) {
 	// Even having not seen the payload, player should still repropose
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(11)
 	pWhite, pM, helper := setupP(t, r, p-1, soft)
 	pV := helper.MakeRandomProposalValue()
@@ -1547,7 +1594,8 @@ func TestPlayerReproposesNextValueBundleWithoutPayload(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1579,7 +1627,7 @@ func TestPlayerReproposesNextValueBundleWithoutPayload(t *testing.T) {
 func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 	// player should forward the proposal payload, forwad freshest bundle, and broadcast a reproposal vote.
 	// which comes from the previous period. (has period set to p - 1)
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(11)
 	pWhite, pM, helper := setupP(t, r, p-1, soft)
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
@@ -1615,7 +1663,8 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1676,14 +1725,15 @@ func TestPlayerReproposesNextValueBundleRelaysPayload(t *testing.T) {
 
 // Commitment
 func TestPlayerCommitsCertThreshold(t *testing.T) {
-	const r = round(20239)
+	rm1 := makeRoundRandomBranch(20238)
 	const p = period(1001)
-	pWhite, pM, helper := setupP(t, r-1, p, soft)
-	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+	pWhite, pM, helper := setupP(t, rm1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, rm1)
+	r := makeRoundBranch(20239, bookkeeping.BlockHash(pV.BlockDigest))
 
 	// send a payload
 	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, rm1, p, propose, *pV)
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1708,10 +1758,11 @@ func TestPlayerCommitsCertThreshold(t *testing.T) {
 	// gen cert to move into the next round
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r-1, p, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p, cert, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r - 1,
+		Round:    rm1.Number,
+		Branch:   rm1.Branch,
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -1743,7 +1794,7 @@ var testPartitionStep = partitionStep
 
 func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 	// let's just fire a bunch of timeouts
-	const r = round(20239)
+	r := makeRoundRandomBranch(20239)
 	const p = period(2)
 	pWhite, pM, helper := setupP(t, r, p, soft)
 
@@ -1754,7 +1805,8 @@ func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1804,7 +1856,7 @@ func TestPlayerRePropagatesFreshestBundle(t *testing.T) {
 
 func TestPlayerPropagatesProposalPayload(t *testing.T) {
 	// if a player receives a payload from the network, it should relay it.
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	_, pM, helper := setupP(t, r, 0, soft)
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 
@@ -1839,7 +1891,7 @@ func TestPlayerPropagatesProposalPayload(t *testing.T) {
 
 func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
 	// if a player receives a PayloadVerified event with its own payload, it should relay it.
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	_, pM, helper := setupP(t, r, 0, soft)
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
 
@@ -1875,12 +1927,13 @@ func TestPlayerPropagatesOwnProposalPayload(t *testing.T) {
 func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
 	// if a player receives a proposal payload for a future round, it should still
 	// propagate it at some point.
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
+	rp1 := makeRoundRandomBranch(r.Number + 1)
 	_, pM, helper := setupP(t, r, 0, soft)
-	payload, pV := helper.MakeRandomProposalPayload(t, r+1)
+	payload, pV := helper.MakeRandomProposalPayload(t, rp1)
 
 	// store an arbitrary proposal/payload
-	vVote := helper.MakeVerifiedVote(t, 0, r+1, 0, propose, *pV)
+	vVote := helper.MakeVerifiedVote(t, 0, rp1, 0, propose, *pV)
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -1906,7 +1959,7 @@ func TestPlayerPropagatesProposalPayloadFutureRound(t *testing.T) {
 
 	// advance to the next round
 	msg := roundInterruptionEvent{
-		Round: r + 1,
+		Round: rp1,
 	}
 	err, panicErr = pM.transition(msg)
 	require.NoError(t, err)
@@ -1920,7 +1973,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	// if player broadcasts a non-bottom freshest bundle during recovery/resynch, broadcast the
 	// associated proposal payload. note this is distinct from relaying the payload
 	// on seeing a reproposal/proposal vote.
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(11)
 	require.Truef(t, p >= testPartitionPeriod, "test case must force player into partitioned period")
 	pWhite, pM, helper := setupP(t, r, p-1, soft)
@@ -1955,7 +2008,8 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, soft, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -1980,7 +2034,8 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Proposal: *pV,
 	}
@@ -2047,7 +2102,8 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, soft, *pVNext)
 	}
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Proposal: *pVNext,
 	}
@@ -2103,7 +2159,7 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 }
 
 func TestPlayerPropagatesProposalVote(t *testing.T) {
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	_, pM, helper := setupP(t, r, 0, soft)
 	_, pV := helper.MakeRandomProposalPayload(t, r)
 
@@ -2125,7 +2181,7 @@ func TestPlayerPropagatesProposalVote(t *testing.T) {
 }
 
 func TestPlayerPropagatesSoftVote(t *testing.T) {
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	_, pM, helper := setupP(t, r, 0, soft)
 	_, pV := helper.MakeRandomProposalPayload(t, r)
 
@@ -2147,7 +2203,7 @@ func TestPlayerPropagatesSoftVote(t *testing.T) {
 }
 
 func TestPlayerPropagatesCertVote(t *testing.T) {
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	_, pM, helper := setupP(t, r, 0, cert)
 	_, pV := helper.MakeRandomProposalPayload(t, r)
 
@@ -2171,7 +2227,7 @@ func TestPlayerPropagatesCertVote(t *testing.T) {
 // Malformed Messages
 // check both proposals, proposal payloads, and votes, bundles
 func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
 
@@ -2208,7 +2264,7 @@ func TestPlayerDisconnectsFromMalformedProposalVote(t *testing.T) {
 }
 
 func TestPlayerIgnoresMalformedPayload(t *testing.T) {
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	_, pM, _ := setupP(t, r, p, cert)
 
@@ -2245,7 +2301,7 @@ func TestPlayerIgnoresMalformedPayload(t *testing.T) {
 }
 
 func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
 
@@ -2283,7 +2339,7 @@ func TestPlayerDisconnectsFromMalformedVotes(t *testing.T) {
 }
 
 func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	_, pM, _ := setupP(t, r, p, cert)
 
@@ -2321,7 +2377,7 @@ func TestPlayerDisconnectsFromMalformedBundles(t *testing.T) {
 
 // Helper Sanity Checks
 func TestPlayerRequestsVoteVerification(t *testing.T) {
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
 	pV := helper.MakeRandomProposalValue()
@@ -2342,7 +2398,7 @@ func TestPlayerRequestsVoteVerification(t *testing.T) {
 }
 
 func TestPlayerRequestsProposalVoteVerification(t *testing.T) {
-	const r = round(1)
+	r := makeRoundRandomBranch(1)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
 	pV := helper.MakeRandomProposalValue()
@@ -2363,11 +2419,12 @@ func TestPlayerRequestsProposalVoteVerification(t *testing.T) {
 }
 
 func TestPlayerRequestsBundleVerification(t *testing.T) {
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	_, pM, _ := setupP(t, r, p, cert)
 	bun := unauthenticatedBundle{
-		Round:  r,
+		Round:  r.Number,
+		Branch: r.Branch,
 		Period: p,
 	}
 	m := message{
@@ -2386,7 +2443,7 @@ func TestPlayerRequestsBundleVerification(t *testing.T) {
 
 // Payload Pipelining
 func TestPlayerRequestsPayloadVerification(t *testing.T) {
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	_, pM, helper := setupP(t, r, p, cert)
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
@@ -2421,12 +2478,16 @@ func TestPlayerRequestsPayloadVerification(t *testing.T) {
 }
 
 func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
-	const r = round(201221)
+	r := makeRoundRandomBranch(201221)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
+	// make payload for round r to be referenced by r+1
+	rBlock := helper.MakeRandomBlock(t, r)
+	rp1 := makeRoundBranch(r.Number+1, bookkeeping.BlockHash(rBlock.Block().Digest()))
+
 	// also make sure we ask for payload verification when entering a new round
-	payloadTwo, pVTwo := helper.MakeRandomProposalPayload(t, r+1)
-	vv := helper.MakeVerifiedVote(t, 0, r+1, 0, propose, *pVTwo)
+	payloadTwo, pVTwo := helper.MakeRandomProposalPayload(t, rp1)
+	vv := helper.MakeVerifiedVote(t, 0, rp1, 0, propose, *pVTwo)
 	inMsg := messageEvent{
 		T: voteVerified,
 		Input: message{
@@ -2453,7 +2514,7 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 	require.Falsef(t, pM.getTrace().Contains(verifyEvent), "Player should not verify payload from r + 1")
 
 	// now enter next round
-	pP, pV := helper.MakeRandomProposalPayload(t, r)
+	pP, pV := helper.MakeProposalPayload(t, r, rBlock)
 	// send a payload
 	// store an arbitrary proposal/payload
 	vVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
@@ -2483,7 +2544,8 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Proposal: *pV,
 	}
@@ -2502,7 +2564,8 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round")
+	//require.Equalf(t, rp1, pWhite.Round, "player did not enter new round")
+	require.Equalf(t, r.Number+1, pWhite.Round.Number, "player did not enter new round")
 	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
 	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
 	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should try to ensure block/digest on ledger")
@@ -2515,15 +2578,17 @@ func TestPlayerRequestsPipelinedPayloadVerification(t *testing.T) {
 // Round pipelining
 func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 	// make sure we stage a pipelined soft threshold after entering new round
-	const r = round(20)
+	r := makeRoundRandomBranch(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
+	rBlock := helper.MakeRandomBlock(t, r)
+	rp1 := makeRoundBranch(r.Number+1, bookkeeping.BlockHash(rBlock.Block().Digest()))
 
 	// pipeline a soft threshold for the next round
-	payload, pV := helper.MakeRandomProposalPayload(t, r+1)
+	payload, pV := helper.MakeRandomProposalPayload(t, rp1)
 	votes := make([]vote, int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(soft.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r+1, p, soft, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, rp1, p, soft, *pV)
 	}
 	// note: we can't just send a bundle - it will get rejected due to freshness rules
 	//bun := unauthenticatedBundle{
@@ -2559,7 +2624,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 	}
 
 	// now, enter next round
-	pPTwo, pVTwo := helper.MakeRandomProposalPayload(t, r)
+	pPTwo, pVTwo := helper.MakeProposalPayload(t, r, rBlock)
 	// store pPTwo
 	vVote := helper.MakeVerifiedVote(t, 0, r, p, propose, *pVTwo)
 	inMsg := messageEvent{
@@ -2588,7 +2653,8 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, *pVTwo)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Proposal: *pVTwo,
 	}
@@ -2606,7 +2672,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
-	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round")
+	require.Equalf(t, rp1, pWhite.Round, "player did not enter new round")
 
 	// now make sure we stage our soft threshold now
 	// we verify this indirectly by attempting to send a payload and making sure it gets verified
@@ -2628,7 +2694,7 @@ func TestPlayerHandlesPipelinedThresholds(t *testing.T) {
 func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) {
 	// should not ignore cert thresholds from previous period in same round, if it
 	// was saved as freshest threshold
-	const r = round(20)
+	r := makeRoundRandomBranch(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
@@ -2639,7 +2705,8 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Step:     next,
 		Proposal: *pV,
@@ -2688,26 +2755,28 @@ func TestPlayerRegression_EnsuresCertThreshFromOldPeriod_8ba23942(t *testing.T) 
 		require.NoError(t, panicErr)
 	}
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Step:     cert,
 		Proposal: *pV,
 	}
-	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round")
+	require.Equalf(t, r.Number+1, pWhite.Round.Number, "player did not enter new round")
 	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
 	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
 	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should try to ensure block on ledger")
 }
 
 func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
-	const r = round(20)
+	r := makeRoundRandomBranch(20)
+	rm1 := makeRoundRandomBranch(r.Number - 1)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
 	_, pV := helper.MakeRandomProposalPayload(t, r)
 	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r-1, p+1, cert, *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, rm1, p+1, cert, *pV)
 		msg := messageEvent{
 			T: voteVerified,
 			Input: message{
@@ -2721,7 +2790,8 @@ func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
 		require.NoError(t, panicErr)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r - 1,
+		Round:    rm1.Number,
+		Branch:   rm1.Branch,
 		Period:   p + 1,
 		Step:     cert,
 		Proposal: *pV,
@@ -2734,7 +2804,7 @@ func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
 
 func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 	// if player has pinned a block, then sees a cert threshold, it should commit
-	const r = round(20)
+	r := makeRoundRandomBranch(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
@@ -2745,7 +2815,8 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Step:     next,
 		Proposal: *pV,
@@ -2795,12 +2866,13 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 		require.NoError(t, panicErr)
 	}
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p + 1,
 		Step:     cert,
 		Proposal: *pV,
 	}
-	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round")
+	require.Equalf(t, r.Number+1, pWhite.Round.Number, "player did not enter new round")
 	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
 	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
 	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should try to ensure block on ledger")
@@ -2808,7 +2880,7 @@ func TestPlayer_CommitsCertThresholdWithoutPreStaging(t *testing.T) {
 
 func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
 	// check that ledger gets a hint to stage digest
-	const r = round(20)
+	r := makeRoundRandomBranch(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
@@ -2829,7 +2901,8 @@ func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
 		require.NoError(t, panicErr)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p,
 		Step:     cert,
 		Proposal: *pV,
@@ -2842,7 +2915,7 @@ func TestPlayer_CertThresholdDoesNotBlock(t *testing.T) {
 
 func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
 	// check that ledger gets a hint to stage digest
-	const r = round(20)
+	r := makeRoundRandomBranch(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
@@ -2863,7 +2936,8 @@ func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
 		require.NoError(t, panicErr)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p + 1,
 		Step:     cert,
 		Proposal: *pV,
@@ -2875,7 +2949,7 @@ func TestPlayer_CertThresholdDoesNotBlockFuturePeriod(t *testing.T) {
 }
 
 func TestPlayer_CertThresholdFastForwards(t *testing.T) {
-	const r = round(20)
+	r := makeRoundRandomBranch(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
@@ -2886,7 +2960,8 @@ func TestPlayer_CertThresholdFastForwards(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p + 2,
 		Step:     cert,
 		Proposal: *pV,
@@ -2913,7 +2988,7 @@ func TestPlayer_CertThresholdFastForwards(t *testing.T) {
 }
 
 func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) {
-	const r = round(20)
+	r := makeRoundRandomBranch(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
@@ -2949,7 +3024,8 @@ func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) 
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p + 2,
 		Step:     cert,
 		Proposal: *pV,
@@ -2969,14 +3045,14 @@ func TestPlayer_CertThresholdCommitsFuturePeriodIfAlreadyHasBlock(t *testing.T) 
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round... bad!")
+	require.Equalf(t, r.Number+1, pWhite.Round.Number, "player did not enter new round... bad!")
 	require.Equalf(t, period(0), pWhite.Period, "player should have entered period 0 of new round but didn't")
 	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *payload})
 	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have commited a block but didn't")
 }
 
 func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
-	const r = round(20)
+	r := makeRoundRandomBranch(20)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r, p, cert)
 
@@ -2987,7 +3063,8 @@ func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p+2, cert, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p + 2,
 		Step:     cert,
 		Proposal: *pV,
@@ -3025,7 +3102,7 @@ func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
-	require.Equalf(t, r+1, pWhite.Round, "player did not enter new round... bad!")
+	require.Equalf(t, r.Number+1, pWhite.Round.Number, "player did not enter new round... bad!")
 	require.Equalf(t, period(0), pWhite.Period, "player should have entered period 0 but didn't")
 	commitEvent = ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
 	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should have committed but didn't")
@@ -3033,7 +3110,7 @@ func TestPlayer_PayloadAfterCertThresholdCommits(t *testing.T) {
 
 func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 	// a white box test that checks the pinned value is relayed even it is not staged in the period corresponding to the freshest bundle
-	const r = round(209)
+	r := makeRoundRandomBranch(209)
 	const p = period(12)
 	pWhite, pM, helper := setupP(t, r, p-2, soft)
 	payload, pV := helper.MakeRandomProposalPayload(t, r)
@@ -3069,7 +3146,8 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-2, next, *pV)
 	}
 	bun := unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 2,
 		Proposal: *pV,
 	}
@@ -3094,7 +3172,8 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next, *pV)
 	}
 	bun = unauthenticatedBundle{
-		Round:    r,
+		Round:    r.Number,
+		Branch:   r.Branch,
 		Period:   p - 1,
 		Proposal: *pV,
 	}

@@ -32,11 +32,11 @@ import (
 type unauthenticatedBundle struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Round    basics.Round  `codec:"rnd"`
-	Period   period        `codec:"per"`
-	Step     step          `codec:"step"`
-	Branch   crypto.Digest `codec:"prev"`
-	Proposal proposalValue `codec:"prop"`
+	Round    basics.Round          `codec:"rnd"`
+	Period   period                `codec:"per"`
+	Step     step                  `codec:"step"`
+	Branch   bookkeeping.BlockHash `codec:"prev"`
+	Proposal proposalValue         `codec:"prop"`
 
 	Votes             []voteAuthenticator             `codec:"vote,allocbound=config.MaxVoteThreshold"`
 	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv,allocbound=config.MaxVoteThreshold"`
@@ -128,6 +128,7 @@ func makeBundle(proto config.ConsensusParams, targetProposal proposalValue, vote
 
 	return unauthenticatedBundle{
 		Round:             votes[0].R.Round,
+		Branch:            votes[0].R.Branch,
 		Period:            votes[0].R.Period,
 		Step:              votes[0].R.Step,
 		Proposal:          targetProposal,
@@ -202,7 +203,7 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 		default:
 		}
 
-		rv := rawVote{Sender: auth.Sender, Round: b.Round, Period: b.Period, Step: b.Step, Proposal: b.Proposal}
+		rv := rawVote{Sender: auth.Sender, Round: b.Round, Branch: b.Branch, Period: b.Period, Step: b.Step, Proposal: b.Proposal}
 		uv := unauthenticatedVote{R: rv, Cred: auth.Cred, Sig: auth.Sig}
 		avv.verifyVote(ctx, l, uv, i, message{}, results)
 	}
@@ -218,6 +219,7 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 		uev := unauthenticatedEquivocationVote{
 			Sender:    auth.Sender,
 			Round:     b.Round,
+			Branch:    b.Branch,
 			Period:    b.Period,
 			Step:      b.Step,
 			Cred:      auth.Cred,
@@ -284,7 +286,7 @@ func (b unauthenticatedBundle) Certificate() Certificate {
 }
 
 func (b unauthenticatedBundle) roundBranch() round {
-	return round{number: b.Round, branch: bookkeeping.BlockHash(b.Branch)}
+	return round{Number: b.Round, Branch: bookkeeping.BlockHash(b.Branch)}
 }
 
 func (b bundle) u() unauthenticatedBundle {

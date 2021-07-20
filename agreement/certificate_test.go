@@ -43,9 +43,9 @@ func verifyBundleAgainstLedger(b unauthenticatedBundle, l Ledger, avv *AsyncVote
 
 func TestCertificateGoodCertificateBasic(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
 	period := period(0)
 	block := makeRandomBlock(1)
+	round := makeRoundBranch(ledger.NextRound(), block.Branch)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)
@@ -69,9 +69,9 @@ func TestCertificateGoodCertificateBasic(t *testing.T) {
 
 func TestCertificateGoodCertificateEarlyBreak(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
 	period := period(0)
 	block := makeRandomBlock(1)
+	round := makeRoundBranch(ledger.NextRound(), block.Branch)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)
@@ -95,9 +95,9 @@ func TestCertificateGoodCertificateEarlyBreak(t *testing.T) {
 
 func TestCertificateFinalCert(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
 	period := period(0)
 	block := makeRandomBlock(1)
+	round := makeRoundBranch(ledger.NextRound(), block.Branch)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)
@@ -121,9 +121,9 @@ func TestCertificateFinalCert(t *testing.T) {
 
 func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
 	period := period(0)
 	block, lastHash := makeRandomBlock(1), randomBlockHash()
+	round := makeRoundBranch(ledger.NextRound(), block.Branch)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)
@@ -174,9 +174,9 @@ func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
 
 func TestCertificateDifferentBlock(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
 	period := period(0)
 	block, lastHash := makeRandomBlock(1), randomBlockHash()
+	round := makeRoundBranch(ledger.NextRound(), block.Branch)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)
@@ -203,9 +203,9 @@ func TestCertificateDifferentBlock(t *testing.T) {
 
 func TestCertificateNoCertStep(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
 	period := period(0)
 	block, _ := makeRandomBlock(1), randomBlockHash()
+	round := makeRoundBranch(ledger.NextRound(), block.Branch)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)
@@ -225,7 +225,7 @@ func TestCertificateNoCertStep(t *testing.T) {
 
 func TestCertificateNotEnoughVotesToCert(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
+	round := makeRoundRandomBranch(ledger.NextRound())
 	period := period(0)
 
 	var lastHash crypto.Digest
@@ -257,9 +257,9 @@ func TestCertificateNotEnoughVotesToCert(t *testing.T) {
 
 func TestCertificateCertWrongRound(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
 	period := period(0)
 	block := makeRandomBlock(1 - 1)
+	round := makeRoundBranch(ledger.NextRound(), block.Branch)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)
@@ -286,9 +286,9 @@ func TestCertificateCertWrongRound(t *testing.T) {
 
 func TestCertificateCertWithTooFewVotes(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
 	period := period(0)
 	block, _ := makeRandomBlock(1), randomBlockHash()
+	round := makeRoundBranch(ledger.NextRound(), block.Branch)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)
@@ -314,9 +314,9 @@ func TestCertificateCertWithTooFewVotes(t *testing.T) {
 
 func TestCertificateDupVote(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
-	round := ledger.NextRound()
 	period := period(0)
 	block, _ := makeRandomBlock(1), randomBlockHash()
+	round := makeRoundBranch(ledger.NextRound(), block.Branch)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)

@@ -27,19 +27,38 @@ import (
 // pipelinePlayer manages an ensemble of players and implements the actor interface.
 // It tracks the last committed agreement round, and manages speculative agreement rounds.
 type pipelinePlayer struct {
-	lastCommittedRound basics.Round
-	players            map[round]*player
+	LastCommittedRound basics.Round
+	Players            map[round]*player
 }
 
 func makePipelinePlayer(nextRound basics.Round, nextVersion protocol.ConsensusVersion) pipelinePlayer {
 	return pipelinePlayer{
-		lastCommittedRound: nextRound,
-		players:            make(map[round]*player),
+		LastCommittedRound: nextRound,
+		Players:            make(map[round]*player),
 	}
 }
 
 func (p *pipelinePlayer) T() stateMachineTag { return playerMachine } // XXX different tag?
 func (p *pipelinePlayer) underlying() actor  { return p }
+
+func (p *pipelinePlayer) forgetBeforeRound() basics.Round {
+	return p.LastCommittedRound // XXX actually lastCommittedRound+1?
+}
+
+// decode implements serializableActor
+func (*pipelinePlayer) decode(buf []byte) (serializableActor, error) {
+	ret := pipelinePlayer{}
+	err := protocol.DecodeReflect(buf, &ret)
+	if err != nil {
+		return nil, err
+	}
+	return &ret, nil
+}
+
+// encode implements serializableActor
+func (p *pipelinePlayer) encode() []byte {
+	return protocol.EncodeReflect(p)
+}
 
 // handle an event, usually by delegating to a child player implementation.
 func (p *pipelinePlayer) handle(r routerHandle, e event) []action {
@@ -98,7 +117,7 @@ func newPlayerForEvent(e externalEvent, rnd round) (*player, error) {
 
 // handleRoundEvent looks up a player for a given round to handle an event.
 func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd round) []action {
-	state, ok := p.players[rnd]
+	state, ok := p.Players[rnd]
 	if !ok {
 		// XXXX haven't seen this round before; create player or drop event
 		state, err := newPlayerForEvent(e, rnd)
@@ -106,7 +125,7 @@ func (p *pipelinePlayer) handleRoundEvent(r routerHandle, e externalEvent, rnd r
 			logging.Base().Debugf("couldn't make player for rnd %+v, dropping event", rnd)
 			return nil
 		}
-		p.players[rnd] = state
+		p.Players[rnd] = state
 	}
 
 	// TODO move cadaver calls to somewhere cleanerxtern
@@ -130,9 +149,9 @@ func (p *pipelinePlayer) enterRound(r routerHandle, source event, target round) 
 // externalDemuxSignals returns a list of per-player signals allowing demux.next to wait for
 // multiple pipelined per-round deadlines, as well as the last committed round.
 func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
-	s := make([]externalDemuxSignals, len(p.players))
+	s := make([]externalDemuxSignals, len(p.Players))
 	i := 0
-	for _, p := range p.players {
+	for _, p := range p.Players {
 		s[i] = externalDemuxSignals{
 			Deadline:             p.Deadline,
 			FastRecoveryDeadline: p.FastRecoveryDeadline,
@@ -140,16 +159,16 @@ func (p *pipelinePlayer) externalDemuxSignals() pipelineExternalDemuxSignals {
 		}
 		i++
 	}
-	return pipelineExternalDemuxSignals{signals: s, lastCommittedRound: p.lastCommittedRound}
+	return pipelineExternalDemuxSignals{signals: s, lastCommittedRound: p.LastCommittedRound}
 }
 
 // allPlayersRPS returns a list of per-player (round, period, step) tuples reflecting the current
 // state of the pipelinePlayer's child players.
 func (p *pipelinePlayer) allPlayersRPS() []RPS {
-	ret := make([]RPS, len(p.players))
+	ret := make([]RPS, len(p.Players))
 	i := 0
-	for _, p := range p.players {
-		ret[i] = RPS{round: p.Round, period: p.Period, step: p.Step}
+	for _, p := range p.Players {
+		ret[i] = RPS{Round: p.Round, Period: p.Period, Step: p.Step}
 		i++
 	}
 	return ret

@@ -580,7 +580,7 @@ func (w *ioAutomataConcretePlayer) callSubmitTop(inputTraceEvent event) (outEven
 			panicErr = fmt.Errorf("Panic: %v", r)
 		}
 	}()
-	_, actions := w.rootRouter.submitTop(w.t, *w.underlying(), inputTraceEvent)
+	_, actions := w.rootRouter.submitTop(w.t, w.underlying(), inputTraceEvent)
 	// wrap all actions as events
 	outEvents = make([]event, len(actions))
 	for i, a := range actions {

@@ -109,7 +109,7 @@ func (pending pendingRequestsContext) clearStaleContexts(r round, p period, pinn
 	// at round r + 2 we can clear tasks from round r
 	oldRounds := make([]round, 0)
 	for round := range pending { // XXX need to make this branch-aware
-		if round.number+2 <= r.number {
+		if round.Number+2 <= r.Number {
 			oldRounds = append(oldRounds, round)
 		}
 	}

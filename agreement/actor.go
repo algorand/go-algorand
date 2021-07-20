@@ -18,6 +18,8 @@ package agreement
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // An actor is a state machine which accepts events and returns sequences of actions.
@@ -34,10 +36,24 @@ type actor interface {
 	//   c.underlying() == c.actor
 	underlying() actor
 
+	// forgetBeforeRound is used by router update() when cleaning up old rounds
+	// also used in service at startup XXX change name to lastCommittedRound
+	forgetBeforeRound() basics.Round
+
+	externalDemuxSignals() pipelineExternalDemuxSignals
+
+	allPlayersRPS() []RPS
+
 	// handle an event, updating the state of the actor.
 	//
 	// handle should return a sequence of actions to be performed given the event.
 	handle(routerHandle, event) []action
+}
+
+type serializableActor interface {
+	actor
+	encode() []byte
+	decode([]byte) (serializableActor, error)
 }
 
 // An actorContract describes the list of allowed preconditions and postconditions

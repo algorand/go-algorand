@@ -105,3 +105,9 @@ func (m *MonotonicFactory) Zero() Clock {
 	logging.Base().Debugf("Clock zeroed to %v", z)
 	return MakeMonotonicClock(z)
 }
+
+// Decode implements MontonicFactory
+func (m *MonotonicFactory) Decode(data []byte) (Clock, error) {
+	c := &Monotonic{}
+	return c.Decode(data)
+}

@@ -134,7 +134,7 @@ func TestVoteTrackerPeriodValueStatus(t *testing.T) {
 	b := testCaseBuilder{}
 	v1 := randomBlockHash()
 	V1 := proposalValue{BlockDigest: v1}
-	in := h.MakeValidNextThresholdVal(t, 1, 1, next, V1)
+	in := h.MakeValidNextThresholdVal(t, makeRoundRandomBranch(1), 1, next, V1)
 	b.AddInOutPair(in, emptyEvent{}) // adding a threshold event does not generate meaningful output
 	expectedStatus := nextThresholdStatusEvent{Bottom: false, Proposal: V1}
 	b.AddInOutPair(nextThresholdStatusRequestEvent{}, expectedStatus)
@@ -165,7 +165,7 @@ func TestVoteTrackerPeriodNoneSeen(t *testing.T) {
 func TestVoteTrackerPeriodBottomOnly(t *testing.T) {
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
-	in := h.MakeValidNextThresholdVal(t, 1, 1, next, bottom)
+	in := h.MakeValidNextThresholdVal(t, makeRoundRandomBranch(1), 1, next, bottom)
 	b.AddInOutPair(in, emptyEvent{}) // adding a threshold event does not generate meaningful output
 	expectedStatus := nextThresholdStatusEvent{Bottom: true, Proposal: bottom}
 	b.AddInOutPair(nextThresholdStatusRequestEvent{}, expectedStatus)
@@ -182,11 +182,11 @@ func TestVoteTrackerPeriodBottomOnly(t *testing.T) {
 func TestVoteTrackerPeriodValueAndBottom(t *testing.T) {
 	h := nextThresholdHelper{}
 	b := testCaseBuilder{}
-	in := h.MakeValidNextThresholdVal(t, 1, 1, next, bottom)
+	in := h.MakeValidNextThresholdVal(t, makeRoundRandomBranch(1), 1, next, bottom)
 	b.AddInOutPair(in, emptyEvent{})
 	v1 := randomBlockHash()
 	V1 := proposalValue{BlockDigest: v1}
-	in = h.MakeValidNextThresholdVal(t, 1, 1, next, V1)
+	in = h.MakeValidNextThresholdVal(t, makeRoundRandomBranch(1), 1, next, V1)
 	b.AddInOutPair(in, emptyEvent{})
 	expectedStatus := nextThresholdStatusEvent{Bottom: true, Proposal: V1}
 	b.AddInOutPair(nextThresholdStatusRequestEvent{}, expectedStatus)
@@ -206,7 +206,7 @@ func TestVoteTrackerRoundUpdatesFreshest(t *testing.T) {
 	b := testCaseBuilder{}
 	v1 := randomBlockHash()
 	V1 := proposalValue{BlockDigest: v1}
-	in := h.MakeValidNextThresholdVal(t, 1, 1, soft, V1)
+	in := h.MakeValidNextThresholdVal(t, makeRoundRandomBranch(1), 1, soft, V1)
 	b.AddInOutPair(in, in) // should ack same event back if freshest
 	expectedStatus := freshestBundleEvent{Ok: true, Event: in}
 	b.AddInOutPair(freshestBundleRequestEvent{}, expectedStatus)
@@ -225,12 +225,13 @@ func TestVoteTrackerRoundUpdatesFreshestNextOverSoft(t *testing.T) {
 	v1 := randomBlockHash()
 	V1 := proposalValue{BlockDigest: v1}
 	// add soft bundle V1 for period 1
-	in := h.MakeValidNextThresholdVal(t, 1, 1, soft, V1)
+	r1 := makeRoundRandomBranch(1)
+	in := h.MakeValidNextThresholdVal(t, r1, 1, soft, V1)
 	b.AddInOutPair(in, in) // should ack same event back if freshest
 	expectedStatus := freshestBundleEvent{Ok: true, Event: in}
 	b.AddInOutPair(freshestBundleRequestEvent{}, expectedStatus)
 	// add a next bundle V1 for period 1
-	in = h.MakeValidNextThresholdVal(t, 1, 1, next, V1)
+	in = h.MakeValidNextThresholdVal(t, r1, 1, next, V1)
 	b.AddInOutPair(in, in)
 	expectedStatus = freshestBundleEvent{Ok: true, Event: in}
 	b.AddInOutPair(freshestBundleRequestEvent{}, expectedStatus)
@@ -249,12 +250,13 @@ func TestVoteTrackerRoundUpdatesFreshestPeriod(t *testing.T) {
 	v1 := randomBlockHash()
 	V1 := proposalValue{BlockDigest: v1}
 	// add a next bundle V1 for period 1
-	in := h.MakeValidNextThresholdVal(t, 1, 1, next, V1)
+	r1 := makeRoundRandomBranch(1)
+	in := h.MakeValidNextThresholdVal(t, r1, 1, next, V1)
 	b.AddInOutPair(in, in)
 	expectedStatus := freshestBundleEvent{Ok: true, Event: in}
 	b.AddInOutPair(freshestBundleRequestEvent{}, expectedStatus)
 	// add a soft bundle V1 for period 2
-	in = h.MakeValidNextThresholdVal(t, 1, 2, soft, V1)
+	in = h.MakeValidNextThresholdVal(t, r1, 2, soft, V1)
 	b.AddInOutPair(in, in)
 	expectedStatus = freshestBundleEvent{Ok: true, Event: in}
 	b.AddInOutPair(freshestBundleRequestEvent{}, expectedStatus)
@@ -273,17 +275,18 @@ func TestVoteTrackerRoundUpdatesFreshestBot(t *testing.T) {
 	v1 := randomBlockHash()
 	V1 := proposalValue{BlockDigest: v1}
 	// add a next bundle V1 for period 1
-	in := h.MakeValidNextThresholdVal(t, 1, 1, next, V1)
+	r1 := makeRoundRandomBranch(1)
+	in := h.MakeValidNextThresholdVal(t, r1, 1, next, V1)
 	b.AddInOutPair(in, in)
 	expectedStatus := freshestBundleEvent{Ok: true, Event: in}
 	b.AddInOutPair(freshestBundleRequestEvent{}, expectedStatus)
 	// add a next bundle bottom for period 2
-	botT := h.MakeValidNextThresholdVal(t, 1, 2, next, bottom)
+	botT := h.MakeValidNextThresholdVal(t, r1, 2, next, bottom)
 	b.AddInOutPair(botT, botT)
 	expectedStatus = freshestBundleEvent{Ok: true, Event: botT}
 	b.AddInOutPair(freshestBundleRequestEvent{}, expectedStatus)
 	// add a next bundle V1 for period 2
-	in = h.MakeValidNextThresholdVal(t, 1, 2, next, V1)
+	in = h.MakeValidNextThresholdVal(t, r1, 2, next, V1)
 	b.AddInOutPair(in, emptyEvent{}) // not freshest, should refuse
 	expectedStatus = freshestBundleEvent{Ok: true, Event: botT}
 	b.AddInOutPair(freshestBundleRequestEvent{}, expectedStatus)

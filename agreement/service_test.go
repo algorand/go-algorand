@@ -1,3 +1,5 @@
+// +build service_test
+
 // Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
@@ -44,9 +46,7 @@ import (
 )
 
 type testingClock struct {
-	mu deadlock.Mutex
-
-	zeroes uint
+	f *testingClockFactory
 
 	TA map[time.Duration]chan time.Time // TimeoutAt
 
@@ -61,18 +61,23 @@ func makeTestingClock(m *coserviceMonitor) *testingClock {
 }
 
 func (c *testingClock) Zero() timers.Clock {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
 
-	c.zeroes++
+	c.f.zeroes++
 	c.TA = make(map[time.Duration]chan time.Time)
 	c.monitor.clearClock()
 	return c
 }
 
+func (c *testingClock) GetTimeout(d time.Duration) time.Time {
+	panic("testingClock.GetTimeout not implemented")
+	return time.Time{}
+}
+
 func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
 
 	ta := c.TA[d]
 	if ta == nil {
@@ -95,8 +100,8 @@ func (c *testingClock) prepareToFire() {
 }
 
 func (c *testingClock) fire(d time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
 
 	if c.TA[d] == nil {
 		c.TA[d] = make(chan time.Time)
@@ -104,20 +109,19 @@ func (c *testingClock) fire(d time.Duration) {
 	close(c.TA[d])
 }
 
-type simpleKeyManager []account.Participation
-
-func (m simpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
-	var km []account.Participation
-	for _, acc := range m {
-		if acc.OverlapsInterval(votingRound, votingRound) {
-			km = append(km, acc)
-		}
-	}
-	return km
+type testingClockFactory struct {
+	mu      deadlock.Mutex // this mutex protects all testingClocks
+	monitor *coserviceMonitor
+	zeroes  uint
 }
 
-func (m simpleKeyManager) DeleteOldKeys(basics.Round) {
-	// noop
+func makeTestingClockFactory(m *coserviceMonitor) *testingClockFactory {
+	return &testingClockFactory{monitor: m}
+}
+
+func (f *testingClockFactory) Zero() timers.Clock {
+	c := makeTestingClock(f.monitor)
+	return c.Zero()
 }
 
 type testingNetwork struct {
@@ -704,12 +708,12 @@ func (testingRand) Uint64() uint64 {
 	return maxuint64 / 2
 }
 
-func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
+func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.ClockFactory, []Ledger, *activityMonitor) {
 	var validator testBlockValidator
 	return setupAgreementWithValidator(t, numNodes, traceLevel, validator, ledgerFactory)
 }
 
-func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
+func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.ClockFactory, []Ledger, *activityMonitor) {
 	bufCap := 1000 // max number of buffered messages
 
 	// system state setup: keygen, stake initialization
@@ -724,7 +728,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 	log.SetLevel(logging.Debug)
 
 	// node setup
-	clocks := make([]timers.Clock, numNodes)
+	clocks := make([]timers.ClockFactory, numNodes)
 	ledgers := make([]Ledger, numNodes)
 	dbAccessors := make([]db.Accessor, numNodes)
 	services := make([]*Service, numNodes)
@@ -740,7 +744,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 
 		m := baseNetwork.monitors[nodeID(i)]
 		m.coserviceListener = am.coserviceListener(nodeID(i))
-		clocks[i] = makeTestingClock(m)
+		clocks[i] = makeTestingClockFactory(m)
 		ledgers[i] = ledgerFactory(balances)
 		keys := simpleKeyManager(accounts[i : i+1])
 		endpoint := baseNetwork.testingNetworkEndpoint(nodeID(i))
@@ -753,7 +757,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 			KeyManager:     keys,
 			BlockValidator: validator,
 			BlockFactory:   testBlockFactory{Owner: i},
-			Clock:          clocks[i],
+			ClockFactory:   clocks[i],
 			Accessor:       accessor,
 			Local:          config.Local{CadaverSizeTarget: 10000000},
 			RandomSource:   &testingRand{},
@@ -780,7 +784,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 		if r := recover(); r != nil {
 			for n, c := range clocks {
 				fmt.Printf("node-%v:\n", n)
-				c.(*testingClock).monitor.dump()
+				c.(*testingClockFactory).monitor.dump()
 			}
 			panic(r)
 		}
@@ -816,21 +820,21 @@ func (m *coserviceMonitor) clearClock() {
 	}
 }
 
-func expectNewPeriod(clocks []timers.Clock, zeroes uint) (newzeroes uint) {
+func expectNewPeriod(clocks []timers.ClockFactory, zeroes uint) (newzeroes uint) {
 	zeroes++
 	for i := range clocks {
-		if clocks[i].(*testingClock).zeroes != zeroes {
-			errstr := fmt.Sprintf("unexpected number of zeroes: %v != %v", clocks[i].(*testingClock).zeroes, zeroes)
+		if clocks[i].(*testingClockFactory).zeroes != zeroes {
+			errstr := fmt.Sprintf("unexpected number of zeroes: %v != %v", clocks[i].(*testingClockFactory).zeroes, zeroes)
 			panic(errstr)
 		}
 	}
 	return zeroes
 }
 
-func expectNoNewPeriod(clocks []timers.Clock, zeroes uint) (newzeroes uint) {
+func expectNoNewPeriod(clocks []timers.ClockFactory, zeroes uint) (newzeroes uint) {
 	for i := range clocks {
-		if clocks[i].(*testingClock).zeroes != zeroes {
-			errstr := fmt.Sprintf("unexpected number of zeroes: %v != %v", clocks[i].(*testingClock).zeroes, zeroes)
+		if clocks[i].(*testingClockFactory).zeroes != zeroes {
+			errstr := fmt.Sprintf("unexpected number of zeroes: %v != %v", clocks[i].(*testingClockFactory).zeroes, zeroes)
 			panic(errstr)
 		}
 	}
@@ -853,14 +857,14 @@ func runRound(clocks []timers.Clock, activityMonitor *activityMonitor, zeroes ui
 	return expectNewPeriod(clocks, zeroes)
 }
 
-func sanityCheck(startRound round, numRounds round, ledgers []Ledger) {
+func sanityCheck(startRound basics.Round, numRounds basics.Round, ledgers []Ledger) {
 	for i := range ledgers {
 		if ledgers[i].NextRound() != startRound+numRounds {
 			panic("did not progress numRounds rounds")
 		}
 	}
 
-	for j := round(0); j < numRounds; j++ {
+	for j := basics.Round(0); j < numRounds; j++ {
 		reference := ledgers[0].(*testLedger).entries[startRound+j].Digest()
 		for i := range ledgers {
 			if ledgers[i].(*testLedger).entries[startRound+j].Digest() != reference {

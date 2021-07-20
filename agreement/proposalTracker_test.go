@@ -166,7 +166,7 @@ func (s *proposalTrackerTestShadow) addVote(v vote) {
 	}()
 
 	var req, res event
-	round := v.R.Round
+	round := makeRoundBranch(v.R.Round, v.R.Branch)
 	period := v.R.Period
 	sender := v.R.Sender
 
@@ -367,7 +367,7 @@ func TestProposalTrackerBasic(t *testing.T) {
 	// TODO assert more things about the state outside of using the shadow
 	t.Run("Synchronous", func(t *testing.T) {
 		targetCert := lowvotes[0]
-		shadow := makeProposalTrackerTestShadow(votes[0].R.Round, votes[0].R.Period)
+		shadow := makeProposalTrackerTestShadow(makeRoundBranch(votes[0].R.Round, votes[0].R.Branch), votes[0].R.Period)
 
 		midDelivery(shadow, "failed to track votes properly at zero state")
 		highDelivery(shadow, "failed to track votes properly at zero state")
@@ -383,7 +383,7 @@ func TestProposalTrackerBasic(t *testing.T) {
 
 	t.Run("MissedLeader", func(t *testing.T) {
 		targetCert := midvotes[0]
-		shadow := makeProposalTrackerTestShadow(votes[0].R.Round, votes[0].R.Period)
+		shadow := makeProposalTrackerTestShadow(makeRoundBranch(votes[0].R.Round, votes[0].R.Branch), votes[0].R.Period)
 
 		highDelivery(shadow, "failed to track votes properly at zero state")
 
@@ -400,7 +400,7 @@ func TestProposalTrackerBasic(t *testing.T) {
 
 	t.Run("LateStaging", func(t *testing.T) {
 		targetCert := midvotes[0]
-		shadow := makeProposalTrackerTestShadow(votes[0].R.Round, votes[0].R.Period)
+		shadow := makeProposalTrackerTestShadow(makeRoundBranch(votes[0].R.Round, votes[0].R.Branch), votes[0].R.Period)
 
 		highDelivery(shadow, "failed to track votes properly at zero state")
 
@@ -417,7 +417,7 @@ func TestProposalTrackerBasic(t *testing.T) {
 
 	t.Run("EarlyStaging", func(t *testing.T) {
 		targetCert := midvotes[0]
-		shadow := makeProposalTrackerTestShadow(votes[0].R.Round, votes[0].R.Period)
+		shadow := makeProposalTrackerTestShadow(makeRoundBranch(votes[0].R.Round, votes[0].R.Branch), votes[0].R.Period)
 
 		shadow.stage(targetCert.R.Proposal)
 		shadow.execute(t, "failed to deliver soft threshold properly")
@@ -433,7 +433,7 @@ func TestProposalTrackerBasic(t *testing.T) {
 
 	t.Run("EarlyStagingCert", func(t *testing.T) {
 		targetCert := midvotes[0]
-		shadow := makeProposalTrackerTestShadow(votes[0].R.Round, votes[0].R.Period)
+		shadow := makeProposalTrackerTestShadow(makeRoundBranch(votes[0].R.Round, votes[0].R.Branch), votes[0].R.Period)
 
 		shadow.stageWithCert(targetCert.R.Proposal)
 		shadow.execute(t, "failed to deliver cert threshold properly")
@@ -449,7 +449,7 @@ func TestProposalTrackerBasic(t *testing.T) {
 
 	t.Run("LateStagingCert", func(t *testing.T) {
 		targetCert := midvotes[0]
-		shadow := makeProposalTrackerTestShadow(votes[0].R.Round, votes[0].R.Period)
+		shadow := makeProposalTrackerTestShadow(makeRoundBranch(votes[0].R.Round, votes[0].R.Branch), votes[0].R.Period)
 
 		highDelivery(shadow, "failed to track votes properly at zero state")
 
@@ -466,7 +466,7 @@ func TestProposalTrackerBasic(t *testing.T) {
 
 	t.Run("SynchronousCert", func(t *testing.T) {
 		targetCert := lowvotes[0]
-		shadow := makeProposalTrackerTestShadow(votes[0].R.Round, votes[0].R.Period)
+		shadow := makeProposalTrackerTestShadow(makeRoundBranch(votes[0].R.Round, votes[0].R.Branch), votes[0].R.Period)
 
 		midDelivery(shadow, "failed to track votes properly at zero state")
 		highDelivery(shadow, "failed to track votes properly at zero state")

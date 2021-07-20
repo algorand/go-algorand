@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -33,7 +32,7 @@ import (
 func testSetup(periodCount uint64) (player, rootRouter, testAccountData, testBlockFactory, Ledger) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture10()
 	accs := testAccountData{addresses: addresses, vrfs: vrfSecrets, ots: otSecrets}
-	round := ledger.NextRound()
+	round := makeRoundRandomBranch(ledger.NextRound())
 	period := period(periodCount)
 	player := player{Round: round, Period: period, Step: soft}
 
@@ -45,8 +44,8 @@ func testSetup(periodCount uint64) (player, rootRouter, testAccountData, testBlo
 	return player, router, accs, f, ledger
 }
 
-func createProposalsTesting(accs testAccountData, round basics.Round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
-	ve, err := factory.AssembleBlock(round, time.Now().Add(time.Minute))
+func createProposalsTesting(accs testAccountData, round round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
+	ve, err := factory.AssembleBlock(round.Number, round.Branch, time.Now().Add(time.Minute))
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
@@ -59,7 +58,7 @@ func createProposalsTesting(accs testAccountData, round basics.Round, period per
 		payload, proposal, _ := proposalForBlock(accs.addresses[i], accs.vrfs[i], ve, period, ledger)
 
 		// attempt to make the vote
-		rv := rawVote{Sender: accs.addresses[i], Round: round, Period: period, Step: propose, Proposal: proposal}
+		rv := rawVote{Sender: accs.addresses[i], Round: round.Number, Branch: round.Branch, Period: period, Step: propose, Proposal: proposal}
 		uv, err := makeVote(rv, accs.ots[i], accs.vrfs[i], ledger)
 		if err != nil {
 			logging.Base().Errorf("AccountManager.makeVotes: Could not create vote: %v", err)
@@ -118,7 +117,7 @@ func TestProposalFunctions(t *testing.T) {
 	player, _, accs, factory, ledger := testSetup(0)
 	round := player.Round
 	period := player.Period
-	ve, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
+	ve, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	validator := testBlockValidator{}
@@ -156,7 +155,7 @@ func TestProposalUnauthenticated(t *testing.T) {
 
 	round := player.Round
 	period := player.Period
-	testBlockFactory, err := factory.AssembleBlock(player.Round, time.Now().Add(time.Minute))
+	testBlockFactory, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	validator := testBlockValidator{}
@@ -175,7 +174,8 @@ func TestProposalUnauthenticated(t *testing.T) {
 	require.NoError(t, err)
 
 	// test bad round number
-	proposal, err = unauthenticatedProposal.validate(context.Background(), round+1, ledger, validator)
+	rp1 := makeRoundBranch(round.Number+1, round.Branch)
+	proposal, err = unauthenticatedProposal.validate(context.Background(), rp1, ledger, validator)
 	require.Error(t, err)
 	proposal, err = unauthenticatedProposal.validate(context.Background(), round, ledger, validator)
 	require.NotNil(t, proposal)

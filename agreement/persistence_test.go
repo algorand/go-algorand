@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -33,18 +34,46 @@ import (
 func TestAgreementSerialization(t *testing.T) {
 	// todo : we need to deserialize some more meaningfull state.
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
-	status := player{Round: 350, Step: soft, Deadline: time.Duration(23) * time.Second}
+	clockManager := makeClockManager(timers.MakeMonotonicClockFactory())
+	rnd := makeRoundRandomBranch(350)
+	clockManager.m[rnd] = clock
+	status := &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}
 	router := makeRootRouter(status)
 	a := []action{}
 
-	encodedBytes := encode(clock, router, status, a)
+	encodedBytes := encode(clockManager, router, status, a)
 
-	t0 := timers.MakeMonotonicClock(time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
+	t0 := makeClockManager(timers.MakeMonotonicClockFactory())
 	clock2, router2, status2, a2, err := decode(encodedBytes, t0)
 	require.NoError(t, err)
-	require.Equalf(t, clock, clock2, "Clock wasn't serialized/deserialized correctly")
+	require.Equalf(t, clockManager, clock2, "Clock wasn't serialized/deserialized correctly")
 	require.Equalf(t, router, router2, "Router wasn't serialized/deserialized correctly")
 	require.Equalf(t, status, status2, "Status wasn't serialized/deserialized correctly")
+	require.Equalf(t, a, a2, "Action wasn't serialized/deserialized correctly")
+}
+
+func TestAgreementSerializationPipeline(t *testing.T) {
+	// todo : we need to deserialize some more meaningfull state.
+	clockManager := makeClockManager(timers.MakeMonotonicClockFactory())
+	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	rnd := makeRoundRandomBranch(350)
+	clockManager.m[rnd] = clock
+	status := &pipelinePlayer{
+		LastCommittedRound: 349,
+		Players: map[round]*player{
+			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
+	}
+	router := makeRootRouter(status)
+	a := []action{}
+
+	encodedBytes := encode(clockManager, router, status, a)
+
+	t0 := makeClockManager(timers.MakeMonotonicClockFactory())
+	clockM2, router2, status2, a2, err := decode(encodedBytes, t0)
+	require.NoError(t, err)
+	require.Equalf(t, clockManager, clockM2, "Clock wasn't serialized/deserialized correctly")
+	require.Equalf(t, status, status2, "Status wasn't serialized/deserialized correctly")
+	require.Equalf(t, router, router2, "Router wasn't serialized/deserialized correctly")
 	require.Equalf(t, a, a2, "Action wasn't serialized/deserialized correctly")
 }
 
@@ -52,14 +81,21 @@ func BenchmarkAgreementSerialization(b *testing.B) {
 	// todo : we need to deserialize some more meaningfull state.
 	b.SkipNow()
 
+	clockManager := makeClockManager(timers.MakeMonotonicClockFactory())
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
-	status := player{Round: 350, Step: soft, Deadline: time.Duration(23) * time.Second}
-	router := makeRootRouter(status)
+	rnd := makeRoundRandomBranch(350)
+	clockManager.m[rnd] = clock
+	status := pipelinePlayer{
+		LastCommittedRound: 349,
+		Players: map[round]*player{
+			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
+	}
+	router := makeRootRouter(&status)
 	a := []action{}
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		encode(clock, router, status, a)
+		encode(clockManager, router, &status, a)
 	}
 }
 
@@ -67,13 +103,20 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 	// todo : we need to deserialize some more meaningfull state.
 	b.SkipNow()
 
+	clockManager := makeClockManager(timers.MakeMonotonicClockFactory())
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
-	status := player{Round: 350, Step: soft, Deadline: time.Duration(23) * time.Second}
-	router := makeRootRouter(status)
+	rnd := makeRoundRandomBranch(350)
+	clockManager.m[rnd] = clock
+	status := pipelinePlayer{
+		LastCommittedRound: 349,
+		Players: map[round]*player{
+			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
+	}
+	router := makeRootRouter(&status)
 	a := []action{}
 
-	encodedBytes := encode(clock, router, status, a)
-	t0 := timers.MakeMonotonicClock(time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
+	encodedBytes := encode(clockManager, router, &status, a)
+	t0 := makeClockManager(timers.MakeMonotonicClockFactory())
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -91,7 +134,7 @@ func TestAgreementPersistence(t *testing.T) {
 	}) // ignore error
 
 	p := player{
-		Round:  370,
+		Round:  makeRound(370),
 		Period: 8,
 		Step:   15,
 	}
@@ -118,7 +161,7 @@ func BenchmarkAgreementPersistence(b *testing.B) {
 	}) // ignore error
 
 	p := player{
-		Round:  370,
+		Round:  makeRound(370),
 		Period: 8,
 		Step:   15,
 	}
@@ -144,7 +187,7 @@ func BenchmarkAgreementPersistenceRecovery(b *testing.B) {
 	}) // ignore error
 
 	p := player{
-		Round:  370,
+		Round:  makeRound(370),
 		Period: 8,
 		Step:   15,
 	}
@@ -156,4 +199,24 @@ func BenchmarkAgreementPersistenceRecovery(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		restore(serviceLogger{Logger: logging.Base()}, accessor)
 	}
+}
+
+func TestPlayerSerialization(t *testing.T) {
+	rnd := makeRoundRandomBranch(350)
+
+	p := &player{Round: rnd, Period: 8, Step: 15}
+	buf := encodePlayer(p)
+	p2, err := decodePlayer(buf)
+	require.NoError(t, err)
+	assert.Equal(t, p, p2)
+
+	status := &pipelinePlayer{
+		LastCommittedRound: 349,
+		Players: map[round]*player{
+			rnd: &player{Round: rnd, Step: soft, Deadline: time.Duration(23) * time.Second}},
+	}
+	buf = encodePlayer(status)
+	status2, err := decodePlayer(buf)
+	require.NoError(t, err)
+	assert.Equal(t, status, status2)
 }
