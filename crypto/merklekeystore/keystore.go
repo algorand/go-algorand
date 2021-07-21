@@ -72,7 +72,7 @@ type (
 )
 
 func (e *EphemeralPublicKey) ToBeHashed() (protocol.HashID, []byte) {
-	return "EP", protocol.Encode(e)
+	return protocol.EphemeralPK, protocol.Encode(e)
 }
 
 //Length returns the amount of disposable keys
