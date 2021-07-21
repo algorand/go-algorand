@@ -179,25 +179,26 @@ func TestIncorrectByteSignature(t *testing.T) {
 	a.Error(signer.GetVerifier().Verify(hashable, sig2))
 }
 
-func TestBadRoundInSignature(t *testing.T) {
+func TestAttemptToUseDifferentKey(t *testing.T) {
 	a := require.New(t)
 	start, _, signer := getValidSig(a)
 
-	hashable, sig := makeSig(signer, start, a)
+	hashable, sig := makeSig(signer, start+1, a)
+	// taking signature for specific round and changing the round
 	sig2 := sig
 	sig2.VKey.Round += 1
 	a.Error(signer.GetVerifier().Verify(hashable, sig2))
 
+	// taking signature and changing the key to match different round
 	sig3 := sig
-	sig3.VKey.Pos -= 1
+	sig3.VKey.VerifyingKey = signer.EphemeralKeys.SignatureAlgorithms[0].GetSigner().GetVerifyingKey()
 	a.Error(signer.GetVerifier().Verify(hashable, sig3))
-
 }
 
-func makeSig(signer *Signer, start uint64, a *require.Assertions) (crypto.Hashable, Signature) {
+func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
 
-	sig, err := signer.Sign(hashable, start+1)
+	sig, err := signer.Sign(hashable, sigRound+1)
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(hashable, sig))
 	return hashable, sig
