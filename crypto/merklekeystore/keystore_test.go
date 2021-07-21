@@ -42,7 +42,7 @@ func TestSignerCreation(t *testing.T) {
 	a.NoError(err)
 	sig, err := signer.Sign(genHashableForTest(), 0)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(genHashableForTest(), sig))
+	a.NoError(signer.GetVerifier().Verify(0, 0, genHashableForTest(), sig))
 	a.Equal(1, len(signer.EphemeralKeys.SignatureAlgorithms))
 
 }
@@ -96,14 +96,15 @@ func TestSignatureStructure(t *testing.T) {
 	pos, err := signer.getKeyPosition(51)
 	a.NoError(err)
 	a.Equal(uint64(1), pos)
-	a.Equal(sig.VKey.Pos, pos)
 
 	key := signer.EphemeralKeys.SignatureAlgorithms[pos]
-	a.Equal(sig.VKey.VerifyingKey, key.GetSigner().GetVerifyingKey())
+	a.Equal(sig.VerifyingKey, key.GetSigner().GetVerifyingKey())
 
 	proof, err := signer.Prove([]uint64{1})
 	a.NoError(err)
 	a.Equal(Proof(proof), sig.Proof)
+
+	a.NotEqual(nil, sig.ByteSignature)
 }
 
 func genHashableForTest() crypto.Hashable {
@@ -120,7 +121,7 @@ func TestSigning(t *testing.T) {
 
 	sig, err := signer.Sign(hashable, start+1)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(start, start+1, hashable, sig))
 
 	_, err = signer.Sign(hashable, start-1)
 	a.Error(err)
@@ -129,23 +130,18 @@ func TestSigning(t *testing.T) {
 	a.Error(err)
 }
 
-func TestBadLeafPositionInSignature(t *testing.T) {
+func TestBadRound(t *testing.T) {
 	a := require.New(t)
-	start, end, signer := getValidSig(a)
+	start, _, signer := getValidSig(a)
 
 	hashable, sig := makeSig(signer, start, a)
 
-	sig2 := sig
-	sig2.VKey.Pos++
-	a.Error(signer.GetVerifier().Verify(hashable, sig2))
+	a.Error(signer.GetVerifier().Verify(0, start, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(start, start+1, hashable, sig))
 
-	sig3 := sig2
-	sig3.VKey.Pos = uint64(end + 1)
-	a.Error(signer.GetVerifier().Verify(hashable, sig3))
-
-	sig4 := sig2
-	sig4.VKey.Pos = uint64(start - 1)
-	a.Error(signer.GetVerifier().Verify(hashable, sig4))
+	hashable, sig = makeSig(signer, start+1, a)
+	a.Error(signer.GetVerifier().Verify(start, start, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(start, start+2, hashable, sig))
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {
@@ -156,13 +152,13 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 
 	sig2 := sig
 	sig2.Proof = sig2.Proof[:len(sig2.Proof)-1]
-	a.Error(signer.GetVerifier().Verify(hashable, sig2))
+	a.Error(signer.GetVerifier().Verify(start, start, hashable, sig2))
 
 	sig3 := sig2
 	someDigest := crypto.Digest{}
 	rand.Read(someDigest[:])
 	sig3.Proof[0] = someDigest
-	a.Error(signer.GetVerifier().Verify(hashable, sig3))
+	a.Error(signer.GetVerifier().Verify(start, start, hashable, sig3))
 }
 
 func TestIncorrectByteSignature(t *testing.T) {
@@ -176,7 +172,7 @@ func TestIncorrectByteSignature(t *testing.T) {
 	copy(bs, sig2.ByteSignature)
 	bs[0]++
 	sig2.ByteSignature = bs
-	a.Error(signer.GetVerifier().Verify(hashable, sig2))
+	a.Error(signer.GetVerifier().Verify(start, start, hashable, sig2))
 }
 
 func TestAttemptToUseDifferentKey(t *testing.T) {
@@ -185,22 +181,19 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 
 	hashable, sig := makeSig(signer, start+1, a)
 	// taking signature for specific round and changing the round
-	sig2 := sig
-	sig2.VKey.Round++
-	a.Error(signer.GetVerifier().Verify(hashable, sig2))
 
 	// taking signature and changing the key to match different round
-	sig3 := sig
-	sig3.VKey.VerifyingKey = signer.EphemeralKeys.SignatureAlgorithms[0].GetSigner().GetVerifyingKey()
-	a.Error(signer.GetVerifier().Verify(hashable, sig3))
+	sig2 := sig
+	sig2.VerifyingKey = signer.EphemeralKeys.SignatureAlgorithms[0].GetSigner().GetVerifyingKey()
+	a.Error(signer.GetVerifier().Verify(start, start+1, hashable, sig2))
 }
 
 func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
 
-	sig, err := signer.Sign(hashable, sigRound+1)
+	sig, err := signer.Sign(hashable, sigRound)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(signer.FirstRound, sigRound, hashable, sig))
 	return hashable, sig
 }
 

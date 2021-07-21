@@ -38,7 +38,6 @@ type (
 
 		VerifyingKey crypto.VerifyingKey `codec:"pk"`
 		Round        uint64              `codec:"rnd"`
-		Pos          uint64              `codec:"pos"`
 	}
 
 	//Proof represent the merkle proof in each signature.
@@ -51,7 +50,7 @@ type (
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
 		Proof                `codec:"prf"`
-		VKey                 EphemeralPublicKey `codec:"vkey"`
+		VerifyingKey         crypto.VerifyingKey `codec:"vkey"`
 	}
 
 	// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
@@ -89,7 +88,6 @@ func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 	ephPK := EphemeralPublicKey{
 		VerifyingKey: d.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
 		Round:        d.firstRound + pos,
-		Pos:          pos,
 	}
 	return crypto.HashObj(&ephPK), nil
 }
@@ -146,11 +144,7 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	return Signature{
 		ByteSignature: signer.Sign(hashable),
 		Proof:         proof,
-		VKey: EphemeralPublicKey{
-			VerifyingKey: signer.GetVerifyingKey(),
-			Round:        round,
-			Pos:          pos,
-		},
+		VerifyingKey:  signer.GetVerifyingKey(),
 	}, nil
 }
 
@@ -169,10 +163,17 @@ func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
-func (v *Verifier) Verify(obj crypto.Hashable, sig Signature) error {
-	isInTree := merklearray.Verify(v.root, map[uint64]crypto.Digest{sig.VKey.Pos: crypto.HashObj(&sig.VKey)}, sig.Proof)
+func (v *Verifier) Verify(firstValid, round uint64, obj crypto.Hashable, sig Signature) error {
+	if round < firstValid {
+		return errOutOfBounds
+	}
+	ephkey := EphemeralPublicKey{
+		VerifyingKey: sig.VerifyingKey,
+		Round:        round,
+	}
+	isInTree := merklearray.Verify(v.root, map[uint64]crypto.Digest{round - firstValid: crypto.HashObj(&ephkey)}, sig.Proof)
 	if isInTree != nil {
 		return isInTree
 	}
-	return sig.VKey.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)
+	return sig.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)
 }
