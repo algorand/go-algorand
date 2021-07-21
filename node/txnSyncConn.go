@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
-// transcationSyncNodeConnector implements the txnsync.NodeConnector interface, allowing the
+// transcationSyncNodeConnector implementes the txnsync.NodeConnector interface, allowing the
 // transaction sync communicate with the node and it's child objects.
 type transcationSyncNodeConnector struct {
 	node           *AlgorandFullNode
@@ -141,11 +141,11 @@ func (tsnc *transcationSyncNodeConnector) SendPeerMessage(netPeer interface{}, m
 		return
 	}
 
-	if err := unicastPeer.Unicast(context.Background(), msg, protocol.Txn2Tag, func(enqueued bool, sequenceNumber uint64) {
-		if callbackErr := callback(enqueued, sequenceNumber); callbackErr != nil {
-			// disconnect from peer - the transaction sync wasn't able to process message sending confirmation
-			tsnc.node.net.Disconnect(unicastPeer)
-		}
+	if err := unicastPeer.Unicast(context.Background(), msg, protocol.Txn2Tag, func(enqueued bool, sequenceNumber uint64) error {
+		// this migth return an error to the network package callback routine. Returning an error signal the network package
+		// that we want to disconnect from this peer. This aligns with the transaction sync txnsync.SendMessageCallback function
+		// behaviour.
+		return callback(enqueued, sequenceNumber)
 	}); err != nil {
 		if callbackErr := callback(false, 0); callbackErr != nil {
 			// disconnect from peer - the transaction sync wasn't able to process message sending confirmation
