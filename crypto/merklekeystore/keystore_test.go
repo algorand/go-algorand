@@ -191,6 +191,7 @@ func TestBadRoundInSignature(t *testing.T) {
 	sig3 := sig
 	sig3.VKey.Pos -= 1
 	a.Error(signer.GetVerifier().Verify(hashable, sig3))
+
 }
 
 func makeSig(signer *Signer, start uint64, a *require.Assertions) (crypto.Hashable, Signature) {

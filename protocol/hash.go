@@ -58,4 +58,5 @@ const (
 	Transaction       HashID = "TX"
 	Vote              HashID = "VO"
 	VerifyingKey      HashID = "VK"
+	EphemeralPK       HashID = "EP"
 )
