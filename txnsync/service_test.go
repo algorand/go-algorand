@@ -38,9 +38,10 @@ type mockLogger struct {
 
 type mockNodeConnector struct {
 	NodeConnector
-	calledEvents  *bool
-	peerInfo      PeerInfo
-	updatingPeers bool
+	calledEvents        *bool
+	peerInfo            PeerInfo
+	updatingPeers       bool
+	transactionPoolSize int
 }
 
 func makeMockNodeConnector(calledEvents *bool) mockNodeConnector {
@@ -80,7 +81,7 @@ func (fn *mockNodeConnector) GetPendingTransactionGroups() (txGroups []transacti
 	return
 }
 func (fn *mockNodeConnector) IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int) {
-	return 0
+	return fn.transactionPoolSize
 }
 func (fn *mockNodeConnector) NotifyMonitor() chan struct{} { return nil }
 
