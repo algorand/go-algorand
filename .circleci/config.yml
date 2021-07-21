@@ -557,7 +557,7 @@ jobs:
       - generic_integration:
           result_subdir: arm64-e2e_subs
 
-  arm64_e2e_subs:
+  arm64_e2e_subs_nightly:
     machine:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
@@ -612,6 +612,21 @@ jobs:
           circleci_home: /Users/distiller
       - upload_coverage
 
+  mac_amd64_integration:
+    macos:
+      xcode: 12.0.1
+    resource_class: medium
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_integration:
+          result_subdir: mac-amd64-integration
+          circleci_home: /Users/distiller
+
   mac_amd64_integration_nightly:
     macos:
       xcode: 12.0.1
@@ -625,6 +640,20 @@ jobs:
       - prepare_go
       - generic_nightlyintegration:
           result_subdir: mac-amd64-integration-nightly
+          circleci_home: /Users/distiller
+
+  mac_amd64_e2e_subs:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    environment:
+      E2E_SUBS_ONLY: "true"
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_nightlyintegration:
+          result_subdir: mac-amd64-e2e_subs
           circleci_home: /Users/distiller
 
   mac_amd64_e2e_subs_nightly:
