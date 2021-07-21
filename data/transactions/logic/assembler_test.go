@@ -23,8 +23,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // used by TestAssemble and others, see UPDATE PROCEDURE in TestAssemble()
