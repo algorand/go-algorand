@@ -152,7 +152,7 @@ commands:
             - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
       - run:
           name: Run short tests
-          no_output_timeout: 30m
+          no_output_timeout: 45m
           command: |
             set -e
             set -x
@@ -170,7 +170,7 @@ commands:
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
             export PARALLEL_FLAG="-p 1"
-            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
           path: /tmp/results
           destination: test-results
@@ -204,7 +204,7 @@ commands:
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
           name: Run integration tests
-          no_output_timeout: 30m
+          no_output_timeout: 45m
           command: |
             set -x
             export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
@@ -218,7 +218,7 @@ commands:
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
-            export SHORTTEST=-short
+            export SHORTTEST=
             export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
@@ -396,7 +396,7 @@ jobs:
       - checkout
       - prepare_windows
       - run:
-          no_output_timeout: 30m
+          no_output_timeout: 45m
           command: |
             #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
             export GOPATH="/home/circleci/go"
