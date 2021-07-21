@@ -39,11 +39,7 @@ func (d EphemeralKeys) Length() uint64 {
 
 // GetHash Gets the hash of the VerifyingKey tied to the signatureAlgorithm in pos.
 func (d EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
-	return disposableKeyHash(&d[pos])
-}
-
-func disposableKeyHash(s *crypto.SignatureAlgorithm) (crypto.Digest, error) {
-	vkey := s.GetSigner().GetVerifyingKey()
+	vkey := d[pos].GetSigner().GetVerifyingKey()
 	return crypto.HashObj(&vkey), nil
 }
 
