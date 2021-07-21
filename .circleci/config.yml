@@ -279,7 +279,7 @@ commands:
             - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
       - run:
           name: Run nightly tests
-          no_output_timeout: 30m
+          no_output_timeout: 45m
           command: |
             set -e
             set -x
@@ -332,7 +332,7 @@ commands:
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
           name: Run integration tests
-          no_output_timeout: 45m
+          no_output_timeout: 30m
           command: |
             set -x
             export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
