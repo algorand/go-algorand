@@ -43,7 +43,7 @@ func TestSignerCreation(t *testing.T) {
 	sig, err := signer.Sign(genHashableForTest(), 0)
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(genHashableForTest(), sig))
-	a.Equal(1, len(signer.EphemeralKeys))
+	a.Equal(1, len(signer.EphemeralKeys.SignatureAlgorithms))
 
 }
 func TestDisposableKeyPositions(t *testing.T) {
@@ -79,7 +79,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 	a.NoError(err)
 
 	s := crypto.SignatureAlgorithm{}
-	for _, key := range signer.EphemeralKeys {
+	for _, key := range signer.EphemeralKeys.SignatureAlgorithms {
 		a.NotEqual(s, key)
 	}
 }
@@ -96,10 +96,10 @@ func TestSignatureStructure(t *testing.T) {
 	pos, err := signer.getKeyPosition(51)
 	a.NoError(err)
 	a.Equal(uint64(1), pos)
-	a.Equal(sig.Pos, pos)
+	a.Equal(sig.VKey.Pos, pos)
 
-	key := signer.EphemeralKeys[pos]
-	a.Equal(sig.VerifyingKey, key.GetSigner().GetVerifyingKey())
+	key := signer.EphemeralKeys.SignatureAlgorithms[pos]
+	a.Equal(sig.VKey.VerifyingKey, key.GetSigner().GetVerifyingKey())
 
 	proof, err := signer.Prove([]uint64{1})
 	a.NoError(err)
@@ -136,15 +136,15 @@ func TestBadLeafPositionInSignature(t *testing.T) {
 	hashable, sig := makeSig(signer, start, a)
 
 	sig2 := sig
-	sig2.Pos++
+	sig2.VKey.Pos++
 	a.Error(signer.GetVerifier().Verify(hashable, sig2))
 
 	sig3 := sig2
-	sig3.Pos = uint64(end + 1)
+	sig3.VKey.Pos = uint64(end + 1)
 	a.Error(signer.GetVerifier().Verify(hashable, sig3))
 
 	sig4 := sig2
-	sig4.Pos = uint64(start - 1)
+	sig4.VKey.Pos = uint64(start - 1)
 	a.Error(signer.GetVerifier().Verify(hashable, sig4))
 }
 
@@ -177,6 +177,20 @@ func TestIncorrectByteSignature(t *testing.T) {
 	bs[0]++
 	sig2.ByteSignature = bs
 	a.Error(signer.GetVerifier().Verify(hashable, sig2))
+}
+
+func TestBadRoundInSignature(t *testing.T) {
+	a := require.New(t)
+	start, _, signer := getValidSig(a)
+
+	hashable, sig := makeSig(signer, start, a)
+	sig2 := sig
+	sig2.VKey.Round += 1
+	a.Error(signer.GetVerifier().Verify(hashable, sig2))
+
+	sig3 := sig
+	sig3.VKey.Pos -= 1
+	a.Error(signer.GetVerifier().Verify(hashable, sig3))
 }
 
 func makeSig(signer *Signer, start uint64, a *require.Assertions) (crypto.Hashable, Signature) {
