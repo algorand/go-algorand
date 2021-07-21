@@ -84,7 +84,8 @@ type StateDelta struct {
 
 // AccountDeltas stores ordered accounts and allows fast lookup by address
 type AccountDeltas struct {
-	// actual data
+	// Actual data. If an account is deleted, `accts` contains a balance record
+	// with empty `AccountData`.
 	accts []basics.BalanceRecord
 	// cache for addr to deltas index resolution
 	acctsCache map[basics.Address]int
