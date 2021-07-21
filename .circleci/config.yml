@@ -557,7 +557,7 @@ jobs:
       - generic_integration:
           result_subdir: arm64-e2e_subs
 
-  arm64_e2e_subs:
+  arm64_e2e_subs_nightly:
     machine:
       image: ubuntu-2004:202101-01
     resource_class: arm.large
