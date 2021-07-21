@@ -210,16 +210,17 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 	s.incomingMessagesQ.clear(message)
 	messageProcessed := false
 	transacationPoolSize := 0
+MainForLoop:
 	for {
-		incomingMsg, seq, err := peer.incomingMessages.popSequence(peer.nextReceivedMessageSeq)		
-		if err == errSequenceNumberMismatch {
+		incomingMsg, seq, err := peer.incomingMessages.popSequence(peer.nextReceivedMessageSeq)
+		switch err {
+		case errHeapEmpty:
+			// this is very likely, once we run out of consecutive messages.
+			break MainForLoop
+		case errSequenceNumberMismatch:
 			// if we receive a message which wasn't in-order, just let it go.
 			s.log.Debugf("received message out of order; seq = %d, expecting seq = %d\n", seq, peer.nextReceivedMessageSeq)
-			break
-		}
-		if err != nil {
-			// this is very likely, once we run out of consecutive messages.
-			break
+			break MainForLoop
 		}
 
 		// increase the message sequence number, since we're processing this message.
