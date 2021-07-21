@@ -24,10 +24,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/msgp/msgp"	
+	
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/msgp/msgp"
 )
 
 type incomingLogger struct {
@@ -61,7 +62,7 @@ func TestAsyncIncomingMessageHandlerAndErrors(t *testing.T) {
 	require.True(t, errors.As(err, &msgpe))
 
 	// expect wrong version error
-	message = transactionBlockMessage{Version: 3}
+	message = transactionBlockMessage{Version: -3}
 	messageBytes = message.MarshalMsg(nil)
 	err = s.asyncIncomingMessageHandler(nil, nil, messageBytes, sequenceNumber)
 	require.Equal(t, errUnsupportedTransactionSyncMessageVersion, err)
