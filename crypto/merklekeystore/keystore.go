@@ -18,6 +18,7 @@ package merklekeystore
 
 import (
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
@@ -68,8 +69,7 @@ type (
 	Verifier struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		root       crypto.Digest `codec:"r"`
-		FirstValid uint64        `codec:"fv"`
+		root crypto.Digest `codec:"r"`
 	}
 )
 
