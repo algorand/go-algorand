@@ -209,19 +209,15 @@ func (z *EphemeralKeys) MsgIsZero() bool {
 func (z *EphemeralPublicKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
 	if (*z).VerifyingKey.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).Pos == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x4
-	}
 	if (*z).Round == 0 {
 		zb0001Len--
-		zb0001Mask |= 0x8
+		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -232,11 +228,6 @@ func (z *EphemeralPublicKey) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).VerifyingKey.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "pos"
-			o = append(o, 0xa3, 0x70, 0x6f, 0x73)
-			o = msgp.AppendUint64(o, (*z).Pos)
-		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
 			o = msgp.AppendUint64(o, (*z).Round)
@@ -280,14 +271,6 @@ func (z *EphemeralPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
-			zb0001--
-			(*z).Pos, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Pos")
-				return
-			}
-		}
-		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -322,12 +305,6 @@ func (z *EphemeralPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Round")
 					return
 				}
-			case "pos":
-				(*z).Pos, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Pos")
-					return
-				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -348,13 +325,13 @@ func (_ *EphemeralPublicKey) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *EphemeralPublicKey) Msgsize() (s int) {
-	s = 1 + 3 + (*z).VerifyingKey.Msgsize() + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	s = 1 + 3 + (*z).VerifyingKey.Msgsize() + 4 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *EphemeralPublicKey) MsgIsZero() bool {
-	return ((*z).VerifyingKey.MsgIsZero()) && ((*z).Round == 0) && ((*z).Pos == 0)
+	return ((*z).VerifyingKey.MsgIsZero()) && ((*z).Round == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -439,7 +416,7 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x4
 	}
-	if (*z).VKey.MsgIsZero() {
+	if (*z).VerifyingKey.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x8
 	}
@@ -466,7 +443,7 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 		if (zb0002Mask & 0x8) == 0 { // if not empty
 			// string "vkey"
 			o = append(o, 0xa4, 0x76, 0x6b, 0x65, 0x79)
-			o = (*z).VKey.MarshalMsg(o)
+			o = (*z).VerifyingKey.MarshalMsg(o)
 		}
 	}
 	return
@@ -524,9 +501,9 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).VKey.UnmarshalMsg(bts)
+			bts, err = (*z).VerifyingKey.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VKey")
+				err = msgp.WrapError(err, "struct-from-array", "VerifyingKey")
 				return
 			}
 		}
@@ -582,9 +559,9 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "vkey":
-				bts, err = (*z).VKey.UnmarshalMsg(bts)
+				bts, err = (*z).VerifyingKey.UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "VKey")
+					err = msgp.WrapError(err, "VerifyingKey")
 					return
 				}
 			default:
@@ -611,13 +588,13 @@ func (z *Signature) Msgsize() (s int) {
 	for zb0001 := range (*z).Proof {
 		s += (*z).Proof[zb0001].Msgsize()
 	}
-	s += 5 + (*z).VKey.Msgsize()
+	s += 5 + (*z).VerifyingKey.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Signature) MsgIsZero() bool {
-	return ((*z).ByteSignature.MsgIsZero()) && (len((*z).Proof) == 0) && ((*z).VKey.MsgIsZero())
+	return ((*z).ByteSignature.MsgIsZero()) && (len((*z).Proof) == 0) && ((*z).VerifyingKey.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler
