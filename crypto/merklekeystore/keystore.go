@@ -32,6 +32,7 @@ type (
 		firstRound          uint64                      `codec:"rnd"`
 	}
 
+	// EphemeralPublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
 	EphemeralPublicKey struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -44,6 +45,8 @@ type (
 	//msgp:allocbound Proof -
 	Proof []crypto.Digest
 
+	// Signature is a byte signature on a crypto.Hashable object,
+	// crypto.VerifyingKey and includes a merkle proof for the key.
 	Signature struct {
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
@@ -71,6 +74,7 @@ type (
 	}
 )
 
+// ToBeHashed implementation means EphemeralPublicKey is crypto.Hashable.
 func (e *EphemeralPublicKey) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.EphemeralPK, protocol.Encode(e)
 }
