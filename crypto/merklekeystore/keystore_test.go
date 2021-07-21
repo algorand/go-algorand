@@ -186,7 +186,7 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	hashable, sig := makeSig(signer, start+1, a)
 	// taking signature for specific round and changing the round
 	sig2 := sig
-	sig2.VKey.Round += 1
+	sig2.VKey.Round++
 	a.Error(signer.GetVerifier().Verify(hashable, sig2))
 
 	// taking signature and changing the key to match different round
