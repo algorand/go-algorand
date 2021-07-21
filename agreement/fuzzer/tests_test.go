@@ -115,7 +115,7 @@ func TestCircularNetworkTopology(t *testing.T) {
 		nodeCount := nodeCounts[i]
 		t.Run(fmt.Sprintf("TestCircularNetworkTopology-%d", nodeCount),
 			func(t *testing.T) {
-				testpartitioning.PartitionTest(t) // Check if this expect test should by run, may SKIP
+				partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 				nodes := nodeCount
 				topologyConfig := TopologyFilterConfig{
 					NodesConnection: make(map[int][]int),
@@ -432,7 +432,7 @@ func TestFuzzer(t *testing.T) {
 	require.NoError(t, err)
 	for testName := range jsonFiles {
 		t.Run(testName, func(t *testing.T) {
-			testpartitioning.PartitionTest(t) // Check if this expect test should by run, may SKIP
+			partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 			jsonFilename := jsonFiles[testName]
 			jsonBytes, err := ioutil.ReadFile(jsonFilename)
 			require.NoError(t, err)
@@ -496,7 +496,7 @@ func TestNetworkBandwidth(t *testing.T) {
 		nodeCount := nodeCounts[i]
 		t.Run(fmt.Sprintf("TestNetworkBandwidth-%d", nodeCount),
 			func(t *testing.T) {
-				testpartitioning.PartitionTest(t) // Check if this expect test should by run, may SKIP
+				partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 				nodes := nodeCount
 				topologyConfig := TopologyFilterConfig{
 					NodesConnection: make(map[int][]int),
@@ -548,7 +548,7 @@ func TestUnstakedNetworkLinearGrowth(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	testpartitioning.PartitionTest(t) // Check if this expect test should by run, may SKIP
+	partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 	relayCount := 8
 	stakedNodeCount := 4
 	deadlock.Opts.Disable = true
@@ -661,7 +661,7 @@ func TestStakedNetworkQuadricGrowth(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	testpartitioning.PartitionTest(t) // Check if this expect test should by run, may SKIP
+	partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 	relayCount := 1
 	nodeCount := []int{4, 5, 6, 7, 8, 9, 10}
 	totalRelayedMessages := []int{}
@@ -772,7 +772,7 @@ func TestRegossipinngElimination(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	testpartitioning.PartitionTest(t) // Check if this expect test should by run, may SKIP
+	partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 	relayCounts := 8
 	nodeCount := 20
 	deadlock.Opts.Disable = true
