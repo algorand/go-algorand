@@ -152,7 +152,7 @@ commands:
             - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
       - run:
           name: Run short tests
-          no_output_timeout: 30m
+          no_output_timeout: 45m
           command: |
             set -e
             set -x
