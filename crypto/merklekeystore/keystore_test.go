@@ -18,10 +18,12 @@ package merklekeystore
 
 import (
 	"crypto/rand"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
+
+	"github.com/algorand/go-algorand/crypto"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestSignerCreation(t *testing.T) {
