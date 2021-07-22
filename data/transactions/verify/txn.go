@@ -118,8 +118,7 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 
 // TxnBatchVerify verifies a SignedTxn having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
-// if verifier is not nil, this function DOES NOT check the cryptographic signature on each transaction.
-// Instead, the signatures are enqueued into the batchverification
+// it is the caller responsibility to call batchVerifier.verifiy()
 func TxnBatchVerify(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) error {
 	if !groupCtx.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
 		return errors.New("nonempty AuthAddr but rekeying not supported")
@@ -152,8 +151,7 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 }
 
 // TxnGroupBatchVerify verifies a []SignedTxn having no obviously inconsistent data.
-// if verifier is not nil, this function DOES NOT check the cryptographic signature on each transaction.
-// Instead, the signatures are enqueued into the batchverification
+// it is the caller responsibility to call batchVerifier.verifiy()
 func TxnGroupBatchVerify(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, verifier *crypto.BatchVerifier) (groupCtx *GroupContext, err error) {
 	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
 	if err != nil {
@@ -267,8 +265,7 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 
 // LogicSigSanityCheckBatchVerify checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
-// if batchverifier is not nil the function DOES NOT check the validity of the digital signature.
-// instead it adds the signature into the batchverifier
+// it is the caller responsibility to call batchVerifier.verifiy()
 func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
 	lsig := txn.Lsig
 
@@ -336,8 +333,7 @@ func LogicSigSanityCheckBatchVerify(txn *transactions.SignedTxn, groupIndex int,
 }
 
 // logicSigBatchVerify checks that the signature is valid, executing the program.
-// if batchverifier is not nil the function DOES NOT check the validity of the digital signature.
-// instead it adds the signature into the batchverifier
+// it is the caller responsibility to call batchVerifier.verifiy()
 func logicSigBatchVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, batchverifier *crypto.BatchVerifier) error {
 	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
 	if err != nil {

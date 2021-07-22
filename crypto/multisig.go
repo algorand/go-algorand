@@ -235,7 +235,7 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, 
 }
 
 // MultisigBatchVerify verifies an assembled MultisigSig.
-// if the batchverifier is not nil, this function DOES NOT validate the digital signature.
+// it is the caller responsibility to call batchVerifier.verifiy()
 func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (verified bool, err error) {
 	verified = false
 	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
