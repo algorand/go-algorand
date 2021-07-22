@@ -1,7 +1,6 @@
-package partitionAnalyzer
+package analyzer
 
 import (
-	"fmt"
 	"go/ast"
 	"strings"
 
@@ -10,6 +9,9 @@ import (
 
 const packageName string = "testpartitioning"
 const functionName string = "PartitionTest"
+const fileNameSuffix string = "_test.go"
+const functionNamePrefix string = "Test"
+const parameterType string = "T"
 
 var Analyzer = &analysis.Analyzer{
 	Name:             "lint",
@@ -21,7 +23,7 @@ var Analyzer = &analysis.Analyzer{
 func run(pass *analysis.Pass) (interface{}, error) {
 	for _, f := range pass.Files {
 		currentFileName := pass.Fset.File(f.Pos()).Name()
-		if !strings.HasSuffix(currentFileName, "_test.go") {
+		if !strings.HasSuffix(currentFileName, fileNameSuffix) {
 			continue
 		}
 		for _, decl := range f.Decls {
@@ -32,15 +34,15 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			}
 
 			// Check that function name starts with "Test"
-			if !strings.HasPrefix(fn.Name.Name, "Test") {
+			if !strings.HasPrefix(fn.Name.Name, functionNamePrefix) {
 				continue
 			}
 
-			if !isTestArgumentInFunction(pass, fn, "Test") {
+			if !isTestParameterInFunction(fn.Type.Params.List[0].Type, parameterType) {
 				continue
 			}
 			if !isSearchLineInFunction(fn) {
-				fmt.Println("Missing testpartitioning.PartitionTest(<test argument>) in", currentFileName, ">", fn.Name.Name, "<<<")
+				pass.Reportf(fn.Pos(), "%s function is missing %s.%s(<%s type parameter>)", fn.Name.Name, packageName, functionName, parameterType)
 			}
 
 		}
@@ -48,19 +50,13 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	return nil, nil
 }
 
-func isTestArgumentInFunction(pass *analysis.Pass, fn *ast.FuncDecl, prefix string) bool {
-	// The param must look like a *testing.T or *testing.B.
-	return isTestArg(fn.Type.Params.List[0].Type, prefix[:1])
-}
-
-func isTestArg(typ ast.Expr, wantType string) bool {
+func isTestParameterInFunction(typ ast.Expr, wantType string) bool {
 	ptr, ok := typ.(*ast.StarExpr)
 	if !ok {
 		// Not a pointer.
 		return false
 	}
-	// No easy way of making sure it's a *testing.T or *testing.B:
-	// ensure the name of the type matches.
+
 	if name, ok := ptr.X.(*ast.Ident); ok {
 		return name.Name == wantType
 	}
@@ -83,7 +79,7 @@ func isSearchLineInFunction(fn *ast.FuncDecl) bool {
 					}
 				}
 
-				if !doesArgumentNameMatch(call, fn) {
+				if !doesParameterNameMatch(call, fn) {
 					continue
 				}
 
@@ -107,7 +103,7 @@ func doesFunctionNameMatch(fun *ast.SelectorExpr) bool {
 	return fun.Sel.Name == functionName
 }
 
-func doesArgumentNameMatch(call *ast.CallExpr, fn *ast.FuncDecl) bool {
+func doesParameterNameMatch(call *ast.CallExpr, fn *ast.FuncDecl) bool {
 	for _, oneArg := range call.Args {
 
 		if realArg, ok := oneArg.(*ast.Ident); ok {
