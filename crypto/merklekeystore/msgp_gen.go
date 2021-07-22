@@ -730,10 +730,20 @@ func (z *Signer) MsgIsZero() bool {
 func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(0)
+	zb0001Len := uint32(1)
+	var zb0001Mask uint8 /* 2 bits */
+	if (*z).Root.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "r"
+			o = append(o, 0xa1, 0x72)
+			o = (*z).Root.MarshalMsg(o)
+		}
 	}
 	return
 }
@@ -755,6 +765,14 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Root.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Root")
+				return
+			}
 		}
 		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
@@ -779,6 +797,12 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			switch string(field) {
+			case "r":
+				bts, err = (*z).Root.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Root")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -799,11 +823,11 @@ func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Verifier) Msgsize() (s int) {
-	s = 1
+	s = 1 + 2 + (*z).Root.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return true
+	return ((*z).Root.MsgIsZero())
 }

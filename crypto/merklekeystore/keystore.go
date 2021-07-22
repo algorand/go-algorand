@@ -69,7 +69,7 @@ type (
 	Verifier struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		root crypto.Digest `codec:"r"`
+		Root crypto.Digest `codec:"r"`
 	}
 )
 
@@ -124,7 +124,7 @@ func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType) (*Signe
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (m *Signer) GetVerifier() *Verifier {
 	return &Verifier{
-		root: m.Root(),
+		Root: m.Root(),
 	}
 }
 
@@ -171,7 +171,7 @@ func (v *Verifier) Verify(firstValid, round uint64, obj crypto.Hashable, sig Sig
 		VerifyingKey: sig.VerifyingKey,
 		Round:        round,
 	}
-	isInTree := merklearray.Verify(v.root, map[uint64]crypto.Digest{round - firstValid: crypto.HashObj(&ephkey)}, sig.Proof)
+	isInTree := merklearray.Verify(v.Root, map[uint64]crypto.Digest{round - firstValid: crypto.HashObj(&ephkey)}, sig.Proof)
 	if isInTree != nil {
 		return isInTree
 	}

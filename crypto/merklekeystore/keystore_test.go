@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 
 	"github.com/stretchr/testify/require"
 )
@@ -117,7 +118,7 @@ func genHashableForTest() crypto.Hashable {
 func TestSigning(t *testing.T) {
 	a := require.New(t)
 
-	start, end, signer := getValidSig(a)
+	start, end, signer := getSigner(a)
 
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
 
@@ -134,7 +135,7 @@ func TestSigning(t *testing.T) {
 
 func TestBadRound(t *testing.T) {
 	a := require.New(t)
-	start, _, signer := getValidSig(a)
+	start, _, signer := getSigner(a)
 
 	hashable, sig := makeSig(signer, start, a)
 
@@ -148,7 +149,7 @@ func TestBadRound(t *testing.T) {
 
 func TestBadMerkleProofInSignature(t *testing.T) {
 	a := require.New(t)
-	start, _, signer := getValidSig(a)
+	start, _, signer := getSigner(a)
 
 	hashable, sig := makeSig(signer, start, a)
 
@@ -165,7 +166,7 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 
 func TestIncorrectByteSignature(t *testing.T) {
 	a := require.New(t)
-	start, _, signer := getValidSig(a)
+	start, _, signer := getSigner(a)
 
 	hashable, sig := makeSig(signer, start, a)
 
@@ -179,7 +180,7 @@ func TestIncorrectByteSignature(t *testing.T) {
 
 func TestAttemptToUseDifferentKey(t *testing.T) {
 	a := require.New(t)
-	start, _, signer := getValidSig(a)
+	start, _, signer := getSigner(a)
 
 	hashable, sig := makeSig(signer, start+1, a)
 	// taking signature for specific round and changing the round
@@ -188,6 +189,16 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	sig2 := sig
 	sig2.VerifyingKey = signer.EphemeralKeys.SignatureAlgorithms[0].GetSigner().GetVerifyingKey()
 	a.Error(signer.GetVerifier().Verify(start, start+1, hashable, sig2))
+}
+
+func TestVerifierMarshal(t *testing.T) {
+	a := require.New(t)
+	_, _, signer := getSigner(a)
+	verifier := signer.GetVerifier()
+	bs := protocol.Encode(verifier)
+	verifierToDecodeInto := Verifier{}
+	protocol.Decode(bs, &verifierToDecodeInto)
+	a.Equal(verifier, verifierToDecodeInto)
 }
 
 func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
@@ -199,7 +210,7 @@ func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Has
 	return hashable, sig
 }
 
-func getValidSig(a *require.Assertions) (uint64, uint64, *Signer) {
+func getSigner(a *require.Assertions) (uint64, uint64, *Signer) {
 	start, end := uint64(50), uint64(100)
 	signer, err := New(start, end, crypto.PlaceHolderType)
 	a.NoError(err)
