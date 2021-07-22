@@ -76,12 +76,14 @@ elif [ "${OS}" = "darwin" ]; then
     brew tap homebrew/cask
     install_or_upgrade pkg-config
     install_or_upgrade boost
-    install_or_upgrade jq
     install_or_upgrade libtool
-    install_or_upgrade autoconf
-    install_or_upgrade automake
     install_or_upgrade shellcheck
-    install_or_upgrade python3
+    if [ "${CIRCLECI}" != "true" ]; then
+        install_or_upgrade jq
+        install_or_upgrade autoconf
+        install_or_upgrade automake
+        install_or_upgrade python3
+    fi
 elif [ "${OS}" = "windows" ]; then
     if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-x86_64-gcc mingw-w64-x86_64-boost mingw-w64-x86_64-python mingw-w64-x86_64-jq unzip procps; then
         echo "Error installing pacman dependencies"
