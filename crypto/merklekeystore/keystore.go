@@ -52,8 +52,8 @@ type (
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
 
-		Proof                `codec:"prf"`
-		VerifyingKey         crypto.VerifyingKey `codec:"vkey"`
+		Proof        `codec:"prf"`
+		VerifyingKey crypto.VerifyingKey `codec:"vkey"`
 	}
 
 	// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
