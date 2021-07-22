@@ -217,7 +217,21 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 
 // MultisigVerify verifies an assembled MultisigSig
 func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (verified bool, err error) {
-	return MultisigBatchVerify(msg, addr, sig, nil)
+	batchVerifier := MakeBatchVerifierDefaultSize()
+
+	if verified, err = MultisigBatchVerify(msg, addr, sig, batchVerifier); err != nil {
+		return
+	}
+	if !verified {
+		return
+	}
+	if batchVerifier.GetNumberOfEnqueuedSignatures() == 0 {
+		return true, nil
+	}
+	if err = batchVerifier.Verify(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // MultisigBatchVerify verifies an assembled MultisigSig.
@@ -269,15 +283,7 @@ func MultisigBatchVerify(msg Hashable, addr Digest, sig MultisigSig, batchVerifi
 	var verifiedCount int
 	for _, subsigi := range sig.Subsigs {
 		if (subsigi.Sig != Signature{}) {
-			if batchVerifier != nil {
-				batchVerifier.EnqueueSignature(subsigi.Key, msg, subsigi.Sig)
-				verifiedCount++
-				continue
-			}
-			if !subsigi.Key.Verify(msg, subsigi.Sig) {
-				err = errors.New(errorsubsigverification)
-				return
-			}
+			batchVerifier.EnqueueSignature(subsigi.Key, msg, subsigi.Sig)
 			verifiedCount++
 		}
 	}

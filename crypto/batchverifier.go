@@ -20,7 +20,7 @@ import "errors"
 
 // BatchVerifier enqueues signatures to be validated in batch.
 type BatchVerifier struct {
-	messages   [][]byte            // contains a slice of messages to be hashed. Each message is varible length
+	messages   []Hashable          // contains a slice of messages to be hashed. Each message is varible length
 	publicKeys []SignatureVerifier // contains a slice of public keys. Each individual public key is 32 bytes.
 	signatures []Signature         // contains a slice of signatures keys. Each individual signature is 64 bytes.
 }
@@ -33,14 +33,21 @@ var (
 	ErrZeroTranscationsInBatch = errors.New("Could not validate empty signature set")
 )
 
-// MakeBatchVerifier create a BatchVerifier instance, and initialize it using the provided hint.
+// MakeBatchVerifierDefaultSize create a BatchVerifier instance. This function pre-allocates
+// amount of free space to enqueue signatures without exapneding
+func MakeBatchVerifierDefaultSize() *BatchVerifier {
+	return MakeBatchVerifier(minBatchVerifierAlloc)
+}
+
+// MakeBatchVerifier create a BatchVerifier instance. This function pre-allocates
+// a given space so it will not expaned the storage
 func MakeBatchVerifier(hint int) *BatchVerifier {
 	// preallocate enough storage for the expected usage. We will reallocate as needed.
 	if hint < minBatchVerifierAlloc {
 		hint = minBatchVerifierAlloc
 	}
 	return &BatchVerifier{
-		messages:   make([][]byte, 0, hint),
+		messages:   make([]Hashable, 0, hint),
 		publicKeys: make([]SignatureVerifier, 0, hint),
 		signatures: make([]Signature, 0, hint),
 	}
@@ -48,10 +55,6 @@ func MakeBatchVerifier(hint int) *BatchVerifier {
 
 // EnqueueSignature enqueues a signature to be enqueued
 func (b *BatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature) {
-	b.enqueueRaw(sigVerifier, hashRep(message), sig)
-}
-
-func (b *BatchVerifier) enqueueRaw(sigVerifier SignatureVerifier, message []byte, sig Signature) {
 	// do we need to reallocate ?
 	if len(b.messages) == cap(b.messages) {
 		b.expand()
@@ -62,7 +65,7 @@ func (b *BatchVerifier) enqueueRaw(sigVerifier SignatureVerifier, message []byte
 }
 
 func (b *BatchVerifier) expand() {
-	messages := make([][]byte, len(b.messages), len(b.messages)*2)
+	messages := make([]Hashable, len(b.messages), len(b.messages)*2)
 	publicKeys := make([]SignatureVerifier, len(b.publicKeys), len(b.publicKeys)*2)
 	signatures := make([]Signature, len(b.signatures), len(b.signatures)*2)
 	copy(messages, b.messages)
@@ -79,6 +82,7 @@ func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
 }
 
 // Verify verifies that all the signatures are valid. in that case nil is returned
+// if the batch is zero an appropriate error is return.
 func (b *BatchVerifier) Verify() error {
 	if b.GetNumberOfEnqueuedSignatures() == 0 {
 		return ErrZeroTranscationsInBatch
@@ -86,7 +90,7 @@ func (b *BatchVerifier) Verify() error {
 
 	for i := range b.messages {
 		verifier := SignatureVerifier(b.publicKeys[i])
-		if !verifier.VerifyBytes(b.messages[i], b.signatures[i]) {
+		if !verifier.Verify(b.messages[i], b.signatures[i]) {
 			return ErrBatchVerificationFailed
 		}
 	}

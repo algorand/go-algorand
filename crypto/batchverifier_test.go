@@ -50,14 +50,15 @@ func TestBatchVerifierBulk(t *testing.T) {
 		n := i
 		bv := MakeBatchVerifier(n)
 		var s Seed
-		RandBytes(s[:])
 
 		for i := 0; i < n; i++ {
 			msg := randString()
+			RandBytes(s[:])
 			sigSecrets := GenerateSignatureSecrets(s)
 			sig := sigSecrets.Sign(msg)
 			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 		}
+		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
 		require.NoError(t, bv.Verify())
 	}
 
@@ -110,4 +111,9 @@ func BenchmarkBatchVerifier(b *testing.B) {
 
 	b.ResetTimer()
 	require.NoError(b, bv.Verify())
+}
+
+func TestEmpty(t *testing.T) {
+	bv := MakeBatchVerifierDefaultSize()
+	require.Error(t, bv.Verify())
 }
