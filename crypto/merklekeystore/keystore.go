@@ -33,8 +33,8 @@ type (
 		firstRound          uint64                      `codec:"rnd"`
 	}
 
-	// EphemeralPublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
-	EphemeralPublicKey struct {
+	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
+	CommittablePublicKey struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		VerifyingKey crypto.VerifyingKey `codec:"pk"`
@@ -73,8 +73,8 @@ type (
 	}
 )
 
-// ToBeHashed implementation means EphemeralPublicKey is crypto.Hashable.
-func (e *EphemeralPublicKey) ToBeHashed() (protocol.HashID, []byte) {
+// ToBeHashed implementation means CommittablePublicKey is crypto.Hashable.
+func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.EphemeralPK, protocol.Encode(e)
 }
 
@@ -85,7 +85,7 @@ func (d *EphemeralKeys) Length() uint64 {
 
 // GetHash Gets the hash of the VerifyingKey tied to the signatureAlgorithm in pos.
 func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
-	ephPK := EphemeralPublicKey{
+	ephPK := CommittablePublicKey{
 		VerifyingKey: d.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
 		Round:        d.firstRound + pos,
 	}
@@ -167,7 +167,7 @@ func (v *Verifier) Verify(firstValid, round uint64, obj crypto.Hashable, sig Sig
 	if round < firstValid {
 		return errOutOfBounds
 	}
-	ephkey := EphemeralPublicKey{
+	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
 		Round:        round,
 	}
