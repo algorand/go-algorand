@@ -8,6 +8,14 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
+// CommittablePublicKey
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//
 // EphemeralKeys
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
@@ -15,14 +23,6 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
-//
-// EphemeralPublicKey
-//          |-----> (*) MarshalMsg
-//          |-----> (*) CanMarshalMsg
-//          |-----> (*) UnmarshalMsg
-//          |-----> (*) CanUnmarshalMsg
-//          |-----> (*) Msgsize
-//          |-----> (*) MsgIsZero
 //
 // Proof
 //   |-----> MarshalMsg
@@ -56,6 +56,135 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
+
+// MarshalMsg implements msgp.Marshaler
+func (z *CommittablePublicKey) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).VerifyingKey.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Round == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "pk"
+			o = append(o, 0xa2, 0x70, 0x6b)
+			o = (*z).VerifyingKey.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "rnd"
+			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
+			o = msgp.AppendUint64(o, (*z).Round)
+		}
+	}
+	return
+}
+
+func (_ *CommittablePublicKey) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*CommittablePublicKey)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *CommittablePublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).VerifyingKey.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VerifyingKey")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Round, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Round")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = CommittablePublicKey{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "pk":
+				bts, err = (*z).VerifyingKey.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VerifyingKey")
+					return
+				}
+			case "rnd":
+				(*z).Round, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Round")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *CommittablePublicKey) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*CommittablePublicKey)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *CommittablePublicKey) Msgsize() (s int) {
+	s = 1 + 3 + (*z).VerifyingKey.Msgsize() + 4 + msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *CommittablePublicKey) MsgIsZero() bool {
+	return ((*z).VerifyingKey.MsgIsZero()) && ((*z).Round == 0)
+}
 
 // MarshalMsg implements msgp.Marshaler
 func (z *EphemeralKeys) MarshalMsg(b []byte) (o []byte) {
@@ -203,135 +332,6 @@ func (z *EphemeralKeys) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *EphemeralKeys) MsgIsZero() bool {
 	return (len((*z).SignatureAlgorithms) == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *EphemeralPublicKey) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 3 bits */
-	if (*z).VerifyingKey.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x2
-	}
-	if (*z).Round == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x4
-	}
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len != 0 {
-		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "pk"
-			o = append(o, 0xa2, 0x70, 0x6b)
-			o = (*z).VerifyingKey.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "rnd"
-			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o = msgp.AppendUint64(o, (*z).Round)
-		}
-	}
-	return
-}
-
-func (_ *EphemeralPublicKey) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*EphemeralPublicKey)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *EphemeralPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 int
-	var zb0002 bool
-	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).VerifyingKey.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "VerifyingKey")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			(*z).Round, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Round")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = EphemeralPublicKey{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-			switch string(field) {
-			case "pk":
-				bts, err = (*z).VerifyingKey.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "VerifyingKey")
-					return
-				}
-			case "rnd":
-				(*z).Round, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Round")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-func (_ *EphemeralPublicKey) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*EphemeralPublicKey)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *EphemeralPublicKey) Msgsize() (s int) {
-	s = 1 + 3 + (*z).VerifyingKey.Msgsize() + 4 + msgp.Uint64Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *EphemeralPublicKey) MsgIsZero() bool {
-	return ((*z).VerifyingKey.MsgIsZero()) && ((*z).Round == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
