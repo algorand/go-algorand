@@ -25,7 +25,8 @@ import (
 )
 
 type (
-	//EphemeralKeys represent the possible keys inside the keystore.
+	// EphemeralKeys represent the possible keys inside the keystore.
+	// Each key in this struct will be used in a specific round.
 	EphemeralKeys struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
