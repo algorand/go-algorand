@@ -198,7 +198,7 @@ func TestVerifierMarshal(t *testing.T) {
 	bs := protocol.Encode(verifier)
 	verifierToDecodeInto := Verifier{}
 	protocol.Decode(bs, &verifierToDecodeInto)
-	a.Equal(verifier, verifierToDecodeInto)
+	a.Equal(*verifier, verifierToDecodeInto)
 }
 
 func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
