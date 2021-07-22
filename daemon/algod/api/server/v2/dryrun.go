@@ -522,7 +522,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					result.LocalDeltas = &localDeltas
 				}
 
-				result.Logs = DeltaLogToLog(uint64(appIdx), delta.Logs)
+				result.Logs = DeltaLogToLog(delta.Logs)
 				if pass {
 					messages = append(messages, "PASS")
 				} else {
@@ -566,7 +566,7 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 }
 
 // DeltaLogToLog EvalDelta.Logs to generated.LogItem
-func DeltaLogToLog(appidx uint64, logs []string) *[]generated.LogItem {
+func DeltaLogToLog(logs []basics.LogItem) *[]generated.LogItem {
 	if len(logs) == 0 {
 		return nil
 	}
@@ -576,9 +576,9 @@ func DeltaLogToLog(appidx uint64, logs []string) *[]generated.LogItem {
 		text  string
 	}
 	encodedLogs := make([]generated.LogItem, 0, len(logs))
-	for i := range logs {
-		msg := base64.StdEncoding.EncodeToString([]byte(logs[i]))
-		encodedLogs = append(encodedLogs, generated.LogItem{AppId: appidx, Text: msg})
+	for _, log := range logs {
+		msg := base64.StdEncoding.EncodeToString([]byte(log.Message))
+		encodedLogs = append(encodedLogs, generated.LogItem{Id: uint64(log.ID), Value: &msg})
 	}
 	return &encodedLogs
 }

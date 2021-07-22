@@ -60,7 +60,7 @@ type mockCowForLogicLedger struct {
 	brs    map[basics.Address]basics.AccountData
 	stores map[storeLocator]basics.TealKeyValue
 	tcs    map[int]basics.CreatableIndex
-	logs   []string
+	logs   []basics.LogItem
 }
 
 func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -126,13 +126,13 @@ func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIn
 	return found, nil
 }
 
-func (c *mockCowForLogicLedger) AppendLog(value string) error {
-	c.logs = append(c.logs, value)
+func (c *mockCowForLogicLedger) AppendLog(aidx basics.AppIndex, value string) error {
+	c.logs[aidx].Messages = append(c.logs[aidx].Messages, value)
 	return nil
 }
 
-func (c *mockCowForLogicLedger) GetLogs() []string {
-	return c.logs
+func (c *mockCowForLogicLedger) GetLogs(aidx basics.AppIndex) basics.LogItem {
+	return c.logs[aidx]
 }
 
 func newCowMock(creatables []modsData) *mockCowForLogicLedger {

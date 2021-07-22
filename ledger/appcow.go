@@ -425,14 +425,15 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	return nil // note: deletion cannot cause us to violate maxCount
 }
 
-// AppendLog creates adds string in logs
-func (cb *roundCowState) AppendLog(value string) error {
-	cb.logs = append(cb.logs, value)
+// AppendLog adds message in logs
+func (cb *roundCowState) AppendLog(aidx basics.AppIndex, value string) error {
+
+	cb.logs = append(cb.logs, basics.LogItem{ID: aidx, Message: value})
 	return nil
 }
 
 // GetLogs returns logs
-func (cb *roundCowState) GetLogs() []string {
+func (cb *roundCowState) GetLogs() []basics.LogItem {
 	return cb.logs
 }
 

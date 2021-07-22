@@ -127,7 +127,7 @@ func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWit
 	res = node.TxnWithStatus{Txn: transactions.SignedTxn{Txn: t},
 		ApplyData: transactions.ApplyData{
 			EvalDelta: basics.EvalDelta{
-				Logs: []string{"a"},
+				Logs: []basics.LogItem{{ID: 0, Message: "a"}},
 			},
 		},
 	}

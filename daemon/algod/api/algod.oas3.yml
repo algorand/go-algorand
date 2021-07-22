@@ -1343,18 +1343,17 @@
       "LogItem": {
         "description": "Application Log",
         "properties": {
-          "app-id": {
+          "id": {
             "description": "unique application identifier",
             "type": "integer"
           },
-          "text": {
+          "value": {
             "description": "log message",
             "type": "string"
           }
         },
         "required": [
-          "app-id",
-          "text"
+          "id"
         ],
         "type": "object"
       },

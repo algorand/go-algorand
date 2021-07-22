@@ -115,6 +115,14 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
+// LogItem
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
 // Round
 //   |-----> MarshalMsg
 //   |-----> CanMarshalMsg
@@ -4210,7 +4218,7 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Logs)))
 			}
 			for zb0007 := range (*z).Logs {
-				o = msgp.AppendString(o, (*z).Logs[zb0007])
+				o = (*z).Logs[zb0007].MarshalMsg(o)
 			}
 		}
 	}
@@ -4344,8 +4352,8 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Logs")
 				return
 			}
-			if zb0016 > config.MaxLogCalls {
-				err = msgp.ErrOverflow(uint64(zb0016), uint64(config.MaxLogCalls))
+			if zb0016 > config.MaxEvalDeltaAccounts {
+				err = msgp.ErrOverflow(uint64(zb0016), uint64(config.MaxEvalDeltaAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "Logs")
 				return
 			}
@@ -4354,10 +4362,10 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			} else if (*z).Logs != nil && cap((*z).Logs) >= zb0016 {
 				(*z).Logs = ((*z).Logs)[:zb0016]
 			} else {
-				(*z).Logs = make([]string, zb0016)
+				(*z).Logs = make([]LogItem, zb0016)
 			}
 			for zb0007 := range (*z).Logs {
-				(*z).Logs[zb0007], bts, err = msgp.ReadStringBytes(bts)
+				bts, err = (*z).Logs[zb0007].UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007)
 					return
@@ -4491,8 +4499,8 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Logs")
 					return
 				}
-				if zb0024 > config.MaxLogCalls {
-					err = msgp.ErrOverflow(uint64(zb0024), uint64(config.MaxLogCalls))
+				if zb0024 > config.MaxEvalDeltaAccounts {
+					err = msgp.ErrOverflow(uint64(zb0024), uint64(config.MaxEvalDeltaAccounts))
 					err = msgp.WrapError(err, "Logs")
 					return
 				}
@@ -4501,10 +4509,10 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				} else if (*z).Logs != nil && cap((*z).Logs) >= zb0024 {
 					(*z).Logs = ((*z).Logs)[:zb0024]
 				} else {
-					(*z).Logs = make([]string, zb0024)
+					(*z).Logs = make([]LogItem, zb0024)
 				}
 				for zb0007 := range (*z).Logs {
-					(*z).Logs[zb0007], bts, err = msgp.ReadStringBytes(bts)
+					bts, err = (*z).Logs[zb0007].UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Logs", zb0007)
 						return
@@ -4555,7 +4563,7 @@ func (z *EvalDelta) Msgsize() (s int) {
 	}
 	s += 3 + msgp.ArrayHeaderSize
 	for zb0007 := range (*z).Logs {
-		s += msgp.StringPrefixSize + len((*z).Logs[zb0007])
+		s += (*z).Logs[zb0007].Msgsize()
 	}
 	return
 }
@@ -4563,6 +4571,143 @@ func (z *EvalDelta) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *EvalDelta) MsgIsZero() bool {
 	return (len((*z).GlobalDelta) == 0) && (len((*z).LocalDeltas) == 0) && (len((*z).Logs) == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *LogItem) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).ID == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Message == "" {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "id"
+			o = append(o, 0xa2, 0x69, 0x64)
+			o = msgp.AppendUint64(o, uint64((*z).ID))
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "mg"
+			o = append(o, 0xa2, 0x6d, 0x67)
+			o = msgp.AppendString(o, (*z).Message)
+		}
+	}
+	return
+}
+
+func (_ *LogItem) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*LogItem)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *LogItem) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			{
+				var zb0003 uint64
+				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "ID")
+					return
+				}
+				(*z).ID = AppIndex(zb0003)
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Message, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Message")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = LogItem{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "id":
+				{
+					var zb0004 uint64
+					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "ID")
+						return
+					}
+					(*z).ID = AppIndex(zb0004)
+				}
+			case "mg":
+				(*z).Message, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Message")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *LogItem) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*LogItem)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *LogItem) Msgsize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.StringPrefixSize + len((*z).Message)
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *LogItem) MsgIsZero() bool {
+	return ((*z).ID == 0) && ((*z).Message == "")
 }
 
 // MarshalMsg implements msgp.Marshaler

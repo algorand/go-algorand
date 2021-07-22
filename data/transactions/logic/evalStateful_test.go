@@ -37,6 +37,7 @@ type balanceRecord struct {
 	locals   map[basics.AppIndex]basics.TealKeyValue
 	holdings map[basics.AssetIndex]basics.AssetHolding
 	mods     map[basics.AppIndex]map[string]basics.ValueDelta
+	logs     []basics.LogItem
 }
 
 // In our test ledger, we don't store the creatables with their
@@ -59,7 +60,7 @@ type testLedger struct {
 	appID             basics.AppIndex
 	creatorAddr       basics.Address
 	mods              map[basics.AppIndex]map[string]basics.ValueDelta
-	logs              []string
+	logs              []basics.LogItem
 }
 
 func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
@@ -82,6 +83,7 @@ func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
 		locals:   make(map[basics.AppIndex]basics.TealKeyValue),
 		holdings: make(map[basics.AssetIndex]basics.AssetHolding),
 		mods:     make(map[basics.AppIndex]map[string]basics.ValueDelta),
+		logs:     make([]basics.LogItem, 0),
 	}
 	return br
 }
@@ -474,12 +476,11 @@ func (l *testLedger) AppendLog(value string) error {
 		return fmt.Errorf("no such app")
 	}
 
-	// append logs
-	l.logs = append(l.logs, value)
+	l.logs = append(l.logs, basics.LogItem{ID: appIdx, Message: value})
 	return nil
 }
 
-func (l *testLedger) GetLogs() []string {
+func (l *testLedger) GetLogs() []basics.LogItem {
 	return l.logs
 }
 

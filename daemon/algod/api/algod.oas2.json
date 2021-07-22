@@ -1921,15 +1921,15 @@
       "description": "Application Log",
       "type": "object",
       "required": [
-        "app-id",
-        "text"
+        "id",
+        "message"
       ],
       "properties": {
-        "app-id": {
+        "id": {
           "description": "unique application identifier",
           "type": "integer"
         },
-        "text": {
+        "value": {
           "description": "log message",
           "type": "string"
         }

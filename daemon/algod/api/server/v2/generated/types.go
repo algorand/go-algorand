@@ -341,10 +341,10 @@ type EvalDeltaKeyValue struct {
 type LogItem struct {
 
 	// unique application identifier
-	AppId uint64 `json:"app-id"`
+	Id uint64 `json:"id"`
 
 	// log message
-	Text string `json:"text"`
+	Value *string `json:"value,omitempty"`
 }
 
 // StateDelta defines model for StateDelta.

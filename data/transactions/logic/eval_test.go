@@ -4499,7 +4499,7 @@ func TestLog(t *testing.T) {
 		},
 	}
 	ledger := makeTestLedger(nil)
-	ledger.newApp(txn.Txn.Receiver, 100, basics.AppParams{})
+	ledger.newApp(txn.Txn.Receiver, 0, basics.AppParams{})
 	sb := strings.Builder{}
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Proto = &proto

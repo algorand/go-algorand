@@ -266,6 +266,30 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
 }
 
+func convertToLogItems(txn node.TxnWithStatus) *[]generated.LogItem {
+	var logItems *[]generated.LogItem
+	if len(txn.ApplyData.EvalDelta.Logs) > 0 {
+		l := make([]generated.LogItem, 0)
+
+		for _, v := range txn.ApplyData.EvalDelta.Logs {
+			// Resolve appid from index
+			var appid uint64
+			if v.ID == 0 {
+				appid = uint64(txn.Txn.Txn.ApplicationID)
+			} else {
+				//to be added when app to app call is available
+			}
+			l = append(l, generated.LogItem{
+				Id:    appid,
+				Value: &v.Message,
+			})
+		}
+
+		logItems = &l
+	}
+	return logItems
+}
+
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.
 // If this is the case, the string is returned as is. Otherwise, the empty string is returned.
 func printableUTF8OrEmpty(in string) string {

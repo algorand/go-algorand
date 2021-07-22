@@ -535,12 +535,10 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
 		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
 		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
-		if response.ApplicationIndex != nil {
-			response.Logs = DeltaLogToLog(*response.ApplicationIndex, txn.ApplyData.EvalDelta.Logs)
-		}
+		response.Logs = convertToLogItems(txn)
 	}
-
 	data, err := encode(handle, response)
+
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}

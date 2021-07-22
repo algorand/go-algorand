@@ -164,7 +164,7 @@ type LedgerForLogic interface {
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
 
 	AppendLog(value string) error
-	GetLogs() []string
+	GetLogs() []basics.LogItem
 }
 
 // EvalSideEffects contains data returned from evaluation

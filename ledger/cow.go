@@ -64,7 +64,7 @@ type roundCowState struct {
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 
 	// logs populated in AppCall transaction
-	logs []string
+	logs []basics.LogItem
 
 	// either or not maintain compatibility with original app refactoring behavior
 	// this is needed for generating old eval delta in new code
@@ -86,6 +86,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		mods:              ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint, 0),
 		sdeltas:           make(map[basics.Address]map[storagePtr]*storageDelta),
 		trackedCreatables: make(map[int]basics.CreatableIndex),
+		logs:              make([]basics.LogItem, 0),
 	}
 
 	// compatibilityMode retains producing application' eval deltas under the following rule:

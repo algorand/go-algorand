@@ -33,6 +33,7 @@ import (
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -169,6 +170,36 @@ func waitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, tx
 		tx, err = testClient.TransactionInformation(fromAddress, txID)
 		if err != nil && strings.HasPrefix(err.Error(), "HTTP 404") {
 			tx, err = testClient.PendingTransactionInformation(txID)
+		}
+		if err == nil {
+			a.NotEmpty(tx)
+			a.Empty(tx.PoolError)
+			if tx.ConfirmedRound > 0 {
+				return
+			}
+		}
+		if time.Now().After(timeoutTime) {
+			err = errWaitForTransactionTimeout
+			return
+		}
+		time.Sleep(time.Second)
+	}
+}
+
+func waitForTransactionV2(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx v1.Transaction, err error) {
+	a := require.New(fixtures.SynchronizedTest(t))
+	rnd, err := testClient.Status()
+	a.NoError(err)
+	if rnd.LastRound == 0 {
+		t.Fatal("it is currently round 0 but we need to wait for a transaction that might happen this round but we'll never know if that happens because ConfirmedRound==0 is indestinguishable from not having happened")
+	}
+	timeoutTime := time.Now().Add(timeout * time.Second)
+	var e error
+	for {
+		tx, err = testClient.TransactionInformation(fromAddress, txID)
+		if err != nil && strings.HasPrefix(err.Error(), "HTTP 404") {
+			_, e = testClient.PendingTransactionInformationV2(txID)
+			a.NoError(e)
 		}
 		if err == nil {
 			a.NotEmpty(tx)
@@ -798,7 +829,6 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 		a.NoError(err)
 		txIDsSeen[tx2.ID().String()] = true
 	}
-
 	statusResponse, err := testClient.GetPendingTransactions(uint64(MaxTxns))
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
@@ -809,4 +839,77 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 		delete(txIDsSeen, tx.TxID)
 	}
 	a.True(len(txIDsSeen) == NumTxns-MaxTxns)
+}
+
+func TestClientCanGetPendingTransactionInfo(t *testing.T) {
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	testClient.WaitForRound(1)
+
+	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, someAddress := getMaxBalAddr(t, testClient, addresses)
+	if someAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+	addr, err := basics.UnmarshalChecksumAddress(someAddress)
+
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
+
+	firstRound := basics.Round(params.LastRound + 1)
+	lastRound := basics.Round(params.LastRound + 1000)
+	var gh crypto.Digest
+	copy(gh[:], params.GenesisHash)
+
+	prog := `#pragma version 5
+int 1
+loop: byte "a"
+log
+int 1
++
+dup
+int 30
+<
+bnz loop
+	`
+	ops, err := logic.AssembleString(prog)
+	approv := ops.Program
+	ops, err = logic.AssembleString("#pragma version 5 \nint 1")
+	clst := ops.Program
+
+	gl := basics.StateSchema{
+		NumByteSlice: 1,
+	}
+	lc := basics.StateSchema{
+		NumByteSlice: 1,
+	}
+	minTxnFee, _, err := localFixture.CurrentMinFeeAndBalance()
+
+	tx, err := testClient.MakeUnsignedApplicationCallTx(0, nil, addresses, nil, nil, transactions.NoOpOC, approv, clst, gl, lc, 0)
+	tx.Sender = addr
+	tx.Fee = basics.MicroAlgos{Raw: minTxnFee}
+	tx.FirstValid = firstRound
+	tx.LastValid = lastRound
+	tx.GenesisHash = gh
+
+	txid, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+	a.NoError(err)
+	_, err = waitForTransactionV2(t, testClient, someAddress, txid, 30*time.Second)
+	a.NoError(err)
+	txn, err := testClient.PendingTransactionInformationV2(txid)
+	a.NoError(err)
+	a.NotNil(txn.Logs)
+	a.Equal(29, len(*txn.Logs))
+
 }

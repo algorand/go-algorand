@@ -332,8 +332,6 @@ done:
 
 var localStateCheckProg []byte
 
-var logsCheckProgram []byte
-
 func init() {
 	ops, err := logic.AssembleString(globalTestSource)
 	if err != nil {
@@ -1109,10 +1107,13 @@ int 30
 <
 bnz loop
 `)
+
 	require.NoError(t, err)
 	approval := ops.Program
 	ops, err = logic.AssembleString("int 1")
 	clst := ops.Program
+	ops, err = logic.AssembleString("#pragma version 5 \nint 1")
+	approv := ops.Program
 	require.NoError(t, err)
 	var appIdx basics.AppIndex = 1
 	creator := randomAddress()
@@ -1129,6 +1130,16 @@ bnz loop
 					},
 				},
 			},
+			{
+				Txn: transactions.Transaction{
+					Header: transactions.Header{Sender: sender},
+					Type:   protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: appIdx + 1,
+						OnCompletion:  transactions.OptInOC,
+					},
+				},
+			},
 		},
 		Apps: []generated.Application{
 			{
@@ -1136,6 +1147,15 @@ bnz loop
 				Params: generated.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
+					ClearStateProgram: clst,
+					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+				},
+			},
+			{
+				Id: uint64(appIdx + 1),
+				Params: generated.ApplicationParams{
+					Creator:           creator.String(),
+					ApprovalProgram:   approv,
 					ClearStateProgram: clst,
 					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
 				},
@@ -1160,4 +1180,10 @@ bnz loop
 	}
 	logs := *response.Txns[0].Logs
 	assert.Equal(t, len(logs), 29)
+	encoded := string(protocol.EncodeJSON(response.Txns[0]))
+	assert.Contains(t, encoded, "logs")
+
+	assert.Empty(t, response.Txns[1].Logs)
+	encoded = string(protocol.EncodeJSON(response.Txns[1]))
+	assert.NotContains(t, encoded, "logs")
 }
