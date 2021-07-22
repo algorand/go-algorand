@@ -53,6 +53,7 @@ const defaultDataExchangeRate = minDataExchangeRateThreshold
 const defaultRelayToRelayDataExchangeRate = 10 * 1024 * 1024 / 8 // 10Mbps
 const bloomFilterRetryCount = 3                                  // number of bloom filters we would try against each transaction group before skipping it.
 const maxTransactionGroupTrackers = 15                           // number of different bloom filter parameters we store before rolling over
+const maxProposalFilterCacheSize = 20                            // number of entries we would hold in the proposalFilterCache
 
 const (
 	// peerStateStartup is before the timeout for the sending the first message to the peer has reached.
@@ -169,6 +170,9 @@ type Peer struct {
 	// used by the selectPendingTransactions method, the lastSelectedTransactionsCount contains the number of entries selected on the previous iteration.
 	// this value is used to optimize the memory preallocation for the selection IDs array.
 	lastSelectedTransactionsCount int
+
+	// proposalFilterCache keeps track of the most recent proposal bytes that the peer does not want to receive
+	proposalFilterCache proposalFilterCache
 }
 
 // requestParamsGroupCounterState stores the latest group counters for a given set of request params.
@@ -255,6 +259,7 @@ func makePeer(networkPeer interface{}, isOutgoing bool, isLocalNodeRelay bool) *
 		dataExchangeRate:           defaultDataExchangeRate,
 		transactionPoolAckCh:       make(chan uint64, maxAcceptedMsgSeq),
 		transactionPoolAckMessages: make([]uint64, 0, maxAcceptedMsgSeq),
+		proposalFilterCache:        makeProposalFilterCache(maxProposalFilterCacheSize),
 	}
 	if isLocalNodeRelay {
 		p.requestedTransactionsModulator = 1
@@ -299,6 +304,107 @@ func (p *Peer) getAcceptedMessages() []uint64 {
 	acceptedMessages := p.transactionPoolAckMessages
 	p.transactionPoolAckMessages = make([]uint64, 0, maxAcceptedMsgSeq)
 	return acceptedMessages
+}
+
+func (p *Peer) selectProposalTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, startIndex int) (selectedTxns []transactions.SignedTxGroup, nextIndex int) {
+	windowLengthBytes := int(uint64(sendWindow) * p.dataExchangeRate / uint64(time.Second))
+	accumulatedSize := 0
+
+	selectedIDsSliceLength := len(pendingTransactions) - startIndex
+	if selectedIDsSliceLength > p.lastSelectedTransactionsCount*2 {
+		selectedIDsSliceLength = p.lastSelectedTransactionsCount * 2
+	}
+	//selectedTxnIDs = make([]transactions.Txid, 0, selectedIDsSliceLength)
+	selectedTxns = make([]transactions.SignedTxGroup, 0, selectedIDsSliceLength)
+
+	windowSizedReached := false
+	//hasMorePendingTransactions := false
+
+	// create a list of all the bloom filters that might need to be tested. This list excludes bloom filters
+	// which has the same modulator and a different offset.
+	var effectiveBloomFilters []int
+	effectiveBloomFilters = make([]int, 0, len(p.recentIncomingBloomFilters))
+	for filterIdx := len(p.recentIncomingBloomFilters) - 1; filterIdx >= 0; filterIdx-- {
+		if p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Modulator == p.requestedTransactionsModulator && p.recentIncomingBloomFilters[filterIdx].filter.encodingParams.Offset != p.requestedTransactionsOffset {
+			continue
+		}
+		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
+	}
+
+	//removedTxn := 0
+	grpIdx := startIndex
+scanLoop:
+	for ; grpIdx < len(pendingTransactions); grpIdx++ {
+		txID := pendingTransactions[grpIdx].GroupTransactionID
+
+		// check if the peer would be interested in these messages -
+		//if p.requestedTransactionsModulator > 1 {
+		//	if txidToUint64(txID)%uint64(p.requestedTransactionsModulator) != uint64(p.requestedTransactionsOffset) {
+		//		continue
+		//	}
+		//}
+
+		// filter out transactions that we already previously sent.
+		//if p.recentSentTransactions.contained(txID) {
+		//	// we already sent that transaction. no need to send again.
+		//	continue
+		//}
+
+		// check if the peer already received these messages from a different source other than us.
+		for _, filterIdx := range effectiveBloomFilters {
+			if p.recentIncomingBloomFilters[filterIdx].filter.test(txID) {
+				//removedTxn++
+				continue scanLoop
+			}
+		}
+
+		if windowSizedReached {
+			//hasMorePendingTransactions = true
+			break
+		}
+		selectedTxns = append(selectedTxns, pendingTransactions[grpIdx])
+		//selectedTxnIDs = append(selectedTxnIDs, txID)
+
+		// add the size of the transaction group
+		accumulatedSize += pendingTransactions[grpIdx].EncodedLength
+
+		if accumulatedSize > windowLengthBytes {
+			windowSizedReached = true
+		}
+	}
+
+	//p.lastSelectedTransactionsCount = len(selectedTxnIDs)
+
+	// if we've over-allocated, resize the buffer; This becomes important on relays,
+	// as storing these arrays can consume considerable amount of memory.
+	//if len(selectedTxnIDs)*2 < cap(selectedTxnIDs) {
+	//	exactBuffer := make([]transactions.Txid, len(selectedTxnIDs))
+	//	copy(exactBuffer, selectedTxnIDs)
+	//	selectedTxnIDs = exactBuffer
+	//}
+
+	// update the lastTransactionSelectionGroupCounter if needed -
+	// if we selected any transaction to be sent, update the lastTransactionSelectionGroupCounter with the latest
+	// group counter. If the startIndex was *after* the last pending transaction, it means that we don't
+	// need to update the lastTransactionSelectionGroupCounter since it's already ahead of everything in the pending transactions.
+	//if grpIdx >= 0 && startIndex < len(pendingTransactions) {
+	//	if grpIdx == len(pendingTransactions) {
+	//		if grpIdx > 0 {
+	//			p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, pendingTransactions[grpIdx-1].GroupCounter+1)
+	//		}
+	//	} else {
+	//		p.lastTransactionSelectionTracker.set(p.requestedTransactionsOffset, p.requestedTransactionsModulator, pendingTransactions[grpIdx].GroupCounter)
+	//	}
+	//}
+	//
+	//if !hasMorePendingTransactions {
+	//	// we're done with the current sequence.
+	//	p.messageSeriesPendingTransactions = nil
+	//}
+
+	//fmt.Printf("selectPendingTransactions : selected %d transactions, %d not needed and aborted after exceeding data length %d/%d more = %v\n", len(selectedTxnIDs), removedTxn, accumulatedSize, windowLengthBytes, hasMorePendingTransactions)
+
+	return selectedTxns, grpIdx
 }
 
 func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTranscationsSet bool) {

@@ -93,6 +93,9 @@ type syncState struct {
 	messageSendWaitGroup sync.WaitGroup
 
 	xorBuilder bloom.XorBuilder
+
+	sendCtx       context.Context
+	cancelSendCtx context.CancelFunc
 }
 
 func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
@@ -142,6 +145,8 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 				profNewRounnd.start()
 				s.onNewRoundEvent(ent)
 				profNewRounnd.end()
+			case proposalBroadcastRequestEvent:
+				s.onBroadcastProposalRequestEvent(ent)
 			}
 			continue
 		case <-nextPeerStateCh:
@@ -182,6 +187,8 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 				profNewRounnd.start()
 				s.onNewRoundEvent(ent)
 				profNewRounnd.end()
+			case proposalBroadcastRequestEvent:
+				s.onBroadcastProposalRequestEvent(ent)
 			}
 		case <-nextPeerStateCh:
 			profIdle.end()
@@ -417,4 +424,9 @@ func (s *syncState) updatePeersRequestParams(peers []*Peer) {
 			}
 		}
 	}
+}
+
+func (s *syncState) onBroadcastProposalRequestEvent(ent Event) {
+	peers := s.getPeers()
+	s.broadcastProposal(ent.proposalBroadcastRequest, peers)
 }

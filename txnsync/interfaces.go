@@ -26,8 +26,9 @@ import (
 type eventType int
 
 const (
-	transactionPoolChangedEvent eventType = 1
-	newRoundEvent               eventType = 2
+	transactionPoolChangedEvent   eventType = 1
+	newRoundEvent                 eventType = 2
+	proposalBroadcastRequestEvent eventType = 3
 )
 
 // RoundSettings is used to communicate the transaction syncer setting for a specific round
@@ -36,12 +37,19 @@ type RoundSettings struct {
 	FetchTransactions bool // for non-relays that has no participation keys, there is no need to request transactions
 }
 
+// ProposalBroadcastRequest is used for the node connector to request a proposal broadcast
+type ProposalBroadcastRequest struct {
+	proposalBytes []byte
+	txGroups      []transactions.SignedTxGroup
+}
+
 // Event is an external triggering event
 type Event struct {
 	eventType
 
-	transactionPoolSize int
-	roundSettings       RoundSettings
+	transactionPoolSize      int
+	roundSettings            RoundSettings
+	proposalBroadcastRequest ProposalBroadcastRequest
 }
 
 // IncomingMessageHandler is the signature of the incoming message handler used by the transaction sync to receive network messages

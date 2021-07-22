@@ -272,8 +272,8 @@ func (z addresses) MarshalMsg(b []byte) (o []byte) {
 	} else {
 		o = msgp.AppendArrayHeader(o, uint32(len(z)))
 	}
-	for za0005 := range z {
-		o = z[za0005].MarshalMsg(o)
+	for za0007 := range z {
+		o = z[za0007].MarshalMsg(o)
 	}
 	return
 }
@@ -326,8 +326,8 @@ func (_ *addresses) CanUnmarshalMsg(z interface{}) bool {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z addresses) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
-	for za0005 := range z {
-		s += z[za0005].Msgsize()
+	for za0007 := range z {
+		s += z[za0007].Msgsize()
 	}
 	return
 }
