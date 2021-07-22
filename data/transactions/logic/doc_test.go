@@ -20,10 +20,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestOpDocs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
 		opsSeen[op.Name] = false
@@ -51,6 +54,8 @@ func TestOpDocs(t *testing.T) {
 }
 
 func TestOpGroupCoverage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
 		opsSeen[op.Name] = false
@@ -73,6 +78,8 @@ func TestOpGroupCoverage(t *testing.T) {
 }
 
 func TestOpDoc(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	xd := OpDoc("txn")
 	require.NotEmpty(t, xd)
 	xd = OpDoc("NOT AN INSTRUCTION")
@@ -80,6 +87,8 @@ func TestOpDoc(t *testing.T) {
 }
 
 func TestOpImmediateNote(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	xd := OpImmediateNote("txn")
 	require.NotEmpty(t, xd)
 	xd = OpImmediateNote("+")
@@ -100,6 +109,8 @@ func TestAllImmediatesDocumented(t *testing.T) {
 }
 
 func TestOpDocExtra(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	xd := OpDocExtra("bnz")
 	require.NotEmpty(t, xd)
 	xd = OpDocExtra("-")
@@ -107,6 +118,8 @@ func TestOpDocExtra(t *testing.T) {
 }
 
 func TestOpAllCosts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := OpAllCosts("+")
 	require.Len(t, a, 1)
 	require.Equal(t, 1, a[0].Cost)
@@ -119,6 +132,8 @@ func TestOpAllCosts(t *testing.T) {
 }
 
 func TestOnCompletionDescription(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	desc := OnCompletionDescription(0)
 	require.Equal(t, "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.", desc)
 
@@ -127,6 +142,8 @@ func TestOnCompletionDescription(t *testing.T) {
 }
 
 func TestFieldDocs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	txnFields := TxnFieldDocs()
 	require.Greater(t, len(txnFields), 0)
 
