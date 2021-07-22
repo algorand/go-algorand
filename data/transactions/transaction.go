@@ -19,6 +19,7 @@ package transactions
 import (
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -559,7 +560,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 }
 
 func (tx Transaction) blockProofPKWellFormed(proto config.ConsensusParams) error {
-	isEmptyBlock := tx.KeyregTxnFields.BlockProofPK == crypto.VerifyingKey{}
+	isEmptyBlock := tx.KeyregTxnFields.BlockProofPK == merklekeystore.Verifier{}
 	if !proto.EnableBlockProofKeyregCheck {
 		// make certain empty key is stored.
 		if !isEmptyBlock {

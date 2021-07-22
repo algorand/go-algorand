@@ -51,6 +51,7 @@ type (
 	Signature struct {
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
+
 		Proof                `codec:"prf"`
 		VerifyingKey         crypto.VerifyingKey `codec:"vkey"`
 	}
@@ -60,9 +61,9 @@ type (
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 		// these keys are the keys used to sign in a round.
 		// should be disposed of once possible.
-		EphemeralKeys    EphemeralKeys `codec:"keys"`
-		FirstRound       uint64        `codec:"srnd"`
-		merklearray.Tree `codec:"tree"`
+		EphemeralKeys EphemeralKeys    `codec:"keys"`
+		FirstRound    uint64           `codec:"srnd"`
+		Tree          merklearray.Tree `codec:"tree"`
 	}
 
 	// Verifier Is a way to verify a Signature produced by merklekeystore.Signer.
@@ -125,7 +126,7 @@ func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType) (*Signe
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (m *Signer) GetVerifier() *Verifier {
 	return &Verifier{
-		Root: m.Root(),
+		Root: m.Tree.Root(),
 	}
 }
 
@@ -136,7 +137,7 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 		return Signature{}, err
 	}
 
-	proof, err := m.Prove([]uint64{pos})
+	proof, err := m.Tree.Prove([]uint64{pos})
 	if err != nil {
 		return Signature{}, err
 	}
