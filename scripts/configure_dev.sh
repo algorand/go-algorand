@@ -72,8 +72,10 @@ if [ "${OS}" = "linux" ]; then
         sudo "$SCRIPTPATH/install_linux_deps.sh"
     fi
 elif [ "${OS}" = "darwin" ]; then
-    brew update
-    brew tap homebrew/cask
+    if [ "${CIRCLECI}" != "true" ]; then
+        brew update
+        brew tap homebrew/cask
+    fi
     install_or_upgrade pkg-config
     install_or_upgrade boost
     install_or_upgrade libtool
