@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -72,7 +74,8 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 
 	crypto.RandBytes(data.VoteID[:])
 	crypto.RandBytes(data.SelectionID[:])
-	data.BlockProofID = crypto.NewSigner(crypto.PlaceHolderType).GetSigner().GetVerifyingKey()
+	crypto.RandBytes(data.BlockProofID.Root[:])
+
 	data.VoteFirstValid = basics.Round(crypto.RandUint64())
 	data.VoteLastValid = basics.Round(crypto.RandUint64())
 	data.VoteKeyDilution = crypto.RandUint64()
@@ -608,7 +611,7 @@ func TestAccountStorageWithBlockProofID(t *testing.T) {
 
 func allAccountsHaveBlockProofPKs(accts map[basics.Address]basics.AccountData) bool {
 	for _, data := range accts {
-		if !data.BlockProofID.IsValid() {
+		if data.BlockProofID == (merklekeystore.Verifier{}) {
 			return false
 		}
 	}

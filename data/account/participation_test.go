@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"os"
 	"strings"
 	"testing"
@@ -217,11 +218,11 @@ func TestKeyRegCreation(t *testing.T) {
 
 	cur := config.Consensus[protocol.ConsensusCurrentVersion]
 	txn := ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, cur)
-	a.Equal(crypto.VerifyingKey{}, txn.BlockProofPK)
+	a.Equal(merklekeystore.Verifier{}, txn.BlockProofPK)
 
 	future := config.Consensus[protocol.ConsensusFuture]
 	txn = ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, future)
-	a.NotEqual(crypto.VerifyingKey{}, txn.BlockProofPK)
+	a.NotEqual(merklekeystore.Verifier{}, txn.BlockProofPK)
 }
 
 func closeDBS(dbAccessor ...db.Accessor) {
@@ -353,7 +354,7 @@ type comparablePartition struct {
 
 	VRF        crypto.VRFSecrets
 	Voting     []byte
-	blockProof crypto.SignatureAlgorithm
+	blockProof merklekeystore.Signer
 
 	FirstValid basics.Round
 	LastValid  basics.Round
