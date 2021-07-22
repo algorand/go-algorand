@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"encoding/base64"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -1283,7 +1284,7 @@ type partkeyInfo struct {
 	LastValid       basics.Round                    `codec:"last"`
 	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID     crypto.VRFVerifier              `codec:"sel"`
-	BlockProofID    crypto.VerifyingKey             `codec:"blkprf"`
+	BlockProofID    merklekeystore.Verifier         `codec:"blkprf"`
 	VoteKeyDilution uint64                          `codec:"voteKD"`
 }
 
@@ -1316,7 +1317,7 @@ var partkeyInfoCmd = &cobra.Command{
 					VoteKeyDilution: part.KeyDilution,
 				}
 				if certSigner := part.BlockProofSigner(); certSigner != nil {
-					info.BlockProofID = certSigner.GetSigner().GetVerifyingKey()
+					info.BlockProofID = *certSigner.GetVerifier()
 				}
 				infoString := protocol.EncodeJSON(&info)
 				fmt.Printf("File: %s\n%s\n", filename, string(infoString))

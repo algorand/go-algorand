@@ -601,28 +601,37 @@ func (z *Signature) MsgIsZero() bool {
 func (z *Signer) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(2)
-	var zb0002Mask uint8 /* 4 bits */
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
 	if (*z).EphemeralKeys.MsgIsZero() {
-		zb0002Len--
-		zb0002Mask |= 0x2
+		zb0001Len--
+		zb0001Mask |= 0x2
 	}
 	if (*z).FirstRound == 0 {
-		zb0002Len--
-		zb0002Mask |= 0x8
+		zb0001Len--
+		zb0001Mask |= 0x4
 	}
-	// variable map header, size zb0002Len
-	o = append(o, 0x80|uint8(zb0002Len))
-	if zb0002Len != 0 {
-		if (zb0002Mask & 0x2) == 0 { // if not empty
+	if (*z).Tree.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "keys"
 			o = append(o, 0xa4, 0x6b, 0x65, 0x79, 0x73)
 			o = (*z).EphemeralKeys.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x8) == 0 { // if not empty
+		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "srnd"
 			o = append(o, 0xa4, 0x73, 0x72, 0x6e, 0x64)
 			o = msgp.AppendUint64(o, (*z).FirstRound)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "tree"
+			o = append(o, 0xa4, 0x74, 0x72, 0x65, 0x65)
+			o = (*z).Tree.MarshalMsg(o)
 		}
 	}
 	return
@@ -637,33 +646,41 @@ func (_ *Signer) CanMarshalMsg(z interface{}) bool {
 func (z *Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 int
-	var zb0003 bool
-	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
+		if zb0001 > 0 {
+			zb0001--
 			bts, err = (*z).EphemeralKeys.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "EphemeralKeys")
 				return
 			}
 		}
-		if zb0002 > 0 {
-			zb0002--
+		if zb0001 > 0 {
+			zb0001--
 			(*z).FirstRound, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FirstRound")
 				return
 			}
 		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Tree.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Tree")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -674,11 +691,11 @@ func (z *Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 {
+		if zb0002 {
 			(*z) = Signer{}
 		}
-		for zb0002 > 0 {
-			zb0002--
+		for zb0001 > 0 {
+			zb0001--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -695,6 +712,12 @@ func (z *Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).FirstRound, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstRound")
+					return
+				}
+			case "tree":
+				bts, err = (*z).Tree.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Tree")
 					return
 				}
 			default:
@@ -717,13 +740,13 @@ func (_ *Signer) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Signer) Msgsize() (s int) {
-	s = 1 + 5 + (*z).EphemeralKeys.Msgsize() + 5 + msgp.Uint64Size
+	s = 1 + 5 + (*z).EphemeralKeys.Msgsize() + 5 + msgp.Uint64Size + 5 + (*z).Tree.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Signer) MsgIsZero() bool {
-	return ((*z).EphemeralKeys.MsgIsZero()) && ((*z).FirstRound == 0)
+	return ((*z).EphemeralKeys.MsgIsZero()) && ((*z).FirstRound == 0) && ((*z).Tree.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

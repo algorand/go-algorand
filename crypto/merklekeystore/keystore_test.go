@@ -103,7 +103,7 @@ func TestSignatureStructure(t *testing.T) {
 	key := signer.EphemeralKeys.SignatureAlgorithms[pos]
 	a.Equal(sig.VerifyingKey, key.GetSigner().GetVerifyingKey())
 
-	proof, err := signer.Prove([]uint64{1})
+	proof, err := signer.Tree.Prove([]uint64{1})
 	a.NoError(err)
 	a.Equal(Proof(proof), sig.Proof)
 
@@ -199,6 +199,17 @@ func TestVerifierMarshal(t *testing.T) {
 	verifierToDecodeInto := Verifier{}
 	protocol.Decode(bs, &verifierToDecodeInto)
 	a.Equal(*verifier, verifierToDecodeInto)
+}
+
+func TestMarshal(t *testing.T) {
+	a := require.New(t)
+	signer, err := New(0, 0, crypto.PlaceHolderType)
+	a.NoError(err)
+
+	out := protocol.Encode(signer)
+	decodeInto := &Signer{}
+	a.NoError(protocol.Decode(out, decodeInto))
+	a.Equal(*signer, *decodeInto)
 }
 
 func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {

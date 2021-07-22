@@ -26,15 +26,17 @@ import (
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
 // at each height.
 type Tree struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	// Level 0 is the leaves.
-	levels []layer
+	Levels []Layer `codec:"lvls,allocbound=-"`
 }
 
-func (tree *Tree) topLayer() layer {
-	return tree.levels[len(tree.levels)-1]
+func (tree *Tree) topLayer() Layer {
+	return tree.Levels[len(tree.Levels)-1]
 }
 
-func buildWorker(ws *workerState, array Array, leaves layer, errs chan error) {
+func buildWorker(ws *workerState, array Array, leaves Layer, errs chan error) {
 	ws.started()
 	batchSize := uint64(1)
 
@@ -68,7 +70,7 @@ done:
 // Build constructs a Merkle tree given an array.
 func Build(array Array) (*Tree, error) {
 	arraylen := array.Length()
-	leaves := make(layer, arraylen)
+	leaves := make(Layer, arraylen)
 	errs := make(chan error, 1)
 
 	ws := newWorkerState(arraylen)
@@ -86,10 +88,10 @@ func Build(array Array) (*Tree, error) {
 	tree := &Tree{}
 
 	if arraylen > 0 {
-		tree.levels = []layer{leaves}
+		tree.Levels = []Layer{leaves}
 
 		for len(tree.topLayer()) > 1 {
-			tree.levels = append(tree.levels, tree.topLayer().up())
+			tree.Levels = append(tree.Levels, tree.topLayer().up())
 		}
 	}
 
@@ -99,7 +101,7 @@ func Build(array Array) (*Tree, error) {
 // Root returns the root hash of the tree.
 func (tree *Tree) Root() crypto.Digest {
 	// Special case: commitment to zero-length array
-	if len(tree.levels) == 0 {
+	if len(tree.Levels) == 0 {
 		var zero crypto.Digest
 		return zero
 	}
@@ -117,7 +119,7 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 	}
 
 	// Special case: commitment to zero-length array
-	if len(tree.levels) == 0 {
+	if len(tree.Levels) == 0 {
 		return nil, fmt.Errorf("proving in zero-length commitment")
 	}
 
@@ -125,8 +127,8 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 
 	pl := make(partialLayer, 0, len(idxs))
 	for _, pos := range idxs {
-		if pos >= uint64(len(tree.levels[0])) {
-			return nil, fmt.Errorf("pos %d larger than leaf count %d", pos, len(tree.levels[0]))
+		if pos >= uint64(len(tree.Levels[0])) {
+			return nil, fmt.Errorf("pos %d larger than leaf count %d", pos, len(tree.Levels[0]))
 		}
 
 		// Discard duplicates
@@ -136,7 +138,7 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 
 		pl = append(pl, layerItem{
 			pos:  pos,
-			hash: tree.levels[0][pos],
+			hash: tree.Levels[0][pos],
 		})
 	}
 
@@ -144,7 +146,7 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 		tree: tree,
 	}
 
-	for l := uint64(0); l < uint64(len(tree.levels)-1); l++ {
+	for l := uint64(0); l < uint64(len(tree.Levels)-1); l++ {
 		var err error
 		pl, err = pl.up(s, l, validateProof)
 		if err != nil {
@@ -154,7 +156,7 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 
 	// Confirm that we got the same root hash
 	if len(pl) != 1 {
-		return nil, fmt.Errorf("internal error: partial layer produced %d hashes", len(pl))
+		return nil, fmt.Errorf("internal error: partial Layer produced %d hashes", len(pl))
 	}
 
 	if validateProof {
@@ -201,7 +203,7 @@ func Verify(root crypto.Digest, elems map[uint64]crypto.Digest, proof []crypto.D
 		}
 
 		if l > 64 {
-			return fmt.Errorf("Verify exceeded 64 levels, more than 2^64 leaves not supported")
+			return fmt.Errorf("Verify exceeded 64 Levels, more than 2^64 leaves not supported")
 		}
 	}
 

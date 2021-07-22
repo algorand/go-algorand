@@ -268,7 +268,7 @@ func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion,
 				data.VoteLastValid = part.LastValid
 				data.VoteKeyDilution = part.KeyDilution
 				if config.Consensus[protocol.ConsensusCurrentVersion].EnableBlockProofKeyregCheck {
-					data.BlockProofID = part.BlockProofSigner().GetSigner().GetVerifyingKey()
+					data.BlockProofID = *part.BlockProofSigner().GetVerifier()
 				}
 			}
 
