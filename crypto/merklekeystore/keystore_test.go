@@ -122,9 +122,9 @@ func TestSigning(t *testing.T) {
 
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
 
-	sig, err := signer.Sign(hashable, start+1)
+	sig, err := signer.Sign(hashable, start)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(start, start+1, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(start, start, hashable, sig))
 
 	_, err = signer.Sign(hashable, start-1)
 	a.Error(err)
