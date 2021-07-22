@@ -20,10 +20,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConfigSystem(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	s, tm, err := SystemConfig()
 	a.NoError(err)

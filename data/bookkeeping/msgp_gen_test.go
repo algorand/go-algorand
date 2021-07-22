@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Block{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -71,6 +73,7 @@ func BenchmarkUnmarshalBlock(b *testing.B) {
 }
 
 func TestMarshalUnmarshalBlockHeader(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := BlockHeader{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -130,6 +133,7 @@ func BenchmarkUnmarshalBlockHeader(b *testing.B) {
 }
 
 func TestMarshalUnmarshalCompactCertState(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := CompactCertState{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -189,6 +193,7 @@ func BenchmarkUnmarshalCompactCertState(b *testing.B) {
 }
 
 func TestMarshalUnmarshalGenesis(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Genesis{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -248,6 +253,7 @@ func BenchmarkUnmarshalGenesis(b *testing.B) {
 }
 
 func TestMarshalUnmarshalGenesisAllocation(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := GenesisAllocation{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -307,6 +313,7 @@ func BenchmarkUnmarshalGenesisAllocation(b *testing.B) {
 }
 
 func TestMarshalUnmarshalRewardsState(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := RewardsState{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -366,6 +373,7 @@ func BenchmarkUnmarshalRewardsState(b *testing.B) {
 }
 
 func TestMarshalUnmarshalUpgradeVote(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := UpgradeVote{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)

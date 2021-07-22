@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type balanceRecord struct {
@@ -467,6 +468,8 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 }
 
 func TestEvalModes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	// ed25519verify and err are tested separately below
 
@@ -728,6 +731,8 @@ pop
 }
 
 func TestBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	ep, ledger := makeSampleEnv()
@@ -793,6 +798,8 @@ func testApp(t *testing.T, program string, ep EvalParams, problems ...string) ba
 }
 
 func TestMinBalance(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	ep, ledger := makeSampleEnv()
@@ -831,6 +838,8 @@ func TestMinBalance(t *testing.T) {
 }
 
 func TestAppCheckOptedIn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	txn := makeSampleTxn()
@@ -876,6 +885,8 @@ func TestAppCheckOptedIn(t *testing.T) {
 }
 
 func TestAppReadLocalState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	text := `int 2  // account idx
@@ -1023,6 +1034,8 @@ int 0
 }
 
 func TestAppReadGlobalState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	text := `int 0
@@ -1228,6 +1241,8 @@ int 1
 `
 
 func TestAssets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	for _, field := range AssetHoldingFieldNames {
 		if !strings.Contains(assetsTestProgram, field) {
@@ -1428,6 +1443,8 @@ func TestAppParams(t *testing.T) {
 }
 
 func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	sourceRead := `intcblock 0 100 0x77 1
@@ -1545,6 +1562,8 @@ intc_1
 }
 
 func TestAppLocalStateReadWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	ep := defaultEvalParams(nil, nil)
@@ -1820,6 +1839,8 @@ int 1
 }
 
 func TestAppGlobalReadWriteDeleteErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	sourceRead := `int 0
@@ -1899,6 +1920,8 @@ int 1
 }
 
 func TestAppGlobalReadWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	// check writing ints and bytes
@@ -2116,6 +2139,8 @@ byte 0x414c474f
 }
 
 func TestAppGlobalReadOtherApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	source := `int 2 // ForeignApps index
 byte "mykey1"
@@ -2161,6 +2186,8 @@ byte "myval"
 }
 
 func TestBlankKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	source := `
 byte ""
@@ -2195,6 +2222,8 @@ int 7
 }
 
 func TestAppGlobalDelete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	// check write/delete/read
@@ -2352,6 +2381,8 @@ int 1
 }
 
 func TestAppLocalDelete(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 
 	// check write/delete/read
@@ -2564,6 +2595,8 @@ int 1
 }
 
 func TestEnumFieldErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	ep := defaultEvalParams(nil, nil)
 
 	source := `txn Amount`
@@ -2656,6 +2689,8 @@ pop
 }
 
 func TestReturnTypes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// Ensure all opcodes return values they supposed to according to the OpSpecs table
 	t.Parallel()
 	typeToArg := map[StackType]string{
@@ -2790,6 +2825,7 @@ func TestReturnTypes(t *testing.T) {
 }
 
 func TestRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, _ := makeSampleEnv()
 	source := "global Round; int 1; >="
@@ -2797,6 +2833,7 @@ func TestRound(t *testing.T) {
 }
 
 func TestLatestTimestamp(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, _ := makeSampleEnv()
 	source := "global LatestTimestamp; int 1; >="
@@ -2804,6 +2841,7 @@ func TestLatestTimestamp(t *testing.T) {
 }
 
 func TestCurrentApplicationID(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, ledger := makeSampleEnv()
 	ledger.appID = basics.AppIndex(42)
@@ -2812,6 +2850,7 @@ func TestCurrentApplicationID(t *testing.T) {
 }
 
 func TestAppLoop(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, _ := makeSampleEnv()
 

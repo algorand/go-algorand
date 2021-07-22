@@ -25,6 +25,7 @@ import (
 
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func GenerateRandomBytes(n int) []byte {
@@ -41,6 +42,8 @@ func GenerateRandomBytes(n int) []byte {
 // this test checks that two accounts' balances stay up to date
 // as they send each other money many times
 func TestAccountsCanSendMoney(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numberOfSends := 25
 	if testing.Short() {
 		numberOfSends = 3
