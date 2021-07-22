@@ -15,111 +15,111 @@ workflows:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore: /pull\/[0-9]+/
       - amd64_test_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only: /pull\/[0-9]+/
       - amd64_integration:
           requires:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore: /pull\/[0-9]+/
       - amd64_integration_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only: /pull\/[0-9]+/
       - amd64_e2e_subs:
           requires:
             - amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore: /pull\/[0-9]+/
       - amd64_e2e_subs_nightly:
           requires:
             - amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only: /pull\/[0-9]+/
       - arm64_build
       - arm64_test:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore: /pull\/[0-9]+/
       - arm64_test_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only: /pull\/[0-9]+/
       - arm64_integration:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore: /pull\/[0-9]+/
       - arm64_integration_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only: /pull\/[0-9]+/
       - arm64_e2e_subs:
           requires:
             - arm64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore: /pull\/[0-9]+/
       - arm64_e2e_subs_nightly:
           requires:
             - arm64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only: /pull\/[0-9]+/
       - mac_amd64_build
       - mac_amd64_test:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore: /pull\/[0-9]+/
       - mac_amd64_test_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only: /pull\/[0-9]+/
       - mac_amd64_integration:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore: /pull\/[0-9]+/
       - mac_amd64_integration_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only: /pull\/[0-9]+/
       - mac_amd64_e2e_subs:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              ignore: "rel/nightly"
+              ignore: /pull\/[0-9]+/
       - mac_amd64_e2e_subs_nightly:
           requires:
             - mac_amd64_build
           filters:
             branches:
-              only: "rel/nightly"
+              only: /pull\/[0-9]+/
       #- windows_x64_build
 
 commands:
@@ -297,7 +297,7 @@ commands:
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
             export PARALLEL_FLAG="-p 1"
-            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension"  -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+            make full integration
       - store_artifacts:
           path: /tmp/results
           destination: test-results
