@@ -1701,14 +1701,14 @@ func opDig(cx *evalContext) {
 
 func opCover(cx *evalContext) {
 	depth := int(cx.program[cx.pc+1])
-	idx := len(cx.stack) - 1 - depth
+	topIdx := len(cx.stack) - 1
+	idx := topIdx - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand cover
 	// so we can't expect our stack to be prechecked.
 	if idx < 0 {
 		cx.err = fmt.Errorf("cover %d with stack size = %d", depth, len(cx.stack))
 		return
 	}
-	topIdx := len(cx.stack) - 1
 	sv := cx.stack[topIdx]
 	copy(cx.stack[idx+1:], cx.stack[idx:])
 	cx.stack[idx] = sv

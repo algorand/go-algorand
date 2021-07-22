@@ -4407,6 +4407,7 @@ func TestCover(t *testing.T) {
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; int 2; ==; return", 5)
 	testAccepts(t, "int 4; int 3; int 2; int 1; cover 2; pop; pop; int 1; ==; return", 5)
 	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; cover 11; int 2; ==; return"), 5)
+	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; cover 4; int 2; ==; return"), 5)
 }
 
 func TestUncover(t *testing.T) {
@@ -4417,6 +4418,7 @@ func TestUncover(t *testing.T) {
 	testAccepts(t, "int 4; int 3; int 2; int 1; uncover 3; pop; pop; int 2; ==; return", 5)
 	testAccepts(t, "int 1; int 3; int 2; int 1; uncover 3; pop; pop; int 2; ==; return", 5)
 	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; uncover 11; int 3; ==; return"), 5)
+	testPanics(t, obfuscate("int 4; int 3; int 2; int 1; uncover 4; int 2; ==; return"), 5)
 }
 
 func TestPush(t *testing.T) {

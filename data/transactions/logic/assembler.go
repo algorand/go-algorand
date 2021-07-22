@@ -1154,7 +1154,6 @@ func typeUncover(ops *OpStream, args []string) (StackTypes, StackTypes) {
 		}
 		returns[len(returns)-1] = sv
 	}
-	fmt.Println(returns)
 	return anys, returns
 }
 
