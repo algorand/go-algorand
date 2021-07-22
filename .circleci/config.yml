@@ -8,81 +8,81 @@ workflows:
   version: 2
   build_pr:
     jobs:
-      # - codegen_verification
-      # - amd64_build
-      # - amd64_test:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         ignore: "rel/nightly"
-      # - amd64_test_nightly:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         only: "rel/nightly"
-      # - amd64_integration:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         ignore: "rel/nightly"
-      # - amd64_integration_nightly:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         only: "rel/nightly"
-      # - amd64_e2e_subs:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         ignore: "rel/nightly"
-      # - amd64_e2e_subs_nightly:
-      #     requires:
-      #       - amd64_build
-      #     filters:
-      #       branches:
-      #         only: "rel/nightly"
-      # - arm64_build
-      # - arm64_test:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         ignore: "rel/nightly"
-      # - arm64_test_nightly:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         only: "rel/nightly"
-      # - arm64_integration:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         ignore: "rel/nightly"
-      # - arm64_integration_nightly:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         only: "rel/nightly"
-      # - arm64_e2e_subs:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         ignore: "rel/nightly"
-      # - arm64_e2e_subs_nightly:
-      #     requires:
-      #       - arm64_build
-      #     filters:
-      #       branches:
-      #         only: "rel/nightly"
+      - codegen_verification
+      - amd64_build
+      - amd64_test:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - amd64_test_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - amd64_integration:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - amd64_integration_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - amd64_e2e_subs:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - amd64_e2e_subs_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - arm64_build
+      - arm64_test:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - arm64_test_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - arm64_integration:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - arm64_integration_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - arm64_e2e_subs:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - arm64_e2e_subs_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: "rel/nightly"
       - mac_amd64_build
       - mac_amd64_test:
           requires:

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -e
-set -x
 
 ./scripts/check_golang_version.sh dev
 
