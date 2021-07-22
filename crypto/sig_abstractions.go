@@ -16,10 +16,19 @@
 
 package crypto
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/algorand/go-algorand/protocol"
+)
 
-// AlgorithmType enum type for signing algorithms
-type AlgorithmType uint64
+type (
+	//ByteSignature using unspecified bound.
+	//msgp:allocbound ByteSignature
+	ByteSignature []byte
+
+	// AlgorithmType enum type for signing algorithms
+	AlgorithmType uint64
+)
 
 // all AlgorithmType enums
 const (
@@ -33,9 +42,6 @@ const (
 func (t AlgorithmType) isValidType() bool {
 	return minAlgorithmType < t && t < maxAlgorithmType
 }
-
-// ByteSignature is a cryptographic signature represented by bytes.
-type ByteSignature []byte
 
 // Signer interface represents the possible operations that can be done with a signing key.
 type Signer interface {
@@ -65,14 +71,20 @@ type SignatureAlgorithm struct {
 
 // VerifyingKey is an abstraction of a key store of verifying keys.
 // it can return the correct key according to the underlying algorithm.
+// Implements Hashable too.
 //
 // NOTE: The VerifyingKey key might not be a valid key if a malicious client sent it over the network
 // make certain it is valid.
 type VerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Type AlgorithmType      `codec:"verType"`
-	Pack PackedVerifyingKey `codec:"pubKeys"`
+	Type AlgorithmType      `codec:"type"`
+	Pack PackedVerifyingKey `codec:"pks"`
+}
+
+// ToBeHashed makes it easier to hash the VeryfyingKey struct.
+func (z *VerifyingKey) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.VerifyingKey, protocol.Encode(z)
 }
 
 // IsValid Makes certain struct is valid.
