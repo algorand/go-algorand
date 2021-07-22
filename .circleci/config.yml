@@ -1,8 +1,690 @@
 version: 2.1
-orbs:
-  welcome: circleci/welcome-orb@0.4.1
-workflows:
-  welcome:
-    jobs:
-      - welcome/run
 
+orbs:
+  win: circleci/windows@2.3.0
+  go: circleci/go@1.7.0
+
+workflows:
+  version: 2
+  build_pr:
+    jobs:
+      - codegen_verification
+      - amd64_build
+      - amd64_test:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - amd64_test_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - amd64_integration:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - amd64_integration_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - amd64_e2e_subs:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - amd64_e2e_subs_nightly:
+          requires:
+            - amd64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - arm64_build
+      - arm64_test:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - arm64_test_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - arm64_integration:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - arm64_integration_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - arm64_e2e_subs:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - arm64_e2e_subs_nightly:
+          requires:
+            - arm64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - mac_amd64_build
+      - mac_amd64_test:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - mac_amd64_test_nightly:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - mac_amd64_integration:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - mac_amd64_integration_nightly:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      - mac_amd64_e2e_subs:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              ignore: "rel/nightly"
+      - mac_amd64_e2e_subs_nightly:
+          requires:
+            - mac_amd64_build
+          filters:
+            branches:
+              only: "rel/nightly"
+      #- windows_x64_build
+
+commands:
+  prepare_go:
+    description: Clean out existing Go so we can use our preferred version
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+    steps:
+      - run: |
+          sudo rm -rf << parameters.circleci_home >>/.go_workspace /usr/local/go
+  prepare_windows:
+    description: Prepare windows image
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+    steps:
+      - run:
+          name: install deps
+          shell: bash.exe
+          command: |
+            choco install -y msys2 pacman make wget --force
+            choco install -y golang --version=1.14.7 --force
+            choco install -y python3 --version=3.7.3 --force
+            export msys2='cmd //C RefreshEnv.cmd '
+            export msys2+='& set MSYS=winsymlinks:nativestrict '
+            export msys2+='& C:\\tools\\msys64\\msys2_shell.cmd -defterm -no-start'
+            export mingw64="$msys2 -mingw64 -full-path -here -c "\"\$@"\" --"
+            export msys2+=" -msys2 -c "\"\$@"\" --"
+            $msys2 pacman --sync --noconfirm --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-libtool unzip autoconf automake
+
+  generic_build:
+    description: Run basic build and store in workspace for re-use by different architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+    steps:
+      - restore_libsodium
+      - restore_cache:
+          keys:
+            - 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+      - restore_cache:
+          keys:
+            - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
+      - run:
+          name: scripts/travis/build.sh --make_debug
+          command: |
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="<< parameters.circleci_home >>/go"
+            export ALGORAND_DEADLOCK=enable
+            scripts/travis/build.sh --make_debug
+      - cache_libsodium
+      - save_cache:
+          key: 'go-mod-1-14-7-v1-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          paths:
+            - << parameters.circleci_home >>/go/pkg/mod
+      - save_cache:
+          key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
+          paths:
+            - tmp/go-cache
+      - persist_to_workspace:
+          root: << parameters.circleci_home >>
+          paths:
+            - project
+            - go
+            - gimme
+            - .gimme
+
+  cache_libsodium:
+    description: Cache libsodium for build
+    steps:
+      - run:
+          name: Get libsodium md5
+          command: |
+            mkdir -p tmp
+            find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
+      - save_cache:
+          key: 'libsodium-fork-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
+          paths:
+            - crypto/libs
+
+  restore_libsodium:
+    description: Restore libsodium for build
+    steps:
+      - run:
+          name: Get libsodium md5
+          command: |
+            mkdir -p tmp
+            find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
+      - restore_cache:
+          keys:
+            - 'libsodium-fork-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
+
+  generic_shorttest:
+    description: Run short tests from build workspace, for re-use by diferent architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+      result_subdir:
+        type: string
+    steps:
+      - attach_workspace:
+          at: << parameters.circleci_home >>
+      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - restore_cache:
+          keys:
+            - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
+      - run:
+          name: Run short tests
+          no_output_timeout: 30m
+          command: |
+            set -e
+            set -x
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export KMD_NOUSB=True
+            export GOPATH="<< parameters.circleci_home >>/go"
+            export PATH="${PATH}:${GOPATH}/bin"
+            export ALGORAND_DEADLOCK=enable
+            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+            eval "$(~/gimme "${GOLANG_VERSION}")"
+            scripts/configure_dev.sh
+            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+            PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
+            export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
+            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
+            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            export PARALLEL_FLAG="-p 1"
+            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+      - store_artifacts:
+          path: /tmp/results
+          destination: test-results
+      - store_test_results:
+          path: /tmp/results
+      - save_cache:
+          key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
+          paths:
+            - tmp/go-cache
+
+  generic_nightlytest:
+    description: Run nightly tests from build workspace, for re-use by diferent architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+      result_subdir:
+        type: string
+    steps:
+      - attach_workspace:
+          at: << parameters.circleci_home >>
+      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - restore_cache:
+          keys:
+            - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
+      - run:
+          name: Run nightly tests
+          no_output_timeout: 45m
+          command: |
+            set -e
+            set -x
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export KMD_NOUSB=True
+            export GOPATH="<< parameters.circleci_home >>/go"
+            export PATH="${PATH}:${GOPATH}/bin"
+            export ALGORAND_DEADLOCK=enable
+            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+            eval "$(~/gimme "${GOLANG_VERSION}")"
+            scripts/configure_dev.sh
+            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+            PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
+            export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
+            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
+            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            export PARALLEL_FLAG="-p 1"
+            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension"  -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+      - store_artifacts:
+          path: /tmp/results
+          destination: test-results
+      - store_test_results:
+          path: /tmp/results
+      - save_cache:
+          key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
+          paths:
+            - tmp/go-cache
+
+
+  upload_coverage:
+    description: Collect coverage reports and upload them
+    steps:
+      - run:
+          name: Upload Coverage Reports
+          no_output_timeout: 10m
+          command: |
+            scripts/travis/upload_coverage.sh || true
+
+  generic_integration:
+    description: Run integration tests from build workspace, for re-use by diferent architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+      result_subdir:
+        type: string
+    steps:
+      - attach_workspace:
+          at: << parameters.circleci_home >>
+      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - run:
+          name: Run integration tests
+          no_output_timeout: 30m
+          command: |
+            set -x
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export KMD_NOUSB=True
+            export GOPATH="<< parameters.circleci_home >>/go"
+            export PATH="${PATH}:${GOPATH}/bin"
+            export ALGORAND_DEADLOCK=enable
+            export BUILD_TYPE=integration
+            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+            eval "$(~/gimme "${GOLANG_VERSION}")"
+            scripts/configure_dev.sh
+            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+            export ALGOTEST=1
+            export SHORTTEST=-short
+            export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
+            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
+            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            test/scripts/run_integration_tests.sh
+      - store_artifacts:
+          path: /tmp/results
+          destination: test-results
+      - store_test_results:
+          path: /tmp/results
+
+  generic_nightlyintegration:
+    description: Run nightly integration tests from build workspace, for re-use by diferent architectures
+    parameters:
+      circleci_home:
+        type: string
+        default: "/home/circleci"
+      result_subdir:
+        type: string
+    steps:
+      - attach_workspace:
+          at: << parameters.circleci_home >>
+      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
+      - run:
+          name: Run integration tests
+          no_output_timeout: 45m
+          command: |
+            set -x
+            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export KMD_NOUSB=True
+            export GOPATH="<< parameters.circleci_home >>/go"
+            export PATH="${PATH}:${GOPATH}/bin"
+            export ALGORAND_DEADLOCK=enable
+            export BUILD_TYPE=integration
+            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+            eval "$(~/gimme "${GOLANG_VERSION}")"
+            scripts/configure_dev.sh
+            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+            export ALGOTEST=1
+            export SHORTTEST=-short
+            export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
+            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
+            export PARTITION_ID=$CIRCLE_NODE_INDEX
+            test/scripts/run_integration_tests.sh
+      - store_artifacts:
+          path: /tmp/results
+          destination: test-results
+      - store_test_results:
+          path: /tmp/results
+
+jobs:
+  codegen_verification:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: medium
+    steps:
+      - checkout
+      - prepare_go
+      - run: |
+          export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+          export GOPATH="/home/circleci/go"
+          scripts/travis/codegen_verification.sh
+
+  amd64_build:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: medium
+    steps:
+      - checkout
+      - prepare_go
+      - generic_build
+
+  amd64_test:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: medium
+    parallelism: 4
+    steps:
+      - prepare_go
+      - generic_shorttest:
+          result_subdir: amd64-short
+      - upload_coverage
+
+  amd64_test_nightly:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: medium
+    parallelism: 4
+    steps:
+      - prepare_go
+      - generic_nightlytest:
+          result_subdir: amd64-nightly
+      - upload_coverage
+
+  amd64_integration:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: medium
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      - prepare_go
+      - generic_integration:
+          result_subdir: amd64-integration
+
+  amd64_integration_nightly:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: medium
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      - prepare_go
+      - generic_nightlyintegration:
+          result_subdir: amd64-integrationnightly
+
+  amd64_e2e_subs:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      - prepare_go
+      - generic_integration:
+          result_subdir: amd64-e2e_subs
+
+  amd64_e2e_subs_nightly:
+    machine:
+      image: ubuntu-2004:202104-01
+    resource_class: large
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      - prepare_go
+      - generic_nightlyintegration:
+          result_subdir: amd64-e2e_subs_nightly
+
+  arm64_build:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.medium
+    steps:
+      - checkout
+      - prepare_go
+      - generic_build
+
+  arm64_test:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.medium
+    parallelism: 4
+    steps:
+      - checkout
+      - prepare_go
+      - generic_shorttest:
+          result_subdir: arm64-short
+      - upload_coverage
+
+  arm64_test_nightly:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.medium
+    parallelism: 4
+    steps:
+      - checkout
+      - prepare_go
+      - generic_nightlytest:
+          result_subdir: arm64-nightly
+      - upload_coverage
+
+  arm64_integration:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.medium
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      - checkout
+      - prepare_go
+      - generic_integration:
+          result_subdir: arm64-integration
+
+  arm64_integration_nightly:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.medium
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+    steps:
+      - checkout
+      - prepare_go
+      - generic_nightlyintegration:
+          result_subdir: arm64-integration-nightly
+
+  arm64_e2e_subs:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      - checkout
+      - prepare_go
+      - generic_integration:
+          result_subdir: arm64-e2e_subs
+
+  arm64_e2e_subs_nightly:
+    machine:
+      image: ubuntu-2004:202101-01
+    resource_class: arm.large
+    environment:
+      E2E_SUBS_ONLY: "true"
+    steps:
+      - checkout
+      - prepare_go
+      - generic_nightlyintegration:
+          result_subdir: arm64-e2e_subs-nightly
+
+  mac_amd64_build:
+    macos:
+      xcode: 12.0.1
+    resource_class: medium
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - checkout
+      - prepare_go
+      - generic_build:
+          circleci_home: /Users/distiller
+
+  mac_amd64_test:
+    macos:
+      xcode: 12.0.1
+    resource_class: medium
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    parallelism: 4
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_shorttest:
+          result_subdir: mac-amd64-short
+          circleci_home: /Users/distiller
+      - upload_coverage
+
+  mac_amd64_test_nightly:
+    macos:
+      xcode: 12.0.1
+    resource_class: medium
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    parallelism: 4
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_nightlytest:
+          result_subdir: mac-amd64-short
+          circleci_home: /Users/distiller
+      - upload_coverage
+
+  mac_amd64_integration:
+    macos:
+      xcode: 12.0.1
+    resource_class: medium
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_integration:
+          result_subdir: mac-amd64-integration
+          circleci_home: /Users/distiller
+
+  mac_amd64_integration_nightly:
+    macos:
+      xcode: 12.0.1
+    resource_class: medium
+    parallelism: 4
+    environment:
+      SKIP_E2E_SUBS: "true"
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_nightlyintegration:
+          result_subdir: mac-amd64-integration-nightly
+          circleci_home: /Users/distiller
+
+  mac_amd64_e2e_subs:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    environment:
+      E2E_SUBS_ONLY: "true"
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_nightlyintegration:
+          result_subdir: mac-amd64-e2e_subs
+          circleci_home: /Users/distiller
+
+  mac_amd64_e2e_subs_nightly:
+    macos:
+      xcode: 12.0.1
+    resource_class: large
+    environment:
+      E2E_SUBS_ONLY: "true"
+      HOMEBREW_NO_AUTO_UPDATE: "true"
+    steps:
+      #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
+      - prepare_go
+      - generic_nightlyintegration:
+          result_subdir: mac-amd64-e2e_subs-nightly
+          circleci_home: /Users/distiller
+
+  windows_x64_build:
+    executor:
+      name: win/default
+      size: large
+    steps:
+      - checkout
+      - prepare_windows
+      - run:
+          no_output_timeout: 45m
+          command: |
+            #export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="/home/circleci/go"
+            export ALGORAND_DEADLOCK=enable
+            export NO_GIMME=True
+            export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
+            export MAKE=mingw32-make
+            $msys2 scripts/travis/build_test.sh
+          shell: bash.exe
