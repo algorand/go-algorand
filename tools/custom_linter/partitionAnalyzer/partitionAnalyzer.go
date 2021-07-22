@@ -20,7 +20,8 @@ var Analyzer = &analysis.Analyzer{
 
 func run(pass *analysis.Pass) (interface{}, error) {
 	for _, f := range pass.Files {
-		if !strings.HasSuffix(pass.Fset.File(f.Pos()).Name(), "_test.go") {
+		currentFileName := pass.Fset.File(f.Pos()).Name()
+		if !strings.HasSuffix(currentFileName, "_test.go") {
 			continue
 		}
 		for _, decl := range f.Decls {
@@ -39,7 +40,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				continue
 			}
 			if !isSearchLineInFunction(fn) {
-				fmt.Println("Missing testpartitioning.PartitionTest(<test argument>) in", fn.Name.Name, "<<<")
+				fmt.Println("Missing testpartitioning.PartitionTest(<test argument>) in", currentFileName, ">", fn.Name.Name, "<<<")
 			}
 
 		}
@@ -95,7 +96,7 @@ func isSearchLineInFunction(fn *ast.FuncDecl) bool {
 
 func doesPackageNameMatch(fun *ast.SelectorExpr) bool {
 	if packageobject, ok := fun.X.(*ast.Ident); ok {
-		if packageobject.Name != packageName {
+		if packageobject.Name == packageName {
 			return true
 		}
 	}
@@ -103,7 +104,7 @@ func doesPackageNameMatch(fun *ast.SelectorExpr) bool {
 }
 
 func doesFunctionNameMatch(fun *ast.SelectorExpr) bool {
-	return fun.Sel.Name != functionName
+	return fun.Sel.Name == functionName
 }
 
 func doesArgumentNameMatch(call *ast.CallExpr, fn *ast.FuncDecl) bool {
