@@ -217,7 +217,7 @@ commands:
             - 'libsodium-fork-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
 
   generic_buildtest:
-    description: Run short tests from build workspace, for re-use by diferent architectures
+    description: Run build tests from build workspace, for re-use by diferent architectures
     parameters:
       circleci_home:
         type: string
