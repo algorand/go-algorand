@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func getRandomAddress(a *require.Assertions) basics.Address {
@@ -145,6 +146,8 @@ func newCowMock(creatables []modsData) *mockCowForLogicLedger {
 }
 
 func TestLogicLedgerMake(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	_, err := newLogicLedger(nil, 0)
@@ -172,6 +175,8 @@ func TestLogicLedgerMake(t *testing.T) {
 }
 
 func TestLogicLedgerBalances(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -190,6 +195,8 @@ func TestLogicLedgerBalances(t *testing.T) {
 }
 
 func TestLogicLedgerGetters(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -216,6 +223,8 @@ func TestLogicLedgerGetters(t *testing.T) {
 }
 
 func TestLogicLedgerAsset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -259,6 +268,8 @@ func TestLogicLedgerAsset(t *testing.T) {
 }
 
 func TestLogicLedgerGetKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -300,6 +311,8 @@ func TestLogicLedgerGetKey(t *testing.T) {
 }
 
 func TestLogicLedgerSetKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -328,6 +341,8 @@ func TestLogicLedgerSetKey(t *testing.T) {
 }
 
 func TestLogicLedgerDelKey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
@@ -360,6 +375,8 @@ func TestLogicLedgerDelKey(t *testing.T) {
 // 2) writing into empty (opted-in) local state's KeyValue works after reloading
 // Hardcoded values are from commit 9a0b439 (pre app refactor commit)
 func TestAppAccountDataStorage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	source := `#pragma version 2
 // do not write local key on opt in or on app create
@@ -585,6 +602,8 @@ return`
 }
 
 func TestAppAccountDelta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	source := `#pragma version 2
 txn ApplicationID
@@ -862,6 +881,8 @@ return`
 }
 
 func TestAppEmptyAccountsLocal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	source := `#pragma version 2
 txn ApplicationID
@@ -1012,6 +1033,8 @@ return`
 }
 
 func TestAppEmptyAccountsGlobal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 	source := `#pragma version 2
 txn ApplicationID
@@ -1143,6 +1166,8 @@ return`
 }
 
 func TestAppAccountDeltaIndicesCompatibility1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	source := `#pragma version 2
 txn ApplicationID
 int 0
@@ -1164,6 +1189,8 @@ int 1
 }
 
 func TestAppAccountDeltaIndicesCompatibility2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	source := `#pragma version 2
 txn ApplicationID
 int 0
@@ -1185,6 +1212,8 @@ int 1
 }
 
 func TestAppAccountDeltaIndicesCompatibility3(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	source := `#pragma version 2
 txn ApplicationID
 int 0

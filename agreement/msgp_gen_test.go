@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalCertificate(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Certificate{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -71,6 +73,7 @@ func BenchmarkUnmarshalCertificate(b *testing.B) {
 }
 
 func TestMarshalUnmarshalbundle(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := bundle{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -130,6 +133,7 @@ func BenchmarkUnmarshalbundle(b *testing.B) {
 }
 
 func TestMarshalUnmarshalequivocationVote(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := equivocationVote{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -189,6 +193,7 @@ func BenchmarkUnmarshalequivocationVote(b *testing.B) {
 }
 
 func TestMarshalUnmarshalequivocationVoteAuthenticator(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := equivocationVoteAuthenticator{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -248,6 +253,7 @@ func BenchmarkUnmarshalequivocationVoteAuthenticator(b *testing.B) {
 }
 
 func TestMarshalUnmarshalproposal(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := proposal{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -307,6 +313,7 @@ func BenchmarkUnmarshalproposal(b *testing.B) {
 }
 
 func TestMarshalUnmarshalproposalValue(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := proposalValue{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -366,6 +373,7 @@ func BenchmarkUnmarshalproposalValue(b *testing.B) {
 }
 
 func TestMarshalUnmarshalproposerSeed(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := proposerSeed{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -425,6 +433,7 @@ func BenchmarkUnmarshalproposerSeed(b *testing.B) {
 }
 
 func TestMarshalUnmarshalrawVote(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := rawVote{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -484,6 +493,7 @@ func BenchmarkUnmarshalrawVote(b *testing.B) {
 }
 
 func TestMarshalUnmarshalseedInput(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := seedInput{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -543,6 +553,7 @@ func BenchmarkUnmarshalseedInput(b *testing.B) {
 }
 
 func TestMarshalUnmarshalselector(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := selector{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -602,6 +613,7 @@ func BenchmarkUnmarshalselector(b *testing.B) {
 }
 
 func TestMarshalUnmarshaltransmittedPayload(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := transmittedPayload{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -661,6 +673,7 @@ func BenchmarkUnmarshaltransmittedPayload(b *testing.B) {
 }
 
 func TestMarshalUnmarshalunauthenticatedBundle(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := unauthenticatedBundle{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -720,6 +733,7 @@ func BenchmarkUnmarshalunauthenticatedBundle(b *testing.B) {
 }
 
 func TestMarshalUnmarshalunauthenticatedEquivocationVote(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := unauthenticatedEquivocationVote{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -779,6 +793,7 @@ func BenchmarkUnmarshalunauthenticatedEquivocationVote(b *testing.B) {
 }
 
 func TestMarshalUnmarshalunauthenticatedProposal(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := unauthenticatedProposal{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -838,6 +853,7 @@ func BenchmarkUnmarshalunauthenticatedProposal(b *testing.B) {
 }
 
 func TestMarshalUnmarshalunauthenticatedVote(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := unauthenticatedVote{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -897,6 +913,7 @@ func BenchmarkUnmarshalunauthenticatedVote(b *testing.B) {
 }
 
 func TestMarshalUnmarshalvote(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := vote{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -956,6 +973,7 @@ func BenchmarkUnmarshalvote(b *testing.B) {
 }
 
 func TestMarshalUnmarshalvoteAuthenticator(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := voteAuthenticator{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
