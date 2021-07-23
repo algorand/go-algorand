@@ -135,7 +135,7 @@ func TestVoteAggregatorBundles(t *testing.T) {
 			Bundle:                bundle,
 			UnauthenticatedBundle: bundle.u(),
 		}
-		eM := messageEvent{T: voteVerified, Input: msg, Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion}}
+		eM := messageEvent{T: bundleVerified, Input: msg, Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion}}
 		e := filterableMessageEvent{messageEvent: eM, FreshnessData: freshnessData{
 			PlayerRound:          round,
 			PlayerPeriod:         period,

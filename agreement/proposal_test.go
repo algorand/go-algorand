@@ -45,7 +45,7 @@ func testSetup(periodCount uint64) (player, rootRouter, testAccountData, testBlo
 }
 
 func createProposalsTesting(accs testAccountData, round round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
-	ve, err := factory.AssembleBlock(round.Number, round.Branch, time.Now().Add(time.Minute))
+	ve, err := factory.AssembleSpeculativeBlock(round.Number, round.Branch, time.Now().Add(time.Minute))
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
@@ -117,7 +117,7 @@ func TestProposalFunctions(t *testing.T) {
 	player, _, accs, factory, ledger := testSetup(0)
 	round := player.Round
 	period := player.Period
-	ve, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
+	ve, err := factory.AssembleSpeculativeBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	validator := testBlockValidator{}
@@ -155,7 +155,7 @@ func TestProposalUnauthenticated(t *testing.T) {
 
 	round := player.Round
 	period := player.Period
-	testBlockFactory, err := factory.AssembleBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
+	testBlockFactory, err := factory.AssembleSpeculativeBlock(player.Round.Number, player.Round.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	validator := testBlockValidator{}

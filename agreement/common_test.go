@@ -185,7 +185,7 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round, prev bookkeeping.BlockHash, deadline time.Time) (ValidatedBlock, error) {
+func (f testBlockFactory) AssembleSpeculativeBlock(r basics.Round, prev bookkeeping.BlockHash, deadline time.Time) (ValidatedBlock, error) {
 	return testValidatedBlock{Inside: bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
 			Round:  r,
@@ -432,7 +432,7 @@ type testAccountData struct {
 
 func makeProposalsTesting(accs testAccountData, round round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
 	// XXX passing empty leaf
-	ve, err := factory.AssembleBlock(round.Number, round.Branch, time.Now().Add(time.Minute))
+	ve, err := factory.AssembleSpeculativeBlock(round.Number, round.Branch, time.Now().Add(time.Minute))
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
@@ -544,7 +544,7 @@ func (v *voteMakerHelper) MakeRandomProposalValue() *proposalValue {
 
 func (v *voteMakerHelper) MakeRandomBlock(t *testing.T, r round) ValidatedBlock {
 	f := testBlockFactory{Owner: 1}
-	ve, err := f.AssembleBlock(r.Number, r.Branch, time.Now().Add(time.Minute))
+	ve, err := f.AssembleSpeculativeBlock(r.Number, r.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	return ve
 }
@@ -566,7 +566,7 @@ func (v *voteMakerHelper) MakeProposalPayload(t *testing.T, r round, ve Validate
 
 func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*proposal, *proposalValue) {
 	f := testBlockFactory{Owner: 1}
-	ve, err := f.AssembleBlock(r.Number, r.Branch, time.Now().Add(time.Minute))
+	ve, err := f.AssembleSpeculativeBlock(r.Number, r.Branch, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 
 	var payload unauthenticatedProposal

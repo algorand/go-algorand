@@ -301,6 +301,8 @@ func (d *demux) next(s *Service, extSignals pipelineExternalDemuxSignals) (e ext
 		}
 
 		s.log.with(logEvent).Infof("agreement: round %d ended early due to concurrent write; next round is %d", previousRound, nextRound)
+		// XXX could call this ledgerAdvancedEvent -- tell player about lastCommittedRound moving up
+		// will cause pipelinePlayer to kill old player
 		e = roundInterruptionEvent{Round: nextRoundBranch}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.monitor.inc(demuxCoserviceType)
