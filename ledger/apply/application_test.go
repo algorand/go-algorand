@@ -1008,7 +1008,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	a.Contains(err.Error(), "updateApplication app programs too long")
 
 	// check extraProgramPages is used
-	appr = make([]byte, 3072, 3072)
+	appr = make([]byte, 3072)
 
 	for i := range appr {
 		appr[i] = 2
