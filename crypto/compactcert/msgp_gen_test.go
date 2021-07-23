@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalCert(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Cert{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -71,6 +73,7 @@ func BenchmarkUnmarshalCert(b *testing.B) {
 }
 
 func TestMarshalUnmarshalCompactOneTimeSignature(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := CompactOneTimeSignature{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -130,6 +133,7 @@ func BenchmarkUnmarshalCompactOneTimeSignature(b *testing.B) {
 }
 
 func TestMarshalUnmarshalParticipant(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Participant{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -189,6 +193,7 @@ func BenchmarkUnmarshalParticipant(b *testing.B) {
 }
 
 func TestMarshalUnmarshalReveal(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := Reveal{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -248,6 +253,7 @@ func BenchmarkUnmarshalReveal(b *testing.B) {
 }
 
 func TestMarshalUnmarshalcoinChoice(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := coinChoice{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -307,6 +313,7 @@ func BenchmarkUnmarshalcoinChoice(b *testing.B) {
 }
 
 func TestMarshalUnmarshalsigslotCommit(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	v := sigslotCommit{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
