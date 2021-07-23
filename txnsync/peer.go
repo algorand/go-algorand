@@ -517,6 +517,7 @@ func (p *Peer) updateRequestParams(modulator, offset byte) {
 func (p *Peer) updateIncomingTransactionGroups(txnGroups []transactions.SignedTxGroup) {
 	for _, txnGroup := range txnGroups {
 		if len(txnGroup.Transactions) > 0 {
+			// The GroupTransactionID field is not yet updated, so we'll be calculating it's value here and passing it.
 			p.recentSentTransactions.add(txnGroup.Transactions.ID())
 		}
 	}
