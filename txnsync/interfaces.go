@@ -40,8 +40,9 @@ type RoundSettings struct {
 type Event struct {
 	eventType
 
-	transactionPoolSize int
-	roundSettings       RoundSettings
+	transactionPoolSize           int
+	roundSettings                 RoundSettings
+	transactionHandlerBacklogFull bool
 }
 
 // IncomingMessageHandler is the signature of the incoming message handler used by the transaction sync to receive network messages
@@ -84,16 +85,19 @@ type NodeConnector interface {
 	// InvalidSignedTxGroupCounter.
 	GetPendingTransactionGroups() (txGroups []transactions.SignedTxGroup, latestLocallyOriginatedGroupCounter uint64)
 	// IncomingTransactionGroups is called by the transaction sync when transactions have been received and need
-	// to be stored in the transaction pool
+	// to be stored in the transaction pool. The method returns the number of transactions in the transaction
+	// pool before the txGroups is applied. A negative value is returned if the provided txGroups could not be applied
+	// to the transaction pool.
 	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int)
 	NotifyMonitor() chan struct{}
 }
 
 // MakeTranscationPoolChangeEvent creates an event for when a txn pool size has changed.
-func MakeTranscationPoolChangeEvent(transactionPoolSize int) Event {
+func MakeTranscationPoolChangeEvent(transactionPoolSize int, transactionHandlerBacklogFull bool) Event {
 	return Event{
-		eventType:           transactionPoolChangedEvent,
-		transactionPoolSize: transactionPoolSize,
+		eventType:                     transactionPoolChangedEvent,
+		transactionPoolSize:           transactionPoolSize,
+		transactionHandlerBacklogFull: transactionHandlerBacklogFull,
 	}
 }
 

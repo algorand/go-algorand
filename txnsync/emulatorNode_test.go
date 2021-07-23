@@ -285,6 +285,7 @@ func (n *emulatedNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, 
 	duplicateMessage := 0
 	duplicateMessageSize := 0
 	encodingBuf := protocol.GetEncodingBuf()
+	transactionPoolSize = len(n.txpoolEntries)
 	for _, group := range txGroups {
 		if group.Transactions[0].Txn.LastValid < n.emulator.currentRound {
 			continue
@@ -316,7 +317,7 @@ func (n *emulatedNode) IncomingTransactionGroups(peer *Peer, messageSeq uint64, 
 	default:
 		panic(errors.New("IncomingTransactionGroups was unable to write messageSeq to the ack channel"))
 	}
-	return len(n.txpoolEntries)
+	return
 }
 
 func (n *emulatedNode) step() {
@@ -382,7 +383,7 @@ func (n *emulatedNode) onNewRound(round basics.Round, hasParticipationKeys bool)
 }
 
 func (n *emulatedNode) onNewTransactionPoolEntry() {
-	n.externalEvents <- MakeTranscationPoolChangeEvent(len(n.txpoolEntries))
+	n.externalEvents <- MakeTranscationPoolChangeEvent(len(n.txpoolEntries), false)
 }
 
 func (p *networkPeer) GetAddress() string {
