@@ -57,7 +57,7 @@ func TestSpeculative(t *testing.T) {
 	require.NoError(t, err)
 
 	vblk1 := ValidatedBlock{
-		blk: blk1,
+		blk:   blk1,
 		state: state,
 	}
 
@@ -71,7 +71,7 @@ func TestSpeculative(t *testing.T) {
 	crypto.RandBytes(randomLeaf[:])
 	_, err = sl.ConsensusVersion(blk1.BlockHeader.Round, randomLeaf)
 	require.Error(t, err)
-	
+
 	cv1, err := sl.ConsensusVersion(blk1.BlockHeader.Round, blk1.Hash())
 	require.NoError(t, err)
 	require.Equal(t, cv1, blk1.CurrentProtocol)
@@ -105,7 +105,7 @@ func TestSpeculative(t *testing.T) {
 				Txn: tx21,
 			},
 		},
-		HasGenesisID:   true,
+		HasGenesisID: true,
 	})
 
 	state, err = sl.eval(context.Background(), bookkeeping.BlockHash{}, blk2, false, nil)
@@ -115,7 +115,7 @@ func TestSpeculative(t *testing.T) {
 	require.NoError(t, err)
 
 	vblk2 := ValidatedBlock{
-		blk: blk2,
+		blk:   blk2,
 		state: state,
 	}
 
@@ -132,5 +132,5 @@ func TestSpeculative(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, ad12.MicroAlgos.Raw, ad11.MicroAlgos.Raw)
-	require.Equal(t, ad22.MicroAlgos.Raw, ad11.MicroAlgos.Raw - 1000000)
+	require.Equal(t, ad22.MicroAlgos.Raw, ad11.MicroAlgos.Raw-1000000)
 }

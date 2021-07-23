@@ -70,12 +70,12 @@ type Ledger struct {
 	genesisProto config.ConsensusParams
 
 	// State-machine trackers
-	accts    accountUpdates
-	txTail   txTail
-	bulletin bulletin
-	notifier blockNotifier
-	time     timeTracker
-	metrics  metricsTracker
+	accts     accountUpdates
+	txTail    txTail
+	bulletin  bulletin
+	notifier  blockNotifier
+	time      timeTracker
+	metrics   metricsTracker
 	speculate speculationTracker
 
 	trackers  trackerRegistry

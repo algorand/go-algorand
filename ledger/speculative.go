@@ -81,7 +81,7 @@ func makeValidatedBlockAsLFE(vb *ValidatedBlock) (*validatedBlockAsLFE, error) {
 	}
 
 	return &validatedBlockAsLFE{
-		l: base.l,
+		l:  base.l,
 		vb: vb,
 	}, nil
 }
@@ -278,7 +278,7 @@ func (st *speculationTracker) loadFromDisk(l *Ledger) error {
 
 	for _, blk := range blocks {
 		var parentLedger ledgerForEvaluator
-		if blk.Round() == l.Latest() + 1 {
+		if blk.Round() == l.Latest()+1 {
 			parentLedger = l
 		} else {
 			parentHash := blk.Branch
@@ -297,7 +297,7 @@ func (st *speculationTracker) loadFromDisk(l *Ledger) error {
 		}
 
 		vblk := ValidatedBlock{
-			blk: blk,
+			blk:   blk,
 			state: state,
 		}
 		err = st.addSpeculativeBlockInMem(vblk)
@@ -340,7 +340,7 @@ func (st *speculationTracker) newBlock(blk bookkeeping.Block, delta ledgercore.S
 			}
 		}
 
-		if specblk.vb.blk.Round() == blk.Round() + 1 {
+		if specblk.vb.blk.Round() == blk.Round()+1 {
 			// If this is a child of the now-committed block,
 			// update its parent ledger pointer to avoid chains
 			// of validatedBlockAsLFE's.
@@ -418,7 +418,7 @@ func (sl *SpeculativeLedger) LFE(r basics.Round, leaf bookkeeping.BlockHash) (le
 }
 
 // blockHdr returns the block header for round r from the speculative ledger.
-func (sl *SpeculativeLedger) BlockHdr(r basics.Round, leaf bookkeeping.BlockHash) (bookkeeping.BlockHeader, error){
+func (sl *SpeculativeLedger) BlockHdr(r basics.Round, leaf bookkeeping.BlockHash) (bookkeeping.BlockHeader, error) {
 	lfe, err := sl.LFE(r, leaf)
 	if err != nil {
 		return bookkeeping.BlockHeader{}, err
@@ -559,7 +559,7 @@ func (sl *SpeculativeLedger) Validate(ctx context.Context, leaf bookkeeping.Bloc
 	}
 
 	return &ValidatedBlock{
-		blk: blk,
+		blk:   blk,
 		state: state,
 	}, nil
 }
