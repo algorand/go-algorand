@@ -21,11 +21,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 )
 
 func TestEmptyClient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	c := MakeDNSClient(nil, time.Second)
@@ -56,6 +59,8 @@ func (t ttr) queryServer(ctx context.Context, server ResolverAddress, msg *dns.M
 }
 
 func TestMockedClient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	qs := ttr{}

@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -78,6 +79,8 @@ func (balances keyregTestBalances) StatefulEval(logic.EvalParams, basics.AppInde
 }
 
 func TestKeyregApply(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
 	vrfSecrets := crypto.GenerateVRFSecrets()

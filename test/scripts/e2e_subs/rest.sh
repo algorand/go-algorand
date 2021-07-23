@@ -54,22 +54,67 @@ function fail_and_exit {
 # $1 - test description.
 # $2 - query
 # $3 - expected status code
-# $4 - substring that should be in the response
+# $4... - substring that should be in the response
 function call_and_verify {
-  local CODE
+  local DESCRIPTION="$1"
+  shift
+  local QUERY="$1"
+  shift
+  local EXPECTED_CODE="$1"
+  shift
+
+  echo "MATCHING $@"
+  curl_test "$DESCRIPTION" "$QUERY" "$EXPECTED_CODE" true "$@"
+}
+
+# CURL Test - query and veryify results
+# $1 - test description.
+# $2 - query
+# $3 - expected status code
+# $4 - match result
+# $5... - substring(s) that should be in the response
+function curl_test {
+  local DESCRIPTION="$1"
+  shift
+  local QUERY="$1"
+  shift
+  local EXPECTED_CODE="$1"
+  shift
+  local MATCH_RESULT="$1"
+  shift
+  local SUBSTRING
+
+  local START=$SECONDS
 
   set +e
-  CODE=$(call "$2" "${TEMPDIR}/curl_out.txt")
+  local CODE=$(call "$QUERY" "${TEMPDIR}/curl_out.txt")
   if [[ $? != 0 ]]; then
-    fail_and_exit "$1" "$2" "curl had a non-zero exit code."
+    cat $CURL_TEMPFILE
+    fail_and_exit "$DESCRIPTION" "$QUERY" "curl had a non-zero exit code."
   fi
   set -e
 
   RES=$(cat "${TEMPDIR}/curl_out.txt")
-  if [[ "$CODE" != "$3" ]]; then
-    fail_and_exit "$1" "$2" "unexpected HTTP status code expected $3 (actual $CODE)"
+  if [[ "$CODE" != "$EXPECTED_CODE" ]]; then
+    fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected HTTP status code expected $EXPECTED_CODE (actual $CODE): $RES"
   fi
-  if [[ "$RES" != *"$4"* ]]; then
-    fail_and_exit "$1" "$2" "unexpected response. should contain '$4', actual: $RES"
-  fi
+
+  #local ELAPSED=$(($SECONDS - $START))
+  #if [[ $ELAPSED -gt $MAX_TIME ]]; then
+  #  fail_and_exit "$DESCRIPTION" "$QUERY" "query duration too long, $ELAPSED > $MAX_TIME"
+  #fi
+
+  # Check result substrings
+  for SUBSTRING in "$@"; do
+    echo "CHECKING '$SUBSTRING'"
+    if [[ $MATCH_RESULT = true ]]; then
+      if [[ "$RES" != *"$SUBSTRING"* ]]; then
+        fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected response. should contain '$SUBSTRING', actual: $RES"
+      fi
+    else
+      if [[ "$RES" == *"$SUBSTRING"* ]]; then
+        fail_and_exit "$DESCRIPTION" "$QUERY" "unexpected response. should NOT contain '$SUBSTRING', actual: $RES"
+      fi
+    fi
+  done
 }

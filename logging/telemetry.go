@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/algorand/go-algorand/config"
@@ -186,7 +186,6 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 	}
 	created := false
 	if err != nil {
-		err = nil
 		created = true
 		cfg = createTelemetryConfig()
 

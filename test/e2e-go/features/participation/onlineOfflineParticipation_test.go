@@ -29,9 +29,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/e2e-go/globals"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -104,6 +107,7 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 //   it should not be proposing blocks
 // - When the account balance receives enough stake, it should be proposing after lookback rounds
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	if testing.Short() {
 		t.Skip()
 	}
