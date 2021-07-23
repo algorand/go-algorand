@@ -517,7 +517,7 @@ func (p *Peer) updateRequestParams(modulator, offset byte) {
 func (p *Peer) updateIncomingTransactionGroups(txnGroups []transactions.SignedTxGroup) {
 	for _, txnGroup := range txnGroups {
 		if len(txnGroup.Transactions) > 0 {
-			p.recentSentTransactions.add(txnGroup.GroupTransactionID)
+			p.recentSentTransactions.add(txnGroup.Transactions.ID())
 		}
 	}
 }
