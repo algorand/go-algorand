@@ -187,10 +187,13 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	queryString := fmt.Sprintf("%s/v2/applications/%d", indexerURL, app)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("application request error: %w", err)
+	}
 	request.Header.Set("X-Indexer-API-Token", indexerToken)
 	resp, err := client.Do(request)
 	if err != nil {
-		return basics.Address{}, fmt.Errorf("application request error: %s", err)
+		return basics.Address{}, fmt.Errorf("application request error: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
@@ -200,13 +203,13 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	var appResp ApplicationIndexerResponse
 	err = json.NewDecoder(resp.Body).Decode(&appResp)
 	if err != nil {
-		return basics.Address{}, fmt.Errorf("application response decode error: %s", err)
+		return basics.Address{}, fmt.Errorf("application response decode error: %w", err)
 	}
 
 	creator, err := basics.UnmarshalChecksumAddress(appResp.Application.Params.Creator)
 
 	if err != nil {
-		return basics.Address{}, fmt.Errorf("UnmarshalChecksumAddress error: %s", err)
+		return basics.Address{}, fmt.Errorf("UnmarshalChecksumAddress error: %w", err)
 	}
 	return creator, nil
 }
@@ -215,10 +218,13 @@ func getBalanceFromIndexer(indexerURL string, indexerToken string, account basic
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
+	if err != nil {
+		return basics.AccountData{}, fmt.Errorf("account request error: %w", err)
+	}
 	request.Header.Set("X-Indexer-API-Token", indexerToken)
 	resp, err := client.Do(request)
 	if err != nil {
-		return basics.AccountData{}, fmt.Errorf("account request error: %s", err)
+		return basics.AccountData{}, fmt.Errorf("account request error: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
@@ -228,11 +234,11 @@ func getBalanceFromIndexer(indexerURL string, indexerToken string, account basic
 	var accountResp AccountIndexerResponse
 	err = json.NewDecoder(resp.Body).Decode(&accountResp)
 	if err != nil {
-		return basics.AccountData{}, fmt.Errorf("account response decode error: %s", err)
+		return basics.AccountData{}, fmt.Errorf("account response decode error: %w", err)
 	}
 	balance, err := v2.AccountToAccountData(&accountResp.Account)
 	if err != nil {
-		return basics.AccountData{}, fmt.Errorf("AccountToAccountData error: %s", err)
+		return basics.AccountData{}, fmt.Errorf("AccountToAccountData error: %w", err)
 	}
 	return balance, nil
 }

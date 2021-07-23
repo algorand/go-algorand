@@ -4,17 +4,20 @@ about: Suggestions for how we can improve the algorand platform.
 title: ''
 labels: new-feature-request
 assignees: ''
-
 ---
 
-## Is your feature request related to a problem? Please describe.
+## Problem
 
-<!-- A clear and concise description of what the problem is. Ex. I'm always frustrated when [...] -->
+<!-- What is the problem that we’re trying to solve? -->
 
-## Describe the solution you'd like.
+## Solution
 
-<!-- A clear and concise description of what you want to happen. -->
+<!-- Do you have a potential/suggested solution? Document more than one if possible. -->
 
-## Additional context.
+## Dependencies
 
-<!-- Add any other context or screenshots about the feature request here. -->
+<!-- Does the solution have any team or design dependencies? -->
+
+## Urgency
+
+<!-- What is the urgency here and why? -->

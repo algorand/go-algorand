@@ -19,6 +19,7 @@ package participation
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func getFirstAccountFromNamedNode(fixture *fixtures.RestClientFixture, r *require.Assertions, nodeName string) (account string) {
@@ -75,6 +77,8 @@ func spendToNonParticipating(t *testing.T, fixture *fixtures.RestClientFixture, 
 }
 
 func TestOnlineOfflineRewards(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
 
@@ -131,6 +135,11 @@ func TestOnlineOfflineRewards(t *testing.T) {
 }
 
 func TestPartkeyOnlyRewards(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if runtime.GOOS == "darwin" {
+		t.Skip()
+	}
 	if testing.Short() {
 		t.Skip()
 	}
@@ -177,6 +186,8 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 }
 
 func TestRewardUnitThreshold(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
 
@@ -296,6 +307,8 @@ func TestRewardUnitThreshold(t *testing.T) {
 var defaultPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 
 func TestRewardRateRecalculation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Parallel()
 	r := require.New(fixtures.SynchronizedTest(t))
 

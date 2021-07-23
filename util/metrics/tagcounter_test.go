@@ -22,10 +22,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTagCounter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	tags := make([]string, 17)
 	for i := range tags {
 		tags[i] = fmt.Sprintf("A%c", 'A'+i)
