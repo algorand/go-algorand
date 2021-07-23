@@ -285,13 +285,19 @@ commands:
         default: "/home/circleci"
       result_subdir:
         type: string
+      no_output_timeout:
+        type: string
+        default: 30m
+      go_test_flags:
+        type: string
+        default: "-short"
     steps:
       - attach_workspace:
           at: << parameters.circleci_home >>
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
           name: Run integration tests
-          no_output_timeout: 30m
+          no_output_timeout: << parameters.no_output_timeout >>
           command: |
             set -x
             export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
@@ -305,46 +311,7 @@ commands:
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
-            export SHORTTEST=-short
-            export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
-            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
-            export PARTITION_ID=$CIRCLE_NODE_INDEX
-            test/scripts/run_integration_tests.sh
-      - store_artifacts:
-          path: /tmp/results
-          destination: test-results
-      - store_test_results:
-          path: /tmp/results
-
-  generic_nightlyintegration:
-    description: Run nightly integration tests from build workspace, for re-use by diferent architectures
-    parameters:
-      circleci_home:
-        type: string
-        default: "/home/circleci"
-      result_subdir:
-        type: string
-    steps:
-      - attach_workspace:
-          at: << parameters.circleci_home >>
-      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
-      - run:
-          name: Run integration tests
-          no_output_timeout: 45m
-          command: |
-            set -x
-            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            export KMD_NOUSB=True
-            export GOPATH="<< parameters.circleci_home >>/go"
-            export PATH="${PATH}:${GOPATH}/bin"
-            export ALGORAND_DEADLOCK=enable
-            export BUILD_TYPE=integration
-            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-            eval "$(~/gimme "${GOLANG_VERSION}")"
-            scripts/configure_dev.sh
-            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-            export ALGOTEST=1
-            export SHORTTEST=-short
+            export SHORTTEST=<< parameters.go_test_flags >>
             export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
@@ -404,7 +371,7 @@ jobs:
   amd64_integration:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: medium
+    resource_class: large
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -416,14 +383,16 @@ jobs:
   amd64_integration_nightly:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: medium
+    resource_class: large
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
     steps:
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: amd64-integrationnightly
+          no_output_timeout: 45m
+          go_test_flags: ""
 
   amd64_e2e_subs:
     machine:
@@ -444,8 +413,10 @@ jobs:
       E2E_SUBS_ONLY: "true"
     steps:
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: amd64-e2e_subs_nightly
+          no_output_timeout: 45m
+          go_test_flags: ""
 
   arm64_build:
     machine:
@@ -485,7 +456,7 @@ jobs:
   arm64_integration:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.medium
+    resource_class: arm.large
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -494,19 +465,23 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: arm64-integration
+          no_output_timeout: 45m
+          go_test_flags: ""
 
   arm64_integration_nightly:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.medium
+    resource_class: arm.large
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
     steps:
       - checkout
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: arm64-integration-nightly
+          no_output_timeout: 45m
+          go_test_flags: ""
 
   arm64_e2e_subs:
     machine:
@@ -529,8 +504,10 @@ jobs:
     steps:
       - checkout
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: arm64-e2e_subs-nightly
+          no_output_timeout: 45m
+          go_test_flags: ""
 
   mac_amd64_build:
     macos:
@@ -580,7 +557,7 @@ jobs:
   mac_amd64_integration:
     macos:
       xcode: 12.0.1
-    resource_class: medium
+    resource_class: large
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -591,11 +568,13 @@ jobs:
       - generic_integration:
           result_subdir: mac-amd64-integration
           circleci_home: /Users/distiller
+          no_output_timeout: 45m
+          go_test_flags: ""
 
   mac_amd64_integration_nightly:
     macos:
       xcode: 12.0.1
-    resource_class: medium
+    resource_class: large
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -603,9 +582,11 @@ jobs:
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: mac-amd64-integration-nightly
           circleci_home: /Users/distiller
+          no_output_timeout: 45m
+          go_test_flags: ""
 
   mac_amd64_e2e_subs:
     macos:
@@ -617,7 +598,7 @@ jobs:
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: mac-amd64-e2e_subs
           circleci_home: /Users/distiller
 
@@ -631,9 +612,11 @@ jobs:
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: mac-amd64-e2e_subs-nightly
           circleci_home: /Users/distiller
+          no_output_timeout: 45m
+          go_test_flags: ""
 
   windows_x64_build:
     executor:
