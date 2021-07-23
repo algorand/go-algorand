@@ -535,7 +535,7 @@ jobs:
   arm64_integration_nightly:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.medium
+    resource_class: arm.large
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
