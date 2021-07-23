@@ -34,12 +34,12 @@ import (
 // TODO these implementations should be pushed down into the corresponding structs or alternatively turned into new structs in the correct subpackages
 
 type blockAuthenticatorImpl struct {
-	*data.Ledger
+	*ledger.SpeculativeLedger
 	*agreement.AsyncVoteVerifier
 }
 
 func (i blockAuthenticatorImpl) Authenticate(block *bookkeeping.Block, cert *agreement.Certificate) error {
-	return cert.Authenticate(*block, i.Ledger, i.AsyncVoteVerifier)
+	return cert.Authenticate(*block, i.SpeculativeLedger, i.AsyncVoteVerifier)
 }
 
 func (i blockAuthenticatorImpl) Quit() {
@@ -64,14 +64,14 @@ func (i blockValidatorImpl) Validate(ctx context.Context, e bookkeeping.Block) (
 
 // agreementLedger implements the agreement.Ledger interface.
 type agreementLedger struct {
-	*data.Ledger
+	*ledger.SpeculativeLedger
 	UnmatchedPendingCertificates chan catchup.PendingUnmatchedCertificate
 	n                            network.GossipNode
 }
 
-func makeAgreementLedger(ledger *data.Ledger, net network.GossipNode) agreementLedger {
+func makeAgreementLedger(ledger *ledger.SpeculativeLedger, net network.GossipNode) agreementLedger {
 	return agreementLedger{
-		Ledger:                       ledger,
+		SpeculativeLedger:            ledger,
 		UnmatchedPendingCertificates: make(chan catchup.PendingUnmatchedCertificate, 1),
 		n:                            net,
 	}
@@ -114,8 +114,8 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, verifier *agre
 }
 
 // Wrapping error with a LedgerDroppedRoundError when an old round is requested but the ledger has already dropped the entry
-func (l agreementLedger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	record, err := l.Ledger.Lookup(rnd, addr)
+func (l agreementLedger) Lookup(rnd basics.Round, branch bookkeeping.BlockHash, addr basics.Address) (basics.AccountData, error) {
+	record, err := l.SpeculativeLedger.Lookup(rnd, branch, addr)
 	var e *ledger.RoundOffsetError
 	if errors.As(err, &e) {
 		err = &agreement.LedgerDroppedRoundError{

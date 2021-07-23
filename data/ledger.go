@@ -19,9 +19,7 @@ package data
 import (
 	"fmt"
 	"sync/atomic"
-	"time"
 
-	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -360,59 +358,4 @@ func (l *Ledger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, er
 	}
 	// otherwise, we can't really tell what the protocol version would be at round r.
 	return "", err
-}
-
-// EnsureValidatedBlock ensures that the block, and associated certificate c, are
-// written to the ledger, or that some other block for the same round is
-// written to the ledger.
-func (l *Ledger) EnsureValidatedBlock(vb *ledger.ValidatedBlock, c agreement.Certificate) {
-	round := vb.Block().Round()
-
-	for l.LastRound() < round {
-		err := l.AddValidatedBlock(*vb, c)
-		if err == nil {
-			break
-		}
-
-		logfn := logging.Base().Errorf
-
-		switch err.(type) {
-		case ledgercore.BlockInLedgerError:
-			logfn = logging.Base().Debugf
-		}
-
-		logfn("could not write block %d to the ledger: %v", round, err)
-	}
-}
-
-// EnsureBlock ensures that the block, and associated certificate c, are
-// written to the ledger, or that some other block for the same round is
-// written to the ledger.
-// This function can be called concurrently.
-func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) {
-	round := block.Round()
-	protocolErrorLogged := false
-
-	for l.LastRound() < round {
-		err := l.AddBlock(*block, c)
-		if err == nil {
-			break
-		}
-
-		switch err.(type) {
-		case protocol.Error:
-			if !protocolErrorLogged {
-				logging.Base().Errorf("unrecoverable protocol error detected at block %d: %v", round, err)
-				protocolErrorLogged = true
-			}
-		case ledgercore.BlockInLedgerError:
-			logging.Base().Debugf("could not write block %d to the ledger: %v", round, err)
-			return // this error implies that l.LastRound() >= round
-		default:
-			logging.Base().Errorf("could not write block %d to the ledger: %v", round, err)
-		}
-
-		// If there was an error add a short delay before the next attempt.
-		time.Sleep(100 * time.Millisecond)
-	}
 }

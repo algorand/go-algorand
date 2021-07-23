@@ -95,6 +95,7 @@ type AlgorandFullNode struct {
 	config    config.Local
 
 	ledger *data.Ledger
+	specledger *ledger.SpeculativeLedger
 	net    network.GossipNode
 
 	transactionPool *pools.TransactionPool
@@ -203,7 +204,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log)
+	node.specledger = ledger.MakeSpeculativeLedger(node.ledger.Ledger)
+
+	node.transactionPool = pools.MakeTransactionPool(node.specledger, cfg, node.log)
 
 	blockListeners := []ledger.BlockListener{
 		node.transactionPool,
@@ -237,7 +240,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 
 	blockValidator := blockValidatorImpl{l: node.ledger, verificationPool: node.highPriorityCryptoVerificationPool}
-	agreementLedger := makeAgreementLedger(node.ledger, node.net)
+	agreementLedger := makeAgreementLedger(node.specledger, node.net)
 
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
@@ -254,7 +257,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	node.agreementService = agreement.MakeService(agreementParameters)
 
-	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
+	node.catchupBlockAuth = blockAuthenticatorImpl{SpeculativeLedger: node.specledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
@@ -1064,6 +1067,15 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Ti
 			// the case where ledgerNextRound > round was not implemented here on purpose. This is the "normal case" where the
 			// ledger was advancing faster then the agreement by the catchup.
 		}
+		return nil, err
+	}
+	return validatedBlock{vb: lvb}, nil
+}
+
+// AssembleSpeculativeBlock implements agreement.BlockFactory.
+func (node *AlgorandFullNode) AssembleSpeculativeBlock(round basics.Round, branch bookkeeping.BlockHash, deadline time.Time) (agreement.ValidatedBlock, error) {
+	lvb, err := node.transactionPool.AssembleSpeculativeBlock(round, branch, deadline)
+	if err != nil {
 		return nil, err
 	}
 	return validatedBlock{vb: lvb}, nil
