@@ -102,9 +102,10 @@ func (lru *transactionCache) addSlice(txids []transactions.Txid, msgSeq uint64, 
 	}
 
 	if len(lru.ackPendingTxids) == cap(lru.ackPendingTxids) {
-		// clear out the entry at lru.ackPendingTxids[0] so that the GC could reclaim it.
-		lru.ackPendingTxids[0] = ackPendingTxids{}
-		lru.ackPendingTxids = append(lru.ackPendingTxids[1:], ackPendingTxids{txids: txids, seq: msgSeq, timestamp: timestamp})
+		// roll this array without reallocation.
+		copy(lru.ackPendingTxids, lru.ackPendingTxids[1:])
+		// update the last entry of the array.
+		lru.ackPendingTxids[len(lru.ackPendingTxids)-1] = ackPendingTxids{txids: txids, seq: msgSeq, timestamp: timestamp}
 	} else {
 		lru.ackPendingTxids = append(lru.ackPendingTxids, ackPendingTxids{txids: txids, seq: msgSeq, timestamp: timestamp})
 	}
