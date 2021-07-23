@@ -88,7 +88,7 @@ type BlockFactory interface {
 	// produce a ValidatedBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
-	AssembleBlock(basics.Round, bookkeeping.BlockHash, time.Time) (ValidatedBlock, error)
+	AssembleSpeculativeBlock(basics.Round, bookkeeping.BlockHash, time.Time) (ValidatedBlock, error)
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.

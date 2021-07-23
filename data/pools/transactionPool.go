@@ -536,12 +536,16 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 // projected time it's going to take to call the GenerateBlock function before the block assembly would be ready.
 // The function expects that the pool.assemblyMu lock would be taken before being called.
 func (pool *TransactionPool) isAssemblyTimedOut() bool {
-	if pool.assemblyDeadline.IsZero() {
+	return isAssemblyTimedOut(pool.assemblyDeadline, pool.pendingBlockEvaluator.TxnCounter())
+}
+
+func isAssemblyTimedOut(assemblyDeadline time.Time, txncount int) bool {
+	if assemblyDeadline.IsZero() {
 		// we have no deadline, so no reason to timeout.
 		return false
 	}
-	generateBlockDuration := generateBlockBaseDuration + time.Duration(pool.pendingBlockEvaluator.TxnCounter())*generateBlockTransactionDuration
-	return time.Now().After(pool.assemblyDeadline.Add(-generateBlockDuration))
+	generateBlockDuration := generateBlockBaseDuration + time.Duration(txncount)*generateBlockTransactionDuration
+	return time.Now().After(assemblyDeadline.Add(-generateBlockDuration))
 }
 
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
@@ -740,6 +744,62 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	pool.rememberCommit(true)
 	return
+}
+
+// AssembleSpeculativeBlock assembles a block for a given round, trying not to
+// take longer than deadline to finish.
+func (pool *TransactionPool) AssembleSpeculativeBlock(round basics.Round, branch bookkeeping.BlockHash, deadline time.Time) (assembled *ledger.ValidatedBlock, err error) {
+	prev, err := pool.ledger.BlockHdr(round.SubSaturate(1), branch)
+	if err != nil {
+		return
+	}
+
+	// Process upgrade to see if we support the next protocol version
+	_, upgradeState, err := bookkeeping.ProcessUpgradeParams(prev)
+	if err != nil {
+		return
+	}
+
+	// Ensure we know about the next protocol version (MakeBlock will panic
+	// if we don't, and we would rather stall locally than panic)
+	_, ok := config.Consensus[upgradeState.CurrentProtocol]
+	if !ok {
+		pool.log.Warnf("TransactionPool.AssembleSpeculativeBlock: next protocol version %v is not supported", upgradeState.CurrentProtocol)
+		return
+	}
+
+	// Grab the transactions to be played through the new block evaluator
+	pool.pendingMu.RLock()
+	txgroups := pool.pendingTxGroups
+	pendingCount := pool.pendingCountNoLock()
+	pool.pendingMu.RUnlock()
+
+	next := bookkeeping.MakeBlock(prev)
+	hint := pendingCount
+	eval, err := pool.ledger.StartEvaluator(next.BlockHeader, hint)
+	if err != nil {
+		pool.log.Warnf("TransactionPool.AssembleSpeculativeBlock: cannot start evaluator: %v", err)
+		return
+	}
+
+	for _, txgroup := range txgroups {
+		err := eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
+		if err != nil {
+			pool.log.Infof("Cannot add pending transaction to speculative block: %v", err)
+		}
+
+		if err == ledger.ErrNoSpace || isAssemblyTimedOut(deadline, eval.TxnCounter()) {
+			break
+		}
+	}
+
+	lvb, err := eval.GenerateBlock()
+	if err != nil {
+		pool.log.Warnf("TransactionPool.AssembleSpeculativeBlock: cannot generate block: %v", err)
+		return
+	}
+
+	return lvb, nil
 }
 
 // AssembleBlock assembles a block for a given round, trying not to
