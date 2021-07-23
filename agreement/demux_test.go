@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
@@ -414,6 +415,8 @@ var demuxTestUsecases = []demuxTestUsecase{
 }
 
 func TestDemuxNext(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	dt := &demuxTester{T: t}
 	dt.Test()
 }

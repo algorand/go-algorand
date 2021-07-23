@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,6 +52,8 @@ func (pc PartCommit) GetHash(pos uint64) (crypto.Digest, error) {
 }
 
 func TestBuildVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// Doing a full test of 1M accounts takes too much CPU time in CI.
 	doLargeTest := false
 
@@ -220,6 +223,8 @@ func BenchmarkBuildVerify(b *testing.B) {
 }
 
 func TestCoinIndex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	n := 1000
 	b := &Builder{
 		sigs:          make([]sigslot, n),

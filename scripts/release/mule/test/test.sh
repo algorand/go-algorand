@@ -93,7 +93,11 @@ else
     # We need to install this since it's not being installed by a package manager.
     # Normally, this is installed for us b/c it's a dependency.
     # See `./installer/rpm/algorand/algorand.spec`.
-    dnf install dnf-automatic -y
+    if command -v dnf &>/dev/null; then
+      dnf install dnf-automatic -y
+    else
+      yum install dnf-automatic -y
+    fi
     #
     # Note that the RPM package DOES NOT have the CHANNEL in its filename (unlike DEB),
     # instead it contains the package name.
