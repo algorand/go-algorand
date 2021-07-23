@@ -152,7 +152,6 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			handle, err = db.MakeAccessor(filepath.Join(keyDir, filename), false, false)
 			if err != nil {
 				// Couldn't open it, skip it
-				err = nil
 				continue
 			}
 
@@ -160,7 +159,6 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			root, err := account.RestoreRoot(handle)
 			if err != nil {
 				// Couldn't read it, skip it
-				err = nil
 				continue
 			}
 
@@ -177,7 +175,6 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			handle, err = db.MakeErasableAccessor(filepath.Join(keyDir, filename))
 			if err != nil {
 				// Couldn't open it, skip it
-				err = nil
 				continue
 			}
 
@@ -185,7 +182,6 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			participation, err := account.RestoreParticipation(handle)
 			if err != nil {
 				// Couldn't read it, skip it
-				err = nil
 				handle.Close()
 				continue
 			}
@@ -224,6 +220,7 @@ func (f *LibGoalFixture) GetLibGoalClientFromDataDir(dataDir string) libgoal.Cli
 // GetLibGoalClientForNamedNode returns the LibGoal Client for a given named node
 func (f *LibGoalFixture) GetLibGoalClientForNamedNode(nodeName string) libgoal.Client {
 	nodeDir, err := f.network.GetNodeDir(nodeName)
+	f.failOnError(err, "network.GetNodeDir failed: %v")
 	client, err := libgoal.MakeClientWithBinDir(f.binDir, nodeDir, nodeDir, libgoal.KmdClient)
 	f.failOnError(err, "make libgoal client failed: %v")
 	f.importRootKeys(&client, nodeDir)
@@ -245,6 +242,7 @@ func (f *LibGoalFixture) GetLibGoalClientFromDataDirNoKeys(dataDir string) libgo
 // GetLibGoalClientForNamedNodeNoKeys returns the LibGoal Client for a given named node
 func (f *LibGoalFixture) GetLibGoalClientForNamedNodeNoKeys(nodeName string) libgoal.Client {
 	nodeDir, err := f.network.GetNodeDir(nodeName)
+	f.failOnError(err, "network.GetNodeDir failed: %v")
 	client, err := libgoal.MakeClientWithBinDir(f.binDir, nodeDir, nodeDir, libgoal.AlgodClient)
 	f.failOnError(err, "make libgoal client failed: %v")
 	return client
