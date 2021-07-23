@@ -1000,7 +1000,7 @@ bnz loop
 
 	txid, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = waitForTransactionV2(t, testClient, someAddress, txid, 30*time.Second)
+	_, err = waitForTransactionV2(t, testClient, someAddress, txid, 60*time.Second)
 	a.NoError(err)
 	txn, err := testClient.PendingTransactionInformationV2(txid)
 	a.NoError(err)
