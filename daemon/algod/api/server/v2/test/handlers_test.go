@@ -122,7 +122,7 @@ func TestGetBlockJsonEncoding(t *testing.T) {
 	require.NoError(t, err)
 
 	// make an app call txn with eval delta
-	lsig := transactions.LogicSig{Logic: []byte{2, 0x20, 1, 1, 0x22}} // int 1
+	lsig := transactions.LogicSig{Logic: retOneProgram} // int 1
 	program := logic.Program(lsig.Logic)
 	lhash := crypto.HashObj(&program)
 	var sender basics.Address
