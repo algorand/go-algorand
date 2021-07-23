@@ -965,7 +965,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 
 	// check app program len
-	appr := make([]byte, 6050, 6050)
+	appr := make([]byte, 6050)
 
 	for i := range appr {
 		appr[i] = 2

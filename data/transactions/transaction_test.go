@@ -22,11 +22,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
@@ -228,6 +229,7 @@ func TestWellFormedErrors(t *testing.T) {
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
 	futureProto := config.Consensus[protocol.ConsensusFuture]
 	protoV27 := config.Consensus[protocol.ConsensusV27]
+	protoV28 := config.Consensus[protocol.ConsensusV28]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 	okHeader := Header{
@@ -460,7 +462,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 			},
 			spec:          specialAddr,
-			proto:         curProto,
+			proto:         protoV28,
 			expectedError: fmt.Errorf("app programs too long. max total len %d bytes", curProto.MaxAppProgramLen),
 		},
 		{
@@ -477,6 +479,23 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			spec:  specialAddr,
 			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 1,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			spec:          specialAddr,
+			proto:         protoV28,
+			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
 		},
 	}
 	for _, usecase := range usecases {
