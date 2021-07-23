@@ -31,12 +31,12 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-func checkEqual(expected []string, actual []string) bool {
+func checkEqual(expected []basics.LogItem, actual []basics.LogItem) bool {
 	if len(expected) != len(actual) {
 		return false
 	}
 	for i, e := range expected {
-		if e != actual[i] {
+		if e.ID != actual[i].ID || e.Message != actual[i].Message {
 			return false
 		}
 	}
@@ -106,15 +106,15 @@ bnz loop
 	round, err = client.CurrentRound()
 	a.NoError(err)
 
-	logs := make([]string, 29)
+	logs := make([]basics.LogItem, 29)
 	for i := range logs {
-		logs[i] = "a"
+		logs[i] = basics.LogItem{ID: 0, Message: "a"}
 	}
 
 	b, err := client.BookkeepingBlock(round)
 	for _, ps := range b.Payset {
 		ed := ps.ApplyData.EvalDelta
-		ok := checkEqual(logs, ed.Logs)
+		ok = checkEqual(logs, ed.Logs)
 		a.True(ok)
 	}
 

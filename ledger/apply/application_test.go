@@ -839,8 +839,8 @@ func TestAppCallClearState(t *testing.T) {
 	b.ResetWrites()
 	b.pass = true
 	b.err = nil
-	logs := []string{"a"}
-	b.delta = basics.EvalDelta{Logs: []string{"a"}}
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
@@ -929,8 +929,8 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	a.Equal(basics.StateSchema{NumUint: 0}, br.TotalAppSchema)
 
-	logs := []string{"a"}
-	b.delta = basics.EvalDelta{Logs: []string{"a"}}
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
@@ -1003,8 +1003,8 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	a.Equal([]byte{2}, br.AppParams[appIdx].ClearStateProgram)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 
-	logs := []string{"a"}
-	b.delta = basics.EvalDelta{Logs: []string{"a"}}
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
@@ -1077,8 +1077,8 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 	a.Equal(uint32(0), br.TotalExtraAppPages)
 
-	logs := []string{"a"}
-	b.delta = basics.EvalDelta{Logs: []string{"a"}}
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
@@ -1177,11 +1177,10 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	br := b.balances[creator]
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
 
-	logs := []string{"a"}
-	b.delta = basics.EvalDelta{Logs: []string{"a"}}
+	logs := []basics.LogItem{{ID: 0, Message: "a"}}
+	b.delta = basics.EvalDelta{Logs: []basics.LogItem{{ID: 0, Message: "a"}}}
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(appIdx, b.allocatedAppIdx)
 	a.Equal(basics.EvalDelta{Logs: logs}, ad.EvalDelta)
 
 }

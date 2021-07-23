@@ -128,12 +128,12 @@ func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIn
 }
 
 func (c *mockCowForLogicLedger) AppendLog(aidx basics.AppIndex, value string) error {
-	c.logs[aidx].Messages = append(c.logs[aidx].Messages, value)
+	c.logs = append(c.logs, basics.LogItem{ID: aidx, Message: value})
 	return nil
 }
 
-func (c *mockCowForLogicLedger) GetLogs(aidx basics.AppIndex) basics.LogItem {
-	return c.logs[aidx]
+func (c *mockCowForLogicLedger) GetLogs() []basics.LogItem {
+	return c.logs
 }
 
 func newCowMock(creatables []modsData) *mockCowForLogicLedger {
