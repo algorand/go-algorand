@@ -208,6 +208,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 	}
 
 	fmt.Printf("adjusting account balance to %d\n", minFund)
+	pendingTxnIDs := make(map[transactions.Txid]bool, len(accounts))
 	for addr, balance := range accounts {
 		if !cfg.Quiet {
 			fmt.Printf("adjusting balance of account %v\n", addr)
@@ -221,10 +222,11 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
-			_, err := sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
+			txn, err := sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
 			if err != nil {
 				return err
 			}
+			pendingTxnIDs[txn.ID()] = true
 			accounts[addr] = minFund
 			if !cfg.Quiet {
 				fmt.Printf("account balance for key %s is %d\n", addr, accounts[addr])
@@ -233,6 +235,40 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 			totalSent++
 			throttleTransactionRate(startTime, cfg, totalSent)
 		}
+	}
+	// wait until all the above transactions are sent, or that we have no more transactions
+	// in our pending transaction pool.
+	for {
+		if len(pendingTxnIDs) == 0 {
+			break
+		}
+		pendingTxns, err := client.GetPendingTransactions(1)
+		if err != nil {
+			fmt.Printf("failed to check pending transaction pool status : %v\n", err)
+			break
+		}
+		if pendingTxns.TotalTxns == 0 {
+			// no more transactions are waiting on the node.
+			break
+		}
+		for txid := range pendingTxnIDs {
+			txInfo, err := client.PendingTransactionInformation(txid.String())
+			if err != nil {
+				fmt.Printf("failed to check pending transaction status : %v\n", err)
+				continue
+			}
+			if txInfo.ConfirmedRound > 0 {
+				// transaction is within a block.
+				delete(pendingTxnIDs, txid)
+			}
+		}
+		nodeStatus, err := client.Status()
+		if err != nil {
+			fmt.Printf("failed to retrieve node status : %v\n", err)
+			continue
+		}
+		// this would wait for the next round, when we will perform the check again.
+		client.WaitForRound(nodeStatus.LastRound)
 	}
 	return nil
 }
@@ -250,6 +286,26 @@ func sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fe
 }
 
 func refreshAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) error {
+	// wait until all the pending transcations have been sent; otherwise, getting the balance
+	// is pretty much meaningless.
+	for {
+		pendingTxns, err := client.GetPendingTransactions(1)
+		if err != nil {
+			fmt.Printf("failed to check pending transaction pool status : %v\n", err)
+			break
+		}
+		if pendingTxns.TotalTxns == 0 {
+			// no more transactions are waiting on the node.
+			break
+		}
+		nodeStatus, err := client.Status()
+		if err != nil {
+			fmt.Printf("failed to retrieve node status : %v\n", err)
+			continue
+		}
+		// this would wait for the next round, when we will perform the check again.
+		client.WaitForRound(nodeStatus.LastRound)
+	}
 	for addr := range accounts {
 		amount, err := client.GetBalance(addr)
 		if err != nil {
@@ -675,7 +731,13 @@ func (pps *WorkerState) sendFromTo(
 
 		successCount++
 		accounts[from] = uint64(fromBalanceChange + int64(accounts[from]))
-		accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
+		// avoid updating the "to" account :
+		// since we can't control the execution order of these transactions,
+		// we don't want to use the fact that an account has XXX algos while it does not.
+		// so, we will not "refund" the destination account, and instead we will trust
+		// that the rebalancing would refresh the accounts to their desired balances.
+		//
+		// accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
 		if cfg.DelayBetweenTxn > 0 {
 			time.Sleep(cfg.DelayBetweenTxn)
 		}
