@@ -384,7 +384,7 @@ func (handler *TxHandler) processDecodedArray(unverifiedTxGroups []transactions.
 	// before calling RememberArray we should reallocate the individual remaining
 	// signed transactions - these transactions were allocated in bulk by the
 	// transaction sync. By re-allocating the backing storage, we would allow the
-	// original backing storage ( which includes transactions that won't go intp the
+	// original backing storage ( which includes transactions that won't go into the
 	// transaction pool ) to be garbge collected.
 	for i, group := range verifiedTxGroup {
 		copiedTransactions := make(transactions.SignedTxnSlice, len(group.Transactions))
@@ -434,6 +434,10 @@ func (handler *solicitedTxHandler) Handle(txgroup []transactions.SignedTxn) erro
 // SolicitedAsyncTxHandler handles messages received through channels other than the gossip network.
 // It therefore circumvents the notion of incoming/outgoing messages
 type SolicitedAsyncTxHandler interface {
+	// HandleTransactionGroups enqueues the given slice of transaction groups that came from the given network peer with
+	// the given message sequence number. The provided acknowledgement channel provides a feedback for the transaction sync
+	// that the entire transaction group slice was added ( or already included ) within the transaction pool. The method
+	// return true if it's able to enqueue the processing task, or false if it's unable to enqueue the processing task.
 	HandleTransactionGroups(networkPeer interface{}, ackCh chan uint64, messageSeq uint64, groups []transactions.SignedTxGroup) bool
 	Start()
 	Stop()
@@ -468,6 +472,11 @@ func (handler *TxHandler) SolicitedAsyncTxHandler() SolicitedAsyncTxHandler {
 	}
 }
 
+// HandleTransactionGroups implements the SolicitedAsyncTxHandler.HandleTransactionGroups interface
+// HandleTransactionGroups enqueues the given slice of transaction groups that came from the given network peer with
+// the given message sequence number. The provided acknowledgement channel provides a feedback for the transaction sync
+// that the entire transaction group slice was added ( or already included ) within the transaction pool. The method
+// return true if it's able to enqueue the processing task, or false if it's unable to enqueue the processing task.
 func (handler *solicitedAyncTxHandler) HandleTransactionGroups(networkPeer interface{}, ackCh chan uint64, messageSeq uint64, groups []transactions.SignedTxGroup) (enqueued bool) {
 	select {
 	case handler.backlogGroups <- &txGroups{networkPeer: networkPeer, txGroups: groups, ackCh: ackCh, messageSeq: messageSeq}:
