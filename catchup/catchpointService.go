@@ -282,11 +282,11 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err))
 		}
 		psp, err := peerSelector.getNextPeer()
-		peer := psp.Peer
 		if err != nil {
 			err = fmt.Errorf("processStageLedgerDownload: catchpoint catchup was unable to obtain a list of peers to retrieve the catchpoint file from")
 			return cs.abort(err)
 		}
+		peer := psp.Peer
 		err = ledgerFetcher.downloadLedger(cs.ctx, peer, round)
 		if err == nil {
 			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedAccounts)
@@ -584,11 +584,11 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 // If the method return a nil block, the caller is expected to retry the operation, increasing the retry counter as needed.
 func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount uint64) (blk *bookkeeping.Block, downloadDuration time.Duration, psp *peerSelectorPeer, stop bool, err error) {
 	psp, err = cs.blocksDownloadPeerSelector.getNextPeer()
-	peer := psp.Peer
 	if err != nil {
 		err = fmt.Errorf("fetchBlock: unable to obtain a list of peers to retrieve the latest block from")
 		return nil, time.Duration(0), psp, true, cs.abort(err)
 	}
+	peer := psp.Peer
 
 	httpPeer, validPeer := peer.(network.HTTPPeer)
 	if !validPeer {

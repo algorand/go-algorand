@@ -56,6 +56,12 @@ func (f *RestClientFixture) SetupShared(testName string, templateFile string) {
 	f.AlgodClient = f.GetAlgodClientForController(f.NC)
 }
 
+// Start can be called to start the fixture's network if SetupNoStart() was used.
+func (f *RestClientFixture) Start() {
+	f.LibGoalFixture.Start()
+	f.AlgodClient = f.GetAlgodClientForController(f.NC)
+}
+
 // GetAlgodClientForController returns a RestClient for the specified NodeController
 func (f *RestClientFixture) GetAlgodClientForController(nc nodecontrol.NodeController) client.RestClient {
 	url, err := nc.ServerURL()
@@ -267,23 +273,38 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 
 // SendMoneyAndWait uses the rest client to send money and WaitForTxnConfirmation to wait for the send to confirm
 // it adds some extra error checking as well
-func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string) (fundingTxid string) {
+func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v1.Transaction) {
 	client := f.LibGoalClient
 	wh, err := client.GetUnencryptedWalletHandle()
 	require.NoError(f.t, err, "client should be able to get unencrypted wallet handle")
-	fundingTxid = f.SendMoneyAndWaitFromWallet(wh, nil, curRound, amountToSend, transactionFee, fromAccount, toAccount)
+	txn = f.SendMoneyAndWaitFromWallet(wh, nil, curRound, amountToSend, transactionFee, fromAccount, toAccount, closeToAccount)
 	return
 }
 
 // SendMoneyAndWaitFromWallet is as above, but for a specific wallet
-func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassword []byte, curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string) (fundingTxid string) {
+func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassword []byte, curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v1.Transaction) {
 	client := f.LibGoalClient
-	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, "", 0, 0)
+	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, closeToAccount, 0, 0)
 	require.NoError(f.t, err, "client should be able to send money from rich to poor account")
 	require.NotEmpty(f.t, fundingTx.ID().String(), "transaction ID should not be empty")
 	waitingDeadline := curRound + uint64(5)
-	_, err = f.WaitForConfirmedTxn(waitingDeadline, fromAccount, fundingTx.ID().String())
+	txn, err = f.WaitForConfirmedTxn(waitingDeadline, fromAccount, fundingTx.ID().String())
 	require.NoError(f.t, err)
+	return
+}
+
+// VerifyBlockProposedRange checks the rounds starting at fromRounds and moving backwards checking countDownNumRounds rounds if any
+// blocks were proposed by address
+func (f *RestClientFixture) VerifyBlockProposedRange(account string, fromRound, countDownNumRounds int) (blockWasProposed bool) {
+	c := f.LibGoalClient
+	for i := 0; i < countDownNumRounds; i++ {
+		block, err := c.Block(uint64(fromRound - i))
+		require.NoError(f.t, err, "client failed to get block %d", fromRound-i)
+		if block.Proposer == account {
+			blockWasProposed = true
+			break
+		}
+	}
 	return
 }
 
@@ -294,15 +315,7 @@ func (f *RestClientFixture) VerifyBlockProposed(account string, searchRange int)
 	if err != nil {
 		require.NoError(f.t, err, "client failed to get the last round")
 	}
-	for i := 0; i < searchRange; i++ {
-		block, err := c.Block(currentRound - uint64(i))
-		require.NoError(f.t, err, "client failed to get block %d", currentRound-uint64(i))
-		if block.Proposer == account {
-			blockWasProposed = true
-			break
-		}
-	}
-	return
+	return f.VerifyBlockProposedRange(account, int(currentRound), int(searchRange))
 }
 
 // GetBalancesOnSameRound gets the balances for the passed addresses, and keeps trying until the balances are all the same round

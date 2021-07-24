@@ -203,16 +203,22 @@ func BenchmarkLRUAccountsWrite(b *testing.B) {
 	fillerAccounts := generatePersistedAccountData(0, 97500)
 	accounts := generatePersistedAccountData(97500-numTestAccounts/2, 97500+numTestAccounts/2)
 
+	benchLruWrite(b, fillerAccounts, accounts)
+}
+
+func benchLruWrite(b *testing.B, fillerAccounts []persistedAccountData, accounts []persistedAccountData) {
 	b.ResetTimer()
 	b.StopTimer()
+	var baseAcct lruAccounts
+	// setting up the baseAccts with a predefined cache size
+	baseAcct.init(logging.TestingLog(b), baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	for i := 0; i < b.N; i++ {
-		var baseAcct lruAccounts
-		baseAcct.init(logging.TestingLog(b), 10, 5)
 		baseAcct = fillLRUAccounts(baseAcct, fillerAccounts)
 
 		b.StartTimer()
 		fillLRUAccounts(baseAcct, accounts)
 		b.StopTimer()
+		baseAcct.prune(0)
 	}
 }
 

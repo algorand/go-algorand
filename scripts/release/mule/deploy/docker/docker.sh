@@ -6,7 +6,7 @@
 # For betanet:
 #   ./docker.sh betanet
 #
-set -ex
+set -e
 
 if [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
     echo "[$0] NETWORK=$NETWORK or VERSION=$VERSION is missing."
@@ -23,24 +23,14 @@ pushd docker/releases
 
 if [ "$NETWORK" = mainnet ]
 then
-    # Build and push mainnet.
-   ./build_releases.sh
+  # Build and push mainnet.
+  ./build_releases.sh --tagname "$VERSION"
 
-    # Build and push testnet.
-   ./build_releases.sh --network testnet
-
-    if [ -z "$VERSION" ]
-    then
-        echo "[$0] No version specified."
-        exit 1
-    fi
-
-   ./build_releases.sh --tagname "$VERSION"
+  # Build and push testnet.
+  ./build_releases.sh --tagname "$VERSION" --network testnet --cached
 elif [ "$NETWORK" = betanet ]
 then
-  ./build_releases.sh --network betanet
-  ./build_releases.sh --network betanet --tagname "$VERSION"
+  ./build_releases.sh --tagname "$VERSION" --network betanet
 fi
 
 popd
-
