@@ -625,15 +625,19 @@ func (z *Signature) MsgIsZero() bool {
 func (z *Signer) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 3 bits */
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 5 bits */
 	if (*z).EphemeralKeys.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
+	if (*z).OriginRound == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
 	if (*z).Tree.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -643,7 +647,12 @@ func (z *Signer) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xa4, 0x6b, 0x65, 0x79, 0x73)
 			o = (*z).EphemeralKeys.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "o"
+			o = append(o, 0xa1, 0x6f)
+			o = msgp.AppendUint64(o, (*z).OriginRound)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "tree"
 			o = append(o, 0xa4, 0x74, 0x72, 0x65, 0x65)
 			o = (*z).Tree.MarshalMsg(o)
@@ -687,6 +696,14 @@ func (z *Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			(*z).OriginRound, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "OriginRound")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -721,6 +738,12 @@ func (z *Signer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Tree")
 					return
 				}
+			case "o":
+				(*z).OriginRound, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "OriginRound")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -741,13 +764,13 @@ func (_ *Signer) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Signer) Msgsize() (s int) {
-	s = 1 + 5 + (*z).EphemeralKeys.Msgsize() + 5 + (*z).Tree.Msgsize()
+	s = 1 + 5 + (*z).EphemeralKeys.Msgsize() + 5 + (*z).Tree.Msgsize() + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Signer) MsgIsZero() bool {
-	return ((*z).EphemeralKeys.MsgIsZero()) && ((*z).Tree.MsgIsZero())
+	return ((*z).EphemeralKeys.MsgIsZero()) && ((*z).Tree.MsgIsZero()) && ((*z).OriginRound == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
