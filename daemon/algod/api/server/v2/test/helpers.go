@@ -115,23 +115,7 @@ func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 }
 
 func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
-	t := transactions.Transaction{
-		Type: protocol.ApplicationCallTx,
-		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			ApplicationID:     0,
-			ApprovalProgram:   []byte("#pragma version 5\nint 1\nloop: byte \"a\"\nlog\nint 1\n+\ndup\nint 30\n<\nbnz loop"),
-			ClearStateProgram: []byte("#pragma version 5\nint 1"),
-		},
-	}
-
-	res = node.TxnWithStatus{Txn: transactions.SignedTxn{Txn: t},
-		ApplyData: transactions.ApplyData{
-			EvalDelta: basics.EvalDelta{
-				Logs: []basics.LogItem{{ID: 0, Message: "a"}},
-			},
-		},
-	}
-	res.ConfirmedRound = 1
+	res = node.TxnWithStatus{}
 	found = true
 	return
 }

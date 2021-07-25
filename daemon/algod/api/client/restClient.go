@@ -434,7 +434,8 @@ func (client RestClient) PendingTransactionInformation(transactionID string) (re
 	return
 }
 
-// PendingTransactionInformationV2 gets information about a recently issued
+// PendingTransactionInformationV2 gets information about a recently issued transaction.
+// See PendingTransactionInformation for more details.
 func (client RestClient) PendingTransactionInformationV2(transactionID string) (response generatedV2.PendingTransactionResponse, err error) {
 	transactionID = stripTransaction(transactionID)
 	err = client.get(&response, fmt.Sprintf("/v2/transactions/pending/%s", transactionID), nil)

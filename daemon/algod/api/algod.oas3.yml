@@ -1348,12 +1348,13 @@
             "type": "integer"
           },
           "value": {
-            "description": "log message",
+            "description": " base64 encoded log message",
             "type": "string"
           }
         },
         "required": [
-          "id"
+          "id",
+          "value"
         ],
         "type": "object"
       },

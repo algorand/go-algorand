@@ -127,7 +127,7 @@ func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIn
 	return found, nil
 }
 
-func (c *mockCowForLogicLedger) AppendLog(aidx basics.AppIndex, value string) error {
+func (c *mockCowForLogicLedger) AppendLog(aidx uint64, value string) error {
 	c.logs = append(c.logs, basics.LogItem{ID: aidx, Message: value})
 	return nil
 }
@@ -1341,11 +1341,22 @@ func TestLogicLedgerAppendLog(t *testing.T) {
 	addr := getRandomAddress(a)
 	aidx := basics.AppIndex(1)
 	c := newCowMock([]modsData{
-		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
+		{addr, basics.CreatableIndex(1), basics.AppCreatable},
 	})
 	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
-	err = l.AppendLog("1")
+
+	appCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion:  transactions.NoOpOC,
+		ApplicationID: 0,
+		Accounts:      []basics.Address{},
+	}
+	appCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		ApplicationCallTxnFields: appCallFields,
+	}
+
+	err = l.AppendLog(&appCall, "a")
 	a.NoError(err)
 }

@@ -127,8 +127,8 @@ func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
 type LogItem struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ID      AppIndex `codec:"id"`
-	Message string   `codec:"mg"`
+	ID      uint64 `codec:"id"`
+	Message string `codec:"mg"`
 }
 
 // EvalDelta stores StateDeltas for an application's global key/value store, as

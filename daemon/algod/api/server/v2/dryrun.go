@@ -571,14 +571,10 @@ func DeltaLogToLog(logs []basics.LogItem) *[]generated.LogItem {
 		return nil
 	}
 
-	type LogItem struct {
-		appid int
-		text  string
-	}
 	encodedLogs := make([]generated.LogItem, 0, len(logs))
 	for _, log := range logs {
 		msg := base64.StdEncoding.EncodeToString([]byte(log.Message))
-		encodedLogs = append(encodedLogs, generated.LogItem{Id: uint64(log.ID), Value: &msg})
+		encodedLogs = append(encodedLogs, generated.LogItem{Id: uint64(log.ID), Value: msg})
 	}
 	return &encodedLogs
 }

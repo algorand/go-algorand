@@ -38,7 +38,6 @@ type balanceRecord struct {
 	locals   map[basics.AppIndex]basics.TealKeyValue
 	holdings map[basics.AssetIndex]basics.AssetHolding
 	mods     map[basics.AppIndex]map[string]basics.ValueDelta
-	logs     []basics.LogItem
 }
 
 // In our test ledger, we don't store the creatables with their
@@ -84,7 +83,6 @@ func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
 		locals:   make(map[basics.AppIndex]basics.TealKeyValue),
 		holdings: make(map[basics.AssetIndex]basics.AssetHolding),
 		mods:     make(map[basics.AppIndex]map[string]basics.ValueDelta),
-		logs:     make([]basics.LogItem, 0),
 	}
 	return br
 }
@@ -467,12 +465,17 @@ func (l *testLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.E
 			}
 		}
 	}
+	evalDelta.Logs = l.logs
 	return
 }
 
-func (l *testLedger) AppendLog(value string) error {
-	appIdx := l.appID
-	_, ok := l.applications[appIdx]
+func (l *testLedger) AppendLog(txn *transactions.Transaction, value string) error {
+
+	appIdx, err := txn.IndexByID(l.appID)
+	if err != nil {
+		return err
+	}
+	_, ok := l.applications[l.appID]
 	if !ok {
 		return fmt.Errorf("no such app")
 	}
@@ -2885,4 +2888,46 @@ func TestAppLoop(t *testing.T) {
 
 	// Infinite loop because multiply by one instead of two
 	testApp(t, stateful+"int 1; loop:; int 1; *; dup; int 10; <; bnz loop; int 16; ==", ep, "dynamic cost")
+}
+
+func TestWriteLogs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+
+	ep := defaultEvalParams(nil, nil)
+	txn := makeSampleTxn()
+	txn.Txn.ApplicationID = 100
+	ep.Txn = &txn
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.Ledger = ledger
+	ledger.newApp(txn.Txn.Sender, 100, basics.AppParams{})
+
+	// write int and bytes values
+	source := `int 1
+loop: byte "a"
+log
+int 1
++
+dup
+int 30
+<
+bnz loop
+`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+	err = CheckStateful(ops.Program, ep)
+	require.NoError(t, err)
+	pass, err := EvalStateful(ops.Program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	delta, err := ledger.GetDelta(&ep.Txn.Txn)
+	require.NoError(t, err)
+	require.Empty(t, 0, delta.GlobalDelta)
+	require.Empty(t, delta.LocalDeltas)
+	require.Len(t, delta.Logs, 29)
 }

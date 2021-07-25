@@ -535,7 +535,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
 		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
 		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
-		response.Logs = convertToLogItems(txn)
+		response.Logs = convertToLogItems(txn, response.ApplicationIndex)
 	}
 	data, err := encode(handle, response)
 

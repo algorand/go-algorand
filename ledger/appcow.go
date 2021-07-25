@@ -426,9 +426,8 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 }
 
 // AppendLog adds message in logs
-func (cb *roundCowState) AppendLog(aidx basics.AppIndex, value string) error {
-
-	cb.logs = append(cb.logs, basics.LogItem{ID: aidx, Message: value})
+func (cb *roundCowState) AppendLog(idx uint64, value string) error {
+	cb.logs = append(cb.logs, basics.LogItem{ID: idx, Message: value})
 	return nil
 }
 

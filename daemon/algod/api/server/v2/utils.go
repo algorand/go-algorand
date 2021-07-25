@@ -266,7 +266,7 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
 }
 
-func convertToLogItems(txn node.TxnWithStatus) *[]generated.LogItem {
+func convertToLogItems(txn node.TxnWithStatus, aidx *uint64) *[]generated.LogItem {
 	var logItems *[]generated.LogItem
 	if len(txn.ApplyData.EvalDelta.Logs) > 0 {
 		l := make([]generated.LogItem, 0)
@@ -274,14 +274,14 @@ func convertToLogItems(txn node.TxnWithStatus) *[]generated.LogItem {
 		for _, v := range txn.ApplyData.EvalDelta.Logs {
 			// Resolve appid from index
 			var appid uint64
-			if v.ID == 0 {
-				appid = uint64(txn.Txn.Txn.ApplicationID)
+			if txn.Txn.Txn.ApplicationID == 0 && aidx != nil {
+				appid = *aidx
 			} else {
 				//to be added when app to app call is available
 			}
 			l = append(l, generated.LogItem{
 				Id:    appid,
-				Value: &v.Message,
+				Value: v.Message,
 			})
 		}
 

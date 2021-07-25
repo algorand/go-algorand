@@ -1362,13 +1362,13 @@ func TestCowAppendLog(t *testing.T) {
 	a := require.New(t)
 
 	addr := getRandomAddress(a)
-	aidx := basics.AppIndex(1)
+	aidx := basics.AppIndex(0)
 	c := getCow([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 	})
 
 	c.logs = []basics.LogItem{}
-	err := c.AppendLog(aidx, "val")
+	err := c.AppendLog(uint64(aidx), "val")
 	a.NoError(err)
 	a.Equal(len(c.logs), 1)
 }

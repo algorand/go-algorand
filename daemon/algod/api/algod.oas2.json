@@ -1922,7 +1922,7 @@
       "type": "object",
       "required": [
         "id",
-        "message"
+        "value"
       ],
       "properties": {
         "id": {
@@ -1930,7 +1930,7 @@
           "type": "integer"
         },
         "value": {
-          "description": "log message",
+          "description": " base64 encoded log message",
           "type": "string"
         }
       }

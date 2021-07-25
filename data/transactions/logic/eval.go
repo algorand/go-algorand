@@ -163,7 +163,7 @@ type LedgerForLogic interface {
 
 	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
 
-	AppendLog(value string) error
+	AppendLog(txn *transactions.Transaction, value string) error
 	GetLogs() []basics.LogItem
 }
 
@@ -3152,7 +3152,7 @@ func opLog(cx *evalContext) {
 		return
 	}
 	// write log to applyData
-	err := cx.Ledger.AppendLog(string(log.Bytes))
+	err := cx.Ledger.AppendLog(&cx.Txn.Txn, string(log.Bytes))
 	if err != nil {
 		cx.err = err
 		return

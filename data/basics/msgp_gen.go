@@ -4218,7 +4218,29 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Logs)))
 			}
 			for zb0007 := range (*z).Logs {
-				o = (*z).Logs[zb0007].MarshalMsg(o)
+				// omitempty: check for empty values
+				zb0009Len := uint32(2)
+				var zb0009Mask uint8 /* 3 bits */
+				if (*z).Logs[zb0007].ID == 0 {
+					zb0009Len--
+					zb0009Mask |= 0x2
+				}
+				if (*z).Logs[zb0007].Message == "" {
+					zb0009Len--
+					zb0009Mask |= 0x4
+				}
+				// variable map header, size zb0009Len
+				o = append(o, 0x80|uint8(zb0009Len))
+				if (zb0009Mask & 0x2) == 0 { // if not empty
+					// string "id"
+					o = append(o, 0xa2, 0x69, 0x64)
+					o = msgp.AppendUint64(o, (*z).Logs[zb0007].ID)
+				}
+				if (zb0009Mask & 0x4) == 0 { // if not empty
+					// string "mg"
+					o = append(o, 0xa2, 0x6d, 0x67)
+					o = msgp.AppendString(o, (*z).Logs[zb0007].Message)
+				}
 			}
 		}
 	}
@@ -4365,10 +4387,74 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).Logs = make([]LogItem, zb0016)
 			}
 			for zb0007 := range (*z).Logs {
-				bts, err = (*z).Logs[zb0007].UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007)
-					return
+				var zb0018 int
+				var zb0019 bool
+				zb0018, zb0019, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007)
+						return
+					}
+					if zb0018 > 0 {
+						zb0018--
+						(*z).Logs[zb0007].ID, bts, err = msgp.ReadUint64Bytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007, "struct-from-array", "ID")
+							return
+						}
+					}
+					if zb0018 > 0 {
+						zb0018--
+						(*z).Logs[zb0007].Message, bts, err = msgp.ReadStringBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007, "struct-from-array", "Message")
+							return
+						}
+					}
+					if zb0018 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0018)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007, "struct-from-array")
+							return
+						}
+					}
+				} else {
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007)
+						return
+					}
+					if zb0019 {
+						(*z).Logs[zb0007] = LogItem{}
+					}
+					for zb0018 > 0 {
+						zb0018--
+						field, bts, err = msgp.ReadMapKeyZC(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007)
+							return
+						}
+						switch string(field) {
+						case "id":
+							(*z).Logs[zb0007].ID, bts, err = msgp.ReadUint64Bytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007, "ID")
+								return
+							}
+						case "mg":
+							(*z).Logs[zb0007].Message, bts, err = msgp.ReadStringBytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007, "Message")
+								return
+							}
+						default:
+							err = msgp.ErrNoField(string(field))
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "Logs", zb0007)
+								return
+							}
+						}
+					}
 				}
 			}
 		}
@@ -4396,27 +4482,27 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "gd":
-				var zb0018 int
-				var zb0019 bool
-				zb0018, zb0019, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0020 int
+				var zb0021 bool
+				zb0020, zb0021, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "GlobalDelta")
 					return
 				}
-				if zb0018 > config.MaxStateDeltaKeys {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(config.MaxStateDeltaKeys))
+				if zb0020 > config.MaxStateDeltaKeys {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxStateDeltaKeys))
 					err = msgp.WrapError(err, "GlobalDelta")
 					return
 				}
-				if zb0019 {
+				if zb0021 {
 					(*z).GlobalDelta = nil
 				} else if (*z).GlobalDelta == nil {
-					(*z).GlobalDelta = make(StateDelta, zb0018)
+					(*z).GlobalDelta = make(StateDelta, zb0020)
 				}
-				for zb0018 > 0 {
+				for zb0020 > 0 {
 					var zb0001 string
 					var zb0002 ValueDelta
-					zb0018--
+					zb0020--
 					zb0001, bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "GlobalDelta")
@@ -4430,53 +4516,53 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).GlobalDelta[zb0001] = zb0002
 				}
 			case "ld":
-				var zb0020 int
-				var zb0021 bool
-				zb0020, zb0021, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0022 int
+				var zb0023 bool
+				zb0022, zb0023, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "LocalDeltas")
 					return
 				}
-				if zb0020 > config.MaxEvalDeltaAccounts {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxEvalDeltaAccounts))
+				if zb0022 > config.MaxEvalDeltaAccounts {
+					err = msgp.ErrOverflow(uint64(zb0022), uint64(config.MaxEvalDeltaAccounts))
 					err = msgp.WrapError(err, "LocalDeltas")
 					return
 				}
-				if zb0021 {
+				if zb0023 {
 					(*z).LocalDeltas = nil
 				} else if (*z).LocalDeltas == nil {
-					(*z).LocalDeltas = make(map[uint64]StateDelta, zb0020)
+					(*z).LocalDeltas = make(map[uint64]StateDelta, zb0022)
 				}
-				for zb0020 > 0 {
+				for zb0022 > 0 {
 					var zb0003 uint64
 					var zb0004 StateDelta
-					zb0020--
+					zb0022--
 					zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "LocalDeltas")
 						return
 					}
-					var zb0022 int
-					var zb0023 bool
-					zb0022, zb0023, bts, err = msgp.ReadMapHeaderBytes(bts)
+					var zb0024 int
+					var zb0025 bool
+					zb0024, zb0025, bts, err = msgp.ReadMapHeaderBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "LocalDeltas", zb0003)
 						return
 					}
-					if zb0022 > config.MaxStateDeltaKeys {
-						err = msgp.ErrOverflow(uint64(zb0022), uint64(config.MaxStateDeltaKeys))
+					if zb0024 > config.MaxStateDeltaKeys {
+						err = msgp.ErrOverflow(uint64(zb0024), uint64(config.MaxStateDeltaKeys))
 						err = msgp.WrapError(err, "LocalDeltas", zb0003)
 						return
 					}
-					if zb0023 {
+					if zb0025 {
 						zb0004 = nil
 					} else if zb0004 == nil {
-						zb0004 = make(StateDelta, zb0022)
+						zb0004 = make(StateDelta, zb0024)
 					}
-					for zb0022 > 0 {
+					for zb0024 > 0 {
 						var zb0005 string
 						var zb0006 ValueDelta
-						zb0022--
+						zb0024--
 						zb0005, bts, err = msgp.ReadStringBytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "LocalDeltas", zb0003)
@@ -4492,30 +4578,94 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).LocalDeltas[zb0003] = zb0004
 				}
 			case "lg":
-				var zb0024 int
-				var zb0025 bool
-				zb0024, zb0025, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0026 int
+				var zb0027 bool
+				zb0026, zb0027, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Logs")
 					return
 				}
-				if zb0024 > config.MaxEvalDeltaAccounts {
-					err = msgp.ErrOverflow(uint64(zb0024), uint64(config.MaxEvalDeltaAccounts))
+				if zb0026 > config.MaxEvalDeltaAccounts {
+					err = msgp.ErrOverflow(uint64(zb0026), uint64(config.MaxEvalDeltaAccounts))
 					err = msgp.WrapError(err, "Logs")
 					return
 				}
-				if zb0025 {
+				if zb0027 {
 					(*z).Logs = nil
-				} else if (*z).Logs != nil && cap((*z).Logs) >= zb0024 {
-					(*z).Logs = ((*z).Logs)[:zb0024]
+				} else if (*z).Logs != nil && cap((*z).Logs) >= zb0026 {
+					(*z).Logs = ((*z).Logs)[:zb0026]
 				} else {
-					(*z).Logs = make([]LogItem, zb0024)
+					(*z).Logs = make([]LogItem, zb0026)
 				}
 				for zb0007 := range (*z).Logs {
-					bts, err = (*z).Logs[zb0007].UnmarshalMsg(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Logs", zb0007)
-						return
+					var zb0028 int
+					var zb0029 bool
+					zb0028, zb0029, bts, err = msgp.ReadMapHeaderBytes(bts)
+					if _, ok := err.(msgp.TypeError); ok {
+						zb0028, zb0029, bts, err = msgp.ReadArrayHeaderBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Logs", zb0007)
+							return
+						}
+						if zb0028 > 0 {
+							zb0028--
+							(*z).Logs[zb0007].ID, bts, err = msgp.ReadUint64Bytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Logs", zb0007, "struct-from-array", "ID")
+								return
+							}
+						}
+						if zb0028 > 0 {
+							zb0028--
+							(*z).Logs[zb0007].Message, bts, err = msgp.ReadStringBytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Logs", zb0007, "struct-from-array", "Message")
+								return
+							}
+						}
+						if zb0028 > 0 {
+							err = msgp.ErrTooManyArrayFields(zb0028)
+							if err != nil {
+								err = msgp.WrapError(err, "Logs", zb0007, "struct-from-array")
+								return
+							}
+						}
+					} else {
+						if err != nil {
+							err = msgp.WrapError(err, "Logs", zb0007)
+							return
+						}
+						if zb0029 {
+							(*z).Logs[zb0007] = LogItem{}
+						}
+						for zb0028 > 0 {
+							zb0028--
+							field, bts, err = msgp.ReadMapKeyZC(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Logs", zb0007)
+								return
+							}
+							switch string(field) {
+							case "id":
+								(*z).Logs[zb0007].ID, bts, err = msgp.ReadUint64Bytes(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "Logs", zb0007, "ID")
+									return
+								}
+							case "mg":
+								(*z).Logs[zb0007].Message, bts, err = msgp.ReadStringBytes(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "Logs", zb0007, "Message")
+									return
+								}
+							default:
+								err = msgp.ErrNoField(string(field))
+								if err != nil {
+									err = msgp.WrapError(err, "Logs", zb0007)
+									return
+								}
+							}
+						}
 					}
 				}
 			default:
@@ -4563,7 +4713,7 @@ func (z *EvalDelta) Msgsize() (s int) {
 	}
 	s += 3 + msgp.ArrayHeaderSize
 	for zb0007 := range (*z).Logs {
-		s += (*z).Logs[zb0007].Msgsize()
+		s += 1 + 3 + msgp.Uint64Size + 3 + msgp.StringPrefixSize + len((*z).Logs[zb0007].Message)
 	}
 	return
 }
@@ -4593,7 +4743,7 @@ func (z *LogItem) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "id"
 			o = append(o, 0xa2, 0x69, 0x64)
-			o = msgp.AppendUint64(o, uint64((*z).ID))
+			o = msgp.AppendUint64(o, (*z).ID)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "mg"
@@ -4624,14 +4774,10 @@ func (z *LogItem) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			{
-				var zb0003 uint64
-				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "ID")
-					return
-				}
-				(*z).ID = AppIndex(zb0003)
+			(*z).ID, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ID")
+				return
 			}
 		}
 		if zb0001 > 0 {
@@ -4666,14 +4812,10 @@ func (z *LogItem) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "id":
-				{
-					var zb0004 uint64
-					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "ID")
-						return
-					}
-					(*z).ID = AppIndex(zb0004)
+				(*z).ID, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ID")
+					return
 				}
 			case "mg":
 				(*z).Message, bts, err = msgp.ReadStringBytes(bts)

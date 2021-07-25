@@ -343,8 +343,8 @@ type LogItem struct {
 	// unique application identifier
 	Id uint64 `json:"id"`
 
-	// log message
-	Value *string `json:"value,omitempty"`
+	//  base64 encoded log message
+	Value string `json:"value"`
 }
 
 // StateDelta defines model for StateDelta.

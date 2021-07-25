@@ -117,3 +117,22 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestIDByIndex(t *testing.T) {
+	a := require.New(t)
+	ac := ApplicationCallTxnFields{}
+	ac.ApplicationID = 1
+	appID, err := ac.IDByIndex(0)
+	a.NoError(err)
+	a.Equal(basics.AppIndex(1), appID)
+
+}
+
+func TestIndexByID(t *testing.T) {
+	a := require.New(t)
+	ac := ApplicationCallTxnFields{}
+	ac.ApplicationID = 1
+	aidx, err := ac.IndexByID(1)
+	a.NoError(err)
+	a.Equal(uint64(0), aidx)
+}
