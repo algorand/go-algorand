@@ -20,10 +20,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 
 	"github.com/stretchr/testify/require"
 
@@ -185,6 +186,7 @@ func TestRetrieveFromDB(t *testing.T) {
 
 	// comparing the outputs:
 	a.Equal(intoComparable(part), intoComparable(retrievedPart))
+
 }
 
 func TestRetrieveFromDBAtVersion1(t *testing.T) {
@@ -359,7 +361,7 @@ type comparablePartition struct {
 
 	VRF        crypto.VRFSecrets
 	Voting     []byte
-	blockProof merklekeystore.Signer
+	blockProof []byte
 
 	FirstValid basics.Round
 	LastValid  basics.Round
@@ -372,7 +374,7 @@ func intoComparable(part PersistedParticipation) comparablePartition {
 		Parent:      part.Parent,
 		VRF:         *part.VRF,
 		Voting:      part.Voting.MarshalMsg(nil),
-		blockProof:  *part.BlockProof,
+		blockProof:  protocol.Encode(part.BlockProof),
 		FirstValid:  part.FirstValid,
 		LastValid:   part.LastValid,
 		KeyDilution: part.KeyDilution,
