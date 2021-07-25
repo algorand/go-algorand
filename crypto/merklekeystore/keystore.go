@@ -181,7 +181,8 @@ func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 	return pos, nil
 }
 
-// Trim takes a round, shortness it and outputs the original signer - which can be used for storage.
+// Trim shortness deletes keys that existed before a specific round,
+// the output is a copy of the signer - which can be persisted.
 func (m *Signer) Trim(before uint64) *Signer {
 	m.mu.Lock()
 	defer m.mu.Unlock()
