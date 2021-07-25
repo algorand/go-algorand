@@ -19,6 +19,7 @@ package transactions
 import (
 	"errors"
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 
 	"github.com/algorand/go-algorand/config"
@@ -252,7 +253,6 @@ var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries 
 var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
 var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
 var errKeyRegEmptyBlockProofPK = errors.New("online keyreg transaction cannot have empty field BlockProofPK")
-var errKeyReginvalidBlockProofPK = errors.New("transaction field BlockProofPK is invalid")
 var errKeyregTxnNotEmptyBLockProofPK = errors.New("transaction field BlockProofPK should be empty in this consensus version")
 var errKeyregTxnNonParticipantShouldBeEmptyBlockProofPK = errors.New("non participation keyreg transactions should contain empty blockProofPK")
 var errKeyregTxnOfflineShouldBeEmptyBlockProofPK = errors.New("offline keyreg transactions should contain empty blockProofPK")
