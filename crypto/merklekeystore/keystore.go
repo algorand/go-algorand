@@ -33,7 +33,8 @@ type (
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		SignatureAlgorithms []crypto.SignatureAlgorithm `codec:"sks,allocbound=-"`
-		FirstRound          uint64                      `codec:"rnd"`
+		// indicates the round that matches SignatureAlgorithms[0].
+		FirstRound uint64 `codec:"rnd"`
 	}
 
 	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
@@ -67,7 +68,7 @@ type (
 		Tree          merklearray.Tree `codec:"tree"`
 		mu            deadlock.RWMutex
 
-		// roots the location of the first valid round.
+		// using this field, the signer can get the accurate location of merkle proof in the merklearray.Tree.
 		OriginRound uint64 `codec:"o"`
 	}
 
