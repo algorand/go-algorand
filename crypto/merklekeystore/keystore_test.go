@@ -217,7 +217,7 @@ func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Has
 
 	sig, err := signer.Sign(hashable, sigRound)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(signer.FirstRound, sigRound, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(signer.EphemeralKeys.FirstRound, sigRound, hashable, sig))
 	return hashable, sig
 }
 
