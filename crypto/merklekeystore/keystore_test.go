@@ -208,11 +208,17 @@ func TestMarshal(t *testing.T) {
 	out := protocol.Encode(signer)
 	decodeInto := &Signer{}
 	a.NoError(protocol.Decode(out, decodeInto))
-	a.Equal(*signer, *decodeInto)
+	compareSigners(a, signer, decodeInto)
 
 	// check that after trim the output stays the same.
 	cpy := signer.Trim(5)
 	a.Equal(protocol.Encode(signer), protocol.Encode(cpy))
+}
+
+func compareSigners(a *require.Assertions, signer *Signer, cpy *Signer) {
+	a.Equal(signer.Tree, cpy.Tree)
+	a.Equal(signer.OriginRound, cpy.OriginRound)
+	a.Equal(signer.EphemeralKeys, cpy.EphemeralKeys)
 }
 
 func TestKeySliceAfterSignerTrim(t *testing.T) {
