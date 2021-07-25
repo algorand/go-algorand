@@ -1291,15 +1291,16 @@ const nowhere int = -2
 const exiting int = -3
 const erroring int = -4
 
+//A BasicBlock is a structure through which control can only flow in through start and out through end
 type BasicBlock struct {
-	startIndex       int
-	endIndex         int
-	expectedStackTop []StackType
-	stackDelta       []StackType
-	sourceErrors     []int
-	jumpTo           int
-	flowTo           int
-	callSubs         bool
+	startIndex       int         //index into ops.pending.Bytes()
+	endIndex         int         //Note this is the beginning of the last op in the block, somewhat unnecessary but we'll keep it for now
+	expectedStackTop []StackType //What the block requires to be on top of the stack in order to complete
+	stackDelta       []StackType //What the block net pushes to the stack
+	sourceErrors     []int       //Sourcelines for each entry in expectedStackTop which is useful for listing sourcelines for errors
+	jumpTo           int         //Index into ops.blocks, where control can jump to out of the block, i.e. via a branch
+	flowTo           int         //Where control can flow to, i.e. the block immediately following a conditional branch
+	callSubs         bool        //Whether or not the block contains a callsub instruction, redundant for now but potentially useful later if blocks get combined
 }
 
 func (ops *OpStream) fixJumpsAndFlows() {
