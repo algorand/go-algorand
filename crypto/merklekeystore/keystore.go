@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// currently, deletion uses rounds, some goroutine runs and calls for deleting and storing
 type (
 	// EphemeralKeys represent the possible keys inside the keystore.
 	// Each key in this struct will be used in a specific round.
@@ -31,7 +32,7 @@ type (
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		SignatureAlgorithms []crypto.SignatureAlgorithm `codec:"sks,allocbound=-"`
-		firstRound          uint64                      `codec:"rnd"`
+		FirstRound          uint64                      `codec:"rnd"`
 	}
 
 	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
@@ -62,7 +63,6 @@ type (
 		// these keys are the keys used to sign in a round.
 		// should be disposed of once possible.
 		EphemeralKeys EphemeralKeys    `codec:"keys"`
-		FirstRound    uint64           `codec:"srnd"`
 		Tree          merklearray.Tree `codec:"tree"`
 	}
 
@@ -89,7 +89,7 @@ func (d *EphemeralKeys) Length() uint64 {
 func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 	ephPK := CommittablePublicKey{
 		VerifyingKey: d.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
-		Round:        d.firstRound + pos,
+		Round:        d.FirstRound + pos,
 	}
 	return crypto.HashObj(&ephPK), nil
 }
@@ -109,7 +109,7 @@ func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType) (*Signe
 	}
 	ephKeys := EphemeralKeys{
 		SignatureAlgorithms: keys,
-		firstRound:          firstValid,
+		FirstRound:          firstValid,
 	}
 	tree, err := merklearray.Build(&ephKeys)
 	if err != nil {
@@ -118,7 +118,6 @@ func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType) (*Signe
 
 	return &Signer{
 		EphemeralKeys: ephKeys,
-		FirstRound:    firstValid,
 		Tree:          *tree,
 	}, nil
 }
@@ -129,6 +128,12 @@ func (m *Signer) GetVerifier() *Verifier {
 		Root: m.Tree.Root(),
 	}
 }
+
+// how do we dilute the keys? in a way that makes sense?
+// in `oneTimeSig` they didn't really dilute keys, but only created what they needed for each round.
+// here we know we'll need the keys every 1K messages or so.
+// why not distribute the key to cover X rounds where there is at most one comp cert in that round?
+// i think that's okay.
 
 // Sign outputs a signature + proof for the signing key.
 func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
@@ -153,11 +158,11 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 var errOutOfBounds = fmt.Errorf("cannot find signing key for given round")
 
 func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
-	if round < m.FirstRound {
+	if round < m.EphemeralKeys.FirstRound {
 		return 0, errOutOfBounds
 	}
 
-	pos := round - m.FirstRound
+	pos := round - m.EphemeralKeys.FirstRound
 	if pos >= uint64(len(m.EphemeralKeys.SignatureAlgorithms)) {
 		return 0, errOutOfBounds
 	}
