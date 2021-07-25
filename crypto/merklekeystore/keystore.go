@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-deadlock"
 )
 
 // currently, deletion uses rounds, some goroutine runs and calls for deleting and storing
@@ -64,6 +65,10 @@ type (
 		// should be disposed of once possible.
 		EphemeralKeys EphemeralKeys    `codec:"keys"`
 		Tree          merklearray.Tree `codec:"tree"`
+		mu            deadlock.RWMutex
+
+		// roots the location of the first valid round.
+		OriginRound uint64 `codec:"o"`
 	}
 
 	// Verifier Is a way to verify a Signature produced by merklekeystore.Signer.
@@ -119,6 +124,8 @@ func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType) (*Signe
 	return &Signer{
 		EphemeralKeys: ephKeys,
 		Tree:          *tree,
+		mu:            deadlock.RWMutex{},
+		OriginRound:   firstValid,
 	}, nil
 }
 
@@ -137,12 +144,15 @@ func (m *Signer) GetVerifier() *Verifier {
 
 // Sign outputs a signature + proof for the signing key.
 func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	pos, err := m.getKeyPosition(round)
 	if err != nil {
 		return Signature{}, err
 	}
-
-	proof, err := m.Tree.Prove([]uint64{pos})
+	// need to get round - originPoint
+	proof, err := m.Tree.Prove([]uint64{round - m.OriginRound})
 	if err != nil {
 		return Signature{}, err
 	}
@@ -155,11 +165,12 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	}, nil
 }
 
-var errOutOfBounds = fmt.Errorf("cannot find signing key for given round")
+var errReceivedRoundIsBeforeFirst = fmt.Errorf("round translated to be prior to first key position")
+var errOutOfBounds = fmt.Errorf("round translated to be after last key position")
 
 func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 	if round < m.EphemeralKeys.FirstRound {
-		return 0, errOutOfBounds
+		return 0, errReceivedRoundIsBeforeFirst
 	}
 
 	pos := round - m.EphemeralKeys.FirstRound
@@ -169,10 +180,67 @@ func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 	return pos, nil
 }
 
+// Trim takes a round, shortness it and outputs the original signer - which can be used for storage.
+func (m *Signer) Trim(before uint64) *Signer {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	pos, err := m.getKeyPosition(before)
+	switch err {
+	case errReceivedRoundIsBeforeFirst:
+		cpy := m.copy()
+		return cpy
+	case errOutOfBounds:
+		m.dropKeys(len(m.EphemeralKeys.SignatureAlgorithms))
+	default:
+		if pos == 0 {
+			return m.copy()
+		}
+		m.dropKeys(int(pos))
+	}
+	m.EphemeralKeys.FirstRound = uint64(before)
+	cpy := m.copy()
+
+	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
+	// e.g: A=A[len(A)-20:] doesn't mean the garbage collector will free parts of memory from the array.
+	// assuming that cpy will be used briefly and then dropped - it's better to swap their key slices.
+	m.EphemeralKeys.SignatureAlgorithms, cpy.EphemeralKeys.SignatureAlgorithms =
+		cpy.EphemeralKeys.SignatureAlgorithms, m.EphemeralKeys.SignatureAlgorithms
+
+	return cpy
+}
+
+func (m *Signer) copy() *Signer {
+	signerCopy := Signer{
+		_struct: struct{}{},
+		EphemeralKeys: EphemeralKeys{
+			_struct:             struct{}{},
+			SignatureAlgorithms: make([]crypto.SignatureAlgorithm, len(m.EphemeralKeys.SignatureAlgorithms)),
+			FirstRound:          m.EphemeralKeys.FirstRound,
+		},
+		Tree: m.Tree,
+		mu:   deadlock.RWMutex{},
+	}
+
+	copy(signerCopy.EphemeralKeys.SignatureAlgorithms, m.EphemeralKeys.SignatureAlgorithms)
+	return &signerCopy
+}
+
+func (m *Signer) dropKeys(upTo int) {
+	if l := len(m.EphemeralKeys.SignatureAlgorithms); l < upTo {
+		upTo = l
+	}
+	for i := 0; i < upTo; i++ {
+		// zero the keys.
+		m.EphemeralKeys.SignatureAlgorithms[i] = crypto.SignatureAlgorithm{}
+	}
+	m.EphemeralKeys.SignatureAlgorithms = m.EphemeralKeys.SignatureAlgorithms[upTo:]
+}
+
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
 func (v *Verifier) Verify(firstValid, round uint64, obj crypto.Hashable, sig Signature) error {
 	if round < firstValid {
-		return errOutOfBounds
+		return errReceivedRoundIsBeforeFirst
 	}
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,

@@ -23,7 +23,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -203,13 +202,68 @@ func TestVerifierMarshal(t *testing.T) {
 
 func TestMarshal(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 0, crypto.PlaceHolderType)
+	signer, err := New(0, 10, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	out := protocol.Encode(signer)
 	decodeInto := &Signer{}
 	a.NoError(protocol.Decode(out, decodeInto))
 	a.Equal(*signer, *decodeInto)
+
+	// check that after trim the output stays the same.
+	cpy := signer.Trim(5)
+	a.Equal(protocol.Encode(signer), protocol.Encode(cpy))
+}
+
+func TestKeySliceAfterSignerTrim(t *testing.T) {
+	a := require.New(t)
+	signer, err := New(1, 100, crypto.PlaceHolderType)
+	a.NoError(err)
+
+	cpy := signer.Trim(1)
+	a.Equal(cpy.EphemeralKeys.FirstRound, uint64(1))
+	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 100)
+
+	cpy = signer.Trim(10)
+	a.Equal(cpy.EphemeralKeys.FirstRound, uint64(10))
+	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 91)
+	a.Equal(signer.EphemeralKeys.FirstRound, uint64(10))
+	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 91)
+
+	cpy = signer.Trim(101)
+	a.Equal(cpy.EphemeralKeys.FirstRound, uint64(101))
+	a.Equal(signer.EphemeralKeys.FirstRound, uint64(101))
+	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 0)
+	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 0)
+
+	signer, err = New(1, 10, crypto.PlaceHolderType)
+	a.NoError(err)
+
+	for i := uint64(1); i <= 10; i++ {
+		cpy = signer.Trim(i + 1)
+		a.Equal(cpy.EphemeralKeys.FirstRound, i+1)
+		a.Equal(signer.EphemeralKeys.FirstRound, i+1)
+		a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), int(10-i))
+		a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), int(10-i))
+	}
+}
+
+func TestKeyDeletion(t *testing.T) {
+	a := require.New(t)
+	signer, err := New(0, 60, crypto.PlaceHolderType)
+	a.NoError(err)
+
+	signer.Trim(50)
+	_, err = signer.Sign(genHashableForTest(), 49)
+	a.Error(err)
+
+	for i := uint64(50); i <= 60; i++ {
+		sig, err := signer.Sign(genHashableForTest(), i)
+		a.NoError(err)
+
+		a.NoError(signer.GetVerifier().Verify(0, i, genHashableForTest(), sig))
+	}
+
 }
 
 func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
