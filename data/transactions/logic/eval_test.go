@@ -4034,10 +4034,10 @@ func obfuscate(program string) string {
 	// but prevents assembly from detecting type errors.  Allows
 	// evaluation testing of a program that would be rejected by
 	// assembler.
-	if strings.Contains(program, "obfuscate") {
+	if strings.Contains(program, "#pragma disable typecheck") {
 		return program // Already done.  Tests sometimes use at multiple levels
 	}
-	return "int 0;bnz obfuscate;obfuscate:;" + program
+	return "#pragma disable typecheck;" + program
 }
 
 type evalTester func(pass bool, err error) bool
