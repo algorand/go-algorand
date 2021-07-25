@@ -19,6 +19,7 @@ package transactions
 import (
 	"errors"
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 
 	"github.com/algorand/go-algorand/config"
