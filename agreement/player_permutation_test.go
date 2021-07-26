@@ -42,17 +42,29 @@ func makeRandomProposalPayload(r round) *proposal {
 
 var errTestVerifyFailed = makeSerErrStr("test error")
 
+type playerPermutation int
+
+const (
+	playerSameRound = iota
+	playerNextRound
+	playerPrevRoundPendingPayloadPresent
+	playerSameRoundProcessedProposalVote
+	playerSameRoundReachedSoftThreshold
+	playerSameRoundReachedCertThreshold
+	playerSameRoundProcessedProposal
+)
+
 func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper) {
 	const r = round(209)
 	const p = period(0)
 	var payload = makeRandomProposalPayload(r)
 	var pV = payload.value()
 	switch n {
-	case 0: // same round and period as proposal
+	case playerSameRound: // same round and period as proposal
 		return setupP(t, r, p, soft)
-	case 1: // one round ahead of proposal
+	case playerNextRound: // one round ahead of proposal
 		return setupP(t, r+1, p, soft)
-	case 2:
+	case playerPrevRoundPendingPayloadPresent:
 		plyr, pMachine, helper = setupP(t, r-1, p, soft)
 		plyr.Pending.push(&messageEvent{
 			T: payloadPresent,
@@ -61,7 +73,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 				UnauthenticatedProposal: payload.u(),
 			},
 		})
-	case 3: // already processed proposal vote
+	case playerSameRoundProcessedProposalVote: // already processed proposal vote
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
@@ -73,7 +85,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.Children[r].Children[p].ProposalTracker.Duplicate[helper.addresses[0]] = true
 		pM.Children[r].Children[p].ProposalTrackerContract.SawOneVote = true
 		pM.Children[r].Children[p].update(0)
-	case 4: // already reached soft threshold
+	case playerSameRoundReachedSoftThreshold: // already reached soft threshold
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
@@ -86,7 +98,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.Children[r].Children[p].ProposalTracker.Staging = pV
 		pM.Children[r].Children[p].ProposalTrackerContract.SawOneVote = true
 		pM.Children[r].Children[p].update(0)
-	case 5: // already reached cert threshold
+	case playerSameRoundReachedCertThreshold: // already reached cert threshold
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
@@ -101,7 +113,7 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 		pM.Children[r].Children[p].ProposalTracker.Staging = pV
 		pM.Children[r].Children[p].ProposalTrackerContract.SawOneVote = true
 		pM.Children[r].Children[p].update(0)
-	case 6: // already processed proposal
+	case playerSameRoundProcessedProposal: // already processed proposal
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
 		pM.update(*plyr, r, true)
@@ -119,13 +131,32 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 	return
 }
 
+type messageEventPermutation int
+
+const (
+	softVoteVerifiedEventSamePeriod = iota
+	softVotePresentEventSamePeriod
+	proposeVoteVerifiedEventNextPeriod
+	proposeVoteVerifiedEventSamePeriod
+	proposeVotePresentEventSamePeriod
+	payloadPresentEvent
+	payloadVerifiedEvent
+	payloadVerifiedEventNoMessageHandle
+	bundleVerifiedEventSamePeriod
+	bundlePresentEventSamePeriod
+	softVoteVerifiedErrorEventSamePeriod
+	proposeVoteVerifiedErrorEventSamePeriod
+	bundleVerifiedErrorEvent
+	payloadVerifiedErrorEvent
+)
+
 func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e messageEvent) {
 	const r = round(209)
 	const p = period(0)
 	var payload = makeRandomProposalPayload(r)
 	var pV = payload.value()
 	switch n {
-	case 0:
+	case softVoteVerifiedEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 		e = messageEvent{
 			T: voteVerified,
@@ -136,7 +167,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			},
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
-	case 1:
+	case softVotePresentEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 		e = messageEvent{
 			T: votePresent,
@@ -146,7 +177,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			},
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
-	case 2:
+	case proposeVoteVerifiedEventNextPeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
 		e = messageEvent{
 			T: voteVerified,
@@ -157,7 +188,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			},
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
-	case 3:
+	case proposeVoteVerifiedEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
 		e = messageEvent{
 			T: voteVerified,
@@ -169,7 +200,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			TaskIndex: 1,
 			Proto:     ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
-	case 4:
+	case proposeVotePresentEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
 		e = messageEvent{
 			T: votePresent,
@@ -179,7 +210,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			},
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
-	case 5:
+	case payloadPresentEvent:
 		e = messageEvent{
 			T: payloadPresent,
 			Input: message{
@@ -187,7 +218,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 				UnauthenticatedProposal: payload.u(),
 			},
 		}
-	case 6:
+	case payloadVerifiedEvent:
 		e = messageEvent{
 			T: payloadVerified,
 			Input: message{
@@ -196,7 +227,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 				Proposal:                *payload,
 			},
 		}
-	case 7:
+	case payloadVerifiedEventNoMessageHandle:
 		e = messageEvent{
 			T: payloadVerified,
 			Input: message{
@@ -204,7 +235,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 				Proposal:                *payload,
 			},
 		}
-	case 8:
+	case bundleVerifiedEventSamePeriod:
 		votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 		for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 			votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
@@ -225,7 +256,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			},
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
-	case 9:
+	case bundlePresentEventSamePeriod:
 		votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 		for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 			votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
@@ -242,7 +273,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			},
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
-	case 10:
+	case softVoteVerifiedErrorEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 		e = messageEvent{
 			T: voteVerified,
@@ -254,7 +285,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			Err:   errTestVerifyFailed,
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
-	case 11:
+	case proposeVoteVerifiedErrorEventSamePeriod:
 		vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
 		e = messageEvent{
 			T: voteVerified,
@@ -266,7 +297,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			Err:   errTestVerifyFailed,
 			Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
 		}
-	case 12:
+	case bundleVerifiedErrorEvent:
 		e = messageEvent{
 			T: bundleVerified,
 			Input: message{
@@ -276,7 +307,7 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			},
 			Err: errTestVerifyFailed,
 		}
-	case 13:
+	case payloadVerifiedErrorEvent:
 		e = messageEvent{
 			T: payloadVerified,
 			Input: message{
@@ -325,409 +356,383 @@ func expectDisconnect(t *testing.T, trace ioTrace, errMsg string, playerN int, e
 	}), errMsg, playerN, eventN)
 }
 
+func requireActionCount(t *testing.T, trace ioTrace, expectedCount, playerN, eventN int) {
+	require.Equalf(t, trace.countAction(), expectedCount, "Player should not emit extra actions, player: %v, event: %v", playerN, eventN)
+}
+
+func requireTraceContains(t *testing.T, trace ioTrace, expected event, playerN, eventN int) {
+	require.Truef(t, trace.Contains(expected), "Player should emit action, player: %v, event: %v", playerN, eventN)
+}
+
 func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, helper *voteMakerHelper, trace ioTrace) {
 	const r = round(209)
 	const p = period(0)
 	var payload = makeRandomProposalPayload(r)
 	var pV = payload.value()
 	switch playerN {
-	case 0:
+	case playerSameRound:
 		switch eventN {
-		case 0:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case softVoteVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 1:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case softVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 2:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventNextPeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 3:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 4:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 5, 6, 7:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore proposal with no vvote, player: %v, event: %v", playerN, eventN)
-		case 8:
-			require.Equalf(t, trace.countAction(), 2, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case bundleVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 2, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{
-				Round:    r,
-				Period:   p,
-				Proposal: pV,
-			}
+			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
 			ra := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
-			require.Truef(t, trace.Contains(ev(ra)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ra), playerN, eventN)
 			sa := stageDigestAction{Certificate: Certificate(bun)}
-			require.Truef(t, trace.Contains(ev(sa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 9:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(sa), playerN, eventN)
+		case bundlePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{
-				Round:    r,
-				Period:   p,
-				Proposal: pV,
-			}
+			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(ca)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-			//ea := ensureAction{Certificate: Certificate(bun), Payload: *payload}
-			//require.Truef(t, trace.Contains(ev(ea)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 10, 11, 12:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ca), playerN, eventN)
+		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectDisconnect(t, trace, "Player should disconnect malformed vote/bundle, player: %v, event: %v", playerN, eventN)
-		case 13:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore malformed proposal, player: %v, event: %v", playerN, eventN)
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 1:
+	case playerNextRound:
 		switch eventN {
-		case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case softVoteVerifiedEventSamePeriod, softVotePresentEventSamePeriod, proposeVoteVerifiedEventNextPeriod, proposeVoteVerifiedEventSamePeriod, proposeVotePresentEventSamePeriod, payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle, bundleVerifiedEventSamePeriod, bundlePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
-		case 10, 11, 12:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectDisconnect(t, trace, "Player should disconnect malformed vote/bundle, player: %v, event: %v", playerN, eventN)
-		case 13:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore malformed proposal, player: %v, event: %v", playerN, eventN)
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 2:
+	case playerPrevRoundPendingPayloadPresent:
 		switch eventN {
-		case 0:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case softVoteVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 1:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case softVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 2:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventNextPeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore future msg from bad period, player: %v, event: %v", playerN, eventN)
-		case 3:
-			require.Equalf(t, trace.countAction(), 2, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case proposeVoteVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 2, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
 			na := networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}}
-			require.Truef(t, trace.Contains(ev(na)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 4:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(na), playerN, eventN)
+		case proposeVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, propose, pV)
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 5, 6, 7:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore proposal with no vvote, player: %v, event: %v", playerN, eventN)
-		case 8, 9:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case bundleVerifiedEventSamePeriod, bundlePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore bundle from different round, player: %v, event: %v", playerN, eventN)
-		case 10, 11, 12:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectDisconnect(t, trace, "Player should disconnect malformed vote/bundle, player: %v, event: %v", playerN, eventN)
-		case 13:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore malformed proposal, player: %v, event: %v", playerN, eventN)
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 3:
+	case playerSameRoundProcessedProposalVote:
 		switch eventN {
-		case 0:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case softVoteVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 1:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case softVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 2:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventNextPeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 3, 4:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventSamePeriod, proposeVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore proposalvvote already received: %v, event: %v", playerN, eventN)
-		case 5:
-			require.Equalf(t, trace.countAction(), 2, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadPresentEvent:
+			requireActionCount(t, trace, 2, playerN, eventN)
 			ca := cryptoAction{T: verifyPayload, M: message{UnauthenticatedProposal: payload.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(ca)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ca), playerN, eventN)
 			na := networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}}
-			require.Truef(t, trace.Contains(ev(na)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 6:
-			require.Equalf(t, trace.countAction(), 0, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
-		case 7:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(na), playerN, eventN)
+		case payloadVerifiedEvent:
+			requireActionCount(t, trace, 0, playerN, eventN)
+		case payloadVerifiedEventNoMessageHandle:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			na := networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}}
-			require.Truef(t, trace.Contains(ev(na)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 8:
-			require.Equalf(t, trace.countAction(), 2, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(na), playerN, eventN)
+		case bundleVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 2, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{
-				Round:    r,
-				Period:   p,
-				Proposal: pV,
-			}
+			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
 			ra := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
-			require.Truef(t, trace.Contains(ev(ra)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ra), playerN, eventN)
 			sa := stageDigestAction{Certificate: Certificate(bun)}
-			require.Truef(t, trace.Contains(ev(sa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 9:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(sa), playerN, eventN)
+		case bundlePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{
-				Round:    r,
-				Period:   p,
-				Proposal: pV,
-			}
+			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(ca)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 10, 11, 12:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ca), playerN, eventN)
+		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectDisconnect(t, trace, "Player should disconnect malformed vote/bundle, player: %v, event: %v", playerN, eventN)
-		case 13:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore malformed proposal, player: %v, event: %v", playerN, eventN)
+
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 4:
+	case playerSameRoundReachedSoftThreshold:
 		switch eventN {
-		case 0:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case softVoteVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 1:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case softVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 2:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventNextPeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 3, 4:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventSamePeriod, proposeVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore proposalvvote already received: %v, event: %v", playerN, eventN)
-		case 5:
-			require.Equalf(t, trace.countAction(), 2, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadPresentEvent:
+			requireActionCount(t, trace, 2, playerN, eventN)
 			ca := cryptoAction{T: verifyPayload, M: message{UnauthenticatedProposal: payload.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(ca)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ca), playerN, eventN)
 			na := networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}}
-			require.Truef(t, trace.Contains(ev(na)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 6:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(na), playerN, eventN)
+		case payloadVerifiedEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			pa := pseudonodeAction{T: attest, Round: r, Period: p, Step: cert, Proposal: pV}
-			require.Truef(t, trace.Contains(ev(pa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 7:
-			require.Equalf(t, trace.countAction(), 2, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(pa), playerN, eventN)
+		case payloadVerifiedEventNoMessageHandle:
+			requireActionCount(t, trace, 2, playerN, eventN)
 			na := networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}}
-			require.Truef(t, trace.Contains(ev(na)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(na), playerN, eventN)
 			pa := pseudonodeAction{T: attest, Round: r, Period: p, Step: cert, Proposal: pV}
-			require.Truef(t, trace.Contains(ev(pa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 8:
-			require.Equalf(t, trace.countAction(), 2, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(pa), playerN, eventN)
+		case bundleVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 2, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{
-				Round:    r,
-				Period:   p,
-				Proposal: pV,
-			}
+			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
 			ra := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
-			require.Truef(t, trace.Contains(ev(ra)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ra), playerN, eventN)
 			sa := stageDigestAction{Certificate: Certificate(bun)}
-			require.Truef(t, trace.Contains(ev(sa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 9:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(sa), playerN, eventN)
+		case bundlePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{
-				Round:    r,
-				Period:   p,
-				Proposal: pV,
-			}
+			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(ca)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 10, 11, 12:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ca), playerN, eventN)
+		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectDisconnect(t, trace, "Player should disconnect malformed vote/bundle, player: %v, event: %v", playerN, eventN)
-		case 13:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore malformed proposal, player: %v, event: %v", playerN, eventN)
+
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 5:
+	case playerSameRoundReachedCertThreshold:
 		switch eventN {
-		case 0:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case softVoteVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 1:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case softVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 2:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventNextPeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 3, 4:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventSamePeriod, proposeVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore proposalvvote already received: %v, event: %v", playerN, eventN)
-		case 5:
-			require.Equalf(t, trace.countAction(), 2, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadPresentEvent:
+			requireActionCount(t, trace, 2, playerN, eventN)
 			ca := cryptoAction{T: verifyPayload, M: message{UnauthenticatedProposal: payload.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(ca)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ca), playerN, eventN)
 			na := networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}}
-			require.Truef(t, trace.Contains(ev(na)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 6:
-			require.Equalf(t, trace.countAction(), 3, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(na), playerN, eventN)
+		case payloadVerifiedEvent:
+			requireActionCount(t, trace, 3, playerN, eventN)
 			ea := ensureAction{Certificate: Certificate(unauthenticatedBundle{Round: r}), Payload: *payload}
-			require.Truef(t, trace.Contains(ev(ea)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ea), playerN, eventN)
 			ra := rezeroAction{Round: r + 1}
-			require.Truef(t, trace.Contains(ev(ra)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ra), playerN, eventN)
 			pa := pseudonodeAction{T: assemble, Round: r + 1, Period: 0, Step: 0}
-			require.Truef(t, trace.Contains(ev(pa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 7:
-			require.Equalf(t, trace.countAction(), 4, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(pa), playerN, eventN)
+		case payloadVerifiedEventNoMessageHandle:
+			requireActionCount(t, trace, 4, playerN, eventN)
 			na := networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}}
-			require.Truef(t, trace.Contains(ev(na)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(na), playerN, eventN)
 			ea := ensureAction{Certificate: Certificate(unauthenticatedBundle{Round: r}), Payload: *payload}
-			require.Truef(t, trace.Contains(ev(ea)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ea), playerN, eventN)
 			ra := rezeroAction{Round: r + 1}
-			require.Truef(t, trace.Contains(ev(ra)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ra), playerN, eventN)
 			pa := pseudonodeAction{T: assemble, Round: r + 1, Period: 0, Step: 0}
-			require.Truef(t, trace.Contains(ev(pa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 8:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(pa), playerN, eventN)
+		case bundleVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore, already hit thresh, player: %v, event: %v", playerN, eventN)
-		case 9:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case bundlePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{
-				Round:    r,
-				Period:   p,
-				Proposal: pV,
-			}
+			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(ca)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 10, 11, 12:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ca), playerN, eventN)
+		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectDisconnect(t, trace, "Player should disconnect malformed vote/bundle, player: %v, event: %v", playerN, eventN)
-		case 13:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore malformed proposal, player: %v, event: %v", playerN, eventN)
+
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}
-	case 6:
+	case playerSameRoundProcessedProposal:
 		switch eventN {
-		case 0:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case softVoteVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := networkAction{T: relay, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: vvote.u()}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 1:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case softVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p, soft, pV)
 			a := cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vvote.u()}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 2:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventNextPeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			vvote := helper.MakeVerifiedVote(t, 0, r, p+1, propose, pV)
 			a := networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u(), Vote: vvote.u()}}
-			require.Truef(t, trace.Contains(ev(a)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 3, 4:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(a), playerN, eventN)
+		case proposeVoteVerifiedEventSamePeriod, proposeVotePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore proposalvvote already received: %v, event: %v", playerN, eventN)
-		case 5, 6, 7:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore proposal already assembled: %v, event: %v", playerN, eventN)
-		case 8:
-			require.Equalf(t, trace.countAction(), 4, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case bundleVerifiedEventSamePeriod:
+			requireActionCount(t, trace, 4, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{
-				Round:    r,
-				Period:   p,
-				Proposal: pV,
-			}
+			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
 			na := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
-			require.Truef(t, trace.Contains(ev(na)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(na), playerN, eventN)
 			ea := ensureAction{Certificate: Certificate(bun), Payload: *payload}
-			require.Truef(t, trace.Contains(ev(ea)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ea), playerN, eventN)
 			ra := rezeroAction{Round: r + 1}
-			require.Truef(t, trace.Contains(ev(ra)), "Player should emit action, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ra), playerN, eventN)
 			pa := pseudonodeAction{T: assemble, Round: r + 1, Period: 0, Step: 0}
-			require.Truef(t, trace.Contains(ev(pa)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 9:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(pa), playerN, eventN)
+		case bundlePresentEventSamePeriod:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{
-				Round:    r,
-				Period:   p,
-				Proposal: pV,
-			}
+			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
-			require.Truef(t, trace.Contains(ev(ca)), "Player should emit action, player: %v, event: %v", playerN, eventN)
-		case 10, 11, 12:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+			requireTraceContains(t, trace, ev(ca), playerN, eventN)
+		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectDisconnect(t, trace, "Player should disconnect malformed vote/bundle, player: %v, event: %v", playerN, eventN)
-		case 13:
-			require.Equalf(t, trace.countAction(), 1, "Plyaer should not emit extra actions, player: %v, event: %v", playerN, eventN)
+		case payloadVerifiedErrorEvent:
+			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore malformed proposal, player: %v, event: %v", playerN, eventN)
+
 		default:
 			require.Fail(t, "event permutation %v does not exist", eventN)
 		}

@@ -420,7 +420,7 @@ func TestSetSynchronousMode(t *testing.T) {
 }
 
 // TestReadingWhileWriting tests the SQLite behaviour when we're using two transactions, writing with one and reading from the other.
-// it demonstates that at any time before we're calling Commit, the database content can be read, and it's containing it's pre-transaction
+// it demonstrates that at any time before we're calling Commit, the database content can be read, and it's containing it's pre-transaction
 // value.
 func TestReadingWhileWriting(t *testing.T) {
 	writeAcc, err := MakeAccessor("fn.db", false, false)

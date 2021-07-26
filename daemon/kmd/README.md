@@ -22,7 +22,7 @@ In order for the `mlockall` call to succeed, your kernel must support `mlockall`
 		- The `client` package provides `client.KMDClient`. `client.KMDClient.DoV1Request` infers the HTTP endpoint and method from the request type, serializes the request with msgpack, makes the request over the unix socket, and deserializes a `kmdapi.APIV1Response`.
 		- The `client` package also provides wrappers for these API calls in `wrappers.go`
 	- `config/`
-		- This folder contains code that parses `kmd_config.json` and merges values from that file with any defualt values.
+		- This folder contains code that parses `kmd_config.json` and merges values from that file with any default values.
 	- `lib/`
 		- This folder contains the `kmdapi` package, which provides the canonical structs used for requests and responses.
 	- `server/`

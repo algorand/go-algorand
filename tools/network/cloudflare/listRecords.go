@@ -117,7 +117,7 @@ type DNSRecordResponseEntry struct {
 	CreatedOn  string `json:"created_on"`
 }
 
-// parseListDNSRecordResponse parses the reponse that was received as a result of a ListDNSRecordRequest
+// parseListDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
 func parseListDNSRecordResponse(response *http.Response) (*ListDNSRecordResponse, error) {
 	defer response.Body.Close()
 	body, err := ioutil.ReadAll(response.Body)

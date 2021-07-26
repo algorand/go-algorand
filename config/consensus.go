@@ -546,7 +546,7 @@ func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) Con
 	return staticConsensus
 }
 
-// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directory
 func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
 	if err != nil {
@@ -562,7 +562,7 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	return nil
 }
 
-// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
+// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
 // and merge it with a copy of the Consensus map. Then, it returns it to the caller.
 func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
 	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
@@ -942,7 +942,7 @@ func initConsensusProtocols() {
 	v28 := v27
 	v28.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// Enable TEAL 4
+	// Enable TEAL 4 / AVM 0.9
 	v28.LogicSigVersion = 4
 	// Enable support for larger app program size
 	v28.MaxExtraAppProgramPages = 3
@@ -983,6 +983,9 @@ func initConsensusProtocols() {
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
+
+	// Enable TEAL 5 / AVM 1.0
+	vFuture.LogicSigVersion = 5
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

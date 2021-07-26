@@ -33,7 +33,7 @@ func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth i
 }
 
 func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int, levels []logrus.Level) *asyncTelemetryHook {
-	// one time check to see if the wrappedHook is ready (true for mocked telemetry)
+	// needed by 'makeTelemetryTestFixtureWithConfig' to mark ready in unit tests.
 	tfh, ok := wrappedHook.(*telemetryFilteredHook)
 	ready := ok && tfh.wrappedHook != nil
 

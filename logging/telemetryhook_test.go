@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -170,19 +169,17 @@ func TestSaveLoadConfig(t *testing.T) {
 	os.RemoveAll(configDir)
 }
 
-func TestAsyncTelemetryHook_Close(t *testing.T) {
-	t.Skip("We no longer ensure 100% delivery. To not block, we drop messages when they come in faster than the network sends them.")
-	a := require.New(t)
-	t.Parallel()
-
+func TestAsyncTelemetryHook_CloseDrop(t *testing.T) {
 	const entryCount = 100
+
+	filling := make(chan struct{})
 
 	testHook := makeMockTelemetryHook(logrus.DebugLevel)
 	testHook.cb = func(entry *logrus.Entry) {
-		// Inject a delay to ensure we buffer entries
-		time.Sleep(1 * time.Millisecond)
+		<-filling // Block while filling
 	}
 	hook := createAsyncHook(&testHook, 4, entryCount)
+	hook.ready = true
 	for i := 0; i < entryCount; i++ {
 		entry := logrus.Entry{
 			Level: logrus.ErrorLevel,
@@ -190,16 +187,14 @@ func TestAsyncTelemetryHook_Close(t *testing.T) {
 		hook.Fire(&entry)
 	}
 
+	close(filling)
 	hook.Close()
 
-	a.Equal(entryCount, len(testHook.entries()))
+	// To not block, we drop messages when they come in faster than the network sends them.
+	require.Less(t, len(testHook.entries()), entryCount)
 }
 
 func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
-	t.Skip("flakey test can fail on slow test systems")
-	a := require.New(t)
-	t.Parallel()
-
 	const entryCount = 100
 	const maxDepth = 10
 
@@ -211,6 +206,7 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	}
 
 	hook := createAsyncHook(&testHook, entryCount, maxDepth)
+	hook.ready = true
 	for i := 0; i < entryCount; i++ {
 		entry := logrus.Entry{
 			Level: logrus.ErrorLevel,
@@ -221,5 +217,5 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	close(filling)
 	hook.Close()
 
-	a.Equal(maxDepth, len(testHook.entries()))
+	require.Equal(t, maxDepth, len(testHook.entries()))
 }

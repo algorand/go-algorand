@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -39,6 +40,14 @@ func TestOpDocs(t *testing.T) {
 			t.Errorf("error: doc for op %#v missing from opDocByName", op)
 		}
 	}
+
+	require.Len(t, txnFieldDocs, len(TxnFieldNames))
+	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
+	require.Len(t, globalFieldDocs, len(GlobalFieldNames))
+	require.Len(t, AssetHoldingFieldDocs, len(AssetHoldingFieldNames))
+	require.Len(t, AssetParamsFieldDocs, len(AssetParamsFieldNames))
+	require.Len(t, AppParamsFieldDocs, len(AppParamsFieldNames))
+	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
 }
 
 func TestOpGroupCoverage(t *testing.T) {
@@ -75,6 +84,19 @@ func TestOpImmediateNote(t *testing.T) {
 	require.NotEmpty(t, xd)
 	xd = OpImmediateNote("+")
 	require.Empty(t, xd)
+}
+
+func TestAllImmediatesDocumented(t *testing.T) {
+	for _, op := range OpSpecs {
+		count := len(op.Details.Immediates)
+		note := OpImmediateNote(op.Name)
+		if count == 1 && op.Details.Immediates[0].kind >= immBytes {
+			// More elaborate than can be checked by easy count.
+			require.NotEmpty(t, note)
+			continue
+		}
+		require.Equal(t, count, strings.Count(note, "{"), "%s immediates doc is wrong", op.Name)
+	}
 }
 
 func TestOpDocExtra(t *testing.T) {

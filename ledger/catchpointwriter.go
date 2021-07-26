@@ -44,7 +44,7 @@ const (
 	catchpointFileVersion = uint64(0200)
 )
 
-// catchpointWriter is the struct managing the persistance of accounts data into the catchpoint file.
+// catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
 // it's designed to work in a step fashion : a caller will call the WriteStep method in a loop until
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throttling the CPU utilization in between the calls.

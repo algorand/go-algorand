@@ -164,7 +164,7 @@ type ioSafetyProp interface {
 	// returns bool whether trace is in the safety property. If false,
 	// optionally accompanied by an informational message pertaining to why
 	// the trace is not in the safety property. Err is set if we saw an
-	// unforseen error.
+	// unforeseen error.
 	containsTrace(trace ioTrace) (contains bool, info string, err error)
 
 	// every safety prop also exposes the option to check it dynamically
@@ -283,7 +283,7 @@ type ioAutomataConcrete struct {
 	listener
 
 	// listeners need additional context. For now, we keep it static.
-	routerCtx router // optional, set to router{} on defualt
+	routerCtx router // optional, set to router{} on default
 	playerCtx player // optional, set to player{} by default
 
 	// private

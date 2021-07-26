@@ -84,7 +84,7 @@ func (reporter *MetricReporter) ReporterLoop(ctx context.Context) {
 		if reporter.gatherInterval != time.Duration(0) {
 			reporter.gatherMetrics()
 		}
-		// post the collected metrics and retreive sampling rate.
+		// post the collected metrics and retrieve sampling rate.
 		if !reporter.postGatheredMetrics(ctx) {
 			// context expired, abort.
 			return
@@ -218,7 +218,7 @@ func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 			return
 		}
 	}
-	// give the node exporter the same enviroment variable we've received.
+	// give the node exporter the same environment variable we've received.
 	neAttributes := os.ProcAttr{
 		Dir: filepath.Dir(os.Args[0]),
 		Env: os.Environ(),
@@ -241,7 +241,7 @@ func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 
 	reporter.neProcess = proc
 
-	// wait for the process to complete on a separate goroutine, and set the reporter.neProcess varaible to nil once it's done.
+	// wait for the process to complete on a separate goroutine, and set the reporter.neProcess variable to nil once it's done.
 	go func(proc **os.Process) {
 		(*proc).Wait()
 		// status, _ :=

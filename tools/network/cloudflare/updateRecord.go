@@ -90,7 +90,7 @@ func updateSRVRecordRequest(zoneID string, authEmail string, authKey string, rec
 	return request, nil
 }
 
-// parseUpdateDNSRecordResponse parses the reponse that was received as a result of a ListDNSRecordRequest
+// parseUpdateDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
 func parseUpdateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResponse, error) {
 	return parseCreateDNSRecordResponse(response)
 }

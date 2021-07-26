@@ -224,7 +224,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			select {
 			case devtoolResp := <-cdtRespCh:
 				if s.verbose {
-					log.Printf("responsing: %v\n", devtoolResp)
+					log.Printf("responding: %v\n", devtoolResp)
 				}
 				err := ws.WriteJSON(&devtoolResp)
 				if err != nil {
