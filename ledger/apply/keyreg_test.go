@@ -50,7 +50,11 @@ func (balances keyregTestBalances) Put(addr basics.Address, ad basics.AccountDat
 	return nil
 }
 
-func (balances keyregTestBalances) PutWithCreatable(basics.Address, basics.AccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
+func (balances keyregTestBalances) CreatableCreated(creatableType basics.CreatableType, creator basics.Address, index basics.CreatableIndex) error {
+	return nil
+}
+
+func (balances keyregTestBalances) CreatableDeleted(creatableType basics.CreatableType, creator basics.Address, index basics.CreatableIndex) error {
 	return nil
 }
 

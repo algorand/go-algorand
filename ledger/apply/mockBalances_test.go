@@ -61,7 +61,11 @@ func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []b
 	return false, basics.EvalDelta{}, nil
 }
 
-func (balances mockBalances) PutWithCreatable(basics.Address, basics.AccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
+func (balances mockBalances) CreatableCreated(creatableType basics.CreatableType, creator basics.Address, index basics.CreatableIndex) error {
+	return nil
+}
+
+func (balances mockBalances) CreatableDeleted(creatableType basics.CreatableType, creator basics.Address, index basics.CreatableIndex) error {
 	return nil
 }
 

@@ -33,8 +33,13 @@ type Balances interface {
 
 	Put(basics.Address, basics.AccountData) error
 
-	// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.
-	PutWithCreatable(addr basics.Address, acct basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error
+	// Notify COW that a creatable was created or deleted.
+	CreatableCreated(
+		creatableType basics.CreatableType, creator basics.Address,
+		index basics.CreatableIndex) error
+	CreatableDeleted(
+		creatableType basics.CreatableType, creator basics.Address,
+		index basics.CreatableIndex) error
 
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)

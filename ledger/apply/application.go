@@ -121,15 +121,14 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	totalExtraPages += ac.ExtraProgramPages
 	record.TotalExtraAppPages = totalExtraPages
 
-	// Tell the cow what app we created
-	created := &basics.CreatableLocator{
-		Creator: creator,
-		Type:    basics.AppCreatable,
-		Index:   basics.CreatableIndex(appIdx),
+	// Write back to the creator's balance record
+	err = balances.Put(creator, record)
+	if err != nil {
+		return 0, err
 	}
 
-	// Write back to the creator's balance record
-	err = balances.PutWithCreatable(creator, record, created, nil)
+	// Tell the cow what app we created
+	err = balances.CreatableCreated(basics.AppCreatable, creator, basics.CreatableIndex(appIdx))
 	if err != nil {
 		return 0, err
 	}
@@ -169,13 +168,13 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		record.TotalExtraAppPages = totalExtraPages
 	}
 
-	// Tell the cow what app we deleted
-	deleted := &basics.CreatableLocator{
-		Creator: creator,
-		Type:    basics.AppCreatable,
-		Index:   basics.CreatableIndex(appIdx),
+	err = balances.Put(creator, record)
+	if err != nil {
+		return err
 	}
-	err = balances.PutWithCreatable(creator, record, nil, deleted)
+
+	// Tell the cow what app we deleted
+	err = balances.CreatableDeleted(basics.AppCreatable, creator, basics.CreatableIndex(appIdx))
 	if err != nil {
 		return err
 	}
