@@ -115,3 +115,14 @@ func MakeNewRoundEvent(roundNumber basics.Round, fetchTransactions bool) Event {
 		},
 	}
 }
+
+// MakeBroadcastProposalRequestEvent creates an event for sending a proposal
+func MakeBroadcastProposalRequestEvent(proposalBytes []byte, txGroups []transactions.SignedTxGroup) Event {
+	return Event{
+		eventType: proposalBroadcastRequestEvent,
+		proposalBroadcastRequest: ProposalBroadcastRequest{
+			proposalBytes: proposalBytes,
+			txGroups: txGroups,
+		},
+	}
+}

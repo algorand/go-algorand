@@ -385,6 +385,10 @@ func (n *emulatedNode) onNewTransactionPoolEntry() {
 	n.externalEvents <- MakeTranscationPoolChangeEvent(len(n.txpoolEntries))
 }
 
+func (n *emulatedNode) onBroadcastProposalRequest() {
+	n.externalEvents <- MakeBroadcastProposalRequestEvent([]byte("proposal"), nil)
+}
+
 func (p *networkPeer) GetAddress() string {
 	return fmt.Sprintf("%d", p.target)
 }
