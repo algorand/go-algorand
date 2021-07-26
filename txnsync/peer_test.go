@@ -708,6 +708,49 @@ func TestSelectPendingTransactions(t *testing.T) {
 	}
 }
 
+// TestSelectedMessagesModulator tests the use of the modulator on the returned list
+func TestSelectedMessagesModulator(t *testing.T) {
+
+	a := require.New(t)
+
+	peer := Peer{}
+
+	peer.lastRound = 10
+	peer.requestedTransactionsModulator = 2
+	peer.requestedTransactionsOffset = 1
+	peer.lastSelectedTransactionsCount = 1
+	peer.dataExchangeRate = 1000
+	peer.recentSentTransactions = makeTransactionCache(10, 10, 0)
+
+	dig1 := crypto.Digest{0x1, 0, 0, 0, 0, 0, 0, 0, 0}
+	dig2 := crypto.Digest{0x2, 0, 0, 0, 0, 0, 0, 0, 0}
+	dig3 := crypto.Digest{0x3, 0, 0, 0, 0, 0, 0, 0, 0}
+	dig4 := crypto.Digest{0x4, 0, 0, 0, 0, 0, 0, 0, 0}
+	dig5 := crypto.Digest{0x5, 0, 0, 0, 0, 0, 0, 0, 0}
+	dig6 := crypto.Digest{0x6, 0, 0, 0, 0, 0, 0, 0, 0}
+
+	a.Equal(txidToUint64(transactions.Txid(dig1)), uint64(1))
+	a.Equal(txidToUint64(transactions.Txid(dig2)), uint64(2))
+	a.Equal(txidToUint64(transactions.Txid(dig3)), uint64(3))
+	a.Equal(txidToUint64(transactions.Txid(dig4)), uint64(4))
+	a.Equal(txidToUint64(transactions.Txid(dig5)), uint64(5))
+	a.Equal(txidToUint64(transactions.Txid(dig6)), uint64(6))
+
+	pendingTransations := []transactions.SignedTxGroup{
+		transactions.SignedTxGroup{GroupCounter: 1, GroupTransactionID: transactions.Txid(dig1), EncodedLength: 1},
+		transactions.SignedTxGroup{GroupCounter: 2, GroupTransactionID: transactions.Txid(dig2), EncodedLength: 1},
+		transactions.SignedTxGroup{GroupCounter: 3, GroupTransactionID: transactions.Txid(dig3), EncodedLength: 1},
+		transactions.SignedTxGroup{GroupCounter: 4, GroupTransactionID: transactions.Txid(dig4), EncodedLength: 1},
+		transactions.SignedTxGroup{GroupCounter: 5, GroupTransactionID: transactions.Txid(dig5), EncodedLength: 1},
+		transactions.SignedTxGroup{GroupCounter: 6, GroupTransactionID: transactions.Txid(dig6), EncodedLength: 1},
+	}
+
+	selectedTxns, _, _ := peer.selectPendingTransactions(pendingTransations, time.Millisecond, 5, 0)
+
+	a.Equal(len(selectedTxns), 2)
+
+}
+
 // TestGetAcceptedMessages tests get accepted messages
 func TestGetAcceptedMessages(t *testing.T) {
 	a := require.New(t)
