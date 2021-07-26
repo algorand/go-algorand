@@ -1213,7 +1213,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 // numAccounts specifies how many accounts to create
 // maxHoldingsPerAccount sets a maximum asset holdings per account (normally distributed across all accounts)
 // largeAccountsRatio is a percentage of numAccounts to have maxHoldingsPerAccount holdings
-func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto config.ConsensusParams, maxHoldingsPerAccount int, largeAccountsRatio int) (accts map[basics.Address]basics.AccountData) {
+func benchmarkInitBalances(b *testing.B, numAccounts int, dbs db.Pair, proto config.ConsensusParams, maxHoldingsPerAccount int, largeAccountsRatio int) (accts map[basics.Address]basics.AccountData) {
 	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(b, err)
 
@@ -1227,13 +1227,6 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 	err = accountsAddNormalizedBalance(tx, proto)
 	require.NoError(b, err)
 
-	// create large holdings as an update because accountsInit does not know about accountext table
-	// the distribution is normal from (maxAssets / numAccounts) to maxHoldingsPerAccount
-	// want have 95% of accounts to be between [1/4 maxHoldingsPerAccount/8, maxHoldingsPerAccount] then
-	// mean = 5/8 maxHoldingsPerAccount and stddev = 3/16 maxHoldingsPerAccount
-
-	// largeHoldings := maxHoldingsPerAccount > numAccounts
-	// if largeHoldings {
 	maxAssetIndex := maxHoldingsPerAccount + 1
 	aidxs := make([]basics.AssetIndex, maxAssetIndex, maxAssetIndex)
 	for i := 0; i < maxAssetIndex; i++ {
@@ -1242,6 +1235,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 	maxAccts := numAccounts * largeAccountsRatio / 100
 	var updates ledgercore.AccountDeltas
 	acctCounter := 0
+	totalHoldingsChanged := 0
 	for addr, ad := range accts {
 		rand.Shuffle(len(aidxs), func(i, j int) { aidxs[i], aidxs[j] = aidxs[j], aidxs[i] })
 		numHoldings := int(rand.NormFloat64()*3*float64(maxHoldingsPerAccount)/16 + float64(5*maxHoldingsPerAccount)/8)
@@ -1259,12 +1253,15 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 		}
 		updates.Upsert(addr, ledgercore.PersistedAccountData{AccountData: ad})
 		accts[addr] = ad
+		totalHoldingsChanged += numHoldings
 
 		acctCounter++
 		if acctCounter >= maxAccts {
 			break
 		}
 	}
+
+	b.ReportMetric(float64(totalHoldingsChanged), "tot_holdings")
 
 	baseAccounts := lruAccounts{}
 	updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
@@ -1276,7 +1273,6 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 	require.NoError(b, err)
 	err = updateAccountsRound(tx, round, 0)
 	require.NoError(b, err)
-	// }
 
 	err = tx.Commit()
 	require.NoError(b, err)
@@ -1364,13 +1360,13 @@ func benchLoadHolding(b *testing.B, qs *accountsDbQueries, dbad dbAccountData, a
 	return holding
 }
 
-func benchmarkReadingRandomBalances(b *testing.B, inMemory bool, maxHoldingsPerAccount int, largeAccountsRatio int) {
+func benchmarkReadingRandomBalances(b *testing.B, numAccounts int, inMemory bool, maxHoldingsPerAccount int, largeAccountsRatio int) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	dbs, fn := dbOpenTest(b, inMemory)
 	setDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
-	accounts := benchmarkInitBalances(b, b.N, dbs, proto, maxHoldingsPerAccount, largeAccountsRatio)
+	accounts := benchmarkInitBalances(b, numAccounts, dbs, proto, maxHoldingsPerAccount, largeAccountsRatio)
 
 	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(b, err)
@@ -1400,11 +1396,11 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool, maxHoldingsPerA
 }
 
 func BenchmarkReadingRandomBalancesRAM(b *testing.B) {
-	benchmarkReadingRandomBalances(b, true, 1, 100)
+	benchmarkReadingRandomBalances(b, b.N, true, 1, 100)
 }
 
 func BenchmarkReadingRandomBalancesDisk(b *testing.B) {
-	benchmarkReadingRandomBalances(b, false, 1, 100)
+	benchmarkReadingRandomBalances(b, b.N, false, 1, 100)
 }
 
 func BenchmarkReadingRandomBalancesDiskLarge(b *testing.B) {
@@ -1420,9 +1416,10 @@ func BenchmarkReadingRandomBalancesDiskLarge(b *testing.B) {
 		{10000, false},
 		{100000, false},
 	}
+	numAccounts := 100000
 	for _, t := range tests {
 		b.Run(fmt.Sprintf("holdings=%d", t.numHoldings), func(b *testing.B) {
-			benchmarkReadingRandomBalances(b, false, t.numHoldings, 10)
+			benchmarkReadingRandomBalances(b, numAccounts, false, t.numHoldings, 10)
 		})
 	}
 }
@@ -1648,12 +1645,14 @@ func benchmarkAcctUpdateLarge(b *testing.B, maxHoldingsPerAccount int, largeHold
 
 	acctUpdateStmt, err := tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
 	require.NoError(b, err)
-	gdUpdateStmt, err := tx.Prepare("UPDATE accountext SET data = ? WHERE id = ?")
+	gdUpdateStmt, err := tx.Prepare("UPDATE accountcreatabledata SET data = ? WHERE addrid = ? AND creatable = ? AND ctype = ?")
 	require.NoError(b, err)
 
 	type groupDataUpdate struct {
-		gi   int
-		data []byte
+		addrid    int64
+		creatable basics.CreatableIndex
+		ctype     basics.CreatableType
+		data      []byte
 	}
 
 	b.ResetTimer()
@@ -1665,19 +1664,17 @@ func benchmarkAcctUpdateLarge(b *testing.B, maxHoldingsPerAccount int, largeHold
 			encodedPad := protocol.Encode(&dbad.pad)
 			var numToUpdate int
 			var gdu []groupDataUpdate
-			if len(dbad.pad.Assets) > testAssetsThreshold {
-				numToUpdate = assetUpdateRatio * len(dbad.pad.Assets) / 100
-				gdu = make([]groupDataUpdate, numToUpdate, numToUpdate)
-				k := 0
-				for aidx := range dbad.pad.Assets {
-					gi := dbad.pad.ExtendedAssetHolding.FindGroup(aidx, 0)
-					require.NotEqual(b, -1, gi)
-					data := dbad.pad.ExtendedAssetHolding.Groups[gi].TestGetGroupData()
-					gdu[k] = groupDataUpdate{gi, protocol.Encode(&data)}
-					k++
-					if k >= numToUpdate {
-						break
-					}
+			numToUpdate = assetUpdateRatio * len(dbad.pad.Assets) / 100
+			if numToUpdate == 0 {
+				numToUpdate = 1
+			}
+			gdu = make([]groupDataUpdate, numToUpdate, numToUpdate)
+			k := 0
+			for aidx, data := range dbad.pad.Assets {
+				gdu[k] = groupDataUpdate{dbad.rowid, basics.CreatableIndex(aidx), basics.AssetCreatableData, protocol.Encode(&data)}
+				k++
+				if k >= numToUpdate {
+					break
 				}
 			}
 
@@ -1687,7 +1684,7 @@ func benchmarkAcctUpdateLarge(b *testing.B, maxHoldingsPerAccount int, largeHold
 
 			if len(dbad.pad.Assets) > testAssetsThreshold {
 				for _, entry := range gdu {
-					_, err = gdUpdateStmt.Exec(entry.data, entry.gi)
+					_, err = gdUpdateStmt.Exec(entry.data, entry.addrid, entry.creatable, entry.ctype)
 				}
 			}
 		}
@@ -1702,14 +1699,14 @@ var benchCreatedAccts map[basics.Address]basics.AccountData
 // This included splitting data into groups and writing into legder
 func BenchmarkLargeAccountsCreation(b *testing.B) {
 	holdings := []int{1, 512, 2000, 3000, 5000, 10000, 100000}
-	numAccounts := 100
+	numAccounts := 100000
 	for _, n := range holdings {
 		b.Run(fmt.Sprintf("holdings=%d", n), func(b *testing.B) {
 			proto := config.Consensus[protocol.ConsensusCurrentVersion]
 			dbs, fn := dbOpenTest(b, true)
 			setDbLogging(b, dbs)
 			b.ResetTimer()
-			benchCreatedAccts = benchmarkInitBalances(b, numAccounts, dbs, proto, n, 100)
+			benchCreatedAccts = benchmarkInitBalances(b, numAccounts, dbs, proto, n, 10)
 			b.StopTimer()
 			cleanupTestDb(dbs, fn, true)
 		})
