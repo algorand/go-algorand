@@ -36,6 +36,14 @@ type mockLogger struct {
 	logging.Logger
 }
 
+func (m mockLogger) outgoingMessage(msgStats) {
+}
+
+func (m mockLogger) incomingMessage(msgStats) {
+}
+
+func (m mockLogger) Infof(string, ...interface{}) {}
+
 type mockNodeConnector struct {
 	NodeConnector
 	calledEvents        *bool
