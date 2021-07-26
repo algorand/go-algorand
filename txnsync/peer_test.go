@@ -748,6 +748,8 @@ func TestSelectedMessagesModulator(t *testing.T) {
 	selectedTxns, _, _ := peer.selectPendingTransactions(pendingTransations, time.Millisecond, 5, 0)
 
 	a.Equal(len(selectedTxns), 2)
+	a.Equal(selectedTxns[0].GroupCounter, uint64(1))
+	a.Equal(selectedTxns[1].GroupCounter, uint64(3))
 
 }
 
