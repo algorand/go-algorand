@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
@@ -262,4 +264,18 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 	}
 
 	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
+}
+
+// printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.
+// If this is the case, the string is returned as is. Otherwise, the empty string is returned.
+func printableUTF8OrEmpty(in string) string {
+	// iterate throughout all the characters in the string to see if they are all printable.
+	// when range iterating on go strings, go decode each element as a utf8 rune.
+	for _, c := range in {
+		// is this a printable character, or invalid rune ?
+		if c == utf8.RuneError || !unicode.IsPrint(c) {
+			return ""
+		}
+	}
+	return in
 }

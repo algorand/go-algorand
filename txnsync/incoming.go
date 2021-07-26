@@ -210,22 +210,19 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 	s.incomingMessagesQ.clear(message)
 	messageProcessed := false
 	transacationPoolSize := 0
+	totalAccumulatedTransactionsCount := 0 // the number of transactions that were added during the execution of this method
+	transactionHandlerBacklogFull := false
+incomingMessageLoop:
 	for {
-		seq, err := peer.incomingMessages.peekSequence()
-		if err != nil {
+		incomingMsg, seq, err := peer.incomingMessages.popSequence(peer.nextReceivedMessageSeq)
+		switch err {
+		case errHeapEmpty:
 			// this is very likely, once we run out of consecutive messages.
-			break
-		}
-		if seq != peer.nextReceivedMessageSeq {
+			break incomingMessageLoop
+		case errSequenceNumberMismatch:
 			// if we receive a message which wasn't in-order, just let it go.
 			s.log.Debugf("received message out of order; seq = %d, expecting seq = %d\n", seq, peer.nextReceivedMessageSeq)
-			break
-		}
-
-		incomingMsg, err := peer.incomingMessages.pop()
-		if err != nil {
-			// if the queue is empty ( not expected, since we peek'ed into it before ), then we can't do much here.
-			return
+			break incomingMessageLoop
 		}
 
 		// increase the message sequence number, since we're processing this message.
@@ -270,12 +267,27 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 		// if we received at least a single transaction group, then forward it to the transaction handler.
 		if len(incomingMsg.transactionGroups) > 0 {
 			// send the incoming transaction group to the node last, so that the txhandler could modify the underlaying array if needed.
-			transacationPoolSize = s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
+			currentTransacationPoolSize := s.node.IncomingTransactionGroups(peer, peer.nextReceivedMessageSeq-1, incomingMsg.transactionGroups)
+			// was the call reached the transaction handler queue ?
+			if currentTransacationPoolSize >= 0 {
+				// we want to store in transacationPoolSize only the first call to IncomingTransactionGroups
+				if transacationPoolSize == 0 {
+					transacationPoolSize = currentTransacationPoolSize
+				}
+				// count the transactions that we are adding.
+				for _, txGroup := range incomingMsg.transactionGroups {
+					totalAccumulatedTransactionsCount += len(txGroup.Transactions)
+				}
+			} else {
+				// no - we couldn't add this group since the transaction handler buffer backlog exceeded it's capacity.
+				transactionHandlerBacklogFull = true
+			}
 		}
 
 		s.log.incomingMessage(msgStats{seq, incomingMsg.message.Round, len(incomingMsg.transactionGroups), incomingMsg.message.UpdatedRequestParams, len(incomingMsg.message.TxnBloomFilter.BloomFilter), incomingMsg.message.MsgSync.NextMsgMinDelay, peer.networkAddress()})
 		messageProcessed = true
 	}
+
 	// if we're a relay, this is an outgoing peer and we've processed a valid message,
 	// then we want to respond right away as well as schedule bloom message.
 	if messageProcessed && peer.isOutgoing && s.isRelay && peer.lastReceivedMessageNextMsgMinDelay != time.Duration(0) {
@@ -285,7 +297,7 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 
 		s.scheduler.schedulerPeer(peer, s.clock.Since())
 	}
-	if transacationPoolSize > 0 {
-		s.onTransactionPoolChangedEvent(MakeTranscationPoolChangeEvent(transacationPoolSize))
+	if transacationPoolSize > 0 || transactionHandlerBacklogFull {
+		s.onTransactionPoolChangedEvent(MakeTranscationPoolChangeEvent(transacationPoolSize+totalAccumulatedTransactionsCount, transactionHandlerBacklogFull))
 	}
 }

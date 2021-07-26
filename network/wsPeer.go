@@ -122,6 +122,7 @@ const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
 const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
+const disconnectClientCallback disconnectReason = "ClientCallback"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -235,7 +236,8 @@ type HTTPPeer interface {
 }
 
 // UnicastWebsocketMessageStateCallback provide asyncrounious feedback for the sequence number of a message
-type UnicastWebsocketMessageStateCallback func(enqueued bool, sequenceNumber uint64)
+// if the caller return an error, the network peer would disconnect
+type UnicastWebsocketMessageStateCallback func(enqueued bool, sequenceNumber uint64) error
 
 // UnicastPeer is another possible interface for the opaque Peer.
 // It is possible that we can only initiate a connection to a peer over websockets.
@@ -611,7 +613,9 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		// just drop it, don't break the connection
 		if msg.callback != nil {
 			// let the callback know that the message was not sent.
-			msg.callback(false, 0)
+			if nil != msg.callback(false, 0) {
+				return disconnectClientCallback
+			}
 		}
 		return disconnectReasonNone
 	}
@@ -627,7 +631,9 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		// the peer isn't interested in this message.
 		if msg.callback != nil {
 			// let the callback know that the message was not sent.
-			msg.callback(false, 0)
+			if nil != msg.callback(false, 0) {
+				return disconnectClientCallback
+			}
 		}
 		return disconnectReasonNone
 	}
@@ -639,7 +645,9 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "stale message"})
 		if msg.callback != nil {
 			// let the callback know that the message was not sent.
-			msg.callback(false, 0)
+			if nil != msg.callback(false, 0) {
+				return disconnectClientCallback
+			}
 		}
 		return disconnectStaleWrite
 	}
@@ -653,7 +661,9 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		}
 		if msg.callback != nil {
 			// let the callback know that the message was not sent.
-			msg.callback(false, 0)
+			if nil != msg.callback(false, 0) {
+				return disconnectClientCallback
+			}
 		}
 		return disconnectWriteError
 	}
@@ -668,7 +678,9 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		// for performance reasons, we count messages only for messages that request a callback. we might want to revisit this
 		// in the future.
 		seq := wp.outgoingMessageCounters[tag]
-		msg.callback(true, seq)
+		if nil != msg.callback(true, seq) {
+			return disconnectClientCallback
+		}
 		wp.outgoingMessageCounters[tag] = seq + 1
 	}
 	return disconnectReasonNone

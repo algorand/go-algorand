@@ -7,12 +7,12 @@ linters:
     - golint
     - misspell
     - govet
+    - ineffassign
 
   disable:
     - deadcode
     - errcheck
     - gosimple
-    - ineffassign
     - staticcheck
     - structcheck
     - unused
@@ -25,6 +25,12 @@ linters-settings:
 issues:
   # don't use default exclude rules listed in `golangci-lint run --help`
   exclude-use-default: false
+
+  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
+  max-same-issues: 0
 
   exclude-rules:
     # ignore govet false positive fixed in https://github.com/golang/go/issues/45043

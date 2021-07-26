@@ -220,7 +220,11 @@ func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
 }
 
 func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
-	if s.transactionPoolFull {
+	if ent.transactionHandlerBacklogFull {
+		// if the transaction handler backlog is full, we don't want to receive any more transactions.
+		// setting the transactionPoolFull here would notify other nodes that we don't want any more messages.
+		s.transactionPoolFull = true
+	} else if s.transactionPoolFull {
 		// the transaction pool is currently full.
 		if float32(ent.transactionPoolSize) < float32(s.config.TxPoolSize)*transacationPoolLowWatermark {
 			s.transactionPoolFull = false
