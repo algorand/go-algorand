@@ -1440,7 +1440,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 // numAccounts specifies how many accounts to create
 // maxHoldingsPerAccount sets a maximum asset holdings per account (normally distributed across all accounts)
 // largeAccountsRatio is a percentage of numAccounts to have maxHoldingsPerAccount holdings
-func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto config.ConsensusParams, maxHoldingsPerAccount int, largeAccountsRatio int) (accts map[basics.Address]basics.AccountData) {
+func benchmarkInitBalances(b *testing.B, numAccounts int, dbs db.Pair, proto config.ConsensusParams, maxHoldingsPerAccount int, largeAccountsRatio int) (accts map[basics.Address]basics.AccountData) {
 	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(b, err)
 
@@ -1458,54 +1458,53 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto con
 	// want have 95% of accounts to be between [1/4 maxHoldingsPerAccount/8, maxHoldingsPerAccount] then
 	// mean = 5/8 maxHoldingsPerAccount and stddev = 3/16 maxHoldingsPerAccount
 
-	largeHoldings := maxHoldingsPerAccount > numAccounts
-	if largeHoldings {
-		maxAssetIndex := maxHoldingsPerAccount + 1
-		aidxs := make([]basics.AssetIndex, maxAssetIndex, maxAssetIndex)
-		for i := 0; i < maxAssetIndex; i++ {
-			aidxs[i] = basics.AssetIndex(i + 1)
-		}
-		maxAccts := numAccounts * largeAccountsRatio / 100
-		var updates ledgercore.AccountDeltas
-		acctCounter := 0
-		for addr, ad := range accts {
-			rand.Shuffle(len(aidxs), func(i, j int) { aidxs[i], aidxs[j] = aidxs[j], aidxs[i] })
-			numHoldings := int(rand.NormFloat64()*3*float64(maxHoldingsPerAccount)/16 + float64(5*maxHoldingsPerAccount)/8)
-			if numHoldings > maxAssetIndex {
-				numHoldings = maxAssetIndex
-			}
-			if numHoldings < 0 {
-				numHoldings = 0
-			}
-			for _, aidx := range aidxs[:numHoldings] {
-				if _, ok := ad.Assets[aidx]; !ok {
-					ad.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
-					updates.SetEntityDelta(addr, basics.CreatableIndex(aidx), ledgercore.ActionHoldingCreate)
-				}
-			}
-			updates.Upsert(addr, ledgercore.PersistedAccountData{AccountData: ad})
-			accts[addr] = ad
-
-			acctCounter++
-			if acctCounter >= maxAccts {
-				break
-			}
-		}
-
-		baseAccounts := lruAccounts{}
-		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
-		err = updatesCnt.accountsLoadOld(tx)
-		require.NoError(b, err)
-
-		round := basics.Round(1)
-		for j := range updatesCnt.deltas {
-			updatesCnt.deltas[j].new.ExtendedAssetHolding = updatesCnt.deltas[j].old.pad.ExtendedAssetHolding
-		}
-		_, err = accountsNewRound(tx, updatesCnt, nil, proto, round)
-		require.NoError(b, err)
-		err = updateAccountsRound(tx, round, 0)
-		require.NoError(b, err)
+	maxAssetIndex := maxHoldingsPerAccount + 1
+	aidxs := make([]basics.AssetIndex, maxAssetIndex, maxAssetIndex)
+	for i := 0; i < maxAssetIndex; i++ {
+		aidxs[i] = basics.AssetIndex(i + 1)
 	}
+	maxAccts := numAccounts * largeAccountsRatio / 100
+	var updates ledgercore.AccountDeltas
+	acctCounter := 0
+	totalHoldingsChanged := 0
+	for addr, ad := range accts {
+		rand.Shuffle(len(aidxs), func(i, j int) { aidxs[i], aidxs[j] = aidxs[j], aidxs[i] })
+		numHoldings := int(rand.NormFloat64()*3*float64(maxHoldingsPerAccount)/16 + float64(5*maxHoldingsPerAccount)/8)
+		if numHoldings > maxAssetIndex {
+			numHoldings = maxAssetIndex
+		}
+		if numHoldings < 0 {
+			numHoldings = 0
+		}
+		for _, aidx := range aidxs[:numHoldings] {
+			if _, ok := ad.Assets[aidx]; !ok {
+				ad.Assets[aidx] = basics.AssetHolding{Amount: uint64(aidx), Frozen: true}
+				updates.SetEntityDelta(addr, basics.CreatableIndex(aidx), ledgercore.ActionHoldingCreate)
+			}
+		}
+		updates.Upsert(addr, ledgercore.PersistedAccountData{AccountData: ad})
+		accts[addr] = ad
+		totalHoldingsChanged += numHoldings
+
+		acctCounter++
+		if acctCounter >= maxAccts {
+			break
+		}
+	}
+	baseAccounts := lruAccounts{}
+	updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
+	err = updatesCnt.accountsLoadOld(tx)
+	require.NoError(b, err)
+
+	round := basics.Round(1)
+	for j := range updatesCnt.deltas {
+		updatesCnt.deltas[j].new.ExtendedAssetHolding = updatesCnt.deltas[j].old.pad.ExtendedAssetHolding
+	}
+	_, err = accountsNewRound(tx, updatesCnt, nil, proto, round)
+	require.NoError(b, err)
+	err = updateAccountsRound(tx, round, 0)
+	require.NoError(b, err)
+	b.ReportMetric(float64(totalHoldingsChanged), "tot_holdings")
 
 	err = tx.Commit()
 	require.NoError(b, err)
@@ -1599,13 +1598,13 @@ func benchLoadHolding(b *testing.B, qs *accountsDbQueries, dbad dbAccountData, a
 	return dbad.pad.ExtendedAssetHolding.Groups[gi].GetHolding(ai)
 }
 
-func benchmarkReadingRandomBalances(b *testing.B, inMemory bool, maxHoldingsPerAccount int, largeAccountsRatio int, simple bool) {
+func benchmarkReadingRandomBalances(b *testing.B, numAccounts int, inMemory bool, maxHoldingsPerAccount int, largeAccountsRatio int, simple bool) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	dbs, fn := dbOpenTest(b, inMemory)
 	setDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
-	accounts := benchmarkInitBalances(b, b.N, dbs, proto, maxHoldingsPerAccount, largeAccountsRatio)
+	accounts := benchmarkInitBalances(b, numAccounts, dbs, proto, maxHoldingsPerAccount, largeAccountsRatio)
 
 	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(b, err)
@@ -1637,11 +1636,11 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool, maxHoldingsPerA
 }
 
 func BenchmarkReadingRandomBalancesRAM(b *testing.B) {
-	benchmarkReadingRandomBalances(b, true, 1, 100, true)
+	benchmarkReadingRandomBalances(b, b.N, true, 1, 100, true)
 }
 
 func BenchmarkReadingRandomBalancesDisk(b *testing.B) {
-	benchmarkReadingRandomBalances(b, false, 1, 100, true)
+	benchmarkReadingRandomBalances(b, b.N, false, 1, 100, true)
 }
 
 func BenchmarkReadingRandomBalancesDiskLarge(b *testing.B) {
@@ -1655,11 +1654,12 @@ func BenchmarkReadingRandomBalancesDiskLarge(b *testing.B) {
 		{2000, false},
 		{5000, false},
 		{10000, false},
-		{100000, false},
+		// {100000, false},
 	}
+	numAccounts := 100000
 	for _, t := range tests {
 		b.Run(fmt.Sprintf("holdings=%d simple=%v", t.numHoldings, t.simple), func(b *testing.B) {
-			benchmarkReadingRandomBalances(b, false, t.numHoldings, 10, t.simple)
+			benchmarkReadingRandomBalances(b, numAccounts, false, t.numHoldings, 10, t.simple)
 		})
 	}
 }
