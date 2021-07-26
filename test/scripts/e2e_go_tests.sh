@@ -91,14 +91,7 @@ fi
 
 echo "PARALLEL_FLAG = ${PARALLEL_FLAG}"
 
-if [ "$USE_CIRCLECI_SPLIT" != "" ]; then
-    PARALLEL_FLAG="-p 1"
-    PACKAGES="$(go list ./... | circleci tests split --split-by=timings --timings-type=classname)"
-    PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-    echo "Testing the following packages:"
-    echo $PACKAGE_NAMES
-    gotestsum --format pkgname --junitfile $TEST_RESULTS/results.xml --jsonfile $TEST_RESULTS/testresults.json -- ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ${PACKAGE_NAMES}
-elif [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
+if [ "${#TESTPATTERNS[@]}" -eq 0 ]; then
     ${GOTESTCOMMAND} ${RACE_OPTION} ${PARALLEL_FLAG} -timeout 1h -v ${SHORTTEST} ./...
 else
     for TEST in ${TESTPATTERNS[@]}; do
