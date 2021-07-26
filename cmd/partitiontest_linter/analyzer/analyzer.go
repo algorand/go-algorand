@@ -13,9 +13,10 @@ const fileNameSuffix string = "_test.go"
 const functionNamePrefix string = "Test"
 const parameterType string = "T"
 
+// Analyzer initilization
 var Analyzer = &analysis.Analyzer{
 	Name: "lint",
-	Doc:  "This custom linter checks inside files that end in '_test.go', and inside functions that start with 'Test' and have testing argument, for a line 'testpatitioning.ParitionTest(<testing arg>)'",
+	Doc:  "This custom linter checks inside files that end in '_test.go', and inside functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'",
 	Run:  run,
 }
 
