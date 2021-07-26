@@ -136,10 +136,10 @@ func (s *syncState) sendMessageLoop(currentTime time.Duration, deadline timers.D
 	profGetTxnsGroups.end()
 	for _, peer := range peers {
 		msgEncoder := &messageAsyncEncoder{
-			state: s,
-			roundClock: s.clock,
+			state:                s,
+			roundClock:           s.clock,
 			peerDataExchangeRate: peer.dataExchangeRate,
-			sendCtx: context.Background(),
+			sendCtx:              context.Background(),
 		}
 		profAssembleMessage.start()
 		msgEncoder.messageData = s.assemblePeerMessage(peer, &pendingTransactions)
@@ -325,7 +325,7 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 				},
 			}
 			encodedMessage := proposalMessage.MarshalMsg(getMessageBuffer())
-			s.node.SendPeerMessage(peer.networkPeer, encodedMessage, func (enqueued bool, sequenceNumber uint64) error { return nil })
+			s.node.SendPeerMessage(peer.networkPeer, encodedMessage, func(enqueued bool, sequenceNumber uint64) error { return nil })
 			releaseMessageBuffer(encodedMessage)
 			// send txns using s.assemblePeerMessage(peer, &pendingTransactions)
 
@@ -333,10 +333,10 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 			for startIndex < len(p.txGroups) {
 				var txGroupsToSend []transactions.SignedTxGroup
 				msgEncoder := &messageAsyncEncoder{
-					state: s,
-					roundClock: s.clock,
+					state:                s,
+					roundClock:           s.clock,
 					peerDataExchangeRate: peer.dataExchangeRate,
-					sendCtx: s.sendCtx,
+					sendCtx:              s.sendCtx,
 				}
 				txGroupsToSend, startIndex = peer.selectProposalTransactions(p.txGroups, messageTimeWindow, startIndex)
 				msgEncoder.messageData = s.assembleProposalMessage(peer, txGroupsToSend)

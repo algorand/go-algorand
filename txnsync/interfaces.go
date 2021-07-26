@@ -126,7 +126,7 @@ func MakeBroadcastProposalRequestEvent(proposalBytes []byte, txGroups []transact
 		eventType: proposalBroadcastRequestEvent,
 		proposalBroadcastRequest: ProposalBroadcastRequest{
 			proposalBytes: proposalBytes,
-			txGroups: txGroups,
+			txGroups:      txGroups,
 		},
 	}
 }

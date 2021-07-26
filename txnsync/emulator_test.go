@@ -80,7 +80,7 @@ func TestEmulatedTrivialTransactionsExchange(t *testing.T) {
 				},
 			},
 		},
-		testDuration: 500 * time.Millisecond,
+		testDuration: 20000 * time.Millisecond,
 		initialAlloc: []initialTransactionsAllocation{
 			initialTransactionsAllocation{
 				node:              1,
