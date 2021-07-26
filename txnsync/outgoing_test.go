@@ -26,16 +26,29 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/bloom"
 	"github.com/algorand/go-algorand/util/timers"
 )
+
+type mockAsyncLogger struct {
+	logging.Logger
+}
+
+func (m mockAsyncLogger) outgoingMessage(mstat msgStats) {
+}
+
+func (m mockAsyncLogger) incomingMessage(mstat msgStats) {
+}
+
+func (m mockAsyncLogger) Infof(string, ...interface{}) {}
 
 func TestAsyncMessageSent(t *testing.T) {
 	a := require.New(t)
 
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
-	s.log = mockLogger{}
+	s.log = mockAsyncLogger{}
 
 	asyncEncoder := messageAsyncEncoder{
 		state: &s,
@@ -89,7 +102,7 @@ func TestAsyncEncodeAndSend(t *testing.T) {
 
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
-	s.log = mockLogger{}
+	s.log = mockAsyncLogger{}
 	called := false
 	s.node = mockAsyncNodeConnector{called: &called}
 	s.messageSendWaitGroup = sync.WaitGroup{}
@@ -129,7 +142,7 @@ func TestAssemblePeerMessage(t *testing.T) {
 
 	s := syncState{
 		service:                    nil,
-		log:                        mockLogger{},
+		log:                        mockAsyncLogger{},
 		node:                       mockAsyncNodeConnector{},
 		isRelay:                    false,
 		clock:                      timers.MakeMonotonicClock(time.Now()),
