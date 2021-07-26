@@ -3,7 +3,7 @@ package analyzer_test
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/cmd/testpartitioning_linter/analyzer"
+	"github.com/algorand/go-algorand/cmd/partitiontest_linter/analyzer"
 	"golang.org/x/tools/go/analysis/analysistest"
 )
 
