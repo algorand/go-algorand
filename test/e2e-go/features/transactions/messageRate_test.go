@@ -29,6 +29,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
@@ -57,7 +58,13 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, templatePath)
+	fixture.SetupNoStart(t, templatePath)
+	configDir := fixture.PrimaryDataDir()
+	cfg, err := config.LoadConfigFromDisk(configDir)
+	a.NoError(err)
+	cfg.EnableVerbosedTransactionSyncLogging = true
+	cfg.SaveToDisk(configDir)
+	fixture.Start()
 
 	defer fixture.Shutdown()
 
@@ -89,7 +96,7 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 
 	// build the path for the primary node's log file
 	var logPath strings.Builder
-	logPath.WriteString(pingClient.DataDir())
+	logPath.WriteString(fixture.PrimaryDataDir())
 	logPath.WriteString("/node.log")
 
 	// seek to `bytesRead` bytes when reading the log file
@@ -103,9 +110,9 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 		txnSentCount := uint(0)
 
 		for {
-			// send txns at txnRate for 10s
+			// send txns at txnRate for 30s
 			timeSinceStart := time.Since(startTime)
-			if timeSinceStart > 10*time.Second {
+			if timeSinceStart > 30*time.Second {
 				break
 			}
 
@@ -116,12 +123,12 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 			throttleTransactionRate(startTime, txnRate, txnSentCount)
 		}
 
-		// parse the log to find out message rate and bytes of the log file read including seek
+		// parse the log to find out message rate and bytes of the log file read
 		msgRate, newBytesRead, err := parseLog(logPath.String(), bytesRead)
 		a.NoError(err)
 		aErrorMessage := fmt.Sprintf("TxSync message rate not monotonic for txn rate: %d", txnRate)
 		a.GreaterOrEqual(msgRate, prevMsgRate, aErrorMessage)
-		bytesRead = newBytesRead
+		bytesRead += newBytesRead
 		prevMsgRate = msgRate
 	}
 
@@ -148,23 +155,25 @@ func parseLog(logPath string, startByte int) (float64, int, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		bytesRead += len(line)
-		if strings.Contains(line, "BroadcastSignedTxGroup") {
+		// look for txnsync messages
+		if strings.Contains(line, "Outgoing Txsync") {
 			var logEvent map[string]interface{}
 			json.Unmarshal([]byte(line), &logEvent)
 			eventTime := fmt.Sprintf("%v", logEvent["time"])
+			// record the timestamps of txnsync messages
 			lastTimestamp, err = time.Parse(time.RFC3339, eventTime)
+			if err != nil {
+				return 0, bytesRead, err
+			}
 			if firstTimestamp.IsZero() {
 				firstTimestamp = lastTimestamp
-			}
-			if err != nil {
-				return 0, startByte + bytesRead, err
 			}
 			messageCount++
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return 0, startByte + bytesRead, err
+		return 0, bytesRead, err
 	}
 	msgRate := float64(messageCount) / (float64(lastTimestamp.Sub(firstTimestamp) / time.Second))
-	return msgRate, startByte + bytesRead, nil
+	return msgRate, bytesRead, nil
 }
