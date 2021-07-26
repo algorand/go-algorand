@@ -3,7 +3,7 @@ package analyzer_testdata
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func notTestFunction() {}
@@ -13,7 +13,7 @@ func notTestFunctionWithWrongParam(t string) {}
 func notTestFunctionWithCorrectParam(t *testing.T) {}
 
 func notTestFunctionWithCorrectParamCorrectLine(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 }
 
 func notTestFunctionWithCorrectParamWrongLine(t *testing.T) {
