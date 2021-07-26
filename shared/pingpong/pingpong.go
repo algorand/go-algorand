@@ -207,8 +207,8 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 		return err
 	}
 
+	pendingTxnCount := uint64(0)
 	fmt.Printf("adjusting account balance to %d\n", minFund)
-	pendingTxnIDs := make(map[transactions.Txid]bool, len(accounts))
 	for addr, balance := range accounts {
 		if !cfg.Quiet {
 			fmt.Printf("adjusting balance of account %v\n", addr)
@@ -222,12 +222,12 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
-			txn, err := sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
+			_, err := sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
 			if err != nil {
 				return err
 			}
-			pendingTxnIDs[txn.ID()] = true
 			accounts[addr] = minFund
+			pendingTxnCount++
 			if !cfg.Quiet {
 				fmt.Printf("account balance for key %s is %d\n", addr, accounts[addr])
 			}
@@ -239,7 +239,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 	// wait until all the above transactions are sent, or that we have no more transactions
 	// in our pending transaction pool.
 	for {
-		if len(pendingTxnIDs) == 0 {
+		if pendingTxnCount == 0 {
 			break
 		}
 		pendingTxns, err := client.GetPendingTransactions(1)
@@ -251,17 +251,8 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 			// no more transactions are waiting on the node.
 			break
 		}
-		for txid := range pendingTxnIDs {
-			txInfo, err := client.PendingTransactionInformation(txid.String())
-			if err != nil {
-				fmt.Printf("failed to check pending transaction status : %v\n", err)
-				continue
-			}
-			if txInfo.ConfirmedRound > 0 {
-				// transaction is within a block.
-				delete(pendingTxnIDs, txid)
-			}
-		}
+		pendingTxnCount = pendingTxns.TotalTxns
+
 		nodeStatus, err := client.Status()
 		if err != nil {
 			fmt.Printf("failed to retrieve node status : %v\n", err)
@@ -288,6 +279,7 @@ func sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fe
 func refreshAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) error {
 	// wait until all the pending transcations have been sent; otherwise, getting the balance
 	// is pretty much meaningless.
+	fmt.Printf("waiting for all transactions to be accepted before refreshing accounts.\n")
 	for {
 		pendingTxns, err := client.GetPendingTransactions(1)
 		if err != nil {
@@ -306,6 +298,7 @@ func refreshAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpCo
 		// this would wait for the next round, when we will perform the check again.
 		client.WaitForRound(nodeStatus.LastRound)
 	}
+
 	for addr := range accounts {
 		amount, err := client.GetBalance(addr)
 		if err != nil {
@@ -572,12 +565,25 @@ func (pps *WorkerState) sendFromTo(
 
 	amt := cfg.MaxAmt
 
+	// map the pending gains for each address to it's corresponding transaction id as well as the numerical gains.
+	pendingAccountGains := make(map[string] /*basics.Address*/ map[transactions.Txid]int64)
+
+	belowMinBalanceAccounts := make(map[string] /*basics.Address*/ bool)
+
 	assetsByCreator := make(map[string][]*v1.AssetParams)
 	for _, p := range cinfo.AssetParams {
 		c := p.Creator
 		assetsByCreator[c] = append(assetsByCreator[c], &p)
 	}
-	for i, from := range fromList {
+	//for i, from := range fromList {
+	for i := 0; i < len(fromList); i = (i + 1) % len(fromList) {
+		from := fromList[i]
+
+		// keep going until the balances of at least 20% of the accounts is too low.
+		if len(belowMinBalanceAccounts)*5 > len(fromList) {
+			return
+		}
+
 		if cfg.RandomizeAmt {
 			amt = rand.Uint64()%cfg.MaxAmt + 1
 		}
@@ -591,8 +597,45 @@ func (pps *WorkerState) sendFromTo(
 			to = addr.String()
 		}
 
+		if toGains, has := pendingAccountGains[to]; has {
+			gainsAdded := false
+			// if the target account has some pending transactions, evaluate these.
+			for txid, gains := range toGains {
+				//t := time.Now()
+				txnList, err2 := client.GetPendingTransactionsByAddress(to, 500)
+				if err2 != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "GetPendingTransactionsByAddress failed: %v\n", err2)
+					return
+				}
+				//d := time.Now().Sub(t)
+				//fmt.Printf("checking pending took %v\n", d)
+				missing := true
+				for _, txn := range txnList.Transactions {
+					if txn.TxID == txid.String() && txn.From != to {
+						missing = false
+						if txn.ConfirmedRound > 0 {
+							// confirmed.
+							accounts[to] = uint64(int64(accounts[to]) + gains)
+							gainsAdded = true
+							delete(toGains, txid)
+						} else {
+							// not confirmed. still pending.
+						}
+					}
+				}
+				if missing {
+					delete(toGains, txid)
+				}
+			}
+			if gainsAdded && belowMinBalanceAccounts[to] {
+				// we should re-evaluate that account.
+				delete(belowMinBalanceAccounts, to)
+			}
+		}
+
 		// Broadcast transaction
 		var sendErr error
+		var txid transactions.Txid
 		fromBalanceChange := int64(0)
 		toBalanceChange := int64(0)
 		if cfg.NumAsset > 0 {
@@ -613,6 +656,7 @@ func (pps *WorkerState) sendFromTo(
 			// would we have enough money after taking into account the current updated fees ?
 			if accounts[from] <= (txn.Fee.Raw + amt + cfg.MinAccountFunds) {
 				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, to)
+				belowMinBalanceAccounts[from] = true
 				continue
 			}
 
@@ -632,6 +676,7 @@ func (pps *WorkerState) sendFromTo(
 			if sendErr != nil {
 				fmt.Printf("Warning, cannot broadcast txn, %s\n", sendErr)
 			}
+			txid = stxn.Txn.ID()
 		} else {
 			// Generate txn group
 
@@ -720,6 +765,10 @@ func (pps *WorkerState) sendFromTo(
 
 			sentCount++
 			sendErr = client.BroadcastTransactionGroup(stxGroup)
+
+			// since it's the transaction group, we can take any of the transaction id as an indication that the
+			// transaction was accepted.
+			txid = txGroup[0].ID()
 		}
 
 		if sendErr != nil {
@@ -734,10 +783,15 @@ func (pps *WorkerState) sendFromTo(
 		// avoid updating the "to" account :
 		// since we can't control the execution order of these transactions,
 		// we don't want to use the fact that an account has XXX algos while it does not.
-		// so, we will not "refund" the destination account, and instead we will trust
-		// that the rebalancing would refresh the accounts to their desired balances.
-		//
-		// accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
+		// We will store that in the pendingAccountGains so we can evaluate that later on if needed.
+		if toGains, has := pendingAccountGains[to]; has {
+			toGains[txid] = toBalanceChange
+		} else {
+			toGains := make(map[transactions.Txid]int64, 1)
+			pendingAccountGains[to] = toGains
+			toGains[txid] = toBalanceChange
+		}
+
 		if cfg.DelayBetweenTxn > 0 {
 			time.Sleep(cfg.DelayBetweenTxn)
 		}
