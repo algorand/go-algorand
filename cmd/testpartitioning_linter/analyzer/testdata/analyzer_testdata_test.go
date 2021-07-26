@@ -3,7 +3,7 @@ package analyzer_testdata
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
+	"../../../../test/partitiontest"
 )
 
 func notTestFunction() {}
@@ -24,42 +24,42 @@ func notTestFunctionWithCorrectParamWrongLine(t *testing.T) {
 
 // func TestFunctionWithWrongParam(t string) {}
 
-func TestFunctionWithCorrectParamOnly(t *testing.T) {} // want "function is missing testpartitioning.PartitionTest"
+func TestFunctionWithCorrectParamOnly(t *testing.T) {} // want "function is missing partitiontest.PartitionTest"
 
-func TestFunctionWithCorrectParamCorrectLine(t *testing.T) { // want "function is missing testpartitioning.PartitionTest"
-	// 	testpartitioning.PartitionTest(t)
+func TestFunctionWithCorrectParamCorrectLine(t *testing.T) {
+	partitiontest.PartitionTest(t)
 }
 
-func TestFunctionWithCorrectParamBadLine(t *testing.T) { // want "function is missing testpartitioning.PartitionTest"
+func TestFunctionWithCorrectParamBadLine(t *testing.T) { // want "function is missing partitiontest.PartitionTest"
 	println("something")
 }
 
-func TestFunctionWithDifferentName(n *testing.T) { // want "function is missing testpartitioning.PartitionTest"
-	// 	testpartitioning.PartitionTest(n)
+func TestFunctionWithDifferentName(n *testing.T) {
+	partitiontest.PartitionTest(n)
 }
 
 // func TestFunctionWithMultipleParams(t *testing.T, whatevs string) {}
 
 // func TestFunctionWithMultipleParamsCorrectLine(t *testing.T, whatevs string) {
-// 	testpartitioning.PartitionTest(t)
+// 	partitiontest.PartitionTest(t)
 // }
 
 // func TestFunctionWithMultipleParamsCorrectLineDifferentOrder(whatevs string, t *testing.T) {
-// 	testpartitioning.PartitionTest(t)
+// 	partitiontest.PartitionTest(t)
 // }
 
-func TestFunctionWithCorrectParamNotFirstCorrectLine(t *testing.T) { // want "function is missing testpartitioning.PartitionTest"
+func TestFunctionWithCorrectParamNotFirstCorrectLine(t *testing.T) {
 	println("something")
-	// 	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 }
 
-func TestFunctionWithCorrectParamNotLastCorrectLine(t *testing.T) { // want "function is missing testpartitioning.PartitionTest"
-	// 	testpartitioning.PartitionTest(t)
+func TestFunctionWithCorrectParamNotLastCorrectLine(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	println("something")
 }
 
-func TestFunctionWithCorrectParamMiddleCorrectLine(t *testing.T) { // want "function is missing testpartitioning.PartitionTest"
+func TestFunctionWithCorrectParamMiddleCorrectLine(t *testing.T) {
 	println("something")
-	// 	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 	println("something")
 }

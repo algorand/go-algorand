@@ -7,7 +7,7 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
-const packageName string = "testpartitioning"
+const packageName string = "partitiontest"
 const functionName string = "PartitionTest"
 const fileNameSuffix string = "_test.go"
 const functionNamePrefix string = "Test"
