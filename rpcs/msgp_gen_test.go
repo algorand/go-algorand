@@ -34,8 +34,6 @@ func TestMarshalUnmarshalEncodedBlockCert(t *testing.T) {
 }
 
 func TestRandomizedEncodingEncodedBlockCert(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &EncodedBlockCert{})
 }
 

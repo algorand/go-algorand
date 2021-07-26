@@ -34,8 +34,6 @@ func TestMarshalUnmarshalBlock(t *testing.T) {
 }
 
 func TestRandomizedEncodingBlock(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Block{})
 }
 
@@ -96,8 +94,6 @@ func TestMarshalUnmarshalBlockHeader(t *testing.T) {
 }
 
 func TestRandomizedEncodingBlockHeader(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &BlockHeader{})
 }
 
@@ -158,8 +154,6 @@ func TestMarshalUnmarshalCompactCertState(t *testing.T) {
 }
 
 func TestRandomizedEncodingCompactCertState(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &CompactCertState{})
 }
 
@@ -220,8 +214,6 @@ func TestMarshalUnmarshalGenesis(t *testing.T) {
 }
 
 func TestRandomizedEncodingGenesis(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Genesis{})
 }
 
@@ -282,8 +274,6 @@ func TestMarshalUnmarshalGenesisAllocation(t *testing.T) {
 }
 
 func TestRandomizedEncodingGenesisAllocation(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &GenesisAllocation{})
 }
 
@@ -344,8 +334,6 @@ func TestMarshalUnmarshalRewardsState(t *testing.T) {
 }
 
 func TestRandomizedEncodingRewardsState(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &RewardsState{})
 }
 
@@ -406,8 +394,6 @@ func TestMarshalUnmarshalUpgradeVote(t *testing.T) {
 }
 
 func TestRandomizedEncodingUpgradeVote(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &UpgradeVote{})
 }
 

@@ -34,8 +34,6 @@ func TestMarshalUnmarshalMessage(t *testing.T) {
 }
 
 func TestRandomizedEncodingMessage(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Message{})
 }
 

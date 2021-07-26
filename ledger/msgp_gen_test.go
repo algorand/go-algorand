@@ -34,8 +34,6 @@ func TestMarshalUnmarshalCatchpointFileHeader(t *testing.T) {
 }
 
 func TestRandomizedEncodingCatchpointFileHeader(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &CatchpointFileHeader{})
 }
 
@@ -96,8 +94,6 @@ func TestMarshalUnmarshalcatchpointFileBalancesChunk(t *testing.T) {
 }
 
 func TestRandomizedEncodingcatchpointFileBalancesChunk(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &catchpointFileBalancesChunk{})
 }
 
@@ -158,8 +154,6 @@ func TestMarshalUnmarshalencodedBalanceRecord(t *testing.T) {
 }
 
 func TestRandomizedEncodingencodedBalanceRecord(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &encodedBalanceRecord{})
 }
 

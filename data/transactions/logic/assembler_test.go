@@ -23,7 +23,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/testpartitioning"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/partitiontest"

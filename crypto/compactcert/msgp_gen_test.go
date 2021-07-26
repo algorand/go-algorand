@@ -34,8 +34,6 @@ func TestMarshalUnmarshalCert(t *testing.T) {
 }
 
 func TestRandomizedEncodingCert(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Cert{})
 }
 
@@ -96,8 +94,6 @@ func TestMarshalUnmarshalCompactOneTimeSignature(t *testing.T) {
 }
 
 func TestRandomizedEncodingCompactOneTimeSignature(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &CompactOneTimeSignature{})
 }
 
@@ -158,8 +154,6 @@ func TestMarshalUnmarshalParticipant(t *testing.T) {
 }
 
 func TestRandomizedEncodingParticipant(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Participant{})
 }
 
@@ -220,8 +214,6 @@ func TestMarshalUnmarshalReveal(t *testing.T) {
 }
 
 func TestRandomizedEncodingReveal(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Reveal{})
 }
 
@@ -282,8 +274,6 @@ func TestMarshalUnmarshalcoinChoice(t *testing.T) {
 }
 
 func TestRandomizedEncodingcoinChoice(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &coinChoice{})
 }
 
@@ -344,8 +334,6 @@ func TestMarshalUnmarshalsigslotCommit(t *testing.T) {
 }
 
 func TestRandomizedEncodingsigslotCommit(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &sigslotCommit{})
 }
 

@@ -34,8 +34,6 @@ func TestMarshalUnmarshalAccountTotals(t *testing.T) {
 }
 
 func TestRandomizedEncodingAccountTotals(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &AccountTotals{})
 }
 
@@ -96,8 +94,6 @@ func TestMarshalUnmarshalAlgoCount(t *testing.T) {
 }
 
 func TestRandomizedEncodingAlgoCount(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &AlgoCount{})
 }
 

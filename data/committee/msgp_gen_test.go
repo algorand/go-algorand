@@ -34,8 +34,6 @@ func TestMarshalUnmarshalCredential(t *testing.T) {
 }
 
 func TestRandomizedEncodingCredential(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Credential{})
 }
 
@@ -96,8 +94,6 @@ func TestMarshalUnmarshalSeed(t *testing.T) {
 }
 
 func TestRandomizedEncodingSeed(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Seed{})
 }
 
@@ -158,8 +154,6 @@ func TestMarshalUnmarshalUnauthenticatedCredential(t *testing.T) {
 }
 
 func TestRandomizedEncodingUnauthenticatedCredential(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &UnauthenticatedCredential{})
 }
 
@@ -220,8 +214,6 @@ func TestMarshalUnmarshalhashableCredential(t *testing.T) {
 }
 
 func TestRandomizedEncodinghashableCredential(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &hashableCredential{})
 }
 

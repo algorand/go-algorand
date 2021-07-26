@@ -34,8 +34,6 @@ func TestMarshalUnmarshalApplicationCallTxnFields(t *testing.T) {
 }
 
 func TestRandomizedEncodingApplicationCallTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &ApplicationCallTxnFields{})
 }
 
@@ -96,8 +94,6 @@ func TestMarshalUnmarshalApplyData(t *testing.T) {
 }
 
 func TestRandomizedEncodingApplyData(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &ApplyData{})
 }
 
@@ -158,8 +154,6 @@ func TestMarshalUnmarshalAssetConfigTxnFields(t *testing.T) {
 }
 
 func TestRandomizedEncodingAssetConfigTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &AssetConfigTxnFields{})
 }
 
@@ -220,8 +214,6 @@ func TestMarshalUnmarshalAssetFreezeTxnFields(t *testing.T) {
 }
 
 func TestRandomizedEncodingAssetFreezeTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &AssetFreezeTxnFields{})
 }
 
@@ -282,8 +274,6 @@ func TestMarshalUnmarshalAssetTransferTxnFields(t *testing.T) {
 }
 
 func TestRandomizedEncodingAssetTransferTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &AssetTransferTxnFields{})
 }
 
@@ -344,8 +334,6 @@ func TestMarshalUnmarshalCompactCertTxnFields(t *testing.T) {
 }
 
 func TestRandomizedEncodingCompactCertTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &CompactCertTxnFields{})
 }
 
@@ -406,8 +394,6 @@ func TestMarshalUnmarshalHeader(t *testing.T) {
 }
 
 func TestRandomizedEncodingHeader(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Header{})
 }
 
@@ -468,8 +454,6 @@ func TestMarshalUnmarshalKeyregTxnFields(t *testing.T) {
 }
 
 func TestRandomizedEncodingKeyregTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &KeyregTxnFields{})
 }
 
@@ -530,8 +514,6 @@ func TestMarshalUnmarshalLogicSig(t *testing.T) {
 }
 
 func TestRandomizedEncodingLogicSig(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &LogicSig{})
 }
 
@@ -592,8 +574,6 @@ func TestMarshalUnmarshalPaymentTxnFields(t *testing.T) {
 }
 
 func TestRandomizedEncodingPaymentTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &PaymentTxnFields{})
 }
 
@@ -654,8 +634,6 @@ func TestMarshalUnmarshalPayset(t *testing.T) {
 }
 
 func TestRandomizedEncodingPayset(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Payset{})
 }
 
@@ -716,8 +694,6 @@ func TestMarshalUnmarshalSignedTxn(t *testing.T) {
 }
 
 func TestRandomizedEncodingSignedTxn(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &SignedTxn{})
 }
 
@@ -778,8 +754,6 @@ func TestMarshalUnmarshalSignedTxnInBlock(t *testing.T) {
 }
 
 func TestRandomizedEncodingSignedTxnInBlock(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &SignedTxnInBlock{})
 }
 
@@ -840,8 +814,6 @@ func TestMarshalUnmarshalSignedTxnWithAD(t *testing.T) {
 }
 
 func TestRandomizedEncodingSignedTxnWithAD(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &SignedTxnWithAD{})
 }
 
@@ -902,8 +874,6 @@ func TestMarshalUnmarshalTransaction(t *testing.T) {
 }
 
 func TestRandomizedEncodingTransaction(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &Transaction{})
 }
 
@@ -964,8 +934,6 @@ func TestMarshalUnmarshalTxGroup(t *testing.T) {
 }
 
 func TestRandomizedEncodingTxGroup(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &TxGroup{})
 }
 

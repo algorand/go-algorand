@@ -34,8 +34,6 @@ func TestMarshalUnmarshalnetPrioResponse(t *testing.T) {
 }
 
 func TestRandomizedEncodingnetPrioResponse(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &netPrioResponse{})
 }
 
@@ -96,8 +94,6 @@ func TestMarshalUnmarshalnetPrioResponseSigned(t *testing.T) {
 }
 
 func TestRandomizedEncodingnetPrioResponseSigned(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
 	protocol.RunEncodingTest(t, &netPrioResponseSigned{})
 }
 
