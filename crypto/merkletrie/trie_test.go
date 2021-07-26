@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 )
 
 func TestAddingAndRemoving(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	mt, _ := MakeTrie(nil, defaultTestMemoryConfig)
 	// create 10000 hashes.
@@ -85,7 +85,7 @@ func TestAddingAndRemoving(t *testing.T) {
 }
 
 func TestRandomAddingAndRemoving(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	mt, err := MakeTrie(nil, defaultTestMemoryConfig)
 	require.NoError(t, err)

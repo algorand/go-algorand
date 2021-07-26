@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"sort"
@@ -43,7 +44,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -201,7 +202,7 @@ func newMessageCounter(t testing.TB, target int) *messageCounterHandler {
 }
 
 func TestWebsocketNetworkStartStop(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.Start()
@@ -221,7 +222,7 @@ func waitReady(t testing.TB, wn *WebsocketNetwork, timeout <-chan time.Time) boo
 
 // Set up two nodes, test that a.Broadcast is received by B
 func TestWebsocketNetworkBasic(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -257,7 +258,7 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 
 // Repeat basic, but test a unicast
 func TestWebsocketNetworkUnicast(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -298,7 +299,7 @@ func TestWebsocketNetworkUnicast(t *testing.T) {
 
 // Like a basic test, but really we just want to have SetPeerData()/GetPeerData()
 func TestWebsocketPeerData(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -336,7 +337,7 @@ func TestWebsocketPeerData(t *testing.T) {
 
 // Test sending array of messages
 func TestWebsocketNetworkArray(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -373,7 +374,7 @@ func TestWebsocketNetworkArray(t *testing.T) {
 
 // Test cancelling message sends
 func TestWebsocketNetworkCancel(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -456,7 +457,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 
 // Set up two nodes, test that a.Broadcast is received by B, when B has no address.
 func TestWebsocketNetworkNoAddress(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -548,7 +549,7 @@ const lineNetworkNumMessages = 5
 // Bonus! Measure how long that takes.
 // TODO: also make a Benchmark version of this that reports per-node broadcast hop speed.
 func TestLineNetwork(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	nodes, counters := lineNetwork(t, lineNetworkLength)
 	t.Logf("line network length: %d", lineNetworkLength)
@@ -584,7 +585,7 @@ func addrtest(t *testing.T, wn *WebsocketNetwork, expected, src string) {
 }
 
 func TestAddrToGossipAddr(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	wn := &WebsocketNetwork{}
 	wn.GenesisID = "test genesisID"
@@ -618,7 +619,7 @@ var nopConnSingleton = nopConn{}
 
 // What happens when all the read message handler threads get busy?
 func TestSlowHandlers(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	slowTag := protocol.Tag("sl")
 	fastTag := protocol.Tag("fa")
@@ -694,7 +695,7 @@ func TestSlowHandlers(t *testing.T) {
 
 // one peer sends waaaayy too much slow-to-handle traffic. everything else should run fine.
 func TestFloodingPeer(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	t.Skip("flaky test")
 	slowTag := protocol.Tag("sl")
@@ -789,7 +790,7 @@ func avgSendBufferHighPrioLength(wn *WebsocketNetwork) float64 {
 //
 // This is a deeply invasive test that reaches into the guts of WebsocketNetwork and wsPeer. If the implementation chainges consider throwing away or totally reimplementing this test.
 func TestSlowOutboundPeer(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	t.Skip() // todo - update this test to reflect the new implementation.
 	xtag := protocol.ProposalPayloadTag
@@ -875,7 +876,7 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 }
 
 func TestDupFilter(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestFilterWebsocketNode(t, "a")
 	netA.config.GossipFanout = 1
@@ -956,7 +957,7 @@ func TestDupFilter(t *testing.T) {
 }
 
 func TestGetPeers(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -1095,7 +1096,7 @@ func BenchmarkWebsocketNetworkBasic(t *testing.B) {
 
 // Check that priority is propagated from B to A
 func TestWebsocketNetworkPrio(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	prioA := netPrioStub{}
 	netA := makeTestWebsocketNode(t)
@@ -1137,7 +1138,7 @@ func TestWebsocketNetworkPrio(t *testing.T) {
 
 // Check that priority is propagated from B to A
 func TestWebsocketNetworkPrioLimit(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	limitConf := defaultConfig
 	limitConf.BroadcastConnectionsLimit = 1
@@ -1160,6 +1161,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netB := makeTestWebsocketNode(t)
 	netB.SetPrioScheme(&prioB)
 	netB.config.GossipFanout = 1
+	netB.config.NetAddress = ""
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counterB}})
 	netB.Start()
@@ -1173,6 +1175,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netC := makeTestWebsocketNode(t)
 	netC.SetPrioScheme(&prioC)
 	netC.config.GossipFanout = 1
+	netC.config.NetAddress = ""
 	netC.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netC.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counterC}})
 	netC.Start()
@@ -1180,35 +1183,50 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 
 	// Wait for response messages to propagate from B+C to A
 	select {
-	case <-netA.prioResponseChan:
+	case peer := <-netA.prioResponseChan:
+		netA.peersLock.RLock()
+		require.Subset(t, []uint64{prioB.prio, prioC.prio}, []uint64{peer.prioWeight})
+		netA.peersLock.RUnlock()
 	case <-time.After(time.Second):
 		t.Errorf("timeout on netA.prioResponseChan 1")
 	}
 	select {
-	case <-netA.prioResponseChan:
+	case peer := <-netA.prioResponseChan:
+		netA.peersLock.RLock()
+		require.Subset(t, []uint64{prioB.prio, prioC.prio}, []uint64{peer.prioWeight})
+		netA.peersLock.RUnlock()
 	case <-time.After(time.Second):
 		t.Errorf("timeout on netA.prioResponseChan 2")
 	}
 	waitReady(t, netA, time.After(time.Second))
 
+	firstPeer := netA.peers[0]
 	netA.Broadcast(context.Background(), protocol.TxnTag, nil, true, nil)
 
+	failed := false
 	select {
 	case <-counterBdone:
 	case <-time.After(time.Second):
 		t.Errorf("timeout, B did not receive message")
+		failed = true
 	}
 
 	select {
 	case <-counterCdone:
 		t.Errorf("C received message")
+		failed = true
 	case <-time.After(time.Second):
+	}
+
+	if failed {
+		t.Errorf("NetA had the following two peers priorities : [0]:%s=%d [1]:%s=%d", netA.peers[0].rootURL, netA.peers[0].prioWeight, netA.peers[1].rootURL, netA.peers[1].prioWeight)
+		t.Errorf("first peer before broadcasting was %s", firstPeer.rootURL)
 	}
 }
 
 // Create many idle connections, to see if we have excessive CPU utilization.
 func TestWebsocketNetworkManyIdle(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// This test is meant to be run manually, as:
 	//
@@ -1277,7 +1295,7 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 // TODO: test funcion when some message handler is slow?
 
 func TestWebsocketNetwork_getCommonHeaders(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	header := http.Header{}
 	expectedTelemetryGUID := "123"
@@ -1293,7 +1311,7 @@ func TestWebsocketNetwork_getCommonHeaders(t *testing.T) {
 }
 
 func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	wn := makeTestWebsocketNode(t)
 	wn.GenesisID = "genesis-id1"
@@ -1354,7 +1372,7 @@ func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte
 }
 
 func TestDelayedMessageDrop(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -1393,7 +1411,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 }
 
 func TestSlowPeerDisconnection(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
@@ -1455,7 +1473,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 }
 
 func TestForceMessageRelaying(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
@@ -1540,7 +1558,7 @@ func TestForceMessageRelaying(t *testing.T) {
 }
 
 func TestSetUserAgentHeader(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	headers := http.Header{}
 	SetUserAgentHeader(headers)
@@ -1549,7 +1567,7 @@ func TestSetUserAgentHeader(t *testing.T) {
 }
 
 func TestCheckProtocolVersionMatch(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// note - this test changes the SupportedProtocolVersions global variable ( SupportedProtocolVersions ) and therefore cannot be parallelized.
 	originalSupportedProtocolVersions := SupportedProtocolVersions
@@ -1630,7 +1648,7 @@ func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
 
 // Set up two nodes, test topics send/receive is working
 func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	var topicMsgReqTag Tag = protocol.UniEnsBlockReqTag
 	netA := makeTestWebsocketNode(t)
@@ -1686,7 +1704,7 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 
 // Set up two nodes, have one of them request a certain message tag mask, and verify the other follow that.
 func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -1771,7 +1789,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 // Network B will respond with another message for the first 4 messages. When it receive the 5th message, it would close the connection.
 // We want to get an event with disconnectRequestReceived
 func TestWebsocketDisconnection(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -1860,7 +1878,7 @@ func TestWebsocketDisconnection(t *testing.T) {
 
 // TestASCIIFiltering tests the behaviour of filterASCII by feeding it with few known inputs and verifying the expected outputs.
 func TestASCIIFiltering(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	testUnicodePrintableStrings := []struct {
 		testString     string
@@ -1902,7 +1920,7 @@ func (cl callbackLogger) Warnf(s string, args ...interface{}) {
 
 // TestMaliciousCheckServerResponseVariables test the checkServerResponseVariables to ensure it doesn't print the a malicious input without being filtered to the log file.
 func TestMaliciousCheckServerResponseVariables(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	wn := makeTestWebsocketNode(t)
 	wn.GenesisID = "genesis-id1"
@@ -2026,5 +2044,55 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 			break
 		}
 		txnCount += txnCount/4 + 1
+	}
+}
+
+type urlCase struct {
+	text string
+	out  url.URL
+}
+
+func TestParseHostOrURL(t *testing.T) {
+	urlTestCases := []urlCase{
+		{"localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
+		{"http://localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
+		{"ws://localhost:9999", url.URL{Scheme: "ws", Host: "localhost:9999"}},
+		{"wss://localhost:443", url.URL{Scheme: "wss", Host: "localhost:443"}},
+		{"https://localhost:123", url.URL{Scheme: "https", Host: "localhost:123"}},
+		{"https://somewhere.tld", url.URL{Scheme: "https", Host: "somewhere.tld"}},
+		{"http://127.0.0.1:123", url.URL{Scheme: "http", Host: "127.0.0.1:123"}},
+		{"//somewhere.tld", url.URL{Scheme: "", Host: "somewhere.tld"}},
+		{"//somewhere.tld:4601", url.URL{Scheme: "", Host: "somewhere.tld:4601"}},
+		{"http://[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
+		{"1.2.3.4:123", url.URL{Scheme: "http", Host: "1.2.3.4:123"}},
+		{"[::]:123", url.URL{Scheme: "http", Host: "[::]:123"}},
+		{"r2-devnet.devnet.algodev.network:4560", url.URL{Scheme: "http", Host: "r2-devnet.devnet.algodev.network:4560"}},
+	}
+	badUrls := []string{
+		"justahost",
+		"localhost:WAT",
+		"http://localhost:WAT",
+		"https://localhost:WAT",
+		"ws://localhost:WAT",
+		"wss://localhost:WAT",
+		"//localhost:WAT",
+		"://badaddress", // See rpcs/blockService_test.go TestRedirectFallbackEndpoints
+		"://localhost:1234",
+	}
+	for _, tc := range urlTestCases {
+		t.Run(tc.text, func(t *testing.T) {
+			v, err := ParseHostOrURL(tc.text)
+			require.NoError(t, err)
+			if tc.out != *v {
+				t.Errorf("url wanted %#v, got %#v", tc.out, v)
+				return
+			}
+		})
+	}
+	for _, addr := range badUrls {
+		t.Run(addr, func(t *testing.T) {
+			_, err := ParseHostOrURL(addr)
+			require.Error(t, err, "url should fail", addr)
+		})
 	}
 }

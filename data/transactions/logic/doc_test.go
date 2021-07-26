@@ -17,14 +17,15 @@
 package logic
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestOpDocs(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
@@ -42,10 +43,18 @@ func TestOpDocs(t *testing.T) {
 			t.Errorf("error: doc for op %#v missing from opDocByName", op)
 		}
 	}
+
+	require.Len(t, txnFieldDocs, len(TxnFieldNames))
+	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
+	require.Len(t, globalFieldDocs, len(GlobalFieldNames))
+	require.Len(t, AssetHoldingFieldDocs, len(AssetHoldingFieldNames))
+	require.Len(t, AssetParamsFieldDocs, len(AssetParamsFieldNames))
+	require.Len(t, AppParamsFieldDocs, len(AppParamsFieldNames))
+	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
 }
 
 func TestOpGroupCoverage(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
@@ -69,7 +78,7 @@ func TestOpGroupCoverage(t *testing.T) {
 }
 
 func TestOpDoc(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	xd := OpDoc("txn")
 	require.NotEmpty(t, xd)
@@ -78,7 +87,7 @@ func TestOpDoc(t *testing.T) {
 }
 
 func TestOpImmediateNote(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	xd := OpImmediateNote("txn")
 	require.NotEmpty(t, xd)
@@ -86,8 +95,21 @@ func TestOpImmediateNote(t *testing.T) {
 	require.Empty(t, xd)
 }
 
+func TestAllImmediatesDocumented(t *testing.T) {
+	for _, op := range OpSpecs {
+		count := len(op.Details.Immediates)
+		note := OpImmediateNote(op.Name)
+		if count == 1 && op.Details.Immediates[0].kind >= immBytes {
+			// More elaborate than can be checked by easy count.
+			require.NotEmpty(t, note)
+			continue
+		}
+		require.Equal(t, count, strings.Count(note, "{"), "%s immediates doc is wrong", op.Name)
+	}
+}
+
 func TestOpDocExtra(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	xd := OpDocExtra("bnz")
 	require.NotEmpty(t, xd)
@@ -96,7 +118,7 @@ func TestOpDocExtra(t *testing.T) {
 }
 
 func TestOpAllCosts(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	a := OpAllCosts("+")
 	require.Len(t, a, 1)
@@ -110,7 +132,7 @@ func TestOpAllCosts(t *testing.T) {
 }
 
 func TestOnCompletionDescription(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	desc := OnCompletionDescription(0)
 	require.Equal(t, "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.", desc)
@@ -120,7 +142,7 @@ func TestOnCompletionDescription(t *testing.T) {
 }
 
 func TestFieldDocs(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	txnFields := TxnFieldDocs()
 	require.Greater(t, len(txnFields), 0)

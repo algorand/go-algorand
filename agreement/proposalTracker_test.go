@@ -21,7 +21,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -52,7 +52,7 @@ func sortedVoteGen(t *testing.T) (votes []vote) {
 }
 
 func TestProposalTrackerProposalSeeker(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	votes := sortedVoteGen(t)
 	for len(votes) < 4 {
@@ -327,7 +327,7 @@ func setupProposalTrackerTests(t *testing.T) (votes []vote) {
 }
 
 func TestProposalTrackerBasic(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	votes := setupProposalTrackerTests(t)
 	for len(votes) <= 3 {

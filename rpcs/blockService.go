@@ -188,8 +188,6 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 				response.WriteHeader(http.StatusBadRequest)
 				return
 			}
-		} else {
-			versionStr = "1"
 		}
 	}
 	round, err := strconv.ParseUint(roundStr, 36, 64)

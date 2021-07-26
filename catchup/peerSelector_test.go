@@ -17,7 +17,9 @@
 package catchup
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"net/http"
 	"testing"
 	"time"
@@ -27,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type mockHTTPPeer struct {
@@ -62,7 +64,7 @@ func (d *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMe
 }
 
 func TestPeerAddress(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	httpPeer := &mockHTTPPeer{address: "12345"}
 	require.Equal(t, "12345", peerAddress(httpPeer))
@@ -75,7 +77,7 @@ func TestPeerAddress(t *testing.T) {
 }
 
 func TestDownloadDurationToRank(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// verify mid value
 	require.Equal(t, 1500, downloadDurationToRank(50*time.Millisecond, 0*time.Millisecond, 100*time.Millisecond, 1000, 2000))
@@ -115,7 +117,7 @@ func makePeersRetrieverStub(fnc func(options ...network.PeerOption) []network.Pe
 	}
 }
 func TestPeerSelector(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	peers := []network.Peer{&mockHTTPPeer{address: "12345"}}
 
@@ -175,7 +177,7 @@ func TestPeerSelector(t *testing.T) {
 }
 
 func TestPeerDownloadRanking(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "1234"}, &mockHTTPPeer{address: "5678"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "abcd"}, &mockHTTPPeer{address: "efgh"}}
@@ -226,7 +228,7 @@ func TestPeerDownloadRanking(t *testing.T) {
 }
 
 func TestFindMissingPeer(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) []network.Peer {
@@ -240,7 +242,7 @@ func TestFindMissingPeer(t *testing.T) {
 }
 
 func TestHistoricData(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
@@ -262,6 +264,7 @@ func TestHistoricData(t *testing.T) {
 	var counters [5]int
 	for i := 0; i < 1000; i++ {
 		psp, getPeerErr := peerSelector.getNextPeer()
+		require.NoError(t, getPeerErr)
 		peer := psp.Peer
 
 		switch peer.(*mockHTTPPeer).address {
@@ -275,11 +278,11 @@ func TestHistoricData(t *testing.T) {
 			counters[3]++
 		case "b2":
 			counters[4]++
+		default:
+			require.Fail(t, "unexpected peer address `%s`", peer.(*mockHTTPPeer).address)
 		}
 
-		require.NoError(t, getPeerErr)
-		randVal := float64(crypto.RandUint64()%uint64(100)) / 100
-		randVal = randVal + 1
+		randVal := peerSelectorTestRandVal(t, i)
 		if randVal < 1.98 {
 			var duration time.Duration
 			switch peer.(*mockHTTPPeer).address {
@@ -303,8 +306,16 @@ func TestHistoricData(t *testing.T) {
 	require.Equal(t, counters[4], 0)
 }
 
+func peerSelectorTestRandVal(t *testing.T, seed int) float64 {
+	iterationDigest := crypto.Hash([]byte{byte(seed), byte(seed >> 8), byte(seed >> 16)})
+	randUint64, err := binary.ReadUvarint(bytes.NewReader(append([]byte{0}, iterationDigest[:]...)))
+	require.NoError(t, err)
+	randVal := float64(randUint64%uint64(100)) / 100
+	randVal = randVal + 1
+	return randVal
+}
 func TestPeersDownloadFailed(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
@@ -344,8 +355,7 @@ func TestPeersDownloadFailed(t *testing.T) {
 		require.NoError(t, getPeerErr)
 
 		if i < 500 || peerAddress(peer) == "b1" || peerAddress(peer) == "b2" {
-			randVal := float64(crypto.RandUint64()%uint64(100)) / 100
-			randVal = randVal + 1
+			randVal := peerSelectorTestRandVal(t, i)
 			if randVal < 1.98 {
 				duration := time.Duration(100 * float64(time.Millisecond) * randVal)
 				peerRank := peerSelector.peerDownloadDurationToRank(psp, duration)
@@ -380,7 +390,7 @@ func TestPeersDownloadFailed(t *testing.T) {
 // TestPenalty tests that the penalty is calculated correctly and one peer
 // is not dominating all the selection.
 func TestPenalty(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
@@ -438,7 +448,7 @@ func TestPenalty(t *testing.T) {
 
 // TestPeerDownloadDurationToRank tests all the cases handled by peerDownloadDurationToRank
 func TestPeerDownloadDurationToRank(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
@@ -479,7 +489,7 @@ func TestPeerDownloadDurationToRank(t *testing.T) {
 }
 
 func TestLowerUpperBounds(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	classes := []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
 		{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
@@ -498,7 +508,7 @@ func TestLowerUpperBounds(t *testing.T) {
 }
 
 func TestFullResetRequestPenalty(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	class := peerClass{initialRank: 10, peerClass: network.PeersPhonebookArchivers}
 	hs := makeHistoricStatus(10, class)
@@ -513,7 +523,7 @@ func TestFullResetRequestPenalty(t *testing.T) {
 // This was a bug where the resetRequestPenalty was not bounding the returned rank, and was having download failures.
 // Initializing rankSamples to 0 makes this works, since the dropped value subtracts 0 from rankSum.
 func TestClassUpperBound(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}}
 	pClass := peerClass{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers}
@@ -547,7 +557,7 @@ func TestClassUpperBound(t *testing.T) {
 // This was a bug where the resetRequestPenalty was not bounding the returned rank, and the rankSum was not
 // initialized to give the average of class.initialRank
 func TestClassLowerBound(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}}
 	pClass := peerClass{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers}
@@ -576,7 +586,7 @@ func TestClassLowerBound(t *testing.T) {
 
 // TestEviction tests that the peer is evicted after several download failures, and it handles same address for different peer classes
 func TestEvictionAndUpgrade(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "a1"}}

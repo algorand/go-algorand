@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type IndexSuite struct {
@@ -151,7 +151,7 @@ func (s *IndexSuite) TestIndexer_Asset() {
 }
 
 func TestExampleTestSuite(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	suite.Run(t, new(IndexSuite))
 }

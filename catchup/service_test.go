@@ -40,7 +40,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -130,7 +130,7 @@ func (auth *mockedAuthenticator) alter(errorRound int, fail bool) {
 }
 
 func TestServiceFetchBlocksSameRange(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// Make Ledgers
 	local := new(mockedLedger)
@@ -164,8 +164,24 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	require.Equal(t, rr, lr)
 }
 
+type periodicSyncLogger struct {
+	logging.Logger
+	WarnfCallback func(string, ...interface{})
+}
+
+func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
+	// filter out few non-interesting warnings.
+	switch s {
+	case "fetchAndWrite(%v): lookback block doesn't exist, cannot authenticate new block":
+		return
+	case "fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v":
+		return
+	}
+	cl.Logger.Warnf(s, args...)
+}
+
 func TestPeriodicSync(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// Make Ledger
 	local := new(mockedLedger)
@@ -196,18 +212,29 @@ func TestPeriodicSync(t *testing.T) {
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
+	s.log = &periodicSyncLogger{Logger: logging.Base()}
 	s.deadlineTimeout = 2 * time.Second
 
 	s.Start()
 	defer s.Stop()
+	// wait past the initial sync - which is known to fail due to the above "auth"
 	time.Sleep(s.deadlineTimeout*2 - 200*time.Millisecond)
 	require.Equal(t, initialLocalRound, local.LastRound())
 	auth.alter(-1, false)
-	time.Sleep(2 * time.Second)
 
+	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
+	// until the synchronization is complete.
+	waitStart := time.Now()
+	for time.Now().Sub(waitStart) < 10*s.deadlineTimeout {
+		if remote.LastRound() == local.LastRound() {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	// Asserts that the last block is the one we expect
 	rr, lr := remote.LastRound(), local.LastRound()
 	require.Equal(t, rr, lr)
+
 	for r := basics.Round(1); r < remote.LastRound(); r++ {
 		localBlock, err := local.Block(r)
 		require.NoError(t, err)
@@ -218,7 +245,7 @@ func TestPeriodicSync(t *testing.T) {
 }
 
 func TestServiceFetchBlocksOneBlock(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// Make Ledger
 	numBlocks := 10
@@ -276,7 +303,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 // When caught up, and the agreement service is taking the lead, the sync() stops and
 // yields to the agreement. Agreement is emulated by the go func() loop in the test
 func TestAbruptWrites(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	numberOfBlocks := 100
 
@@ -336,7 +363,7 @@ func TestAbruptWrites(t *testing.T) {
 }
 
 func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// Make Ledger
 	numberOfBlocks := basics.Round(100)
@@ -394,7 +421,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 }
 
 func TestServiceFetchBlocksMalformed(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// Make Ledger
 	numBlocks := 10
@@ -424,6 +451,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil, nil)
+	s.log = &periodicSyncLogger{Logger: logging.Base()}
 
 	// Start the service ( dummy )
 	s.testStart()
@@ -437,7 +465,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 // Test the interruption in the initial loop
 // This cannot happen in practice, but is used to test the code.
 func TestOnSwitchToUnSupportedProtocol1(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	lastRoundRemote := 5
 	lastRoundLocal := 0
@@ -456,7 +484,7 @@ func TestOnSwitchToUnSupportedProtocol1(t *testing.T) {
 
 // Test the interruption in "the rest" loop
 func TestOnSwitchToUnSupportedProtocol2(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	lastRoundRemote := 10
 	lastRoundLocal := 7
@@ -478,7 +506,7 @@ func TestOnSwitchToUnSupportedProtocol2(t *testing.T) {
 // This can not happen in practice, because there will be
 // enough rounds for the protocol upgrade notice.
 func TestOnSwitchToUnSupportedProtocol3(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	lastRoundRemote := 14
 	lastRoundLocal := 7
@@ -504,7 +532,7 @@ func TestOnSwitchToUnSupportedProtocol3(t *testing.T) {
 // happen when the catchup service restart at the round when
 // an upgrade happens.
 func TestOnSwitchToUnSupportedProtocol4(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	lastRoundRemote := 14
 	lastRoundLocal := 7
@@ -746,7 +774,7 @@ func (s *Service) testStart() {
 }
 
 func TestCatchupUnmatchedCertificate(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// Make Ledger
 	numBlocks := 10
@@ -791,7 +819,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 
 // TestCreatePeerSelector tests if the correct peer selector coonfigurations are prepared
 func TestCreatePeerSelector(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// Make Service
 	cfg := defaultConfig
@@ -916,7 +944,7 @@ func TestCreatePeerSelector(t *testing.T) {
 }
 
 func TestServiceStartStop(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	cfg := defaultConfig
 	ledger := new(mockedLedger)
@@ -929,7 +957,7 @@ func TestServiceStartStop(t *testing.T) {
 }
 
 func TestSynchronizingTime(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	cfg := defaultConfig
 	ledger := new(mockedLedger)

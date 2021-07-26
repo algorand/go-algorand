@@ -8,13 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalCatchpointFileHeader(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := CatchpointFileHeader{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -76,8 +75,7 @@ func BenchmarkUnmarshalCatchpointFileHeader(b *testing.B) {
 }
 
 func TestMarshalUnmarshalcatchpointFileBalancesChunk(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := catchpointFileBalancesChunk{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -139,8 +137,7 @@ func BenchmarkUnmarshalcatchpointFileBalancesChunk(b *testing.B) {
 }
 
 func TestMarshalUnmarshalencodedBalanceRecord(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := encodedBalanceRecord{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)

@@ -8,13 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalAccountTotals(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := AccountTotals{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -76,8 +75,7 @@ func BenchmarkUnmarshalAccountTotals(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAlgoCount(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := AlgoCount{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)

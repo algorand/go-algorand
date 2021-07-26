@@ -8,13 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalnetPrioResponse(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := netPrioResponse{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -76,8 +75,7 @@ func BenchmarkUnmarshalnetPrioResponse(b *testing.B) {
 }
 
 func TestMarshalUnmarshalnetPrioResponseSigned(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := netPrioResponseSigned{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)

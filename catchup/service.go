@@ -209,11 +209,11 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 		}
 
 		psp, getPeerErr := peerSelector.getNextPeer()
-		peer := psp.Peer
 		if getPeerErr != nil {
 			s.log.Debugf("fetchAndWrite: was unable to obtain a peer to retrieve the block from")
 			break
 		}
+		peer := psp.Peer
 
 		// Try to fetch, timing out after retryInterval
 		block, cert, blockDownloadDuration, err := s.innerFetch(r, peer)
@@ -307,7 +307,8 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 				}
 
 				if s.cfg.CatchupVerifyTransactionSignatures() || s.cfg.CatchupVerifyApplyData() {
-					vb, err := s.ledger.Validate(s.ctx, *block, s.blockValidationPool)
+					var vb *ledger.ValidatedBlock
+					vb, err = s.ledger.Validate(s.ctx, *block, s.blockValidationPool)
 					if err != nil {
 						if s.ctx.Err() != nil {
 							// if the context expired, just exit.
@@ -600,16 +601,25 @@ func (s *Service) syncCert(cert *PendingUnmatchedCertificate) {
 
 // TODO this doesn't actually use the digest from cert!
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
+	// is there any point attempting to retrieve the block ?
+	if s.nextRoundIsNotSupported(cert.Round) {
+		// we might get here if the agreement service was seeing the certs votes for the next
+		// block, without seeing the actual block. Since it hasn't seen the block, it couldn't
+		// tell that it's an unsupported protocol, and would try to request it from the catchup.
+		s.handleUnsupportedRound(cert.Round)
+		return
+	}
+
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	peerSelector := s.createPeerSelector(false)
 	for s.ledger.LastRound() < cert.Round {
 		psp, getPeerErr := peerSelector.getNextPeer()
-		peer := psp.Peer
 		if getPeerErr != nil {
 			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
 			s.net.RequestConnectOutgoing(true, s.ctx.Done())
 			continue
 		}
+		peer := psp.Peer
 
 		// Ask the fetcher to get the block somehow
 		block, fetchedCert, _, err := s.innerFetch(cert.Round, peer)

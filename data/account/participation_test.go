@@ -28,12 +28,12 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
 
 func TestParticipation_NewDB(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
@@ -89,7 +89,7 @@ func getSchemaVersions(db db.Accessor) (versions map[string]int, err error) {
 }
 
 func TestOverlapsInterval(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	const before = basics.Round(95)
 	const start = basics.Round(100)

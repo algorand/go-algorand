@@ -26,11 +26,11 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestBasicLRUAccounts(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	var baseAcct lruAccounts
 	baseAcct.init(logging.TestingLog(t), 10, 5)
@@ -88,7 +88,7 @@ func TestBasicLRUAccounts(t *testing.T) {
 }
 
 func TestLRUAccountsPendingWrites(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	var baseAcct lruAccounts
 	accountsNum := 250
@@ -140,7 +140,7 @@ func (cl *lruAccountsTestLogger) Warnf(s string, args ...interface{}) {
 }
 
 func TestLRUAccountsPendingWritesWarning(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	var baseAcct lruAccounts
 	pendingWritesBuffer := 50
@@ -166,7 +166,7 @@ func TestLRUAccountsPendingWritesWarning(t *testing.T) {
 }
 
 func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	var baseAcct lruAccounts
 	pendingWritesBuffer := 50
@@ -212,16 +212,22 @@ func BenchmarkLRUAccountsWrite(b *testing.B) {
 	fillerAccounts := generatePersistedAccountData(0, 97500)
 	accounts := generatePersistedAccountData(97500-numTestAccounts/2, 97500+numTestAccounts/2)
 
+	benchLruWrite(b, fillerAccounts, accounts)
+}
+
+func benchLruWrite(b *testing.B, fillerAccounts []persistedAccountData, accounts []persistedAccountData) {
 	b.ResetTimer()
 	b.StopTimer()
+	var baseAcct lruAccounts
+	// setting up the baseAccts with a predefined cache size
+	baseAcct.init(logging.TestingLog(b), baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 	for i := 0; i < b.N; i++ {
-		var baseAcct lruAccounts
-		baseAcct.init(logging.TestingLog(b), 10, 5)
 		baseAcct = fillLRUAccounts(baseAcct, fillerAccounts)
 
 		b.StartTimer()
 		fillLRUAccounts(baseAcct, accounts)
 		b.StopTimer()
+		baseAcct.prune(0)
 	}
 }
 

@@ -22,12 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // TestNodeSerialization tests the serialization and deserialization of nodes.
 func TestNodeSerialization(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	var memoryCommitter InMemoryCommitter
 	memConfig := defaultTestMemoryConfig

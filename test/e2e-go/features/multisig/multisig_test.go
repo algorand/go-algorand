@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,7 +32,7 @@ import (
 // try to transact with 2 sigs: expect success
 // try to transact with 3 sigs: expect success
 func TestBasicMultisig(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 
@@ -71,7 +71,7 @@ func TestBasicMultisig(t *testing.T) {
 	// fund account with enough Algos to allow for 3 transactions and still keep a minBalance in the account
 	amountToFund := 4*minAcctBalance + 3*minTxnFee
 	curStatus, err := client.Status()
-	fixture.SendMoneyAndWait(curStatus.LastRound, amountToFund, minTxnFee, fundingAddr, multisigAddr)
+	fixture.SendMoneyAndWait(curStatus.LastRound, amountToFund, minTxnFee, fundingAddr, multisigAddr, "")
 	// try to transact with 1 of 3
 	amountToSend := minAcctBalance
 	unsignedTransaction, err := client.ConstructPayment(multisigAddr, addrs[0], minTxnFee, amountToSend, nil, "", [32]byte{}, 0, 0)
@@ -109,7 +109,7 @@ func TestBasicMultisig(t *testing.T) {
 
 // create a 0-of-3 multisig address: expect failure
 func TestZeroThreshold(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 
@@ -138,7 +138,7 @@ func TestZeroThreshold(t *testing.T) {
 
 // create a 3-of-0 multisig address: expect failure
 func TestZeroSigners(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 
@@ -163,7 +163,7 @@ func TestZeroSigners(t *testing.T) {
 // where the valid keys are all the same
 // then try to transact
 func TestDuplicateKeys(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 
@@ -202,7 +202,7 @@ func TestDuplicateKeys(t *testing.T) {
 	amountToFund := 3 * minAcctBalance
 	txnFee := minTxnFee
 	curStatus, _ := client.Status()
-	fixture.SendMoneyAndWait(curStatus.LastRound, amountToFund, txnFee, fundingAddr, multisigAddr)
+	fixture.SendMoneyAndWait(curStatus.LastRound, amountToFund, txnFee, fundingAddr, multisigAddr, "")
 	// try to transact with "1" signature (though, this is a signature from "every" member of the multisig)
 	amountToSend := minAcctBalance
 	unsignedTransaction, err := client.ConstructPayment(multisigAddr, addrs[0], txnFee, amountToSend, nil, "", [32]byte{}, 0, 0)

@@ -1416,8 +1416,13 @@
           "format": "byte"
         },
         "name": {
-          "description": "\\[an\\] Name of this asset, as supplied by the creator.",
+          "description": "\\[an\\] Name of this asset, as supplied by the creator. Included only when the asset name is composed of printable utf-8 characters.",
           "type": "string"
+        },
+        "name-b64": {
+          "description": "Base64 encoded name of this asset, as supplied by the creator.",
+          "type": "string",
+          "format": "byte"
         },
         "reserve": {
           "description": "\\[r\\] Address of account holding reserve (non-minted) units of this asset.",
@@ -1429,12 +1434,22 @@
           "x-algorand-format": "uint64"
         },
         "unit-name": {
-          "description": "\\[un\\] Name of a unit of this asset, as supplied by the creator.",
+          "description": "\\[un\\] Name of a unit of this asset, as supplied by the creator. Included only when the name of a unit of this asset is composed of printable utf-8 characters.",
           "type": "string"
         },
+        "unit-name-b64": {
+          "description": "Base64 encoded name of a unit of this asset, as supplied by the creator.",
+          "type": "string",
+          "format": "byte"
+        },
         "url": {
-          "description": "\\[au\\] URL where more information about the asset can be retrieved.",
+          "description": "\\[au\\] URL where more information about the asset can be retrieved. Included only when the URL is composed of printable utf-8 characters.",
           "type": "string"
+        },
+        "url-b64": {
+          "description": "Base64 encoded URL where more information about the asset can be retrieved.",
+          "type": "string",
+          "format": "byte"
         }
       }
     },

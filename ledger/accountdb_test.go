@@ -37,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -98,7 +98,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 			data.AssetParams[basics.AssetIndex(lastCreatableID)] = ap
 		}
 	}
-	if 1 == (crypto.RandUint64() % 2) {
+	if 1 == (crypto.RandUint64()%2) && lastCreatableID > 0 {
 		// if account owns assets
 		data.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 		ownedAssetsCount := crypto.RandUint64()%20 + 1
@@ -114,7 +114,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 		crypto.RandBytes(data.AuthAddr[:])
 	}
 
-	if 1 == (crypto.RandUint64() % 3) {
+	if 1 == (crypto.RandUint64()%3) && lastCreatableID > 0 {
 		data.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
 		appStatesCount := crypto.RandUint64()%20 + 1
 		for i := uint64(0); i < appStatesCount; i++ {
@@ -429,7 +429,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 }
 
 func TestAccountDBInit(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -522,7 +522,7 @@ func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates l
 }
 
 func TestAccountDBRound(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -949,7 +949,7 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 	require.NoError(b, err)
 }
 func TestAccountsReencoding(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	oldEncodedAccountsData := [][]byte{
 		{132, 164, 97, 108, 103, 111, 206, 5, 234, 236, 80, 164, 97, 112, 97, 114, 129, 206, 0, 3, 60, 164, 137, 162, 97, 109, 196, 32, 49, 54, 101, 102, 97, 97, 51, 57, 50, 52, 97, 54, 102, 100, 57, 100, 51, 97, 52, 56, 50, 52, 55, 57, 57, 97, 52, 97, 99, 54, 53, 100, 162, 97, 110, 167, 65, 80, 84, 75, 73, 78, 71, 162, 97, 117, 174, 104, 116, 116, 112, 58, 47, 47, 115, 111, 109, 101, 117, 114, 108, 161, 99, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 102, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 109, 196, 32, 60, 69, 244, 159, 234, 26, 168, 145, 153, 184, 85, 182, 46, 124, 227, 144, 84, 113, 176, 206, 109, 204, 245, 165, 100, 23, 71, 49, 32, 242, 146, 68, 161, 114, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 116, 205, 3, 32, 162, 117, 110, 163, 65, 80, 75, 165, 97, 115, 115, 101, 116, 129, 206, 0, 3, 60, 164, 130, 161, 97, 0, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
@@ -1038,7 +1038,7 @@ func TestAccountsReencoding(t *testing.T) {
 // TestAccountsDbQueriesCreateClose tests to see that we can create the accountsDbQueries and close it.
 // it also verify that double-closing it doesn't create an issue.
 func TestAccountsDbQueriesCreateClose(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
@@ -1155,7 +1155,7 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 }
 
 func TestCompactAccountDeltas(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 

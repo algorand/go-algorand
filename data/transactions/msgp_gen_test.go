@@ -8,13 +8,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/msgp/msgp"
 )
 
 func TestMarshalUnmarshalApplicationCallTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := ApplicationCallTxnFields{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -76,8 +75,7 @@ func BenchmarkUnmarshalApplicationCallTxnFields(b *testing.B) {
 }
 
 func TestMarshalUnmarshalApplyData(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := ApplyData{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -139,8 +137,7 @@ func BenchmarkUnmarshalApplyData(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAssetConfigTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := AssetConfigTxnFields{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -202,8 +199,7 @@ func BenchmarkUnmarshalAssetConfigTxnFields(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAssetFreezeTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := AssetFreezeTxnFields{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -265,8 +261,7 @@ func BenchmarkUnmarshalAssetFreezeTxnFields(b *testing.B) {
 }
 
 func TestMarshalUnmarshalAssetTransferTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := AssetTransferTxnFields{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -328,8 +323,7 @@ func BenchmarkUnmarshalAssetTransferTxnFields(b *testing.B) {
 }
 
 func TestMarshalUnmarshalCompactCertTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := CompactCertTxnFields{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -391,8 +385,7 @@ func BenchmarkUnmarshalCompactCertTxnFields(b *testing.B) {
 }
 
 func TestMarshalUnmarshalHeader(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := Header{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -454,8 +447,7 @@ func BenchmarkUnmarshalHeader(b *testing.B) {
 }
 
 func TestMarshalUnmarshalKeyregTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := KeyregTxnFields{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -517,8 +509,7 @@ func BenchmarkUnmarshalKeyregTxnFields(b *testing.B) {
 }
 
 func TestMarshalUnmarshalLogicSig(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := LogicSig{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -580,8 +571,7 @@ func BenchmarkUnmarshalLogicSig(b *testing.B) {
 }
 
 func TestMarshalUnmarshalPaymentTxnFields(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := PaymentTxnFields{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -643,8 +633,7 @@ func BenchmarkUnmarshalPaymentTxnFields(b *testing.B) {
 }
 
 func TestMarshalUnmarshalPayset(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := Payset{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -706,8 +695,7 @@ func BenchmarkUnmarshalPayset(b *testing.B) {
 }
 
 func TestMarshalUnmarshalSignedTxn(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := SignedTxn{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -769,8 +757,7 @@ func BenchmarkUnmarshalSignedTxn(b *testing.B) {
 }
 
 func TestMarshalUnmarshalSignedTxnInBlock(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := SignedTxnInBlock{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -832,8 +819,7 @@ func BenchmarkUnmarshalSignedTxnInBlock(b *testing.B) {
 }
 
 func TestMarshalUnmarshalSignedTxnWithAD(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := SignedTxnWithAD{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -895,8 +881,7 @@ func BenchmarkUnmarshalSignedTxnWithAD(b *testing.B) {
 }
 
 func TestMarshalUnmarshalTransaction(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := Transaction{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
@@ -958,8 +943,7 @@ func BenchmarkUnmarshalTransaction(b *testing.B) {
 }
 
 func TestMarshalUnmarshalTxGroup(t *testing.T) {
-	testpartitioning.PartitionTest(t)
-
+	partitiontest.PartitionTest(t)
 	v := TxGroup{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)

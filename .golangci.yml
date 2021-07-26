@@ -1,0 +1,43 @@
+run:
+  timeout: 5m
+  tests: false
+  
+linters:
+  enable:
+    - golint
+    - misspell
+    - govet
+    - ineffassign
+
+  disable:
+    - deadcode
+    - errcheck
+    - gosimple
+    - staticcheck
+    - structcheck
+    - unused
+    - varcheck
+    
+linters-settings:
+#  govet:
+#    check-shadowing: true
+
+issues:
+  # don't use default exclude rules listed in `golangci-lint run --help`
+  exclude-use-default: false
+
+  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
+  max-same-issues: 0
+
+  exclude-rules:
+    # ignore govet false positive fixed in https://github.com/golang/go/issues/45043
+    - linters:
+        - govet
+      text: "sigchanyzer: misuse of unbuffered os.Signal channel as argument to signal.Notify"
+    # ignore golint false positive fixed in https://github.com/golang/lint/pull/487
+    - linters:
+        - golint
+      text: "exported method (.*).Unwrap` should have comment or be unexported"

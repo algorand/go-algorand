@@ -75,6 +75,9 @@ echo "Running fixcheck"
 GOPATH=$(go env GOPATH)
 "$GOPATH"/bin/algofix -error */
 
+echo "Updating TEAL Specs"
+make -C data/transactions/logic
+
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
    echo Enlistment is dirty - did you forget to run make?

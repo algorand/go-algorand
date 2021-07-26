@@ -34,7 +34,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/testpartitioning"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/bloom"
 )
 
@@ -133,7 +133,7 @@ func nodePair() (*basicRPCNode, *basicRPCNode) {
 }
 
 func TestTxSync(t *testing.T) {
-	testpartitioning.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 
 	// A network with two nodes, A and B
 	nodeA, nodeB := nodePair()

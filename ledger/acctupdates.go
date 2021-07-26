@@ -1602,7 +1602,6 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 			err = os.Remove(absCatchpointFileName)
 			if err == nil || os.IsNotExist(err) {
 				// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
-				err = nil
 			} else {
 				// we can't delete the file, abort -
 				return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
