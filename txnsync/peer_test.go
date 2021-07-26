@@ -600,12 +600,6 @@ func TestUpdateIncomingTransactionGroups(t *testing.T) {
 		a.False(p.recentSentTransactions.contained(txid))
 	}
 
-	p.updateIncomingTransactionGroups(txnGroups)
-
-	for i := 0; i < 10; i++ {
-		txid := transactions.Txid{byte(i)}
-		a.True(p.recentSentTransactions.contained(txid))
-	}
 }
 
 // TestUpdateRequestParams tests updating the request parameters
