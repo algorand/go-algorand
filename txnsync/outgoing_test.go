@@ -17,22 +17,22 @@
 package txnsync
 
 import (
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/util/bloom"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/timers"
 )
 
 type mockAsyncLogger struct {
 	logging.Logger
+	warnCalled *bool
 }
 
 func (m mockAsyncLogger) outgoingMessage(mstat msgStats) {
@@ -42,6 +42,12 @@ func (m mockAsyncLogger) incomingMessage(mstat msgStats) {
 }
 
 func (m mockAsyncLogger) Infof(string, ...interface{}) {}
+
+func (m mockAsyncLogger) Warnf(string, ...interface{}) {
+	if m.warnCalled != nil {
+		*m.warnCalled = true
+	}
+}
 
 func TestAsyncMessageSent(t *testing.T) {
 	a := require.New(t)
@@ -53,21 +59,13 @@ func TestAsyncMessageSent(t *testing.T) {
 	asyncEncoder := messageAsyncEncoder{
 		state: &s,
 		messageData: sentMessageMetadata{
-			encodedMessageSize:  0,
-			sentTranscationsIDs: []transactions.Txid{},
 			message: &transactionBlockMessage{
 				Version: txnBlockMessageVersion,
 				Round:   1,
 			},
-			peer:              &Peer{},
-			sentTimestamp:     0 * time.Millisecond,
-			sequenceNumber:    0,
-			partialMessage:    false,
-			filter:            bloomFilter{},
-			transactionGroups: []transactions.SignedTxGroup{},
+			peer: &Peer{},
 		},
-		roundClock:           timers.MakeMonotonicClock(time.Now()),
-		peerDataExchangeRate: 0,
+		roundClock: timers.MakeMonotonicClock(time.Now()),
 	}
 
 	oldTimestamp := asyncEncoder.messageData.sentTimestamp
@@ -97,34 +95,41 @@ func (m mockAsyncNodeConnector) GetPendingTransactionGroups() (txGroups []transa
 	return []transactions.SignedTxGroup{}, 1
 }
 
-func TestAsyncEncodeAndSend(t *testing.T) {
+// TestAsyncEncodeAndSendErr Tests response when encodeTransactionGroups doesn't return an error
+func TestAsyncEncodeAndSendNonErr(t *testing.T) {
 	a := require.New(t)
 
 	var s syncState
 	s.clock = timers.MakeMonotonicClock(time.Now())
-	s.log = mockAsyncLogger{}
-	called := false
-	s.node = mockAsyncNodeConnector{called: &called}
+	warnCalled := false
+	s.log = mockAsyncLogger{warnCalled: &warnCalled}
+	sendPeerMessageCalled := false
+	s.node = mockAsyncNodeConnector{called: &sendPeerMessageCalled}
 	s.messageSendWaitGroup = sync.WaitGroup{}
+
+	txnGrps := []transactions.SignedTxGroup{
+		transactions.SignedTxGroup{
+			Transactions: []transactions.SignedTxn{
+				transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.AssetConfigTx,
+					},
+				},
+			},
+		},
+	}
 
 	asyncEncoder := messageAsyncEncoder{
 		state: &s,
 		messageData: sentMessageMetadata{
-			encodedMessageSize:  0,
-			sentTranscationsIDs: []transactions.Txid{},
 			message: &transactionBlockMessage{
 				Version: txnBlockMessageVersion,
 				Round:   1,
 			},
+			transactionGroups: txnGrps,
 			peer:              &Peer{},
-			sentTimestamp:     0 * time.Millisecond,
-			sequenceNumber:    0,
-			partialMessage:    false,
-			filter:            bloomFilter{},
-			transactionGroups: []transactions.SignedTxGroup{},
 		},
-		roundClock:           timers.MakeMonotonicClock(time.Now()),
-		peerDataExchangeRate: 0,
+		roundClock: timers.MakeMonotonicClock(time.Now()),
 	}
 
 	asyncEncoder.state.messageSendWaitGroup.Add(1)
@@ -132,87 +137,114 @@ func TestAsyncEncodeAndSend(t *testing.T) {
 	err := asyncEncoder.asyncEncodeAndSend(nil)
 
 	a.Nil(err)
-	a.True(called)
+	a.False(warnCalled)
+	a.True(sendPeerMessageCalled)
+}
+
+// TestAsyncEncodeAndSendErr Tests response when encodeTransactionGroups returns an error
+func TestAsyncEncodeAndSendErr(t *testing.T) {
+	a := require.New(t)
+
+	var s syncState
+	s.clock = timers.MakeMonotonicClock(time.Now())
+	warnCalled := false
+	s.log = mockAsyncLogger{warnCalled: &warnCalled}
+	sendPeerMessageCalled := false
+	s.node = mockAsyncNodeConnector{called: &sendPeerMessageCalled}
+	s.messageSendWaitGroup = sync.WaitGroup{}
+
+	txnGrps := []transactions.SignedTxGroup{
+		transactions.SignedTxGroup{
+			Transactions: []transactions.SignedTxn{
+				transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.UnknownTx,
+					},
+				},
+			},
+		},
+	}
+
+	asyncEncoder := messageAsyncEncoder{
+		state: &s,
+		messageData: sentMessageMetadata{
+			message: &transactionBlockMessage{
+				Version: txnBlockMessageVersion,
+				Round:   1,
+			},
+			transactionGroups: txnGrps,
+			peer:              &Peer{},
+		},
+		roundClock: timers.MakeMonotonicClock(time.Now()),
+	}
+
+	asyncEncoder.state.messageSendWaitGroup.Add(1)
+
+	err := asyncEncoder.asyncEncodeAndSend(nil)
+
+	a.Nil(err)
+	a.True(warnCalled)
+	a.True(sendPeerMessageCalled)
 
 }
 
-func TestAssemblePeerMessage(t *testing.T) {
-
+// TestAsyncEncodeAndSend Tests that SendPeerMessage is called in the node connector
+func TestAsyncEncodeAndSend(t *testing.T) {
 	a := require.New(t)
 
-	s := syncState{
-		service:                    nil,
-		log:                        mockAsyncLogger{},
-		node:                       mockAsyncNodeConnector{},
-		isRelay:                    false,
-		clock:                      timers.MakeMonotonicClock(time.Now()),
-		config:                     config.Local{},
-		threadpool:                 nil,
-		genesisID:                  "",
-		genesisHash:                crypto.Digest{},
-		lastBeta:                   0,
-		round:                      42,
-		fetchTransactions:          false,
-		scheduler:                  peerScheduler{},
-		interruptablePeers:         nil,
-		interruptablePeersMap:      nil,
-		incomingMessagesQ:          incomingMessageQueue{},
-		outgoingMessagesCallbackCh: nil,
-		nextOffsetRollingCh:        nil,
-		requestsOffset:             0,
-		lastBloomFilter:            bloomFilter{},
-		transactionPoolFull:        false,
-		messageSendWaitGroup:       sync.WaitGroup{},
-		xorBuilder:                 bloom.XorBuilder{},
+	var s syncState
+	s.clock = timers.MakeMonotonicClock(time.Now())
+	s.log = mockAsyncLogger{}
+	sendPeerMessageCalled := false
+	s.node = mockAsyncNodeConnector{called: &sendPeerMessageCalled}
+	s.messageSendWaitGroup = sync.WaitGroup{}
+
+	asyncEncoder := messageAsyncEncoder{
+		state: &s,
+		messageData: sentMessageMetadata{
+			message: &transactionBlockMessage{
+				Version: txnBlockMessageVersion,
+				Round:   1,
+			},
+			peer: &Peer{},
+		},
+		roundClock: timers.MakeMonotonicClock(time.Now()),
 	}
+
+	asyncEncoder.state.messageSendWaitGroup.Add(1)
+
+	err := asyncEncoder.asyncEncodeAndSend(nil)
+
+	a.Nil(err)
+	a.True(sendPeerMessageCalled)
+
+}
+
+// TestAssemblePeerMessage1 Tests assemblePeerMessage with messageConstBloomFilter msgOps
+func TestAssemblePeerMessage1(t *testing.T) {
+	a := require.New(t)
+
+	s := syncState{clock: timers.MakeMonotonicClock(time.Now())}
 
 	s.profiler = makeProfiler(1*time.Millisecond, s.clock, s.log, 1*time.Millisecond)
 
-	s.isRelay = false
-
-	peer := Peer{
-		networkPeer:                        nil,
-		isOutgoing:                         false,
-		state:                              0,
-		lastRound:                          0,
-		incomingMessages:                   messageOrderingHeap{},
-		nextReceivedMessageSeq:             0,
-		recentIncomingBloomFilters:         nil,
-		recentSentTransactions:             nil,
-		recentSentTransactionsRound:        0,
-		requestedTransactionsModulator:     0,
-		requestedTransactionsOffset:        0,
-		lastSentMessageSequenceNumber:      0,
-		lastSentMessageRound:               0,
-		lastSentMessageTimestamp:           0,
-		lastSentMessageSize:                0,
-		lastSentBloomFilter:                bloomFilter{},
-		lastConfirmedMessageSeqReceived:    0,
-		lastReceivedMessageLocalRound:      0,
-		lastReceivedMessageTimestamp:       0,
-		lastReceivedMessageSize:            0,
-		lastReceivedMessageNextMsgMinDelay: 0,
-		dataExchangeRate:                   0,
-		localTransactionsModulator:         0,
-		localTransactionsBaseOffset:        0,
-		lastTransactionSelectionTracker:    nil,
-		nextStateTimestamp:                 0,
-		messageSeriesPendingTransactions:   nil,
-		transactionPoolAckCh:               nil,
-		transactionPoolAckMessages:         nil,
-		lastSelectedTransactionsCount:      0,
-	}
+	peer := Peer{}
 
 	pendingTransactions := pendingTransactionGroupsSnapshot{
-		pendingTransactionsGroups:           nil,
-		latestLocallyOriginatedGroupCounter: 0,
+		pendingTransactionsGroups: []transactions.SignedTxGroup{
+			transactions.SignedTxGroup{},
+		},
 	}
 
 	peer.setLocalRequestParams(111, 222)
 	peer.lastReceivedMessageTimestamp = 100
 	peer.lastReceivedMessageLocalRound = s.round
 
+	expectedFilter := s.makeBloomFilter(requestParams{Offset: 111, Modulator: 222}, pendingTransactions.pendingTransactionsGroups, &s.lastBloomFilter)
+
 	s.isRelay = true
+	peer.isOutgoing = true
+	peer.state = peerStateLateBloom
 
 	metaMessage := s.assemblePeerMessage(&peer, &pendingTransactions)
 
@@ -222,6 +254,75 @@ func TestAssemblePeerMessage(t *testing.T) {
 	a.Equal(metaMessage.message.Version, int32(txnBlockMessageVersion))
 	a.Equal(metaMessage.message.Round, s.round)
 	a.True(metaMessage.message.MsgSync.ResponseElapsedTime != 0)
+	a.Equal(s.lastBloomFilter, expectedFilter)
+}
+
+// TestAssemblePeerMessage2 Tests assemblePeerMessage with messageConstNextMinDelay | messageConstUpdateRequestParams msgOps
+func TestAssemblePeerMessage2(t *testing.T) {
+
+	a := require.New(t)
+
+	s := syncState{clock: timers.MakeMonotonicClock(time.Now())}
+
+	s.profiler = makeProfiler(1*time.Millisecond, s.clock, s.log, 1*time.Millisecond)
+
+	peer := Peer{}
+
+	pendingTransactions := pendingTransactionGroupsSnapshot{}
+
+	peer.setLocalRequestParams(111, 222)
+	peer.lastReceivedMessageTimestamp = 100
+	peer.lastReceivedMessageLocalRound = s.round
+
+	s.isRelay = true
+	s.lastBeta = 123 * time.Nanosecond
+
+	metaMessage := s.assemblePeerMessage(&peer, &pendingTransactions)
+
+	a.Equal(metaMessage.message.UpdatedRequestParams.Modulator, byte(222))
+	a.Equal(metaMessage.message.UpdatedRequestParams.Offset, byte(111))
+	a.Equal(metaMessage.peer, &peer)
+	a.Equal(metaMessage.message.Version, int32(txnBlockMessageVersion))
+	a.Equal(metaMessage.message.Round, s.round)
+	a.True(metaMessage.message.MsgSync.ResponseElapsedTime != 0)
+	a.Equal(metaMessage.message.MsgSync.NextMsgMinDelay, uint64(s.lastBeta.Nanoseconds())*2)
+
+}
+
+// TestAssemblePeerMessage3 Tests assemblePeerMessage messageConstTransactions msgOps
+func TestAssemblePeerMessage3(t *testing.T) {
+	a := require.New(t)
+
+	s := syncState{clock: timers.MakeMonotonicClock(time.Now())}
+
+	s.profiler = makeProfiler(1*time.Millisecond, s.clock, s.log, 1*time.Millisecond)
+
+	peer := Peer{}
+
+	pendingTransactions := pendingTransactionGroupsSnapshot{
+		latestLocallyOriginatedGroupCounter: 1,
+		pendingTransactionsGroups: []transactions.SignedTxGroup{
+			transactions.SignedTxGroup{
+				LocallyOriginated: true,
+				EncodedLength:     2,
+			},
+		},
+	}
+
+	peer.setLocalRequestParams(111, 222)
+	peer.lastReceivedMessageTimestamp = 100
+	peer.lastReceivedMessageLocalRound = s.round
+	peer.requestedTransactionsModulator = 2
+	peer.recentSentTransactions = makeTransactionCache(5, 10, 20)
+
+	s.isRelay = false
+	peer.isOutgoing = true
+	peer.state = peerStateHoldsoff
+
+	metaMessage := s.assemblePeerMessage(&peer, &pendingTransactions)
+
+	a.Equal(len(metaMessage.transactionGroups), 1)
+	a.True(reflect.DeepEqual(metaMessage.transactionGroups[0], pendingTransactions.pendingTransactionsGroups[0]))
 
 }
 
@@ -229,10 +330,7 @@ func TestLocallyGeneratedTransactions(t *testing.T) {
 
 	a := require.New(t)
 
-	pendingTransactions := &pendingTransactionGroupsSnapshot{
-		pendingTransactionsGroups:           []transactions.SignedTxGroup{},
-		latestLocallyOriginatedGroupCounter: 0,
-	}
+	pendingTransactions := &pendingTransactionGroupsSnapshot{}
 
 	s := syncState{}
 
@@ -242,25 +340,16 @@ func TestLocallyGeneratedTransactions(t *testing.T) {
 
 	pendingTransactions.pendingTransactionsGroups = []transactions.SignedTxGroup{
 		transactions.SignedTxGroup{
-			Transactions:       nil,
-			LocallyOriginated:  true,
-			GroupCounter:       0,
-			GroupTransactionID: transactions.Txid{},
-			EncodedLength:      2,
+			LocallyOriginated: true,
+			EncodedLength:     2,
 		},
 		transactions.SignedTxGroup{
-			Transactions:       nil,
-			LocallyOriginated:  false,
-			GroupCounter:       0,
-			GroupTransactionID: transactions.Txid{},
-			EncodedLength:      1,
+			LocallyOriginated: false,
+			EncodedLength:     1,
 		},
 		transactions.SignedTxGroup{
-			Transactions:       nil,
-			LocallyOriginated:  true,
-			GroupCounter:       0,
-			GroupTransactionID: transactions.Txid{},
-			EncodedLength:      3,
+			LocallyOriginated: true,
+			EncodedLength:     3,
 		},
 	}
 
@@ -273,19 +362,13 @@ func TestLocallyGeneratedTransactions(t *testing.T) {
 	expected := []transactions.SignedTxGroup{
 
 		transactions.SignedTxGroup{
-			Transactions:       nil,
-			LocallyOriginated:  true,
-			GroupCounter:       0,
-			GroupTransactionID: transactions.Txid{},
-			EncodedLength:      2,
+			LocallyOriginated: true,
+			EncodedLength:     2,
 		},
 
 		transactions.SignedTxGroup{
-			Transactions:       nil,
-			LocallyOriginated:  true,
-			GroupCounter:       0,
-			GroupTransactionID: transactions.Txid{},
-			EncodedLength:      3,
+			LocallyOriginated: true,
+			EncodedLength:     3,
 		},
 	}
 
