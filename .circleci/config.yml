@@ -404,7 +404,9 @@ jobs:
     steps:
       - checkout
       - prepare_go
-      - run: |
+      - run:
+          no_output_timeout: 30m
+          command: |
           export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
           export GOPATH="/home/circleci/go"
           scripts/travis/codegen_verification.sh
