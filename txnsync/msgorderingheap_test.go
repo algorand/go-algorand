@@ -143,29 +143,17 @@ func TestMultiThreaded(t *testing.T) {
 		if value%2 == 0 {
 			return []transactions.SignedTxGroup{
 				{
-					Transactions:       nil,
-					LocallyOriginated:  true,
-					GroupCounter:       0,
 					GroupTransactionID: transactions.Txid{byte(value % 255)},
-					EncodedLength:      0,
 				},
 			}
 		}
 
 		return []transactions.SignedTxGroup{
 			{
-				Transactions:       nil,
-				LocallyOriginated:  false,
-				GroupCounter:       0,
 				GroupTransactionID: transactions.Txid{byte(value % 255)},
-				EncodedLength:      0,
 			},
 			{
-				Transactions:       nil,
-				LocallyOriginated:  true,
-				GroupCounter:       0,
 				GroupTransactionID: transactions.Txid{byte(value + 1%255)},
-				EncodedLength:      0,
 			},
 		}
 	}
