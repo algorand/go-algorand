@@ -565,6 +565,8 @@ func (pps *WorkerState) sendFromTo(
 
 	amt := cfg.MaxAmt
 
+	halfFullAccountBalance, _ := computeAccountMinBalance(client, pps.cfg)
+
 	// map the pending gains for each address to it's corresponding transaction id as well as the numerical gains.
 	pendingAccountGains := make(map[string] /*basics.Address*/ map[transactions.Txid]int64)
 
@@ -595,41 +597,56 @@ func (pps *WorkerState) sendFromTo(
 			var addr basics.Address
 			crypto.RandBytes(addr[:])
 			to = addr.String()
+		} else {
+			// make 5% of the calls attempt to refund low-balanced accounts.
+			// ( if there is any )
+			if len(belowMinBalanceAccounts) > 0 && (crypto.RandUint64()%100 < 5) {
+				// pick the first low balance account
+				for acct := range belowMinBalanceAccounts {
+					to = acct
+					break
+				}
+			}
 		}
 
-		if toGains, has := pendingAccountGains[to]; has {
+		if fromGains, has := pendingAccountGains[from]; has {
 			gainsAdded := false
-			// if the target account has some pending transactions, evaluate these.
-			for txid, gains := range toGains {
-				//t := time.Now()
-				txnList, err2 := client.GetPendingTransactionsByAddress(to, 500)
+			if accounts[from] < halfFullAccountBalance {
+				txnList, err2 := client.GetPendingTransactionsByAddress(from, 0)
 				if err2 != nil {
 					_, _ = fmt.Fprintf(os.Stderr, "GetPendingTransactionsByAddress failed: %v\n", err2)
 					return
 				}
-				//d := time.Now().Sub(t)
-				//fmt.Printf("checking pending took %v\n", d)
-				missing := true
-				for _, txn := range txnList.Transactions {
-					if txn.TxID == txid.String() && txn.From != to {
+				pendingTxnMap := make(map[string] /*txid*/ int)
+				for i, txn := range txnList.Transactions {
+					// we're looking for a transaction where the recipient is our "from"
+					if txn.From != from {
+						pendingTxnMap[txn.TxID] = i
+					}
+				}
+				// if the source account has some pending transactions, evaluate these.
+				for txid, gains := range fromGains {
+					missing := true
+					if idx, has := pendingTxnMap[txid.String()]; has {
+						txn := txnList.Transactions[idx]
 						missing = false
 						if txn.ConfirmedRound > 0 {
 							// confirmed.
-							accounts[to] = uint64(int64(accounts[to]) + gains)
+							accounts[from] = uint64(int64(accounts[from]) + gains)
 							gainsAdded = true
-							delete(toGains, txid)
+							delete(fromGains, txid)
 						} else {
 							// not confirmed. still pending.
 						}
 					}
-				}
-				if missing {
-					delete(toGains, txid)
+					if missing {
+						delete(fromGains, txid)
+					}
 				}
 			}
-			if gainsAdded && belowMinBalanceAccounts[to] {
+			if gainsAdded && belowMinBalanceAccounts[from] {
 				// we should re-evaluate that account.
-				delete(belowMinBalanceAccounts, to)
+				delete(belowMinBalanceAccounts, from)
 			}
 		}
 
@@ -889,8 +906,6 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 		_, _ = fmt.Fprintf(os.Stdout, "error constructing transaction %v\n", err)
 		return
 	}
-	// adjust transaction duration for 5 rounds. That would prevent it from getting stuck in the transaction pool for too long.
-	txn.LastValid = txn.FirstValid + 5
 
 	// if cfg.MaxFee == 0, automatically adjust the fee amount to required min fee
 	if cfg.MaxFee == 0 {
