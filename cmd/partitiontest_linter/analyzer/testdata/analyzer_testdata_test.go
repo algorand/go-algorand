@@ -20,10 +20,6 @@ func notTestFunctionWithCorrectParamWrongLine(t *testing.T) {
 	println("something")
 }
 
-// func TestFunctionWithoutAnything() {}
-
-// func TestFunctionWithWrongParam(t string) {}
-
 func TestFunctionWithCorrectParamOnly(t *testing.T) {} // want "function is missing partitiontest.PartitionTest"
 
 func TestFunctionWithCorrectParamCorrectLine(t *testing.T) {
@@ -37,16 +33,6 @@ func TestFunctionWithCorrectParamBadLine(t *testing.T) { // want "function is mi
 func TestFunctionWithDifferentName(n *testing.T) {
 	partitiontest.PartitionTest(n)
 }
-
-// func TestFunctionWithMultipleParams(t *testing.T, whatevs string) {}
-
-// func TestFunctionWithMultipleParamsCorrectLine(t *testing.T, whatevs string) {
-// 	partitiontest.PartitionTest(t)
-// }
-
-// func TestFunctionWithMultipleParamsCorrectLineDifferentOrder(whatevs string, t *testing.T) {
-// 	partitiontest.PartitionTest(t)
-// }
 
 func TestFunctionWithCorrectParamNotFirstCorrectLine(t *testing.T) {
 	println("something")
