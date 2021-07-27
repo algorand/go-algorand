@@ -371,7 +371,7 @@ jobs:
   amd64_integration:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: large
+    resource_class: medium
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -383,7 +383,7 @@ jobs:
   amd64_integration_nightly:
     machine:
       image: ubuntu-2004:202104-01
-    resource_class: large
+    resource_class: medium
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -456,7 +456,7 @@ jobs:
   arm64_integration:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.large
+    resource_class: arm.medium
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -471,7 +471,7 @@ jobs:
   arm64_integration_nightly:
     machine:
       image: ubuntu-2004:202101-01
-    resource_class: arm.large
+    resource_class: arm.medium
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -557,7 +557,7 @@ jobs:
   mac_amd64_integration:
     macos:
       xcode: 12.0.1
-    resource_class: large
+    resource_class: medium
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
@@ -574,7 +574,7 @@ jobs:
   mac_amd64_integration_nightly:
     macos:
       xcode: 12.0.1
-    resource_class: large
+    resource_class: medium
     parallelism: 4
     environment:
       SKIP_E2E_SUBS: "true"
