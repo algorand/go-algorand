@@ -215,8 +215,8 @@ func TestMultiThreaded(t *testing.T) {
 
 		var masterList []int
 
-		for i := 0; i < totalItems; i++ {
-			masterList = append(masterList, i)
+		for j := 0; j < totalItems; j++ {
+			masterList = append(masterList, j)
 		}
 
 		rand.Seed(time.Now().UnixNano())
