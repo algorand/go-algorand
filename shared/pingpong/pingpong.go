@@ -575,7 +575,7 @@ func (pps *WorkerState) sendFromTo(
 		c := p.Creator
 		assetsByCreator[c] = append(assetsByCreator[c], &p)
 	}
-	//for i, from := range fromList {
+	lastTransactionTime := time.Now()
 	for i := 0; i < len(fromList); i = (i + 1) % len(fromList) {
 		from := fromList[i]
 
@@ -793,7 +793,12 @@ func (pps *WorkerState) sendFromTo(
 		}
 
 		if cfg.DelayBetweenTxn > 0 {
-			time.Sleep(cfg.DelayBetweenTxn)
+			now := time.Now()
+			deltaTime := now.Sub(lastTransactionTime) - cfg.DelayBetweenTxn
+			if deltaTime > 0 {
+				time.Sleep(deltaTime)
+			}
+			lastTransactionTime = time.Now()
 		}
 	}
 	return
