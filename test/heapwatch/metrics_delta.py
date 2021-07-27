@@ -162,9 +162,24 @@ class summary:
             lines.append('{}\t{:.0f}\t{:.0f}'.format(msg, txBps, rxBps))
         return '\n'.join(lines)
 
+    def txPool(self):
+        mins = []
+        maxs = []
+        means = []
+        for nick, ns in self.nodes.items():
+            if len(ns.txPool) < 2:
+                continue
+            # skip the first two while the system could still count as warming up
+            txp = ns.txPool[2:]
+            mins.append(min(txp))
+            maxs.append(max(txp))
+            means.append(statistics.mean(txp))
+        return 'txnpool({} {} {} {} {})'.format(
+            min(mins), min(means), statistics.mean(means), max(means), max(maxs)
+        )
 
     def __str__(self):
-        return '{}\nsummary: {:0.2f} TPS, {:0.0f} tx B/s, {:0.0f} rx B/s'.format(self.byMsg(), self.tpsMeanSum/self.sumsCount, self.txBpsMeanSum/self.sumsCount, self.rxBpsMeanSum/self.sumsCount)
+        return '{}\n{}\nsummary: {:0.2f} TPS, {:0.0f} tx B/s, {:0.0f} rx B/s'.format(self.byMsg(), self.txPool(), self.tpsMeanSum/self.sumsCount, self.txBpsMeanSum/self.sumsCount, self.rxBpsMeanSum/self.sumsCount)
 
 def anynickre(nick_re, nicks):
     if not nick_re:
@@ -279,6 +294,7 @@ def perProtocol(prefix, lists, sums, deltas, dt):
             sums[sub] = sums.get(sub,0) + v
 
 def process_files(args, nick, paths):
+    "returns a nodestats object"
     return nodestats().process_files(args, nick, paths)
 
 class nodestats:
@@ -299,8 +315,11 @@ class nodestats:
         # algod_network_sent_bytes_*
         self.txPLists = {}
         self.txPSums = {}
+        # algod_tx_pool_count{}
+        self.txPool = []
 
     def process_files(self, args, nick=None, metrics_files=None):
+        "returns self, a nodestats object"
         self.args = args
         self.nick = nick
         if metrics_files is None:
@@ -333,6 +352,7 @@ class nodestats:
                 with open(bijsonpath, 'rt') as fin:
                     bi = json.load(fin)
             curtime = os.path.getmtime(path)
+            self.txPool.append(cur.get('algod_tx_pool_count{}'))
             #logger.debug('%s: %r', path, cur)
             if prev is not None:
                 d = metrics_delta(prev, cur)
