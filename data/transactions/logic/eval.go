@@ -1716,14 +1716,15 @@ func opCover(cx *evalContext) {
 
 func opUncover(cx *evalContext) {
 	depth := int(cx.program[cx.pc+1])
-	idx := len(cx.stack) - 1 - depth
+	topIdx := len(cx.stack) - 1
+	idx := topIdx - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand uncover
 	// so we can't expect our stack to be prechecked.
 	if idx < 0 {
 		cx.err = fmt.Errorf("uncover %d with stack size = %d", depth, len(cx.stack))
 		return
 	}
-	topIdx := len(cx.stack) - 1
+
 	sv := cx.stack[idx]
 	copy(cx.stack[idx:], cx.stack[idx+1:])
 	cx.stack[topIdx] = sv
