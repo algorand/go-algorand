@@ -200,9 +200,9 @@ func TestMultiThreaded(t *testing.T) {
 			err := heap.enqueue(msg)
 
 			if err == nil {
-				(*enqueuedMtx).Lock()
+				enqueuedMtx.Lock()
 				*enqueuedList = append(*enqueuedList, value)
-				(*enqueuedMtx).Unlock()
+				enqueuedMtx.Unlock()
 			}
 		}
 
