@@ -578,6 +578,7 @@ func (pps *WorkerState) sendFromTo(
 		assetsByCreator[c] = append(assetsByCreator[c], &p)
 	}
 	lastTransactionTime := time.Now()
+	timeCredit := time.Duration(0)
 	for i := 0; i < len(fromList); i = (i + 1) % len(fromList) {
 		from := fromList[i]
 
@@ -801,21 +802,38 @@ func (pps *WorkerState) sendFromTo(
 		// since we can't control the execution order of these transactions,
 		// we don't want to use the fact that an account has XXX algos while it does not.
 		// We will store that in the pendingAccountGains so we can evaluate that later on if needed.
-		if toGains, has := pendingAccountGains[to]; has {
-			toGains[txid] = toBalanceChange
-		} else {
-			toGains := make(map[transactions.Txid]int64, 1)
-			pendingAccountGains[to] = toGains
-			toGains[txid] = toBalanceChange
+		if from != to {
+			if toGains, has := pendingAccountGains[to]; has {
+				toGains[txid] = toBalanceChange
+			} else {
+				toGains := make(map[transactions.Txid]int64, 1)
+				pendingAccountGains[to] = toGains
+				toGains[txid] = toBalanceChange
+			}
 		}
 
+		// the logic here would sleep for the remaining of time to match the desired cfg.DelayBetweenTxn
 		if cfg.DelayBetweenTxn > 0 {
+			time.Sleep(cfg.DelayBetweenTxn)
+		}
+		if cfg.TxnPerSec > 0 {
+			timeCredit += time.Second / time.Duration(cfg.TxnPerSec)
+
 			now := time.Now()
-			deltaTime := now.Sub(lastTransactionTime) - cfg.DelayBetweenTxn
-			if deltaTime > 0 {
-				time.Sleep(deltaTime)
+			took := now.Sub(lastTransactionTime)
+			timeCredit -= took
+			if timeCredit > 0 {
+				time.Sleep(timeCredit)
+				timeCredit = time.Duration(0)
+			} else if timeCredit < -20*time.Millisecond {
+				// cap the "time debt" to 20 ms.
+				timeCredit = -20 * time.Millisecond
 			}
 			lastTransactionTime = time.Now()
+
+			// since we just slept enough here, we can take it off the counters
+			sentCount--
+			successCount--
 		}
 	}
 	return
