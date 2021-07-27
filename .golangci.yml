@@ -8,6 +8,7 @@ linters:
     - misspell
     - govet
     - ineffassign
+    - partitiontest
 
   disable:
     - deadcode
@@ -21,7 +22,7 @@ linters:
 linters-settings:
   custom:
     partitiontest:
-      path: cmd/partitiontest_linter/partitiontest_linter.so
+      path: cmd/partitiontest_linter/plugin.so
       description: This custom linter checks inside files that end in '_test.go', and inside functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
       original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
 #  govet:
