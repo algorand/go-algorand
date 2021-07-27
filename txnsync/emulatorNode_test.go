@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -393,3 +394,5 @@ func (n *emulatedNode) onBroadcastProposalRequest() {
 func (p *networkPeer) GetAddress() string {
 	return fmt.Sprintf("%d", p.target)
 }
+
+func (n *emulatedNode) SetProposalCancelFunc(context.CancelFunc) {}

@@ -31,6 +31,9 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
+const maxNumProposalBytes = 30000       // sizeof(block header)
+const maxNumTxGroupHashesBytes = 320000 // 10K * 32
+
 // transcationSyncNodeConnector implementes the txnsync.NodeConnector interface, allowing the
 // transaction sync communicate with the node and it's child objects.
 type transcationSyncNodeConnector struct {
@@ -40,6 +43,14 @@ type transcationSyncNodeConnector struct {
 	messageHandler txnsync.IncomingMessageHandler
 	txHandler      data.SolicitedAsyncTxHandler
 	openStateCh    chan struct{}
+	cancelSendCtx  context.CancelFunc
+}
+
+type proposalData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	proposalBytes []byte              `codec:"b,allocbound=maxNumProposalBytes"`
+	txGroupHashes []transactions.Txid `codec:"h,allocbound=maxNumTxGroupHashesBytes"` // TODO: make this []byte
 }
 
 func makeTranscationSyncNodeConnector(node *AlgorandFullNode) transcationSyncNodeConnector {
@@ -232,4 +243,35 @@ func (tsnc *transcationSyncNodeConnector) IncomingTransactionGroups(peer *txnsyn
 		transactionPoolSize = -1
 	}
 	return
+}
+
+func (tsnc *transcationSyncNodeConnector) SetProposalCancelFunc(cancelSendCtx context.CancelFunc) {
+	tsnc.cancelSendCtx = cancelSendCtx
+}
+
+func (tsnc *transcationSyncNodeConnector) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
+	data := proposalData{
+		proposalBytes: proposalBytes,
+		txGroupHashes: make([]transactions.Txid, len(txnSlices)),
+	}
+
+	txGroups := make([]transactions.SignedTxGroup, len(txnSlices))
+	encodingBuf := protocol.GetEncodingBuf()
+	for i, txnSlice := range txnSlices {
+		data.txGroupHashes[i] = txnSlice.ID()
+		txGroups[i] = transactions.SignedTxGroup{
+			Transactions:       txnSlice,
+			GroupTransactionID: data.txGroupHashes[i],
+		}
+		txGroups[i].EncodedLength = 0
+		for _, txn := range txGroups[i].Transactions {
+			encodingBuf = encodingBuf[:0]
+			txGroups[i].EncodedLength += len(txn.MarshalMsg(encodingBuf))
+		}
+	}
+
+	if tsnc.cancelSendCtx != nil {
+		tsnc.cancelSendCtx()
+	}
+	tsnc.eventsCh <- txnsync.MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups)
 }

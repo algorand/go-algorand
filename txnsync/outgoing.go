@@ -306,7 +306,10 @@ func (s *syncState) locallyGeneratedTransactions(pendingTransactions *pendingTra
 }
 
 func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer) {
-	s.sendCtx, s.cancelSendCtx = context.WithCancel(context.Background())
+	var cancelSendCtx context.CancelFunc
+	s.sendCtx, cancelSendCtx = context.WithCancel(context.Background())
+	s.node.SetProposalCancelFunc(cancelSendCtx)
+
 	for _, peer := range peers {
 		select {
 		case <-s.sendCtx.Done():

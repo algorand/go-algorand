@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"context"
 	"encoding/binary"
 	"math/rand"
 	"testing"
@@ -339,3 +340,5 @@ func (fn *justRandomFakeNode) IncomingTransactionGroups(peer *Peer, messageSeq u
 	return 0
 }
 func (fn *justRandomFakeNode) NotifyMonitor() chan struct{} { return nil }
+
+func (fn *justRandomFakeNode) SetProposalCancelFunc(context.CancelFunc) {}

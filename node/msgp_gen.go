@@ -23,6 +23,14 @@ import (
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
 //
+// proposalData
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
 
 // MarshalMsg implements msgp.Marshaler
 func (z *netPrioResponse) MarshalMsg(b []byte) (o []byte) {
@@ -416,4 +424,86 @@ func (z *netPrioResponseSigned) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *netPrioResponseSigned) MsgIsZero() bool {
 	return ((*z).Response.Nonce == "") && ((*z).Round.MsgIsZero()) && ((*z).Sender.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *proposalData) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(0)
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+	}
+	return
+}
+
+func (_ *proposalData) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*proposalData)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *proposalData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = proposalData{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *proposalData) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*proposalData)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *proposalData) Msgsize() (s int) {
+	s = 1
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *proposalData) MsgIsZero() bool {
+	return true
 }

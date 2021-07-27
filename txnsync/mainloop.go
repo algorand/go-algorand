@@ -95,7 +95,6 @@ type syncState struct {
 	xorBuilder bloom.XorBuilder
 
 	sendCtx       context.Context
-	cancelSendCtx context.CancelFunc
 }
 
 func (s *syncState) mainloop(serviceCtx context.Context, wg *sync.WaitGroup) {
