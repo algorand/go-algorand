@@ -1101,6 +1101,62 @@ func typeDig(ops *OpStream, args []string) (StackTypes, StackTypes) {
 	return anys, returns
 }
 
+func typeCover(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	if len(args) == 0 {
+		return oneAny, oneAny
+	}
+	n, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return oneAny, oneAny
+	}
+	depth := int(n) + 1
+	anys := make(StackTypes, depth)
+	for i := range anys {
+		anys[i] = StackAny
+	}
+	returns := make(StackTypes, depth)
+	for i := range returns {
+		returns[i] = StackAny
+	}
+	idx := len(ops.typeStack) - depth
+	if idx >= 0 {
+		sv := ops.typeStack[len(ops.typeStack)-1]
+		for i := idx; i < len(ops.typeStack)-1; i++ {
+			returns[i-idx+1] = ops.typeStack[i]
+		}
+		returns[len(returns)-depth] = sv
+	}
+	return anys, returns
+}
+
+func typeUncover(ops *OpStream, args []string) (StackTypes, StackTypes) {
+	if len(args) == 0 {
+		return oneAny, oneAny
+	}
+	n, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return oneAny, oneAny
+	}
+	depth := int(n) + 1
+	anys := make(StackTypes, depth)
+	for i := range anys {
+		anys[i] = StackAny
+	}
+	returns := make(StackTypes, depth)
+	for i := range returns {
+		returns[i] = StackAny
+	}
+	idx := len(ops.typeStack) - depth
+	if idx >= 0 {
+		sv := ops.typeStack[idx]
+		for i := idx + 1; i < len(ops.typeStack); i++ {
+			returns[i-idx-1] = ops.typeStack[i]
+		}
+		returns[len(returns)-1] = sv
+	}
+	return anys, returns
+}
+
 // keywords handle parsing and assembling special asm language constructs like 'addr'
 // We use OpSpec here, but somewhat degenerate, since they don't have opcodes or eval functions
 var keywords = map[string]OpSpec{
