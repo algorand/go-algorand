@@ -207,7 +207,6 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 		return err
 	}
 
-	pendingTxnCount := uint64(0)
 	fmt.Printf("adjusting account balance to %d\n", minFund)
 	for addr, balance := range accounts {
 		if !cfg.Quiet {
@@ -227,7 +226,6 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 				return err
 			}
 			accounts[addr] = minFund
-			pendingTxnCount++
 			if !cfg.Quiet {
 				fmt.Printf("account balance for key %s is %d\n", addr, accounts[addr])
 			}
@@ -237,31 +235,9 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 		}
 	}
 	// wait until all the above transactions are sent, or that we have no more transactions
-	// in our pending transaction pool.
-	for {
-		if pendingTxnCount == 0 {
-			break
-		}
-		pendingTxns, err := client.GetPendingTransactions(1)
-		if err != nil {
-			fmt.Printf("failed to check pending transaction pool status : %v\n", err)
-			break
-		}
-		if pendingTxns.TotalTxns == 0 {
-			// no more transactions are waiting on the node.
-			break
-		}
-		pendingTxnCount = pendingTxns.TotalTxns
-
-		nodeStatus, err := client.Status()
-		if err != nil {
-			fmt.Printf("failed to retrieve node status : %v\n", err)
-			continue
-		}
-		// this would wait for the next round, when we will perform the check again.
-		client.WaitForRound(nodeStatus.LastRound)
-	}
-	return nil
+	// in our pending transaction pool coming from the source account.
+	err = waitPendingTransactions(map[string]uint64{cfg.SrcAccount: uint64(0)}, client)
+	return err
 }
 
 func sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
@@ -276,27 +252,45 @@ func sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fe
 	return client.SendPaymentFromWalletWithLease(wh, nil, from, to, fee, amount, note, "", lease, 0, 0)
 }
 
+// waitPendingTransactions waits until all the pending transactions coming from the given
+// accounts map have been cleared out of the transaction pool. A prerequesite for this is that
+// there is no other source who might be generating transactions that would come from these account
+// addresses.
+func waitPendingTransactions(accounts map[string]uint64, client libgoal.Client) error {
+	for from := range accounts {
+	repeat:
+		txnList, err := client.GetPendingTransactionsByAddress(from, 0)
+		if err != nil {
+			fmt.Printf("failed to check pending transaction pool status : %v\n", err)
+			return err
+		}
+		for _, txn := range txnList.Transactions {
+			if txn.From != from {
+				// we found a transaction where the receiver was the given account. We don't
+				// care about these.
+				continue
+			}
+			// the transaction is still in the transaction pool.
+			nodeStatus, err := client.Status()
+			if err != nil {
+				fmt.Printf("failed to retrieve node status : %v\n", err)
+				continue
+			}
+			// this would wait for the next round, when we will perform the check again.
+			client.WaitForRound(nodeStatus.LastRound)
+			goto repeat
+		}
+	}
+	return nil
+}
+
 func refreshAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) error {
 	// wait until all the pending transcations have been sent; otherwise, getting the balance
 	// is pretty much meaningless.
 	fmt.Printf("waiting for all transactions to be accepted before refreshing accounts.\n")
-	for {
-		pendingTxns, err := client.GetPendingTransactions(1)
-		if err != nil {
-			fmt.Printf("failed to check pending transaction pool status : %v\n", err)
-			break
-		}
-		if pendingTxns.TotalTxns == 0 {
-			// no more transactions are waiting on the node.
-			break
-		}
-		nodeStatus, err := client.Status()
-		if err != nil {
-			fmt.Printf("failed to retrieve node status : %v\n", err)
-			continue
-		}
-		// this would wait for the next round, when we will perform the check again.
-		client.WaitForRound(nodeStatus.LastRound)
+	err := waitPendingTransactions(accounts, client)
+	if err != nil {
+		return err
 	}
 
 	for addr := range accounts {
