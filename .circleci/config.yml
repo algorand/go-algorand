@@ -465,8 +465,6 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: arm64-integration
-          no_output_timeout: 45m
-          go_test_flags: ""
 
   arm64_integration_nightly:
     machine:
