@@ -404,7 +404,6 @@ jobs:
     steps:
       - checkout
       - prepare_go
-
       - run:
           no_output_timeout: 30m
           command: |
