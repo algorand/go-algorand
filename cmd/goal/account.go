@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -1195,7 +1195,6 @@ var importRootKeysCmd = &cobra.Command{
 			handle, err = db.MakeErasableAccessor(filepath.Join(keyDir, filename))
 			if err != nil {
 				// Couldn't open it, skip it
-				err = nil
 				continue
 			}
 
@@ -1204,7 +1203,6 @@ var importRootKeysCmd = &cobra.Command{
 			handle.Close()
 			if err != nil {
 				// Couldn't read it, skip it
-				err = nil
 				continue
 			}
 

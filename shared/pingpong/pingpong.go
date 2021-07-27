@@ -153,10 +153,7 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (requiredBala
 		fmt.Printf("required min balance for app accounts: %d\n", requiredBalance)
 		return
 	}
-	var fee uint64 = 1000
-	if cfg.MinFee > fee {
-		fee = cfg.MinFee
-	}
+	var fee uint64
 	if cfg.MaxFee != 0 {
 		fee = cfg.MaxFee
 	} else {

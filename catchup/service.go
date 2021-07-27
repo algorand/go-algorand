@@ -307,7 +307,8 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 				}
 
 				if s.cfg.CatchupVerifyTransactionSignatures() || s.cfg.CatchupVerifyApplyData() {
-					vb, err := s.ledger.Validate(s.ctx, *block, s.blockValidationPool)
+					var vb *ledger.ValidatedBlock
+					vb, err = s.ledger.Validate(s.ctx, *block, s.blockValidationPool)
 					if err != nil {
 						if s.ctx.Err() != nil {
 							// if the context expired, just exit.
