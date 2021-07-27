@@ -17,10 +17,17 @@
 package txnsync
 
 import (
+	"math/rand"
+	"reflect"
+	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-deadlock"
 )
 
 func TestMessageOrderingHeap_PushPopSwapLess(t *testing.T) {
@@ -111,42 +118,156 @@ func TestMultiThreaded(t *testing.T) {
 
 	a := require.New(t)
 
-	heap := messageOrderingHeap{}
+	loopCount := 1000
+	numThreads := 100
+	itemsPerThread := 10
 
-	startChan := make(chan struct{})
+	totalItems := numThreads * itemsPerThread
 
-	var wg sync.WaitGroup
+	var (
+		heap      messageOrderingHeap
+		startChan chan struct{}
+		wg        sync.WaitGroup
+	)
 
-	fxn := func(value int, heap *messageOrderingHeap, start chan struct{}, wg *sync.WaitGroup) {
+	peers := []Peer{
+		{},
+		{},
+		{},
+		{},
+		{},
+	}
+
+	genTxnGrp := func(value int) []transactions.SignedTxGroup {
+
+		if value%2 == 0 {
+			return []transactions.SignedTxGroup{
+				{
+					Transactions:       nil,
+					LocallyOriginated:  true,
+					GroupCounter:       0,
+					GroupTransactionID: transactions.Txid{byte(value % 255)},
+					EncodedLength:      0,
+				},
+			}
+		}
+
+		return []transactions.SignedTxGroup{
+			{
+				Transactions:       nil,
+				LocallyOriginated:  false,
+				GroupCounter:       0,
+				GroupTransactionID: transactions.Txid{byte(value % 255)},
+				EncodedLength:      0,
+			},
+			{
+				Transactions:       nil,
+				LocallyOriginated:  true,
+				GroupCounter:       0,
+				GroupTransactionID: transactions.Txid{byte(value + 1%255)},
+				EncodedLength:      0,
+			},
+		}
+	}
+
+	encodeMsg := func(value int, peers []Peer) incomingMessage {
+
+		rval := incomingMessage{
+			sequenceNumber:    uint64(value),
+			peer:              &peers[value%len(peers)],
+			encodedSize:       value + 874,
+			transactionGroups: genTxnGrp(value),
+		}
+
+		return rval
+	}
+
+	validateMsg := func(message incomingMessage) bool {
+		val := int(message.sequenceNumber)
+
+		if message.peer != &peers[val%len(peers)] {
+			return false
+		}
+
+		if message.encodedSize != val+874 {
+			return false
+		}
+
+		if !reflect.DeepEqual(message.transactionGroups, genTxnGrp(val)) {
+			return false
+		}
+
+		return true
+
+	}
+
+	fxn := func(values []int, heap *messageOrderingHeap, start chan struct{}, wg *sync.WaitGroup,
+		enqueuedMtx *deadlock.Mutex, enqueuedList *[]int) {
 		defer wg.Done()
 		// Wait for the start
 		<-start
-		_ = heap.enqueue(incomingMessage{sequenceNumber: uint64(value)})
+
+		for _, value := range values {
+			msg := encodeMsg(value, peers)
+			err := heap.enqueue(msg)
+
+			if err == nil {
+				(*enqueuedMtx).Lock()
+				*enqueuedList = append(*enqueuedList, value)
+				(*enqueuedMtx).Unlock()
+			}
+		}
+
 	}
 
-	for i := 0; i < messageOrderingHeapLimit; i++ {
-		wg.Add(1)
-		go fxn(i, &heap, startChan, &wg)
+	for i := 0; i < loopCount; i++ {
+
+		var enqueuedList []int
+		var enqueuedMtx deadlock.Mutex
+
+		var masterList []int
+
+		for i := 0; i < totalItems; i++ {
+			masterList = append(masterList, i)
+		}
+
+		rand.Seed(time.Now().UnixNano())
+		rand.Shuffle(len(masterList), func(i, j int) { masterList[i], masterList[j] = masterList[j], masterList[i] })
+
+		heap = messageOrderingHeap{}
+		startChan = make(chan struct{})
+
+		currentIdx := 0
+
+		for j := 0; j < numThreads; j++ {
+			wg.Add(1)
+
+			randomList := masterList[currentIdx : currentIdx+itemsPerThread]
+			currentIdx = currentIdx + itemsPerThread
+
+			go fxn(randomList, &heap, startChan, &wg, &enqueuedMtx, &enqueuedList)
+		}
+
+		// Tell all goroutines to go
+		close(startChan)
+
+		wg.Wait()
+
+		a.Equal(heap.Len(), int(messageOrderingHeapLimit))
+		a.Equal(heap.enqueue(incomingMessage{}), errHeapReachedCapacity)
+		a.Equal(heap.Len(), int(messageOrderingHeapLimit))
+
+		sort.Ints(enqueuedList)
+
+		for _, val := range enqueuedList {
+
+			msg, sequenceNumber, err := heap.popSequence(uint64(val))
+			a.Nil(err)
+			a.Equal(sequenceNumber, uint64(val))
+			a.True(validateMsg(msg))
+		}
+
+		a.Equal(heap.Len(), int(0))
 	}
-
-	// Tell all goroutines to go
-	close(startChan)
-
-	wg.Wait()
-
-	a.Equal(heap.Len(), int(messageOrderingHeapLimit))
-	a.Equal(heap.enqueue(incomingMessage{}), errHeapReachedCapacity)
-	a.Equal(heap.Len(), int(messageOrderingHeapLimit))
-
-	for i := 0; i < messageOrderingHeapLimit; i++ {
-		msg, err := heap.pop()
-		a.Nil(err)
-		a.Equal(msg.sequenceNumber, uint64(i))
-	}
-
-	_, err := heap.pop()
-
-	a.Equal(heap.Len(), int(0))
-	a.Equal(err, errHeapEmpty)
 
 }
