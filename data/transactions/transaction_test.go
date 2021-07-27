@@ -228,6 +228,7 @@ func TestWellFormedErrors(t *testing.T) {
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
 	futureProto := config.Consensus[protocol.ConsensusFuture]
 	protoV27 := config.Consensus[protocol.ConsensusV27]
+	protoV28 := config.Consensus[protocol.ConsensusV28]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 	okHeader := Header{
@@ -446,6 +447,54 @@ func TestWellFormedErrors(t *testing.T) {
 			spec:          specialAddr,
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx has too many references, max is 8"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     1,
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+					ExtraProgramPages: 0,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			spec:          specialAddr,
+			proto:         protoV28,
+			expectedError: fmt.Errorf("app programs too long. max total len %d bytes", curProto.MaxAppProgramLen),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     1,
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+					ExtraProgramPages: 0,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			spec:  specialAddr,
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 1,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			spec:          specialAddr,
+			proto:         protoV28,
+			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
 		},
 	}
 	for _, usecase := range usecases {
