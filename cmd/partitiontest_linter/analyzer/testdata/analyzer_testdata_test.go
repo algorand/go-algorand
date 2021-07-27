@@ -1,3 +1,9 @@
+/*
+This file is input file for analyzer_test.go
+That's why we are using relative path in import below
+It is also why we named this file _test.go, since linter only looks at files that end in _test.go
+*/
+
 package analyzer_testdata
 
 import (

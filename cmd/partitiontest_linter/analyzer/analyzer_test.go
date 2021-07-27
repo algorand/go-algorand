@@ -1,12 +1,11 @@
-package analyzer_test
+package analyzer
 
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/cmd/partitiontest_linter/analyzer"
 	"golang.org/x/tools/go/analysis/analysistest"
 )
 
 func TestAll(t *testing.T) {
-	analysistest.Run(t, analysistest.TestData(), analyzer.Analyzer)
+	analysistest.Run(t, analysistest.TestData(), Analyzer)
 }
