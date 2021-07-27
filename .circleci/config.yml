@@ -10,7 +10,9 @@ workflows:
   build_pr:
     jobs:
       - codegen_verification
-      - amd64_build
+      - amd64_build:
+          context:
+            - slack-secrets
       - amd64_test:
           requires:
             - amd64_build
