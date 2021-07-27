@@ -80,6 +80,11 @@ func TestAsyncMessageSent(t *testing.T) {
 
 	err = asyncEncoder.asyncMessageSent(true, 1337)
 	a.Nil(err)
+	num := 0
+	for _ = range asyncEncoder.state.outgoingMessagesCallbackCh {
+		num++
+	}
+	a.Equal(1, num)
 }
 
 type mockAsyncNodeConnector struct {
@@ -139,6 +144,8 @@ func TestAsyncEncodeAndSendNonErr(t *testing.T) {
 	a.Nil(err)
 	a.False(warnCalled)
 	a.True(sendPeerMessageCalled)
+	a.Nil(asyncEncoder.messageData.transactionGroups)
+	a.Nil(asyncEncoder.messageData.message)
 }
 
 // TestAsyncEncodeAndSendErr Tests response when encodeTransactionGroups returns an error
@@ -326,6 +333,8 @@ func TestAssemblePeerMessage3(t *testing.T) {
 
 }
 
+// TestLocallyGeneratedTransactions Separately tests that generating transactions are being
+// correctly made given a signed transaction group array.
 func TestLocallyGeneratedTransactions(t *testing.T) {
 
 	a := require.New(t)
