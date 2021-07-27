@@ -210,26 +210,30 @@ func (cb *roundCowState) lookupCreatableData(addr basics.Address, locators []bas
 		case basics.AssetCreatable:
 			params, parentOk := parentPad.AccountData.AssetParams[basics.AssetIndex(loc.Index)]
 			if _, ok := pad.AccountData.AssetParams[basics.AssetIndex(loc.Index)]; !ok && parentOk {
-				pad.AccountData.AssetParams = ledgercore.CloneAssetParams(pad.AccountData.AssetParams)
-				pad.AccountData.AssetParams[basics.AssetIndex(loc.Index)] = params
+				clone := ledgercore.CloneAssetParams(pad.AccountData.AssetParams)
+				clone[basics.AssetIndex(loc.Index)] = params
+				pad.AccountData.AssetParams = clone
 			}
 		case basics.AssetCreatableData:
 			holding, parentOk := parentPad.AccountData.Assets[basics.AssetIndex(loc.Index)]
 			if _, ok := pad.AccountData.Assets[basics.AssetIndex(loc.Index)]; !ok && parentOk {
-				pad.AccountData.Assets = ledgercore.CloneAssetHoldings(pad.AccountData.Assets)
-				pad.AccountData.Assets[basics.AssetIndex(loc.Index)] = holding
+				clone := ledgercore.CloneAssetHoldings(pad.AccountData.Assets)
+				clone[basics.AssetIndex(loc.Index)] = holding
+				pad.AccountData.Assets = clone
 			}
 		case basics.AppCreatable:
 			params, parentOk := parentPad.AccountData.AppParams[basics.AppIndex(loc.Index)]
 			if _, ok := pad.AccountData.AppParams[basics.AppIndex(loc.Index)]; !ok && parentOk {
-				pad.AccountData.AppParams = ledgercore.CloneAppParams(pad.AccountData.AppParams)
-				pad.AccountData.AppParams[basics.AppIndex(loc.Index)] = params
+				clone := ledgercore.CloneAppParams(pad.AccountData.AppParams)
+				clone[basics.AppIndex(loc.Index)] = params
+				pad.AccountData.AppParams = clone
 			}
 		case basics.AppCreatableData:
 			states, parentOk := parentPad.AccountData.AppLocalStates[basics.AppIndex(loc.Index)]
 			if _, ok := pad.AccountData.AppLocalStates[basics.AppIndex(loc.Index)]; !ok && parentOk {
-				pad.AccountData.AppLocalStates = ledgercore.CloneAppLocalStates(pad.AccountData.AppLocalStates)
-				pad.AccountData.AppLocalStates[basics.AppIndex(loc.Index)] = states
+				clone := ledgercore.CloneAppLocalStates(pad.AccountData.AppLocalStates)
+				clone[basics.AppIndex(loc.Index)] = states
+				pad.AccountData.AppLocalStates = clone
 			}
 		}
 	}

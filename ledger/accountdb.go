@@ -568,35 +568,35 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		var ot basics.OverflowTracker
 		var totals ledgercore.AccountTotals
 
-		stmt, err := tx.Prepare("INSERT INTO accountcreatabledata (addrid, creatable, ctype, data) VALUES (?, ?, ?, ?)")
-		if err != nil {
-			return true, err
-		}
+		// stmt, err := tx.Prepare("INSERT INTO accountcreatabledata (addrid, creatable, ctype, data) VALUES (?, ?, ?, ?)")
+		// if err != nil {
+		// 	return true, err
+		// }
 		for addr, data := range initAccounts {
 			data2 := data
 			data2.Assets = nil
 			data2.AssetParams = nil
-			res, err := tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
+			_, err := tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
 				addr[:], protocol.Encode(&data2))
 			if err != nil {
 				return true, err
 			}
-			rowid, err := res.LastInsertId()
-			if err != nil {
-				return true, err
-			}
-			for aidx, holding := range data.Assets {
-				_, err := stmt.Exec(rowid, aidx, basics.AssetCreatableData, protocol.Encode(&holding))
-				if err != nil {
-					return true, err
-				}
-			}
-			for aidx, params := range data.AssetParams {
-				_, err := stmt.Exec(rowid, aidx, basics.AssetCreatable, protocol.Encode(&params))
-				if err != nil {
-					return true, err
-				}
-			}
+			// rowid, err := res.LastInsertId()
+			// if err != nil {
+			// 	return true, err
+			// }
+			// for aidx, holding := range data.Assets {
+			// 	_, err := stmt.Exec(rowid, aidx, basics.AssetCreatableData, protocol.Encode(&holding))
+			// 	if err != nil {
+			// 		return true, err
+			// 	}
+			// }
+			// for aidx, params := range data.AssetParams {
+			// 	_, err := stmt.Exec(rowid, aidx, basics.AssetCreatable, protocol.Encode(&params))
+			// 	if err != nil {
+			// 		return true, err
+			// 	}
+			// }
 
 			totals.AddAccount(proto, data, &ot)
 		}
