@@ -217,8 +217,8 @@ before_cache:
    esac
    docker save -o $HOME/docker_cache/images.tar $(docker images -a -q)
 
-after_success:
-  - scripts/travis/upload_coverage.sh || true
+#after_success:
+#  - scripts/travis/upload_coverage.sh || true
 
 addons:
   apt:

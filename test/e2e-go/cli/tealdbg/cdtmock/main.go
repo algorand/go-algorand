@@ -87,9 +87,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	var counter int64 = 1
+	var counter int64
+	counter++
 	req := cdt.ChromeRequest{ID: counter, Method: "Debugger.Enable"}
-	counter++
 
 	if err = client.SendJSON(req); err != nil {
 		fmt.Printf("Send error: %v", err)
@@ -101,8 +101,8 @@ func main() {
 	}
 	fmt.Printf("%s\n", string(data))
 
+	counter++
 	req = cdt.ChromeRequest{ID: counter, Method: "Runtime.runIfWaitingForDebugger"}
-	counter++
 
 	if err = client.SendJSON(req); err != nil {
 		fmt.Printf("Send error: %v", err)
@@ -114,8 +114,8 @@ func main() {
 	}
 	fmt.Printf("%s\n", string(data))
 
-	req = cdt.ChromeRequest{ID: counter, Method: "Debugger.resume"}
 	counter++
+	req = cdt.ChromeRequest{ID: counter, Method: "Debugger.resume"}
 
 	if err = client.SendJSON(req); err != nil {
 		fmt.Printf("Send error: %v", err)

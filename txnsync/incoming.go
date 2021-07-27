@@ -210,26 +210,26 @@ func (s *syncState) evaluateIncomingMessage(message incomingMessage) {
 	s.incomingMessagesQ.clear(message)
 	messageProcessed := false
 	transacationPoolSize := 0
+MainForLoop:
 	for {
-		seq, err := peer.incomingMessages.peekSequence()
-		if err != nil {
+		incomingMsg, seq, err := peer.incomingMessages.popSequence(peer.nextReceivedMessageSeq)
+		switch err {
+		case errHeapEmpty:
 			// this is very likely, once we run out of consecutive messages.
-			break
-		}
-		if seq != peer.nextReceivedMessageSeq {
+			break MainForLoop
+		case errSequenceNumberMismatch:
 			// if we receive a message which wasn't in-order, just let it go.
 			s.log.Debugf("received message out of order; seq = %d, expecting seq = %d\n", seq, peer.nextReceivedMessageSeq)
-			break
-		}
-
-		incomingMsg, err := peer.incomingMessages.pop()
-		if err != nil {
-			// if the queue is empty ( not expected, since we peek'ed into it before ), then we can't do much here.
-			return
+			break MainForLoop
 		}
 
 		// increase the message sequence number, since we're processing this message.
 		peer.nextReceivedMessageSeq++
+
+		// skip txnsync messages with proposalData for now
+		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
+			continue
+		}
 
 		// update the round number if needed.
 		if incomingMsg.message.Round > peer.lastRound {

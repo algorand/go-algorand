@@ -17,6 +17,7 @@
 package txnsync
 
 import (
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -24,6 +25,7 @@ const txnBlockMessageVersion = 1
 const maxBloomFilterSize = 100000
 const maxAcceptedMsgSeq = 64
 const maxEncodedTransactionGroupBytes = 10000000
+const maxProposalSize = 350000
 
 type transactionBlockMessage struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"` //nolint:structcheck,unused
@@ -34,6 +36,7 @@ type transactionBlockMessage struct {
 	UpdatedRequestParams requestParams           `codec:"p"`
 	TransactionGroups    packedTransactionGroups `codec:"g"`
 	MsgSync              timingParams            `codec:"t"`
+	RelayedProposal      relayedProposal         `codec:"rp"`
 }
 
 type encodedBloomFilter struct {
@@ -72,4 +75,17 @@ type timingParams struct {
 	ResponseElapsedTime uint64   `codec:"r"`
 	AcceptedMsgSeq      []uint64 `codec:"a,allocbound=maxAcceptedMsgSeq"`
 	NextMsgMinDelay     uint64   `codec:"m"`
+}
+
+const (
+	noProposal byte = iota
+	transactionsForProposal
+)
+
+type relayedProposal struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	RawBytes        []byte        `codec:"b,allocbound=maxProposalSize"`
+	ExcludeProposal crypto.Digest `codec:"e"`
+	Content         byte          `codec:"c"`
 }

@@ -165,7 +165,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node := new(AlgorandFullNode)
 	node.rootDir = rootDir
-	node.config = cfg
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
@@ -174,6 +173,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	if node.devMode {
 		cfg.DisableNetworking = true
 	}
+	node.config = cfg
 
 	// tie network, block fetcher, and agreement services together
 	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network)
@@ -637,7 +637,6 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 
 		// Keep looking in the ledger..
 	}
-
 	var maxLife basics.Round
 	latest := node.ledger.Latest()
 	proto, err := node.ledger.ConsensusParams(latest)
@@ -648,7 +647,6 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	}
 	maxRound := latest
 	minRound := maxRound.SubSaturate(maxLife)
-
 	for r := minRound; r <= maxRound; r++ {
 		tx, found, err := node.ledger.LookupTxid(txID, r)
 		if err != nil || !found {

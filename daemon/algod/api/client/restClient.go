@@ -328,6 +328,10 @@ func (client RestClient) LedgerSupply() (response v1.Supply, err error) {
 	return
 }
 
+type pendingTransactionsByAddrParams struct {
+	Max uint64 `url:"max"`
+}
+
 type transactionsByAddrParams struct {
 	FirstRound uint64 `url:"firstRound"`
 	LastRound  uint64 `url:"lastRound"`
@@ -356,6 +360,12 @@ type rawFormat struct {
 // last] rounds range.
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
+	return
+}
+
+// PendingTransactionsByAddr returns all the pending transactions for a PK [addr].
+func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response v1.TransactionList, err error) {
+	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
 	return
 }
 

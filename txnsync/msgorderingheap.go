@@ -25,6 +25,7 @@ import (
 
 var errHeapEmpty = errors.New("message ordering heap is empty")
 var errHeapReachedCapacity = errors.New("message ordering heap reached capacity")
+var errSequenceNumberMismatch = errors.New("sequence number mismatch")
 
 const messageOrderingHeapLimit = 128
 
@@ -68,20 +69,24 @@ func (p *messageOrderingHeap) Less(i, j int) bool {
 func (p *messageOrderingHeap) enqueue(msg incomingMessage) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if len(p.messages) > messageOrderingHeapLimit {
+	if len(p.messages) >= messageOrderingHeapLimit {
 		return errHeapReachedCapacity
 	}
 	heap.Push(p, messageHeapItem(msg))
 	return nil
 }
 
-func (p *messageOrderingHeap) peekSequence() (sequenceNumber uint64, err error) {
+func (p *messageOrderingHeap) popSequence(sequenceNumber uint64) (msg incomingMessage, heapSequenceNumber uint64, err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(p.messages) == 0 {
-		return 0, errHeapEmpty
+		return incomingMessage{}, 0, errHeapEmpty
 	}
-	return p.messages[0].sequenceNumber, nil
+	if p.messages[0].sequenceNumber != sequenceNumber {
+		return incomingMessage{}, p.messages[0].sequenceNumber, errSequenceNumberMismatch
+	}
+	entry := heap.Pop(p).(messageHeapItem)
+	return incomingMessage(entry), sequenceNumber, nil
 }
 
 func (p *messageOrderingHeap) pop() (msg incomingMessage, err error) {
