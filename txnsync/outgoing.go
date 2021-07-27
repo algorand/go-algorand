@@ -216,7 +216,7 @@ func (s *syncState) assemblePeerMessage(peer *Peer, pendingTransactions *pending
 
 		profTxnsSelection := s.profiler.getElement(profElementTxnsSelection)
 		profTxnsSelection.start()
-		metaMessage.transactionGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize)
+		metaMessage.transactionGroups, metaMessage.sentTranscationsIDs, metaMessage.partialMessage = peer.selectPendingTransactions(transactionGroups, messageTimeWindow, s.round, bloomFilterSize, s.log)
 		profTxnsSelection.end()
 
 		// clear the last sent bloom filter on the end of a series of partial messages.

@@ -17,6 +17,7 @@
 package pingpong
 
 import (
+	//"container/heap"
 	"context"
 	"fmt"
 	"math"
@@ -48,6 +49,63 @@ type WorkerState struct {
 	nftStartTime  int64
 	localNftIndex uint64
 	nftHolders    map[string]int
+
+	//txidSent sentTxidHeap
+	txidSent map[string]sentTxid
+
+	broadcastedCount   int
+	confirmedSentCount int
+	dropCount          int
+
+	roundConfirmed uint64
+}
+
+type sentTxid struct {
+	txid      string
+	lastValid uint64
+	sent      time.Time
+	lastCheck time.Time
+}
+
+func newSentTxid(txn *transactions.Transaction, sent time.Time) sentTxid {
+	txid := txn.ID().String()
+	lastValid := uint64(txn.LastValid)
+	return sentTxid{txid, lastValid, sent, sent}
+}
+
+type sentTxidHeap []sentTxid
+
+// Push is heap.Interface
+func (sth *sentTxidHeap) Push(x interface{}) {
+	st := x.(sentTxid)
+	*sth = append(*sth, st)
+}
+
+// Pop is heap.Interface
+func (sth *sentTxidHeap) Pop() interface{} {
+	a := *sth
+	al := len(a)
+	out := a[al-1]
+	a = a[:al-1]
+	*sth = a
+	return out
+}
+
+// Len is sort.Interface and heap.Interface
+func (sth *sentTxidHeap) Len() int {
+	return len(*sth)
+}
+
+// Less is sort.Interface and heap.Interface
+func (sth *sentTxidHeap) Less(i, j int) bool {
+	return (*sth)[i].lastCheck.Before((*sth)[j].lastCheck)
+}
+
+// Swap is sort.Interface and heap.Interface
+func (sth *sentTxidHeap) Swap(i, j int) {
+	t := (*sth)[i]
+	(*sth)[i] = (*sth)[j]
+	(*sth)[j] = t
 }
 
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
@@ -301,6 +359,20 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 	//			error = fundAccounts()
 	//  }
 
+	for pps.roundConfirmed == 0 {
+		status, err := ac.Status()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not get algod status, %s\n", err)
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		pps.roundConfirmed = status.LastRound
+	}
+
+	if pps.txidSent == nil {
+		pps.txidSent = make(map[string]sentTxid, 100)
+	}
+
 	cfg := pps.cfg
 	var runTime time.Duration
 	if cfg.RunTime > 0 {
@@ -315,10 +387,12 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 	restTime := cfg.RestTime
 	refreshTime := time.Now().Add(cfg.RefreshTime)
 
-	var nftThrottler *throttler
-	if pps.cfg.NftAsaPerSecond > 0 {
-		nftThrottler = newThrottler(20, float64(pps.cfg.NftAsaPerSecond))
-	}
+	/*
+		var nftThrottler *throttler
+		if pps.cfg.NftAsaPerSecond > 0 {
+			nftThrottler = newThrottler(20, float64(pps.cfg.NftAsaPerSecond))
+		}
+	*/
 
 	lastLog := time.Now()
 	nextLog := lastLog.Add(logPeriod)
@@ -330,8 +404,8 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 		}
 		startTime := time.Now()
 		stopTime := startTime.Add(runTime)
-
 		var totalSent, totalSucceeded, lastTotalSent uint64
+
 		for {
 			now := time.Now()
 			if now.After(stopTime) {
@@ -339,7 +413,7 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 			}
 			if now.After(nextLog) {
 				dt := now.Sub(lastLog)
-				fmt.Printf("%d sent, %0.2f/s (%d total)\n", totalSent-lastTotalSent, float64(totalSent-lastTotalSent)/dt.Seconds(), totalSent)
+				fmt.Printf("%d sent, %0.2f/s (%d total), %d broadcasted %d confirmed %d dropped\n", totalSent-lastTotalSent, float64(totalSent-lastTotalSent)/dt.Seconds(), totalSent, pps.broadcastedCount, pps.confirmedSentCount, pps.dropCount)
 				lastTotalSent = totalSent
 				for now.After(nextLog) {
 					nextLog = nextLog.Add(logPeriod)
@@ -357,8 +431,12 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "error sending nft transactions: %v\n", err)
 				}
-				nftThrottler.maybeSleep(int(sent))
+				//nftThrottler.maybeSleep(int(sent))
 				totalSent += sent
+				shouldSleep, nextRun := nextRunTime(startTime, now, float64(cfg.NftAsaPerSecond), totalSent)
+				if shouldSleep {
+					pps.idleTask(ac, nextRun)
+				}
 				continue
 			}
 
@@ -386,14 +464,19 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 				refreshTime = refreshTime.Add(cfg.RefreshTime)
 			}
 
-			throttleTransactionRate(startTime, cfg, totalSent)
+			//throttleTransactionRate(startTime, cfg, totalSent)
+			now = time.Now()
+			shouldSleep, nextRun := nextRunTime(startTime, now, float64(cfg.TxnPerSec), totalSent)
+			if shouldSleep {
+				pps.idleTask(ac, nextRun)
+			}
 		}
 
 		timeDelta := time.Now().Sub(startTime)
 		_, _ = fmt.Fprintf(os.Stdout, "Sent %d transactions (%d attempted) in %d seconds\n", totalSucceeded, totalSent, int(math.Round(timeDelta.Seconds())))
 		if cfg.RestTime > 0 {
 			_, _ = fmt.Fprintf(os.Stdout, "Pausing %d seconds before sending more transactions\n", int(math.Round(cfg.RestTime.Seconds())))
-			time.Sleep(restTime)
+			pps.idleTask(ac, time.Now().Add(restTime))
 		}
 	}
 }
@@ -506,6 +589,9 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 	}
 	sentCount++
 	_, err = client.BroadcastTransaction(stxn)
+	if err == nil {
+		pps.addSentTxid(&txn, time.Now())
+	}
 	return
 }
 
@@ -578,6 +664,8 @@ func (pps *WorkerState) sendFromTo(
 			_, sendErr = client.BroadcastTransaction(stxn)
 			if sendErr != nil {
 				fmt.Printf("Warning, cannot broadcast txn, %s\n", sendErr)
+			} else {
+				pps.addSentTxid(&txn, time.Now())
 			}
 		} else {
 			// Generate txn group
@@ -667,12 +755,18 @@ func (pps *WorkerState) sendFromTo(
 
 			sentCount++
 			sendErr = client.BroadcastTransactionGroup(stxGroup)
+			if sendErr == nil {
+				now := time.Now()
+				for _, txn := range txGroup {
+					pps.addSentTxid(&txn, now)
+				}
+			}
 		}
 
 		if sendErr != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "error sending Transaction, sleeping .5 seconds: %v\n", sendErr)
 			err = sendErr
-			time.Sleep(500 * time.Millisecond)
+			pps.idleTask(client, time.Now().Add(500*time.Millisecond))
 			return
 		}
 
@@ -819,6 +913,103 @@ func signTxn(signer string, txn transactions.Transaction, client libgoal.Client,
 	return
 }
 
+func (pps *WorkerState) addSentTxid(txn *transactions.Transaction, now time.Time) {
+	//heap.Push(&pps.txidSent, newSentTxid(txn, now))
+	ts := newSentTxid(txn, now)
+	pps.txidSent[ts.txid] = ts
+	pps.broadcastedCount++
+}
+
+func (pps *WorkerState) resolveTxid(txid string, now time.Time) {
+	_, hit := pps.txidSent[txid]
+	if !hit {
+		return
+	}
+	pps.confirmedSentCount++
+	delete(pps.txidSent, txid)
+}
+
+// idleTask checks status on sent txns, potentially other background bookkeepping
+func (pps *WorkerState) idleTask(client libgoal.Client, deadline time.Time) {
+	lastKnownRound := uint64(0)
+	for {
+		now := time.Now()
+		if now.After(deadline) {
+			return
+		}
+		if lastKnownRound <= pps.roundConfirmed {
+			status, err := client.Status()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error getting algod status, sleeping .5 seconds: %v\n", err)
+				limitSleep(deadline, 500*time.Millisecond)
+				continue
+			}
+			lastKnownRound = status.LastRound
+		}
+		if lastKnownRound > pps.roundConfirmed {
+			nextRound := pps.roundConfirmed + 1
+			block, err := client.BookkeepingBlock(nextRound)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error getting block %d, sleeping .5 seconds: %v\n", nextRound, err)
+				limitSleep(deadline, 500*time.Millisecond)
+				continue
+			}
+			now = time.Now()
+			for _, stxib := range block.Payset {
+				stxn, _, _ := block.DecodeSignedTxn(stxib)
+				txid := stxn.ID().String()
+				pps.resolveTxid(txid, now)
+			}
+
+			var expiredTxid []string
+			for txid, ts := range pps.txidSent {
+				if ts.lastValid < nextRound {
+					pps.dropCount++
+					expiredTxid = append(expiredTxid, txid)
+				}
+			}
+			for _, txid := range expiredTxid {
+				delete(pps.txidSent, txid)
+			}
+			pps.roundConfirmed = nextRound
+			continue
+		}
+		/*
+			if len(pps.txidSent) > 0 {
+				st := pps.txidSent[0]
+				status, err := client.PendingTransactionInformation(st.txid)
+				// TODO: some specific error means it is gone and will never be seen again and we should stop trying?
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "error getting txn %s status, sleeping .5 seconds: %v\n", st.txid, err)
+					limitSleep(deadline, 500*time.Millisecond)
+					continue
+				}
+				heap.Pop(&pps.txidSent)
+				if status.ConfirmedRound != 0 {
+					// done!
+					pps.confirmedSentCount++
+				} else {
+					// still pending
+					st.lastCheck = now
+					heap.Push(&pps.txidSent, st)
+				}
+				continue
+			}
+		*/
+		time.Sleep(deadline.Sub(now))
+	}
+}
+
+func limitSleep(deadline time.Time, dur time.Duration) {
+	now := time.Now()
+	if now.Add(dur).After(deadline) {
+		time.Sleep(deadline.Sub(now))
+	} else {
+		time.Sleep(dur)
+	}
+}
+
+/*
 type timeCount struct {
 	when  time.Time
 	count int
@@ -868,3 +1059,4 @@ func (t *throttler) maybeSleep(count int) {
 		t.iterm *= 0.95
 	}
 }
+*/

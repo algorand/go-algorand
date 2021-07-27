@@ -301,7 +301,7 @@ func (p *Peer) getAcceptedMessages() []uint64 {
 	return acceptedMessages
 }
 
-func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTranscationsSet bool) {
+func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.SignedTxGroup, sendWindow time.Duration, round basics.Round, bloomFilterSize int, log Logger) (selectedTxns []transactions.SignedTxGroup, selectedTxnIDs []transactions.Txid, partialTranscationsSet bool) {
 	// if peer is too far back, don't send it any transactions ( or if the peer is not interested in transactions )
 	if p.lastRound < round.SubSaturate(1) || p.requestedTransactionsModulator == 0 {
 		return nil, nil, false
@@ -354,7 +354,9 @@ func (p *Peer) selectPendingTransactions(pendingTransactions []transactions.Sign
 		effectiveBloomFilters = append(effectiveBloomFilters, filterIdx)
 	}
 
-	//removedTxn := 0
+	filteredCount := 0
+	modulatedOut := 0
+	alreadySent := 0
 	grpIdx := startIndex
 scanLoop:
 	for ; grpIdx < len(pendingTransactions); grpIdx++ {
@@ -363,6 +365,7 @@ scanLoop:
 		// check if the peer would be interested in these messages -
 		if p.requestedTransactionsModulator > 1 {
 			if txidToUint64(txID)%uint64(p.requestedTransactionsModulator) != uint64(p.requestedTransactionsOffset) {
+				modulatedOut++
 				continue
 			}
 		}
@@ -370,13 +373,14 @@ scanLoop:
 		// filter out transactions that we already previously sent.
 		if p.recentSentTransactions.contained(txID) {
 			// we already sent that transaction. no need to send again.
+			alreadySent++
 			continue
 		}
 
 		// check if the peer already received these messages from a different source other than us.
 		for _, filterIdx := range effectiveBloomFilters {
 			if p.recentIncomingBloomFilters[filterIdx].filter.test(txID) {
-				//removedTxn++
+				filteredCount++
 				continue scanLoop
 			}
 		}
@@ -425,7 +429,26 @@ scanLoop:
 		p.messageSeriesPendingTransactions = nil
 	}
 
-	//fmt.Printf("selectPendingTransactions : selected %d transactions, %d not needed and aborted after exceeding data length %d/%d more = %v\n", len(selectedTxnIDs), removedTxn, accumulatedSize, windowLengthBytes, hasMorePendingTransactions)
+	log.With("details", struct {
+		Pending   int
+		Modulated int
+		Redundant int
+		Filtered  int
+		Selected  int
+		Size      int
+		Window    int
+		HasMore   bool
+	}{
+		len(pendingTransactions),
+		modulatedOut,
+		alreadySent,
+		filteredCount,
+		len(selectedTxnIDs),
+		accumulatedSize,
+		windowLengthBytes,
+		hasMorePendingTransactions,
+	}).Info("selectPendingTransactions")
+	//("selectPendingTransactions : selected %d transactions, %d not needed and aborted after exceeding data length %d/%d more = %v\n", len(selectedTxnIDs), filteredCount, accumulatedSize, windowLengthBytes, hasMorePendingTransactions)
 
 	return selectedTxns, selectedTxnIDs, hasMorePendingTransactions
 }

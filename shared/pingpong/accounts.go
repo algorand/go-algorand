@@ -126,6 +126,21 @@ func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64
 	}
 }
 
+// float64(cfg.TxnPerSec) or float64(cfg.NftAsaPerSecond)
+func nextRunTime(startTime, now time.Time, targetTps float64, totalSent uint64) (shouldWait bool, nextRun time.Time) {
+	dt := now.Sub(startTime)
+	tps := float64(totalSent) / dt.Seconds()
+	if tps > targetTps {
+		sleepSec := float64(totalSent)/targetTps - dt.Seconds()
+		sleepTime := time.Duration(int64(math.Round(sleepSec*1000000))) * time.Microsecond
+		nextRun = now.Add(sleepTime)
+		shouldWait = true
+	} else {
+		shouldWait = false
+	}
+	return
+}
+
 // Prepare assets for asset transaction testing
 // Step 1) Create X assets for each of the participant accounts
 // Step 2) For each participant account, opt-in to assets of all other participant accounts
