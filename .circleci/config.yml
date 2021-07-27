@@ -3,6 +3,7 @@ version: 2.1
 orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
+  slack: circleci/slack@4.0
 
 workflows:
   version: 2
@@ -343,6 +344,9 @@ jobs:
       - checkout
       - prepare_go
       - generic_build
+      - slack/notify:
+          event: always
+          template: basic_success_1
 
   amd64_test:
     machine:
