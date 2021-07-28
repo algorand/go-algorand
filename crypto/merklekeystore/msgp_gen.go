@@ -800,11 +800,15 @@ func (z *Signer) MsgIsZero() bool {
 func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(1)
-	var zb0001Mask uint8 /* 2 bits */
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
 	if (*z).Root.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
+	}
+	if (*z).IsValid == false {
+		zb0001Len--
+		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -813,6 +817,11 @@ func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = (*z).Root.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "v"
+			o = append(o, 0xa1, 0x76)
+			o = msgp.AppendBool(o, (*z).IsValid)
 		}
 	}
 	return
@@ -845,6 +854,14 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			(*z).IsValid, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "IsValid")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -873,6 +890,12 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Root")
 					return
 				}
+			case "v":
+				(*z).IsValid, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "IsValid")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -893,11 +916,11 @@ func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Verifier) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Root.Msgsize()
+	s = 1 + 2 + (*z).Root.Msgsize() + 2 + msgp.BoolSize
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return ((*z).Root.MsgIsZero())
+	return ((*z).Root.MsgIsZero()) && ((*z).IsValid == false)
 }
