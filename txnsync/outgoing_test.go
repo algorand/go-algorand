@@ -80,11 +80,7 @@ func TestAsyncMessageSent(t *testing.T) {
 
 	err = asyncEncoder.asyncMessageSent(true, 1337)
 	a.Nil(err)
-	num := 0
-	for _ = range asyncEncoder.state.outgoingMessagesCallbackCh {
-		num++
-	}
-	a.Equal(1, num)
+	a.Equal(1, len(asyncEncoder.state.outgoingMessagesCallbackCh))
 }
 
 type mockAsyncNodeConnector struct {
@@ -145,7 +141,6 @@ func TestAsyncEncodeAndSendNonErr(t *testing.T) {
 	a.False(warnCalled)
 	a.True(sendPeerMessageCalled)
 	a.Nil(asyncEncoder.messageData.transactionGroups)
-	a.Nil(asyncEncoder.messageData.message)
 }
 
 // TestAsyncEncodeAndSendErr Tests response when encodeTransactionGroups returns an error
