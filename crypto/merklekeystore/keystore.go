@@ -57,6 +57,8 @@ type (
 
 		Proof        `codec:"prf"`
 		VerifyingKey crypto.VerifyingKey `codec:"vkey"`
+		index        uint64
+		round        uint64
 	}
 
 	// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
@@ -80,7 +82,7 @@ type (
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		Root    crypto.Digest `codec:"r"`
-		IsValid bool          `codec:"v"`
+		Divisor uint64        `codec:"d"`
 	}
 )
 
@@ -154,15 +156,9 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 func (m *Signer) GetVerifier() *Verifier {
 	return &Verifier{
 		Root:    m.Tree.Root(),
-		IsValid: true,
+		Divisor: m.EphemeralKeys.Divisor,
 	}
 }
-
-// how do we dilute the keys? in a way that makes sense?
-// in `oneTimeSig` they didn't really dilute keys, but only created what they needed for each round.
-// here we know we'll need the keys every 1K messages or so.
-// why not distribute the key to cover X rounds where there is at most one comp cert in that round?
-// i think that's okay.
 
 // Sign outputs a signature + proof for the signing key.
 func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
@@ -173,8 +169,8 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	if err != nil {
 		return Signature{}, err
 	}
-
-	proof, err := m.Tree.Prove([]uint64{round - m.OriginRound})
+	index := roundToIndex(m.OriginRound, round, m.EphemeralKeys.Divisor)
+	proof, err := m.Tree.Prove([]uint64{index})
 	if err != nil {
 		return Signature{}, err
 	}
@@ -273,11 +269,12 @@ func (v *Verifier) Verify(firstValid, round uint64, obj crypto.Hashable, sig Sig
 	if round < firstValid {
 		return errReceivedRoundIsBeforeFirst
 	}
+	pos := roundToIndex(firstValid, round, v.Divisor)
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
-		Round:        round,
+		Round:        indexToRound(firstValid, v.Divisor, pos),
 	}
-	isInTree := merklearray.Verify(v.Root, map[uint64]crypto.Digest{round - firstValid: crypto.HashObj(&ephkey)}, sig.Proof)
+	isInTree := merklearray.Verify(v.Root, map[uint64]crypto.Digest{pos: crypto.HashObj(&ephkey)}, sig.Proof)
 	if isInTree != nil {
 		return isInTree
 	}

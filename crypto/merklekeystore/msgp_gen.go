@@ -802,11 +802,11 @@ func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 3 bits */
-	if (*z).Root.MsgIsZero() {
+	if (*z).Divisor == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if (*z).IsValid == false {
+	if (*z).Root.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -814,14 +814,14 @@ func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "d"
+			o = append(o, 0xa1, 0x64)
+			o = msgp.AppendUint64(o, (*z).Divisor)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = (*z).Root.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "v"
-			o = append(o, 0xa1, 0x76)
-			o = msgp.AppendBool(o, (*z).IsValid)
 		}
 	}
 	return
@@ -855,9 +855,9 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).IsValid, bts, err = msgp.ReadBoolBytes(bts)
+			(*z).Divisor, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "IsValid")
+				err = msgp.WrapError(err, "struct-from-array", "Divisor")
 				return
 			}
 		}
@@ -890,10 +890,10 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Root")
 					return
 				}
-			case "v":
-				(*z).IsValid, bts, err = msgp.ReadBoolBytes(bts)
+			case "d":
+				(*z).Divisor, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "IsValid")
+					err = msgp.WrapError(err, "Divisor")
 					return
 				}
 			default:
@@ -916,11 +916,11 @@ func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Verifier) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Root.Msgsize() + 2 + msgp.BoolSize
+	s = 1 + 2 + (*z).Root.Msgsize() + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return ((*z).Root.MsgIsZero()) && ((*z).IsValid == false)
+	return ((*z).Root.MsgIsZero()) && ((*z).Divisor == 0)
 }
