@@ -165,6 +165,9 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 
 	// Fill the database with new participation keys
 	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstRound, lastRound, keyDilution)
+	if err != nil {
+		return
+	}
 	part = newPart.Participation
 	newPart.Close()
 	return part, partKeyPath, err
