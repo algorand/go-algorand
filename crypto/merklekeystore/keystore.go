@@ -60,6 +60,8 @@ type (
 	}
 
 	// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
+	// Signer will generate all keys in the range [A,Z] that are divisible by some divisor d.
+	// in case A equals zero then signer will generate all keys from (0,Z], i.e will not generate key for round zero.
 	Signer struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 		// these keys are the keys used to sign in a round.
@@ -108,7 +110,6 @@ func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 }
 
 // New Generates a merklekeystore.Signer
-// Note that the signer will have keys for the rounds  [firstValid, lastValid]
 func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
@@ -116,7 +117,9 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 	if divisor == 0 {
 		return nil, errDivisorIsZero
 	}
-
+	if firstValid == 0 {
+		firstValid++
+	}
 	numberOfKeys := roundToIndex(firstValid, lastValid, divisor) + 1
 	firstRound := indexToRound(firstValid, divisor, 0)
 
