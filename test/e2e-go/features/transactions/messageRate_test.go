@@ -18,6 +18,7 @@ package transactions
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -92,11 +93,23 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	a.NoError(err)
 	listeningURL := strings.Split(listeningURLRaw, "//")[1]
 
-	// seek to `bytesRead` bytes when reading the log file
-	bytesRead := 0
+	// // seek to `bytesRead` bytes when reading the log file
+	// bytesRead := 0
 
 	// store message rate for each of the txn rates
 	prevMsgRate := 0.0
+
+	errChan := make(chan error)
+	resetChan := make(chan bool)
+	msgRateChan := make(chan float64)
+	ctx, stopParsing := context.WithCancel(context.Background())
+	defer stopParsing()
+
+	// parseLog continuously monitors the log for txnsync messages
+	// resetChan is used to signal it to send results on msgRate chan
+	// and reset its internal counters
+	// errChan is used to propagate errors if any
+	go parseLog(ctx, logPath, listeningURL, errChan, msgRateChan, resetChan)
 
 	for _, txnRate := range txnRates {
 		startTime := time.Now()
@@ -116,38 +129,79 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 			throttleTransactionRate(startTime, txnRate, txnSentCount)
 		}
 
+		// wait for some time for the logs to get flushed
+		time.Sleep(2 * time.Second)
+		// fmt.Println("Sent reset")
+		// send reset on resetChan to signal the parseLog goroutine to send the msgRate and reset its counters
+		resetChan <- true
+
+		select {
+		case err := <-errChan:
+			a.Error(err)
+		case msgRate := <-msgRateChan:
+			aErrorMessage := fmt.Sprintf("TxSync message rate not monotonic for txn rate: %d", txnRate)
+			a.GreaterOrEqual(msgRate, prevMsgRate, aErrorMessage)
+			prevMsgRate = msgRate
+
+		}
+		// fmt.Println("Continuing")
+
 		// parse the log to find out message rate and bytes of the log file read
-		msgRate, newBytesRead, err := parseLog(logPath, bytesRead, listeningURL)
-		a.NoError(err)
-		aErrorMessage := fmt.Sprintf("TxSync message rate not monotonic for txn rate: %d", txnRate)
-		a.GreaterOrEqual(msgRate, prevMsgRate, aErrorMessage)
-		bytesRead += newBytesRead
-		prevMsgRate = msgRate
+		// msgRate, newBytesRead, err := parseLog(logPath, bytesRead, listeningURL)
+		// a.NoError(err)
+
+		// bytesRead += newBytesRead
+		// prevMsgRate = msgRate
 	}
 
 }
 
-func parseLog(logPath string, startByte int, filterAddress string) (float64, int, error) {
+func parseLog(ctx context.Context, logPath string, filterAddress string, errChan chan error, msgRateChan chan float64, resetChan chan bool) {
 	file, err := os.Open(logPath)
 	if err != nil {
-		return 0, 0, err
+		errChan <- err
+		return
 	}
 	defer file.Close()
 
-	// start reading log file from startByte
-	_, err = file.Seek(int64(startByte), 0)
-	if err != nil {
-		return 0, 0, err
-	}
+	// // start reading log file from startByte
+	// _, err = file.Seek(int64(0), 0)
+	// if err != nil {
+	// 	errChan <- err
+	// 	return
+	// }
 
 	messageCount := 0
-	bytesRead := 0
+	// bytesRead := 0
 	var firstTimestamp, lastTimestamp time.Time
 
 	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-resetChan:
+			msgRate := float64(messageCount) / (float64(lastTimestamp.Sub(firstTimestamp) / time.Second))
+			msgRateChan <- msgRate
+			messageCount = 0
+			firstTimestamp = time.Time{}
+			lastTimestamp = time.Time{}
+			continue
+		default:
+		}
+		scanned := scanner.Scan()
+		if !scanned {
+			if err := scanner.Err(); err != nil {
+				errChan <- err
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+			scanner = bufio.NewScanner(file)
+			continue
+		}
+
 		line := scanner.Text()
-		bytesRead += len(line) + 1
+		// bytesRead += len(line) + 1
 		// look for txnsync messages sent to `filterAddress`
 		if strings.Contains(line, "Outgoing Txsync") && strings.Contains(line, filterAddress) {
 			// fmt.Println(line)
@@ -162,7 +216,8 @@ func parseLog(logPath string, startByte int, filterAddress string) (float64, int
 			// record the timestamps of txnsync messages
 			lastTimestamp, err = time.Parse(time.RFC3339, eventTime)
 			if err != nil {
-				return 0, bytesRead, err
+				errChan <- err
+				return
 			}
 			if firstTimestamp.IsZero() {
 				firstTimestamp = lastTimestamp
@@ -170,9 +225,4 @@ func parseLog(logPath string, startByte int, filterAddress string) (float64, int
 			messageCount++
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return 0, bytesRead, err
-	}
-	msgRate := float64(messageCount) / (float64(lastTimestamp.Sub(firstTimestamp) / time.Second))
-	return msgRate, bytesRead, nil
 }
