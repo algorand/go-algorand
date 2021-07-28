@@ -7,5 +7,8 @@ jobs:
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
-      - name: golangci-lint
+      - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2
+        with:
+          # golangci_lint_flags: "--new --fix"
+          # while we can put config flags here, i suggest we use /.golangci.yml if possible to have it all in one place
