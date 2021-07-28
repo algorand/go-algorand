@@ -127,7 +127,8 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 	firstRound := indexToRound(firstValid, divisor, 0)
 
 	if numberOfKeys == 0 {
-		return &Signer{}, nil
+		// always outputs a valid signer that doesn't crash.
+		return &Signer{EphemeralKeys: EphemeralKeys{Divisor: divisor}}, nil
 	}
 
 	keys := make([]crypto.SignatureAlgorithm, numberOfKeys)
