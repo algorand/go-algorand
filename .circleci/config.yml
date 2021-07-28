@@ -339,7 +339,6 @@ jobs:
           export GOPATH="/home/circleci/go"
           scripts/travis/codegen_verification.sh
       - slack/notify:
-          context: slack-secrets
           event: always
           template: basic_success_1
 
@@ -352,7 +351,6 @@ jobs:
       - prepare_go
       - generic_build
       - slack/notify:
-          context: slack-secrets
           event: always
           template: basic_success_1
 
