@@ -190,25 +190,34 @@ func (z *CommittablePublicKey) MsgIsZero() bool {
 func (z *EphemeralKeys) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(2)
-	var zb0002Mask uint8 /* 3 bits */
-	if (*z).FirstRound == 0 {
+	zb0002Len := uint32(3)
+	var zb0002Mask uint8 /* 4 bits */
+	if (*z).Divisor == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
-	if len((*z).SignatureAlgorithms) == 0 {
+	if (*z).FirstRound == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x4
+	}
+	if len((*z).SignatureAlgorithms) == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x8
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
 	if zb0002Len != 0 {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "dv"
+			o = append(o, 0xa2, 0x64, 0x76)
+			o = msgp.AppendUint64(o, (*z).Divisor)
+		}
+		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
 			o = msgp.AppendUint64(o, (*z).FirstRound)
 		}
-		if (zb0002Mask & 0x4) == 0 { // if not empty
+		if (zb0002Mask & 0x8) == 0 { // if not empty
 			// string "sks"
 			o = append(o, 0xa3, 0x73, 0x6b, 0x73)
 			if (*z).SignatureAlgorithms == nil {
@@ -275,6 +284,14 @@ func (z *EphemeralKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0002 > 0 {
+			zb0002--
+			(*z).Divisor, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Divisor")
+				return
+			}
+		}
+		if zb0002 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0002)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -325,6 +342,12 @@ func (z *EphemeralKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "FirstRound")
 					return
 				}
+			case "dv":
+				(*z).Divisor, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Divisor")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -349,13 +372,13 @@ func (z *EphemeralKeys) Msgsize() (s int) {
 	for zb0001 := range (*z).SignatureAlgorithms {
 		s += (*z).SignatureAlgorithms[zb0001].Msgsize()
 	}
-	s += 4 + msgp.Uint64Size
+	s += 4 + msgp.Uint64Size + 3 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *EphemeralKeys) MsgIsZero() bool {
-	return (len((*z).SignatureAlgorithms) == 0) && ((*z).FirstRound == 0)
+	return (len((*z).SignatureAlgorithms) == 0) && ((*z).FirstRound == 0) && ((*z).Divisor == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler

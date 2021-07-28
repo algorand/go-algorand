@@ -194,7 +194,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	vrf := crypto.GenerateVRFSecrets()
 
 	// Generate a new key which signs the compact certificates
-	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), crypto.PlaceHolderType)
+	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), keyDilution, crypto.PlaceHolderType)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}
