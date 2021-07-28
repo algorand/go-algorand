@@ -339,6 +339,21 @@ func TestKeyDeletion(t *testing.T) {
 		a.NoError(signer.GetVerifier().Verify(1, i, genHashableForTest(), sig))
 	}
 
+	signer, err = New(1, 60, 11, crypto.PlaceHolderType)
+	a.NoError(err)
+
+	signer.Trim(50)
+	_, err = signer.Sign(genHashableForTest(), 49)
+	a.Error(err)
+
+	for i := uint64(50); i <= 60; i++ {
+		sig, err := signer.Sign(genHashableForTest(), i)
+		if i%11 != 0 {
+			a.Error(err)
+			continue
+		}
+		a.NoError(signer.GetVerifier().Verify(1, i, genHashableForTest(), sig))
+	}
 }
 
 func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Hashable, Signature) {
