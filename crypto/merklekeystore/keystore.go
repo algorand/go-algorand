@@ -249,8 +249,9 @@ func (m *Signer) copy() *Signer {
 			FirstRound:          m.EphemeralKeys.FirstRound,
 			Divisor:             m.EphemeralKeys.Divisor,
 		},
-		Tree: m.Tree,
-		mu:   deadlock.RWMutex{},
+		Tree:        m.Tree,
+		mu:          deadlock.RWMutex{},
+		OriginRound: m.OriginRound,
 	}
 
 	copy(signerCopy.EphemeralKeys.SignatureAlgorithms, m.EphemeralKeys.SignatureAlgorithms)
