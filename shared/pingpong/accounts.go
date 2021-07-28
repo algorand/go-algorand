@@ -116,13 +116,12 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 }
 
 // throttle transaction rate
+// If we're above the curve, wait until we hit it before sending more.
 func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64) {
-	localTimeDelta := time.Now().Sub(startTime)
-	currentTps := float64(totalSent) / localTimeDelta.Seconds()
-	if currentTps > float64(cfg.TxnPerSec) {
-		sleepSec := float64(totalSent)/float64(cfg.TxnPerSec) - localTimeDelta.Seconds()
-		sleepTime := time.Duration(int64(math.Round(sleepSec*1000))) * time.Millisecond
-		time.Sleep(sleepTime)
+	now := time.Now()
+	shouldWait, nextRun := nextRunTime(startTime, now, float64(cfg.TxnPerSec), totalSent)
+	if shouldWait {
+		time.Sleep(nextRun.Sub(now))
 	}
 }
 

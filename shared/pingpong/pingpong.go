@@ -17,7 +17,6 @@
 package pingpong
 
 import (
-	//"container/heap"
 	"context"
 	"fmt"
 	"math"
@@ -50,7 +49,6 @@ type WorkerState struct {
 	localNftIndex uint64
 	nftHolders    map[string]int
 
-	//txidSent sentTxidHeap
 	txidSent map[string]sentTxid
 
 	broadcastedCount   int
@@ -71,41 +69,6 @@ func newSentTxid(txn *transactions.Transaction, sent time.Time) sentTxid {
 	txid := txn.ID().String()
 	lastValid := uint64(txn.LastValid)
 	return sentTxid{txid, lastValid, sent, sent}
-}
-
-type sentTxidHeap []sentTxid
-
-// Push is heap.Interface
-func (sth *sentTxidHeap) Push(x interface{}) {
-	st := x.(sentTxid)
-	*sth = append(*sth, st)
-}
-
-// Pop is heap.Interface
-func (sth *sentTxidHeap) Pop() interface{} {
-	a := *sth
-	al := len(a)
-	out := a[al-1]
-	a = a[:al-1]
-	*sth = a
-	return out
-}
-
-// Len is sort.Interface and heap.Interface
-func (sth *sentTxidHeap) Len() int {
-	return len(*sth)
-}
-
-// Less is sort.Interface and heap.Interface
-func (sth *sentTxidHeap) Less(i, j int) bool {
-	return (*sth)[i].lastCheck.Before((*sth)[j].lastCheck)
-}
-
-// Swap is sort.Interface and heap.Interface
-func (sth *sentTxidHeap) Swap(i, j int) {
-	t := (*sth)[i]
-	(*sth)[i] = (*sth)[j]
-	(*sth)[j] = t
 }
 
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
@@ -387,13 +350,6 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 	restTime := cfg.RestTime
 	refreshTime := time.Now().Add(cfg.RefreshTime)
 
-	/*
-		var nftThrottler *throttler
-		if pps.cfg.NftAsaPerSecond > 0 {
-			nftThrottler = newThrottler(20, float64(pps.cfg.NftAsaPerSecond))
-		}
-	*/
-
 	lastLog := time.Now()
 	nextLog := lastLog.Add(logPeriod)
 
@@ -464,7 +420,6 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 				refreshTime = refreshTime.Add(cfg.RefreshTime)
 			}
 
-			//throttleTransactionRate(startTime, cfg, totalSent)
 			now = time.Now()
 			shouldSleep, nextRun := nextRunTime(startTime, now, float64(cfg.TxnPerSec), totalSent)
 			if shouldSleep {
@@ -974,28 +929,6 @@ func (pps *WorkerState) idleTask(client libgoal.Client, deadline time.Time) {
 			pps.roundConfirmed = nextRound
 			continue
 		}
-		/*
-			if len(pps.txidSent) > 0 {
-				st := pps.txidSent[0]
-				status, err := client.PendingTransactionInformation(st.txid)
-				// TODO: some specific error means it is gone and will never be seen again and we should stop trying?
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "error getting txn %s status, sleeping .5 seconds: %v\n", st.txid, err)
-					limitSleep(deadline, 500*time.Millisecond)
-					continue
-				}
-				heap.Pop(&pps.txidSent)
-				if status.ConfirmedRound != 0 {
-					// done!
-					pps.confirmedSentCount++
-				} else {
-					// still pending
-					st.lastCheck = now
-					heap.Push(&pps.txidSent, st)
-				}
-				continue
-			}
-		*/
 		time.Sleep(deadline.Sub(now))
 	}
 }
@@ -1008,55 +941,3 @@ func limitSleep(deadline time.Time, dur time.Duration) {
 		time.Sleep(dur)
 	}
 }
-
-/*
-type timeCount struct {
-	when  time.Time
-	count int
-}
-
-type throttler struct {
-	times []timeCount
-
-	next int
-
-	// target x per-second
-	xps float64
-
-	// rough proportional + integral control
-	iterm float64
-}
-
-func newThrottler(windowSize int, targetPerSecond float64) *throttler {
-	return &throttler{times: make([]timeCount, windowSize), xps: targetPerSecond, iterm: 0.0}
-}
-
-func (t *throttler) maybeSleep(count int) {
-	now := time.Now()
-	t.times[t.next].when = now
-	t.times[t.next].count = count
-	nn := (t.next + 1) % len(t.times)
-	t.next = nn
-	if t.times[nn].when.IsZero() {
-		return
-	}
-	dt := now.Sub(t.times[nn].when)
-	countsum := 0
-	for i, tc := range t.times {
-		if i != nn {
-			countsum += tc.count
-		}
-	}
-	rate := float64(countsum) / dt.Seconds()
-	if rate > t.xps {
-		// rate too high, slow down
-		desiredSeconds := float64(countsum) / t.xps
-		extraSeconds := desiredSeconds - dt.Seconds()
-		t.iterm += 0.1 * extraSeconds / float64(len(t.times))
-		time.Sleep(time.Duration(int64(1000000000.0 * (extraSeconds + t.iterm) / float64(len(t.times)))))
-
-	} else {
-		t.iterm *= 0.95
-	}
-}
-*/
