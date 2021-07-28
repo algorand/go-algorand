@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -67,14 +68,15 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	dledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(b, err)
 
-	l := ledger
+	l := dledger
 
 	cfg.TxPoolSize = 20000
 	cfg.EnableProcessBlockStats = false
-	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
+	specledger := ledger.MakeSpeculativeLedger(l.Ledger)
+	tp := pools.MakeTransactionPool(specledger, cfg, logging.Base())
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N/numUsers; i++ {
 		for u := 0; u < numUsers; u++ {

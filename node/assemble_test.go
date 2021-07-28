@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -82,10 +83,10 @@ func BenchmarkAssembleBlock(b *testing.B) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := data.LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	dledger, err := data.LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(b, err)
 
-	l := ledger
+	l := dledger
 	next := l.LastRound()
 	if err != nil {
 		b.Errorf("could not make proposals at round %d: could not read block from ledger: %v", next, err)
@@ -98,7 +99,8 @@ func BenchmarkAssembleBlock(b *testing.B) {
 		cfg := config.GetDefaultLocal()
 		cfg.TxPoolSize = txPoolSize
 		cfg.EnableAssembleStats = false
-		tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
+		specledger := ledger.MakeSpeculativeLedger(l.Ledger)
+		tp := pools.MakeTransactionPool(specledger, cfg, logging.Base())
 		errcount := 0
 		okcount := 0
 		var worstTxID transactions.Txid
@@ -209,21 +211,22 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := data.LoadLedger(log, "ledgerName", inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	dledger, err := data.LoadLedger(log, "ledgerName", inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
 
-	l := ledger
+	l := dledger
 	const txPoolSize = 6000
 	cfg = config.GetDefaultLocal()
 	cfg.TxPoolSize = txPoolSize
 	cfg.EnableAssembleStats = false
-	tp := pools.MakeTransactionPool(l.Ledger, cfg, log)
+	specledger := ledger.MakeSpeculativeLedger(l.Ledger)
+	tp := pools.MakeTransactionPool(specledger, cfg, log)
 
 	next := l.NextRound()
 	deadline := time.Now().Add(time.Second)
 	block, err := tp.AssembleBlock(next, deadline)
 	require.NoError(t, err)
-	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
+	require.NoError(t, dledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
 
 	expectingLog = true
 
@@ -231,7 +234,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	deadline = time.Now().Add(time.Second)
 	block, err = tp.AssembleBlock(next, deadline)
 	require.NoError(t, err)
-	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
+	require.NoError(t, dledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
 
 	require.False(t, expectingLog)
 }
