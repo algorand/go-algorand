@@ -40,7 +40,7 @@ func TestMessageRateChangesWithTxnRate(t *testing.T) {
 	if testing.Short() {
 		txnRates = []uint{20, 40}
 	}
-	testMessageRateChangesWithTxnRate(t, filepath.Join("nettemplates", "TwoNodes50Each.json"), txnRates)
+	testMessageRateChangesWithTxnRate(t, filepath.Join("nettemplates", "OneNodeTwoRelays.json"), txnRates)
 }
 
 func throttleTransactionRate(startTime time.Time, txnRate uint, sentSoFar uint) {
@@ -59,7 +59,8 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetupNoStart(t, templatePath)
-	configDir := fixture.PrimaryDataDir()
+	configDir, err := fixture.GetNodeDir("Node")
+	a.NoError(err)
 	cfg, err := config.LoadConfigFromDisk(configDir)
 	a.NoError(err)
 	cfg.EnableVerbosedTransactionSyncLogging = true
@@ -68,36 +69,28 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 
 	defer fixture.Shutdown()
 
-	pingClient := fixture.LibGoalClient
-	pingAccountList, err := fixture.GetWalletsSortedByBalance()
-	a.NoError(err, "fixture should be able to get wallets sorted by balance")
-	pingAccount := pingAccountList[0].Address
-
-	pongClient := fixture.GetLibGoalClientForNamedNode("Node")
-	pongAccounts, err := fixture.GetNodeWalletsSortedByBalance(pongClient.DataDir())
+	client := fixture.GetLibGoalClientForNamedNode("Node")
+	accountsList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
 	a.NoError(err)
-	var pongAccount string
-	for _, acct := range pongAccounts {
-		if acct.Address == pingAccount {
-			continue
-		}
-		// we found an account.
-		pongAccount = acct.Address
-		break
-	}
-
-	a.NotEqual(pingAccount, pongAccount, "accounts under study should be different")
+	account := accountsList[0].Address
 
 	minTxnFee, minAcctBalance, err := fixture.CurrentMinFeeAndBalance()
 	a.NoError(err)
 
 	transactionFee := minTxnFee + 5
-	amountPingSendsPong := minAcctBalance * 3 / 2
+	amount := minAcctBalance * 3 / 2
 
 	// build the path for the primary node's log file
-	var logPath strings.Builder
-	logPath.WriteString(fixture.PrimaryDataDir())
-	logPath.WriteString("/node.log")
+	nodeDataDir, err := fixture.GetNodeDir("Node")
+	a.NoError(err)
+	logPath := filepath.Join(nodeDataDir, "node.log")
+
+	// Get the relay's gossip port
+	r1, err := fixture.GetNodeController("Relay1")
+	a.NoError(err)
+	listeningURLRaw, err := r1.GetListeningAddress()
+	a.NoError(err)
+	listeningURL := strings.Split(listeningURLRaw, "//")[1]
 
 	// seek to `bytesRead` bytes when reading the log file
 	bytesRead := 0
@@ -116,15 +109,15 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 				break
 			}
 
-			_, err := pingClient.SendPaymentFromUnencryptedWallet(pingAccount, pongAccount, transactionFee, amountPingSendsPong, GenerateRandomBytes(8))
-			a.NoError(err, "fixture should be able to send money (ping -> pong)")
+			_, err := client.SendPaymentFromUnencryptedWallet(account, account, transactionFee, amount, GenerateRandomBytes(8))
+			a.NoError(err, "fixture should be able to send money")
 			txnSentCount++
 
 			throttleTransactionRate(startTime, txnRate, txnSentCount)
 		}
 
 		// parse the log to find out message rate and bytes of the log file read
-		msgRate, newBytesRead, err := parseLog(logPath.String(), bytesRead)
+		msgRate, newBytesRead, err := parseLog(logPath, bytesRead, listeningURL)
 		a.NoError(err)
 		aErrorMessage := fmt.Sprintf("TxSync message rate not monotonic for txn rate: %d", txnRate)
 		a.GreaterOrEqual(msgRate, prevMsgRate, aErrorMessage)
@@ -134,7 +127,7 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 
 }
 
-func parseLog(logPath string, startByte int) (float64, int, error) {
+func parseLog(logPath string, startByte int, filterAddress string) (float64, int, error) {
 	file, err := os.Open(logPath)
 	if err != nil {
 		return 0, 0, err
@@ -154,12 +147,18 @@ func parseLog(logPath string, startByte int) (float64, int, error) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		bytesRead += len(line)
-		// look for txnsync messages
-		if strings.Contains(line, "Outgoing Txsync") {
+		bytesRead += len(line) + 1
+		// look for txnsync messages sent to `filterAddress`
+		if strings.Contains(line, "Outgoing Txsync") && strings.Contains(line, filterAddress) {
+			// fmt.Println(line)
 			var logEvent map[string]interface{}
 			json.Unmarshal([]byte(line), &logEvent)
 			eventTime := fmt.Sprintf("%v", logEvent["time"])
+			message := fmt.Sprintf("%v", logEvent["msg"])
+			// skip lines containing empty bloom filter
+			if strings.Contains(message, "bloom 0") {
+				continue
+			}
 			// record the timestamps of txnsync messages
 			lastTimestamp, err = time.Parse(time.RFC3339, eventTime)
 			if err != nil {
