@@ -9,10 +9,10 @@ workflows:
   version: 2
   build_pr:
     jobs:
-      - codegen_verification
+      - codegen_verification:
+          context: slack-secrets
       - amd64_build:
-          context:
-            - slack-secrets
+          context: slack-secrets
       - amd64_test:
           requires:
             - amd64_build
@@ -337,6 +337,9 @@ jobs:
           export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
           export GOPATH="/home/circleci/go"
           scripts/travis/codegen_verification.sh
+      - slack/notify:
+          event: always
+          template: basic_success_1
 
   amd64_build:
     machine:
