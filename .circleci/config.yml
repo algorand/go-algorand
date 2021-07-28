@@ -3,19 +3,12 @@ version: 2.1
 orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
-  slack: circleci/slack@4.0
+  slack: circleci/slack@4.4.2
 
 workflows:
   version: 2
   build_pr:
     jobs:
-      - slack/notify:
-          context: slack-secrets
-          event: always
-          template: basic_success_1
-          filters:
-            branches:
-              only: /pull\/[0-9]+/
       - codegen_verification:
           context: slack-secrets
       - amd64_build:
@@ -56,7 +49,8 @@ workflows:
           filters:
             branches:
               only: "rel/nightly"
-      - arm64_build
+      - arm64_build:
+          context: slack-secrets
       - arm64_test:
           requires:
             - arm64_build
