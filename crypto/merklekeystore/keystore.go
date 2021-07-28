@@ -170,15 +170,27 @@ var errReceivedRoundIsBeforeFirst = errors.New("round translated to be prior to 
 var errOutOfBounds = errors.New("round translated to be after last key position")
 
 func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
-	if round < m.EphemeralKeys.FirstRound {
+	if m.isRoundPriorToFirstRound(round) {
 		return 0, errReceivedRoundIsBeforeFirst
 	}
 
-	pos := round - m.EphemeralKeys.FirstRound
-	if pos >= uint64(len(m.EphemeralKeys.SignatureAlgorithms)) {
+	pos := m.calculatePosition(round)
+	if m.isPositionOutOfBound(pos) {
 		return 0, errOutOfBounds
 	}
 	return pos, nil
+}
+
+func (m *Signer) calculatePosition(round uint64) uint64 {
+	return round - m.EphemeralKeys.FirstRound
+}
+
+func (m *Signer) isPositionOutOfBound(pos uint64) bool {
+	return pos >= uint64(len(m.EphemeralKeys.SignatureAlgorithms))
+}
+
+func (m *Signer) isRoundPriorToFirstRound(round uint64) bool {
+	return round < m.EphemeralKeys.FirstRound
 }
 
 // Trim shortness deletes keys that existed before a specific round,
@@ -187,20 +199,22 @@ func (m *Signer) Trim(before uint64) *Signer {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	pos, err := m.getKeyPosition(before)
-	switch err {
-	case errReceivedRoundIsBeforeFirst:
-		cpy := m.copy()
-		return cpy
-	case errOutOfBounds:
+	if m.isRoundPriorToFirstRound(before) {
+		return m.copy()
+	}
+
+	pos := m.calculatePosition(before)
+	if pos == 0 {
+		return m.copy()
+	}
+
+	if m.isPositionOutOfBound(pos) {
 		m.dropKeys(len(m.EphemeralKeys.SignatureAlgorithms))
-	default:
-		if pos == 0 {
-			return m.copy()
-		}
+	} else {
 		m.dropKeys(int(pos))
 	}
-	m.EphemeralKeys.FirstRound = uint64(before)
+
+	m.EphemeralKeys.FirstRound = before
 	cpy := m.copy()
 
 	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
@@ -229,9 +243,6 @@ func (m *Signer) copy() *Signer {
 }
 
 func (m *Signer) dropKeys(upTo int) {
-	if l := len(m.EphemeralKeys.SignatureAlgorithms); l < upTo {
-		upTo = l
-	}
 	for i := 0; i < upTo; i++ {
 		// zero the keys.
 		m.EphemeralKeys.SignatureAlgorithms[i] = crypto.SignatureAlgorithm{}
