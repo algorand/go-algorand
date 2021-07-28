@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
+	pseudorand "math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1294,3 +1295,161 @@ int 32
 &&
 if_end1:
 `
+
+func BenchmarkAssetFullBlocks(b *testing.B) {
+	// disable deadlock checking code
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
+
+	dbTempDir, err := ioutil.TempDir("", "testdir"+b.Name())
+	require.NoError(b, err)
+	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
+	dbPrefix := filepath.Join(dbTempDir, dbName)
+	defer os.RemoveAll(dbTempDir)
+
+	genesisInitState := getInitState()
+
+	// Use future protocol
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{}
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	genesisInitState.GenesisHash = crypto.Digest{1}
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
+
+	numAssets := 10000
+	numAccountsWithAssets := 10000
+	numAccounts := 100000
+
+	allAddresses := make([]basics.Address, numAccounts)
+	for i := 0; i < numAccounts; i++ {
+		addr := randomAddress()
+		allAddresses[i] = addr
+		genesisInitState.Accounts[addr] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+	}
+
+	i := 0
+	lastAssetId := 1
+	for addr, ad := range genesisInitState.Accounts {
+		ad.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, numAssets)
+		ad.Assets = make(map[basics.AssetIndex]basics.AssetHolding, numAssets)
+		for j := lastAssetId; j < lastAssetId+numAssets; j++ {
+			ad.AssetParams[basics.AssetIndex(j)] = basics.AssetParams{
+				Total:     9999999,
+				AssetName: fmt.Sprintf("unit-%d", j),
+			}
+			ad.Assets[basics.AssetIndex(j)] = basics.AssetHolding{Amount: 9999999}
+			genesisInitState.Accounts[addr] = ad
+		}
+		lastAssetId += numAssets
+		i++
+		if i >= numAccountsWithAssets {
+			break
+		}
+	}
+
+	// open first ledger
+	const inMem = false // use persistent storage
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	require.NoError(b, err)
+
+	// open second ledger
+	dbName = fmt.Sprintf("%s.%d.2", b.Name(), crypto.RandUint64())
+	dbPrefix = filepath.Join(dbTempDir, dbName)
+	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	require.NoError(b, err)
+
+	blk := genesisInitState.Block
+
+	numBlocks := 500
+	cert := agreement.Certificate{}
+	var blocks []bookkeeping.Block
+	var txPerBlock int
+	for i := 0; i < numBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.BlockHeader.GenesisID = "x"
+
+		// If this is the zeroth block, add a blank one to both ledgers
+		if i == 0 {
+			err = l0.AddBlock(blk, cert)
+			require.NoError(b, err)
+			err = l1.AddBlock(blk, cert)
+			require.NoError(b, err)
+			continue
+		}
+
+		// Construct evaluator for next block
+		prev, err := l0.BlockHdr(basics.Round(i))
+		require.NoError(b, err)
+		newBlk := bookkeeping.MakeBlock(prev)
+		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000)
+		require.NoError(b, err)
+
+		// build a payset
+		var j int
+		for {
+			j++
+			sender := allAddresses[pseudorand.Intn(numAccounts)]
+			aidx := pseudorand.Intn(lastAssetId)
+			// make a transaction of the appropriate type
+			tx := transactions.Transaction{
+				Type: protocol.AssetTransferTx,
+				Header: transactions.Header{
+					FirstValid: basics.Round(i),
+					LastValid:  basics.Round(i + 1000),
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					Sender:     sender,
+				},
+				AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+					XferAsset:   basics.AssetIndex(aidx),
+					AssetAmount: 0,
+				},
+			}
+
+			tx.Note = []byte(fmt.Sprintf("%d,%d", i, j))
+			tx.GenesisHash = crypto.Digest{1}
+
+			// add tx to block
+			var stxn transactions.SignedTxn
+			stxn.Txn = tx
+			stxn.Sig = crypto.Signature{1}
+			err = eval.Transaction(stxn, transactions.ApplyData{})
+
+			// check if block is full
+			if err == ErrNoSpace {
+				txPerBlock = len(eval.block.Payset)
+				break
+			} else {
+				require.NoError(b, err)
+			}
+		}
+
+		lvb, err := eval.GenerateBlock()
+		require.NoError(b, err)
+
+		// For all other blocks, add just to the first ledger, and stash
+		// away to be replayed in the second ledger while running timer
+		err = l0.AddBlock(lvb.blk, cert)
+		require.NoError(b, err)
+
+		blocks = append(blocks, lvb.blk)
+	}
+
+	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)
+
+	// eval + add all the (valid) blocks to the second ledger, measuring it this time
+	vc := verify.GetMockedCache(true)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, blk := range blocks {
+			_, err = eval(context.Background(), l1, blk, true, vc, nil)
+			require.NoError(b, err)
+			err = l1.AddBlock(blk, cert)
+			require.NoError(b, err)
+		}
+	}
+}
