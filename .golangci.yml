@@ -8,12 +8,13 @@ linters:
     - misspell
     - govet
     - ineffassign
+    - staticcheck
+    - typecheck
 
   disable:
     - deadcode
     - errcheck
     - gosimple
-    - staticcheck
     - structcheck
     - unused
     - varcheck
@@ -23,7 +24,7 @@ linters-settings:
 #    check-shadowing: true
 
 issues:
-  # don't use default exclude rules listed in `golangci-lint run --help`
+  # Disable default exclude rules listed in `golangci-lint run --help` (selectively re-enable some below)
   exclude-use-default: false
 
   # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
@@ -41,3 +42,13 @@ issues:
     - linters:
         - golint
       text: "exported method (.*).Unwrap` should have comment or be unexported"
+
+    # Enable some golangci-lint default exception rules:
+    # "EXC0001 errcheck: Almost all programs ignore errors on these functions and in most cases it's ok"
+    - linters:
+        - errcheck
+      text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
+    # "EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore"
+    - linters:
+        - staticcheck
+      text: ineffective break statement. Did you mean to break out of the outer loop
