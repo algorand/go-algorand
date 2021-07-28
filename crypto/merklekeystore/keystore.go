@@ -34,6 +34,7 @@ type (
 		SignatureAlgorithms []crypto.SignatureAlgorithm `codec:"sks,allocbound=-"`
 		// indicates the round that matches SignatureAlgorithms[0].
 		FirstRound uint64 `codec:"rnd"`
+		Divisor    uint64 `codec:"dv"`
 	}
 
 	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
@@ -83,6 +84,9 @@ type (
 var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
 var errReceivedRoundIsBeforeFirst = errors.New("round translated to be prior to first key position")
 var errOutOfBounds = errors.New("round translated to be after last key position")
+var errNonExistantKey = errors.New("key doesn't exist")
+var errDivisorIsZero = errors.New("received zero Divisor")
+var errCannotGenerateKeys = errors.New("first and last valid rounds don't have big enough gap to generate keys")
 
 // ToBeHashed implementation means CommittablePublicKey is crypto.Hashable.
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
@@ -98,25 +102,36 @@ func (d *EphemeralKeys) Length() uint64 {
 func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 	ephPK := CommittablePublicKey{
 		VerifyingKey: d.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
-		Round:        d.FirstRound + pos,
+		Round:        indexToRound(d.FirstRound, d.Divisor, pos),
 	}
 	return crypto.HashObj(&ephPK), nil
 }
 
 // New Generates a merklekeystore.Signer
 // Note that the signer will have keys for the rounds  [firstValid, lastValid]
-func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
+func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
 	}
+	if divisor == 0 {
+		return nil, errDivisorIsZero
+	}
 
-	keys := make([]crypto.SignatureAlgorithm, lastValid-firstValid+1)
+	numberOfKeys := roundToIndex(firstValid, lastValid, divisor) + 1
+	firstRound := indexToRound(firstValid, divisor, 0)
+
+	if numberOfKeys == 0 {
+		return nil, errCannotGenerateKeys
+	}
+
+	keys := make([]crypto.SignatureAlgorithm, numberOfKeys)
 	for i := range keys {
 		keys[i] = *crypto.NewSigner(sigAlgoType)
 	}
 	ephKeys := EphemeralKeys{
 		SignatureAlgorithms: keys,
-		FirstRound:          firstValid,
+		FirstRound:          firstRound,
+		Divisor:             divisor,
 	}
 	tree, err := merklearray.Build(&ephKeys)
 	if err != nil {
@@ -127,7 +142,7 @@ func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType) (*Signe
 		EphemeralKeys: ephKeys,
 		Tree:          *tree,
 		mu:            deadlock.RWMutex{},
-		OriginRound:   firstValid,
+		OriginRound:   firstRound,
 	}, nil
 }
 
@@ -168,19 +183,18 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 }
 
 func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
-	if m.isRoundPriorToFirstRound(round) {
+	if round%m.EphemeralKeys.Divisor != 0 {
+		return 0, errNonExistantKey
+	}
+	if round < m.OriginRound {
 		return 0, errReceivedRoundIsBeforeFirst
 	}
-
-	pos := m.calculatePosition(round)
-	if m.isPositionOutOfBound(pos) {
+	pos := roundToIndex(m.EphemeralKeys.FirstRound, round, m.EphemeralKeys.Divisor)
+	if pos >= uint64(len(m.EphemeralKeys.SignatureAlgorithms)) {
 		return 0, errOutOfBounds
 	}
-	return pos, nil
-}
 
-func (m *Signer) calculatePosition(round uint64) uint64 {
-	return round - m.EphemeralKeys.FirstRound
+	return pos, nil
 }
 
 func (m *Signer) isPositionOutOfBound(pos uint64) bool {
@@ -201,7 +215,7 @@ func (m *Signer) Trim(before uint64) *Signer {
 		return m.copy()
 	}
 
-	pos := m.calculatePosition(before)
+	pos := roundToIndex(m.OriginRound, before, m.EphemeralKeys.Divisor)
 	if pos == 0 {
 		return m.copy()
 	}
@@ -211,8 +225,8 @@ func (m *Signer) Trim(before uint64) *Signer {
 	} else {
 		m.dropKeys(int(pos))
 	}
-
-	m.EphemeralKeys.FirstRound = before
+	rnd := indexToRound(m.OriginRound, m.EphemeralKeys.Divisor, pos)
+	m.EphemeralKeys.FirstRound = rnd
 	cpy := m.copy()
 
 	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
@@ -231,6 +245,7 @@ func (m *Signer) copy() *Signer {
 			_struct:             struct{}{},
 			SignatureAlgorithms: make([]crypto.SignatureAlgorithm, len(m.EphemeralKeys.SignatureAlgorithms)),
 			FirstRound:          m.EphemeralKeys.FirstRound,
+			Divisor:             m.EphemeralKeys.Divisor,
 		},
 		Tree: m.Tree,
 		mu:   deadlock.RWMutex{},
