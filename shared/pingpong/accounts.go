@@ -45,7 +45,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*p
 	var richestAccount string
 	var richestBalance uint64
 
-	addresses, err := ac.ListAddresses(wallet)
+	addresses, err := []string{}, nil// ac.ListAddresses(wallet)
 
 	if err != nil {
 		return nil, PpConfig{}, err
