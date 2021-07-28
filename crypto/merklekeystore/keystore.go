@@ -17,7 +17,7 @@
 package merklekeystore
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
@@ -100,7 +100,7 @@ func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 	return crypto.HashObj(&ephPK), nil
 }
 
-var errStartBiggerThanEndRound = fmt.Errorf("cannot create merkleKeyStore because end round is smaller then start round")
+var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
 
 // New Generates a merklekeystore.Signer
 // Note that the signer will have keys for the rounds  [firstValid, lastValid]
@@ -166,8 +166,8 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	}, nil
 }
 
-var errReceivedRoundIsBeforeFirst = fmt.Errorf("round translated to be prior to first key position")
-var errOutOfBounds = fmt.Errorf("round translated to be after last key position")
+var errReceivedRoundIsBeforeFirst = errors.New("round translated to be prior to first key position")
+var errOutOfBounds = errors.New("round translated to be after last key position")
 
 func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 	if round < m.EphemeralKeys.FirstRound {
