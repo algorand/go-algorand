@@ -9,6 +9,13 @@ workflows:
   version: 2
   build_pr:
     jobs:
+      - slack/notify:
+          context: slack-secrets
+          event: always
+          template: basic_success_1
+          filters:
+            branches:
+              only: /pull\/[0-9]+/
       - codegen_verification:
           context: slack-secrets
       - amd64_build:
@@ -338,6 +345,7 @@ jobs:
           export GOPATH="/home/circleci/go"
           scripts/travis/codegen_verification.sh
       - slack/notify:
+          context: slack-secrets
           event: always
           template: basic_success_1
 
@@ -350,6 +358,7 @@ jobs:
       - prepare_go
       - generic_build
       - slack/notify:
+          context: slack-secrets
           event: always
           template: basic_success_1
 
