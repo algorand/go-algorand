@@ -20,17 +20,15 @@ import (
 	"bufio"
 	"encoding/base64"
 	"fmt"
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/crypto/passphrase"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
@@ -40,6 +38,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
+
+	"github.com/spf13/cobra"
 )
 
 var (
