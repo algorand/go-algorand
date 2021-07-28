@@ -325,7 +325,7 @@ func TestKeySliceAfterSignerTrim(t *testing.T) {
 
 func TestKeyDeletion(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 60, 1, crypto.PlaceHolderType)
+	signer, err := New(1, 60, 1, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	signer.Trim(50)
@@ -336,7 +336,7 @@ func TestKeyDeletion(t *testing.T) {
 		sig, err := signer.Sign(genHashableForTest(), i)
 		a.NoError(err)
 
-		a.NoError(signer.GetVerifier().Verify(0, i, genHashableForTest(), sig))
+		a.NoError(signer.GetVerifier().Verify(1, i, genHashableForTest(), sig))
 	}
 
 }
