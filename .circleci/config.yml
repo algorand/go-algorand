@@ -1,36 +1,30 @@
-description: |
-  Send a custom notification using Slack's Block Kit Builder.
-  Create the payload code and paste it in your notify command's custom parameter.
-  Detailed instructions in the GitHub readme.
-  https://app.slack.com/block-kit-builder
-usage:
-  version: 2.1
-  orbs:
-    slack: circleci/slack@4.1
-  jobs:
-    notify:
-      docker:
-        - image: cimg/base:stable
-      steps:
-        - slack/notify:
-            event: always
-            custom: |
-              {
-                "blocks": [
-                  {
-                    "type": "section",
-                    "fields": [
-                      {
-                        "type": "plain_text",
-                        "text": "*This is a text notification*",
-                        "emoji": true
-                      }
-                    ]
-                  }
-                ]
-              }
-  workflows:
-    send-notification:
-      jobs:
-        - notify:
-            context: slack-secrets
+version: '2.1'
+orbs:
+  slack: circleci/slack@4.1
+jobs:
+  notify:
+    docker:
+      - image: 'cimg/base:stable'
+    steps:
+      - slack/notify:
+          custom: |
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "plain_text",
+                      "text": "*This is a text notification*",
+                      "emoji": true
+                    }
+                  ]
+                }
+              ]
+            }
+          event: always
+workflows:
+  send-notification:
+    jobs:
+      - notify:
+          context: slack-secrets
