@@ -158,7 +158,9 @@ func genHashableForTest() crypto.Hashable {
 func TestSigning(t *testing.T) {
 	a := require.New(t)
 
-	start, end, signer := getSigner(a)
+	start, end := uint64(50), uint64(100)
+	signer, err := New(start, end, 1, crypto.PlaceHolderType)
+	a.NoError(err)
 
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
 
@@ -171,6 +173,31 @@ func TestSigning(t *testing.T) {
 
 	_, err = signer.Sign(hashable, end+1)
 	a.Error(err)
+
+	signer, err = New(start, end, 10, crypto.PlaceHolderType)
+	a.NoError(err)
+
+	sig, err = signer.Sign(hashable, start)
+	a.NoError(err)
+	a.NoError(signer.GetVerifier().Verify(start, start, hashable, sig))
+
+	sig, err = signer.Sign(hashable, start+5)
+	a.Error(err)
+	a.Error(signer.GetVerifier().Verify(start, start+5, hashable, sig))
+
+	signer, err = New(50, 100, 12, crypto.PlaceHolderType)
+	a.NoError(err)
+
+	for i := uint64(50); i < 100; i++ {
+		if i%12 != 0 {
+			_, err = signer.Sign(hashable, i)
+			a.Error(err)
+		} else {
+			sig, err = signer.Sign(hashable, i)
+			a.NoError(err)
+			a.NoError(signer.GetVerifier().Verify(50, i, hashable, sig))
+		}
+	}
 }
 
 func TestBadRound(t *testing.T) {
@@ -231,16 +258,6 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	a.Error(signer.GetVerifier().Verify(start, start+1, hashable, sig2))
 }
 
-func TestVerifierMarshal(t *testing.T) {
-	a := require.New(t)
-	_, _, signer := getSigner(a)
-	verifier := signer.GetVerifier()
-	bs := protocol.Encode(verifier)
-	verifierToDecodeInto := Verifier{}
-	protocol.Decode(bs, &verifierToDecodeInto)
-	a.Equal(*verifier, verifierToDecodeInto)
-}
-
 func TestMarshal(t *testing.T) {
 	a := require.New(t)
 	signer, err := New(0, 10, 1, crypto.PlaceHolderType)
@@ -254,6 +271,12 @@ func TestMarshal(t *testing.T) {
 	// check that after trim the output stays the same.
 	cpy := signer.Trim(5)
 	a.Equal(protocol.Encode(signer), protocol.Encode(cpy))
+
+	verifier := signer.GetVerifier()
+	bs := protocol.Encode(verifier)
+	verifierToDecodeInto := Verifier{}
+	protocol.Decode(bs, &verifierToDecodeInto)
+	a.Equal(*verifier, verifierToDecodeInto)
 }
 
 func compareSigners(a *require.Assertions, signer *Signer, cpy *Signer) {
