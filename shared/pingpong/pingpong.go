@@ -236,7 +236,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 	}
 	// wait until all the above transactions are sent, or that we have no more transactions
 	// in our pending transaction pool coming from the source account.
-	err = waitPendingTransactions(map[string]uint64{cfg.SrcAccount: uint64(0)}, client)
+	//err = waitPendingTransactions(map[string]uint64{cfg.SrcAccount: uint64(0)}, client)
 	return err
 }
 
@@ -288,10 +288,10 @@ func refreshAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpCo
 	// wait until all the pending transcations have been sent; otherwise, getting the balance
 	// is pretty much meaningless.
 	fmt.Printf("waiting for all transactions to be accepted before refreshing accounts.\n")
-	err := waitPendingTransactions(accounts, client)
+	/*err := waitPendingTransactions(accounts, client)
 	if err != nil {
 		return err
-	}
+	}*/
 
 	for addr := range accounts {
 		amount, err := client.GetBalance(addr)
