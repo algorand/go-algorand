@@ -23,6 +23,9 @@ jobs:
               ]
             }
           event: always
+      - run:
+          name: "echo environment variables from context"
+          command: echo $TEST
 workflows:
   send-notification:
     jobs:
