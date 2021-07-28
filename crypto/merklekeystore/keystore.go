@@ -79,7 +79,8 @@ type (
 	Verifier struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		Root crypto.Digest `codec:"r"`
+		Root    crypto.Digest `codec:"r"`
+		IsValid bool          `codec:"v"`
 	}
 )
 
@@ -88,7 +89,6 @@ var errReceivedRoundIsBeforeFirst = errors.New("round translated to be prior to 
 var errOutOfBounds = errors.New("round translated to be after last key position")
 var errNonExistantKey = errors.New("key doesn't exist")
 var errDivisorIsZero = errors.New("received zero Divisor")
-var errCannotGenerateKeys = errors.New("first and last valid rounds don't have big enough gap to generate keys")
 
 // ToBeHashed implementation means CommittablePublicKey is crypto.Hashable.
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
@@ -110,6 +110,7 @@ func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 }
 
 // New Generates a merklekeystore.Signer
+// The function allow creation of empty signers, i.e signers without any key to sign with.
 func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
@@ -124,7 +125,7 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 	firstRound := indexToRound(firstValid, divisor, 0)
 
 	if numberOfKeys == 0 {
-		return nil, errCannotGenerateKeys
+		return &Signer{}, nil
 	}
 
 	keys := make([]crypto.SignatureAlgorithm, numberOfKeys)
@@ -152,7 +153,8 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (m *Signer) GetVerifier() *Verifier {
 	return &Verifier{
-		Root: m.Tree.Root(),
+		Root:    m.Tree.Root(),
+		IsValid: true,
 	}
 }
 
