@@ -268,6 +268,9 @@ func (m *Signer) dropKeys(upTo int) {
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
 func (v *Verifier) Verify(firstValid, round uint64, obj crypto.Hashable, sig Signature) error {
+	if firstValid == 0 {
+		firstValid++
+	}
 	if round < firstValid {
 		return errReceivedRoundIsBeforeFirst
 	}
