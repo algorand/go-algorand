@@ -42,13 +42,13 @@ type CreatablesInfo struct {
 
 type pingPongAccount struct {
 	balance uint64
-	sk *crypto.SignatureSecrets
-	pk basics.Address
+	sk      *crypto.SignatureSecrets
+	pk      basics.Address
 }
 
 // WorkerState object holds a running pingpong worker
 type WorkerState struct {
-	cfg      PpConfig
+	cfg PpConfig
 	//accounts map[string]uint64
 	accounts map[string]*pingPongAccount
 	cinfo    CreatablesInfo
@@ -92,7 +92,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 
 		if !cfg.Quiet {
 			for addr := range pps.accounts {
-				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, pps.accounts[addr])
+				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, pps.accounts[addr].balance)
 			}
 		}
 	} else if cfg.NumApp > 0 {
@@ -109,7 +109,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 		}
 		if !cfg.Quiet {
 			for addr := range pps.accounts {
-				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, pps.accounts[addr])
+				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, pps.accounts[addr].balance)
 			}
 		}
 	} else {
@@ -124,7 +124,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 	return
 }
 
-func (pps* WorkerState) prepareNewAccounts(client libgoal.Client, cfg PpConfig, wallet []byte, accounts map[string]*pingPongAccount) (newAccounts map[string]*pingPongAccount, err error) {
+func (pps *WorkerState) prepareNewAccounts(client libgoal.Client, cfg PpConfig, wallet []byte, accounts map[string]*pingPongAccount) (newAccounts map[string]*pingPongAccount, err error) {
 	// remove existing accounts except for src account
 	for k := range accounts {
 		if k != cfg.SrcAccount {
@@ -239,7 +239,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			}
 			accounts[addr].balance = minFund
 			if !cfg.Quiet {
-				fmt.Printf("account balance for key %s is %d\n", addr, accounts[addr])
+				fmt.Printf("account balance for key %s is %d\n", addr, accounts[addr].balance)
 			}
 
 			totalSent++
@@ -261,7 +261,7 @@ func sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fe
 	return client.SendPaymentFromWalletWithLease(wh, nil, from, to, fee, amount, note, "", lease, 0, 0)
 }
 
-func (pps* WorkerState) refreshAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
+func (pps *WorkerState) refreshAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
 	for addr := range accounts {
 		amount, err := client.GetBalance(addr)
 		if err != nil {
@@ -799,26 +799,16 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 }
 
 func signTxn(signer string, txn transactions.Transaction, accounts map[string]*pingPongAccount, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
-	// Get wallet handle token
-	//var h []byte
-	//h, err = client.GetUnencryptedWalletHandle()
-	//if err != nil {
-	//	return
-	//}
 
 	var psig crypto.Signature
 
 	if cfg.Rekey {
-		stxn, err =  txn.Sign(accounts[signer].sk), nil
-		//stxn, err = client.SignTransactionWithWalletAndSigner(h, nil, signer, txn)
+		stxn, err = txn.Sign(accounts[signer].sk), nil
 	} else if len(cfg.Program) > 0 {
 		// If there's a program, sign it and use that in a lsig
 
 		psig = accounts[signer].sk.Sign(logic.Program(cfg.Program))
-		//psig, err = client.SignProgramWithWallet(h, nil, signer, cfg.Program)
-		//if err != nil {
-		//	return
-		//}
+
 		// Fill in signed transaction
 		stxn.Txn = txn
 		stxn.Lsig.Logic = cfg.Program
@@ -826,8 +816,7 @@ func signTxn(signer string, txn transactions.Transaction, accounts map[string]*p
 		stxn.Lsig.Args = cfg.LogicArgs
 	} else {
 		// Otherwise, just sign the transaction like normal
-		stxn, err =  txn.Sign(accounts[signer].sk), nil
-		//stxn, err = client.SignTransactionWithWallet(h, nil, txn)
+		stxn, err = txn.Sign(accounts[signer].sk), nil
 	}
 	return
 }
