@@ -60,7 +60,7 @@ type WorkerState struct {
 
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
 func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
-	pps.accounts, pps.cfg, err = ensureAccounts(ac, pps.cfg)
+	pps.accounts, pps.cfg, err = pps.ensureAccounts(ac, pps.cfg)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "ensure accounts failed %v\n", err)
 		return
@@ -78,7 +78,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 		cfg.MaxAmt = 0
 
 		var assetAccounts map[string]*pingPongAccount
-		assetAccounts, err = prepareNewAccounts(ac, cfg, wallet, pps.accounts)
+		assetAccounts, err = pps.prepareNewAccounts(ac, cfg, wallet, pps.accounts)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
 			return
@@ -98,7 +98,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 	} else if cfg.NumApp > 0 {
 
 		var appAccounts map[string]*pingPongAccount
-		appAccounts, err = prepareNewAccounts(ac, cfg, wallet, pps.accounts)
+		appAccounts, err = pps.prepareNewAccounts(ac, cfg, wallet, pps.accounts)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
 			return
@@ -113,7 +113,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 			}
 		}
 	} else {
-		err = fundAccounts(pps.accounts, ac, cfg)
+		err = pps.fundAccounts(pps.accounts, ac, cfg)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
 			return
@@ -124,7 +124,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 	return
 }
 
-func prepareNewAccounts(client libgoal.Client, cfg PpConfig, wallet []byte, accounts map[string]*pingPongAccount) (newAccounts map[string]*pingPongAccount, err error) {
+func (pps* WorkerState) prepareNewAccounts(client libgoal.Client, cfg PpConfig, wallet []byte, accounts map[string]*pingPongAccount) (newAccounts map[string]*pingPongAccount, err error) {
 	// remove existing accounts except for src account
 	for k := range accounts {
 		if k != cfg.SrcAccount {
@@ -138,7 +138,7 @@ func prepareNewAccounts(client libgoal.Client, cfg PpConfig, wallet []byte, acco
 	for k := range newAccounts {
 		accounts[k] = newAccounts[k]
 	}
-	err = fundAccounts(accounts, client, cfg)
+	err = pps.fundAccounts(accounts, client, cfg)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
 		return
@@ -201,8 +201,12 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (requiredBala
 	return
 }
 
-func fundAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
-	srcFunds := accounts[cfg.SrcAccount]
+func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
+	srcFunds, err := client.GetBalance(cfg.SrcAccount)
+
+	if err != nil {
+		return err
+	}
 
 	startTime := time.Now()
 	var totalSent uint64
@@ -222,10 +226,10 @@ func fundAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, c
 		}
 		if val.balance < minFund {
 			toSend := minFund - val.balance
-			if srcFunds.balance <= toSend {
+			if srcFunds <= toSend {
 				return fmt.Errorf("source account %s has insufficient funds %d - needs %d", cfg.SrcAccount, srcFunds, toSend)
 			}
-			srcFunds.balance -= toSend
+			srcFunds -= toSend
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
@@ -257,7 +261,7 @@ func sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fe
 	return client.SendPaymentFromWalletWithLease(wh, nil, from, to, fee, amount, note, "", lease, 0, 0)
 }
 
-func refreshAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
+func (pps* WorkerState) refreshAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
 	for addr := range accounts {
 		amount, err := client.GetBalance(addr)
 		if err != nil {
@@ -268,7 +272,7 @@ func refreshAccounts(accounts map[string]*pingPongAccount, client libgoal.Client
 		accounts[addr].balance = amount
 	}
 
-	return fundAccounts(accounts, client, cfg)
+	return pps.fundAccounts(accounts, client, cfg)
 }
 
 // return a shuffled list of accounts with some minimum balance
@@ -383,7 +387,7 @@ func (pps *WorkerState) RunPingPong(ctx context.Context, ac libgoal.Client) {
 			}
 
 			if cfg.RefreshTime > 0 && time.Now().After(refreshTime) {
-				err = refreshAccounts(pps.accounts, ac, cfg)
+				err = pps.refreshAccounts(pps.accounts, ac, cfg)
 				if err != nil {
 					_, _ = fmt.Fprintf(os.Stderr, "error refreshing: %v\n", err)
 				}

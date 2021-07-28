@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*pingPongAccount, cfg PpConfig, err error) {
+func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*pingPongAccount, cfg PpConfig, err error) {
 	accounts = make(map[string]*pingPongAccount)
 	cfg = initCfg
 
@@ -45,7 +45,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*p
 	var richestAccount string
 	var richestBalance uint64
 
-	addresses, err := []string{}, nil// ac.ListAddresses(wallet)
+	addresses, err := ac.ListAddresses(wallet)
 
 	if err != nil {
 		return nil, PpConfig{}, err
@@ -67,7 +67,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*p
 			richestAccount = addr
 			richestBalance = amt
 		}
-		accounts[addr] = &pingPongAccount{balance: amt}
+
 		if !initCfg.Quiet {
 			fmt.Printf("Found local account: %s -> %v\n", addr, amt)
 		}
