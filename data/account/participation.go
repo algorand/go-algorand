@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
@@ -46,7 +47,7 @@ type Participation struct {
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
-	// BlockProof is used to sign compact certifications. might be nil
+	// BlockProof is used to sign compact certificates. might be nil
 	BlockProof *merklekeystore.Signer
 
 	// The first and last rounds for which this account is valid, respectively.
