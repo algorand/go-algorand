@@ -1,12 +1,11 @@
-name: golangci-lint
+name: "ReviewDog workflow"
 on:
   pull_request:
 jobs:
-  golangci:
-    name: lint
+  reviewdog:
     runs-on: ubuntu-latest
     steps:
-      - uses: reviewdog/action-setup@v1
-        with:
-          reviewdog_version: latest
-      - run: reviewdog -version
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+      - name: golangci-lint
+        uses: reviewdog/action-golangci-lint@v2
