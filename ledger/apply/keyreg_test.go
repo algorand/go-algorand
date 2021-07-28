@@ -17,8 +17,9 @@
 package apply
 
 import (
-	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"testing"
+
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -192,7 +193,7 @@ func TestBlockProofPKKeyReg(t *testing.T) {
 }
 
 func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
-	signer, err := merklekeystore.New(0, 0, crypto.PlaceHolderType)
+	signer, err := merklekeystore.New(0, 0, 1, crypto.PlaceHolderType)
 	require.NoError(t, err)
 
 	return transactions.Transaction{
