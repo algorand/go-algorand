@@ -544,8 +544,12 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 	if err != nil {
 		return
 	}
-	sentCount++
+
 	_, err = client.BroadcastTransaction(stxn)
+	if err != nil {
+		return
+	}
+	sentCount++
 	return
 }
 
@@ -612,31 +616,35 @@ func (pps *WorkerState) sendFromTo(
 					_, _ = fmt.Fprintf(os.Stderr, "GetPendingTransactionsByAddress failed: %v\n", err2)
 					return
 				}
-				pendingTxnMap := make(map[string] /*txid*/ int)
-				for i, txn := range txnList.Transactions {
+				pendingTxnMap := make(map[string]bool)
+				for _, txn := range txnList.Transactions {
 					// we're looking for a transaction where the recipient is our "from"
 					if txn.From != from {
-						pendingTxnMap[txn.TxID] = i
+						pendingTxnMap[txn.TxID] = true
 					}
 				}
 				// if the source account has some pending transactions, evaluate these.
-				for txid, gains := range fromGains {
-					missing := true
-					if idx, has := pendingTxnMap[txid.String()]; has {
-						txn := txnList.Transactions[idx]
-						missing = false
-						if txn.ConfirmedRound > 0 {
-							// confirmed.
-							accounts[from] = uint64(int64(accounts[from]) + gains)
-							gainsAdded = true
-							delete(fromGains, txid)
-						} else {
-							// not confirmed. still pending.
-						}
-					}
-					if missing {
+				missing := false
+				for txid := range fromGains {
+					if pendingTxnMap[txid.String()] {
+						// transaction is still in the transaction pool.
+					} else {
+						// if it's not in the transaction pool, it was either accepted or rejected.
+						// since we don't know, we'll mark it as missing
+						missing = true
 						delete(fromGains, txid)
 					}
+				}
+				if missing {
+					// if we had one or more missing transactions from the transaction pool, we don't know if these were accepted or not.
+					var amount uint64
+					amount, err = client.GetBalance(from)
+					if err != nil {
+						_, _ = fmt.Fprintf(os.Stderr, "GetBalance was unable to figure account balance: %v\n", err)
+						return
+					}
+					accounts[from] = amount
+					gainsAdded = true
 				}
 			}
 			if gainsAdded && belowMinBalanceAccounts[from] {
