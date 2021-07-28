@@ -911,7 +911,11 @@ const globalV4TestProgram = globalV3TestProgram + `
 `
 
 const globalV5TestProgram = globalV4TestProgram + `
-// No new globals in v5
+global GroupID
+int 32
+bzero
+==
+&&
 `
 
 func TestGlobal(t *testing.T) {
@@ -941,6 +945,7 @@ func TestGlobal(t *testing.T) {
 			CreatorAddress, globalV5TestProgram,
 			EvalStateful, CheckStateful,
 		},
+		6: {GroupID, globalV5TestProgram, Eval, Check},
 	}
 	ledger := makeTestLedger(nil)
 	ledger.appID = 42

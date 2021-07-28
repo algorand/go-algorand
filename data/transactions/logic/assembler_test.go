@@ -1202,6 +1202,7 @@ global Round
 global LatestTimestamp
 global CurrentApplicationID
 global CreatorAddress
+global GroupID
 txn Sender
 txn Fee
 bnz label1

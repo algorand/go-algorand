@@ -303,6 +303,7 @@ Global fields are fields that are common to all the transactions in the group. I
 | 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
 | 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
 | 9 | CreatorAddress | []byte | Address of the creator of the current application. Fails if no such application is executing. LogicSigVersion >= 3. |
+| 10 | GroupID | []byte | ID of the transaction group. Empty if the transaction is not part of a group. LogicSigVersion >= 5. |
 
 
 **Asset Fields**
