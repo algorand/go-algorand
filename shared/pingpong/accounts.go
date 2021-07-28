@@ -857,10 +857,6 @@ func generateAccounts(client libgoal.Client, allAccounts map[string]*pingPongAcc
 
 	for accountsRequired > 0 {
 		accountsRequired--
-		//addr, err := client.GenerateAddress(wallet)
-		//if err != nil {
-		//	return allAccounts, err
-		//}
 
 		crypto.RandBytes(seed[:])
 		privateKey := crypto.GenerateSignatureSecrets(seed)
