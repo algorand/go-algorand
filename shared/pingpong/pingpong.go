@@ -19,7 +19,6 @@ package pingpong
 import (
 	"context"
 	"fmt"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"math"
 	"math/rand"
 	"os"
@@ -30,6 +29,7 @@ import (
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 )
 
