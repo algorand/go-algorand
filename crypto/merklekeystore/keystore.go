@@ -25,7 +25,6 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
-// currently, deletion uses rounds, some goroutine runs and calls for deleting and storing
 type (
 	// EphemeralKeys represent the possible keys inside the keystore.
 	// Each key in this struct will be used in a specific round.
@@ -81,6 +80,10 @@ type (
 	}
 )
 
+var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
+var errReceivedRoundIsBeforeFirst = errors.New("round translated to be prior to first key position")
+var errOutOfBounds = errors.New("round translated to be after last key position")
+
 // ToBeHashed implementation means CommittablePublicKey is crypto.Hashable.
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.EphemeralPK, protocol.Encode(e)
@@ -99,8 +102,6 @@ func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 	}
 	return crypto.HashObj(&ephPK), nil
 }
-
-var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
 
 // New Generates a merklekeystore.Signer
 // Note that the signer will have keys for the rounds  [firstValid, lastValid]
@@ -152,7 +153,7 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	if err != nil {
 		return Signature{}, err
 	}
-	// need to get round - originPoint
+
 	proof, err := m.Tree.Prove([]uint64{round - m.OriginRound})
 	if err != nil {
 		return Signature{}, err
@@ -165,9 +166,6 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 		VerifyingKey:  signer.GetVerifyingKey(),
 	}, nil
 }
-
-var errReceivedRoundIsBeforeFirst = errors.New("round translated to be prior to first key position")
-var errOutOfBounds = errors.New("round translated to be after last key position")
 
 func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 	if m.isRoundPriorToFirstRound(round) {
