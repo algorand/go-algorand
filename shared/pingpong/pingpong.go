@@ -19,6 +19,7 @@ package pingpong
 import (
 	"context"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"math"
 	"math/rand"
 	"os"
@@ -39,10 +40,17 @@ type CreatablesInfo struct {
 	OptIns      map[uint64][]string
 }
 
+type pingPongAccount struct {
+	balance uint64
+	sk *crypto.SignatureSecrets
+	pk basics.Address
+}
+
 // WorkerState object holds a running pingpong worker
 type WorkerState struct {
 	cfg      PpConfig
-	accounts map[string]uint64
+	//accounts map[string]uint64
+	accounts map[string]*pingPongAccount
 	cinfo    CreatablesInfo
 
 	nftStartTime  int64
@@ -69,7 +77,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 		// zero out max amount for asset transactions
 		cfg.MaxAmt = 0
 
-		var assetAccounts map[string]uint64
+		var assetAccounts map[string]*pingPongAccount
 		assetAccounts, err = prepareNewAccounts(ac, cfg, wallet, pps.accounts)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
@@ -89,7 +97,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 		}
 	} else if cfg.NumApp > 0 {
 
-		var appAccounts map[string]uint64
+		var appAccounts map[string]*pingPongAccount
 		appAccounts, err = prepareNewAccounts(ac, cfg, wallet, pps.accounts)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
@@ -116,7 +124,7 @@ func (pps *WorkerState) PrepareAccounts(ac libgoal.Client) (err error) {
 	return
 }
 
-func prepareNewAccounts(client libgoal.Client, cfg PpConfig, wallet []byte, accounts map[string]uint64) (newAccounts map[string]uint64, err error) {
+func prepareNewAccounts(client libgoal.Client, cfg PpConfig, wallet []byte, accounts map[string]*pingPongAccount) (newAccounts map[string]*pingPongAccount, err error) {
 	// remove existing accounts except for src account
 	for k := range accounts {
 		if k != cfg.SrcAccount {
@@ -124,7 +132,7 @@ func prepareNewAccounts(client libgoal.Client, cfg PpConfig, wallet []byte, acco
 		}
 	}
 	// create new accounts for testing
-	newAccounts = make(map[string]uint64)
+	newAccounts = make(map[string]*pingPongAccount)
 	newAccounts, err = generateAccounts(client, newAccounts, cfg.NumPartAccounts-1, wallet)
 
 	for k := range newAccounts {
@@ -193,7 +201,7 @@ func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (requiredBala
 	return
 }
 
-func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) error {
+func fundAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
 	srcFunds := accounts[cfg.SrcAccount]
 
 	startTime := time.Now()
@@ -208,16 +216,16 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 	}
 
 	fmt.Printf("adjusting account balance to %d\n", minFund)
-	for addr, balance := range accounts {
+	for addr, val := range accounts {
 		if !cfg.Quiet {
 			fmt.Printf("adjusting balance of account %v\n", addr)
 		}
-		if balance < minFund {
-			toSend := minFund - balance
-			if srcFunds <= toSend {
+		if val.balance < minFund {
+			toSend := minFund - val.balance
+			if srcFunds.balance <= toSend {
 				return fmt.Errorf("source account %s has insufficient funds %d - needs %d", cfg.SrcAccount, srcFunds, toSend)
 			}
-			srcFunds -= toSend
+			srcFunds.balance -= toSend
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
@@ -225,7 +233,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 			if err != nil {
 				return err
 			}
-			accounts[addr] = minFund
+			accounts[addr].balance = minFund
 			if !cfg.Quiet {
 				fmt.Printf("account balance for key %s is %d\n", addr, accounts[addr])
 			}
@@ -249,7 +257,7 @@ func sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fe
 	return client.SendPaymentFromWalletWithLease(wh, nil, from, to, fee, amount, note, "", lease, 0, 0)
 }
 
-func refreshAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) error {
+func refreshAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
 	for addr := range accounts {
 		amount, err := client.GetBalance(addr)
 		if err != nil {
@@ -257,20 +265,20 @@ func refreshAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpCo
 			return err
 		}
 
-		accounts[addr] = amount
+		accounts[addr].balance = amount
 	}
 
 	return fundAccounts(accounts, client, cfg)
 }
 
 // return a shuffled list of accounts with some minimum balance
-func listSufficientAccounts(accounts map[string]uint64, minimumAmount uint64, except string) []string {
+func listSufficientAccounts(accounts map[string]*pingPongAccount, minimumAmount uint64, except string) []string {
 	out := make([]string, 0, len(accounts))
 	for key, value := range accounts {
 		if key == except {
 			continue
 		}
-		if value >= minimumAmount {
+		if value.balance >= minimumAmount {
 			out = append(out, key)
 		}
 	}
@@ -497,7 +505,7 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 	} else {
 		pps.nftHolders[sender] = senderNftCount + 1
 	}
-	stxn, err := signTxn(sender, txn, client, pps.cfg)
+	stxn, err := signTxn(sender, txn, pps.accounts, pps.cfg)
 	if err != nil {
 		return
 	}
@@ -555,7 +563,7 @@ func (pps *WorkerState) sendFromTo(
 			}
 
 			// would we have enough money after taking into account the current updated fees ?
-			if accounts[from] <= (txn.Fee.Raw + amt + cfg.MinAccountFunds) {
+			if accounts[from].balance <= (txn.Fee.Raw + amt + cfg.MinAccountFunds) {
 				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, to)
 				continue
 			}
@@ -564,7 +572,7 @@ func (pps *WorkerState) sendFromTo(
 			toBalanceChange = int64(amt)
 
 			// Sign txn
-			stxn, signErr := signTxn(from, txn, client, cfg)
+			stxn, signErr := signTxn(from, txn, pps.accounts, cfg)
 			if signErr != nil {
 				err = signErr
 				_, _ = fmt.Fprintf(os.Stderr, "signTxn failed: %v\n", err)
@@ -630,11 +638,11 @@ func (pps *WorkerState) sendFromTo(
 			}
 
 			// would we have enough money after taking into account the current updated fees ?
-			if int64(accounts[from])+fromBalanceChange <= int64(cfg.MinAccountFunds) {
+			if int64(accounts[from].balance)+fromBalanceChange <= int64(cfg.MinAccountFunds) {
 				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, to)
 				continue
 			}
-			if int64(accounts[to])+toBalanceChange <= int64(cfg.MinAccountFunds) {
+			if int64(accounts[to].balance)+toBalanceChange <= int64(cfg.MinAccountFunds) {
 				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending back %d : %s -> %s; Current cost too high.\n", amt, to, from)
 				continue
 			}
@@ -654,7 +662,7 @@ func (pps *WorkerState) sendFromTo(
 			var stxGroup []transactions.SignedTxn
 			for j, txn := range txGroup {
 				txn.Group = gid
-				stxn, signErr := signTxn(txSigners[j], txn, client, cfg)
+				stxn, signErr := signTxn(txSigners[j], txn, pps.accounts, cfg)
 				if signErr != nil {
 					err = signErr
 					return
@@ -674,8 +682,8 @@ func (pps *WorkerState) sendFromTo(
 		}
 
 		successCount++
-		accounts[from] = uint64(fromBalanceChange + int64(accounts[from]))
-		accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
+		accounts[from].balance = uint64(fromBalanceChange + int64(accounts[from].balance))
+		accounts[to].balance = uint64(toBalanceChange + int64(accounts[to].balance))
 		if cfg.DelayBetweenTxn > 0 {
 			time.Sleep(cfg.DelayBetweenTxn)
 		}
@@ -786,24 +794,27 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 	return
 }
 
-func signTxn(signer string, txn transactions.Transaction, client libgoal.Client, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
+func signTxn(signer string, txn transactions.Transaction, accounts map[string]*pingPongAccount, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
 	// Get wallet handle token
-	var h []byte
-	h, err = client.GetUnencryptedWalletHandle()
-	if err != nil {
-		return
-	}
+	//var h []byte
+	//h, err = client.GetUnencryptedWalletHandle()
+	//if err != nil {
+	//	return
+	//}
 
 	var psig crypto.Signature
 
 	if cfg.Rekey {
-		stxn, err = client.SignTransactionWithWalletAndSigner(h, nil, signer, txn)
+		stxn, err =  txn.Sign(accounts[signer].sk), nil
+		//stxn, err = client.SignTransactionWithWalletAndSigner(h, nil, signer, txn)
 	} else if len(cfg.Program) > 0 {
 		// If there's a program, sign it and use that in a lsig
-		psig, err = client.SignProgramWithWallet(h, nil, signer, cfg.Program)
-		if err != nil {
-			return
-		}
+
+		psig = accounts[signer].sk.Sign(logic.Program(cfg.Program))
+		//psig, err = client.SignProgramWithWallet(h, nil, signer, cfg.Program)
+		//if err != nil {
+		//	return
+		//}
 		// Fill in signed transaction
 		stxn.Txn = txn
 		stxn.Lsig.Logic = cfg.Program
@@ -811,7 +822,8 @@ func signTxn(signer string, txn transactions.Transaction, client libgoal.Client,
 		stxn.Lsig.Args = cfg.LogicArgs
 	} else {
 		// Otherwise, just sign the transaction like normal
-		stxn, err = client.SignTransactionWithWallet(h, nil, txn)
+		stxn, err =  txn.Sign(accounts[signer].sk), nil
+		//stxn, err = client.SignTransactionWithWallet(h, nil, txn)
 	}
 	return
 }

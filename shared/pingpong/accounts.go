@@ -35,8 +35,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, cfg PpConfig, err error) {
-	accounts = make(map[string]uint64)
+func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*pingPongAccount, cfg PpConfig, err error) {
+	accounts = make(map[string]*pingPongAccount)
 	cfg = initCfg
 
 	wallet, err := ac.GetUnencryptedWalletHandle()
@@ -67,7 +67,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 			richestAccount = addr
 			richestBalance = amt
 		}
-		accounts[addr] = amt
+		accounts[addr] = &pingPongAccount{balance: amt}
 		if !initCfg.Quiet {
 			fmt.Printf("Found local account: %s -> %v\n", addr, amt)
 		}
@@ -129,7 +129,7 @@ func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64
 // Step 1) Create X assets for each of the participant accounts
 // Step 2) For each participant account, opt-in to assets of all other participant accounts
 // Step 3) Evenly distribute the assets across all participant accounts
-func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client libgoal.Client) (resultAssetMaps map[uint64]v1.AssetParams, optIns map[uint64][]string, err error) {
+func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount, client libgoal.Client) (resultAssetMaps map[uint64]v1.AssetParams, optIns map[uint64][]string, err error) {
 	accounts := assetAccounts
 	cfg := pps.cfg
 	proto, err := getProto(client)
@@ -408,9 +408,9 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client li
 	return
 }
 
-func signAndBroadcastTransaction(accounts map[string]uint64, sender string, tx transactions.Transaction, client libgoal.Client, cfg PpConfig) (txID string, err error) {
+func signAndBroadcastTransaction(accounts map[string]*pingPongAccount, sender string, tx transactions.Transaction, client libgoal.Client, cfg PpConfig) (txID string, err error) {
 	var signedTx transactions.SignedTxn
-	signedTx, err = signTxn(sender, tx, client, cfg)
+	signedTx, err = signTxn(sender, tx, accounts, cfg)
 	if err != nil {
 		fmt.Printf("Cannot sign trx %+v with account %v\nerror %v\n", tx, sender, err)
 		return
@@ -423,7 +423,7 @@ func signAndBroadcastTransaction(accounts map[string]uint64, sender string, tx t
 	if !cfg.Quiet {
 		fmt.Printf("Broadcast transaction %v\n", txID)
 	}
-	accounts[sender] -= tx.Fee.Raw
+	accounts[sender].balance -= tx.Fee.Raw
 
 	return
 }
@@ -635,7 +635,7 @@ func getProto(client libgoal.Client) (config.ConsensusParams, error) {
 	return *proto, nil
 }
 
-func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, optIns map[uint64][]string, err error) {
+func prepareApps(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, optIns map[uint64][]string, err error) {
 	proto, err := getProto(client)
 	if err != nil {
 		return
@@ -730,7 +730,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 			tx.Note = note[:]
 
 			txgroup = append(txgroup, tx)
-			accounts[appAccount.Address] -= tx.Fee.Raw
+			accounts[appAccount.Address].balance -= tx.Fee.Raw
 		}
 
 		err = sendAsGroup(txgroup, client, h)
@@ -822,7 +822,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 	return
 }
 
-func takeTopAccounts(allAccounts map[string]uint64, numAccounts uint32, srcAccount string) (accounts map[string]uint64) {
+func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) {
 	allAddrs := make([]string, len(allAccounts))
 	var i int
 	for addr := range allAccounts {
@@ -833,12 +833,12 @@ func takeTopAccounts(allAccounts map[string]uint64, numAccounts uint32, srcAccou
 	sort.SliceStable(allAddrs, func(i, j int) bool {
 		amt1 := allAccounts[allAddrs[i]]
 		amt2 := allAccounts[allAddrs[j]]
-		return amt1 > amt2
+		return amt1.balance > amt2.balance
 	})
 
 	// Now populate a new map with just the accounts needed
 	accountsRequired := int(numAccounts + 1) // Participating and Src
-	accounts = make(map[string]uint64)
+	accounts = make(map[string]*pingPongAccount)
 	accounts[srcAccount] = allAccounts[srcAccount]
 	for _, addr := range allAddrs {
 		accounts[addr] = allAccounts[addr]
@@ -849,18 +849,29 @@ func takeTopAccounts(allAccounts map[string]uint64, numAccounts uint32, srcAccou
 	return
 }
 
-func generateAccounts(client libgoal.Client, allAccounts map[string]uint64, numAccounts uint32, wallet []byte) (map[string]uint64, error) {
+func generateAccounts(client libgoal.Client, allAccounts map[string]*pingPongAccount, numAccounts uint32, wallet []byte) (map[string]*pingPongAccount, error) {
 	// Compute the number of accounts to generate
 	accountsRequired := int(numAccounts+1) - len(allAccounts)
 
+	var seed crypto.Seed
+
+
 	for accountsRequired > 0 {
 		accountsRequired--
-		addr, err := client.GenerateAddress(wallet)
-		if err != nil {
-			return allAccounts, err
-		}
+		//addr, err := client.GenerateAddress(wallet)
+		//if err != nil {
+		//	return allAccounts, err
+		//}
 
-		allAccounts[addr] = 0
+		crypto.RandBytes(seed[:])
+		privateKey := crypto.GenerateSignatureSecrets(seed)
+		publicKey := basics.Address(privateKey.SignatureVerifier)
+
+
+		allAccounts[publicKey.String()] = &pingPongAccount{
+			sk:      privateKey,
+			pk:      publicKey,
+		}
 	}
 
 	return allAccounts, nil
