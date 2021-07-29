@@ -24,7 +24,7 @@ import (
 func (cs *roundCowState) AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
 	if global {
 		cs.mods.Creatables[basics.CreatableIndex(index)] = ledgercore.ModifiedCreatable{
-			Ctype: basics.AssetCreatable,
+			Ctype:   basics.AssetCreatable,
 			Creator: addr,
 			Created: true,
 		}
@@ -36,7 +36,7 @@ func (cs *roundCowState) AllocateAsset(addr basics.Address, index basics.AssetIn
 func (cs *roundCowState) DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
 	if global {
 		cs.mods.Creatables[basics.CreatableIndex(index)] = ledgercore.ModifiedCreatable{
-			Ctype: basics.AssetCreatable,
+			Ctype:   basics.AssetCreatable,
 			Creator: addr,
 			Created: false,
 		}

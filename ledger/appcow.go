@@ -243,7 +243,7 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 
 	if global {
 		cb.mods.Creatables[basics.CreatableIndex(aidx)] = ledgercore.ModifiedCreatable{
-			Ctype: basics.AppCreatable,
+			Ctype:   basics.AppCreatable,
 			Creator: addr,
 			Created: true,
 		}
@@ -276,7 +276,7 @@ func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex
 
 	if global {
 		cb.mods.Creatables[basics.CreatableIndex(aidx)] = ledgercore.ModifiedCreatable{
-			Ctype: basics.AppCreatable,
+			Ctype:   basics.AppCreatable,
 			Creator: addr,
 			Created: false,
 		}
