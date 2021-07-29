@@ -18,3 +18,4 @@ jobs:
         with:
           golangci_lint_version: "v1.41.1"
           golangci_lint_flags: "--config=.golangci.yml"
+          reporter: "github-pr-review"
