@@ -187,15 +187,14 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 }
 
 func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
-	if round%m.EphemeralKeys.Interval != 0 {
-		return 0, errNonExistantKey
-	}
 	if round < m.EphemeralKeys.TreeBase {
 		return 0, errReceivedRoundIsBeforeFirst
 	}
 	pos := roundToIndex(m.EphemeralKeys.TreeBase, round, m.EphemeralKeys.Interval)
 	pos = pos - m.EphemeralKeys.ArrayBase
-
+	if round%m.EphemeralKeys.Interval != 0 {
+		return pos, errNonExistantKey
+	}
 	if pos >= uint64(len(m.EphemeralKeys.SignatureAlgorithms)) {
 		return 0, errOutOfBounds
 	}
@@ -211,26 +210,20 @@ func (m *Signer) isRoundPriorToFirstRound(round uint64) bool {
 }
 
 // Trim shortness deletes keys that existed before a specific round,
+// will return an error for non existing keys/ out of bounds keys.
 // the output is a copy of the signer - which can be persisted.
-func (m *Signer) Trim(before uint64) *Signer {
+func (m *Signer) Trim(before uint64) (*Signer, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	pos, err := m.getKeyPosition(before)
-	switch err {
-	case errOutOfBounds:
-		m.dropKeys(len(m.EphemeralKeys.SignatureAlgorithms))
-	case errReceivedRoundIsBeforeFirst:
-		return m.copy()
-	case errNonExistantKey:
-		// dropping keys up to the current position (not included)
-		m.dropKeys(int(roundToIndex(m.EphemeralKeys.TreeBase, before, m.EphemeralKeys.Interval)))
-	default:
-		m.dropKeys(int(pos))
+	if err != nil {
+		return nil, err
 	}
+	m.dropKeys(int(pos))
 
 	// advance the array zero location.
-	m.EphemeralKeys.ArrayBase = roundToIndex(m.EphemeralKeys.TreeBase, before, m.EphemeralKeys.Interval)
+	m.EphemeralKeys.ArrayBase = roundToIndex(m.EphemeralKeys.TreeBase, before, m.EphemeralKeys.Interval) + 1
 	cpy := m.copy()
 
 	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
@@ -239,7 +232,7 @@ func (m *Signer) Trim(before uint64) *Signer {
 	m.EphemeralKeys.SignatureAlgorithms, cpy.EphemeralKeys.SignatureAlgorithms =
 		cpy.EphemeralKeys.SignatureAlgorithms, m.EphemeralKeys.SignatureAlgorithms
 
-	return cpy
+	return cpy, nil
 }
 
 func (m *Signer) copy() *Signer {
@@ -261,11 +254,11 @@ func (m *Signer) copy() *Signer {
 }
 
 func (m *Signer) dropKeys(upTo int) {
-	for i := 0; i < upTo; i++ {
+	for i := 0; i <= upTo; i++ {
 		// zero the keys.
 		m.EphemeralKeys.SignatureAlgorithms[i] = crypto.SignatureAlgorithm{}
 	}
-	m.EphemeralKeys.SignatureAlgorithms = m.EphemeralKeys.SignatureAlgorithms[upTo:]
+	m.EphemeralKeys.SignatureAlgorithms = m.EphemeralKeys.SignatureAlgorithms[upTo+1:]
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.

@@ -274,7 +274,7 @@ func TestMarshal(t *testing.T) {
 	compareSigners(a, signer, decodeInto)
 
 	// check that after trim the output stays the same.
-	cpy := signer.Trim(5)
+	cpy, _ := signer.Trim(5)
 	a.Equal(protocol.Encode(signer), protocol.Encode(cpy))
 
 	verifier := signer.GetVerifier()
@@ -296,33 +296,49 @@ func TestKeySliceAfterSignerTrim(t *testing.T) {
 	signer, err := New(1, 100, 1, crypto.PlaceHolderType)
 	a.NoError(err)
 
-	cpy := signer.Trim(1)
+	cpy, _ := signer.Trim(1)
 	a.Equal(cpy.EphemeralKeys.TreeBase, uint64(1))
-	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 100)
+	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 99)
 
-	cpy = signer.Trim(10)
+	cpy, _ = signer.Trim(10)
 	a.Equal(cpy.EphemeralKeys.TreeBase, uint64(1))
-	a.Equal(cpy.EphemeralKeys.ArrayBase, uint64(9))
-	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 91)
+	a.Equal(cpy.EphemeralKeys.ArrayBase, uint64(10))
+	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 90)
 	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
-	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 91)
+	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 90)
 
-	cpy = signer.Trim(101)
+	cpy, _ = signer.Trim(20)
 	a.Equal(cpy.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(cpy.EphemeralKeys.ArrayBase, uint64(20))
+	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 80)
 	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
-	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 0)
-	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 0)
+	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 80)
+
+	_, err = signer.Trim(101)
+	a.Error(err)
 
 	signer, err = New(1, 10, 1, crypto.PlaceHolderType)
 	a.NoError(err)
 
-	//for i := uint64(1); i <= 10; i++ {
-	//	cpy = signer.Trim(i + 1)
-	//	a.Equal(cpy.EphemeralKeys.FirstRound, i+1)
-	//	a.Equal(signer.EphemeralKeys.FirstRound, i+1)
-	//	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), int(10))
-	//	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), int(10))
-	//}
+	signer, err = New(1, 100, 11, crypto.PlaceHolderType)
+	a.NoError(err)
+	a.Equal(9, len(signer.EphemeralKeys.SignatureAlgorithms))
+
+	// Should not trim, removes only keys from before current round
+	signer.Trim(11)
+	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(8, len(signer.EphemeralKeys.SignatureAlgorithms))
+
+	signer.Trim(22)
+	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(7, len(signer.EphemeralKeys.SignatureAlgorithms))
+
+	_, err = signer.Trim(23)
+	a.Error(err)
+
+	signer.Trim(99)
+	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 0)
 }
 
 func TestKeyDeletion(t *testing.T) {
@@ -331,10 +347,10 @@ func TestKeyDeletion(t *testing.T) {
 	a.NoError(err)
 
 	signer.Trim(50)
-	_, err = signer.Sign(genHashableForTest(), 49)
+	_, err = signer.Sign(genHashableForTest(), 50)
 	a.Error(err)
 
-	for i := uint64(50); i <= 60; i++ {
+	for i := uint64(51); i <= 60; i++ {
 		sig, err := signer.Sign(genHashableForTest(), i)
 		a.NoError(err)
 
