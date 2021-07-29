@@ -44,7 +44,7 @@ func TestSignerCreation(t *testing.T) {
 	a.NoError(err)
 	sig, err := signer.Sign(genHashableForTest(), 2)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(2, 2, genHashableForTest(), sig))
+	a.NoError(signer.GetVerifier().Verify(2, 2, 2, genHashableForTest(), sig))
 	a.Equal(1, len(signer.EphemeralKeys.SignatureAlgorithms))
 
 	signer, err = New(2, 2, 3, crypto.PlaceHolderType)
@@ -171,7 +171,7 @@ func TestSigning(t *testing.T) {
 
 	sig, err := signer.Sign(hashable, start)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(start, start, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(start, start, 1, hashable, sig))
 
 	_, err = signer.Sign(hashable, start-1)
 	a.Error(err)
@@ -184,11 +184,11 @@ func TestSigning(t *testing.T) {
 
 	sig, err = signer.Sign(hashable, start)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(start, start, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(start, start, 1, hashable, sig))
 
 	sig, err = signer.Sign(hashable, start+5)
 	a.Error(err)
-	a.Error(signer.GetVerifier().Verify(start, start+5, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(start, start+5, 1, hashable, sig))
 
 	signer, err = New(50, 100, 12, crypto.PlaceHolderType)
 	a.NoError(err)
@@ -200,7 +200,7 @@ func TestSigning(t *testing.T) {
 		} else {
 			sig, err = signer.Sign(hashable, i)
 			a.NoError(err)
-			a.NoError(signer.GetVerifier().Verify(50, i, hashable, sig))
+			a.NoError(signer.GetVerifier().Verify(50, i, 12, hashable, sig))
 		}
 	}
 }
@@ -211,12 +211,12 @@ func TestBadRound(t *testing.T) {
 
 	hashable, sig := makeSig(signer, start, a)
 
-	a.Error(signer.GetVerifier().Verify(0, start, hashable, sig))
-	a.Error(signer.GetVerifier().Verify(start, start+1, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(0, start, 1, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(start, start+1, 1, hashable, sig))
 
 	hashable, sig = makeSig(signer, start+1, a)
-	a.Error(signer.GetVerifier().Verify(start, start, hashable, sig))
-	a.Error(signer.GetVerifier().Verify(start, start+2, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(start, start, 1, hashable, sig))
+	a.Error(signer.GetVerifier().Verify(start, start+2, 1, hashable, sig))
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {
@@ -227,13 +227,13 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 
 	sig2 := sig
 	sig2.Proof = sig2.Proof[:len(sig2.Proof)-1]
-	a.Error(signer.GetVerifier().Verify(start, start, hashable, sig2))
+	a.Error(signer.GetVerifier().Verify(start, start, 1, hashable, sig2))
 
 	sig3 := sig2
 	someDigest := crypto.Digest{}
 	rand.Read(someDigest[:])
 	sig3.Proof[0] = someDigest
-	a.Error(signer.GetVerifier().Verify(start, start, hashable, sig3))
+	a.Error(signer.GetVerifier().Verify(start, start, 1, hashable, sig3))
 }
 
 func TestIncorrectByteSignature(t *testing.T) {
@@ -247,7 +247,7 @@ func TestIncorrectByteSignature(t *testing.T) {
 	copy(bs, sig2.ByteSignature)
 	bs[0]++
 	sig2.ByteSignature = bs
-	a.Error(signer.GetVerifier().Verify(start, start, hashable, sig2))
+	a.Error(signer.GetVerifier().Verify(start, start, 1, hashable, sig2))
 }
 
 func TestAttemptToUseDifferentKey(t *testing.T) {
@@ -260,7 +260,7 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	// taking signature and changing the key to match different round
 	sig2 := sig
 	sig2.VerifyingKey = signer.EphemeralKeys.SignatureAlgorithms[0].GetSigner().GetVerifyingKey()
-	a.Error(signer.GetVerifier().Verify(start, start+1, hashable, sig2))
+	a.Error(signer.GetVerifier().Verify(start, start+1, 1, hashable, sig2))
 }
 
 func TestMarshal(t *testing.T) {
@@ -338,7 +338,7 @@ func TestKeyDeletion(t *testing.T) {
 		sig, err := signer.Sign(genHashableForTest(), i)
 		a.NoError(err)
 
-		a.NoError(signer.GetVerifier().Verify(1, i, genHashableForTest(), sig))
+		a.NoError(signer.GetVerifier().Verify(1, i, 1, genHashableForTest(), sig))
 	}
 
 	signer, err = New(1, 60, 11, crypto.PlaceHolderType)
@@ -354,7 +354,7 @@ func TestKeyDeletion(t *testing.T) {
 			a.Error(err)
 			continue
 		}
-		a.NoError(signer.GetVerifier().Verify(1, i, genHashableForTest(), sig))
+		a.NoError(signer.GetVerifier().Verify(1, i, 11, genHashableForTest(), sig))
 	}
 }
 
@@ -363,7 +363,7 @@ func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Has
 
 	sig, err := signer.Sign(hashable, sigRound)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(signer.EphemeralKeys.Origin, sigRound, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(signer.EphemeralKeys.Origin, sigRound, 1, hashable, sig))
 	return hashable, sig
 }
 
