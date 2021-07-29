@@ -36,16 +36,17 @@ type Balances interface {
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 
-	// AllocateApp or Deallocate either global or address-local app storage.
+	// Allocate or deallocate either global or address-local app storage.
 	//
-	// PutWithCreatable(...) and then {AllocateApp/Deallocate}(..., ..., global=true)
+	// Put(...) and then {AllocateApp/DeallocateApp}(..., ..., global=true)
 	// creates/destroys an application.
 	//
-	// Put(...) and then {AllocateApp/Deallocate}(..., ..., global=false)
+	// Put(...) and then {AllocateApp/DeallocateApp}(..., ..., global=false)
 	// opts into/closes out of an application.
 	AllocateApp(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error
 	DeallocateApp(addr basics.Address, aidx basics.AppIndex, global bool) error
 
+	// Similar to above, notify COW that global/local asset state was created.
 	AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error
 	DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error
 
