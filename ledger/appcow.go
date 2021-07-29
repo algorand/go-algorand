@@ -249,6 +249,8 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 		}
 	}
 
+	cb.trackCreatable(basics.CreatableIndex(aidx))
+
 	return nil
 }
 

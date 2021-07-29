@@ -28,6 +28,8 @@ func (cs *roundCowState) AllocateAsset(addr basics.Address, index basics.AssetIn
 			Creator: addr,
 			Created: true,
 		}
+
+		cs.trackCreatable(basics.CreatableIndex(index))
 	}
 
 	return nil
