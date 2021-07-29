@@ -21,7 +21,7 @@ jobs:
           reporter: "github-pr-review"
           tool_name: "RD Errors"
           level: "error"
-  reviewdog-warning:
+  reviewdog-info:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
@@ -38,5 +38,5 @@ jobs:
           golangci_lint_version: "v1.41.1"
           golangci_lint_flags: "--allow-parallel-runners --disable-all -E staticcheck -E structcheck -E typecheck -E varcheck -E deadcode -E gosimple -E unused"
           reporter: "github-pr-check"
-          tool_name: "RD Warnings"
-          level: "warning"
+          tool_name: "RD Info"
+          level: "info"
