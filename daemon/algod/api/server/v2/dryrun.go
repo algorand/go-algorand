@@ -22,13 +22,14 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
-
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -333,6 +334,18 @@ func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatab
 		return basics.Address{}, false, fmt.Errorf("no app %d", cidx)
 	}
 	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
+}
+
+func (dl *dryrunLedger) CompactCertVoters(r basics.Round) (*ledger.VotersForRound, error) {
+	return nil, fmt.Errorf("dryrunLedger does not implement CompactCertVoters")
+}
+
+func (dl *dryrunLedger) GenesisHash() crypto.Digest {
+	return crypto.Digest{}
+}
+
+func (dl *dryrunLedger) Totals(r basics.Round) (ledgercore.AccountTotals, error) {
+	return ledgercore.AccountTotals{}, fmt.Errorf("dryrunLedger does not implement Totals")
 }
 
 func (dl *dryrunLedger) getAppParams(addr basics.Address, aidx basics.AppIndex) (params basics.AppParams, err error) {

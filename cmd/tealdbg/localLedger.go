@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -302,4 +303,16 @@ func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatable
 		return basics.Address{}, false, nil
 	}
 	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
+}
+
+func (l *localLedger) CompactCertVoters(r basics.Round) (*ledger.VotersForRound, error) {
+	return nil, fmt.Errorf("localLedger does not implement CompactCertVoters")
+}
+
+func (l *localLedger) GenesisHash() crypto.Digest {
+	return crypto.Digest{}
+}
+
+func (l *localLedger) Totals(r basics.Round) (ledgercore.AccountTotals, error) {
+	return ledgercore.AccountTotals{}, fmt.Errorf("localLedger does not implement Totals")
 }
