@@ -19,6 +19,7 @@ package txnsync
 import (
 	"context"
 	"errors"
+	"github.com/algorand/go-algorand/crypto"
 	"sort"
 	"time"
 
@@ -316,7 +317,7 @@ func (s *syncState) broadcastProposal(p ProposalBroadcastRequest, peers []*Peer)
 			return
 		default:
 			// check if p.proposalBytes was filtered
-			if peer.proposalFilterCache.exists(p.proposalBytes) {
+			if peer.proposalFilterCache.exists(crypto.Hash(p.proposalBytes)) {
 				continue
 			}
 

@@ -101,6 +101,8 @@ type NodeConnector interface {
 	IncomingTransactionGroups(peer *Peer, messageSeq uint64, txGroups []transactions.SignedTxGroup) (transactionPoolSize int)
 	NotifyMonitor() chan struct{}
 	SetProposalCancelFunc(context.CancelFunc)
+    RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice)
+	HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup)
 }
 
 // MakeTranscationPoolChangeEvent creates an event for when a txn pool size has changed.

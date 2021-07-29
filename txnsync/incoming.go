@@ -230,6 +230,13 @@ incomingMessageLoop:
 
 		// skip txnsync messages with proposalData for now
 		if !incomingMsg.message.RelayedProposal.MsgIsZero() {
+			if !incomingMsg.message.RelayedProposal.ExcludeProposal.MsgIsZero() {
+				peer.proposalFilterCache.insert(incomingMsg.message.RelayedProposal.ExcludeProposal)
+			} else {
+				s.node.HandleProposalMessage(incomingMsg.message.RelayedProposal.RawBytes, incomingMsg.transactionGroups)
+			}
+
+
 			continue
 		}
 

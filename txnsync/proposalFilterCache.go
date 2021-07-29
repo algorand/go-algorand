@@ -36,14 +36,13 @@ func makeProposalFilterCache(limit int) proposalFilterCache {
 	return c
 }
 
-func (c *proposalFilterCache) insert(proposalBytes []byte) {
-	key := crypto.Hash(proposalBytes)
-	element, found := c.store[key]
+func (c *proposalFilterCache) insert(proposalHash crypto.Digest) {
+	element, found := c.store[proposalHash]
 	if found {
 		c.orderedMsgs.MoveToBack(element)
 	} else {
-		element := c.orderedMsgs.PushBack(key)
-		c.store[key] = element
+		element := c.orderedMsgs.PushBack(proposalHash)
+		c.store[proposalHash] = element
 		for c.orderedMsgs.Len() > c.limit {
 			key := c.orderedMsgs.Front()
 			delete(c.store, key.Value.(crypto.Digest))
@@ -52,8 +51,7 @@ func (c *proposalFilterCache) insert(proposalBytes []byte) {
 	}
 }
 
-func (c *proposalFilterCache) exists(proposalBytes []byte) bool {
-	key := crypto.Hash(proposalBytes)
-	_, exists := c.store[key]
+func (c *proposalFilterCache) exists(proposalHash crypto.Digest) bool {
+	_, exists := c.store[proposalHash]
 	return exists
 }

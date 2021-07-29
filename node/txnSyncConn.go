@@ -53,6 +53,12 @@ type proposalData struct {
 	txGroupHashes []transactions.Txid `codec:"h,allocbound=maxNumTxGroupHashesBytes"` // TODO: make this []byte
 }
 
+type proposalCache struct {
+	proposalData
+
+	receivedTxGroups []transactions.SignedTxGroup
+}
+
 func makeTranscationSyncNodeConnector(node *AlgorandFullNode) transcationSyncNodeConnector {
 	return transcationSyncNodeConnector{
 		node:        node,
@@ -274,4 +280,18 @@ func (tsnc *transcationSyncNodeConnector) RelayProposal(proposalBytes []byte, tx
 		tsnc.cancelSendCtx()
 	}
 	tsnc.eventsCh <- txnsync.MakeBroadcastProposalRequestEvent(protocol.Encode(&data), txGroups)
+}
+
+func (tsnc *transcationSyncNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup) {
+	var data proposalData
+	protocol.Decode(proposalDataBytes, &data)
+
+	// TODO check cache for proposals
+
+	// TODO populate proposal cache with new proposaldatabytes, then attempt to fill receivedTxns with txpool
+
+	// TODO fill receivedTxns with txnSlices
+
+	// TODO check if receivedTxns complete / send proposal to agreement / send filter message
+
 }

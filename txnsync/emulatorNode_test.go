@@ -387,12 +387,14 @@ func (n *emulatedNode) onNewTransactionPoolEntry() {
 	n.externalEvents <- MakeTranscationPoolChangeEvent(len(n.txpoolEntries), false)
 }
 
-func (n *emulatedNode) onBroadcastProposalRequest() {
-	n.externalEvents <- MakeBroadcastProposalRequestEvent([]byte("proposal"), nil)
-}
-
 func (p *networkPeer) GetAddress() string {
 	return fmt.Sprintf("%d", p.target)
 }
 
 func (n *emulatedNode) SetProposalCancelFunc(context.CancelFunc) {}
+
+func (n *emulatedNode) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
+	n.externalEvents <- MakeBroadcastProposalRequestEvent(proposalBytes, txnSlices)
+}
+
+func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup) {}
