@@ -30,6 +30,7 @@ After=network.target
 AssertPathExists=%I
 
 [Service]
+ExecStartPre=bash -c "[[ ! -f %I/system.json ]] && echo '{\"shared_server\":true,\"systemd_managed\":true}' > %I/system.json || :"
 ExecStart=@@BINDIR@@/algod -d %I
 User=@@USER@@
 Group=@@GROUP@@
