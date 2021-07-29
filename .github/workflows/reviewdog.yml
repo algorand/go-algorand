@@ -12,5 +12,5 @@ jobs:
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2
         with:
-          golangci_version: "v1.41.1"
+          golangci_lint_version: "v1.41.1"
           golangci_lint_flags: "--config=.golangci.yml"
