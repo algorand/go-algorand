@@ -636,7 +636,7 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 			delete(owned, aapp.aidx)
 		case allocAction, remainAllocAction:
 			// note: these should always exist because they were
-			// at least preceded by a call to PutWithCreatable
+			// at least preceded by a call to Put()
 			params, ok := owned[aapp.aidx]
 			if !ok {
 				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)

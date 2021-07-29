@@ -239,14 +239,6 @@ func (b *testBalancesPass) Put(addr basics.Address, ad basics.AccountData) error
 	return nil
 }
 
-func (b *testBalancesPass) PutWithCreatable(addr basics.Address, ad basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
-	if b.balances == nil {
-		b.balances = make(map[basics.Address]basics.AccountData)
-	}
-	b.balances[addr] = ad
-	return nil
-}
-
 func (b *testBalancesPass) ConsensusParams() config.ConsensusParams {
 	return b.proto
 }
@@ -263,7 +255,7 @@ func (b *testBalancesPass) StatefulEval(params logic.EvalParams, aidx basics.App
 	return true, b.delta, nil
 }
 
-// ResetWrites clears side effects of Put/PutWithCreatable
+// ResetWrites clears side effects of Put.
 func (b *testBalances) ResetWrites() {
 	b.put = 0
 	b.putBalances = nil
