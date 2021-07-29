@@ -31,8 +31,31 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-// TestTxnSync sends payments between two nodes, and verifies that
+// TestTxnSync sends payments by two nodes, and verifies that
 // each transaction is received by the other node and the relay
+//
+// The test sets up a network with 2 nodes and 2 relays.
+// The two nodes send payment transactions.
+//
+// For each transaction, the test checks if the relays and the nodes
+// (including the node that originated the transaction) have the
+// transaction in the pool (i.e. the transactionInfo.ConfirmedRound ==
+// 0).
+//
+// The tests needs a delicate balance to pass.
+//
+// The transactions need to be checked in the pool fast enough before
+// they are moved out to the block.
+//
+// In order to quickly test them while maintaining a high transaction
+// throughput, the checks need to be performed in parallel.
+//
+// The parallel checks require open files for the rest
+// connections. Too many of them and the system will complain about
+// too many open files.
+//
+// The test keeps the number of simultaneous open connections via
+// maxParallelChecks.
 func TestTxnSync(t *testing.T) {
 	t.Parallel()
 
@@ -69,7 +92,7 @@ func TestTxnSync(t *testing.T) {
 		t:                    t,
 		ctx:                  ctx,
 		client:               &node1,
-		othersToVerify:       []chan string{n2chan, r1chan, r2chan},
+		othersToVerify:       []chan string{n2chan, r1chan, r2chan, n1chan},
 		selfToVerify:         n1chan,
 		pendingVerification:  make(map[string]bool),
 		parallelCheckChannel: parallelCheckChannel,
@@ -80,7 +103,7 @@ func TestTxnSync(t *testing.T) {
 		t:                    t,
 		ctx:                  ctx,
 		client:               &node2,
-		othersToVerify:       []chan string{n1chan, r1chan, r2chan},
+		othersToVerify:       []chan string{n1chan, r1chan, r2chan, n2chan},
 		selfToVerify:         n2chan,
 		pendingVerification:  make(map[string]bool),
 		parallelCheckChannel: parallelCheckChannel,
@@ -91,7 +114,7 @@ func TestTxnSync(t *testing.T) {
 		t:                    t,
 		ctx:                  ctx,
 		client:               &relay1,
-		othersToVerify:       []chan string{n1chan, n2chan, r2chan},
+		othersToVerify:       []chan string{n1chan, n2chan, r2chan, r1chan},
 		selfToVerify:         r1chan,
 		pendingVerification:  make(map[string]bool),
 		parallelCheckChannel: parallelCheckChannel,
@@ -102,7 +125,7 @@ func TestTxnSync(t *testing.T) {
 		t:                    t,
 		ctx:                  ctx,
 		client:               &relay2,
-		othersToVerify:       []chan string{n1chan, n2chan, r1chan},
+		othersToVerify:       []chan string{n1chan, n2chan, r1chan, r2chan},
 		selfToVerify:         r2chan,
 		pendingVerification:  make(map[string]bool),
 		parallelCheckChannel: parallelCheckChannel,
@@ -154,7 +177,7 @@ func TestTxnSync(t *testing.T) {
 		require.NoError(t, err, "Failed to send transaction on iteration %d", i)
 		ttn2.addTransactionToVerify(tx2.ID().String())
 		if i%100 == 0 {
-			fmt.Printf("txn iteration %d\n", i)
+			fmt.Printf("txn sent  %d / %d\n", i, numberOfSends)
 		}
 	}
 
@@ -176,7 +199,6 @@ func TestTxnSync(t *testing.T) {
 
 	unprocessed := 0
 	for x := 0; x < numberOfSends/10; x++ {
-		fmt.Printf("unprocessed items: %d\n", unprocessed)
 		select {
 		case <-ctx.Done():
 			require.True(t, false, "Context canceled due to an error")
@@ -231,7 +253,11 @@ func (tt *transactionTracker) terminate() {
 // This should not block to maintain the transaction rate. Hence, the channel is large enough.
 func (tt *transactionTracker) addTransactionToVerify(transactionID string) {
 	for _, c := range tt.othersToVerify {
-		c <- transactionID
+		select {
+		case <-tt.ctx.Done():
+			return
+		case c <- transactionID:
+		}
 	}
 }
 
@@ -247,9 +273,13 @@ func (tt *transactionTracker) verifyTransactions() {
 			tt.pendingVerification[tid] = true
 			tt.mu.Unlock()
 			// This may be blocked untill there is room in parallelCheckChannel
-			tt.parallelCheckChannel <- true
-			tt.wg.Add(1)
-			go tt.checkIfReceivedTransaction(tid)
+			select {
+			case <-tt.ctx.Done():
+				return
+			case tt.parallelCheckChannel <- true:
+				tt.wg.Add(1)
+				go tt.checkIfReceivedTransaction(tid)
+			}
 		}
 	}
 }
@@ -270,22 +300,18 @@ func (tt *transactionTracker) checkIfReceivedTransaction(transactionID string) {
 				if err.Error() != "HTTP 404 Not Found: couldn't find the required transaction in the required range" {
 					require.NoError(tt.t, err)
 					tt.cancelFunc()
-					fmt.Println(err)
 				}
 				throttleRate(startTime, 3, tries)
 				continue
 			}
+			// If we got txn information
 			if transactionInfo.ConfirmedRound > 0 {
-				fmt.Printf("Out of pool %d try %d\n", int(transactionInfo.ConfirmedRound), tries)
 				tt.cancelFunc()
+				require.True(tt.t, false)
 			}
 			require.Equal(tt.t, 0, int(transactionInfo.ConfirmedRound))
 		}
 		break
-	}
-	if tries > 10 {
-		fmt.Print("Tries ")
-		fmt.Println(tries)
 	}
 	<-tt.parallelCheckChannel
 	// if received
@@ -297,12 +323,10 @@ func (tt *transactionTracker) checkIfReceivedTransaction(transactionID string) {
 // Retruns true if all the associated channels are empty
 func (tt *transactionTracker) channelsAreEmpty() bool {
 	if len(tt.selfToVerify) > 0 {
-		fmt.Printf("channelsAreEmpty0 %d\n", len(tt.selfToVerify))
 		return false
 	}
 	for _, c := range tt.othersToVerify {
 		if len(c) > 0 {
-			fmt.Printf("channelsAreEmpty %d\n", len(c))
 			return false
 		}
 	}
