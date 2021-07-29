@@ -8,7 +8,9 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: sudo apt-get -y -q install libboost-math-dev
-      - run: make crypto/libs/linux/amd64/lib/libsodium.a
+        # move go out of the way temporarily to avoid "go list ./..." from installing modules
+      - run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+        name: make libsodium.a
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
         with:
@@ -28,7 +30,7 @@ jobs:
           skip-go-installation: true
 
           # Optional: if set to true then the action don't cache or restore ~/go/pkg.
-          skip-pkg-cache: true
+          # skip-pkg-cache: true
 
           # Optional: if set to true then the action don't cache or restore ~/.cache/go-build.
           # skip-build-cache: true
