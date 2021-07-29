@@ -175,7 +175,7 @@ func TestTxnSync(t *testing.T) {
 	require.True(t, ttn1.channelsAreEmpty())
 
 	unprocessed := 0
-	for x := 0; x < numberOfSends / 10 ; x++ {
+	for x := 0; x < numberOfSends/10; x++ {
 		fmt.Printf("unprocessed items: %d\n", unprocessed)
 		select {
 		case <-ctx.Done():
@@ -186,7 +186,7 @@ func TestTxnSync(t *testing.T) {
 		ttn1.mu.Lock()
 		unprocessed = len(ttn1.pendingVerification)
 		ttn1.mu.Unlock()
-		
+
 		ttn2.mu.Lock()
 		unprocessed += len(ttn2.pendingVerification)
 		ttn2.mu.Unlock()
@@ -199,12 +199,11 @@ func TestTxnSync(t *testing.T) {
 		unprocessed += len(ttr2.pendingVerification)
 		ttr2.mu.Unlock()
 
-
+		if unprocessed == 0 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-
 	require.Equal(t, 0, unprocessed)
 }
 
@@ -298,12 +297,12 @@ func (tt *transactionTracker) checkIfReceivedTransaction(transactionID string) {
 // Retruns true if all the associated channels are empty
 func (tt *transactionTracker) channelsAreEmpty() bool {
 	if len(tt.selfToVerify) > 0 {
-		fmt.Printf("channelsAreEmpty0 %d\n", len(tt.selfToVerify) )
+		fmt.Printf("channelsAreEmpty0 %d\n", len(tt.selfToVerify))
 		return false
 	}
 	for _, c := range tt.othersToVerify {
 		if len(c) > 0 {
-			fmt.Printf("channelsAreEmpty %d\n", len(c) )
+			fmt.Printf("channelsAreEmpty %d\n", len(c))
 			return false
 		}
 	}
