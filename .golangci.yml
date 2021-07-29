@@ -3,6 +3,7 @@ run:
   tests: true
   
 linters:
+  disable-all: true
   enable:
     - errcheck
     - gofmt
@@ -10,17 +11,13 @@ linters:
     - govet
     - ineffassign
     - misspell
-    - staticcheck
-    - structcheck
-    - typecheck
-    - varcheck
-    - deadcode
-    - gosimple
-    - unused
-
-  disable:
     
 linters-settings:
+  custom:
+    partitiontest:
+      path: cmd/partitiontest_linter/plugin.so
+      description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
+      original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
 #  govet:
 #    check-shadowing: true
 
