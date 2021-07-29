@@ -183,23 +183,23 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 			return ep
 		}
 
-		// XXX check if round.number = propRound.number but branch != propbranch
+		// XXXXX check if round.number = propRound.number but branch != propbranch
 		// XXX frontier of speculation --
 		// if propRound.number < p.Round {
 
 		// pipeline for next round
 		// XXX or other branch on same round? don't assume p.Round+1
 		//e2 := r.dispatch(p, in, proposalMachineRound, p.Round+1, 0, 0)
-		e2 := r.dispatch(p, in, proposalMachineRound, p.Round, 0, 0)
+		e2 := r.dispatch(p, in, proposalMachineRound, propRound, 0, 0)
 		if e2.t() == payloadRejected {
 			return e2
 		}
 		ep := e2.(payloadProcessedEvent) // e2.t() == payloadPipelined
 		//ep.Round = p.Round + 1
-		ep.Round = p.Round
+		ep.Round = propRound
 
 		//pipelinedRound = p.Round + 1
-		pipelinedRound = p.Round
+		pipelinedRound = propRound
 		pipelinedPeriod = 0
 
 		r.t.timeRPlus1().RecPayload(ep.Proposal.OriginalPeriod, propose, ep.Proposal)

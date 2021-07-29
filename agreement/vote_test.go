@@ -68,7 +68,8 @@ func TestVoteValidation(t *testing.T) {
 			av, err := unauthenticatedVote.verify(ledger)
 			require.NoError(t, err)
 
-			require.Equal(t, av.R.Round, round)
+			require.Equal(t, av.R.Round, round.Number)
+			require.Equal(t, av.R.Branch, round.Branch)
 			require.Equal(t, av.R.Period, period)
 			require.Equal(t, av.R.Step, step(i))
 

@@ -242,10 +242,11 @@ func voteStepFresh(descr string, proto protocol.ConsensusVersion, mine, vote ste
 	return nil
 }
 
-const alwaysFresh = true
+const alwaysFresh = false
 
 // voteFresh determines whether a vote satisfies freshness rules.
 func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote unauthenticatedVote) error {
+	// XXXXX update voteFresh rules for pipelining
 	if alwaysFresh { // XXX for now
 		return nil
 	}

@@ -64,7 +64,7 @@ func (p *player) underlying() actor {
 }
 
 func (p *player) forgetBeforeRound() basics.Round {
-	return p.Round.Number - 1
+	return p.Round.Number
 }
 
 // decode implements serializableActor

@@ -204,8 +204,8 @@ func (pair unauthenticatedEquivocationVote) verify(l LedgerReader) (equivocation
 		return equivocationVote{}, fmt.Errorf("isEquivocationPair: not an equivocation pair: identical vote (block hash %v == %v)", pair.Proposals[0], pair.Proposals[1])
 	}
 
-	rv0 := rawVote{Sender: pair.Sender, Round: pair.Round, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[0]}
-	rv1 := rawVote{Sender: pair.Sender, Round: pair.Round, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[1]}
+	rv0 := rawVote{Sender: pair.Sender, Round: pair.Round, Branch: pair.Branch, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[0]}
+	rv1 := rawVote{Sender: pair.Sender, Round: pair.Round, Branch: pair.Branch, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[1]}
 
 	uv0 := unauthenticatedVote{R: rv0, Cred: pair.Cred, Sig: pair.Sigs[0]}
 	uv1 := unauthenticatedVote{R: rv1, Cred: pair.Cred, Sig: pair.Sigs[1]}
@@ -223,6 +223,7 @@ func (pair unauthenticatedEquivocationVote) verify(l LedgerReader) (equivocation
 	return equivocationVote{
 		Sender:    pair.Sender,
 		Round:     pair.Round,
+		Branch:    pair.Branch,
 		Period:    pair.Period,
 		Step:      pair.Step,
 		Cred:      v0.Cred,
@@ -233,12 +234,12 @@ func (pair unauthenticatedEquivocationVote) verify(l LedgerReader) (equivocation
 
 // the first member of the equivocation pair
 func (pair equivocationVote) v0() vote {
-	rv := rawVote{Sender: pair.Sender, Round: pair.Round, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[0]}
+	rv := rawVote{Sender: pair.Sender, Round: pair.Round, Branch: pair.Branch, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[0]}
 	return vote{R: rv, Cred: pair.Cred, Sig: pair.Sigs[0]}
 }
 
 // the second member of the equivocation pair
 func (pair equivocationVote) v1() vote {
-	rv := rawVote{Sender: pair.Sender, Round: pair.Round, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[1]}
+	rv := rawVote{Sender: pair.Sender, Round: pair.Round, Branch: pair.Branch, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[1]}
 	return vote{R: rv, Cred: pair.Cred, Sig: pair.Sigs[1]}
 }

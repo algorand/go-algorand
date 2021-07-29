@@ -140,10 +140,22 @@ func (router *rootRouter) update(state actor, r round, gc bool) {
 // submitTop is a convenience method used to submit the event directly into the root of the state machine tree
 // (i.e., to the playerMachine).
 func (router *rootRouter) submitTop(t *tracer, state actor, e event) (actor, []action) {
+	if pl, ok := state.(*player); ok {
+		// TODO move cadaver calls to somewhere cleaner
+		t.traceInput(pl.Round, pl.Period, *pl, e) // cadaver
+		t.ainTop(demultiplexer, playerMachine, *pl, e, roundZero, 0, 0)
+	}
+
 	router.update(state, roundZero, true)
 	// XXX trace calls moved to pipelinePlayer.handleRoundEvent
 	handle := routerHandle{t: t, r: router, src: playerMachine}
 	a := router.root.handle(handle, e)
+
+	if pl, ok := state.(*player); ok {
+		t.aoutTop(demultiplexer, playerMachine, a, roundZero, 0, 0)
+		t.traceOutput(pl.Round, pl.Period, *pl, a) // cadaver
+	}
+
 	p := router.root.underlying()
 	return p, a
 }
@@ -166,7 +178,7 @@ func (router *rootRouter) submitTopAutopsyXXX(t *tracer, p player, e event) (pla
 }
 
 func (router *rootRouter) dispatch(t *tracer, state player, e event, src stateMachineTag, dest stateMachineTag, r round, p period, s step) event {
-	router.update(router.root.underlying(), r, true)
+	router.update(&state, r, true)
 	if router.proposalRoot.T() == dest {
 		handle := routerHandle{t: t, r: router, src: proposalMachine}
 		return router.proposalRoot.handle(handle, state, e)

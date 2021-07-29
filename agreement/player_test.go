@@ -2788,6 +2788,7 @@ func TestPlayer_RejectsCertThresholdFromPreviousRound(t *testing.T) {
 		err, panicErr := pM.transition(msg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
+		// XXX produces ignoreAction due to filtered vote from bad round, could assert this
 	}
 	bun := unauthenticatedBundle{
 		Round:    rm1.Number,
