@@ -183,11 +183,23 @@ func TestTxnSync(t *testing.T) {
 			return
 		default:
 		}
-		unprocessed = len(ttn1.pendingVerification) +
-			len(ttn2.pendingVerification) +
-			len(ttr1.pendingVerification) +
-			len(ttr2.pendingVerification)
-		if unprocessed == 0 {
+		ttn1.mu.Lock()
+		unprocessed = len(ttn1.pendingVerification)
+		ttn1.mu.Unlock()
+		
+		ttn2.mu.Lock()
+		unprocessed += len(ttn2.pendingVerification)
+		ttn2.mu.Unlock()
+
+		ttr1.mu.Lock()
+		unprocessed += len(ttr1.pendingVerification)
+		ttr1.mu.Unlock()
+
+		ttr2.mu.Lock()
+		unprocessed += len(ttr2.pendingVerification)
+		ttr2.mu.Unlock()
+
+
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -211,6 +223,8 @@ type transactionTracker struct {
 
 func (tt *transactionTracker) terminate() {
 	tt.wg.Wait()
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
 	require.Equal(tt.t, 0, len(tt.pendingVerification))
 }
 
