@@ -18,6 +18,7 @@ package transactions
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"path/filepath"
 	"sync"
@@ -35,51 +36,77 @@ import (
 func TestTxnSync(t *testing.T) {
 	t.Parallel()
 
+	// maxParallelChecks is the number of goroutines will simultaniously check if the
+	// transaction is received by the node.
+	// If this is too large, the system will report too many open files.
+	// If too small, the txns will be moved to the block.
+	maxParallelChecks := 100
 	numberOfSends := 2500
-	targetRate := 30 // txn/sec
+	targetRate := 300 // txn/sec
 	if testing.Short() {
-		numberOfSends = 3
+		numberOfSends = 100
 	}
-	templatePath := filepath.Join("nettemplates", "TwoNodes50EachWithRelay.json")
+	templatePath := filepath.Join("nettemplates", "TwoNodes50EachWithTwoRelays.json")
 
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, templatePath)
 
 	node1 := fixture.GetLibGoalClientForNamedNode("Node1")
 	node2 := fixture.GetLibGoalClientForNamedNode("Node2")
-	relay := fixture.GetLibGoalClientForNamedNode("Relay")
+	relay1 := fixture.GetLibGoalClientForNamedNode("Relay1")
+	relay2 := fixture.GetLibGoalClientForNamedNode("Relay2")
 
-	n1chan := make(chan string)
-	n2chan := make(chan string)
-	rchan := make(chan string)
+	n1chan := make(chan string, numberOfSends)
+	n2chan := make(chan string, numberOfSends)
+	r1chan := make(chan string, numberOfSends*2)
+	r2chan := make(chan string, numberOfSends*2)
+
+	parallelCheckChannel := make(chan bool, maxParallelChecks)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	ttn1 := transactionTracker{
-		t:                   t,
-		ctx:                 ctx,
-		client:              &node1,
-		othersToVerify:      []chan string{n2chan, rchan},
-		selfToVerify:        n1chan,
-		pendingVerification: make(map[string]bool),
+		t:                    t,
+		ctx:                  ctx,
+		client:               &node1,
+		othersToVerify:       []chan string{n2chan, r1chan, r2chan},
+		selfToVerify:         n1chan,
+		pendingVerification:  make(map[string]bool),
+		parallelCheckChannel: parallelCheckChannel,
+		cancelFunc:           cancel,
 	}
 
 	ttn2 := transactionTracker{
-		t:                   t,
-		ctx:                 ctx,
-		client:              &node2,
-		othersToVerify:      []chan string{n1chan, rchan},
-		selfToVerify:        n2chan,
-		pendingVerification: make(map[string]bool),
+		t:                    t,
+		ctx:                  ctx,
+		client:               &node2,
+		othersToVerify:       []chan string{n1chan, r1chan, r2chan},
+		selfToVerify:         n2chan,
+		pendingVerification:  make(map[string]bool),
+		parallelCheckChannel: parallelCheckChannel,
+		cancelFunc:           cancel,
 	}
 
-	ttr := transactionTracker{
-		t:                   t,
-		ctx:                 ctx,
-		client:              &relay,
-		othersToVerify:      []chan string{n1chan, n2chan},
-		selfToVerify:        rchan,
-		pendingVerification: make(map[string]bool),
+	ttr1 := transactionTracker{
+		t:                    t,
+		ctx:                  ctx,
+		client:               &relay1,
+		othersToVerify:       []chan string{n1chan, n2chan, r2chan},
+		selfToVerify:         r1chan,
+		pendingVerification:  make(map[string]bool),
+		parallelCheckChannel: parallelCheckChannel,
+		cancelFunc:           cancel,
+	}
+
+	ttr2 := transactionTracker{
+		t:                    t,
+		ctx:                  ctx,
+		client:               &relay2,
+		othersToVerify:       []chan string{n1chan, n2chan, r1chan},
+		selfToVerify:         r2chan,
+		pendingVerification:  make(map[string]bool),
+		parallelCheckChannel: parallelCheckChannel,
+		cancelFunc:           cancel,
 	}
 
 	defer fixture.Shutdown()
@@ -95,76 +122,108 @@ func TestTxnSync(t *testing.T) {
 	minTxnFee, minAcctBalance, err := fixture.CurrentMinFeeAndBalance()
 	require.NoError(t, err)
 
-	transactionFee := minTxnFee + 5
+	transactionFee := minTxnFee * 5
 	amount1 := minAcctBalance / uint64(numberOfSends)
 	amount2 := minAcctBalance / uint64(numberOfSends)
 
 	go ttn1.verifyTransactions()
 	go ttn2.verifyTransactions()
-	go ttr.verifyTransactions()
+	go ttr1.verifyTransactions()
+	go ttr2.verifyTransactions()
+
+	defer ttn1.terminate()
+	defer ttn2.terminate()
+	defer ttr1.terminate()
+	defer ttr2.terminate()
+	defer cancel()
 
 	st := time.Now()
-
 	for i := 0; i < numberOfSends; i++ {
+		select {
+		case <-ctx.Done():
+			require.True(t, false, "Context canceled due to an error at iteration %d", i)
+			return
+		default:
+		}
+		throttleRate(st, targetRate, i*2)
 		tx1, err := node1.SendPaymentFromUnencryptedWallet(account1, account2, transactionFee, amount1, GenerateRandomBytes(8))
 		require.NoError(t, err, "Failed to send transaction on iteration %d", i)
 		ttn1.addTransactionToVerify(tx1.ID().String())
+
 		tx2, err := node2.SendPaymentFromUnencryptedWallet(account2, account1, transactionFee, amount2, GenerateRandomBytes(8))
 		require.NoError(t, err, "Failed to send transaction on iteration %d", i)
-		// Post "http://127.0.0.1:57255/v1/transactions": dial tcp 127.0.0.1:57255: connect: can't assign requested address
 		ttn2.addTransactionToVerify(tx2.ID().String())
-
-		throttleTransactionRate(st, targetRate, i)
+		if i%100 == 0 {
+			fmt.Printf("txn iteration %d\n", i)
+		}
 	}
 
-	// wait until all channels are empty for max 1 second
-	for x := 0; x < 100; x++ {
+	// wait until all channels are empty for max 50 seconds
+	for x := 0; x < 250; x++ {
+		select {
+		case <-ctx.Done():
+			require.True(t, false, "Context canceled due to an error")
+			return
+		default:
+		}
+
 		if ttn1.channelsAreEmpty() {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 	}
 	require.True(t, ttn1.channelsAreEmpty())
 
-	for x := 0; x < 100; x++ {
-		unprocessed := len(ttn1.pendingVerification) +
+	unprocessed := 0
+	for x := 0; x < numberOfSends / 10 ; x++ {
+		fmt.Printf("unprocessed items: %d\n", unprocessed)
+		select {
+		case <-ctx.Done():
+			require.True(t, false, "Context canceled due to an error")
+			return
+		default:
+		}
+		unprocessed = len(ttn1.pendingVerification) +
 			len(ttn2.pendingVerification) +
-			len(ttr.pendingVerification)
+			len(ttr1.pendingVerification) +
+			len(ttr2.pendingVerification)
 		if unprocessed == 0 {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
-	cancel()
-	ttn1.wg.Wait()
-	ttn2.wg.Wait()
-	ttr.wg.Wait()
-
-	require.Empty(t, ttn1.pendingVerification)
-	require.Empty(t, ttn2.pendingVerification)
-	require.Empty(t, ttr.pendingVerification)
+	require.Equal(t, 0, unprocessed)
 }
 
 type transactionTracker struct {
-	t                   *testing.T
-	ctx                 context.Context
-	mu                  sync.Mutex
-	wg                  sync.WaitGroup
-	client              *libgoal.Client
-	othersToVerify      []chan string
-	selfToVerify        chan string
-	pendingVerification map[string]bool
+	t                    *testing.T
+	ctx                  context.Context
+	mu                   sync.Mutex
+	wg                   sync.WaitGroup
+	client               *libgoal.Client
+	othersToVerify       []chan string
+	selfToVerify         chan string
+	pendingVerification  map[string]bool
+	parallelCheckChannel chan bool
+	cancelFunc           context.CancelFunc
+}
+
+func (tt *transactionTracker) terminate() {
+	tt.wg.Wait()
+	require.Equal(tt.t, 0, len(tt.pendingVerification))
 }
 
 // Adds the transaction to the channels of the nodes intended to receive the transaction
+// This should not block to maintain the transaction rate. Hence, the channel is large enough.
 func (tt *transactionTracker) addTransactionToVerify(transactionID string) {
 	for _, c := range tt.othersToVerify {
 		c <- transactionID
 	}
 }
 
-// Pulls transactions from the channel and async checks if recived by the node  
+// Pulls transactions from the channel and pushes them to another limited bandwith channel
+// Then, the check if the node received is performed async
 func (tt *transactionTracker) verifyTransactions() {
 	for {
 		select {
@@ -174,30 +233,48 @@ func (tt *transactionTracker) verifyTransactions() {
 			tt.mu.Lock()
 			tt.pendingVerification[tid] = true
 			tt.mu.Unlock()
+			// This may be blocked untill there is room in parallelCheckChannel
+			tt.parallelCheckChannel <- true
+			tt.wg.Add(1)
 			go tt.checkIfReceivedTransaction(tid)
-		default:
 		}
 	}
 }
 
 // Waits until gets a confirmation that the transaction is recieved by the node
 func (tt *transactionTracker) checkIfReceivedTransaction(transactionID string) {
-	tt.wg.Add(1)
 	defer tt.wg.Done()
+	startTime := time.Now()
+	tries := 0
 	for {
 		select {
 		case <-tt.ctx.Done():
 			return
 		default:
 			transactionInfo, err := tt.client.PendingTransactionInformation(transactionID)
+			tries++
 			if err != nil {
-				time.Sleep(200 * time.Millisecond)
+				if err.Error() != "HTTP 404 Not Found: couldn't find the required transaction in the required range" {
+					require.NoError(tt.t, err)
+					tt.cancelFunc()
+					fmt.Println(err)
+				}
+				throttleRate(startTime, 3, tries)
 				continue
 			}
-			require.NotNil(tt.t, transactionInfo)
+			if transactionInfo.ConfirmedRound > 0 {
+				fmt.Printf("Out of pool %d try %d\n", int(transactionInfo.ConfirmedRound), tries)
+				tt.cancelFunc()
+			}
+			require.Equal(tt.t, 0, int(transactionInfo.ConfirmedRound))
 		}
 		break
 	}
+	if tries > 10 {
+		fmt.Print("Tries ")
+		fmt.Println(tries)
+	}
+	<-tt.parallelCheckChannel
 	// if received
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
@@ -207,10 +284,12 @@ func (tt *transactionTracker) checkIfReceivedTransaction(transactionID string) {
 // Retruns true if all the associated channels are empty
 func (tt *transactionTracker) channelsAreEmpty() bool {
 	if len(tt.selfToVerify) > 0 {
+		fmt.Printf("channelsAreEmpty0 %d\n", len(tt.selfToVerify) )
 		return false
 	}
 	for _, c := range tt.othersToVerify {
 		if len(c) > 0 {
+			fmt.Printf("channelsAreEmpty %d\n", len(c) )
 			return false
 		}
 	}
@@ -218,11 +297,11 @@ func (tt *transactionTracker) channelsAreEmpty() bool {
 }
 
 // throttle transaction rate
-func throttleTransactionRate(startTime time.Time, targetRate int, totalSent int) {
+func throttleRate(startTime time.Time, targetRate int, total int) {
 	localTimeDelta := time.Now().Sub(startTime)
-	currentTps := float64(totalSent) / localTimeDelta.Seconds()
+	currentTps := float64(total) / localTimeDelta.Seconds()
 	if currentTps > float64(targetRate) {
-		sleepSec := float64(totalSent)/float64(targetRate) - localTimeDelta.Seconds()
+		sleepSec := float64(total)/float64(targetRate) - localTimeDelta.Seconds()
 		sleepTime := time.Duration(int64(math.Round(sleepSec*1000))) * time.Millisecond
 		time.Sleep(sleepTime)
 	}
