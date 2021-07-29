@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -31,13 +32,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
+	"github.com/algorand/go-algorand/util/db"
 )
+
+// TODO: remove print statements
 
 // this test checks that the txsync outgoing message rate
 // varies according to the transaction rate
 func TestMessageRateChangesWithTxnRate(t *testing.T) {
-	txnRates := []uint{20, 40, 80, 160}
+	txnRates := []uint{50, 300, 800, 1300}
 	if testing.Short() {
 		txnRates = []uint{20, 40}
 	}
@@ -60,12 +67,12 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetupNoStart(t, templatePath)
-	configDir, err := fixture.GetNodeDir("Node")
+	nodeDataDir, err := fixture.GetNodeDir("Node")
 	a.NoError(err)
-	cfg, err := config.LoadConfigFromDisk(configDir)
+	cfg, err := config.LoadConfigFromDisk(nodeDataDir)
 	a.NoError(err)
 	cfg.EnableVerbosedTransactionSyncLogging = true
-	cfg.SaveToDisk(configDir)
+	cfg.SaveToDisk(nodeDataDir)
 	fixture.Start()
 
 	defer fixture.Shutdown()
@@ -74,16 +81,20 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	accountsList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
 	a.NoError(err)
 	account := accountsList[0].Address
+	clientAlgod := fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(nodeDataDir))
 
-	minTxnFee, minAcctBalance, err := fixture.CurrentMinFeeAndBalance()
+	_, minAcctBalance, err := fixture.CurrentMinFeeAndBalance()
 	a.NoError(err)
 
-	transactionFee := minTxnFee + 5
 	amount := minAcctBalance * 3 / 2
 
-	// build the path for the primary node's log file
-	nodeDataDir, err := fixture.GetNodeDir("Node")
+	// get the node account's secret key
+	secretKey, err := fetchSecretKey(client, nodeDataDir)
 	a.NoError(err)
+	signatureSecrets, err := crypto.SecretKeyToSignatureSecrets(secretKey)
+	a.NoError(err)
+
+	// build the path for the primary node's log file
 	logPath := filepath.Join(nodeDataDir, "node.log")
 
 	// Get the relay's gossip port
@@ -112,6 +123,11 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	go parseLog(ctx, logPath, listeningURL, errChan, msgRateChan, resetChan)
 
 	for _, txnRate := range txnRates {
+		// get the min transaction fee
+		minTxnFee, _, err := fixture.CurrentMinFeeAndBalance()
+		a.NoError(err)
+		transactionFee := minTxnFee * 100
+
 		startTime := time.Now()
 		txnSentCount := uint(0)
 
@@ -122,13 +138,22 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 				break
 			}
 
-			_, err := client.SendPaymentFromUnencryptedWallet(account, account, transactionFee, amount, GenerateRandomBytes(8))
-			a.NoError(err, "fixture should be able to send money")
+			tx, err := client.ConstructPayment(account, account, transactionFee, amount, GenerateRandomBytes(8), "", [32]byte{}, 0, 0)
+			a.NoError(err)
+			signedTxn := tx.Sign(signatureSecrets)
+
+			_, err = clientAlgod.SendRawTransaction(signedTxn)
+			a.NoError(err, "Unable to send raw txn")
+
+			// _, err := client.SendPaymentFromUnencryptedWallet(account, account, transactionFee, amount, GenerateRandomBytes(8))
 			txnSentCount++
 
 			throttleTransactionRate(startTime, txnRate, txnSentCount)
 		}
 
+		endTimeDelta := time.Since(startTime)
+		avgTps := float64(txnSentCount) / endTimeDelta.Seconds()
+		fmt.Println("Avg TPS: ", avgTps, " Expected: ", txnRate)
 		// wait for some time for the logs to get flushed
 		time.Sleep(2 * time.Second)
 		// fmt.Println("Sent reset")
@@ -183,6 +208,7 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 		case <-resetChan:
 			msgRate := float64(messageCount) / (float64(lastTimestamp.Sub(firstTimestamp) / time.Second))
 			msgRateChan <- msgRate
+			fmt.Println("Message Rate: ", msgRate, " Message Count: ", messageCount, " Time elapsed: ", lastTimestamp.Sub(firstTimestamp)/time.Second)
 			messageCount = 0
 			firstTimestamp = time.Time{}
 			lastTimestamp = time.Time{}
@@ -225,4 +251,46 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 			messageCount++
 		}
 	}
+}
+
+func fetchSecretKey(client libgoal.Client, dataDir string) (crypto.PrivateKey, error) {
+	secretKey := crypto.PrivateKey{}
+	genID, err := client.GenesisID()
+	if err != nil {
+		return secretKey, err
+	}
+
+	keyDir := filepath.Join(dataDir, genID)
+	files, err := ioutil.ReadDir(keyDir)
+	if err != nil {
+		return secretKey, err
+	}
+
+	// For each of these files
+	for _, info := range files {
+		var handle db.Accessor
+
+		filename := info.Name()
+
+		// If it isn't a key file we care about, skip it
+		if config.IsRootKeyFilename(filename) {
+			handle, err = db.MakeAccessor(filepath.Join(keyDir, filename), true, false)
+			if err != nil {
+				// Couldn't open it, skip it
+				continue
+			}
+
+			// Fetch an account.Root from the database
+			root, err := account.RestoreRoot(handle)
+			if err != nil {
+				return secretKey, err
+			}
+
+			secretKey = crypto.PrivateKey(root.Secrets().SK)
+			break
+		}
+
+	}
+
+	return secretKey, nil
 }
