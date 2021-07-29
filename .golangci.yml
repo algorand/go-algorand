@@ -11,18 +11,6 @@ linters:
     - govet
     - ineffassign
     - misspell
-
-  disable:
-    - deadcode
-    - errcheck
-    - gosimple
-    - staticcheck
-    - structcheck
-    - typecheck
-    - varcheck
-    - deadcode
-    - gosimple
-    - unused
     
 linters-settings:
   custom:
