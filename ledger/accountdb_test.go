@@ -489,7 +489,7 @@ func initTestAccountDB(tx *sql.Tx, initAccounts map[basics.Address]basics.Accoun
 	if err != nil {
 		return
 	}
-	err = createAccountExtTable(tx)
+	err = createAccountExtTable(tx, nil, config.ConsensusParams{})
 	return
 }
 
@@ -1450,7 +1450,7 @@ func benchmarkInitBalances(b *testing.B, numAccounts int, dbs db.Pair, proto con
 	require.NoError(b, err)
 	err = accountsAddNormalizedBalance(tx, proto)
 	require.NoError(b, err)
-	err = createAccountExtTable(tx)
+	err = createAccountExtTable(tx, nil, config.ConsensusParams{})
 	require.NoError(b, err)
 
 	// create large holdings as an update because accountsInit does not know about accountext table

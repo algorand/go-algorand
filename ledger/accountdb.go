@@ -680,7 +680,15 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		var ot basics.OverflowTracker
 		var totals ledgercore.AccountTotals
 
+		assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
 		for addr, data := range initAccounts {
+			// postpone large accounts creation to createAccountExtTable
+			if len(data.Assets) > assetsThreshold {
+				continue
+			}
+			if len(data.AssetParams) > assetsThreshold {
+				continue
+			}
 			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
 				addr[:], protocol.Encode(&data))
 			if err != nil {
@@ -745,13 +753,13 @@ func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) erro
 			return err
 		}
 
-		var data basics.AccountData
-		err = protocol.Decode(buf, &data)
+		var pad ledgercore.PersistedAccountData
+		err = protocol.Decode(buf, &pad)
 		if err != nil {
 			return err
 		}
 
-		normBalance := data.NormalizedOnlineBalance(proto)
+		normBalance := pad.AccountData.NormalizedOnlineBalance(proto)
 		if normBalance > 0 {
 			_, err = tx.Exec("UPDATE accountbase SET normalizedonlinebalance=? WHERE address=?", normBalance, addrbuf)
 			if err != nil {
@@ -807,11 +815,70 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 	return num, addresses, err
 }
 
-func createAccountExtTable(tx *sql.Tx) error {
+func createAccountExtTable(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) error {
 	tableCreate := `CREATE TABLE IF NOT EXISTS accountext (
 		id integer primary key,
 		data blob)`
 	_, err := tx.Exec(tableCreate)
+
+	totals, err := accountsTotals(tx, false)
+	if err != nil {
+		return err
+	}
+	if len(initAccounts) == 0 {
+		return nil
+	}
+
+	insertStmt, err := tx.Prepare("INSERT INTO accountext (data) VALUES (?)")
+	if err == nil {
+		var ot basics.OverflowTracker
+		assetsThreshold := config.Consensus[protocol.ConsensusV18].MaxAssetsPerAccount
+
+		for addr, data := range initAccounts {
+			pad := ledgercore.PersistedAccountData{AccountData: data}
+			modified := false
+			if len(pad.Assets) > assetsThreshold {
+				pad.ExtendedAssetHolding.ConvertToGroups(pad.Assets)
+
+				err = modifyAssetGroup(insertStmt, &pad.ExtendedAssetHolding)
+				if err != nil {
+					return err
+				}
+				pad.Assets = nil
+				modified = true
+			}
+			if len(pad.AssetParams) > assetsThreshold {
+				pad.ExtendedAssetParams.ConvertToGroups(pad.AssetParams)
+				err = modifyAssetGroup(insertStmt, &pad.ExtendedAssetParams)
+				if err != nil {
+					return err
+				}
+
+				pad.AssetParams = nil
+				modified = true
+			}
+			if !modified {
+				continue
+			}
+
+			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
+				addr[:], protocol.Encode(&pad))
+			if err != nil {
+				return err
+			}
+			totals.AddAccount(proto, pad.AccountData, &ot)
+
+			if ot.Overflowed {
+				return fmt.Errorf("overflow computing totals")
+			}
+
+			err = accountsPutTotals(tx, totals, false)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return err
 }
 
@@ -2344,13 +2411,13 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 			copy(addr[:], addrbuf)
 
-			var accountData basics.AccountData
-			err = protocol.Decode(buf, &accountData)
+			var pad ledgercore.PersistedAccountData
+			err = protocol.Decode(buf, &pad)
 			if err != nil {
 				iterator.Close(ctx)
 				return
 			}
-			hash := accountHashBuilder(addr, accountData.RewardsBase, buf)
+			hash := accountHashBuilder(addr, pad.AccountData.RewardsBase, buf)
 			_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
 			if err != nil {
 				iterator.Close(ctx)

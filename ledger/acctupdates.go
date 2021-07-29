@@ -1618,7 +1618,7 @@ func (au *accountUpdates) upgradeDatabaseSchema5(ctx context.Context, tx *sql.Tx
 	current := int32(5)
 	upgraded := current + 1
 
-	err = createAccountExtTable(tx)
+	err = createAccountExtTable(tx, au.initAccounts, au.initProto)
 	if err != nil {
 		return 0, err
 	}
