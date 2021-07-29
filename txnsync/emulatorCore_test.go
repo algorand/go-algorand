@@ -133,7 +133,7 @@ func (e *emulator) nextRound() {
 	e.currentRound++
 	for _, node := range e.nodes {
 		node.onNewRound(e.currentRound, true)
-		node.onBroadcastProposalRequest()
+		node.RelayProposal([]byte("proposal"), nil)
 	}
 }
 func (e *emulator) unblockStep() {

@@ -85,6 +85,10 @@ func (fn *mockNodeConnector) IncomingTransactionGroups(peer *Peer, messageSeq ui
 }
 func (fn *mockNodeConnector) NotifyMonitor() chan struct{} { return nil }
 
+func (fn *mockNodeConnector) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {}
+
+func (fn *mockNodeConnector) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup) {}
+
 type mockThreadPool struct {
 	execpool.BacklogPool
 }

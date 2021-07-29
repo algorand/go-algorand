@@ -75,6 +75,13 @@ type emulatedNode struct {
 	nodeRunning                         chan struct{} // channel is closed when node is running.
 }
 
+type proposalData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	proposalBytes []byte              `codec:"b,allocbound=maxNumProposalBytes"`
+	txGroupHashes []transactions.Txid `codec:"h,allocbound=maxNumTxGroupHashesBytes"` // TODO: make this []byte
+}
+
 func makeEmulatedNode(emulator *emulator, nodeIdx int) *emulatedNode {
 	en := &emulatedNode{
 		emulator:        emulator,
@@ -394,7 +401,27 @@ func (p *networkPeer) GetAddress() string {
 func (n *emulatedNode) SetProposalCancelFunc(context.CancelFunc) {}
 
 func (n *emulatedNode) RelayProposal(proposalBytes []byte, txnSlices []transactions.SignedTxnSlice) {
-	n.externalEvents <- MakeBroadcastProposalRequestEvent(proposalBytes, txnSlices)
+	data := proposalData{
+		proposalBytes: proposalBytes,
+		txGroupHashes: make([]transactions.Txid, len(txnSlices)),
+	}
+
+	txGroups := make([]transactions.SignedTxGroup, len(txnSlices))
+	encodingBuf := protocol.GetEncodingBuf()
+	for i, txnSlice := range txnSlices {
+		data.txGroupHashes[i] = txnSlice.ID()
+		txGroups[i] = transactions.SignedTxGroup{
+			Transactions:       txnSlice,
+			GroupTransactionID: data.txGroupHashes[i],
+		}
+		txGroups[i].EncodedLength = 0
+		for _, txn := range txGroups[i].Transactions {
+			encodingBuf = encodingBuf[:0]
+			txGroups[i].EncodedLength += len(txn.MarshalMsg(encodingBuf))
+		}
+	}
+
+	n.externalEvents <- MakeBroadcastProposalRequestEvent(proposalBytes, txGroups)
 }
 
 func (n *emulatedNode) HandleProposalMessage(proposalDataBytes []byte, txGroups []transactions.SignedTxGroup) {}
