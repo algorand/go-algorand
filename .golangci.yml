@@ -11,6 +11,11 @@ linters:
     - govet
     - ineffassign
     - misspell
+
+  disable:
+    - deadcode
+    - errcheck
+    - gosimple
     - staticcheck
     - structcheck
     - typecheck
