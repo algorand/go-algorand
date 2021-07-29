@@ -33,9 +33,9 @@ type (
 
 		SignatureAlgorithms []crypto.SignatureAlgorithm `codec:"sks,allocbound=-"`
 		// indicates the round that matches SignatureAlgorithms[0].
-		Origin uint64 `codec:"rnd"`
+		TreeBase uint64 `codec:"rnd"`
 		// Used to align a position to a shrank array.
-		ArrayZero uint64 `codec:"az"`
+		ArrayBase uint64 `codec:"az"`
 		Interval  uint64 `codec:"dv"`
 	}
 
@@ -73,9 +73,6 @@ type (
 		EphemeralKeys EphemeralKeys    `codec:"keys"`
 		Tree          merklearray.Tree `codec:"tree"`
 		mu            deadlock.RWMutex
-
-		// using this field, the signer can get the accurate location of merkle proof in the merklearray.Tree.
-		//OriginRound uint64 `codec:"o"`
 	}
 
 	// Verifier Is a way to verify a Signature produced by merklekeystore.Signer.
@@ -108,7 +105,7 @@ func (d *EphemeralKeys) Length() uint64 {
 func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 	ephPK := CommittablePublicKey{
 		VerifyingKey: d.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
-		Round:        indexToRound(d.Origin, d.Interval, pos),
+		Round:        indexToRound(d.TreeBase, d.Interval, pos),
 	}
 	return crypto.HashObj(&ephPK), nil
 }
@@ -143,7 +140,7 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 	}
 	ephKeys := EphemeralKeys{
 		SignatureAlgorithms: keys,
-		Origin:              firstValid,
+		TreeBase:            firstValid,
 		Interval:            divisor,
 	}
 	tree, err := merklearray.Build(&ephKeys)
@@ -175,7 +172,7 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	if err != nil {
 		return Signature{}, err
 	}
-	index := roundToIndex(m.EphemeralKeys.Origin, round, m.EphemeralKeys.Interval)
+	index := roundToIndex(m.EphemeralKeys.TreeBase, round, m.EphemeralKeys.Interval)
 	proof, err := m.Tree.Prove([]uint64{index})
 	if err != nil {
 		return Signature{}, err
@@ -193,11 +190,11 @@ func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 	if round%m.EphemeralKeys.Interval != 0 {
 		return 0, errNonExistantKey
 	}
-	if round < m.EphemeralKeys.Origin {
+	if round < m.EphemeralKeys.TreeBase {
 		return 0, errReceivedRoundIsBeforeFirst
 	}
-	pos := roundToIndex(m.EphemeralKeys.Origin, round, m.EphemeralKeys.Interval)
-	pos = pos - m.EphemeralKeys.ArrayZero
+	pos := roundToIndex(m.EphemeralKeys.TreeBase, round, m.EphemeralKeys.Interval)
+	pos = pos - m.EphemeralKeys.ArrayBase
 
 	if pos >= uint64(len(m.EphemeralKeys.SignatureAlgorithms)) {
 		return 0, errOutOfBounds
@@ -210,7 +207,7 @@ func (m *Signer) isPositionOutOfBound(pos uint64) bool {
 }
 
 func (m *Signer) isRoundPriorToFirstRound(round uint64) bool {
-	return round < m.EphemeralKeys.Origin
+	return round < m.EphemeralKeys.TreeBase
 }
 
 // Trim shortness deletes keys that existed before a specific round,
@@ -227,13 +224,13 @@ func (m *Signer) Trim(before uint64) *Signer {
 		return m.copy()
 	case errNonExistantKey:
 		// dropping keys up to the current position (not included)
-		m.dropKeys(int(roundToIndex(m.EphemeralKeys.Origin, before, m.EphemeralKeys.Interval)))
+		m.dropKeys(int(roundToIndex(m.EphemeralKeys.TreeBase, before, m.EphemeralKeys.Interval)))
 	default:
 		m.dropKeys(int(pos))
 	}
 
 	// advance the array zero location.
-	m.EphemeralKeys.ArrayZero = roundToIndex(m.EphemeralKeys.Origin, before, m.EphemeralKeys.Interval)
+	m.EphemeralKeys.ArrayBase = roundToIndex(m.EphemeralKeys.TreeBase, before, m.EphemeralKeys.Interval)
 	cpy := m.copy()
 
 	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
@@ -251,9 +248,9 @@ func (m *Signer) copy() *Signer {
 		EphemeralKeys: EphemeralKeys{
 			_struct:             struct{}{},
 			SignatureAlgorithms: make([]crypto.SignatureAlgorithm, len(m.EphemeralKeys.SignatureAlgorithms)),
-			Origin:              m.EphemeralKeys.Origin,
+			TreeBase:            m.EphemeralKeys.TreeBase,
 			Interval:            m.EphemeralKeys.Interval,
-			ArrayZero:           m.EphemeralKeys.ArrayZero,
+			ArrayBase:           m.EphemeralKeys.ArrayBase,
 		},
 		Tree: m.Tree,
 		mu:   deadlock.RWMutex{},

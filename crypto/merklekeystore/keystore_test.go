@@ -286,8 +286,8 @@ func TestMarshal(t *testing.T) {
 
 func compareSigners(a *require.Assertions, signer *Signer, cpy *Signer) {
 	a.Equal(signer.Tree, cpy.Tree)
-	a.Equal(signer.EphemeralKeys.Origin, cpy.EphemeralKeys.Origin)
-	a.Equal(signer.EphemeralKeys.ArrayZero, cpy.EphemeralKeys.ArrayZero)
+	a.Equal(signer.EphemeralKeys.TreeBase, cpy.EphemeralKeys.TreeBase)
+	a.Equal(signer.EphemeralKeys.ArrayBase, cpy.EphemeralKeys.ArrayBase)
 	a.Equal(signer.EphemeralKeys, cpy.EphemeralKeys)
 }
 
@@ -297,19 +297,19 @@ func TestKeySliceAfterSignerTrim(t *testing.T) {
 	a.NoError(err)
 
 	cpy := signer.Trim(1)
-	a.Equal(cpy.EphemeralKeys.Origin, uint64(1))
+	a.Equal(cpy.EphemeralKeys.TreeBase, uint64(1))
 	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 100)
 
 	cpy = signer.Trim(10)
-	a.Equal(cpy.EphemeralKeys.Origin, uint64(1))
-	a.Equal(cpy.EphemeralKeys.ArrayZero, uint64(9))
+	a.Equal(cpy.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(cpy.EphemeralKeys.ArrayBase, uint64(9))
 	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 91)
-	a.Equal(signer.EphemeralKeys.Origin, uint64(1))
+	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
 	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 91)
 
 	cpy = signer.Trim(101)
-	a.Equal(cpy.EphemeralKeys.Origin, uint64(1))
-	a.Equal(signer.EphemeralKeys.Origin, uint64(1))
+	a.Equal(cpy.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
 	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 0)
 	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 0)
 
@@ -363,7 +363,7 @@ func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Has
 
 	sig, err := signer.Sign(hashable, sigRound)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(signer.EphemeralKeys.Origin, sigRound, 1, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(signer.EphemeralKeys.TreeBase, sigRound, 1, hashable, sig))
 	return hashable, sig
 }
 
