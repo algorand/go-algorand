@@ -101,7 +101,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		}
 
 		// Tell the cow what asset we created
-		return balances.CreatableCreated(basics.AssetCreatable, header.Sender, basics.CreatableIndex(newidx))
+		return balances.AllocateAsset(header.Sender, newidx, true)
 	}
 
 	// Re-configuration and destroying must be done by the manager key.
@@ -130,8 +130,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		}
 
 		// Tell the cow what asset we deleted
-		err = balances.CreatableDeleted(
-			basics.AssetCreatable, creator, basics.CreatableIndex(cc.ConfigAsset))
+		err = balances.DeallocateAsset(creator, cc.ConfigAsset, true)
 		if err != nil {
 			return err
 		}

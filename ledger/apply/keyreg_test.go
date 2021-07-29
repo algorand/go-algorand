@@ -50,14 +50,6 @@ func (balances keyregTestBalances) Put(addr basics.Address, ad basics.AccountDat
 	return nil
 }
 
-func (balances keyregTestBalances) CreatableCreated(creatableType basics.CreatableType, creator basics.Address, index basics.CreatableIndex) error {
-	return nil
-}
-
-func (balances keyregTestBalances) CreatableDeleted(creatableType basics.CreatableType, creator basics.Address, index basics.CreatableIndex) error {
-	return nil
-}
-
 func (balances keyregTestBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
 	return nil
 }
@@ -70,11 +62,19 @@ func (balances keyregTestBalances) Round() basics.Round {
 	return basics.Round(4294967296)
 }
 
-func (balances keyregTestBalances) Allocate(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
+func (balances keyregTestBalances) AllocateApp(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
 	return nil
 }
 
-func (balances keyregTestBalances) Deallocate(basics.Address, basics.AppIndex, bool) error {
+func (balances keyregTestBalances) DeallocateApp(basics.Address, basics.AppIndex, bool) error {
+	return nil
+}
+
+func (balances keyregTestBalances) AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
+	return nil
+}
+
+func (balances keyregTestBalances) DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
 	return nil
 }
 

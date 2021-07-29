@@ -142,30 +142,6 @@ func (b *testBalances) Put(addr basics.Address, ad basics.AccountData) error {
 	return nil
 }
 
-func (b *testBalances) CreatableCreated(
-	creatableType basics.CreatableType, creator basics.Address,
-	index basics.CreatableIndex) error {
-	locator := basics.CreatableLocator{
-		Type:    creatableType,
-		Creator: creator,
-		Index:   index,
-	}
-	b.createdCreatables = append(b.createdCreatables, locator)
-	return nil
-}
-
-func (b *testBalances) CreatableDeleted(
-	creatableType basics.CreatableType, creator basics.Address,
-	index basics.CreatableIndex) error {
-	locator := basics.CreatableLocator{
-		Type:    creatableType,
-		Creator: creator,
-		Index:   index,
-	}
-	b.deletedCreatables = append(b.deletedCreatables, locator)
-	return nil
-}
-
 func (b *testBalances) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	if ctype == basics.AppCreatable {
 		aidx := basics.AppIndex(cidx)
@@ -186,13 +162,60 @@ func (b *testBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, s
 func (b *testBalances) ConsensusParams() config.ConsensusParams {
 	return b.proto
 }
-func (b *testBalances) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
+
+func (b *testBalances) AllocateApp(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	b.allocatedAppIdx = aidx
+
+	if global {
+		locator := basics.CreatableLocator{
+			Type:    basics.AppCreatable,
+			Creator: addr,
+			Index:   basics.CreatableIndex(aidx),
+		}
+		b.createdCreatables = append(b.createdCreatables, locator)
+	}
+
 	return nil
 }
 
-func (b *testBalances) Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
+func (b *testBalances) DeallocateApp(addr basics.Address, aidx basics.AppIndex, global bool) error {
 	b.deAllocatedAppIdx = aidx
+
+	if global {
+		locator := basics.CreatableLocator{
+			Type:    basics.AppCreatable,
+			Creator: addr,
+			Index:   basics.CreatableIndex(aidx),
+		}
+		b.deletedCreatables = append(b.deletedCreatables, locator)
+	}
+
+	return nil
+}
+
+func (b *testBalances) AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
+	if global {
+		locator := basics.CreatableLocator{
+			Type:    basics.AppCreatable,
+			Creator: addr,
+			Index:   basics.CreatableIndex(index),
+		}
+		b.createdCreatables = append(b.createdCreatables, locator)
+	}
+
+	return nil
+}
+
+func (b *testBalances) DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
+	if global {
+		locator := basics.CreatableLocator{
+			Type:    basics.AppCreatable,
+			Creator: addr,
+			Index:   basics.CreatableIndex(index),
+		}
+		b.deletedCreatables = append(b.deletedCreatables, locator)
+	}
+
 	return nil
 }
 

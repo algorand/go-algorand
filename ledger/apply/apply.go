@@ -33,26 +33,21 @@ type Balances interface {
 
 	Put(basics.Address, basics.AccountData) error
 
-	// Notify COW that a creatable was created or deleted.
-	CreatableCreated(
-		creatableType basics.CreatableType, creator basics.Address,
-		index basics.CreatableIndex) error
-	CreatableDeleted(
-		creatableType basics.CreatableType, creator basics.Address,
-		index basics.CreatableIndex) error
-
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 
-	// Allocate or Deallocate either global or address-local app storage.
+	// AllocateApp or Deallocate either global or address-local app storage.
 	//
-	// PutWithCreatable(...) and then {Allocate/Deallocate}(..., ..., global=true)
+	// PutWithCreatable(...) and then {AllocateApp/Deallocate}(..., ..., global=true)
 	// creates/destroys an application.
 	//
-	// Put(...) and then {Allocate/Deallocate}(..., ..., global=false)
+	// Put(...) and then {AllocateApp/Deallocate}(..., ..., global=false)
 	// opts into/closes out of an application.
-	Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error
-	Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error
+	AllocateApp(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error
+	DeallocateApp(addr basics.Address, aidx basics.AppIndex, global bool) error
+
+	AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error
+	DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error
 
 	// StatefulEval executes a TEAL program in stateful mode on the balances.
 	// It returns whether the program passed and its error.  It alo returns

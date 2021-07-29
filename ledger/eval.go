@@ -251,28 +251,6 @@ func (cs *roundCowState) Put(addr basics.Address, acct basics.AccountData) error
 	return nil
 }
 
-func (cs *roundCowState) CreatableCreated(creatableType basics.CreatableType, creator basics.Address, index basics.CreatableIndex) error {
-	cs.mods.Creatables[index] = ledgercore.ModifiedCreatable{
-		Ctype:   creatableType,
-		Creator: creator,
-		Created: true,
-	}
-
-	cs.trackCreatable(index)
-
-	return nil
-}
-
-func (cs *roundCowState) CreatableDeleted(creatableType basics.CreatableType, creator basics.Address, index basics.CreatableIndex) error {
-	cs.mods.Creatables[index] = ledgercore.ModifiedCreatable{
-		Ctype:   creatableType,
-		Creator: creator,
-		Created: false,
-	}
-
-	return nil
-}
-
 func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics.MicroAlgos, fromRewards *basics.MicroAlgos, toRewards *basics.MicroAlgos) error {
 	rewardlvl := cs.rewardsLevel()
 
