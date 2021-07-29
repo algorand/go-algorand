@@ -196,7 +196,7 @@ func (z *EphemeralKeys) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
-	if (*z).Divisor == 0 {
+	if (*z).Interval == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x4
 	}
@@ -219,7 +219,7 @@ func (z *EphemeralKeys) MarshalMsg(b []byte) (o []byte) {
 		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "dv"
 			o = append(o, 0xa2, 0x64, 0x76)
-			o = msgp.AppendUint64(o, (*z).Divisor)
+			o = msgp.AppendUint64(o, (*z).Interval)
 		}
 		if (zb0002Mask & 0x8) == 0 { // if not empty
 			// string "rnd"
@@ -302,9 +302,9 @@ func (z *EphemeralKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			(*z).Divisor, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Interval, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Divisor")
+				err = msgp.WrapError(err, "struct-from-array", "Interval")
 				return
 			}
 		}
@@ -366,9 +366,9 @@ func (z *EphemeralKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "dv":
-				(*z).Divisor, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).Interval, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Divisor")
+					err = msgp.WrapError(err, "Interval")
 					return
 				}
 			default:
@@ -401,7 +401,7 @@ func (z *EphemeralKeys) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *EphemeralKeys) MsgIsZero() bool {
-	return (len((*z).SignatureAlgorithms) == 0) && ((*z).Origin == 0) && ((*z).ArrayZero == 0) && ((*z).Divisor == 0)
+	return (len((*z).SignatureAlgorithms) == 0) && ((*z).Origin == 0) && ((*z).ArrayZero == 0) && ((*z).Interval == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -802,7 +802,7 @@ func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 3 bits */
-	if (*z).Divisor == 0 {
+	if (*z).Interval == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
@@ -816,7 +816,7 @@ func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
 			// string "d"
 			o = append(o, 0xa1, 0x64)
-			o = msgp.AppendUint64(o, (*z).Divisor)
+			o = msgp.AppendUint64(o, (*z).Interval)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "r"
@@ -855,9 +855,9 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).Divisor, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).Interval, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Divisor")
+				err = msgp.WrapError(err, "struct-from-array", "Interval")
 				return
 			}
 		}
@@ -891,9 +891,9 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "d":
-				(*z).Divisor, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).Interval, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Divisor")
+					err = msgp.WrapError(err, "Interval")
 					return
 				}
 			default:
@@ -922,5 +922,5 @@ func (z *Verifier) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return ((*z).Root.MsgIsZero()) && ((*z).Divisor == 0)
+	return ((*z).Root.MsgIsZero()) && ((*z).Interval == 0)
 }
