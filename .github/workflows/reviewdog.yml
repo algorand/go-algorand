@@ -7,8 +7,10 @@ jobs:
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
+      - run: sudo apt-get -y -q install libboost-math-dev
+      - run: make crypto/libs/linux/amd64/lib/libsodium.a
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2
         with:
           # while we can put config flags here, i suggest we use /.golangci.yml if possible to have it all in one place
-          golangci_lint_flags: "--new --fix"
+          #golangci_lint_flags: ""
