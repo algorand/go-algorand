@@ -33,8 +33,10 @@ type (
 
 		SignatureAlgorithms []crypto.SignatureAlgorithm `codec:"sks,allocbound=-"`
 		// indicates the round that matches SignatureAlgorithms[0].
-		FirstRound uint64 `codec:"rnd"`
-		Divisor    uint64 `codec:"dv"`
+		Origin uint64 `codec:"rnd"`
+		// Used to align a position to a shrank array.
+		ArrayZero uint64 `codec:"az"`
+		Divisor   uint64 `codec:"dv"`
 	}
 
 	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
@@ -73,7 +75,7 @@ type (
 		mu            deadlock.RWMutex
 
 		// using this field, the signer can get the accurate location of merkle proof in the merklearray.Tree.
-		OriginRound uint64 `codec:"o"`
+		//OriginRound uint64 `codec:"o"`
 	}
 
 	// Verifier Is a way to verify a Signature produced by merklekeystore.Signer.
@@ -106,9 +108,13 @@ func (d *EphemeralKeys) Length() uint64 {
 func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 	ephPK := CommittablePublicKey{
 		VerifyingKey: d.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
-		Round:        indexToRound(d.FirstRound, d.Divisor, pos),
+		Round:        indexToRound(d.Origin, d.Divisor, pos),
 	}
 	return crypto.HashObj(&ephPK), nil
+}
+
+func (d *EphemeralKeys) getActualPos(pos uint64) uint64 {
+	return pos
 }
 
 // New Generates a merklekeystore.Signer
@@ -124,7 +130,7 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 		firstValid++
 	}
 	numberOfKeys := roundToIndex(firstValid, lastValid, divisor) + 1
-	firstRound := indexToRound(firstValid, divisor, 0)
+	//firstRound := indexToRound(firstValid, divisor, 0)
 
 	if numberOfKeys == 0 {
 		// always outputs a valid signer that doesn't crash.
@@ -137,7 +143,7 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 	}
 	ephKeys := EphemeralKeys{
 		SignatureAlgorithms: keys,
-		FirstRound:          firstRound,
+		Origin:              firstValid,
 		Divisor:             divisor,
 	}
 	tree, err := merklearray.Build(&ephKeys)
@@ -149,7 +155,6 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 		EphemeralKeys: ephKeys,
 		Tree:          *tree,
 		mu:            deadlock.RWMutex{},
-		OriginRound:   firstRound,
 	}, nil
 }
 
@@ -170,7 +175,7 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	if err != nil {
 		return Signature{}, err
 	}
-	index := roundToIndex(m.OriginRound, round, m.EphemeralKeys.Divisor)
+	index := roundToIndex(m.EphemeralKeys.Origin, round, m.EphemeralKeys.Divisor)
 	proof, err := m.Tree.Prove([]uint64{index})
 	if err != nil {
 		return Signature{}, err
@@ -188,14 +193,15 @@ func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 	if round%m.EphemeralKeys.Divisor != 0 {
 		return 0, errNonExistantKey
 	}
-	if round < m.OriginRound {
+	if round < m.EphemeralKeys.Origin {
 		return 0, errReceivedRoundIsBeforeFirst
 	}
-	pos := roundToIndex(m.EphemeralKeys.FirstRound, round, m.EphemeralKeys.Divisor)
+	pos := roundToIndex(m.EphemeralKeys.Origin, round, m.EphemeralKeys.Divisor)
+	pos = pos - m.EphemeralKeys.ArrayZero
+
 	if pos >= uint64(len(m.EphemeralKeys.SignatureAlgorithms)) {
 		return 0, errOutOfBounds
 	}
-
 	return pos, nil
 }
 
@@ -204,7 +210,7 @@ func (m *Signer) isPositionOutOfBound(pos uint64) bool {
 }
 
 func (m *Signer) isRoundPriorToFirstRound(round uint64) bool {
-	return round < m.EphemeralKeys.FirstRound
+	return round < m.EphemeralKeys.Origin
 }
 
 // Trim shortness deletes keys that existed before a specific round,
@@ -213,22 +219,21 @@ func (m *Signer) Trim(before uint64) *Signer {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.isRoundPriorToFirstRound(before) {
-		return m.copy()
-	}
-
-	pos := roundToIndex(m.OriginRound, before, m.EphemeralKeys.Divisor)
-	if pos == 0 {
-		return m.copy()
-	}
-
-	if m.isPositionOutOfBound(pos) {
+	pos, err := m.getKeyPosition(before)
+	switch err {
+	case errOutOfBounds:
 		m.dropKeys(len(m.EphemeralKeys.SignatureAlgorithms))
-	} else {
+	case errReceivedRoundIsBeforeFirst:
+		return m.copy()
+	case errNonExistantKey:
+		// dropping keys up to the current position (not included)
+		m.dropKeys(int(roundToIndex(m.EphemeralKeys.Origin, before, m.EphemeralKeys.Divisor)))
+	default:
 		m.dropKeys(int(pos))
 	}
-	rnd := indexToRound(m.OriginRound, m.EphemeralKeys.Divisor, pos)
-	m.EphemeralKeys.FirstRound = rnd
+
+	// advance the array zero location.
+	m.EphemeralKeys.ArrayZero = roundToIndex(m.EphemeralKeys.Origin, before, m.EphemeralKeys.Divisor)
 	cpy := m.copy()
 
 	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
@@ -246,12 +251,12 @@ func (m *Signer) copy() *Signer {
 		EphemeralKeys: EphemeralKeys{
 			_struct:             struct{}{},
 			SignatureAlgorithms: make([]crypto.SignatureAlgorithm, len(m.EphemeralKeys.SignatureAlgorithms)),
-			FirstRound:          m.EphemeralKeys.FirstRound,
+			Origin:              m.EphemeralKeys.Origin,
 			Divisor:             m.EphemeralKeys.Divisor,
+			ArrayZero:           m.EphemeralKeys.ArrayZero,
 		},
-		Tree:        m.Tree,
-		mu:          deadlock.RWMutex{},
-		OriginRound: m.OriginRound,
+		Tree: m.Tree,
+		mu:   deadlock.RWMutex{},
 	}
 
 	copy(signerCopy.EphemeralKeys.SignatureAlgorithms, m.EphemeralKeys.SignatureAlgorithms)
