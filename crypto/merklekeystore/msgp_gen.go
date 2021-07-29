@@ -192,7 +192,7 @@ func (z *EphemeralKeys) MarshalMsg(b []byte) (o []byte) {
 	// omitempty: check for empty values
 	zb0002Len := uint32(4)
 	var zb0002Mask uint8 /* 5 bits */
-	if (*z).ArrayZero == 0 {
+	if (*z).ArrayBase == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
@@ -200,7 +200,7 @@ func (z *EphemeralKeys) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x4
 	}
-	if (*z).Origin == 0 {
+	if (*z).TreeBase == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x8
 	}
@@ -214,7 +214,7 @@ func (z *EphemeralKeys) MarshalMsg(b []byte) (o []byte) {
 		if (zb0002Mask & 0x2) == 0 { // if not empty
 			// string "az"
 			o = append(o, 0xa2, 0x61, 0x7a)
-			o = msgp.AppendUint64(o, (*z).ArrayZero)
+			o = msgp.AppendUint64(o, (*z).ArrayBase)
 		}
 		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "dv"
@@ -224,7 +224,7 @@ func (z *EphemeralKeys) MarshalMsg(b []byte) (o []byte) {
 		if (zb0002Mask & 0x8) == 0 { // if not empty
 			// string "rnd"
 			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
-			o = msgp.AppendUint64(o, (*z).Origin)
+			o = msgp.AppendUint64(o, (*z).TreeBase)
 		}
 		if (zb0002Mask & 0x10) == 0 { // if not empty
 			// string "sks"
@@ -286,17 +286,17 @@ func (z *EphemeralKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			(*z).Origin, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).TreeBase, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Origin")
+				err = msgp.WrapError(err, "struct-from-array", "TreeBase")
 				return
 			}
 		}
 		if zb0002 > 0 {
 			zb0002--
-			(*z).ArrayZero, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).ArrayBase, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "ArrayZero")
+				err = msgp.WrapError(err, "struct-from-array", "ArrayBase")
 				return
 			}
 		}
@@ -354,15 +354,15 @@ func (z *EphemeralKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "rnd":
-				(*z).Origin, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).TreeBase, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "Origin")
+					err = msgp.WrapError(err, "TreeBase")
 					return
 				}
 			case "az":
-				(*z).ArrayZero, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).ArrayBase, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "ArrayZero")
+					err = msgp.WrapError(err, "ArrayBase")
 					return
 				}
 			case "dv":
@@ -401,7 +401,7 @@ func (z *EphemeralKeys) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *EphemeralKeys) MsgIsZero() bool {
-	return (len((*z).SignatureAlgorithms) == 0) && ((*z).Origin == 0) && ((*z).ArrayZero == 0) && ((*z).Interval == 0)
+	return (len((*z).SignatureAlgorithms) == 0) && ((*z).TreeBase == 0) && ((*z).ArrayBase == 0) && ((*z).Interval == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
