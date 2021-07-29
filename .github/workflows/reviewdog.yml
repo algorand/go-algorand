@@ -12,5 +12,5 @@ jobs:
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2
         with:
-          # while we can put config flags here, i suggest we use /.golangci.yml if possible to have it all in one place
-          #golangci_lint_flags: ""
+          golangci_version: "v1.41.1"
+          golangci_lint_flags: "--config=.golangci.yml"
