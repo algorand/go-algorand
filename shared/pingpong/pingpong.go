@@ -40,6 +40,8 @@ type CreatablesInfo struct {
 	OptIns      map[uint64][]string
 }
 
+// pingPongAccount represents the account state for each account in the pingpong application
+// This includes the current balance and public/private keys tied to the account
 type pingPongAccount struct {
 	balance uint64
 	sk      *crypto.SignatureSecrets
@@ -49,7 +51,6 @@ type pingPongAccount struct {
 // WorkerState object holds a running pingpong worker
 type WorkerState struct {
 	cfg PpConfig
-	//accounts map[string]uint64
 	accounts map[string]*pingPongAccount
 	cinfo    CreatablesInfo
 
@@ -220,12 +221,12 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	}
 
 	fmt.Printf("adjusting account balance to %d\n", minFund)
-	for addr, val := range accounts {
+	for addr, acct := range accounts {
 		if !cfg.Quiet {
 			fmt.Printf("adjusting balance of account %v\n", addr)
 		}
-		if val.balance < minFund {
-			toSend := minFund - val.balance
+		if acct.balance < minFund {
+			toSend := minFund - acct.balance
 			if srcFunds <= toSend {
 				return fmt.Errorf("source account %s has insufficient funds %d - needs %d", cfg.SrcAccount, srcFunds, toSend)
 			}
@@ -233,7 +234,7 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
-			_, err := sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
+			_, err := pps.sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
 			if err != nil {
 				return err
 			}
@@ -249,16 +250,41 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 	return nil
 }
 
-func sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
-	wh, err := client.GetUnencryptedWalletHandle()
+func (pps *WorkerState) sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
+
+	if from == pps.cfg.SrcAccount {
+
+		wh, err := client.GetUnencryptedWalletHandle()
+		if err != nil {
+			return transactions.Transaction{}, err
+		}
+		// generate a random lease to avoid duplicate transaction failures
+		var lease [32]byte
+		crypto.RandBytes(lease[:])
+
+		return client.SendPaymentFromWalletWithLease(wh, nil, from, to, fee, amount, note, "", lease, 0, 0)
+	}
+
+
+	tx, err := client.ConstructPayment(from, to, fee, amount, note, "", [32]byte{}, 0, 0)
+
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
-	// generate a random lease to avoid duplicate transaction failures
-	var lease [32]byte
-	crypto.RandBytes(lease[:])
 
-	return client.SendPaymentFromWalletWithLease(wh, nil, from, to, fee, amount, note, "", lease, 0, 0)
+	stxn, err := signTxn(from, tx, pps.accounts, pps.cfg)
+
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	_, err = client.BroadcastTransaction(stxn)
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+
+	return tx, nil
 }
 
 func (pps *WorkerState) refreshAccounts(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) error {
@@ -468,7 +494,7 @@ func (pps *WorkerState) makeNftTraffic(client libgoal.Client) (sentCount uint64,
 		// enough for the per-asa minbalance and more than enough for the txns to create them
 		toSend := proto.MinBalance * uint64(pps.cfg.NftAsaPerAccount+1) * 2
 		pps.nftHolders[addr] = 0
-		_, err = sendPaymentFromUnencryptedWallet(client, pps.cfg.SrcAccount, addr, fee, toSend, nil)
+		_, err = pps.sendPaymentFromUnencryptedWallet(client, pps.cfg.SrcAccount, addr, fee, toSend, nil)
 		if err != nil {
 			return
 		}
@@ -804,10 +830,11 @@ func signTxn(signer string, txn transactions.Transaction, accounts map[string]*p
 
 	if cfg.Rekey {
 		stxn, err = txn.Sign(accounts[signer].sk), nil
+
 	} else if len(cfg.Program) > 0 {
 		// If there's a program, sign it and use that in a lsig
-
-		psig = accounts[signer].sk.Sign(logic.Program(cfg.Program))
+		progb := logic.Program(cfg.Program)
+		psig = accounts[signer].sk.Sign(&progb)
 
 		// Fill in signed transaction
 		stxn.Txn = txn
@@ -815,6 +842,7 @@ func signTxn(signer string, txn transactions.Transaction, accounts map[string]*p
 		stxn.Lsig.Sig = psig
 		stxn.Lsig.Args = cfg.LogicArgs
 	} else {
+
 		// Otherwise, just sign the transaction like normal
 		stxn, err = txn.Sign(accounts[signer].sk), nil
 	}

@@ -90,6 +90,17 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 	} else {
 		fmt.Printf("Located Source Account: %s -> %v\n", cfg.SrcAccount, accounts[cfg.SrcAccount])
 	}
+	//var seed crypto.Seed
+	//
+	//crypto.RandBytes(seed[:])
+	//privateKey := crypto.GenerateSignatureSecrets(seed)
+	//publicKey := basics.Address(privateKey.SignatureVerifier)
+	//
+	//pps.accounts[publicKey.String()] = &pingPongAccount{
+	//	sk: privateKey,
+	//	pk: publicKey,
+	//}
+
 
 	// Only reuse existing accounts for non asset testing and non app testing.
 	// For asset testing, new participant accounts will be created since accounts are limited to 1000 assets.
