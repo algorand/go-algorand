@@ -336,6 +336,9 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
+// ParticipationKey defines model for ParticipationKey.
+type ParticipationKey map[string]interface{}
+
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
 
@@ -538,6 +541,16 @@ type NodeStatusResponse struct {
 	TimeSinceLastRound uint64 `json:"time-since-last-round"`
 }
 
+// ParticipationKeyResponse defines model for ParticipationKeyResponse.
+type ParticipationKeyResponse struct {
+
+	// Detailed description of a participation key
+	ParticipationKey string `json:"participationKey"`
+}
+
+// ParticipationKeysResponse defines model for ParticipationKeysResponse.
+type ParticipationKeysResponse []ParticipationKey
+
 // PendingTransactionResponse defines model for PendingTransactionResponse.
 type PendingTransactionResponse struct {
 
@@ -586,6 +599,13 @@ type PendingTransactionsResponse struct {
 
 	// Total number of transactions in the pool.
 	TotalTransactions uint64 `json:"total-transactions"`
+}
+
+// PostParticipationResponse defines model for PostParticipationResponse.
+type PostParticipationResponse struct {
+
+	// encoding of the participation id.
+	PartId string `json:"partId"`
 }
 
 // PostTransactionsResponse defines model for PostTransactionsResponse.
@@ -650,22 +670,6 @@ type TransactionParametersResponse struct {
 
 // VersionsResponse defines model for VersionsResponse.
 type VersionsResponse Version
-
-// RegisterParticipationKeysParams defines parameters for RegisterParticipationKeys.
-type RegisterParticipationKeysParams struct {
-
-	// The fee to use when submitting key registration transactions. Defaults to the suggested fee.
-	Fee *uint64 `json:"fee,omitempty"`
-
-	// value to use for two-level participation key.
-	KeyDilution *uint64 `json:"key-dilution,omitempty"`
-
-	// The last round for which the generated participation keys will be valid.
-	RoundLastValid *uint64 `json:"round-last-valid,omitempty"`
-
-	// Don't wait for transaction to commit before returning response.
-	NoWait *bool `json:"no-wait,omitempty"`
-}
 
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {

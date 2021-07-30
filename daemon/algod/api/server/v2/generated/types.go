@@ -336,6 +336,9 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
+// ParticipationKey defines model for ParticipationKey.
+type ParticipationKey map[string]interface{}
+
 // StateDelta defines model for StateDelta.
 type StateDelta []EvalDeltaKeyValue
 
@@ -538,6 +541,16 @@ type NodeStatusResponse struct {
 	TimeSinceLastRound uint64 `json:"time-since-last-round"`
 }
 
+// ParticipationKeyResponse defines model for ParticipationKeyResponse.
+type ParticipationKeyResponse struct {
+
+	// Detailed description of a participation key
+	ParticipationKey string `json:"participationKey"`
+}
+
+// ParticipationKeysResponse defines model for ParticipationKeysResponse.
+type ParticipationKeysResponse []ParticipationKey
+
 // PendingTransactionResponse defines model for PendingTransactionResponse.
 type PendingTransactionResponse struct {
 
@@ -586,6 +599,13 @@ type PendingTransactionsResponse struct {
 
 	// Total number of transactions in the pool.
 	TotalTransactions uint64 `json:"total-transactions"`
+}
+
+// PostParticipationResponse defines model for PostParticipationResponse.
+type PostParticipationResponse struct {
+
+	// encoding of the participation id.
+	PartId string `json:"partId"`
 }
 
 // PostTransactionsResponse defines model for PostTransactionsResponse.
