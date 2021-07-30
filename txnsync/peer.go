@@ -523,15 +523,18 @@ func (p *Peer) updateIncomingTransactionGroups(txnGroups []transactions.SignedTx
 	}
 }
 
+const minSignificantMessageSize = 50000
+
 func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, incomingMessageSize int) {
 	p.lastConfirmedMessageSeqReceived = timings.RefTxnBlockMsgSeq
 	// if we received a message that references our privious message, see if they occurred on the same round
 	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound {
 		// if so, we might be able to calculate the bandwidth.
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
-		if timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) {
+		networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
+		if timings.ResponseElapsedTime != 0 && timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && networkMessageSize > minSignificantMessageSize {
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)
-			networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
+
 			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 
 			if dataExchangeRate < minDataExchangeRateThreshold {
