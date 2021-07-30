@@ -78,6 +78,9 @@ GOPATH=$(go env GOPATH)
 echo "Updating TEAL Specs"
 make -C data/transactions/logic
 
+echo "Regenerate REST server"
+make -C daemon/algod/api
+
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
    echo Enlistment is dirty - did you forget to run make?
