@@ -247,16 +247,7 @@ func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.Cre
 }
 
 func (cs *roundCowState) Put(addr basics.Address, acct basics.AccountData) error {
-	return cs.PutWithCreatable(addr, acct, nil, nil)
-}
-
-func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
-	cs.put(addr, acct, newCreatable, deletedCreatable)
-
-	// store the creatable locator
-	if newCreatable != nil {
-		cs.trackCreatable(newCreatable.Index)
-	}
+	cs.mods.Accts.Upsert(addr, acct)
 	return nil
 }
 
@@ -283,7 +274,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 	}
-	cs.put(from, fromBalNew, nil, nil)
+	cs.Put(from, fromBalNew)
 
 	toBal, err := cs.lookup(to)
 	if err != nil {
@@ -304,7 +295,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 	}
-	cs.put(to, toBalNew, nil, nil)
+	cs.Put(to, toBalNew)
 
 	return nil
 }
