@@ -44,7 +44,7 @@ import (
 // this test checks that the txsync outgoing message rate
 // varies according to the transaction rate
 func TestMessageRateChangesWithTxnRate(t *testing.T) {
-	txnRates := []uint{50, 150, 450, 1100, 2000}
+	txnRates := []uint{50, 1200}
 	if testing.Short() {
 		txnRates = []uint{20, 40}
 	}
@@ -72,11 +72,11 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	cfg, err := config.LoadConfigFromDisk(nodeDataDir)
 	a.NoError(err)
 	cfg.EnableVerbosedTransactionSyncLogging = true
-	cfg.TxPoolSize = 50000
+	// cfg.TxPoolSize = 50000
 	cfg.SaveToDisk(nodeDataDir)
 	fixture.Start()
 
-	defer fixture.Shutdown()
+	defer fixture.ShutdownImpl(true)
 
 	client := fixture.GetLibGoalClientForNamedNode("Node")
 	accountsList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())

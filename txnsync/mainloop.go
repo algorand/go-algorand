@@ -229,6 +229,7 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 	}
 
 	newBeta := beta(ent.transactionPoolSize)
+	s.log.Info("Beta Prev: ", s.lastBeta, " New: ", newBeta)
 
 	// check if beta should be updated
 	if !shouldUpdateBeta(s.lastBeta, newBeta, betaGranularChangeThreshold) {
@@ -237,7 +238,7 @@ func (s *syncState) onTransactionPoolChangedEvent(ent Event) {
 	}
 	// yes, change beta as the number of transactions in the pool have changed dramatically since the last time.
 	s.lastBeta = newBeta
-
+	s.log.Info("Beta new: ", s.lastBeta)
 	peers := make([]*Peer, 0, len(s.interruptablePeers))
 	for _, peer := range s.interruptablePeers {
 		if peer == nil {
