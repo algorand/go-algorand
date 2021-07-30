@@ -63,8 +63,8 @@ func TestTxnSync(t *testing.T) {
 	// transaction is received by the node.
 	// If this is too large, the system will report too many open files.
 	// If too small, the txns will be moved to the block.
-	maxParallelChecks := 100
-	numberOfSends := 2500
+	maxParallelChecks := 10
+	numberOfSends := 500
 	targetRate := 300 // txn/sec
 	if testing.Short() {
 		numberOfSends = 100
@@ -307,9 +307,8 @@ func (tt *transactionTracker) checkIfReceivedTransaction(transactionID string) {
 			// If we got txn information
 			if transactionInfo.ConfirmedRound > 0 {
 				tt.cancelFunc()
-				require.True(tt.t, false)
+				require.Equal(tt.t, 0, int(transactionInfo.ConfirmedRound))
 			}
-			require.Equal(tt.t, 0, int(transactionInfo.ConfirmedRound))
 		}
 		break
 	}
