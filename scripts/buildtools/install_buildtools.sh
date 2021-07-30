@@ -10,13 +10,17 @@ function usage {
   echo "By default all packages are installed."
   echo "usage: $0 [-o packagename]"
   echo "  -o packagename    when used only packagename is installed."
+  echo "  -c commandname    if it is one command from a package provide this."
   echo "  -h                print this usage information."
 }
 
-while getopts ":o:h" opt; do
+while getopts ":o:c:h" opt; do
   case $opt in
     o)
       BUILDTOOLS_INSTALL="$OPTARG"
+      ;;
+    c)
+      BUILDTOOLS_COMMAND="$OPTARG"
       ;;
     h)
       usage
@@ -81,7 +85,7 @@ function install_go_module {
 }
 
 if [[ "${BUILDTOOLS_INSTALL}" != "ALL" ]]; then
-  install_go_module "${BUILDTOOLS_INSTALL}"
+  install_go_module "${BUILDTOOLS_INSTALL}" "${BUILDTOOLS_COMMAND}"
   exit 0
 fi
 
