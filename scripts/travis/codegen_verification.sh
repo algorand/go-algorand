@@ -79,7 +79,8 @@ echo "Updating TEAL Specs"
 make -C data/transactions/logic
 
 echo "Regenerate REST server"
-make -C daemon/algod/api
+touch daemon/algod/api/algod.oas2.json
+make -C daemon/algod/api generate
 
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then
