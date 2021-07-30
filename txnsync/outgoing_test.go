@@ -222,8 +222,8 @@ func TestAsyncEncodeAndSend(t *testing.T) {
 
 }
 
-// TestAssemblePeerMessage1 Tests assemblePeerMessage with messageConstBloomFilter msgOps
-func TestAssemblePeerMessage1(t *testing.T) {
+// TestAssemblePeerMessage_messageConstBloomFilter Tests assemblePeerMessage with messageConstBloomFilter msgOps
+func TestAssemblePeerMessage_messageConstBloomFilter(t *testing.T) {
 	a := require.New(t)
 
 	s := syncState{clock: timers.MakeMonotonicClock(time.Now())}
@@ -259,8 +259,8 @@ func TestAssemblePeerMessage1(t *testing.T) {
 	a.Equal(s.lastBloomFilter, expectedFilter)
 }
 
-// TestAssemblePeerMessage2 Tests assemblePeerMessage with messageConstNextMinDelay | messageConstUpdateRequestParams msgOps
-func TestAssemblePeerMessage2(t *testing.T) {
+// TestAssemblePeerMessage_messageConstNextMinDelay_messageConstUpdateRequestParams Tests assemblePeerMessage with messageConstNextMinDelay | messageConstUpdateRequestParams msgOps
+func TestAssemblePeerMessage_messageConstNextMinDelay_messageConstUpdateRequestParams(t *testing.T) {
 
 	a := require.New(t)
 
@@ -291,8 +291,8 @@ func TestAssemblePeerMessage2(t *testing.T) {
 
 }
 
-// TestAssemblePeerMessage3 Tests assemblePeerMessage messageConstTransactions msgOps
-func TestAssemblePeerMessage3(t *testing.T) {
+// TestAssemblePeerMessage_messageConstTransactions Tests assemblePeerMessage messageConstTransactions msgOps
+func TestAssemblePeerMessage_messageConstTransactions(t *testing.T) {
 	a := require.New(t)
 
 	s := syncState{clock: timers.MakeMonotonicClock(time.Now())}
