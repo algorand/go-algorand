@@ -24,6 +24,7 @@ import (
 	pseudorand "math/rand"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"strings"
 	"testing"
 
@@ -1444,6 +1445,11 @@ func BenchmarkAssetFullBlocks(b *testing.B) {
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
 	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
+	f, err := os.Create(fmt.Sprintf("%s-asset-groups-3.cpuprof", b.Name()))
+	require.NoError(b, err)
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
+
 	for i := 0; i < b.N; i++ {
 		for _, blk := range blocks {
 			_, err = eval(context.Background(), l1, blk, true, vc, nil)
