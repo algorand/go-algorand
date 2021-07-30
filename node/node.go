@@ -267,6 +267,13 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
+	// TODO: where to put the participation metrics - where are they needed?
+	_, err = ensureParticipationDB()
+	if err != nil {
+		log.Errorf("Cannot get participation metrics: %v", err)
+		return nil, err
+	}
+
 	err = node.loadParticipationKeys()
 	if err != nil {
 		log.Errorf("Cannot load participation keys: %v", err)
@@ -394,6 +401,7 @@ func (node *AlgorandFullNode) Start() {
 func (node *AlgorandFullNode) startMonitoringRoutines() {
 	node.monitoringRoutinesWaitGroup.Add(3)
 
+	// TODO: Remove this with #2596
 	// Periodically check for new participation keys
 	go node.checkForParticipationKeys()
 
@@ -741,6 +749,13 @@ func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
 func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
 	return bookkeeping.SignedTxnGroupsFlatten(node.transactionPool.PendingTxGroups()), nil
 }
+
+
+// ensureParticipationDB opens or creates a participation DB.
+func ensureParticipationDB() (interface{}, error) {
+	return nil, nil
+}
+
 
 // Reload participation keys from disk periodically
 func (node *AlgorandFullNode) checkForParticipationKeys() {
