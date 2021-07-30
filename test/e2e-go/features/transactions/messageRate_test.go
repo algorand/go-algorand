@@ -104,9 +104,6 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	a.NoError(err)
 	listeningURL := strings.Split(listeningURLRaw, "//")[1]
 
-	// // seek to `bytesRead` bytes when reading the log file
-	// bytesRead := 0
-
 	// store message rate for each of the txn rates
 	prevMsgRate := 0.0
 
@@ -116,10 +113,6 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	ctx, stopParsing := context.WithCancel(context.Background())
 	defer stopParsing()
 
-	// parseLog continuously monitors the log for txnsync messages
-	// resetChan is used to signal it to send results on msgRate chan
-	// and reset its internal counters
-	// errChan is used to propagate errors if any
 	go parseLog(ctx, logPath, listeningURL, errChan, msgRateChan, resetChan)
 
 	for _, txnRate := range txnRates {
@@ -130,7 +123,6 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 
 		startTime := time.Now()
 		txnSentCount := uint(0)
-		// fmt.Println("Started txn: ", startTime)
 
 		for {
 			// send txns at txnRate for 30s
@@ -146,27 +138,14 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 			_, err = clientAlgod.SendRawTransaction(signedTxn)
 			a.NoError(err, "Unable to send raw txn")
 
-			// _, err := client.SendPaymentFromUnencryptedWallet(account, account, transactionFee, amount, GenerateRandomBytes(8))
 			txnSentCount++
 
 			throttleTransactionRate(startTime, txnRate, txnSentCount)
 		}
 
-		// endTimeDelta := time.Since(startTime)
-		// fmt.Println("End txn: ", time.Now(), " End delta: ", endTimeDelta)
-		// avgTps := float64(txnSentCount) / endTimeDelta.Seconds()
-		// fmt.Println("Avg TPS: ", avgTps, " Expected: ", txnRate)
-		// beta := 1.0 / (2 * 3.6923 * math.Exp(float64(txnRate)*0.00026))
-		// fmt.Println("Expected beta: ", beta)
-
-		// status, err := client.Status()
-		// a.NoError(err)
-		// currentRound := status.LastRound
-		// ok := fixture.WaitForAllTxnsToConfirm(currentRound+uint64(5), txidAccountMap)
-		// a.True(ok)
 		// wait for some time for the logs to get flushed
 		time.Sleep(2 * time.Second)
-		// fmt.Println("Sent reset")
+
 		// send reset on resetChan to signal the parseLog goroutine to send the msgRate and reset its counters
 		resetChan <- true
 
@@ -174,24 +153,19 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 		case err := <-errChan:
 			a.Error(err)
 		case msgRate := <-msgRateChan:
-			// fmt.Println("Actual beta: ", 1.0/(2*msgRate))
 			aErrorMessage := fmt.Sprintf("TxSync message rate not monotonic for txn rate: %d", txnRate)
 			a.GreaterOrEqual(msgRate, prevMsgRate, aErrorMessage)
 			prevMsgRate = msgRate
 
 		}
-		// fmt.Println("Continuing")
-
-		// parse the log to find out message rate and bytes of the log file read
-		// msgRate, newBytesRead, err := parseLog(logPath, bytesRead, listeningURL)
-		// a.NoError(err)
-
-		// bytesRead += newBytesRead
-		// prevMsgRate = msgRate
 	}
 
 }
 
+// parseLog continuously monitors the log for txnsync messages sent to filterAddress
+// resetChan is used to signal it to send results on msgRate chan
+// and reset its internal counters
+// errChan is used to propagate errors if any
 func parseLog(ctx context.Context, logPath string, filterAddress string, errChan chan error, msgRateChan chan float64, resetChan chan bool) {
 	file, err := os.Open(logPath)
 	if err != nil {
@@ -203,7 +177,6 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 	messageCount := 0
 	var firstTimestamp, lastTimestamp time.Time
 	firstTimestamp = time.Now()
-	// var firstMessage, lastMessage string
 
 	scanner := bufio.NewScanner(file)
 	for {
@@ -214,13 +187,8 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 			lastTimestamp = time.Now()
 			msgRate := float64(messageCount) / float64(lastTimestamp.Sub(firstTimestamp)) * float64(time.Second)
 			msgRateChan <- msgRate
-			// fmt.Println("Message Rate: ", msgRate, " Message Count: ", messageCount, " Time elapsed: ", lastTimestamp.Sub(firstTimestamp)/time.Second)
-			// fmt.Println("First msg: ", firstMessage, "First timestamp: ", firstTimestamp)
-			// fmt.Println("Last msg: ", lastMessage, "Last timestamp: ", lastTimestamp)
 			messageCount = 0
 			firstTimestamp = time.Now()
-			// firstMessage = ""
-			// lastTimestamp = time.Time{}
 			continue
 		default:
 		}
@@ -236,10 +204,8 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 		}
 
 		line := scanner.Text()
-		// bytesRead += len(line) + 1
 		// look for txnsync messages sent to `filterAddress`
 		if strings.Contains(line, "Outgoing Txsync") && strings.Contains(line, filterAddress) {
-			// fmt.Println(line)
 			var logEvent map[string]interface{}
 			json.Unmarshal([]byte(line), &logEvent)
 			eventTime := fmt.Sprintf("%v", logEvent["time"])
@@ -255,10 +221,6 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 				errChan <- err
 				return
 			}
-			// if firstMessage == "" {
-			// 	// firstTimestamp = lastTimestamp
-			// 	firstMessage = message
-			// }
 			messageCount++
 		}
 	}
