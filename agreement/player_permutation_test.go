@@ -1,5 +1,3 @@
-// +build perm
-
 // Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
@@ -28,12 +26,13 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 func makeRandomProposalPayload(r round) *proposal {
 	f := testBlockFactory{Owner: 1}
-	ve, _ := f.AssembleBlock(r.number, r.branch, time.Time{})
+	ve, _ := f.AssembleSpeculativeBlock(r.Number, r.Branch, time.Time{})
 
 	var payload unauthenticatedProposal
 	payload.Block = ve.Block()
@@ -56,32 +55,38 @@ const (
 	playerSameRoundProcessedProposal
 )
 
-func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper) {
-	r := makeRoundRandomBranch(209)
-	rp1 := makeRoundRandomBranch(210)
+func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper, r round) {
+	rm1 := makeRoundRandomBranch(208)
+	rm1Block := helper.MakeRandomBlock(t, rm1)
+	r = makeRoundBranch(209, bookkeeping.BlockHash(rm1Block.Block().Digest()))
+	rBlock := helper.MakeRandomBlock(t, r)
+	rp1 := makeRoundBranch(210, bookkeeping.BlockHash(rBlock.Block().Digest()))
 	const p = period(0)
-	var payload = makeRandomProposalPayload(r)
-	var pV = payload.value()
+
+	// proposal and proposalValue for round r
+	rPayload, _ := helper.MakeProposalPayload(t, r, rBlock)
+	rpV := rPayload.value()
+
 	switch n {
 	case playerSameRound: // same round and period as proposal
-		return setupP(t, r, p, soft)
+		plyr, pMachine, helper = setupP(t, r, p, soft)
 	case playerNextRound: // one round ahead of proposal
-		return setupP(t, rp1, p, soft)
+		plyr, pMachine, helper = setupP(t, rp1, p, soft)
 	case playerPrevRoundPendingPayloadPresent:
-		plyr, pMachine, helper = setupP(t, r-1, p, soft)
+		plyr, pMachine, helper = setupP(t, rm1, p, soft)
 		plyr.Pending.push(&messageEvent{
 			T: payloadPresent,
 			Input: message{
 				MessageHandle:           "uniquemessage",
-				UnauthenticatedProposal: payload.u(),
+				UnauthenticatedProposal: rPayload.u(),
 			},
 		})
 	case playerSameRoundProcessedProposalVote: // already processed proposal vote
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
-		pM.update(*plyr, r, true)
+		pM.update(plyr, r, true)
 		pM.Children[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
-		pM.Children[r].ProposalStore.Assemblers[pV] = blockAssembler{}
+		pM.Children[r].ProposalStore.Assemblers[rpV] = blockAssembler{}
 		pM.Children[r].update(*plyr, p, true)
 		pM.Children[r].Children[p].ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())
@@ -91,37 +96,37 @@ func getPlayerPermutation(t *testing.T, n int) (plyr *player, pMachine ioAutomat
 	case playerSameRoundReachedSoftThreshold: // already reached soft threshold
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
-		pM.update(*plyr, r, true)
+		pM.update(plyr, r, true)
 		pM.Children[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
-		pM.Children[r].ProposalStore.Assemblers[pV] = blockAssembler{}
+		pM.Children[r].ProposalStore.Assemblers[rpV] = blockAssembler{}
 		pM.Children[r].update(*plyr, p, true)
 		pM.Children[r].Children[p].ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())
 		pM.Children[r].Children[p].ProposalTracker.Duplicate[helper.addresses[0]] = true
-		pM.Children[r].Children[p].ProposalTracker.Staging = pV
+		pM.Children[r].Children[p].ProposalTracker.Staging = rpV
 		pM.Children[r].Children[p].ProposalTrackerContract.SawOneVote = true
 		pM.Children[r].Children[p].update(0)
 	case playerSameRoundReachedCertThreshold: // already reached cert threshold
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
-		pM.update(*plyr, r, true)
+		pM.update(plyr, r, true)
 		pM.Children[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
-		pM.Children[r].ProposalStore.Assemblers[pV] = blockAssembler{}
-		pM.Children[r].VoteTrackerRound.Freshest = thresholdEvent{T: certThreshold, Proposal: pV, Round: r, Period: p, Bundle: unauthenticatedBundle{Round: r}}
+		pM.Children[r].ProposalStore.Assemblers[rpV] = blockAssembler{}
+		pM.Children[r].VoteTrackerRound.Freshest = thresholdEvent{T: certThreshold, Proposal: rpV, Round: r, Period: p, Bundle: unauthenticatedBundle{Round: r.Number, Branch: r.Branch}}
 		pM.Children[r].VoteTrackerRound.Ok = true
 		pM.Children[r].update(*plyr, p, true)
 		pM.Children[r].Children[p].ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())
 		pM.Children[r].Children[p].ProposalTracker.Duplicate[helper.addresses[0]] = true
-		pM.Children[r].Children[p].ProposalTracker.Staging = pV
+		pM.Children[r].Children[p].ProposalTracker.Staging = rpV
 		pM.Children[r].Children[p].ProposalTrackerContract.SawOneVote = true
 		pM.Children[r].Children[p].update(0)
 	case playerSameRoundProcessedProposal: // already processed proposal
 		plyr, pMachine, helper = setupP(t, r, p, soft)
 		pM := pMachine.(*ioAutomataConcretePlayer)
-		pM.update(*plyr, r, true)
+		pM.update(plyr, r, true)
 		pM.Children[r].ProposalStore.Assemblers = make(map[proposalValue]blockAssembler)
-		pM.Children[r].ProposalStore.Assemblers[pV] = blockAssembler{Assembled: true, Payload: *payload}
+		pM.Children[r].ProposalStore.Assemblers[rpV] = blockAssembler{Assembled: true, Payload: *rPayload}
 		pM.Children[r].update(*plyr, p, true)
 		pM.Children[r].Children[p].ProposalTracker.Duplicate = make(map[basics.Address]bool)
 		helper.addresses[0] = basics.Address(randomBlockHash())
@@ -153,8 +158,8 @@ const (
 	payloadVerifiedErrorEvent
 )
 
-func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e messageEvent) {
-	const r = makeRoundRandomBranch(209)
+func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper, r round) (e messageEvent) {
+	//r := makeRoundRandomBranch(209)
 	const p = period(0)
 	var payload = makeRandomProposalPayload(r)
 	var pV = payload.value()
@@ -244,7 +249,8 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 		}
 		bun := unauthenticatedBundle{
-			Round:    r,
+			Round:    r.Number,
+			Branch:   r.Branch,
 			Period:   p,
 			Proposal: pV,
 		}
@@ -265,7 +271,8 @@ func getMessageEventPermutation(t *testing.T, n int, helper *voteMakerHelper) (e
 			votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 		}
 		bun := unauthenticatedBundle{
-			Round:    r,
+			Round:    r.Number,
+			Branch:   r.Branch,
 			Period:   p,
 			Proposal: pV,
 		}
@@ -364,14 +371,16 @@ func requireActionCount(t *testing.T, trace ioTrace, expectedCount, playerN, eve
 }
 
 func requireTraceContains(t *testing.T, trace ioTrace, expected event, playerN, eventN int) {
-	require.Truef(t, trace.Contains(expected), "Player should emit action, player: %v, event: %v", playerN, eventN)
+	require.Truef(t, trace.Contains(expected), "Player should emit action %v, player: %v, event: %v, trace: %s", expected, playerN, eventN, trace.String())
 }
 
-func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, helper *voteMakerHelper, trace ioTrace) {
-	const r = makeRoundRandomBranch(209)
+func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, helper *voteMakerHelper, r round, trace ioTrace) {
+	//r := makeRoundRandomBranch(209)
 	const p = period(0)
 	var payload = makeRandomProposalPayload(r)
 	var pV = payload.value()
+	rp1 := makeRoundBranch(210, bookkeeping.BlockHash(payload.Digest()))
+
 	switch playerN {
 	case playerSameRound:
 		switch eventN {
@@ -409,7 +418,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
+			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ra := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
 			requireTraceContains(t, trace, ev(ra), playerN, eventN)
 			sa := stageDigestAction{Certificate: Certificate(bun)}
@@ -420,7 +429,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
+			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(ca), playerN, eventN)
 		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
@@ -526,7 +535,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
+			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ra := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
 			requireTraceContains(t, trace, ev(ra), playerN, eventN)
 			sa := stageDigestAction{Certificate: Certificate(bun)}
@@ -537,7 +546,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
+			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(ca), playerN, eventN)
 		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
@@ -592,7 +601,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
+			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ra := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
 			requireTraceContains(t, trace, ev(ra), playerN, eventN)
 			sa := stageDigestAction{Certificate: Certificate(bun)}
@@ -603,7 +612,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
+			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(ca), playerN, eventN)
 		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
@@ -644,21 +653,21 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			requireTraceContains(t, trace, ev(na), playerN, eventN)
 		case payloadVerifiedEvent:
 			requireActionCount(t, trace, 3, playerN, eventN)
-			ea := ensureAction{Certificate: Certificate(unauthenticatedBundle{Round: r}), Payload: *payload}
+			ea := ensureAction{Certificate: Certificate(unauthenticatedBundle{Round: r.Number, Branch: r.Branch}), Payload: *payload}
 			requireTraceContains(t, trace, ev(ea), playerN, eventN)
-			ra := rezeroAction{Round: r + 1}
+			ra := rezeroAction{Round: rp1}
 			requireTraceContains(t, trace, ev(ra), playerN, eventN)
-			pa := pseudonodeAction{T: assemble, Round: r + 1, Period: 0, Step: 0}
+			pa := pseudonodeAction{T: assemble, Round: rp1, Period: 0, Step: 0}
 			requireTraceContains(t, trace, ev(pa), playerN, eventN)
 		case payloadVerifiedEventNoMessageHandle:
 			requireActionCount(t, trace, 4, playerN, eventN)
 			na := networkAction{T: relay, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}}
 			requireTraceContains(t, trace, ev(na), playerN, eventN)
-			ea := ensureAction{Certificate: Certificate(unauthenticatedBundle{Round: r}), Payload: *payload}
+			ea := ensureAction{Certificate: Certificate(unauthenticatedBundle{Round: r.Number, Branch: r.Branch}), Payload: *payload}
 			requireTraceContains(t, trace, ev(ea), playerN, eventN)
-			ra := rezeroAction{Round: r + 1}
+			ra := rezeroAction{Round: rp1}
 			requireTraceContains(t, trace, ev(ra), playerN, eventN)
-			pa := pseudonodeAction{T: assemble, Round: r + 1, Period: 0, Step: 0}
+			pa := pseudonodeAction{T: assemble, Round: rp1, Period: 0, Step: 0}
 			requireTraceContains(t, trace, ev(pa), playerN, eventN)
 		case bundleVerifiedEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
@@ -669,7 +678,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
+			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(ca), playerN, eventN)
 		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
@@ -711,14 +720,14 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
+			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			na := networkAction{T: relay, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: bun}
 			requireTraceContains(t, trace, ev(na), playerN, eventN)
 			ea := ensureAction{Certificate: Certificate(bun), Payload: *payload}
 			requireTraceContains(t, trace, ev(ea), playerN, eventN)
-			ra := rezeroAction{Round: r + 1}
+			ra := rezeroAction{Round: rp1}
 			requireTraceContains(t, trace, ev(ra), playerN, eventN)
-			pa := pseudonodeAction{T: assemble, Round: r + 1, Period: 0, Step: 0}
+			pa := pseudonodeAction{T: assemble, Round: rp1, Period: 0, Step: 0}
 			requireTraceContains(t, trace, ev(pa), playerN, eventN)
 		case bundlePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
@@ -726,7 +735,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
 				votes[i] = helper.MakeVerifiedVote(t, i, r, p, cert, pV)
 			}
-			bun := unauthenticatedBundle{Round: r, Period: p, Proposal: pV}
+			bun := unauthenticatedBundle{Round: r.Number, Branch: r.Branch, Period: p, Proposal: pV}
 			ca := cryptoAction{T: verifyBundle, M: message{Bundle: bundle{U: bun, Votes: votes}, UnauthenticatedBundle: bun}, TaskIndex: 0}
 			requireTraceContains(t, trace, ev(ca), playerN, eventN)
 		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
@@ -749,15 +758,15 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 func TestPlayerPermutation(t *testing.T) {
 	for i := 0; i < 7; i++ {
 		for j := 0; j < 14; j++ {
-			_, pMachine, helper := getPlayerPermutation(t, i)
-			inMsg := getMessageEventPermutation(t, j, helper)
+			_, pMachine, helper, r := getPlayerPermutation(t, i)
+			inMsg := getMessageEventPermutation(t, j, helper, r)
 			err, panicErr := pMachine.transition(inMsg)
-			fmt.Println(pMachine.getTrace().events)
+			fmt.Println(i, j, pMachine.getTrace().events)
 			fmt.Println("")
 			require.NoErrorf(t, err, "player: %v, event: %v", i, j)
 			require.NoErrorf(t, panicErr, "player: %v, event: %v", i, j)
 
-			verifyPermutationExpectedActions(t, i, j, helper, pMachine.getTrace())
+			verifyPermutationExpectedActions(t, i, j, helper, r, pMachine.getTrace())
 		}
 	}
 }

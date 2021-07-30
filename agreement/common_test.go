@@ -189,7 +189,7 @@ func (f testBlockFactory) AssembleSpeculativeBlock(r basics.Round, prev bookkeep
 	return testValidatedBlock{Inside: bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
 			Round:  r,
-			Branch: bookkeeping.BlockHash(prev),
+			Branch: prev,
 		}}}, nil
 }
 

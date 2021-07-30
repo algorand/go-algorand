@@ -103,7 +103,7 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		if err != nil {
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
 		}
-		if v.R.Round == pr.Round.Number { // XXX timer doesn't know branches
+		if v.R.Round == pr.Round.Number { // XXXX timer doesn't know branches
 			r.t.timeR().RecVoteReceived(v)
 		} else if v.R.Round == pr.Round.Number+1 { // XXX
 			r.t.timeRPlus1().RecVoteReceived(v)
@@ -114,9 +114,10 @@ func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res even
 		if tE.t() == none {
 			return tE
 		}
+		//if tE.(thresholdEvent).Round.Number == e.FreshnessData.PlayerRound.Number {
 		if tE.(thresholdEvent).Round == e.FreshnessData.PlayerRound {
 			return tE
-		} else if tE.(thresholdEvent).Round.Number == e.FreshnessData.PlayerRound.Number+1 { // XXX freshness data R+1 check not branch-aware
+		} else if tE.(thresholdEvent).Round.Number == e.FreshnessData.PlayerRound.Number+1 { // XXXXX freshness data R+1 check not branch-aware
 			return emptyEvent{}
 		}
 		logging.Base().Panicf("bad round (%v, %v)", tE.(thresholdEvent).Round, e.FreshnessData.PlayerRound) // TODO this should be a postcondition check; move it
@@ -251,8 +252,10 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 		return nil
 	}
 
-	if freshData.PlayerRound != vote.R.roundBranch() && freshData.PlayerRound.Number+1 != vote.R.Round { // XXX ignores branch for r+1 check
-		return fmt.Errorf("filtered vote from bad round: player.Round=%v; vote.Round=%v", freshData.PlayerRound, vote.R.Round)
+	// XXXX ignores branch for r+1 check
+	//if freshData.PlayerRound.Number != vote.R.roundBranch().Number && freshData.PlayerRound.Number+1 != vote.R.Round {
+	if freshData.PlayerRound != vote.R.roundBranch() && freshData.PlayerRound.Number+1 != vote.R.Round { // XXXX ignores branch for r+1 check
+		return fmt.Errorf("filtered vote from bad round: player.Round=%v; vote.Round=%v", freshData.PlayerRound, vote.R.roundBranch())
 	}
 
 	if freshData.PlayerRound.Number+1 == vote.R.Round { // XXX ignores branch
