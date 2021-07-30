@@ -44,9 +44,9 @@ import (
 // this test checks that the txsync outgoing message rate
 // varies according to the transaction rate
 func TestMessageRateChangesWithTxnRate(t *testing.T) {
-	txnRates := []uint{50, 1200}
+	txnRates := []uint{50, 300, 800, 1300}
 	if testing.Short() {
-		txnRates = []uint{20, 40}
+		txnRates = []uint{50, 300}
 	}
 	testMessageRateChangesWithTxnRate(t, filepath.Join("nettemplates", "OneNodeTwoRelays.json"), txnRates)
 }
@@ -72,11 +72,10 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	cfg, err := config.LoadConfigFromDisk(nodeDataDir)
 	a.NoError(err)
 	cfg.EnableVerbosedTransactionSyncLogging = true
-	// cfg.TxPoolSize = 50000
 	cfg.SaveToDisk(nodeDataDir)
 	fixture.Start()
 
-	defer fixture.ShutdownImpl(true)
+	defer fixture.Shutdown()
 
 	client := fixture.GetLibGoalClientForNamedNode("Node")
 	accountsList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
@@ -109,7 +108,7 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	// bytesRead := 0
 
 	// store message rate for each of the txn rates
-	// prevMsgRate := 0.0
+	prevMsgRate := 0.0
 
 	errChan := make(chan error)
 	resetChan := make(chan bool)
@@ -131,7 +130,7 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 
 		startTime := time.Now()
 		txnSentCount := uint(0)
-		fmt.Println("Started txn: ", startTime)
+		// fmt.Println("Started txn: ", startTime)
 
 		for {
 			// send txns at txnRate for 30s
@@ -153,12 +152,12 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 			throttleTransactionRate(startTime, txnRate, txnSentCount)
 		}
 
-		endTimeDelta := time.Since(startTime)
-		fmt.Println("End txn: ", time.Now(), " End delta: ", endTimeDelta)
-		avgTps := float64(txnSentCount) / endTimeDelta.Seconds()
-		fmt.Println("Avg TPS: ", avgTps, " Expected: ", txnRate)
-		beta := 1.0 / (2 * 3.6923 * math.Exp(float64(txnRate)*0.00026))
-		fmt.Println("Expected beta: ", beta)
+		// endTimeDelta := time.Since(startTime)
+		// fmt.Println("End txn: ", time.Now(), " End delta: ", endTimeDelta)
+		// avgTps := float64(txnSentCount) / endTimeDelta.Seconds()
+		// fmt.Println("Avg TPS: ", avgTps, " Expected: ", txnRate)
+		// beta := 1.0 / (2 * 3.6923 * math.Exp(float64(txnRate)*0.00026))
+		// fmt.Println("Expected beta: ", beta)
 
 		// status, err := client.Status()
 		// a.NoError(err)
@@ -175,10 +174,10 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 		case err := <-errChan:
 			a.Error(err)
 		case msgRate := <-msgRateChan:
-			fmt.Println("Actual beta: ", 1.0/(2*msgRate))
-			// aErrorMessage := fmt.Sprintf("TxSync message rate not monotonic for txn rate: %d", txnRate)
-			// a.GreaterOrEqual(msgRate, prevMsgRate, aErrorMessage)
-			// prevMsgRate = msgRate
+			// fmt.Println("Actual beta: ", 1.0/(2*msgRate))
+			aErrorMessage := fmt.Sprintf("TxSync message rate not monotonic for txn rate: %d", txnRate)
+			a.GreaterOrEqual(msgRate, prevMsgRate, aErrorMessage)
+			prevMsgRate = msgRate
 
 		}
 		// fmt.Println("Continuing")
@@ -201,18 +200,10 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 	}
 	defer file.Close()
 
-	// // start reading log file from startByte
-	// _, err = file.Seek(int64(0), 0)
-	// if err != nil {
-	// 	errChan <- err
-	// 	return
-	// }
-
 	messageCount := 0
-	// bytesRead := 0
 	var firstTimestamp, lastTimestamp time.Time
 	firstTimestamp = time.Now()
-	var firstMessage, lastMessage string
+	// var firstMessage, lastMessage string
 
 	scanner := bufio.NewScanner(file)
 	for {
@@ -223,12 +214,12 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 			lastTimestamp = time.Now()
 			msgRate := float64(messageCount) / float64(lastTimestamp.Sub(firstTimestamp)) * float64(time.Second)
 			msgRateChan <- msgRate
-			fmt.Println("Message Rate: ", msgRate, " Message Count: ", messageCount, " Time elapsed: ", lastTimestamp.Sub(firstTimestamp)/time.Second)
-			fmt.Println("First msg: ", firstMessage, "First timestamp: ", firstTimestamp)
-			fmt.Println("Last msg: ", lastMessage, "Last timestamp: ", lastTimestamp)
+			// fmt.Println("Message Rate: ", msgRate, " Message Count: ", messageCount, " Time elapsed: ", lastTimestamp.Sub(firstTimestamp)/time.Second)
+			// fmt.Println("First msg: ", firstMessage, "First timestamp: ", firstTimestamp)
+			// fmt.Println("Last msg: ", lastMessage, "Last timestamp: ", lastTimestamp)
 			messageCount = 0
 			firstTimestamp = time.Now()
-			firstMessage = ""
+			// firstMessage = ""
 			// lastTimestamp = time.Time{}
 			continue
 		default:
@@ -254,20 +245,20 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 			eventTime := fmt.Sprintf("%v", logEvent["time"])
 			message := fmt.Sprintf("%v", logEvent["msg"])
 			// skip lines containing empty bloom filter
-			// if strings.Contains(message, "bloom 0") || strings.Contains(message, "transacations 0") {
-			// 	continue
-			// }
+			if strings.Contains(message, "bloom 0") || strings.Contains(message, "transacations 0") {
+				continue
+			}
 			// record the timestamps of txnsync messages
 			lastTimestamp, err = time.Parse(time.RFC3339, eventTime)
-			lastMessage = message
+			// lastMessage = message
 			if err != nil {
 				errChan <- err
 				return
 			}
-			if firstMessage == "" {
-				// firstTimestamp = lastTimestamp
-				firstMessage = message
-			}
+			// if firstMessage == "" {
+			// 	// firstTimestamp = lastTimestamp
+			// 	firstMessage = message
+			// }
 			messageCount++
 		}
 	}
