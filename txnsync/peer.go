@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 )
 
 //msgp:ignore peerState
@@ -53,6 +54,11 @@ const defaultDataExchangeRate = minDataExchangeRateThreshold
 const defaultRelayToRelayDataExchangeRate = 10 * 1024 * 1024 / 8 // 10Mbps
 const bloomFilterRetryCount = 3                                  // number of bloom filters we would try against each transaction group before skipping it.
 const maxTransactionGroupTrackers = 15                           // number of different bloom filter parameters we store before rolling over
+const lagMessageSizeThreshold = 100                              // when the number of bytes in a request/response is less than that, we consider the bandwidth irrelevent and use it as a measurement of lag.
+
+// when the number of bytes in a request/response is above the bandwidthMessageSizeThreshold , we consider this measurement as valid for bandwidth calculation.
+// it's calculated as half of the max message size for the minimum supported bandwidth.
+const bandwidthMessageSizeThreshold = uint64(minDataExchangeRateThreshold*messageTimeWindow/time.Second) / 2
 
 const (
 	// peerStateStartup is before the timeout for the sending the first message to the peer has reached.
@@ -139,6 +145,10 @@ type Peer struct {
 
 	// dataExchangeRate is the combined upload/download rate in bytes/second
 	dataExchangeRate uint64
+
+	// dataExchangeLag measure the amount of lag we had with this peer. It measured in nanoseconds
+	// for sending/receiving a very minimalistic message sizes.
+	dataExchangeLag time.Duration
 
 	// these two fields describe "what does the local peer want the remote peer to send back"
 	localTransactionsModulator  byte
@@ -438,6 +448,7 @@ func (p *Peer) getLocalRequestParams() (offset, modulator byte) {
 // update the peer once the message was sent successfully.
 func (p *Peer) updateMessageSent(txMsg *transactionBlockMessage, selectedTxnIDs []transactions.Txid, timestamp time.Duration, sequenceNumber uint64, messageSize int, filter bloomFilter) {
 	p.recentSentTransactions.addSlice(selectedTxnIDs, sequenceNumber, timestamp)
+	// maybe move this earlier ?
 	p.lastSentMessageSequenceNumber = sequenceNumber
 	p.lastSentMessageRound = txMsg.Round
 	p.lastSentMessageTimestamp = timestamp
@@ -525,24 +536,46 @@ func (p *Peer) updateIncomingTransactionGroups(txnGroups []transactions.SignedTx
 
 func (p *Peer) updateIncomingMessageTiming(timings timingParams, currentRound basics.Round, currentTime time.Duration, incomingMessageSize int) {
 	p.lastConfirmedMessageSeqReceived = timings.RefTxnBlockMsgSeq
-	// if we received a message that references our privious message, see if they occurred on the same round
-	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound {
+	// if we received a message that references our previous message, see if they occurred on the same round
+	if p.lastConfirmedMessageSeqReceived == p.lastSentMessageSequenceNumber && p.lastSentMessageRound == currentRound && p.lastSentMessageTimestamp != 0 {
 		// if so, we might be able to calculate the bandwidth.
 		timeSinceLastMessageWasSent := currentTime - p.lastSentMessageTimestamp
-		if timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) {
+		if timeSinceLastMessageWasSent > time.Duration(timings.ResponseElapsedTime) && timings.ResponseElapsedTime > 0 {
 			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)
 			networkMessageSize := uint64(p.lastSentMessageSize + incomingMessageSize)
-			dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
 
-			if dataExchangeRate < minDataExchangeRateThreshold {
-				dataExchangeRate = minDataExchangeRateThreshold
-			} else if dataExchangeRate > maxDataExchangeRateThreshold {
-				dataExchangeRate = maxDataExchangeRateThreshold
+			if networkMessageSize <= lagMessageSizeThreshold {
+				p.dataExchangeLag = networkTrasmitTime
+				logging.Base().Infof("incoming message : updating data exchange lag to %d; network msg size = %d+%d, transmit time %v = %d - %d addr=%s\n",
+					p.dataExchangeLag, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime, timeSinceLastMessageWasSent, timings.ResponseElapsedTime, p.networkAddress())
+			} else if networkMessageSize >= bandwidthMessageSizeThreshold {
+				if networkTrasmitTime > p.dataExchangeLag {
+					networkTrasmitTime -= p.dataExchangeLag
+					dataExchangeRate := uint64(time.Second) * networkMessageSize / uint64(networkTrasmitTime)
+
+					if dataExchangeRate < minDataExchangeRateThreshold {
+						dataExchangeRate = minDataExchangeRateThreshold
+					} else if dataExchangeRate > maxDataExchangeRateThreshold {
+						dataExchangeRate = maxDataExchangeRateThreshold
+					}
+					// clamp data exchange rate to realistic metrics
+					p.dataExchangeRate = dataExchangeRate
+					logging.Base().Infof("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time %v = %d - %d - %d addr=%s\n",
+						dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime, timeSinceLastMessageWasSent, timings.ResponseElapsedTime, p.dataExchangeLag, p.networkAddress())
+				}
 			}
-			// clamp data exchange rate to realistic metrics
-			p.dataExchangeRate = dataExchangeRate
-			//fmt.Printf("incoming message : updating data exchange to %d; network msg size = %d+%d, transmit time = %v\n", dataExchangeRate, p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime)
+		} else if timeSinceLastMessageWasSent < time.Duration(timings.ResponseElapsedTime) {
+			networkTrasmitTime := timeSinceLastMessageWasSent - time.Duration(timings.ResponseElapsedTime)
+			logging.Base().Infof("incoming message : unexpected : network msg size = %d+%d, transmit time %v = %d - %d addr=%s\n",
+				p.lastSentMessageSize, incomingMessageSize, networkTrasmitTime, timeSinceLastMessageWasSent, timings.ResponseElapsedTime, p.networkAddress())
 		}
+
+		// given that we've (maybe) updated the data exchange rate, we need to clear out the lastSendMessage information
+		// so we won't use that again on a subsequent incoming message.
+		p.lastSentMessageSequenceNumber = 0
+		p.lastSentMessageRound = 0
+		p.lastSentMessageTimestamp = 0
+		p.lastSentMessageSize = 0
 	}
 	p.lastReceivedMessageLocalRound = currentRound
 	p.lastReceivedMessageTimestamp = currentTime
