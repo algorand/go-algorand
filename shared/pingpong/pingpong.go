@@ -869,9 +869,9 @@ func (pps *WorkerState) sendFromTo(
 			if timeCredit > 0 {
 				time.Sleep(timeCredit)
 				timeCredit = time.Duration(0)
-			} else if timeCredit < -100*time.Millisecond {
-				// cap the "time debt" to 100 ms.
-				timeCredit = -100 * time.Millisecond
+			} else if timeCredit < -1000*time.Millisecond {
+				// cap the "time debt" to 1000 ms.
+				timeCredit = -1000 * time.Millisecond
 			}
 			lastTransactionTime = time.Now()
 
