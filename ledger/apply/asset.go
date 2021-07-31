@@ -95,14 +95,13 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			return fmt.Errorf("too many assets in account: %d > %d", len(record.Assets), balances.ConsensusParams().MaxAssetsPerAccount)
 		}
 
-		// Tell the cow what asset we created
-		created := &basics.CreatableLocator{
-			Creator: header.Sender,
-			Type:    basics.AssetCreatable,
-			Index:   basics.CreatableIndex(newidx),
+		err = balances.Put(header.Sender, record)
+		if err != nil {
+			return err
 		}
 
-		return balances.PutWithCreatable(header.Sender, record, created, nil)
+		// Tell the cow what asset we created
+		return balances.AllocateAsset(header.Sender, newidx, true)
 	}
 
 	// Re-configuration and destroying must be done by the manager key.
@@ -123,7 +122,6 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 	record.Assets = cloneAssetHoldings(record.Assets)
 	record.AssetParams = cloneAssetParams(record.AssetParams)
 
-	var deleted *basics.CreatableLocator
 	if cc.AssetParams == (basics.AssetParams{}) {
 		// Destroying an asset.  The creator account must hold
 		// the entire outstanding asset amount.
@@ -132,10 +130,9 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		}
 
 		// Tell the cow what asset we deleted
-		deleted = &basics.CreatableLocator{
-			Creator: creator,
-			Type:    basics.AssetCreatable,
-			Index:   basics.CreatableIndex(cc.ConfigAsset),
+		err = balances.DeallocateAsset(creator, cc.ConfigAsset, true)
+		if err != nil {
+			return err
 		}
 
 		delete(record.Assets, cc.ConfigAsset)
@@ -158,7 +155,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		record.AssetParams[cc.ConfigAsset] = params
 	}
 
-	return balances.PutWithCreatable(creator, record, nil, deleted)
+	return balances.Put(creator, record)
 }
 
 func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
