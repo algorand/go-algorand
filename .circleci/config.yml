@@ -216,14 +216,20 @@ commands:
           keys:
             - 'libsodium-fork-{{ .Environment.CIRCLE_STAGE }}-{{ checksum "tmp/libsodium.md5" }}'
 
-  generic_shorttest:
-    description: Run short tests from build workspace, for re-use by diferent architectures
+  generic_buildtest:
+    description: Run build tests from build workspace, for re-use by diferent architectures
     parameters:
       circleci_home:
         type: string
         default: "/home/circleci"
       result_subdir:
         type: string
+      no_output_timeout:
+        type: string
+        default: 30m
+      short_test_flag:
+        type: string
+        default: ""
     steps:
       - attach_workspace:
           at: << parameters.circleci_home >>
@@ -232,8 +238,8 @@ commands:
           keys:
             - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
       - run:
-          name: Run short tests
-          no_output_timeout: 30m
+          name: Run build tests
+          no_output_timeout: << parameters.no_output_timeout >>
           command: |
             set -e
             set -x
@@ -251,7 +257,7 @@ commands:
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
             export PARALLEL_FLAG="-p 1"
-            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" -short -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
+            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
       - store_artifacts:
           path: /tmp/results
           destination: test-results
@@ -261,53 +267,6 @@ commands:
           key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
           paths:
             - tmp/go-cache
-
-  generic_nightlytest:
-    description: Run nightly tests from build workspace, for re-use by diferent architectures
-    parameters:
-      circleci_home:
-        type: string
-        default: "/home/circleci"
-      result_subdir:
-        type: string
-    steps:
-      - attach_workspace:
-          at: << parameters.circleci_home >>
-      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
-      - restore_cache:
-          keys:
-            - 'go-cache-{{ .Environment.CIRCLE_STAGE }}-'
-      - run:
-          name: Run nightly tests
-          no_output_timeout: 45m
-          command: |
-            set -e
-            set -x
-            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            export KMD_NOUSB=True
-            export GOPATH="<< parameters.circleci_home >>/go"
-            export PATH="${PATH}:${GOPATH}/bin"
-            export ALGORAND_DEADLOCK=enable
-            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-            eval "$(~/gimme "${GOLANG_VERSION}")"
-            scripts/configure_dev.sh
-            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-            PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-            export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
-            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
-            export PARTITION_ID=$CIRCLE_NODE_INDEX
-            export PARALLEL_FLAG="-p 1"
-            gotestsum --format pkgname --junitfile /tmp/results/<< parameters.result_subdir >>/results.xml --jsonfile /tmp/results/<< parameters.result_subdir >>/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension"  -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
-      - store_artifacts:
-          path: /tmp/results
-          destination: test-results
-      - store_test_results:
-          path: /tmp/results
-      - save_cache:
-          key: 'go-cache-{{ .Environment.CIRCLE_STAGE }}-{{ .Environment.CIRCLE_BUILD_NUM }}'
-          paths:
-            - tmp/go-cache
-
 
   upload_coverage:
     description: Collect coverage reports and upload them
@@ -326,13 +285,19 @@ commands:
         default: "/home/circleci"
       result_subdir:
         type: string
+      no_output_timeout:
+        type: string
+        default: 30m
+      short_test_flag:
+        type: string
+        default: ""
     steps:
       - attach_workspace:
           at: << parameters.circleci_home >>
       - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
       - run:
           name: Run integration tests
-          no_output_timeout: 30m
+          no_output_timeout: << parameters.no_output_timeout >>
           command: |
             set -x
             export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
@@ -346,46 +311,7 @@ commands:
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export ALGOTEST=1
-            export SHORTTEST=-short
-            export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
-            export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
-            export PARTITION_ID=$CIRCLE_NODE_INDEX
-            test/scripts/run_integration_tests.sh
-      - store_artifacts:
-          path: /tmp/results
-          destination: test-results
-      - store_test_results:
-          path: /tmp/results
-
-  generic_nightlyintegration:
-    description: Run nightly integration tests from build workspace, for re-use by diferent architectures
-    parameters:
-      circleci_home:
-        type: string
-        default: "/home/circleci"
-      result_subdir:
-        type: string
-    steps:
-      - attach_workspace:
-          at: << parameters.circleci_home >>
-      - run: mkdir -p /tmp/results/<< parameters.result_subdir >>
-      - run:
-          name: Run integration tests
-          no_output_timeout: 45m
-          command: |
-            set -x
-            export PATH=$(echo "$PATH" | sed -e 's|:<< parameters.circleci_home >>/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            export KMD_NOUSB=True
-            export GOPATH="<< parameters.circleci_home >>/go"
-            export PATH="${PATH}:${GOPATH}/bin"
-            export ALGORAND_DEADLOCK=enable
-            export BUILD_TYPE=integration
-            GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-            eval "$(~/gimme "${GOLANG_VERSION}")"
-            scripts/configure_dev.sh
-            scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-            export ALGOTEST=1
-            export SHORTTEST=-short
+            export SHORTTEST=<< parameters.short_test_flag >>
             export TEST_RESULTS=/tmp/results/<< parameters.result_subdir >>
             export PARTITION_TOTAL=$CIRCLE_NODE_TOTAL
             export PARTITION_ID=$CIRCLE_NODE_INDEX
@@ -425,8 +351,9 @@ jobs:
     parallelism: 4
     steps:
       - prepare_go
-      - generic_shorttest:
+      - generic_buildtest:
           result_subdir: amd64-short
+          short_test_flag: "-short"
       - upload_coverage
 
   amd64_test_nightly:
@@ -436,8 +363,9 @@ jobs:
     parallelism: 4
     steps:
       - prepare_go
-      - generic_nightlytest:
+      - generic_buildtest:
           result_subdir: amd64-nightly
+          no_output_timeout: 45m
       - upload_coverage
 
   amd64_integration:
@@ -451,6 +379,7 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: amd64-integration
+          short_test_flag: "-short"
 
   amd64_integration_nightly:
     machine:
@@ -461,8 +390,9 @@ jobs:
       SKIP_E2E_SUBS: "true"
     steps:
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: amd64-integrationnightly
+          no_output_timeout: 45m
 
   amd64_e2e_subs:
     machine:
@@ -474,6 +404,7 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: amd64-e2e_subs
+          short_test_flag: "-short"
 
   amd64_e2e_subs_nightly:
     machine:
@@ -483,8 +414,9 @@ jobs:
       E2E_SUBS_ONLY: "true"
     steps:
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: amd64-e2e_subs_nightly
+          no_output_timeout: 45m
 
   arm64_build:
     machine:
@@ -503,8 +435,9 @@ jobs:
     steps:
       - checkout
       - prepare_go
-      - generic_shorttest:
+      - generic_buildtest:
           result_subdir: arm64-short
+          short_test_flag: "-short"
       - upload_coverage
 
   arm64_test_nightly:
@@ -515,8 +448,9 @@ jobs:
     steps:
       - checkout
       - prepare_go
-      - generic_nightlytest:
+      - generic_buildtest:
           result_subdir: arm64-nightly
+          no_output_timeout: 45m
       - upload_coverage
 
   arm64_integration:
@@ -531,6 +465,7 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: arm64-integration
+          short_test_flag: "-short"
 
   arm64_integration_nightly:
     machine:
@@ -542,8 +477,9 @@ jobs:
     steps:
       - checkout
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: arm64-integration-nightly
+          no_output_timeout: 45m
 
   arm64_e2e_subs:
     machine:
@@ -556,6 +492,7 @@ jobs:
       - prepare_go
       - generic_integration:
           result_subdir: arm64-e2e_subs
+          short_test_flag: "-short"
 
   arm64_e2e_subs_nightly:
     machine:
@@ -566,8 +503,9 @@ jobs:
     steps:
       - checkout
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: arm64-e2e_subs-nightly
+          no_output_timeout: 45m
 
   mac_amd64_build:
     macos:
@@ -592,9 +530,10 @@ jobs:
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
-      - generic_shorttest:
+      - generic_buildtest:
           result_subdir: mac-amd64-short
           circleci_home: /Users/distiller
+          short_test_flag: "-short"
       - upload_coverage
 
   mac_amd64_test_nightly:
@@ -607,9 +546,10 @@ jobs:
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
-      - generic_nightlytest:
+      - generic_buildtest:
           result_subdir: mac-amd64-short
           circleci_home: /Users/distiller
+          no_output_timeout: 45m
       - upload_coverage
 
   mac_amd64_integration:
@@ -626,6 +566,7 @@ jobs:
       - generic_integration:
           result_subdir: mac-amd64-integration
           circleci_home: /Users/distiller
+          short_test_flag: "-short"
 
   mac_amd64_integration_nightly:
     macos:
@@ -638,9 +579,10 @@ jobs:
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: mac-amd64-integration-nightly
           circleci_home: /Users/distiller
+          no_output_timeout: 45m
 
   mac_amd64_e2e_subs:
     macos:
@@ -652,9 +594,10 @@ jobs:
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: mac-amd64-e2e_subs
           circleci_home: /Users/distiller
+          short_test_flag: "-short"
 
   mac_amd64_e2e_subs_nightly:
     macos:
@@ -666,9 +609,10 @@ jobs:
     steps:
       #- run: git -C /usr/local/Homebrew/Library/Taps/homebrew/homebrew-core fetch --unshallow
       - prepare_go
-      - generic_nightlyintegration:
+      - generic_integration:
           result_subdir: mac-amd64-e2e_subs-nightly
           circleci_home: /Users/distiller
+          no_output_timeout: 45m
 
   windows_x64_build:
     executor:
