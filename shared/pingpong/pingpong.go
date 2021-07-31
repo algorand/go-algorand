@@ -246,9 +246,10 @@ func (pps *WorkerState) fundAccounts(accounts map[string]*pingPongAccount, clien
 			throttleTransactionRate(startTime, cfg, totalSent)
 		}
 	}
+	accounts[cfg.SrcAccount].balance = srcFunds
 	// wait until all the above transactions are sent, or that we have no more transactions
 	// in our pending transaction pool coming from the source account.
-	//err = waitPendingTransactions(map[string]uint64{cfg.SrcAccount: uint64(0)}, client)
+	err = waitPendingTransactions(map[string]*pingPongAccount{cfg.SrcAccount: nil}, client)
 	return err
 }
 
@@ -285,12 +286,12 @@ func (pps *WorkerState) sendPaymentFromUnencryptedWallet(client libgoal.Client, 
 func waitPendingTransactions(accounts map[string]*pingPongAccount, client libgoal.Client) error {
 	for from := range accounts {
 	repeat:
-		txnList, err := client.GetPendingTransactionsByAddress(from, 0)
+		pendingTxns, err := client.GetPendingTransactionsByAddress(from, 0)
 		if err != nil {
 			fmt.Printf("failed to check pending transaction pool status : %v\n", err)
 			return err
 		}
-		for _, txn := range txnList.Transactions {
+		for _, txn := range pendingTxns.TruncatedTxns.Transactions {
 			if txn.From != from {
 				// we found a transaction where the receiver was the given account. We don't
 				// care about these.
@@ -314,10 +315,10 @@ func (pps *WorkerState) refreshAccounts(accounts map[string]*pingPongAccount, cl
 	// wait until all the pending transcations have been sent; otherwise, getting the balance
 	// is pretty much meaningless.
 	fmt.Printf("waiting for all transactions to be accepted before refreshing accounts.\n")
-	/*err := waitPendingTransactions(accounts, client)
+	err := waitPendingTransactions(accounts, client)
 	if err != nil {
 		return err
-	}*/
+	}
 
 	for addr := range accounts {
 		amount, err := client.GetBalance(addr)
@@ -601,6 +602,8 @@ func (pps *WorkerState) sendFromTo(
 		c := p.Creator
 		assetsByCreator[c] = append(assetsByCreator[c], &p)
 	}
+	txnBlock := time.Now()
+	txnBlockCount := 0
 	lastTransactionTime := time.Now()
 	timeCredit := time.Duration(0)
 	for i := 0; i < len(fromList); i = (i + 1) % len(fromList) {
@@ -611,8 +614,12 @@ func (pps *WorkerState) sendFromTo(
 			return
 		}
 
+		if belowMinBalanceAccounts[from] {
+			continue
+		}
+
 		if cfg.RandomizeAmt {
-			amt = rand.Uint64()%cfg.MaxAmt + 1
+			amt = ((rand.Uint64() % cfg.MaxAmt) + 1) % cfg.MaxAmt
 		}
 
 		fee := pps.fee()
@@ -625,7 +632,7 @@ func (pps *WorkerState) sendFromTo(
 		} else {
 			// make 5% of the calls attempt to refund low-balanced accounts.
 			// ( if there is any )
-			if len(belowMinBalanceAccounts) > 0 && (crypto.RandUint64()%100 < 5) {
+			if len(belowMinBalanceAccounts) > 0 /*&& (crypto.RandUint64()%100 < 5)*/ {
 				// pick the first low balance account
 				for acct := range belowMinBalanceAccounts {
 					to = acct
@@ -634,21 +641,24 @@ func (pps *WorkerState) sendFromTo(
 			}
 		}
 
-		if fromGains, has := pendingAccountGains[from]; has {
-			gainsAdded := false
-			if accounts[from].balance < halfFullAccountBalance {
-				txnList, err2 := client.GetPendingTransactionsByAddress(from, 0)
+		if accounts[from].balance < halfFullAccountBalance {
+			if fromGains, has := pendingAccountGains[from]; has && len(fromGains) > 0 {
+				gainsAdded := false
+
+				addrPendingTxns, err2 := client.GetPendingTransactionsByAddress(from, 0)
 				if err2 != nil {
 					_, _ = fmt.Fprintf(os.Stderr, "GetPendingTransactionsByAddress failed: %v\n", err2)
 					return
 				}
 				pendingTxnMap := make(map[string]bool)
-				for _, txn := range txnList.Transactions {
+				for _, txn := range addrPendingTxns.TruncatedTxns.Transactions {
 					// we're looking for a transaction where the recipient is our "from"
 					if txn.From != from {
 						pendingTxnMap[txn.TxID] = true
+
 					}
 				}
+
 				// if the source account has some pending transactions, evaluate these.
 				missing := false
 				for txid := range fromGains {
@@ -672,10 +682,11 @@ func (pps *WorkerState) sendFromTo(
 					accounts[from].balance = amount
 					gainsAdded = true
 				}
-			}
-			if gainsAdded && belowMinBalanceAccounts[from] {
-				// we should re-evaluate that account.
-				delete(belowMinBalanceAccounts, from)
+
+				if gainsAdded && belowMinBalanceAccounts[from] {
+					// we should re-evaluate that account.
+					delete(belowMinBalanceAccounts, from)
+				}
 			}
 		}
 
@@ -703,7 +714,11 @@ func (pps *WorkerState) sendFromTo(
 
 			// would we have enough money after taking into account the current updated fees ?
 			if accounts[from].balance <= (txn.Fee.Raw + amt + cfg.MinAccountFunds) {
-				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, to)
+				pending := int64(0)
+				for _, txPending := range pendingAccountGains[from] {
+					pending += txPending
+				}
+				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d (%d): %s -> %s; Current cost too high(%d <= %d + %d  + %d).\n", amt, pending, from, to, accounts[from].balance, txn.Fee.Raw, amt, cfg.MinAccountFunds)
 				belowMinBalanceAccounts[from] = true
 				continue
 			}
@@ -854,15 +869,23 @@ func (pps *WorkerState) sendFromTo(
 			if timeCredit > 0 {
 				time.Sleep(timeCredit)
 				timeCredit = time.Duration(0)
-			} else if timeCredit < -20*time.Millisecond {
-				// cap the "time debt" to 20 ms.
-				timeCredit = -20 * time.Millisecond
+			} else if timeCredit < -100*time.Millisecond {
+				// cap the "time debt" to 100 ms.
+				timeCredit = -100 * time.Millisecond
 			}
 			lastTransactionTime = time.Now()
 
 			// since we just slept enough here, we can take it off the counters
 			sentCount--
 			successCount--
+		}
+		txnBlockCount++
+		if txnBlockCount == 100 {
+			now := time.Now()
+			dt := now.Sub(txnBlock)
+			txnBlock = now
+			fmt.Printf("time per 100 transaction was %v\n", dt)
+			txnBlockCount = 0
 		}
 	}
 	return

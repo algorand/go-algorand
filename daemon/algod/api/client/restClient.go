@@ -364,7 +364,7 @@ func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64
 }
 
 // PendingTransactionsByAddr returns all the pending transactions for a PK [addr].
-func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response v1.TransactionList, err error) {
+func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response v1.PendingTransactions, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
 	return
 }

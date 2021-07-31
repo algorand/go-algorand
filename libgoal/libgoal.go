@@ -873,7 +873,7 @@ func (c *Client) GetPendingTransactions(maxTxns uint64) (resp v1.PendingTransact
 
 // GetPendingTransactionsByAddress gets a snapshot of current pending transactions on the node for the given address.
 // If maxTxns = 0, fetches as many transactions as possible.
-func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (resp v1.TransactionList, err error) {
+func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (resp v1.PendingTransactions, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.PendingTransactionsByAddr(addr, maxTxns)
