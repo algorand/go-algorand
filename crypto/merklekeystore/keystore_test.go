@@ -286,7 +286,7 @@ func TestMarshal(t *testing.T) {
 
 func compareSigners(a *require.Assertions, signer *Signer, cpy *Signer) {
 	a.Equal(signer.Tree, cpy.Tree)
-	a.Equal(signer.EphemeralKeys.TreeBase, cpy.EphemeralKeys.TreeBase)
+	a.Equal(signer.EphemeralKeys.FirstValid, cpy.EphemeralKeys.FirstValid)
 	a.Equal(signer.EphemeralKeys.ArrayBase, cpy.EphemeralKeys.ArrayBase)
 	a.Equal(signer.EphemeralKeys, cpy.EphemeralKeys)
 }
@@ -297,21 +297,21 @@ func TestKeySliceAfterSignerTrim(t *testing.T) {
 	a.NoError(err)
 
 	cpy, _ := signer.Trim(1)
-	a.Equal(cpy.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(cpy.EphemeralKeys.FirstValid, uint64(1))
 	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 99)
 
 	cpy, _ = signer.Trim(10)
-	a.Equal(cpy.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(cpy.EphemeralKeys.FirstValid, uint64(1))
 	a.Equal(cpy.EphemeralKeys.ArrayBase, uint64(10))
 	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 90)
-	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(signer.EphemeralKeys.FirstValid, uint64(1))
 	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 90)
 
 	cpy, _ = signer.Trim(20)
-	a.Equal(cpy.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(cpy.EphemeralKeys.FirstValid, uint64(1))
 	a.Equal(cpy.EphemeralKeys.ArrayBase, uint64(20))
 	a.Equal(len(cpy.EphemeralKeys.SignatureAlgorithms), 80)
-	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(signer.EphemeralKeys.FirstValid, uint64(1))
 	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 80)
 
 	_, err = signer.Trim(101)
@@ -326,18 +326,18 @@ func TestKeySliceAfterSignerTrim(t *testing.T) {
 
 	// Should not trim, removes only keys from before current round
 	signer.Trim(11)
-	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(signer.EphemeralKeys.FirstValid, uint64(1))
 	a.Equal(8, len(signer.EphemeralKeys.SignatureAlgorithms))
 
 	signer.Trim(22)
-	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(signer.EphemeralKeys.FirstValid, uint64(1))
 	a.Equal(7, len(signer.EphemeralKeys.SignatureAlgorithms))
 
 	_, err = signer.Trim(23)
 	a.Error(err)
 
 	signer.Trim(99)
-	a.Equal(signer.EphemeralKeys.TreeBase, uint64(1))
+	a.Equal(signer.EphemeralKeys.FirstValid, uint64(1))
 	a.Equal(len(signer.EphemeralKeys.SignatureAlgorithms), 0)
 }
 
@@ -379,7 +379,7 @@ func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Has
 
 	sig, err := signer.Sign(hashable, sigRound)
 	a.NoError(err)
-	a.NoError(signer.GetVerifier().Verify(signer.EphemeralKeys.TreeBase, sigRound, 1, hashable, sig))
+	a.NoError(signer.GetVerifier().Verify(signer.EphemeralKeys.FirstValid, sigRound, 1, hashable, sig))
 	return hashable, sig
 }
 
