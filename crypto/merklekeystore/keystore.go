@@ -115,20 +115,21 @@ func (d *EphemeralKeys) getActualPos(pos uint64) uint64 {
 
 // New Generates a merklekeystore.Signer
 // The function allow creation of empty signers, i.e signers without any key to sign with.
-func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
+// keys can be created between [A,Z], if A == 0, keys created will be in the range (0,Z]
+func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
 	}
-	if divisor == 0 {
+	if interval == 0 {
 		return nil, errDivisorIsZero
 	}
 	if firstValid == 0 {
 		firstValid++
 	}
-	numberOfKeys := roundToIndex(firstValid, lastValid, divisor) + 1
+	numberOfKeys := roundToIndex(firstValid, lastValid, interval) + 1
 	if numberOfKeys == 0 {
 		// always outputs a valid signer that doesn't crash.
-		return &Signer{EphemeralKeys: EphemeralKeys{Interval: divisor}}, nil
+		return &Signer{EphemeralKeys: EphemeralKeys{Interval: interval}}, nil
 	}
 
 	keys := make([]crypto.SignatureAlgorithm, numberOfKeys)
@@ -138,7 +139,7 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 	ephKeys := EphemeralKeys{
 		SignatureAlgorithms: keys,
 		TreeBase:            firstValid,
-		Interval:            divisor,
+		Interval:            interval,
 	}
 	tree, err := merklearray.Build(&ephKeys)
 	if err != nil {
