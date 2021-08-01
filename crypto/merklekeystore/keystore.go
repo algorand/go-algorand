@@ -73,6 +73,9 @@ type (
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		Root crypto.Digest `codec:"r"`
+
+		// indicates that this verifier is tied to a specific array of ephemeral keys.
+		HasValidRoot bool `codec:"vr"`
 	}
 )
 
@@ -81,6 +84,7 @@ var errReceivedRoundIsBeforeFirst = errors.New("round translated to be prior to 
 var errOutOfBounds = errors.New("round translated to be after last key position")
 var errNonExistantKey = errors.New("key doesn't exist")
 var errDivisorIsZero = errors.New("received zero Interval")
+var errCannotVerify = errors.New("verifier isn't valid")
 
 // ToBeHashed implementation means CommittablePublicKey is crypto.Hashable.
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
@@ -146,6 +150,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 func (s *Signer) GetVerifier() *Verifier {
 	return &Verifier{
 		Root: s.Tree.Root(),
+		HasValidRoot: true,
 	}
 }
 
@@ -246,7 +251,9 @@ func (s *Signer) dropKeys(upTo int) {
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
 func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashable, sig Signature) error {
-
+	if !v.HasValidRoot {
+		return errCannotVerify
+	}
 	if firstValid == 0 {
 		firstValid++
 	}
