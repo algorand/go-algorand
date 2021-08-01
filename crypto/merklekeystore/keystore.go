@@ -74,21 +74,13 @@ type (
 		mu            deadlock.RWMutex
 	}
 
-	VerifierStatus uint8
 	// Verifier Is a way to verify a Signature produced by merklekeystore.Signer.
 	// it also serves as a commit over all keys contained in the merklekeystore.Signer.
 	Verifier struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		Root crypto.Digest `codec:"r"`
-		// states the verifier state, for example - notEmpty.
-		Status VerifierStatus `codec:"s"`
 	}
-)
-
-const (
-	empty VerifierStatus = iota
-	notEmpty
 )
 
 var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
@@ -164,8 +156,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (m *Signer) GetVerifier() *Verifier {
 	return &Verifier{
-		Root:   m.Tree.Root(),
-		Status: notEmpty,
+		Root: m.Tree.Root(),
 	}
 }
 
@@ -259,13 +250,8 @@ func (m *Signer) dropKeys(upTo int) {
 	m.EphemeralKeys.SignatureAlgorithms = m.EphemeralKeys.SignatureAlgorithms[upTo+1:]
 }
 
-var errEmptyVerifier = errors.New("empty verifier")
-
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
 func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashable, sig Signature) error {
-	if v.Status == empty {
-		return errEmptyVerifier
-	}
 
 	if firstValid == 0 {
 		firstValid++
