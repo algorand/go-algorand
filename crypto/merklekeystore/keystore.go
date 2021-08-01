@@ -138,6 +138,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 	ephKeys := EphemeralKeys{
 		SignatureAlgorithms: keys,
 		TreeBase:            firstValid,
+		ArrayBase:           0,
 		Interval:            interval,
 	}
 	tree, err := merklearray.Build(&ephKeys)
