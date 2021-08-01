@@ -149,7 +149,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (s *Signer) GetVerifier() *Verifier {
 	return &Verifier{
-		Root: s.Tree.Root(),
+		Root:         s.Tree.Root(),
 		HasValidRoot: true,
 	}
 }
