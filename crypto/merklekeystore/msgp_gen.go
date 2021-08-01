@@ -56,6 +56,14 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
+// VerifierStatus
+//        |-----> MarshalMsg
+//        |-----> CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> Msgsize
+//        |-----> MsgIsZero
+//
 
 // MarshalMsg implements msgp.Marshaler
 func (z *CommittablePublicKey) MarshalMsg(b []byte) (o []byte) {
@@ -477,18 +485,18 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(3)
-	var zb0002Mask uint8 /* 6 bits */
+	var zb0002Mask uint8 /* 5 bits */
 	if (*z).ByteSignature.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x2
 	}
 	if len((*z).Proof) == 0 {
 		zb0002Len--
-		zb0002Mask |= 0x8
+		zb0002Mask |= 0x4
 	}
 	if (*z).VerifyingKey.MsgIsZero() {
 		zb0002Len--
-		zb0002Mask |= 0x20
+		zb0002Mask |= 0x10
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
@@ -498,7 +506,7 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xa4, 0x62, 0x73, 0x69, 0x67)
 			o = (*z).ByteSignature.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x8) == 0 { // if not empty
+		if (zb0002Mask & 0x4) == 0 { // if not empty
 			// string "prf"
 			o = append(o, 0xa3, 0x70, 0x72, 0x66)
 			if (*z).Proof == nil {
@@ -510,7 +518,7 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).Proof[zb0001].MarshalMsg(o)
 			}
 		}
-		if (zb0002Mask & 0x20) == 0 { // if not empty
+		if (zb0002Mask & 0x10) == 0 { // if not empty
 			// string "vkey"
 			o = append(o, 0xa4, 0x76, 0x6b, 0x65, 0x79)
 			o = (*z).VerifyingKey.MarshalMsg(o)
@@ -800,11 +808,15 @@ func (z *Signer) MsgIsZero() bool {
 func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(1)
-	var zb0001Mask uint8 /* 2 bits */
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
 	if (*z).Root.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
+	}
+	if (*z).Status == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -813,6 +825,11 @@ func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = (*z).Root.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "s"
+			o = append(o, 0xa1, 0x73)
+			o = msgp.AppendUint8(o, uint8((*z).Status))
 		}
 	}
 	return
@@ -845,6 +862,18 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			{
+				var zb0003 uint8
+				zb0003, bts, err = msgp.ReadUint8Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Status")
+					return
+				}
+				(*z).Status = VerifierStatus(zb0003)
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -873,6 +902,16 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Root")
 					return
 				}
+			case "s":
+				{
+					var zb0004 uint8
+					zb0004, bts, err = msgp.ReadUint8Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Status")
+						return
+					}
+					(*z).Status = VerifierStatus(zb0004)
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -893,11 +932,57 @@ func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Verifier) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Root.Msgsize()
+	s = 1 + 2 + (*z).Root.Msgsize() + 2 + msgp.Uint8Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return ((*z).Root.MsgIsZero())
+	return ((*z).Root.MsgIsZero()) && ((*z).Status == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z VerifierStatus) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint8(o, uint8(z))
+	return
+}
+
+func (_ VerifierStatus) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(VerifierStatus)
+	if !ok {
+		_, ok = (z).(*VerifierStatus)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *VerifierStatus) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = VerifierStatus(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *VerifierStatus) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*VerifierStatus)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z VerifierStatus) Msgsize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z VerifierStatus) MsgIsZero() bool {
+	return z == 0
 }
