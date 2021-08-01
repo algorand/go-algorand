@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"github.com/algorand/go-algorand/crypto/merklekeystore"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -189,6 +190,5 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 	if err = protocol.Decode(rawBlockProof, acc.BlockProof); err != nil {
 		return PersistedParticipation{}, err
 	}
-	// TODO: Should i check validity of the keys inside the Signer?
 	return acc, nil
 }
