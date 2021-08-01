@@ -22,6 +22,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -89,6 +90,8 @@ func testVersioning(t *testing.T, inMemory bool) {
 }
 
 func TestVersioning(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	t.Run("InMem", func(t *testing.T) { testVersioning(t, true) })
 	t.Run("OnDisk", func(t *testing.T) { testVersioning(t, false) })
 }

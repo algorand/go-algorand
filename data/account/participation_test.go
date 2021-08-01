@@ -30,12 +30,15 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
 
 var partableColumnNames = [...]string{"parent", "vrf", "voting", "blockProof", "firstValid", "lastValid", "keyDilution"}
 
 func TestParticipation_NewDB(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	a := require.New(t)
 
 	_, rootDB, partDB, err := setupParticipationKey(t, a)
@@ -108,6 +111,8 @@ func getSchemaVersions(db db.Accessor) (versions map[string]int, err error) {
 }
 
 func TestOverlapsInterval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	const before = basics.Round(95)
 	const start = basics.Round(100)
 	const middle = basics.Round(105)

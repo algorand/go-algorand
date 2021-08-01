@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,10 +50,6 @@ func (balances keyregTestBalances) Put(addr basics.Address, ad basics.AccountDat
 	return nil
 }
 
-func (balances keyregTestBalances) PutWithCreatable(basics.Address, basics.AccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
-	return nil
-}
-
 func (balances keyregTestBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
 	return nil
 }
@@ -65,11 +62,19 @@ func (balances keyregTestBalances) Round() basics.Round {
 	return basics.Round(4294967296)
 }
 
-func (balances keyregTestBalances) Allocate(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
+func (balances keyregTestBalances) AllocateApp(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
 	return nil
 }
 
-func (balances keyregTestBalances) Deallocate(basics.Address, basics.AppIndex, bool) error {
+func (balances keyregTestBalances) DeallocateApp(basics.Address, basics.AppIndex, bool) error {
+	return nil
+}
+
+func (balances keyregTestBalances) AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
+	return nil
+}
+
+func (balances keyregTestBalances) DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
 	return nil
 }
 
@@ -78,6 +83,8 @@ func (balances keyregTestBalances) StatefulEval(logic.EvalParams, basics.AppInde
 }
 
 func TestKeyregApply(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
 	vrfSecrets := crypto.GenerateVRFSecrets()

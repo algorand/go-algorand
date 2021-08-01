@@ -384,6 +384,7 @@ type ConsensusParams struct {
 
 	// EnableBlockProofKeyregCheck enables the check for blockProof key on key registration
 	EnableBlockProofKeyregCheck bool
+	EnableExtraPagesOnAppUpdate bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -992,6 +993,9 @@ func initConsensusProtocols() {
 
 	// compact certificate key registration
 	vFuture.EnableBlockProofKeyregCheck = true
+
+	// Enable ExtraProgramPages for application update
+	vFuture.EnableExtraPagesOnAppUpdate = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
