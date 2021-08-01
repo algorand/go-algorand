@@ -217,8 +217,8 @@ func (z *EphemeralKeys) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint64(o, (*z).ArrayBase)
 		}
 		if (zb0002Mask & 0x4) == 0 { // if not empty
-			// string "dv"
-			o = append(o, 0xa2, 0x64, 0x76)
+			// string "iv"
+			o = append(o, 0xa2, 0x69, 0x76)
 			o = msgp.AppendUint64(o, (*z).Interval)
 		}
 		if (zb0002Mask & 0x8) == 0 { // if not empty
@@ -365,7 +365,7 @@ func (z *EphemeralKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ArrayBase")
 					return
 				}
-			case "dv":
+			case "iv":
 				(*z).Interval, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Interval")
@@ -800,25 +800,16 @@ func (z *Signer) MsgIsZero() bool {
 func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 3 bits */
-	if (*z).Interval == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x2
-	}
+	zb0001Len := uint32(1)
+	var zb0001Mask uint8 /* 2 bits */
 	if (*z).Root.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x2
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len != 0 {
 		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "d"
-			o = append(o, 0xa1, 0x64)
-			o = msgp.AppendUint64(o, (*z).Interval)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = (*z).Root.MarshalMsg(o)
@@ -854,14 +845,6 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
-			zb0001--
-			(*z).Interval, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Interval")
-				return
-			}
-		}
-		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -890,12 +873,6 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Root")
 					return
 				}
-			case "d":
-				(*z).Interval, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Interval")
-					return
-				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -916,11 +893,11 @@ func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Verifier) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Root.Msgsize() + 2 + msgp.Uint64Size
+	s = 1 + 2 + (*z).Root.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return ((*z).Root.MsgIsZero()) && ((*z).Interval == 0)
+	return ((*z).Root.MsgIsZero())
 }

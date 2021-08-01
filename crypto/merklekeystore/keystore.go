@@ -36,7 +36,7 @@ type (
 		TreeBase uint64 `codec:"rnd"`
 		// Used to align a position to a shrank array.
 		ArrayBase uint64 `codec:"az"`
-		Interval  uint64 `codec:"dv"`
+		Interval  uint64 `codec:"iv"`
 	}
 
 	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
@@ -80,8 +80,7 @@ type (
 	Verifier struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-		Root     crypto.Digest `codec:"r"`
-		Interval uint64        `codec:"d"`
+		Root crypto.Digest `codec:"r"`
 	}
 )
 
@@ -158,8 +157,7 @@ func New(firstValid, lastValid, divisor uint64, sigAlgoType crypto.AlgorithmType
 // GetVerifier can be used to store the commitment and verifier for this signer.
 func (m *Signer) GetVerifier() *Verifier {
 	return &Verifier{
-		Root:     m.Tree.Root(),
-		Interval: m.EphemeralKeys.Interval,
+		Root: m.Tree.Root(),
 	}
 }
 
