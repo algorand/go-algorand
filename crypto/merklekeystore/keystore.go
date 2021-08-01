@@ -116,11 +116,12 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 		return nil, errDivisorIsZero
 	}
 	if firstValid == 0 {
-		firstValid++
+		firstValid = 1
 	}
 
 	// calculates the number of indices from first valid round and up to lastValid.
-	numberOfKeys := roundToIndex(firstValid, lastValid, interval) + 1
+	// writing this explicit calculation to avoid overflow.
+	numberOfKeys := lastValid/interval - ((firstValid - 1) / interval)
 	keys := make([]crypto.SignatureAlgorithm, numberOfKeys)
 	for i := range keys {
 		keys[i] = *crypto.NewSigner(sigAlgoType)
