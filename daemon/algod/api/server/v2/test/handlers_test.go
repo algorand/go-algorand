@@ -18,6 +18,7 @@ package test
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -27,16 +28,20 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/crypto"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 func setupTestForMethodGet(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
@@ -103,6 +108,101 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "msgpack", 200)
 	getBlockTest(t, 1, "json", 500)
 	getBlockTest(t, 0, "bad format", 400)
+}
+
+func TestGetBlockJsonEncoding(t *testing.T) {
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
+	defer releasefunc()
+
+	l := handler.Node.Ledger()
+
+	genBlk, err := l.Block(0)
+	require.NoError(t, err)
+
+	// make an app call txn with eval delta
+	lsig := transactions.LogicSig{Logic: retOneProgram} // int 1
+	program := logic.Program(lsig.Logic)
+	lhash := crypto.HashObj(&program)
+	var sender basics.Address
+	copy(sender[:], lhash[:])
+	stx := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: transactions.Header{
+				Sender:      sender,
+				Fee:         basics.MicroAlgos{Raw: 1000},
+				GenesisID:   genBlk.GenesisID(),
+				GenesisHash: genBlk.GenesisHash(),
+				FirstValid:  1,
+				LastValid:   10,
+			},
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID: 1,
+				OnCompletion:  transactions.ClearStateOC,
+			},
+		},
+		Lsig: lsig,
+	}
+	ad := transactions.ApplyData{
+		EvalDelta: basics.EvalDelta{
+			LocalDeltas: map[uint64]basics.StateDelta{
+				1: {"key": basics.ValueDelta{Action: 1}},
+			},
+		},
+	}
+
+	// put it into a block
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	totals, err := l.Totals(l.Latest())
+	require.NoError(t, err)
+	totalRewardUnits := totals.RewardUnits()
+	poolBal, err := l.Lookup(l.Latest(), poolAddr)
+	require.NoError(t, err)
+
+	var blk bookkeeping.Block
+	blk.BlockHeader = bookkeeping.BlockHeader{
+		GenesisID:    genBlk.GenesisID(),
+		GenesisHash:  genBlk.GenesisHash(),
+		Round:        l.Latest() + 1,
+		Branch:       genBlk.Hash(),
+		TimeStamp:    0,
+		RewardsState: genBlk.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits),
+		UpgradeState: genBlk.UpgradeState,
+	}
+
+	blk.BlockHeader.TxnCounter = genBlk.TxnCounter
+
+	blk.RewardsPool = genBlk.RewardsPool
+	blk.FeeSink = genBlk.FeeSink
+	blk.CurrentProtocol = genBlk.CurrentProtocol
+	blk.TimeStamp = genBlk.TimeStamp + 1
+
+	txib, err := blk.EncodeSignedTxn(stx, ad)
+	blk.Payset = append(blk.Payset, txib)
+	blk.BlockHeader.TxnCounter++
+	blk.TxnRoot, err = blk.PaysetCommit()
+	require.NoError(t, err)
+
+	err = l.AddBlock(blk, agreement.Certificate{})
+	require.NoError(t, err)
+
+	// fetch the block and ensure it can be properly decoded with the standard JSON decoder
+	format := "json"
+	err = handler.GetBlock(c, 1, generatedV2.GetBlockParams{Format: &format})
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	data := rec.Body.Bytes()
+
+	response := struct {
+		Block bookkeeping.Block `codec:"block"`
+	}{}
+
+	err = json.Unmarshal(data, &response)
+	require.NoError(t, err)
 }
 
 func TestGetSupply(t *testing.T) {
