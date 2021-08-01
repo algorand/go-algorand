@@ -81,24 +81,24 @@ func TestDisposableKeyPositions(t *testing.T) {
 	a.NoError(err)
 
 	for i := uint64(1); i < 100; i++ {
-		pos, err := signer.getKeyPosition(i)
+		pos, err := signer.getArrayIndex(i)
 		a.NoError(err, i)
 		a.Equal(i-1, pos)
 	}
 
-	_, err = signer.getKeyPosition(101)
+	_, err = signer.getArrayIndex(101)
 	a.Error(err)
 
 	signer, err = New(1000, 1100, 1, crypto.PlaceHolderType)
 	a.NoError(err)
 
 	for i := uint64(1000); i < 1100; i++ {
-		pos, err := signer.getKeyPosition(i)
+		pos, err := signer.getArrayIndex(i)
 		a.NoError(err, i)
 		a.Equal(i-1000, pos)
 	}
 
-	_, err = signer.getKeyPosition(999)
+	_, err = signer.getArrayIndex(999)
 	a.Error(err)
 
 	signer, err = New(1000, 1100, 101, crypto.PlaceHolderType)
@@ -110,12 +110,12 @@ func TestDisposableKeyPositions(t *testing.T) {
 			indices = append(indices, i)
 			continue
 		}
-		_, err := signer.getKeyPosition(i)
+		_, err := signer.getArrayIndex(i)
 		a.Error(err, i)
 	}
 
 	for index, round := range indices {
-		pos, err := signer.getKeyPosition(round)
+		pos, err := signer.getArrayIndex(round)
 		a.NoError(err)
 		a.Equal(uint64(index), pos)
 	}
@@ -141,7 +141,7 @@ func TestSignatureStructure(t *testing.T) {
 	sig, err := signer.Sign(hashable, 51)
 	a.NoError(err)
 
-	pos, err := signer.getKeyPosition(51)
+	pos, err := signer.getArrayIndex(51)
 	a.NoError(err)
 	a.Equal(uint64(1), pos)
 

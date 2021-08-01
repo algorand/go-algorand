@@ -118,12 +118,9 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 	if firstValid == 0 {
 		firstValid++
 	}
-	numberOfKeys := roundToIndex(firstValid, lastValid, interval) + 1
-	if numberOfKeys == 0 {
-		// always outputs a valid signer that doesn't crash.
-		return &Signer{Interval: interval}, nil
-	}
 
+	// calculates the number of indices from first valid round and up to lastValid.
+	numberOfKeys := roundToIndex(firstValid, lastValid, interval) + 1
 	keys := make([]crypto.SignatureAlgorithm, numberOfKeys)
 	for i := range keys {
 		keys[i] = *crypto.NewSigner(sigAlgoType)
@@ -156,25 +153,31 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	pos, err := s.getKeyPosition(round)
+	pos, err := s.getArrayIndex(round)
 	if err != nil {
 		return Signature{}, err
 	}
-	index := roundToIndex(s.FirstValid, round, s.Interval)
+	signingKey := s.SignatureAlgorithms[pos].GetSigner()
+
+	index := s.getMerkleTreeIndex(round)
 	proof, err := s.Tree.Prove([]uint64{index})
 	if err != nil {
 		return Signature{}, err
 	}
 
-	signer := s.SignatureAlgorithms[pos].GetSigner()
 	return Signature{
-		ByteSignature: signer.Sign(hashable),
+		ByteSignature: signingKey.Sign(hashable),
 		Proof:         proof,
-		VerifyingKey:  signer.GetVerifyingKey(),
+		VerifyingKey:  signingKey.GetVerifyingKey(),
 	}, nil
 }
 
-func (s *Signer) getKeyPosition(round uint64) (uint64, error) {
+// expects valid rounds, i.e round that are bigger than FirstValid.
+func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
+	return roundToIndex(s.FirstValid, round, s.Interval)
+}
+
+func (s *Signer) getArrayIndex(round uint64) (uint64, error) {
 	if round < s.FirstValid {
 		return 0, errReceivedRoundIsBeforeFirst
 	}
@@ -196,14 +199,14 @@ func (s *Signer) Trim(before uint64) (*Signer, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	pos, err := s.getKeyPosition(before)
+	pos, err := s.getArrayIndex(before)
 	if err != nil {
 		return nil, err
 	}
 	s.dropKeys(int(pos))
 
-	// advance the array zero location.
-	s.ArrayBase = roundToIndex(s.FirstValid, before, s.Interval) + 1
+	// the array base represents the leaf index that we can treat as first leaf after trimming the ephemeral keys array.
+	s.ArrayBase = s.getMerkleTreeIndex(before) + 1
 	cpy := s.copy()
 
 	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
