@@ -46,7 +46,6 @@ type (
 
 		Proof        `codec:"prf"`
 		VerifyingKey crypto.VerifyingKey `codec:"vkey"`
-		round        uint64
 	}
 
 	// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
@@ -74,7 +73,8 @@ type (
 
 		Root crypto.Digest `codec:"r"`
 
-		// indicates that this verifier is tied to a specific array of ephemeral keys.
+		// indicates that this verifier corresponds to a specific array of ephemeral keys.
+		// this is used to distinguish between an empty structure, and nothing to commit to.
 		HasValidRoot bool `codec:"vr"`
 	}
 )
@@ -103,10 +103,6 @@ func (s *Signer) GetHash(pos uint64) (crypto.Digest, error) {
 		Round:        indexToRound(s.FirstValid, s.Interval, pos),
 	}
 	return crypto.HashObj(&ephPK), nil
-}
-
-func (s *Signer) getActualPos(pos uint64) uint64 {
-	return pos
 }
 
 // New Generates a merklekeystore.Signer
@@ -255,7 +251,7 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 		return errCannotVerify
 	}
 	if firstValid == 0 {
-		firstValid++
+		firstValid = 1
 	}
 	if round < firstValid {
 		return errReceivedRoundIsBeforeFirst
