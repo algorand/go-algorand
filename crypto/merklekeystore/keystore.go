@@ -32,8 +32,8 @@ type (
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		SignatureAlgorithms []crypto.SignatureAlgorithm `codec:"sks,allocbound=-"`
-		// indicates the round that matches SignatureAlgorithms[0].
-		TreeBase uint64 `codec:"rnd"`
+		// the first round is used to set up the intervals.
+		FirstValid uint64 `codec:"rnd"`
 		// Used to align a position to a shrank array.
 		ArrayBase uint64 `codec:"az"`
 		Interval  uint64 `codec:"iv"`
@@ -103,7 +103,7 @@ func (d *EphemeralKeys) Length() uint64 {
 func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 	ephPK := CommittablePublicKey{
 		VerifyingKey: d.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
-		Round:        indexToRound(d.TreeBase, d.Interval, pos),
+		Round:        indexToRound(d.FirstValid, d.Interval, pos),
 	}
 	return crypto.HashObj(&ephPK), nil
 }
@@ -137,7 +137,7 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 	}
 	ephKeys := EphemeralKeys{
 		SignatureAlgorithms: keys,
-		TreeBase:            firstValid,
+		FirstValid:          firstValid,
 		ArrayBase:           0,
 		Interval:            interval,
 	}
@@ -169,7 +169,7 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	if err != nil {
 		return Signature{}, err
 	}
-	index := roundToIndex(m.EphemeralKeys.TreeBase, round, m.EphemeralKeys.Interval)
+	index := roundToIndex(m.EphemeralKeys.FirstValid, round, m.EphemeralKeys.Interval)
 	proof, err := m.Tree.Prove([]uint64{index})
 	if err != nil {
 		return Signature{}, err
@@ -184,10 +184,10 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 }
 
 func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
-	if round < m.EphemeralKeys.TreeBase {
+	if round < m.EphemeralKeys.FirstValid {
 		return 0, errReceivedRoundIsBeforeFirst
 	}
-	pos := roundToIndex(m.EphemeralKeys.TreeBase, round, m.EphemeralKeys.Interval)
+	pos := roundToIndex(m.EphemeralKeys.FirstValid, round, m.EphemeralKeys.Interval)
 	pos = pos - m.EphemeralKeys.ArrayBase
 	if round%m.EphemeralKeys.Interval != 0 {
 		return pos, errNonExistantKey
@@ -212,7 +212,7 @@ func (m *Signer) Trim(before uint64) (*Signer, error) {
 	m.dropKeys(int(pos))
 
 	// advance the array zero location.
-	m.EphemeralKeys.ArrayBase = roundToIndex(m.EphemeralKeys.TreeBase, before, m.EphemeralKeys.Interval) + 1
+	m.EphemeralKeys.ArrayBase = roundToIndex(m.EphemeralKeys.FirstValid, before, m.EphemeralKeys.Interval) + 1
 	cpy := m.copy()
 
 	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
@@ -230,7 +230,7 @@ func (m *Signer) copy() *Signer {
 		EphemeralKeys: EphemeralKeys{
 			_struct:             struct{}{},
 			SignatureAlgorithms: make([]crypto.SignatureAlgorithm, len(m.EphemeralKeys.SignatureAlgorithms)),
-			TreeBase:            m.EphemeralKeys.TreeBase,
+			FirstValid:          m.EphemeralKeys.FirstValid,
 			Interval:            m.EphemeralKeys.Interval,
 			ArrayBase:           m.EphemeralKeys.ArrayBase,
 		},
