@@ -26,19 +26,6 @@ import (
 )
 
 type (
-	// EphemeralKeys represent the possible keys inside the keystore.
-	// Each key in this struct will be used in a specific round.
-	EphemeralKeys struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-		SignatureAlgorithms []crypto.SignatureAlgorithm `codec:"sks,allocbound=-"`
-		// the first round is used to set up the intervals.
-		FirstValid uint64 `codec:"rnd"`
-		// Used to align a position to a shrank array.
-		ArrayBase uint64 `codec:"az"`
-		Interval  uint64 `codec:"iv"`
-	}
-
 	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
 	CommittablePublicKey struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -69,9 +56,15 @@ type (
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 		// these keys are the keys used to sign in a round.
 		// should be disposed of once possible.
-		EphemeralKeys EphemeralKeys    `codec:"keys"`
-		Tree          merklearray.Tree `codec:"tree"`
-		mu            deadlock.RWMutex
+		SignatureAlgorithms []crypto.SignatureAlgorithm `codec:"sks,allocbound=-"`
+		// the first round is used to set up the intervals.
+		FirstValid uint64 `codec:"rnd"`
+		// Used to align a position to a shrank array.
+		ArrayBase uint64 `codec:"az"`
+		Interval  uint64 `codec:"iv"`
+
+		Tree merklearray.Tree `codec:"tree"`
+		mu   deadlock.RWMutex
 	}
 
 	// Verifier Is a way to verify a Signature produced by merklekeystore.Signer.
@@ -95,12 +88,12 @@ func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 //Length returns the amount of disposable keys
-func (d *EphemeralKeys) Length() uint64 {
+func (d *Signer) Length() uint64 {
 	return uint64(len(d.SignatureAlgorithms))
 }
 
 // GetHash Gets the hash of the VerifyingKey tied to the signatureAlgorithm in pos.
-func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
+func (d *Signer) GetHash(pos uint64) (crypto.Digest, error) {
 	ephPK := CommittablePublicKey{
 		VerifyingKey: d.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
 		Round:        indexToRound(d.FirstValid, d.Interval, pos),
@@ -108,7 +101,7 @@ func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
 	return crypto.HashObj(&ephPK), nil
 }
 
-func (d *EphemeralKeys) getActualPos(pos uint64) uint64 {
+func (d *Signer) getActualPos(pos uint64) uint64 {
 	return pos
 }
 
@@ -128,29 +121,27 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 	numberOfKeys := roundToIndex(firstValid, lastValid, interval) + 1
 	if numberOfKeys == 0 {
 		// always outputs a valid signer that doesn't crash.
-		return &Signer{EphemeralKeys: EphemeralKeys{Interval: interval}}, nil
+		return &Signer{Interval: interval}, nil
 	}
 
 	keys := make([]crypto.SignatureAlgorithm, numberOfKeys)
 	for i := range keys {
 		keys[i] = *crypto.NewSigner(sigAlgoType)
 	}
-	ephKeys := EphemeralKeys{
+	s := &Signer{
 		SignatureAlgorithms: keys,
 		FirstValid:          firstValid,
 		ArrayBase:           0,
 		Interval:            interval,
+		mu:                  deadlock.RWMutex{},
 	}
-	tree, err := merklearray.Build(&ephKeys)
+	tree, err := merklearray.Build(s)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Signer{
-		EphemeralKeys: ephKeys,
-		Tree:          *tree,
-		mu:            deadlock.RWMutex{},
-	}, nil
+	s.Tree = *tree
+	return s, nil
 }
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
@@ -169,13 +160,13 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	if err != nil {
 		return Signature{}, err
 	}
-	index := roundToIndex(m.EphemeralKeys.FirstValid, round, m.EphemeralKeys.Interval)
+	index := roundToIndex(m.FirstValid, round, m.Interval)
 	proof, err := m.Tree.Prove([]uint64{index})
 	if err != nil {
 		return Signature{}, err
 	}
 
-	signer := m.EphemeralKeys.SignatureAlgorithms[pos].GetSigner()
+	signer := m.SignatureAlgorithms[pos].GetSigner()
 	return Signature{
 		ByteSignature: signer.Sign(hashable),
 		Proof:         proof,
@@ -184,15 +175,15 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 }
 
 func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
-	if round < m.EphemeralKeys.FirstValid {
+	if round < m.FirstValid {
 		return 0, errReceivedRoundIsBeforeFirst
 	}
-	pos := roundToIndex(m.EphemeralKeys.FirstValid, round, m.EphemeralKeys.Interval)
-	pos = pos - m.EphemeralKeys.ArrayBase
-	if round%m.EphemeralKeys.Interval != 0 {
+	pos := roundToIndex(m.FirstValid, round, m.Interval)
+	pos = pos - m.ArrayBase
+	if round%m.Interval != 0 {
 		return pos, errNonExistantKey
 	}
-	if pos >= uint64(len(m.EphemeralKeys.SignatureAlgorithms)) {
+	if pos >= uint64(len(m.SignatureAlgorithms)) {
 		return 0, errOutOfBounds
 	}
 	return pos, nil
@@ -212,14 +203,14 @@ func (m *Signer) Trim(before uint64) (*Signer, error) {
 	m.dropKeys(int(pos))
 
 	// advance the array zero location.
-	m.EphemeralKeys.ArrayBase = roundToIndex(m.EphemeralKeys.FirstValid, before, m.EphemeralKeys.Interval) + 1
+	m.ArrayBase = roundToIndex(m.FirstValid, before, m.Interval) + 1
 	cpy := m.copy()
 
 	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
 	// e.g: A=A[len(A)-20:] doesn't mean the garbage collector will free parts of memory from the array.
 	// assuming that cpy will be used briefly and then dropped - it's better to swap their key slices.
-	m.EphemeralKeys.SignatureAlgorithms, cpy.EphemeralKeys.SignatureAlgorithms =
-		cpy.EphemeralKeys.SignatureAlgorithms, m.EphemeralKeys.SignatureAlgorithms
+	m.SignatureAlgorithms, cpy.SignatureAlgorithms =
+		cpy.SignatureAlgorithms, m.SignatureAlgorithms
 
 	return cpy, nil
 }
@@ -227,27 +218,26 @@ func (m *Signer) Trim(before uint64) (*Signer, error) {
 func (m *Signer) copy() *Signer {
 	signerCopy := Signer{
 		_struct: struct{}{},
-		EphemeralKeys: EphemeralKeys{
-			_struct:             struct{}{},
-			SignatureAlgorithms: make([]crypto.SignatureAlgorithm, len(m.EphemeralKeys.SignatureAlgorithms)),
-			FirstValid:          m.EphemeralKeys.FirstValid,
-			Interval:            m.EphemeralKeys.Interval,
-			ArrayBase:           m.EphemeralKeys.ArrayBase,
-		},
+
+		SignatureAlgorithms: make([]crypto.SignatureAlgorithm, len(m.SignatureAlgorithms)),
+		FirstValid:          m.FirstValid,
+		Interval:            m.Interval,
+		ArrayBase:           m.ArrayBase,
+
 		Tree: m.Tree,
 		mu:   deadlock.RWMutex{},
 	}
 
-	copy(signerCopy.EphemeralKeys.SignatureAlgorithms, m.EphemeralKeys.SignatureAlgorithms)
+	copy(signerCopy.SignatureAlgorithms, m.SignatureAlgorithms)
 	return &signerCopy
 }
 
 func (m *Signer) dropKeys(upTo int) {
 	for i := 0; i <= upTo; i++ {
 		// zero the keys.
-		m.EphemeralKeys.SignatureAlgorithms[i] = crypto.SignatureAlgorithm{}
+		m.SignatureAlgorithms[i] = crypto.SignatureAlgorithm{}
 	}
-	m.EphemeralKeys.SignatureAlgorithms = m.EphemeralKeys.SignatureAlgorithms[upTo+1:]
+	m.SignatureAlgorithms = m.SignatureAlgorithms[upTo+1:]
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
