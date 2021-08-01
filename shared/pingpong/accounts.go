@@ -460,8 +460,7 @@ func signAndBroadcastTransaction(accounts map[string]*pingPongAccount, sender st
 	if !cfg.Quiet {
 		fmt.Printf("Broadcast transaction %v\n", txID)
 	}
-	accounts[sender].balance -= tx.Fee.Raw
-
+	accounts[sender].setBalance(accounts[sender].getBalance() - tx.Fee.Raw)
 	return
 }
 
@@ -767,7 +766,7 @@ func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client
 			tx.Note = note[:]
 
 			txgroup = append(txgroup, tx)
-			accounts[appAccount.Address].balance -= tx.Fee.Raw
+			accounts[appAccount.Address].setBalance(accounts[appAccount.Address].getBalance() - tx.Fee.Raw)
 			senders = append(senders, appAccount.Address)
 		}
 
@@ -873,7 +872,7 @@ func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32
 	sort.SliceStable(allAddrs, func(i, j int) bool {
 		amt1 := allAccounts[allAddrs[i]]
 		amt2 := allAccounts[allAddrs[j]]
-		return amt1.balance > amt2.balance
+		return amt1.getBalance() > amt2.getBalance()
 	})
 
 	// Now populate a new map with just the accounts needed
