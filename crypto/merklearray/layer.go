@@ -21,10 +21,11 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// A layer of the Merkle tree consists of a dense array of hashes at that
+// A Layer of the Merkle tree consists of a dense array of hashes at that
 // level of the tree.  Hashes beyond the end of the array (e.g., if the
 // number of leaves is not an exact power of 2) are implicitly zero.
-type layer []crypto.Digest
+//msgp:allocbound Layer -
+type Layer []crypto.Digest
 
 // A pair represents an internal node in the Merkle tree.
 type pair struct {
@@ -49,7 +50,7 @@ func (p *pair) Hash() crypto.Digest {
 	return crypto.Hash(s)
 }
 
-func upWorker(ws *workerState, in layer, out layer) {
+func upWorker(ws *workerState, in Layer, out Layer) {
 	ws.started()
 	batchSize := uint64(2)
 
@@ -74,12 +75,12 @@ func upWorker(ws *workerState, in layer, out layer) {
 	ws.done()
 }
 
-// up takes a layer representing some level in the tree,
+// up takes a Layer representing some level in the tree,
 // and returns the next-higher level in the tree,
-// represented as a layer.
-func (l layer) up() layer {
+// represented as a Layer.
+func (l Layer) up() Layer {
 	n := len(l)
-	res := make(layer, (uint64(n)+1)/2)
+	res := make(Layer, (uint64(n)+1)/2)
 
 	ws := newWorkerState(uint64(n))
 	for ws.nextWorker() {

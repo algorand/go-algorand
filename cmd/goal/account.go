@@ -26,10 +26,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/crypto/passphrase"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
@@ -39,6 +38,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
+
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -1250,7 +1251,7 @@ type partkeyInfo struct {
 	LastValid       basics.Round                    `codec:"last"`
 	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID     crypto.VRFVerifier              `codec:"sel"`
-	BlockProofID    crypto.VerifyingKey             `codec:"blkprf"`
+	BlockProofID    merklekeystore.Verifier         `codec:"blkprf"`
 	VoteKeyDilution uint64                          `codec:"voteKD"`
 }
 
@@ -1283,7 +1284,7 @@ var partkeyInfoCmd = &cobra.Command{
 					VoteKeyDilution: part.KeyDilution,
 				}
 				if certSigner := part.BlockProofSigner(); certSigner != nil {
-					info.BlockProofID = certSigner.GetSigner().GetVerifyingKey()
+					info.BlockProofID = *certSigner.GetVerifier()
 				}
 				infoString := protocol.EncodeJSON(&info)
 				fmt.Printf("File: %s\n%s\n", filename, string(infoString))

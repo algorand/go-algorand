@@ -19,6 +19,8 @@ package apply
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -90,7 +92,7 @@ func TestKeyregApply(t *testing.T) {
 	vrfSecrets := crypto.GenerateVRFSecrets()
 	secretParticipation := keypair()
 
-	tx := createTestTxn(src, secretParticipation, vrfSecrets)
+	tx := createTestTxn(t, src, secretParticipation, vrfSecrets)
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.NoError(t, err)
 
@@ -179,14 +181,14 @@ func TestBlockProofPKKeyReg(t *testing.T) {
 	vrfSecrets := crypto.GenerateVRFSecrets()
 	secretParticipation := keypair()
 
-	tx := createTestTxn(src, secretParticipation, vrfSecrets)
+	tx := createTestTxn(t, src, secretParticipation, vrfSecrets)
 	mockBal := makeMockBalances(protocol.ConsensusCurrentVersion)
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err := mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
-	require.Equal(t, crypto.VerifyingKey{}, acct.BlockProofID)
+	require.Equal(t, merklekeystore.Verifier{}, acct.BlockProofID)
 
 	mockBal = makeMockBalances(protocol.ConsensusFuture)
 	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
@@ -194,10 +196,13 @@ func TestBlockProofPKKeyReg(t *testing.T) {
 
 	acct, err = mockBal.Get(tx.Src(), false)
 	require.NoError(t, err)
-	require.NotEqual(t, crypto.VerifyingKey{}, acct.BlockProofID)
+	require.NotEqual(t, merklekeystore.Verifier{}, acct.BlockProofID)
 }
 
-func createTestTxn(src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
+func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
+	signer, err := merklekeystore.New(0, 0, 1, crypto.PlaceHolderType)
+	require.NoError(t, err)
+
 	return transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
@@ -209,7 +214,7 @@ func createTestTxn(src basics.Address, secretParticipation *crypto.SignatureSecr
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:       crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
 			SelectionPK:  vrfSecrets.PK,
-			BlockProofPK: crypto.NewSigner(crypto.PlaceHolderType).GetSigner().GetVerifyingKey(),
+			BlockProofPK: *signer.GetVerifier(),
 			VoteFirst:    0,
 			VoteLast:     100,
 		},

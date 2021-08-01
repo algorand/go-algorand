@@ -20,8 +20,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -45,8 +47,8 @@ type Participation struct {
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
-	// BlockProof is used to sign compact certifications. might be nil
-	BlockProof *crypto.SignatureAlgorithm
+	// BlockProof is used to sign compact certificates. might be nil
+	BlockProof *merklekeystore.Signer
 
 	// The first and last rounds for which this account is valid, respectively.
 	//
@@ -108,7 +110,7 @@ func (part Participation) VotingSigner() crypto.OneTimeSigner {
 
 // BlockProofSigner returns the key used to sign on Compact Certificates.
 // might return nil!
-func (part Participation) BlockProofSigner() *crypto.SignatureAlgorithm {
+func (part Participation) BlockProofSigner() *merklekeystore.Signer {
 	return part.BlockProof
 }
 
@@ -130,7 +132,7 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 	}
 	if cert := part.BlockProofSigner(); cert != nil {
 		if cparams.EnableBlockProofKeyregCheck {
-			t.KeyregTxnFields.BlockProofPK = cert.GetSigner().GetVerifyingKey()
+			t.KeyregTxnFields.BlockProofPK = *(cert.GetVerifier())
 		}
 	}
 	t.KeyregTxnFields.VoteFirst = part.FirstValid
@@ -192,7 +194,10 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	vrf := crypto.GenerateVRFSecrets()
 
 	// Generate a new key which signs the compact certificates
-	blockProof := crypto.NewSigner(crypto.PlaceHolderType)
+	blockProof, err := merklekeystore.New(uint64(firstValid), uint64(lastValid), keyDilution, crypto.PlaceHolderType)
+	if err != nil {
+		return PersistedParticipation{}, err
+	}
 
 	// Construct the Participation containing these keys to be persisted
 	part = PersistedParticipation{

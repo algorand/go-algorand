@@ -18,6 +18,7 @@ package basics
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
 	"reflect"
 
 	"github.com/algorand/go-algorand/config"
@@ -148,7 +149,7 @@ type AccountData struct {
 
 	VoteID       crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID  crypto.VRFVerifier              `codec:"sel"`
-	BlockProofID crypto.VerifyingKey             `codec:"blkprf"`
+	BlockProofID merklekeystore.Verifier         `codec:"blkprf"`
 
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`

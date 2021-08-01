@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -251,7 +253,6 @@ var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries 
 var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
 var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
 var errKeyRegEmptyBlockProofPK = errors.New("online keyreg transaction cannot have empty field BlockProofPK")
-var errKeyReginvalidBlockProofPK = errors.New("transaction field BlockProofPK is invalid")
 var errKeyregTxnNotEmptyBLockProofPK = errors.New("transaction field BlockProofPK should be empty in this consensus version")
 var errKeyregTxnNonParticipantShouldBeEmptyBlockProofPK = errors.New("non participation keyreg transactions should contain empty blockProofPK")
 var errKeyregTxnOfflineShouldBeEmptyBlockProofPK = errors.New("offline keyreg transactions should contain empty blockProofPK")
@@ -545,7 +546,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 }
 
 func (tx Transaction) blockProofPKWellFormed(proto config.ConsensusParams) error {
-	isEmptyBlock := tx.KeyregTxnFields.BlockProofPK == crypto.VerifyingKey{}
+	isEmptyBlock := tx.KeyregTxnFields.BlockProofPK == merklekeystore.Verifier{}
 	if !proto.EnableBlockProofKeyregCheck {
 		// make certain empty key is stored.
 		if !isEmptyBlock {
@@ -573,11 +574,6 @@ func (tx Transaction) blockProofPKWellFormed(proto config.ConsensusParams) error
 	// setting online cannot set an empty blockProofPK
 	if isEmptyBlock {
 		return errKeyRegEmptyBlockProofPK
-	}
-
-	// setting online cannot set invalid blockProofPK
-	if !tx.KeyregTxnFields.BlockProofPK.IsValid() {
-		return errKeyReginvalidBlockProofPK
 	}
 
 	return nil

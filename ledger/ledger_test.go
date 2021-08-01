@@ -25,6 +25,8 @@ import (
 	"runtime/pprof"
 	"testing"
 
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -1160,9 +1162,13 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	// depends on what the concensus is need to generate correct KeyregTxnFields.
 	if proto.EnableBlockProofKeyregCheck {
-		correctKeyregFields.BlockProofPK = crypto.NewSigner(crypto.PlaceHolderType).GetSigner().GetVerifyingKey()
+		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
+		signer, err := merklekeystore.New(frst, lst, 1, crypto.PlaceHolderType)
+		require.NoError(t, err)
+
+		correctKeyregFields.BlockProofPK = *(signer.GetVerifier())
 	} else {
-		correctKeyregFields.BlockProofPK = crypto.VerifyingKey{}
+		correctKeyregFields.BlockProofPK = merklekeystore.Verifier{}
 	}
 
 	correctKeyreg := transactions.Transaction{

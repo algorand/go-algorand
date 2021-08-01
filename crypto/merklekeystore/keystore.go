@@ -17,23 +17,15 @@
 package merklekeystore
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-deadlock"
 )
 
 type (
-	// EphemeralKeys represent the possible keys inside the keystore.
-	// Each key in this struct will be used in a specific round.
-	EphemeralKeys struct {
-		_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-		SignatureAlgorithms []crypto.SignatureAlgorithm `codec:"sks,allocbound=-"`
-		firstRound          uint64                      `codec:"rnd"`
-	}
-
 	// CommittablePublicKey is a key tied to a specific round and is committed by the merklekeystore.Signer.
 	CommittablePublicKey struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -51,18 +43,27 @@ type (
 	Signature struct {
 		_struct              struct{} `codec:",omitempty,omitemptyarray"`
 		crypto.ByteSignature `codec:"bsig"`
-		Proof                `codec:"prf"`
-		VerifyingKey         crypto.VerifyingKey `codec:"vkey"`
+
+		Proof        `codec:"prf"`
+		VerifyingKey crypto.VerifyingKey `codec:"vkey"`
 	}
 
 	// Signer is a merkleKeyStore, contain multiple keys which can be used per round.
+	// Signer will generate all keys in the range [A,Z] that are divisible by some divisor d.
+	// in case A equals zero then signer will generate all keys from (0,Z], i.e will not generate key for round zero.
 	Signer struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 		// these keys are the keys used to sign in a round.
 		// should be disposed of once possible.
-		EphemeralKeys    EphemeralKeys `codec:"keys"`
-		FirstRound       uint64        `codec:"srnd"`
-		merklearray.Tree `codec:"tree"`
+		SignatureAlgorithms []crypto.SignatureAlgorithm `codec:"sks,allocbound=-"`
+		// the first round is used to set up the intervals.
+		FirstValid uint64 `codec:"rnd"`
+		// Used to align a position to a shrank array.
+		ArrayBase uint64 `codec:"az"`
+		Interval  uint64 `codec:"iv"`
+
+		Tree merklearray.Tree `codec:"tree"`
+		mu   deadlock.RWMutex
 	}
 
 	// Verifier Is a way to verify a Signature produced by merklekeystore.Signer.
@@ -71,8 +72,19 @@ type (
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 		Root crypto.Digest `codec:"r"`
+
+		// indicates that this verifier corresponds to a specific array of ephemeral keys.
+		// this is used to distinguish between an empty structure, and nothing to commit to.
+		HasValidRoot bool `codec:"vr"`
 	}
 )
+
+var errStartBiggerThanEndRound = errors.New("cannot create merkleKeyStore because end round is smaller then start round")
+var errReceivedRoundIsBeforeFirst = errors.New("round translated to be prior to first key position")
+var errOutOfBounds = errors.New("round translated to be after last key position")
+var errNonExistantKey = errors.New("key doesn't exist")
+var errDivisorIsZero = errors.New("received zero Interval")
+var errCannotVerify = errors.New("verifier isn't valid")
 
 // ToBeHashed implementation means CommittablePublicKey is crypto.Hashable.
 func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
@@ -80,101 +92,181 @@ func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 //Length returns the amount of disposable keys
-func (d *EphemeralKeys) Length() uint64 {
-	return uint64(len(d.SignatureAlgorithms))
+func (s *Signer) Length() uint64 {
+	return uint64(len(s.SignatureAlgorithms))
 }
 
 // GetHash Gets the hash of the VerifyingKey tied to the signatureAlgorithm in pos.
-func (d *EphemeralKeys) GetHash(pos uint64) (crypto.Digest, error) {
+func (s *Signer) GetHash(pos uint64) (crypto.Digest, error) {
 	ephPK := CommittablePublicKey{
-		VerifyingKey: d.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
-		Round:        d.firstRound + pos,
+		VerifyingKey: s.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
+		Round:        indexToRound(s.FirstValid, s.Interval, pos),
 	}
 	return crypto.HashObj(&ephPK), nil
 }
 
-var errStartBiggerThanEndRound = fmt.Errorf("cannot create merkleKeyStore because end round is smaller then start round")
-
 // New Generates a merklekeystore.Signer
-// Note that the signer will have keys for the rounds  [firstValid, lastValid]
-func New(firstValid, lastValid uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
+// The function allow creation of empty signers, i.e signers without any key to sign with.
+// keys can be created between [A,Z], if A == 0, keys created will be in the range (0,Z]
+func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmType) (*Signer, error) {
 	if firstValid > lastValid {
 		return nil, errStartBiggerThanEndRound
 	}
+	if interval == 0 {
+		return nil, errDivisorIsZero
+	}
+	if firstValid == 0 {
+		firstValid = 1
+	}
 
-	keys := make([]crypto.SignatureAlgorithm, lastValid-firstValid+1)
+	// calculates the number of indices from first valid round and up to lastValid.
+	// writing this explicit calculation to avoid overflow.
+	numberOfKeys := lastValid/interval - ((firstValid - 1) / interval)
+	keys := make([]crypto.SignatureAlgorithm, numberOfKeys)
 	for i := range keys {
 		keys[i] = *crypto.NewSigner(sigAlgoType)
 	}
-	ephKeys := EphemeralKeys{
+	s := &Signer{
 		SignatureAlgorithms: keys,
-		firstRound:          firstValid,
+		FirstValid:          firstValid,
+		ArrayBase:           0,
+		Interval:            interval,
+		mu:                  deadlock.RWMutex{},
 	}
-	tree, err := merklearray.Build(&ephKeys)
+	tree, err := merklearray.Build(s)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Signer{
-		EphemeralKeys: ephKeys,
-		FirstRound:    firstValid,
-		Tree:          *tree,
-	}, nil
+	s.Tree = *tree
+	return s, nil
 }
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
-func (m *Signer) GetVerifier() *Verifier {
+func (s *Signer) GetVerifier() *Verifier {
 	return &Verifier{
-		Root: m.Root(),
+		Root:         s.Tree.Root(),
+		HasValidRoot: true,
 	}
 }
 
 // Sign outputs a signature + proof for the signing key.
-func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
-	pos, err := m.getKeyPosition(round)
+func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	pos, err := s.getArrayIndex(round)
+	if err != nil {
+		return Signature{}, err
+	}
+	signingKey := s.SignatureAlgorithms[pos].GetSigner()
+
+	index := s.getMerkleTreeIndex(round)
+	proof, err := s.Tree.Prove([]uint64{index})
 	if err != nil {
 		return Signature{}, err
 	}
 
-	proof, err := m.Prove([]uint64{pos})
-	if err != nil {
-		return Signature{}, err
-	}
-
-	signer := m.EphemeralKeys.SignatureAlgorithms[pos].GetSigner()
 	return Signature{
-		ByteSignature: signer.Sign(hashable),
+		ByteSignature: signingKey.Sign(hashable),
 		Proof:         proof,
-		VerifyingKey:  signer.GetVerifyingKey(),
+		VerifyingKey:  signingKey.GetVerifyingKey(),
 	}, nil
 }
 
-var errOutOfBounds = fmt.Errorf("cannot find signing key for given round")
+// expects valid rounds, i.e round that are bigger than FirstValid.
+func (s *Signer) getMerkleTreeIndex(round uint64) uint64 {
+	return roundToIndex(s.FirstValid, round, s.Interval)
+}
 
-func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
-	if round < m.FirstRound {
-		return 0, errOutOfBounds
+func (s *Signer) getArrayIndex(round uint64) (uint64, error) {
+	if round < s.FirstValid {
+		return 0, errReceivedRoundIsBeforeFirst
 	}
-
-	pos := round - m.FirstRound
-	if pos >= uint64(len(m.EphemeralKeys.SignatureAlgorithms)) {
+	pos := roundToIndex(s.FirstValid, round, s.Interval)
+	pos = pos - s.ArrayBase
+	if round%s.Interval != 0 {
+		return pos, errNonExistantKey
+	}
+	if pos >= uint64(len(s.SignatureAlgorithms)) {
 		return 0, errOutOfBounds
 	}
 	return pos, nil
 }
 
-// Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
-func (v *Verifier) Verify(firstValid, round uint64, obj crypto.Hashable, sig Signature) error {
-	if round < firstValid {
-		return errOutOfBounds
+// Trim shortness deletes keys that existed before a specific round,
+// will return an error for non existing keys/ out of bounds keys.
+// the output is a copy of the signer - which can be persisted.
+func (s *Signer) Trim(before uint64) (*Signer, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	pos, err := s.getArrayIndex(before)
+	if err != nil {
+		return nil, err
 	}
+	s.dropKeys(int(pos))
+
+	// the array base represents the leaf index that we can treat as first leaf after trimming the ephemeral keys array.
+	s.ArrayBase = s.getMerkleTreeIndex(before) + 1
+	cpy := s.copy()
+
+	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
+	// e.g: A=A[len(A)-20:] doesn't mean the garbage collector will free parts of memory from the array.
+	// assuming that cpy will be used briefly and then dropped - it's better to swap their key slices.
+	s.SignatureAlgorithms, cpy.SignatureAlgorithms =
+		cpy.SignatureAlgorithms, s.SignatureAlgorithms
+
+	return cpy, nil
+}
+
+func (s *Signer) copy() *Signer {
+	signerCopy := Signer{
+		_struct: struct{}{},
+
+		SignatureAlgorithms: make([]crypto.SignatureAlgorithm, len(s.SignatureAlgorithms)),
+		FirstValid:          s.FirstValid,
+		Interval:            s.Interval,
+		ArrayBase:           s.ArrayBase,
+
+		Tree: s.Tree,
+		mu:   deadlock.RWMutex{},
+	}
+
+	copy(signerCopy.SignatureAlgorithms, s.SignatureAlgorithms)
+	return &signerCopy
+}
+
+func (s *Signer) dropKeys(upTo int) {
+	for i := 0; i <= upTo; i++ {
+		// zero the keys.
+		s.SignatureAlgorithms[i] = crypto.SignatureAlgorithm{}
+	}
+	s.SignatureAlgorithms = s.SignatureAlgorithms[upTo+1:]
+}
+
+// Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
+func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashable, sig Signature) error {
+	if !v.HasValidRoot {
+		return errCannotVerify
+	}
+	if firstValid == 0 {
+		firstValid = 1
+	}
+	if round < firstValid {
+		return errReceivedRoundIsBeforeFirst
+	}
+
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
 		Round:        round,
 	}
-	isInTree := merklearray.Verify(v.Root, map[uint64]crypto.Digest{round - firstValid: crypto.HashObj(&ephkey)}, sig.Proof)
+
+	pos := roundToIndex(firstValid, round, interval)
+	isInTree := merklearray.Verify(v.Root, map[uint64]crypto.Digest{pos: crypto.HashObj(&ephkey)}, sig.Proof)
 	if isInTree != nil {
 		return isInTree
 	}
+
 	return sig.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)
 }

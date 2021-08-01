@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/crypto/merklekeystore"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -184,6 +186,7 @@ func TestRetrieveFromDB(t *testing.T) {
 
 	// comparing the outputs:
 	a.Equal(intoComparable(part), intoComparable(retrievedPart))
+
 }
 
 func TestRetrieveFromDBAtVersion1(t *testing.T) {
@@ -222,11 +225,11 @@ func TestKeyRegCreation(t *testing.T) {
 
 	cur := config.Consensus[protocol.ConsensusCurrentVersion]
 	txn := ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, cur)
-	a.Equal(crypto.VerifyingKey{}, txn.BlockProofPK)
+	a.Equal(merklekeystore.Verifier{}, txn.BlockProofPK)
 
 	future := config.Consensus[protocol.ConsensusFuture]
 	txn = ppart.Participation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, 0, 100, [32]byte{}, future)
-	a.NotEqual(crypto.VerifyingKey{}, txn.BlockProofPK)
+	a.NotEqual(merklekeystore.Verifier{}, txn.BlockProofPK)
 }
 
 func closeDBS(dbAccessor ...db.Accessor) {
@@ -358,7 +361,7 @@ type comparablePartition struct {
 
 	VRF        crypto.VRFSecrets
 	Voting     []byte
-	blockProof crypto.SignatureAlgorithm
+	blockProof []byte
 
 	FirstValid basics.Round
 	LastValid  basics.Round
@@ -371,7 +374,7 @@ func intoComparable(part PersistedParticipation) comparablePartition {
 		Parent:      part.Parent,
 		VRF:         *part.VRF,
 		Voting:      part.Voting.MarshalMsg(nil),
-		blockProof:  *part.BlockProof,
+		blockProof:  protocol.Encode(part.BlockProof),
 		FirstValid:  part.FirstValid,
 		LastValid:   part.LastValid,
 		KeyDilution: part.KeyDilution,
