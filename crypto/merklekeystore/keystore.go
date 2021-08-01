@@ -259,12 +259,12 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 		return errReceivedRoundIsBeforeFirst
 	}
 
-	pos := roundToIndex(firstValid, round, interval)
 	ephkey := CommittablePublicKey{
 		VerifyingKey: sig.VerifyingKey,
-		Round:        indexToRound(firstValid, interval, pos),
+		Round:        round,
 	}
 
+	pos := roundToIndex(firstValid, round, interval)
 	isInTree := merklearray.Verify(v.Root, map[uint64]crypto.Digest{pos: crypto.HashObj(&ephkey)}, sig.Proof)
 	if isInTree != nil {
 		return isInTree
