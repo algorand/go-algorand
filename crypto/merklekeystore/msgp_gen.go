@@ -56,14 +56,6 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
-// VerifierStatus
-//        |-----> MarshalMsg
-//        |-----> CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> Msgsize
-//        |-----> MsgIsZero
-//
 
 // MarshalMsg implements msgp.Marshaler
 func (z *CommittablePublicKey) MarshalMsg(b []byte) (o []byte) {
@@ -808,15 +800,11 @@ func (z *Signer) MsgIsZero() bool {
 func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 3 bits */
+	zb0001Len := uint32(1)
+	var zb0001Mask uint8 /* 2 bits */
 	if (*z).Root.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
-	}
-	if (*z).Status == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -825,11 +813,6 @@ func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = (*z).Root.MarshalMsg(o)
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "s"
-			o = append(o, 0xa1, 0x73)
-			o = msgp.AppendUint8(o, uint8((*z).Status))
 		}
 	}
 	return
@@ -862,18 +845,6 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
-			zb0001--
-			{
-				var zb0003 uint8
-				zb0003, bts, err = msgp.ReadUint8Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Status")
-					return
-				}
-				(*z).Status = VerifierStatus(zb0003)
-			}
-		}
-		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -902,16 +873,6 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Root")
 					return
 				}
-			case "s":
-				{
-					var zb0004 uint8
-					zb0004, bts, err = msgp.ReadUint8Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Status")
-						return
-					}
-					(*z).Status = VerifierStatus(zb0004)
-				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -932,57 +893,11 @@ func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Verifier) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Root.Msgsize() + 2 + msgp.Uint8Size
+	s = 1 + 2 + (*z).Root.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
-	return ((*z).Root.MsgIsZero()) && ((*z).Status == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z VerifierStatus) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint8(o, uint8(z))
-	return
-}
-
-func (_ VerifierStatus) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(VerifierStatus)
-	if !ok {
-		_, ok = (z).(*VerifierStatus)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *VerifierStatus) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 uint8
-		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = VerifierStatus(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *VerifierStatus) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*VerifierStatus)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z VerifierStatus) Msgsize() (s int) {
-	s = msgp.Uint8Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z VerifierStatus) MsgIsZero() bool {
-	return z == 0
+	return ((*z).Root.MsgIsZero())
 }
