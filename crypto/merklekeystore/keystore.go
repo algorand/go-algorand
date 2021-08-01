@@ -59,7 +59,6 @@ type (
 
 		Proof        `codec:"prf"`
 		VerifyingKey crypto.VerifyingKey `codec:"vkey"`
-		index        uint64
 		round        uint64
 	}
 
@@ -196,14 +195,6 @@ func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 		return 0, errOutOfBounds
 	}
 	return pos, nil
-}
-
-func (m *Signer) isPositionOutOfBound(pos uint64) bool {
-	return pos >= uint64(len(m.EphemeralKeys.SignatureAlgorithms))
-}
-
-func (m *Signer) isRoundPriorToFirstRound(round uint64) bool {
-	return round < m.EphemeralKeys.TreeBase
 }
 
 // Trim shortness deletes keys that existed before a specific round,
