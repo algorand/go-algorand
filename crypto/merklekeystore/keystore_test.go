@@ -77,7 +77,14 @@ func TestSignerCreation(t *testing.T) {
 	_, err = signer.Sign(genHashableForTest(), 2)
 	a.Error(err)
 }
+func TestEmptyVerifier(t *testing.T) {
+	a := require.New(t)
 
+	signer, err := New(8, 9, 5, crypto.PlaceHolderType)
+	a.NoError(err)
+	a.NotEqual(*signer.GetVerifier(), Verifier{})
+
+}
 func TestEmptySigner(t *testing.T) {
 	a := require.New(t)
 
