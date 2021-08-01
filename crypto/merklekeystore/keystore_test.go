@@ -48,7 +48,6 @@ func TestSignerCreation(t *testing.T) {
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(2, 2, 2, genHashableForTest(), sig))
 
-
 	signer, err = New(2, 2, 3, crypto.PlaceHolderType)
 	a.NoError(err)
 	a.Equal(0, len(signer.SignatureAlgorithms))
@@ -76,6 +75,33 @@ func TestSignerCreation(t *testing.T) {
 	a.NoError(err)
 	a.Equal(0, len(s.SignatureAlgorithms))
 	_, err = signer.Sign(genHashableForTest(), 2)
+	a.Error(err)
+}
+
+func TestEmptySigner(t *testing.T) {
+	a := require.New(t)
+
+	h := genHashableForTest()
+	signer, err := New(8, 9, 5, crypto.PlaceHolderType)
+	a.NoError(err)
+	a.Equal(0, len(signer.SignatureAlgorithms))
+
+	_, err = signer.Sign(h, 8)
+	a.Error(err)
+
+	_, err = signer.Sign(h, 9)
+	a.Error(err)
+
+	_, err = signer.Trim(10)
+	a.Error(err)
+	// take signer and make it empty, then try to sign with it:
+	signer, err = New(8, 9, 2, crypto.PlaceHolderType)
+	a.NoError(err)
+	a.Equal(1, len(signer.SignatureAlgorithms))
+
+	_, err = signer.Trim(8)
+	a.NoError(err)
+	_, err = signer.Sign(h, 8)
 	a.Error(err)
 }
 
