@@ -42,13 +42,17 @@ func TestSignerCreation(t *testing.T) {
 
 	signer, err := New(2, 2, 2, crypto.PlaceHolderType)
 	a.NoError(err)
+	a.Equal(1, len(signer.SignatureAlgorithms))
+
 	sig, err := signer.Sign(genHashableForTest(), 2)
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(2, 2, 2, genHashableForTest(), sig))
-	a.Equal(1, len(signer.SignatureAlgorithms))
+
 
 	signer, err = New(2, 2, 3, crypto.PlaceHolderType)
 	a.NoError(err)
+	a.Equal(0, len(signer.SignatureAlgorithms))
+
 	_, err = signer.Sign(genHashableForTest(), 2)
 	a.Error(err)
 
