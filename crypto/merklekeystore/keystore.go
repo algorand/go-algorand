@@ -88,20 +88,20 @@ func (e *CommittablePublicKey) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 //Length returns the amount of disposable keys
-func (d *Signer) Length() uint64 {
-	return uint64(len(d.SignatureAlgorithms))
+func (s *Signer) Length() uint64 {
+	return uint64(len(s.SignatureAlgorithms))
 }
 
 // GetHash Gets the hash of the VerifyingKey tied to the signatureAlgorithm in pos.
-func (d *Signer) GetHash(pos uint64) (crypto.Digest, error) {
+func (s *Signer) GetHash(pos uint64) (crypto.Digest, error) {
 	ephPK := CommittablePublicKey{
-		VerifyingKey: d.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
-		Round:        indexToRound(d.FirstValid, d.Interval, pos),
+		VerifyingKey: s.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
+		Round:        indexToRound(s.FirstValid, s.Interval, pos),
 	}
 	return crypto.HashObj(&ephPK), nil
 }
 
-func (d *Signer) getActualPos(pos uint64) uint64 {
+func (s *Signer) getActualPos(pos uint64) uint64 {
 	return pos
 }
 
@@ -145,28 +145,28 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 }
 
 // GetVerifier can be used to store the commitment and verifier for this signer.
-func (m *Signer) GetVerifier() *Verifier {
+func (s *Signer) GetVerifier() *Verifier {
 	return &Verifier{
-		Root: m.Tree.Root(),
+		Root: s.Tree.Root(),
 	}
 }
 
 // Sign outputs a signature + proof for the signing key.
-func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	pos, err := m.getKeyPosition(round)
+	pos, err := s.getKeyPosition(round)
 	if err != nil {
 		return Signature{}, err
 	}
-	index := roundToIndex(m.FirstValid, round, m.Interval)
-	proof, err := m.Tree.Prove([]uint64{index})
+	index := roundToIndex(s.FirstValid, round, s.Interval)
+	proof, err := s.Tree.Prove([]uint64{index})
 	if err != nil {
 		return Signature{}, err
 	}
 
-	signer := m.SignatureAlgorithms[pos].GetSigner()
+	signer := s.SignatureAlgorithms[pos].GetSigner()
 	return Signature{
 		ByteSignature: signer.Sign(hashable),
 		Proof:         proof,
@@ -174,16 +174,16 @@ func (m *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	}, nil
 }
 
-func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
-	if round < m.FirstValid {
+func (s *Signer) getKeyPosition(round uint64) (uint64, error) {
+	if round < s.FirstValid {
 		return 0, errReceivedRoundIsBeforeFirst
 	}
-	pos := roundToIndex(m.FirstValid, round, m.Interval)
-	pos = pos - m.ArrayBase
-	if round%m.Interval != 0 {
+	pos := roundToIndex(s.FirstValid, round, s.Interval)
+	pos = pos - s.ArrayBase
+	if round%s.Interval != 0 {
 		return pos, errNonExistantKey
 	}
-	if pos >= uint64(len(m.SignatureAlgorithms)) {
+	if pos >= uint64(len(s.SignatureAlgorithms)) {
 		return 0, errOutOfBounds
 	}
 	return pos, nil
@@ -192,52 +192,52 @@ func (m *Signer) getKeyPosition(round uint64) (uint64, error) {
 // Trim shortness deletes keys that existed before a specific round,
 // will return an error for non existing keys/ out of bounds keys.
 // the output is a copy of the signer - which can be persisted.
-func (m *Signer) Trim(before uint64) (*Signer, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+func (s *Signer) Trim(before uint64) (*Signer, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	pos, err := m.getKeyPosition(before)
+	pos, err := s.getKeyPosition(before)
 	if err != nil {
 		return nil, err
 	}
-	m.dropKeys(int(pos))
+	s.dropKeys(int(pos))
 
 	// advance the array zero location.
-	m.ArrayBase = roundToIndex(m.FirstValid, before, m.Interval) + 1
-	cpy := m.copy()
+	s.ArrayBase = roundToIndex(s.FirstValid, before, s.Interval) + 1
+	cpy := s.copy()
 
 	// Swapping the keys (both of them are the same, but the one in cpy doesn't contain a dangling array behind it.
 	// e.g: A=A[len(A)-20:] doesn't mean the garbage collector will free parts of memory from the array.
 	// assuming that cpy will be used briefly and then dropped - it's better to swap their key slices.
-	m.SignatureAlgorithms, cpy.SignatureAlgorithms =
-		cpy.SignatureAlgorithms, m.SignatureAlgorithms
+	s.SignatureAlgorithms, cpy.SignatureAlgorithms =
+		cpy.SignatureAlgorithms, s.SignatureAlgorithms
 
 	return cpy, nil
 }
 
-func (m *Signer) copy() *Signer {
+func (s *Signer) copy() *Signer {
 	signerCopy := Signer{
 		_struct: struct{}{},
 
-		SignatureAlgorithms: make([]crypto.SignatureAlgorithm, len(m.SignatureAlgorithms)),
-		FirstValid:          m.FirstValid,
-		Interval:            m.Interval,
-		ArrayBase:           m.ArrayBase,
+		SignatureAlgorithms: make([]crypto.SignatureAlgorithm, len(s.SignatureAlgorithms)),
+		FirstValid:          s.FirstValid,
+		Interval:            s.Interval,
+		ArrayBase:           s.ArrayBase,
 
-		Tree: m.Tree,
+		Tree: s.Tree,
 		mu:   deadlock.RWMutex{},
 	}
 
-	copy(signerCopy.SignatureAlgorithms, m.SignatureAlgorithms)
+	copy(signerCopy.SignatureAlgorithms, s.SignatureAlgorithms)
 	return &signerCopy
 }
 
-func (m *Signer) dropKeys(upTo int) {
+func (s *Signer) dropKeys(upTo int) {
 	for i := 0; i <= upTo; i++ {
 		// zero the keys.
-		m.SignatureAlgorithms[i] = crypto.SignatureAlgorithm{}
+		s.SignatureAlgorithms[i] = crypto.SignatureAlgorithm{}
 	}
-	m.SignatureAlgorithms = m.SignatureAlgorithms[upTo+1:]
+	s.SignatureAlgorithms = s.SignatureAlgorithms[upTo+1:]
 }
 
 // Verify receives a signature over a specific crypto.Hashable object, and makes certain the signature is correct.
