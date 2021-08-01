@@ -37,10 +37,19 @@ func TestSignerCreation(t *testing.T) {
 		a.NoError(err)
 	}
 
-	_, err := New(1, 0, 1, crypto.PlaceHolderType)
+	signer, err := New(0, 0, 1, crypto.PlaceHolderType)
+	a.NoError(err)
+	a.Equal(0, len(signer.SignatureAlgorithms))
+
+	signer, err = New(0, 1, 1, crypto.PlaceHolderType)
+	a.NoError(err)
+	a.Equal(uint64(1), signer.FirstValid)
+	a.Equal(1, len(signer.SignatureAlgorithms))
+
+	_, err = New(1, 0, 1, crypto.PlaceHolderType)
 	a.Error(err)
 
-	signer, err := New(2, 2, 2, crypto.PlaceHolderType)
+	signer, err = New(2, 2, 2, crypto.PlaceHolderType)
 	a.NoError(err)
 	a.Equal(1, len(signer.SignatureAlgorithms))
 
@@ -56,6 +65,10 @@ func TestSignerCreation(t *testing.T) {
 	a.Error(err)
 
 	s, err := New(8, 21, 10, crypto.PlaceHolderType)
+	a.NoError(err)
+	a.Equal(len(s.SignatureAlgorithms), 2)
+
+	s, err = New(8, 20, 10, crypto.PlaceHolderType)
 	a.NoError(err)
 	a.Equal(len(s.SignatureAlgorithms), 2)
 
@@ -100,15 +113,6 @@ func TestEmptySigner(t *testing.T) {
 	a.Error(err)
 
 	_, err = signer.Trim(10)
-	a.Error(err)
-	// take signer and make it empty, then try to sign with it:
-	signer, err = New(8, 9, 2, crypto.PlaceHolderType)
-	a.NoError(err)
-	a.Equal(1, len(signer.SignatureAlgorithms))
-
-	_, err = signer.Trim(8)
-	a.NoError(err)
-	_, err = signer.Sign(h, 8)
 	a.Error(err)
 }
 
@@ -266,7 +270,7 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 	sig2.Proof = sig2.Proof[:len(sig2.Proof)-1]
 	a.Error(signer.GetVerifier().Verify(start, start, 1, hashable, sig2))
 
-	sig3 := sig2
+	sig3 := sig
 	someDigest := crypto.Digest{}
 	rand.Read(someDigest[:])
 	sig3.Proof[0] = someDigest
@@ -347,9 +351,6 @@ func TestKeySliceAfterSignerTrim(t *testing.T) {
 	_, err = signer.Trim(101)
 	a.Error(err)
 
-	signer, err = New(1, 10, 1, crypto.PlaceHolderType)
-	a.NoError(err)
-
 	signer, err = New(1, 100, 11, crypto.PlaceHolderType)
 	a.NoError(err)
 	a.Equal(9, len(signer.SignatureAlgorithms))
@@ -369,6 +370,20 @@ func TestKeySliceAfterSignerTrim(t *testing.T) {
 	signer.Trim(99)
 	a.Equal(signer.FirstValid, uint64(1))
 	a.Equal(len(signer.SignatureAlgorithms), 0)
+
+	// create signer and delete all keys.
+	signer, err = New(1, 60, 1, crypto.PlaceHolderType)
+	a.NoError(err)
+	_, err = signer.Trim(60)
+	a.NoError(err)
+	a.Equal(0, len(signer.SignatureAlgorithms))
+
+	signer, err = New(1, 60, 11, crypto.PlaceHolderType)
+	a.NoError(err)
+	_, err = signer.Trim(55)
+	a.NoError(err)
+	a.Equal(0, len(signer.SignatureAlgorithms))
+
 }
 
 func TestKeyDeletion(t *testing.T) {
