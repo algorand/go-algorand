@@ -105,22 +105,6 @@ func (c *testingClock) fire(d time.Duration) {
 	close(c.TA[d])
 }
 
-type simpleKeyManager []account.Participation
-
-func (m simpleKeyManager) VotingKeys(votingRound, _ basics.Round) []account.Participation {
-	var km []account.Participation
-	for _, acc := range m {
-		if acc.OverlapsInterval(votingRound, votingRound) {
-			km = append(km, acc)
-		}
-	}
-	return km
-}
-
-func (m simpleKeyManager) DeleteOldKeys(basics.Round) {
-	// noop
-}
-
 type testingNetwork struct {
 	validator BlockValidator
 

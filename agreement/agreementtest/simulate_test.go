@@ -324,7 +324,7 @@ func TestSimulate(t *testing.T) {
 	}
 
 	l := makeTestLedger(genesis)
-	err := Simulate(t.Name(), 10, deadline, l, SimpleKeyManager(accs), testBlockFactory{}, testBlockValidator{}, logging.Base())
+	err := Simulate(t.Name(), 10, deadline, l, agreement.SimpleKeyManager(accs), testBlockFactory{}, testBlockValidator{}, logging.Base())
 	require.NoError(t, err)
 }
 

@@ -132,7 +132,7 @@ func (n *Fuzzer) initAgreementNode(nodeID int, filters ...NetworkFilterFactory) 
 		Logger:                  logger,
 		Ledger:                  n.ledgers[nodeID],
 		Network:                 gossip.WrapNetwork(n.facades[nodeID], logger),
-		KeyManager:              simpleKeyManager(n.accounts[nodeID : nodeID+1]),
+		KeyManager:              agreement.SimpleKeyManager(n.accounts[nodeID : nodeID+1]),
 		BlockValidator:          n.blockValidator,
 		BlockFactory:            testBlockFactory{Owner: nodeID},
 		Clock:                   n.clocks[nodeID],
