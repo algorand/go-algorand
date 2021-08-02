@@ -37,6 +37,7 @@ const (
 	minAlgorithmType AlgorithmType = iota
 
 	PlaceHolderType
+	DilithiumType
 
 	maxAlgorithmType
 )
@@ -45,7 +46,7 @@ const (
 type Signer interface {
 	Sign(message Hashable) ByteSignature
 	SignBytes(message []byte) ByteSignature
-	GetVerifyingKey() VerifyingKey
+	GetVerifyingKey() *VerifyingKey
 }
 
 // ErrBadSignature represents a bad signature
@@ -100,6 +101,7 @@ type PackedVerifyingKey struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	PlaceHolderPublicKey PlaceHolderPublicKey `codec:"placeholder"`
+	DilithiumPublicKey   DilithiumVerifier    `codec:"dk2"`
 }
 
 var errUnknownVerifier = errors.New("could not find stored Verifier")
@@ -108,6 +110,8 @@ func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) (Verifier, error) {
 	switch t {
 	case PlaceHolderType:
 		return &p.PlaceHolderPublicKey, nil
+	case DilithiumType:
+		return &p.DilithiumPublicKey, nil
 	default:
 		return nil, errUnknownVerifier
 	}
@@ -117,7 +121,8 @@ func (p *PackedVerifyingKey) getVerifier(t AlgorithmType) (Verifier, error) {
 type PackedSignatureAlgorithm struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	PlaceHolderKey PlaceHolderKey `codec:"placeholderkey"`
+	PlaceHolderKey  PlaceHolderKey  `codec:"placeholderkey"`
+	DilithiumSigner DilithiumSigner `codec:"ds"`
 }
 
 var errUnknownSigner = errors.New("could not find stored signer")
@@ -126,6 +131,8 @@ func (p *PackedSignatureAlgorithm) getSigner(t AlgorithmType) (Signer, error) {
 	switch t {
 	case PlaceHolderType:
 		return &p.PlaceHolderKey, nil
+	case DilithiumType:
+		return &p.DilithiumSigner, nil
 	default:
 		return nil, errUnknownSigner
 	}
@@ -143,6 +150,11 @@ func NewSigner(t AlgorithmType) (*SignatureAlgorithm, error) {
 		key := GeneratePlaceHolderKey(seed)
 		p = PackedSignatureAlgorithm{
 			PlaceHolderKey: *key,
+		}
+	case DilithiumType:
+		signer := NewDilithiumSigner().(*DilithiumSigner)
+		p = PackedSignatureAlgorithm{
+			DilithiumSigner: *signer,
 		}
 	default:
 		return nil, errNonExistingSignatureAlgorithmType

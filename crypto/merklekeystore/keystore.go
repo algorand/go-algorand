@@ -103,7 +103,7 @@ func (s *Signer) GetHash(pos uint64) (crypto.Digest, error) {
 		return crypto.Digest{}, err
 	}
 	ephPK := CommittablePublicKey{
-		VerifyingKey: signer.GetVerifyingKey(),
+		VerifyingKey: *signer.GetVerifyingKey(),
 		Round:        indexToRound(s.FirstValid, s.Interval, pos),
 	}
 	return crypto.HashObj(&ephPK), nil
@@ -181,7 +181,7 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	return Signature{
 		ByteSignature: signingKey.Sign(hashable),
 		Proof:         proof,
-		VerifyingKey:  signingKey.GetVerifyingKey(),
+		VerifyingKey:  *signingKey.GetVerifyingKey(),
 	}, nil
 }
 
