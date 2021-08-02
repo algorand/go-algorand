@@ -386,7 +386,7 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 
 	var totalWeight uint64
 	for _, result := range verifiedResults {
-		t.node.keys.RecordVote(result.v.R.Sender, result.v.R.Round)
+		t.node.keys.Record(result.v.R.Sender, result.v.R.Round, account.Vote)
 		totalWeight += result.v.Cred.Weight
 	}
 	if t.node.log.IsLevelEnabled(logging.Info) {
@@ -509,7 +509,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 			ObjectPeriod: uint64(vote.R.Period),
 		}
 		t.node.log.with(logEvent).Infof("pseudonode.makeProposals: proposal created for (%d, %d)", vote.R.Round, vote.R.Period)
-		t.node.keys.RecordBlockProposal(vote.R.Sender, vote.R.Round)
+		t.node.keys.Record(vote.R.Sender, vote.R.Round, account.BlockProposal)
 		if t.node.log.GetTelemetryEnabled() {
 			t.node.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockProposedEvent, telemetryspec.BlockProposedEventDetails{
 				Hash:    vote.R.Proposal.BlockDigest.String(),

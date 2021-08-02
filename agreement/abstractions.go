@@ -230,14 +230,8 @@ type KeyManager interface {
 	// keysRound.
 	VotingKeys(votingRound, keysRound basics.Round) []account.Participation
 
-	// RecordVote sets the LastVote field for the Account.
-	RecordVote(account basics.Address, round basics.Round) error
-
-	// RecordBlockProposal sets the LastBlockProposal field for the Account.
-	RecordBlockProposal(account basics.Address, round basics.Round) error
-
-	// RecordCompactCertificate sets the LastCompactCertificate field for the Account.
-	RecordCompactCertificate(account basics.Address, round basics.Round) error
+	// Record indicates that the given participation action has been taken.
+	Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) error
 }
 
 // MessageHandle is an ID referring to a specific message.

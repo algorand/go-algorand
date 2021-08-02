@@ -108,7 +108,7 @@ type AlgorandFullNode struct {
 
 	indexer *indexer.Indexer
 
-	participationRegistry ParticipationRegistry
+	participationRegistry account.ParticipationRegistry
 
 	rootDir     string
 	genesisID   string
@@ -752,8 +752,8 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 }
 
 // ensureParticipationDB opens or creates a participation DB.
-func ensureParticipationDB() (ParticipationRegistry, error) {
-	return MakeParticipationRegistry(db.Accessor{}), nil
+func ensureParticipationDB() (account.ParticipationRegistry, error) {
+	return account.MakeParticipationRegistry(db.Accessor{}), nil
 }
 
 // Reload participation keys from disk periodically
@@ -1171,17 +1171,7 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	return participations
 }
 
-// RecordVote sets the LastVote field for the ParticipationID.
-func (node *AlgorandFullNode) RecordVote(account basics.Address, round basics.Round) error {
-	return node.participationRegistry.RecordVote(account, round)
-}
-
-// RecordBlockProposal sets the LastBlockProposal field for the ParticipationID.
-func (node *AlgorandFullNode) RecordBlockProposal(account basics.Address, round basics.Round) error {
-	return node.participationRegistry.RecordBlockProposal(account, round)
-}
-
-// RecordCompactCertificate sets the LastCompactCertificate field for the ParticipationID.
-func (node *AlgorandFullNode) RecordCompactCertificate(account basics.Address, round basics.Round) error {
-	return node.participationRegistry.RecordCompactCertificate(account, round)
+// Record forwards participation record calls to the participation registry.
+func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) error {
+	return node.participationRegistry.Record(account, round, participationType)
 }

@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package node
+package account
 
 import (
-	"fmt"
+	"errors"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/util/db"
@@ -29,6 +29,7 @@ type ParticipationID crypto.Digest
 // ParticipationRecord contains all metadata relating to a set of participation keys.
 type ParticipationRecord struct {
 	ParticipationID ParticipationID
+
 	Account         basics.Address
 	FirstValid      basics.Round
 	LastValid       basics.Round
@@ -44,11 +45,20 @@ type ParticipationRecord struct {
 	// OneTimeSignatureSecrets
 }
 
+// ParticipationAction is used when recording participation actions.
+type ParticipationAction int
+
+const (
+	Vote ParticipationAction = iota
+	BlockProposal
+	CompactCertificate
+)
+
 // ParticipationIDNotFoundErr is used when attempting to update a set of keys which do not exist.
 var ParticipationIDNotFoundErr error
 
 func init() {
-	ParticipationIDNotFoundErr = fmt.Errorf("the participation ID was not found")
+	ParticipationIDNotFoundErr = errors.New("the participation ID was not found")
 }
 
 // ParticipationRegistry contain all functions for interacting with the Participation Registry.
@@ -63,14 +73,8 @@ type ParticipationRegistry interface {
 	// then it is possible for multiple records to be updated.
 	Register(id ParticipationID, on basics.Round) error
 
-	// RecordVote sets the LastVote field for the ParticipationID.
-	RecordVote(account basics.Address, round basics.Round) error
-
-	// RecordBlockProposal sets the LastBlockProposal field for the ParticipationID.
-	RecordBlockProposal(account basics.Address, round basics.Round) error
-
-	// RecordCompactCertificate sets the LastCompactCertificate field for the ParticipationID.
-	RecordCompactCertificate(account basics.Address, round basics.Round) error
+	// Record sets the Last* field for the active ParticipationID for the given account.
+	Record(account basics.Address, round basics.Round, participationType ParticipationAction) error
 }
 
 // MakeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
@@ -96,14 +100,6 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	return nil
 }
 
-func (db *participationDB) RecordVote(account basics.Address, round basics.Round) error {
-	return nil
-}
-
-func (db *participationDB) RecordBlockProposal(account basics.Address, round basics.Round) error {
-	return nil
-}
-
-func (db *participationDB) RecordCompactCertificate(account basics.Address, round basics.Round) error {
+func (db *participationDB) Record(account basics.Address, round basics.Round, participationType ParticipationAction) error {
 	return nil
 }
