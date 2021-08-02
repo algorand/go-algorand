@@ -38,7 +38,11 @@ jobs:
       - name: Make libsodium.a
         run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: Build custom linters
-        run: make build_custom_linters
+        run: |
+          go version
+          cd cmd/partitiontest_linter/
+          go build -buildmode=plugin -trimpath plugin/plugin.go
+          ls plugin.so
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2
         with:
@@ -48,3 +52,4 @@ jobs:
           tool_name: "Lint Warnings"
           level: "warning"
           fail_on_error: false
+          go_version: "1.16.5"
