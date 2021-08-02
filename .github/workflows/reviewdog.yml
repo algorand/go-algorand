@@ -17,10 +17,11 @@ jobs:
         uses: reviewdog/action-golangci-lint@v2
         with:
           golangci_lint_version: "v1.41.1"
-          golangci_lint_flags: "--allow-parallel-runners --disable-all -E errcheck -E gofmt -E golint -E govet -E ineffassign -E misspell"
+          golangci_lint_flags: "-c ./golangci.yml --allow-parallel-runners"
           reporter: "github-pr-review"
-          tool_name: "RD Errors"
+          tool_name: "Lint Errors"
           level: "error"
+          fail_on_error: true
   reviewdog-info:
     runs-on: ubuntu-latest
     steps:
@@ -36,7 +37,8 @@ jobs:
         uses: reviewdog/action-golangci-lint@v2
         with:
           golangci_lint_version: "v1.41.1"
-          golangci_lint_flags: "--allow-parallel-runners --disable-all -E staticcheck -E structcheck -E typecheck -E varcheck -E deadcode -E gosimple -E unused"
-          reporter: "github-pr-check"
-          tool_name: "RD Info"
+          golangci_lint_flags: "-c ./golangci-warnings.yml --allow-parallel-runners"
+          reporter: "github-check"
+          tool_name: "Lint Warnings"
           level: "info"
+          fail_on_error: false
