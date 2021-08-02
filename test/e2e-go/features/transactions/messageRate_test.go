@@ -83,11 +83,6 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 	account := accountsList[0].Address
 	clientAlgod := fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(nodeDataDir))
 
-	_, minAcctBalance, err := fixture.CurrentMinFeeAndBalance()
-	a.NoError(err)
-
-	amount := minAcctBalance * 3 / 2
-
 	// get the node account's secret key
 	secretKey, err := fetchSecretKey(client, nodeDataDir)
 	a.NoError(err)
@@ -131,7 +126,7 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 				break
 			}
 
-			tx, err := client.ConstructPayment(account, account, transactionFee, amount, GenerateRandomBytes(8), "", [32]byte{}, 0, 0)
+			tx, err := client.ConstructPayment(account, account, transactionFee, 0, GenerateRandomBytes(8), "", [32]byte{}, 0, 0)
 			a.NoError(err)
 			signedTxn := tx.Sign(signatureSecrets)
 
