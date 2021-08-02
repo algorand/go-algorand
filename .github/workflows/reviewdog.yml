@@ -45,6 +45,10 @@ jobs:
           ls plugin.so
           pwd
           cd ../../
+      - name: test step
+        run: |
+          ls -la cmd/partitiontest_linter/
+          pwd
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2
         with:
