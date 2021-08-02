@@ -2,6 +2,7 @@ name: "ReviewDog workflow"
 on:
   pull_request:
 jobs:
+  # Blocking Errors Section
   reviewdog-error:
     runs-on: ubuntu-latest
     steps:
@@ -22,6 +23,7 @@ jobs:
           tool_name: "Lint Errors"
           level: "error"
           fail_on_error: true
+  # Non-Blocking Warnings Section
   reviewdog-info:
     runs-on: ubuntu-latest
     steps:

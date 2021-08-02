@@ -12,16 +12,6 @@ linters:
     - ineffassign
     - misspell
 
-# linters-settings:
-  # custom:
-    # partitiontest:
-    #   path: cmd/partitiontest_linter/plugin.so
-    #   description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
-    #   original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
-#  govet:
-#    check-shadowing: true
-
-# to start, most linter outputs will be warnings, and only a few will be errors
 severity:
   default-severity: error
 
@@ -51,18 +41,3 @@ issues:
     - Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
     # "EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore"
     - ineffective break statement. Did you mean to break out of the outer loop
-
-  # exclude-rules:
-    # be more lenient with test code
-    # - path: _test\.go
-    #   linters:
-    #     - errcheck
-    #     - ineffassign
-    #     - misspell
-    #     - staticcheck
-    #     - structcheck
-    #     - typecheck
-    #     - varcheck
-    #     - deadcode
-    #     - gosimple
-    #     - unused

@@ -21,12 +21,9 @@ linters-settings:
       path: cmd/partitiontest_linter/plugin.so
       description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
       original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
-#  govet:
-#    check-shadowing: true
 
-# to start, most linter outputs will be warnings, and only a few will be errors
 severity:
-  default-severity: warning
+  default-severity: info
 
 issues:
   # use these new lint checks on code since #2574
