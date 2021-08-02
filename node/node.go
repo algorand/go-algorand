@@ -87,8 +87,6 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 
 // AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
-	nodeContextData
-
 	mu        deadlock.Mutex
 	ctx       context.Context
 	cancelCtx context.CancelFunc
