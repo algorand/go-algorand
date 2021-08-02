@@ -98,8 +98,12 @@ func (s *Signer) Length() uint64 {
 
 // GetHash Gets the hash of the VerifyingKey tied to the signatureAlgorithm in pos.
 func (s *Signer) GetHash(pos uint64) (crypto.Digest, error) {
+	signer, err := s.SignatureAlgorithms[pos].GetSigner()
+	if err != nil {
+		return crypto.Digest{}, err
+	}
 	ephPK := CommittablePublicKey{
-		VerifyingKey: s.SignatureAlgorithms[pos].GetSigner().GetVerifyingKey(),
+		VerifyingKey: signer.GetVerifyingKey(),
 		Round:        indexToRound(s.FirstValid, s.Interval, pos),
 	}
 	return crypto.HashObj(&ephPK), nil
@@ -124,7 +128,11 @@ func New(firstValid, lastValid, interval uint64, sigAlgoType crypto.AlgorithmTyp
 	numberOfKeys := lastValid/interval - ((firstValid - 1) / interval)
 	keys := make([]crypto.SignatureAlgorithm, numberOfKeys)
 	for i := range keys {
-		keys[i] = *crypto.NewSigner(sigAlgoType)
+		sigAlgo, err := crypto.NewSigner(sigAlgoType)
+		if err != nil {
+			return nil, err
+		}
+		keys[i] = *sigAlgo
 	}
 	s := &Signer{
 		SignatureAlgorithms: keys,
@@ -159,7 +167,10 @@ func (s *Signer) Sign(hashable crypto.Hashable, round uint64) (Signature, error)
 	if err != nil {
 		return Signature{}, err
 	}
-	signingKey := s.SignatureAlgorithms[pos].GetSigner()
+	signingKey, err := s.SignatureAlgorithms[pos].GetSigner()
+	if err != nil {
+		return Signature{}, err
+	}
 
 	index := s.getMerkleTreeIndex(round)
 	proof, err := s.Tree.Prove([]uint64{index})
@@ -268,5 +279,9 @@ func (v *Verifier) Verify(firstValid, round, interval uint64, obj crypto.Hashabl
 		return isInTree
 	}
 
-	return sig.VerifyingKey.GetVerifier().Verify(obj, sig.ByteSignature)
+	ver, err := sig.VerifyingKey.GetVerifier()
+	if err != nil {
+		return err
+	}
+	return ver.Verify(obj, sig.ByteSignature)
 }

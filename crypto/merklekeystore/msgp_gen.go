@@ -251,7 +251,7 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(3)
-	var zb0002Mask uint8 /* 5 bits */
+	var zb0002Mask uint8 /* 4 bits */
 	if (*z).ByteSignature.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x2
@@ -262,7 +262,7 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 	}
 	if (*z).VerifyingKey.MsgIsZero() {
 		zb0002Len--
-		zb0002Mask |= 0x10
+		zb0002Mask |= 0x8
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
@@ -284,7 +284,7 @@ func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).Proof[zb0001].MarshalMsg(o)
 			}
 		}
-		if (zb0002Mask & 0x10) == 0 { // if not empty
+		if (zb0002Mask & 0x8) == 0 { // if not empty
 			// string "vkey"
 			o = append(o, 0xa4, 0x76, 0x6b, 0x65, 0x79)
 			o = (*z).VerifyingKey.MarshalMsg(o)
