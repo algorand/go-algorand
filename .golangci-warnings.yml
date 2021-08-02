@@ -15,15 +15,15 @@ linters:
     # - partitiontest
 
 
-linters-settings:
-  custom:
-    partitiontest:
-      path: cmd/partitiontest_linter/plugin.so
-      description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
-      original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
+# linters-settings:
+#   custom:
+#     partitiontest:
+#       path: cmd/partitiontest_linter/plugin.so
+#       description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
+#       original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
 
 severity:
-  default-severity: warning
+  default-severity: info
 
 issues:
   # use these new lint checks on code since #2574
