@@ -44,10 +44,9 @@ jobs:
           go build -buildmode=plugin -trimpath plugin/plugin.go
           ls plugin.so
           pwd
+          cd ../../
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2
-        env:
-          GO111MODULE: "on"
         with:
           golangci_lint_version: "v1.41.1"
           golangci_lint_flags: "-c .golangci-warnings.yml --allow-parallel-runners"
@@ -55,4 +54,3 @@ jobs:
           tool_name: "Lint Warnings"
           level: "warning"
           fail_on_error: false
-          go_version: "1.15.14"
