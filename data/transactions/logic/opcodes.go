@@ -219,6 +219,8 @@ var OpSpecs = []OpSpec{
 	{0x4b, "dig", opDig, asmDefault, disDefault, oneAny, twoAny, 3, modeAny, stacky(typeDig, "n")},
 	{0x4c, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 3, modeAny, stacky(typeSwap)},
 	{0x4d, "select", opSelect, asmDefault, disDefault, twoAny.plus(oneInt), oneAny, 3, modeAny, opDefault},
+	{0x4e, "cover", opCover, asmDefault, disDefault, oneAny, oneAny, 5, modeAny, stacky(typeCover, "n")},
+	{0x4f, "uncover", opUncover, asmDefault, disDefault, oneAny, oneAny, 5, modeAny, stacky(typeUncover, "n")},
 
 	{0x50, "concat", opConcat, asmDefault, disDefault, twoBytes, oneBytes, 2, modeAny, opDefault},
 	{0x51, "substring", opSubstring, assembleSubstring, disDefault, oneBytes, oneBytes, 2, modeAny, immediates("s", "e")},

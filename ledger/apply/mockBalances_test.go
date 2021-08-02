@@ -49,20 +49,24 @@ func (balances mockBalances) Round() basics.Round {
 	return basics.Round(8675309)
 }
 
-func (balances mockBalances) Allocate(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
+func (balances mockBalances) AllocateApp(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
 	return nil
 }
 
-func (balances mockBalances) Deallocate(basics.Address, basics.AppIndex, bool) error {
+func (balances mockBalances) DeallocateApp(basics.Address, basics.AppIndex, bool) error {
+	return nil
+}
+
+func (balances mockBalances) AllocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
+	return nil
+}
+
+func (balances mockBalances) DeallocateAsset(addr basics.Address, index basics.AssetIndex, global bool) error {
 	return nil
 }
 
 func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, basics.EvalDelta, error) {
 	return false, basics.EvalDelta{}, nil
-}
-
-func (balances mockBalances) PutWithCreatable(basics.Address, basics.AccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
-	return nil
 }
 
 func (balances mockBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
