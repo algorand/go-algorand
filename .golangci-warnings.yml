@@ -23,7 +23,7 @@ linters-settings:
       original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
 
 severity:
-  default-severity: info
+  default-severity: warning
 
 issues:
   # use these new lint checks on code since #2574

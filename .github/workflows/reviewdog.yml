@@ -3,7 +3,7 @@ on:
   pull_request:
 jobs:
   # Blocking Errors Section
-  reviewdog-error:
+  reviewdog-errors:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
@@ -24,7 +24,7 @@ jobs:
           level: "error"
           fail_on_error: true
   # Non-Blocking Warnings Section
-  reviewdog-info:
+  reviewdog-warnings:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
@@ -42,5 +42,5 @@ jobs:
           golangci_lint_flags: "-c .golangci-warnings.yml --allow-parallel-runners"
           reporter: "github-check"
           tool_name: "Lint Warnings"
-          level: "info"
+          level: "warning"
           fail_on_error: false
