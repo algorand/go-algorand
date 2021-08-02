@@ -31,25 +31,25 @@ func TestSignerCreation(t *testing.T) {
 
 	h := genHashableForTest()
 	for i := uint64(1); i < 20; i++ {
-		signer, err := New(i, i+1, 1, crypto.PlaceHolderType)
+		signer, err := New(i, i+1, 1, crypto.DilithiumType)
 		a.NoError(err)
 		_, err = signer.Sign(h, i)
 		a.NoError(err)
 	}
 
-	signer, err := New(0, 0, 1, crypto.PlaceHolderType)
+	signer, err := New(0, 0, 1, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(0, len(signer.SignatureAlgorithms))
 
-	signer, err = New(0, 1, 1, crypto.PlaceHolderType)
+	signer, err = New(0, 1, 1, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(uint64(1), signer.FirstValid)
 	a.Equal(1, len(signer.SignatureAlgorithms))
 
-	_, err = New(1, 0, 1, crypto.PlaceHolderType)
+	_, err = New(1, 0, 1, crypto.DilithiumType)
 	a.Error(err)
 
-	signer, err = New(2, 2, 2, crypto.PlaceHolderType)
+	signer, err = New(2, 2, 2, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(1, len(signer.SignatureAlgorithms))
 
@@ -57,34 +57,34 @@ func TestSignerCreation(t *testing.T) {
 	a.NoError(err)
 	a.NoError(signer.GetVerifier().Verify(2, 2, 2, genHashableForTest(), sig))
 
-	signer, err = New(2, 2, 3, crypto.PlaceHolderType)
+	signer, err = New(2, 2, 3, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(0, len(signer.SignatureAlgorithms))
 
 	_, err = signer.Sign(genHashableForTest(), 2)
 	a.Error(err)
 
-	s, err := New(8, 21, 10, crypto.PlaceHolderType)
+	s, err := New(8, 21, 10, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(len(s.SignatureAlgorithms), 2)
 
-	s, err = New(8, 20, 10, crypto.PlaceHolderType)
+	s, err = New(8, 20, 10, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(len(s.SignatureAlgorithms), 2)
 
-	s, err = New(10, 21, 10, crypto.PlaceHolderType)
+	s, err = New(10, 21, 10, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(len(s.SignatureAlgorithms), 2)
 
-	s, err = New(10, 20, 10, crypto.PlaceHolderType)
+	s, err = New(10, 20, 10, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(len(s.SignatureAlgorithms), 2)
 
-	s, err = New(11, 20, 10, crypto.PlaceHolderType)
+	s, err = New(11, 20, 10, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(len(s.SignatureAlgorithms), 1)
 
-	s, err = New(11, 19, 10, crypto.PlaceHolderType)
+	s, err = New(11, 19, 10, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(0, len(s.SignatureAlgorithms))
 	_, err = signer.Sign(genHashableForTest(), 2)
@@ -93,7 +93,7 @@ func TestSignerCreation(t *testing.T) {
 func TestEmptyVerifier(t *testing.T) {
 	a := require.New(t)
 
-	signer, err := New(8, 9, 5, crypto.PlaceHolderType)
+	signer, err := New(8, 9, 5, crypto.DilithiumType)
 	a.NoError(err)
 	a.NotEqual(*signer.GetVerifier(), Verifier{})
 
@@ -102,7 +102,7 @@ func TestEmptySigner(t *testing.T) {
 	a := require.New(t)
 
 	h := genHashableForTest()
-	signer, err := New(8, 9, 5, crypto.PlaceHolderType)
+	signer, err := New(8, 9, 5, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(0, len(signer.SignatureAlgorithms))
 
@@ -118,7 +118,7 @@ func TestEmptySigner(t *testing.T) {
 
 func TestDisposableKeyPositions(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 100, 1, crypto.PlaceHolderType)
+	signer, err := New(0, 100, 1, crypto.DilithiumType)
 	a.NoError(err)
 
 	for i := uint64(1); i < 100; i++ {
@@ -130,7 +130,7 @@ func TestDisposableKeyPositions(t *testing.T) {
 	_, err = signer.getArrayIndex(101)
 	a.Error(err)
 
-	signer, err = New(1000, 1100, 1, crypto.PlaceHolderType)
+	signer, err = New(1000, 1100, 1, crypto.DilithiumType)
 	a.NoError(err)
 
 	for i := uint64(1000); i < 1100; i++ {
@@ -142,7 +142,7 @@ func TestDisposableKeyPositions(t *testing.T) {
 	_, err = signer.getArrayIndex(999)
 	a.Error(err)
 
-	signer, err = New(1000, 1100, 101, crypto.PlaceHolderType)
+	signer, err = New(1000, 1100, 101, crypto.DilithiumType)
 	a.NoError(err)
 
 	indices := make([]uint64, 0)
@@ -164,7 +164,7 @@ func TestDisposableKeyPositions(t *testing.T) {
 
 func TestNonEmptyDisposableKeys(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 100, 1, crypto.PlaceHolderType)
+	signer, err := New(0, 100, 1, crypto.DilithiumType)
 	a.NoError(err)
 
 	s := crypto.SignatureAlgorithm{}
@@ -175,7 +175,7 @@ func TestNonEmptyDisposableKeys(t *testing.T) {
 
 func TestSignatureStructure(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(50, 100, 1, crypto.PlaceHolderType)
+	signer, err := New(50, 100, 1, crypto.DilithiumType)
 	a.NoError(err)
 
 	hashable := genHashableForTest()
@@ -189,7 +189,7 @@ func TestSignatureStructure(t *testing.T) {
 	key := signer.SignatureAlgorithms[pos]
 	signingkey, err := key.GetSigner()
 	a.NoError(err)
-	a.Equal(sig.VerifyingKey, signingkey.GetVerifyingKey())
+	a.Equal(sig.VerifyingKey, *signingkey.GetVerifyingKey())
 
 	proof, err := signer.Tree.Prove([]uint64{1})
 	a.NoError(err)
@@ -207,7 +207,7 @@ func TestSigning(t *testing.T) {
 	a := require.New(t)
 
 	start, end := uint64(50), uint64(100)
-	signer, err := New(start, end, 1, crypto.PlaceHolderType)
+	signer, err := New(start, end, 1, crypto.DilithiumType)
 	a.NoError(err)
 
 	hashable := crypto.Hashable(&crypto.VerifyingKey{Type: math.MaxUint64}) // just want some crypto.Hashable..
@@ -222,7 +222,7 @@ func TestSigning(t *testing.T) {
 	_, err = signer.Sign(hashable, end+1)
 	a.Error(err)
 
-	signer, err = New(start, end, 10, crypto.PlaceHolderType)
+	signer, err = New(start, end, 10, crypto.DilithiumType)
 	a.NoError(err)
 
 	sig, err = signer.Sign(hashable, start)
@@ -233,7 +233,7 @@ func TestSigning(t *testing.T) {
 	a.Error(err)
 	a.Error(signer.GetVerifier().Verify(start, start+5, 1, hashable, sig))
 
-	signer, err = New(50, 100, 12, crypto.PlaceHolderType)
+	signer, err = New(50, 100, 12, crypto.DilithiumType)
 	a.NoError(err)
 
 	for i := uint64(50); i < 100; i++ {
@@ -304,13 +304,13 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	sig2 := sig
 	signingKey, err := signer.SignatureAlgorithms[0].GetSigner()
 	a.NoError(err)
-	sig2.VerifyingKey = signingKey.GetVerifyingKey()
+	sig2.VerifyingKey = *signingKey.GetVerifyingKey()
 	a.Error(signer.GetVerifier().Verify(start, start+1, 1, hashable, sig2))
 }
 
 func TestMarshal(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(0, 10, 1, crypto.PlaceHolderType)
+	signer, err := New(0, 10, 1, crypto.DilithiumType)
 	a.NoError(err)
 
 	out := protocol.Encode(signer)
@@ -331,7 +331,7 @@ func TestMarshal(t *testing.T) {
 
 func TestKeySliceAfterSignerTrim(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(1, 100, 1, crypto.PlaceHolderType)
+	signer, err := New(1, 100, 1, crypto.DilithiumType)
 	a.NoError(err)
 
 	cpy, _ := signer.Trim(1)
@@ -355,7 +355,7 @@ func TestKeySliceAfterSignerTrim(t *testing.T) {
 	_, err = signer.Trim(101)
 	a.Error(err)
 
-	signer, err = New(1, 100, 11, crypto.PlaceHolderType)
+	signer, err = New(1, 100, 11, crypto.DilithiumType)
 	a.NoError(err)
 	a.Equal(9, len(signer.SignatureAlgorithms))
 
@@ -376,13 +376,13 @@ func TestKeySliceAfterSignerTrim(t *testing.T) {
 	a.Equal(len(signer.SignatureAlgorithms), 0)
 
 	// create signer and delete all keys.
-	signer, err = New(1, 60, 1, crypto.PlaceHolderType)
+	signer, err = New(1, 60, 1, crypto.DilithiumType)
 	a.NoError(err)
 	_, err = signer.Trim(60)
 	a.NoError(err)
 	a.Equal(0, len(signer.SignatureAlgorithms))
 
-	signer, err = New(1, 60, 11, crypto.PlaceHolderType)
+	signer, err = New(1, 60, 11, crypto.DilithiumType)
 	a.NoError(err)
 	_, err = signer.Trim(55)
 	a.NoError(err)
@@ -392,7 +392,7 @@ func TestKeySliceAfterSignerTrim(t *testing.T) {
 
 func TestKeyDeletion(t *testing.T) {
 	a := require.New(t)
-	signer, err := New(1, 60, 1, crypto.PlaceHolderType)
+	signer, err := New(1, 60, 1, crypto.DilithiumType)
 	a.NoError(err)
 
 	signer.Trim(50)
@@ -406,7 +406,7 @@ func TestKeyDeletion(t *testing.T) {
 		a.NoError(signer.GetVerifier().Verify(1, i, 1, genHashableForTest(), sig))
 	}
 
-	signer, err = New(1, 60, 11, crypto.PlaceHolderType)
+	signer, err = New(1, 60, 11, crypto.DilithiumType)
 	a.NoError(err)
 
 	signer.Trim(50)
@@ -434,7 +434,7 @@ func makeSig(signer *Signer, sigRound uint64, a *require.Assertions) (crypto.Has
 
 func getSigner(a *require.Assertions) (uint64, uint64, *Signer) {
 	start, end := uint64(50), uint64(100)
-	signer, err := New(start, end, 1, crypto.PlaceHolderType)
+	signer, err := New(start, end, 1, crypto.DilithiumType)
 	a.NoError(err)
 	return start, end, signer
 }
