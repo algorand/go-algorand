@@ -140,8 +140,8 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 		// calculate avg tps
 		endTimeDelta := time.Since(startTime)
 		avgTps := float64(txnSentCount) / endTimeDelta.Seconds()
-		avgTpsSatisfied := avgTps > (0.9 * float64(txnRate))
-		a.Truef(avgTpsSatisfied, "Cannot achieve txn rate of %d", txnRate)
+		avgTpsErrorMessage := fmt.Sprintf("Avg txn rate %f < expected txn rate %f", avgTps, float64(txnRate))
+		a.Greaterf(avgTps, 0.9*float64(txnRate), avgTpsErrorMessage)
 
 		// wait for some time for the logs to get flushed
 		time.Sleep(2 * time.Second)
