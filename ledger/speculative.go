@@ -20,7 +20,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -166,6 +168,16 @@ func (v *validatedBlockAsLFE) Totals(r basics.Round) (ledgercore.AccountTotals, 
 	return v.l.Totals(r)
 }
 
+// A speculativeBlock is a block that we have validated, but have not agreed
+// upon (no continuous chain of certificates).  There may be a certificate
+// associated with a speculativeBlock, if we get a certificate for a speculative
+// block out-of-order with its parent.  In this case, we hang on to the certificate
+// until all of the parents are committed themselves.
+type speculativeBlock struct {
+	lfe  *validatedBlockAsLFE
+	cert *agreement.Certificate
+}
+
 // The speculationTracker tracks speculative blocks that have been proposed
 // over the network but that have not yet been agreed upon (no certificate).
 //
@@ -175,10 +187,10 @@ func (v *validatedBlockAsLFE) Totals(r basics.Round) (ledgercore.AccountTotals, 
 type speculationTracker struct {
 	// blocks contains the set of blocks that we have received in a
 	// proposal but for whose round we have not yet reached consensus.
-	blocks map[bookkeeping.BlockHash]*validatedBlockAsLFE
+	blocks map[bookkeeping.BlockHash]speculativeBlock
 
 	// l is the committed ledger.
-	l ledgerForTracker
+	l *Ledger
 
 	// dbs is l.trackerDB()
 	dbs db.Pair
@@ -190,19 +202,28 @@ type speculationTracker struct {
 var speculativeBlockSchema = []string{
 	`CREATE TABLE IF NOT EXISTS speculative (
 		rnd integer,
-		blkdata blob)`,
+		blkhash blob,
+		blkdata blob,
+		certdata blob,
+		PRIMARY KEY (rnd, blkhash))`,
 }
 
 // addSpeculativeBlock records a new speculative block.
-func (st *speculationTracker) addSpeculativeBlock(vblk ValidatedBlock) error {
-	err := st.addSpeculativeBlockInMem(vblk)
+func (st *speculationTracker) addSpeculativeBlock(vblk ValidatedBlock, cert *agreement.Certificate) error {
+	err := st.addSpeculativeBlockInMem(vblk, cert)
 	if err != nil {
 		return err
 	}
 
+	var certbuf []byte
+	if cert != nil {
+		certbuf = protocol.Encode(cert)
+	}
+
+	blkhash := vblk.blk.Hash()
 	err = st.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec("INSERT INTO speculative (rnd, blkdata) VALUES (?, ?)",
-			vblk.blk.Round(), protocol.Encode(&vblk.blk))
+		_, err := tx.Exec("INSERT INTO speculative (rnd, blkhash, blkdata, certdata) VALUES (?, ?, ?, ?)",
+			vblk.blk.Round(), blkhash[:], protocol.Encode(&vblk.blk), certbuf)
 		return err
 	})
 
@@ -211,7 +232,7 @@ func (st *speculationTracker) addSpeculativeBlock(vblk ValidatedBlock) error {
 
 // addSpeculativeBlockInMem updates the in-memory state with a new speculative
 // block, but does not store the block on-disk.
-func (st *speculationTracker) addSpeculativeBlockInMem(vblk ValidatedBlock) error {
+func (st *speculationTracker) addSpeculativeBlockInMem(vblk ValidatedBlock, cert *agreement.Certificate) error {
 	// The parent of this block must be committed or present in the
 	// speculation tracker.
 	latest := st.l.Latest()
@@ -229,16 +250,24 @@ func (st *speculationTracker) addSpeculativeBlockInMem(vblk ValidatedBlock) erro
 	}
 
 	h := vblk.blk.Hash()
-	st.blocks[h] = lfe
+	st.blocks[h] = speculativeBlock{
+		lfe:  lfe,
+		cert: cert,
+	}
 	return nil
+}
+
+type blkcert struct {
+	blk  bookkeeping.Block
+	cert *agreement.Certificate
 }
 
 func (st *speculationTracker) loadFromDisk(l *Ledger) error {
 	st.l = l
 	st.dbs = st.l.trackerDB()
-	st.blocks = make(map[bookkeeping.BlockHash]*validatedBlockAsLFE)
+	st.blocks = make(map[bookkeeping.BlockHash]speculativeBlock)
 
-	var blocks []bookkeeping.Block
+	var blocks []blkcert
 
 	err := st.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		for _, tableCreate := range speculativeBlockSchema {
@@ -248,26 +277,35 @@ func (st *speculationTracker) loadFromDisk(l *Ledger) error {
 			}
 		}
 
-		rows, err := tx.Query("SELECT blkdata FROM speculative ORDER BY rnd ASC")
+		rows, err := tx.Query("SELECT blkdata, certdata FROM speculative ORDER BY rnd ASC")
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 
 		for rows.Next() {
-			var buf []byte
-			err = rows.Scan(&buf)
+			var blkbuf []byte
+			var certbuf []byte
+			err = rows.Scan(&blkbuf, &certbuf)
 			if err != nil {
 				return err
 			}
 
-			var blk bookkeeping.Block
-			err = protocol.Decode(buf, &blk)
+			var entry blkcert
+			err = protocol.Decode(blkbuf, &entry.blk)
 			if err != nil {
 				return err
 			}
 
-			blocks = append(blocks, blk)
+			if len(certbuf) > 0 {
+				entry.cert = new(agreement.Certificate)
+				err = protocol.Decode(certbuf, entry.cert)
+				if err != nil {
+					return err
+				}
+			}
+
+			blocks = append(blocks, entry)
 		}
 
 		return nil
@@ -276,7 +314,8 @@ func (st *speculationTracker) loadFromDisk(l *Ledger) error {
 		return err
 	}
 
-	for _, blk := range blocks {
+	for _, entry := range blocks {
+		blk := &entry.blk
 		var parentLedger ledgerForEvaluator
 		if blk.Round() == l.Latest()+1 {
 			parentLedger = l
@@ -287,20 +326,20 @@ func (st *speculationTracker) loadFromDisk(l *Ledger) error {
 				l.trackerLog().Warnf("speculationTracker.loadFromDisk: cannot find parent %v for block %v round %d, latest %d", parentHash, blk.Hash(), blk.Round(), l.Latest())
 				continue
 			}
-			parentLedger = parent
+			parentLedger = parent.lfe
 		}
 
-		state, err := l.trackerEvalVerified(blk, parentLedger)
+		state, err := l.trackerEvalVerified(*blk, parentLedger)
 		if err != nil {
 			l.trackerLog().Warnf("speculationTracker.loadFromDisk: block %d round %d: %v", blk.Hash(), blk.Round(), err)
 			continue
 		}
 
 		vblk := ValidatedBlock{
-			blk:   blk,
+			blk:   *blk,
 			state: state,
 		}
-		err = st.addSpeculativeBlockInMem(vblk)
+		err = st.addSpeculativeBlockInMem(vblk, entry.cert)
 		if err != nil {
 			l.trackerLog().Warnf("speculationTracker.loadFromDisk: block %d round %d: addSpeculativeBlockInMem: %v", blk.Hash(), blk.Round(), err)
 		}
@@ -310,23 +349,14 @@ func (st *speculationTracker) loadFromDisk(l *Ledger) error {
 }
 
 func (st *speculationTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-	// First, check if we have an existing speculative entry for this block.
-	// If so, we need to remember its parent ledger so that we can update its
-	// children to have the same parent ledger.
-	var parentLedger ledgerForEvaluator
-	specblk, ok := st.blocks[blk.Hash()]
-	if ok {
-		parentLedger = specblk.l
-	}
-
 	for h, specblk := range st.blocks {
-		if specblk.vb.blk.Round() < blk.Round() {
+		if specblk.lfe.vb.blk.Round() < blk.Round() {
 			// Older blocks hanging around for whatever reason.
 			// Shouldn't happen, but clean them up just in case.
 			delete(st.blocks, h)
 		}
 
-		if specblk.vb.blk.Round() == blk.Round() {
+		if specblk.lfe.vb.blk.Round() == blk.Round() {
 			// Block for the same round.  Clear it out.
 			delete(st.blocks, h)
 
@@ -340,12 +370,20 @@ func (st *speculationTracker) newBlock(blk bookkeeping.Block, delta ledgercore.S
 			}
 		}
 
-		if specblk.vb.blk.Round() == blk.Round()+1 {
+		if specblk.lfe.vb.blk.Round() == blk.Round()+1 &&
+			specblk.lfe.vb.blk.Branch == blk.Hash() {
+
 			// If this is a child of the now-committed block,
 			// update its parent ledger pointer to avoid chains
 			// of validatedBlockAsLFE's.
-			if specblk.vb.blk.Branch == blk.Hash() && parentLedger != nil {
-				specblk.resetParent(parentLedger)
+			specblk.lfe.resetParent(st.l)
+
+			// If this child has a certificate associated with it,
+			// add the block to the ledger.  This will in turn cause
+			// the ledger to call our newBlock() again, which will
+			// commit any subsequent blocks that already have certs.
+			if specblk.cert != nil {
+				st.l.EnsureValidatedBlock(specblk.lfe.vb, *specblk.cert)
 			}
 		}
 	}
@@ -361,7 +399,7 @@ func (st *speculationTracker) newBlock(blk bookkeeping.Block, delta ledgercore.S
 
 func (st *speculationTracker) invalidateChildren(branch bookkeeping.BlockHash) {
 	for h, specblk := range st.blocks {
-		if specblk.vb.blk.Branch == branch {
+		if specblk.lfe.vb.blk.Branch == branch {
 			delete(st.blocks, h)
 			st.invalidateChildren(h)
 		}
@@ -405,9 +443,9 @@ func (sl *SpeculativeLedger) LFE(r basics.Round, leaf bookkeeping.BlockHash) (le
 	sl.trackerMu.Lock()
 	defer sl.trackerMu.Unlock()
 
-	lfe, ok := sl.speculate.blocks[leaf]
+	entry, ok := sl.speculate.blocks[leaf]
 	if ok {
-		return lfe, nil
+		return entry.lfe, nil
 	}
 
 	if r <= sl.Latest() {
@@ -456,9 +494,9 @@ func (sl *SpeculativeLedger) Wait(r basics.Round, leaf bookkeeping.BlockHash) ch
 	// blocks are currently written to durable storage synchronously, so
 	// no waiting is needed.
 	sl.trackerMu.Lock()
-	lfe, ok := sl.speculate.blocks[leaf]
+	entry, ok := sl.speculate.blocks[leaf]
 	sl.trackerMu.Unlock()
-	if ok && r <= lfe.vb.blk.Round() {
+	if ok && r <= entry.lfe.vb.blk.Round() {
 		closed := make(chan struct{})
 		close(closed)
 		return closed
@@ -548,7 +586,55 @@ func (sl *SpeculativeLedger) ConsensusVersion(r basics.Round, leaf bookkeeping.B
 func (sl *SpeculativeLedger) AddSpeculativeBlock(vblk ValidatedBlock) error {
 	sl.trackerMu.Lock()
 	defer sl.trackerMu.Unlock()
-	return sl.speculate.addSpeculativeBlock(vblk)
+	return sl.speculate.addSpeculativeBlock(vblk, nil)
+}
+
+// AddBlock adds a certificate together with a block to the ledger.
+func (sl *SpeculativeLedger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
+	vb, err := sl.Validate(context.Background(), blk.Branch, blk)
+	if err != nil {
+		return err
+	}
+
+	return sl.AddValidatedBlock(*vb, cert)
+}
+
+// AddValidatedBlock adds a certificate together with a block to the ledger.
+func (sl *SpeculativeLedger) AddValidatedBlock(vb ValidatedBlock, cert agreement.Certificate) error {
+	sl.trackerMu.Lock()
+
+	// If this block is for the next round expected by the ledger,
+	// add it directly to the underlying ledger.  That avoids writing
+	// the cert to disk twice.  The tracker lock does not guard against
+	// concurrent insertion of blocks, but the latest round returned
+	// by the ledger is monotonically increasing, so if it increments
+	// concurrently with us, the block insertion should error out anyway.
+	if vb.blk.Round() == sl.Latest()+1 {
+		sl.trackerMu.Unlock()
+		return sl.Ledger.AddValidatedBlock(vb, cert)
+	}
+
+	// This is a speculative block.  We are holding the trackerMu, which
+	// will serialize us with respect to calls to newBlock().  We rely
+	// on that so that newBlock() will insert this certificate into the
+	// ledger, if/when this block stops being speculative.
+	defer sl.trackerMu.Unlock()
+
+	// This block might be not even in our set of known speculative blocks
+	// yet, so add it there if need be.  addSpeculativeBlock() takes a cert,
+	// so nothing left for us to do if we invoke it.
+	entry, ok := sl.speculate.blocks[vb.blk.Hash()]
+	if !ok {
+		return sl.speculate.addSpeculativeBlock(vb, &cert)
+	}
+
+	entry.cert = &cert
+	blkhash := entry.lfe.vb.blk.Hash()
+	return sl.speculate.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.Exec("UPDATE speculative SET certdata=? WHERE rnd=? AND blkhash=?",
+			protocol.Encode(&cert), entry.lfe.vb.blk.Round(), blkhash[:])
+		return err
+	})
 }
 
 // Validate validates whether a block is valid, on a particular leaf branch.
@@ -584,4 +670,63 @@ func (sl *SpeculativeLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetH
 	}
 
 	return startEvaluator(lfe, hdr, paysetHint, true, true)
+}
+
+// EnsureBlock ensures that the block, and associated certificate c, are
+// written to the speculative ledger, or that some other block for the
+// same round is written to the ledger.
+// This function can be called concurrently.
+func (sl *SpeculativeLedger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) {
+	round := block.Round()
+	protocolErrorLogged := false
+
+	// As a fallback, bail out if the base (non-speculative) ledger has a
+	// block for the same round number.
+	for sl.Latest() < round {
+		err := sl.AddBlock(*block, c)
+		if err == nil {
+			break
+		}
+
+		switch err.(type) {
+		case protocol.Error:
+			if !protocolErrorLogged {
+				logging.Base().Errorf("unrecoverable protocol error detected at block %d: %v", round, err)
+				protocolErrorLogged = true
+			}
+		case ledgercore.BlockInLedgerError:
+			logging.Base().Debugf("could not write block %d to the ledger: %v", round, err)
+			return // this error implies that l.Latest() >= round
+		default:
+			logging.Base().Errorf("could not write block %d to the speculative ledger: %v", round, err)
+		}
+
+		// If there was an error add a short delay before the next attempt.
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// EnsureValidatedBlock ensures that the block, and associated certificate c, are
+// written to the speculative ledger, or that some other block for the same round is
+// written to the ledger.
+func (sl *SpeculativeLedger) EnsureValidatedBlock(vb *ValidatedBlock, c agreement.Certificate) {
+	round := vb.Block().Round()
+
+	// As a fallback, bail out if the base (non-speculative) ledger has a
+	// block for the same round number.
+	for sl.Latest() < round {
+		err := sl.AddValidatedBlock(*vb, c)
+		if err == nil {
+			break
+		}
+
+		logfn := logging.Base().Errorf
+
+		switch err.(type) {
+		case ledgercore.BlockInLedgerError:
+			logfn = logging.Base().Debugf
+		}
+
+		logfn("could not write block %d to the speculative ledger: %v", round, err)
+	}
 }
