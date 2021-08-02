@@ -145,7 +145,7 @@ func TestPseudonode(t *testing.T) {
 	sLogger := serviceLogger{logging.NewLogger()}
 	sLogger.SetLevel(logging.Warn)
 
-	keyManager := simpleKeyManager(accounts)
+	keyManager := SimpleKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
 		factory:      testBlockFactory{Owner: 0},
 		validator:    testBlockValidator{},
@@ -390,6 +390,10 @@ func (k *KeyManagerProxy) VotingKeys(votingRound, balanceRound basics.Round) []a
 	return k.target(votingRound, balanceRound)
 }
 
+func (k *KeyManagerProxy) Record(account basics.Address, round basics.Round, action account.ParticipationAction) error {
+	return nil
+}
+
 func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -403,7 +407,7 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	sLogger := serviceLogger{logging.NewLogger()}
 	sLogger.SetLevel(logging.Warn)
 
-	keyManager := simpleKeyManager(accounts)
+	keyManager := SimpleKeyManager(accounts)
 	pb := makePseudonode(pseudonodeParams{
 		factory:      testBlockFactory{Owner: 0},
 		validator:    testBlockValidator{},

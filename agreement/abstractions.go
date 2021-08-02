@@ -231,6 +231,7 @@ type KeyManager interface {
 	VotingKeys(votingRound, keysRound basics.Round) []account.Participation
 
 	// Record indicates that the given participation action has been taken.
+	// This function is also part of account.ParticipationRegistry.
 	Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) error
 }
 
