@@ -43,6 +43,7 @@ jobs:
           cd cmd/partitiontest_linter/
           go build -buildmode=plugin -trimpath plugin/plugin.go
           ls plugin.so
+          pwd
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2
         with:
@@ -52,4 +53,4 @@ jobs:
           tool_name: "Lint Warnings"
           level: "warning"
           fail_on_error: false
-          go_version: "1.16.5"
+          go_version: "1.15.14"
