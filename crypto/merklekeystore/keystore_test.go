@@ -187,7 +187,9 @@ func TestSignatureStructure(t *testing.T) {
 	a.Equal(uint64(1), pos)
 
 	key := signer.SignatureAlgorithms[pos]
-	a.Equal(sig.VerifyingKey, key.GetSigner().GetVerifyingKey())
+	signingkey, err := key.GetSigner()
+	a.NoError(err)
+	a.Equal(sig.VerifyingKey, signingkey.GetVerifyingKey())
 
 	proof, err := signer.Tree.Prove([]uint64{1})
 	a.NoError(err)
@@ -300,7 +302,9 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 
 	// taking signature and changing the key to match different round
 	sig2 := sig
-	sig2.VerifyingKey = signer.SignatureAlgorithms[0].GetSigner().GetVerifyingKey()
+	signingKey, err := signer.SignatureAlgorithms[0].GetSigner()
+	a.NoError(err)
+	sig2.VerifyingKey = signingKey.GetVerifyingKey()
 	a.Error(signer.GetVerifier().Verify(start, start+1, 1, hashable, sig2))
 }
 
