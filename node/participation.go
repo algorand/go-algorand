@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2021 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package node
 
 import (
@@ -7,32 +23,36 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+// ParticipationID identifies a particular set of participation keys.
 type ParticipationID crypto.Digest
 
+// ParticipationRecord contains all metadata relating to a set of participation keys.
 type ParticipationRecord struct {
 	ParticipationID ParticipationID
-	Account basics.Address
-	FirstValid basics.Round
-	LastValid basics.Round
-	KeyDilution uint64
+	Account         basics.Address
+	FirstValid      basics.Round
+	LastValid       basics.Round
+	KeyDilution     uint64
 
-	LastVote basics.Round
-	LastBlockProposal basics.Round
+	LastVote               basics.Round
+	LastBlockProposal      basics.Round
 	LastCompactCertificate basics.Round
-	EffectiveFirst basics.Round
-	EffectiveLast basics.Round
+	EffectiveFirst         basics.Round
+	EffectiveLast          basics.Round
 
 	// VRFSecrets
 	// OneTimeSignatureSecrets
 }
 
+// ParticipationIDNotFoundErr is used when attempting to update a set of keys which do not exist.
 var ParticipationIDNotFoundErr error
 
 func init() {
 	ParticipationIDNotFoundErr = fmt.Errorf("the participation ID was not found")
 }
 
-type ParticipationStorage interface {
+// ParticipationRegistry contain all functions for interacting with the Participation Registry.
+type ParticipationRegistry interface {
 	// Insert adds a record to storage and computes the ParticipationID
 	Insert(record ParticipationRecord) (ParticipationID, error)
 
@@ -44,16 +64,17 @@ type ParticipationStorage interface {
 	Register(id ParticipationID, on basics.Round) error
 
 	// RecordVote sets the LastVote field for the ParticipationID.
-	RecordVote(id ParticipationID, round basics.Round) error
+	RecordVote(account basics.Address, round basics.Round) error
 
 	// RecordBlockProposal sets the LastBlockProposal field for the ParticipationID.
-	RecordBlockProposal(participationID ParticipationID, round basics.Round) error
+	RecordBlockProposal(account basics.Address, round basics.Round) error
 
 	// RecordCompactCertificate sets the LastCompactCertificate field for the ParticipationID.
-	RecordCompactCertificate(participationID ParticipationID, round basics.Round) error
+	RecordCompactCertificate(account basics.Address, round basics.Round) error
 }
 
-func MakeParticipationStorage(db db.Accessor) ParticipationStorage {
+// MakeParticipationRegistry creates a db.Accessor backed ParticipationRegistry.
+func MakeParticipationRegistry(db db.Accessor) ParticipationRegistry {
 	return &participationDB{
 		store: db,
 	}
@@ -75,14 +96,14 @@ func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	return nil
 }
 
-func (db *participationDB) RecordVote(id ParticipationID, round basics.Round) error {
+func (db *participationDB) RecordVote(account basics.Address, round basics.Round) error {
 	return nil
 }
 
-func (db *participationDB) RecordBlockProposal(participationID ParticipationID, round basics.Round) error {
+func (db *participationDB) RecordBlockProposal(account basics.Address, round basics.Round) error {
 	return nil
 }
 
-func (db *participationDB) RecordCompactCertificate(participationID ParticipationID, round basics.Round) error {
+func (db *participationDB) RecordCompactCertificate(account basics.Address, round basics.Round) error {
 	return nil
 }

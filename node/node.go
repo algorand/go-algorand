@@ -108,6 +108,8 @@ type AlgorandFullNode struct {
 
 	indexer *indexer.Indexer
 
+	participationRegistry ParticipationRegistry
+
 	rootDir     string
 	genesisID   string
 	genesisHash crypto.Digest
@@ -267,8 +269,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
-	// TODO: where to put the participation metrics - where are they needed?
-	_, err = ensureParticipationDB()
+	node.participationRegistry, err = ensureParticipationDB()
 	if err != nil {
 		log.Errorf("Cannot get participation metrics: %v", err)
 		return nil, err
@@ -750,12 +751,10 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 	return bookkeeping.SignedTxnGroupsFlatten(node.transactionPool.PendingTxGroups()), nil
 }
 
-
 // ensureParticipationDB opens or creates a participation DB.
-func ensureParticipationDB() (interface{}, error) {
-	return nil, nil
+func ensureParticipationDB() (ParticipationRegistry, error) {
+	return MakeParticipationRegistry(db.Accessor{}), nil
 }
-
 
 // Reload participation keys from disk periodically
 func (node *AlgorandFullNode) checkForParticipationKeys() {
@@ -1170,4 +1169,19 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		}
 	}
 	return participations
+}
+
+// RecordVote sets the LastVote field for the ParticipationID.
+func (node *AlgorandFullNode) RecordVote(account basics.Address, round basics.Round) error {
+	return node.participationRegistry.RecordVote(account, round)
+}
+
+// RecordBlockProposal sets the LastBlockProposal field for the ParticipationID.
+func (node *AlgorandFullNode) RecordBlockProposal(account basics.Address, round basics.Round) error {
+	return node.participationRegistry.RecordBlockProposal(account, round)
+}
+
+// RecordCompactCertificate sets the LastCompactCertificate field for the ParticipationID.
+func (node *AlgorandFullNode) RecordCompactCertificate(account basics.Address, round basics.Round) error {
+	return node.participationRegistry.RecordCompactCertificate(account, round)
 }

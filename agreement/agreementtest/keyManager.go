@@ -41,3 +41,20 @@ func (m SimpleKeyManager) DeleteOldKeys(r basics.Round) {
 	// acc.DeleteOldKeys(r)
 	// }
 }
+
+// TODO: Test that these are called?
+
+// RecordVote implements KeyManager.RecordVote.
+func (m SimpleKeyManager) RecordVote(account basics.Address, round basics.Round) error {
+	return nil
+}
+
+// RecordBlockProposal implements KeyManager.RecordBlockProposal.
+func (m SimpleKeyManager) RecordBlockProposal(account basics.Address, round basics.Round) error {
+	return nil
+}
+
+// RecordCompactCertificate implements KeyManager.RecordCompactCertificate.
+func (m SimpleKeyManager) RecordCompactCertificate(account basics.Address, round basics.Round) error {
+	return nil
+}
