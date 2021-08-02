@@ -19,7 +19,6 @@ package transactions
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -44,7 +43,7 @@ import (
 // this test checks that the txsync outgoing message rate
 // varies according to the transaction rate
 func TestMessageRateChangesWithTxnRate(t *testing.T) {
-	txnRates := []uint{50, 300, 800, 1300}
+	txnRates := []uint{50, 300, 800, 1200}
 	if testing.Short() {
 		txnRates = []uint{50, 300}
 	}
@@ -138,6 +137,12 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 			throttleTransactionRate(startTime, txnRate, txnSentCount)
 		}
 
+		// calculate avg tps
+		endTimeDelta := time.Since(startTime)
+		avgTps := float64(txnSentCount) / endTimeDelta.Seconds()
+		avgTpsSatisfied := avgTps > (0.9 * float64(txnRate))
+		a.Truef(avgTpsSatisfied, "Cannot achieve txn rate of %d", txnRate)
+
 		// wait for some time for the logs to get flushed
 		time.Sleep(2 * time.Second)
 
@@ -148,6 +153,7 @@ func testMessageRateChangesWithTxnRate(t *testing.T, templatePath string, txnRat
 		case err := <-errChan:
 			a.Error(err)
 		case msgRate := <-msgRateChan:
+			t.Logf("Message rate: %f Previous Message Rate: %f Expected Transaction rate: %f Actual Transaction rate: %f", msgRate, prevMsgRate, float64(txnRate), avgTps)
 			aErrorMessage := fmt.Sprintf("TxSync message rate not monotonic for txn rate: %d", txnRate)
 			a.GreaterOrEqual(msgRate, prevMsgRate, aErrorMessage)
 			prevMsgRate = msgRate
@@ -201,21 +207,21 @@ func parseLog(ctx context.Context, logPath string, filterAddress string, errChan
 		line := scanner.Text()
 		// look for txnsync messages sent to `filterAddress`
 		if strings.Contains(line, "Outgoing Txsync") && strings.Contains(line, filterAddress) {
-			var logEvent map[string]interface{}
-			json.Unmarshal([]byte(line), &logEvent)
-			eventTime := fmt.Sprintf("%v", logEvent["time"])
-			message := fmt.Sprintf("%v", logEvent["msg"])
+			// var logEvent map[string]interface{}
+			// json.Unmarshal([]byte(line), &logEvent)
+			// eventTime := fmt.Sprintf("%v", logEvent["time"])
+			// message := fmt.Sprintf("%v", logEvent["msg"])
 			// skip lines containing empty bloom filter
-			if strings.Contains(message, "bloom 0") || strings.Contains(message, "transacations 0") {
-				continue
-			}
+			// if strings.Contains(message, "bloom 0") || strings.Contains(message, "transacations 0") {
+			// 	continue
+			// }
 			// record the timestamps of txnsync messages
-			lastTimestamp, err = time.Parse(time.RFC3339, eventTime)
+			// lastTimestamp, err = time.Parse(time.RFC3339, eventTime)
 			// lastMessage = message
-			if err != nil {
-				errChan <- err
-				return
-			}
+			// if err != nil {
+			// 	errChan <- err
+			// 	return
+			// }
 			messageCount++
 		}
 	}
