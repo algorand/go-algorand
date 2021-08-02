@@ -222,7 +222,7 @@ func errAlreadyStorage(addr basics.Address, aidx basics.AppIndex, global bool) e
 }
 
 // Allocate creates kv storage for a given {addr, aidx, global}. It is called on app creation (global) or opting in (local)
-func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
+func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	// Check that account is not already opted in
 	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
@@ -241,11 +241,21 @@ func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, glo
 	lsd.action = allocAction
 	lsd.maxCounts = &space
 
+	if global {
+		cb.mods.Creatables[basics.CreatableIndex(aidx)] = ledgercore.ModifiedCreatable{
+			Ctype:   basics.AppCreatable,
+			Creator: addr,
+			Created: true,
+		}
+	}
+
+	cb.trackCreatable(basics.CreatableIndex(aidx))
+
 	return nil
 }
 
 // Deallocate clears storage for {addr, aidx, global}. It happens on app deletion (global) or closing out (local)
-func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
+func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex, global bool) error {
 	// Check that account has allocated storage
 	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
@@ -265,6 +275,15 @@ func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, g
 	lsd.counts = &basics.StateSchema{}
 	lsd.maxCounts = &basics.StateSchema{}
 	lsd.kvCow = make(stateDelta)
+
+	if global {
+		cb.mods.Creatables[basics.CreatableIndex(aidx)] = ledgercore.ModifiedCreatable{
+			Ctype:   basics.AppCreatable,
+			Creator: addr,
+			Created: false,
+		}
+	}
+
 	return nil
 }
 
@@ -619,7 +638,7 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 			delete(owned, aapp.aidx)
 		case allocAction, remainAllocAction:
 			// note: these should always exist because they were
-			// at least preceded by a call to PutWithCreatable
+			// at least preceded by a call to Put()
 			params, ok := owned[aapp.aidx]
 			if !ok {
 				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)

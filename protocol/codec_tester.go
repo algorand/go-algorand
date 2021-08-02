@@ -24,8 +24,11 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 
 	"github.com/algorand/go-deadlock"
 
@@ -93,6 +96,7 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 	// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
 	gopath := os.Getenv("GOPATH")
 	const repositoryRoot = "go-algorand/"
+	const thisFile = "protocol/codec_tester.go"
 	packageFilesPath := path.Join(gopath, "src", dataType.PkgPath())
 
 	if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
@@ -104,7 +108,12 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 		if cwdPaths := strings.SplitAfter(cwd, repositoryRoot); len(cwdPaths) == 2 {
 			cwd = cwdPaths[0]
 		} else {
-			return false
+			// try to assemble the project directory based on the current stack frame
+			_, file, _, ok := runtime.Caller(0)
+			if !ok {
+				return false
+			}
+			cwd = strings.TrimSuffix(file, thisFile)
 		}
 
 		relPkdPath := strings.SplitAfter(dataType.PkgPath(), repositoryRoot)
@@ -353,6 +362,7 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 // RunEncodingTest runs several iterations of encoding/decoding
 // consistency testing of object type specified by template.
 func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
+	partitiontest.PartitionTest(t)
 	for i := 0; i < 1000; i++ {
 		err := EncodingTest(template)
 		if err == errSkipRawMsgpTesting {

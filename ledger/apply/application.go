@@ -121,21 +121,14 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	totalExtraPages += ac.ExtraProgramPages
 	record.TotalExtraAppPages = totalExtraPages
 
-	// Tell the cow what app we created
-	created := &basics.CreatableLocator{
-		Creator: creator,
-		Type:    basics.AppCreatable,
-		Index:   basics.CreatableIndex(appIdx),
-	}
-
 	// Write back to the creator's balance record
-	err = balances.PutWithCreatable(creator, record, created, nil)
+	err = balances.Put(creator, record)
 	if err != nil {
 		return 0, err
 	}
 
 	// Allocate global storage
-	err = balances.Allocate(creator, appIdx, true, ac.GlobalStateSchema)
+	err = balances.AllocateApp(creator, appIdx, true, ac.GlobalStateSchema)
 	if err != nil {
 		return 0, err
 	}
@@ -169,19 +162,13 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		record.TotalExtraAppPages = totalExtraPages
 	}
 
-	// Tell the cow what app we deleted
-	deleted := &basics.CreatableLocator{
-		Creator: creator,
-		Type:    basics.AppCreatable,
-		Index:   basics.CreatableIndex(appIdx),
-	}
-	err = balances.PutWithCreatable(creator, record, nil, deleted)
+	err = balances.Put(creator, record)
 	if err != nil {
 		return err
 	}
 
 	// Deallocate global storage
-	err = balances.Deallocate(creator, appIdx, true)
+	err = balances.DeallocateApp(creator, appIdx, true)
 	if err != nil {
 		return err
 	}
@@ -199,6 +186,16 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	// Fill in the new programs
 	record.AppParams = cloneAppParams(record.AppParams)
 	params := record.AppParams[appIdx]
+	proto := balances.ConsensusParams()
+	// when proto.EnableExtraPageOnAppUpdate is false, WellFormed rejects all updates with a multiple-page program
+	if proto.EnableExtraPagesOnAppUpdate {
+		allowed := int(1+params.ExtraProgramPages) * proto.MaxAppProgramLen
+		actual := len(ac.ApprovalProgram) + len(ac.ClearStateProgram)
+		if actual > allowed {
+			return fmt.Errorf("updateApplication app programs too long, %d. max total len %d bytes", actual, allowed)
+		}
+	}
+
 	params.ApprovalProgram = ac.ApprovalProgram
 	params.ClearStateProgram = ac.ClearStateProgram
 
@@ -243,7 +240,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	}
 
 	// Allocate local storage
-	err = balances.Allocate(sender, appIdx, false, params.LocalStateSchema)
+	err = balances.AllocateApp(sender, appIdx, false, params.LocalStateSchema)
 	if err != nil {
 		return err
 	}
@@ -281,7 +278,7 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	}
 
 	// Deallocate local storage
-	err = balances.Deallocate(sender, appIdx, false)
+	err = balances.DeallocateApp(sender, appIdx, false)
 	if err != nil {
 		return err
 	}
