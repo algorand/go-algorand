@@ -18,9 +18,11 @@ package pingpong
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -28,48 +30,83 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
-func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, cfg PpConfig, err error) {
-	accounts = make(map[string]uint64)
+func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*pingPongAccount, cfg PpConfig, err error) {
+	accounts = make(map[string]*pingPongAccount)
 	cfg = initCfg
 
-	wallet, err := ac.GetUnencryptedWalletHandle()
+	genID, err2 := ac.GenesisID()
+	if err2 != nil {
+		err = err2
+		return
+	}
+	genesisDir := filepath.Join(ac.DataDir(), genID)
+	files, err2 := ioutil.ReadDir(genesisDir)
+	if err2 != nil {
+		err = err2
+		return
+	}
 
 	var srcAcctPresent bool
 	var richestAccount string
 	var richestBalance uint64
 
-	addresses, err := ac.ListAddresses(wallet)
+	for _, info := range files {
+		var handle db.Accessor
 
-	if err != nil {
-		return nil, PpConfig{}, err
-	}
+		// If it can't be a participation key database, skip it
+		if !config.IsRootKeyFilename(info.Name()) {
+			continue
+		}
 
-	// find either srcAccount or the richest account
-	for _, addr := range addresses {
-		if addr == cfg.SrcAccount {
+		// Fetch a handle to this database
+		handle, err = db.MakeErasableAccessor(filepath.Join(genesisDir, info.Name()))
+		if err != nil {
+			// Couldn't open it, skip it
+			continue
+		}
+
+		// Fetch an account.Participation from the database
+		root, err := algodAcct.RestoreRoot(handle)
+		handle.Close()
+		if err != nil {
+			// Couldn't read it, skip it
+			continue
+		}
+
+		publicKey := root.Secrets().SignatureVerifier
+		accountAddress := basics.Address(publicKey)
+
+		if accountAddress.String() == cfg.SrcAccount {
 			srcAcctPresent = true
 		}
 
-		amount, err := ac.GetBalance(addr)
+		amt, err := ac.GetBalance(accountAddress.String())
 		if err != nil {
 			return nil, PpConfig{}, err
 		}
 
-		amt := amount
 		if !srcAcctPresent && amt > richestBalance {
-			richestAccount = addr
+			richestAccount = accountAddress.String()
 			richestBalance = amt
 		}
-		accounts[addr] = amt
+
 		if !initCfg.Quiet {
-			fmt.Printf("Found local account: %s -> %v\n", addr, amt)
+			fmt.Printf("Found local account: %s -> %v\n", accountAddress.String(), amt)
+		}
+
+		accounts[accountAddress.String()] = &pingPongAccount{
+			balance: amt,
+			sk:      root.Secrets(),
+			pk:      accountAddress,
 		}
 	}
 
@@ -104,7 +141,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 			if len(accounts) != int(cfg.NumPartAccounts+1) {
 				fmt.Printf("Not enough accounts - creating %d more\n", int(cfg.NumPartAccounts+1)-len(accounts))
 			}
-			accounts, err = generateAccounts(ac, accounts, cfg.NumPartAccounts, wallet)
+			accounts, err = generateAccounts(ac, accounts, cfg.NumPartAccounts)
 			if err != nil {
 				return
 			}
@@ -129,7 +166,7 @@ func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64
 // Step 1) Create X assets for each of the participant accounts
 // Step 2) For each participant account, opt-in to assets of all other participant accounts
 // Step 3) Evenly distribute the assets across all participant accounts
-func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client libgoal.Client) (resultAssetMaps map[uint64]v1.AssetParams, optIns map[uint64][]string, err error) {
+func (pps *WorkerState) prepareAssets(assetAccounts map[string]*pingPongAccount, client libgoal.Client) (resultAssetMaps map[uint64]v1.AssetParams, optIns map[uint64][]string, err error) {
 	accounts := assetAccounts
 	cfg := pps.cfg
 	proto, err := getProto(client)
@@ -354,14 +391,14 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client li
 				fmt.Printf("Distributing assets from %v to %v \n", creator, addr)
 			}
 
-			tx, sendErr := pps.constructTxn(creator, addr, cfg.MaxFee, assetAmt, k, client)
+			tx, signer, sendErr := pps.constructTxn(creator, addr, cfg.MaxFee, assetAmt, k, client)
 			if sendErr != nil {
 				fmt.Printf("Cannot transfer asset %v from account %v\n", k, creator)
 				err = sendErr
 				return
 			}
 
-			_, err = signAndBroadcastTransaction(accounts, creator, tx, client, cfg)
+			_, err = signAndBroadcastTransaction(accounts, signer, tx, client, cfg)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
 				return
@@ -408,9 +445,9 @@ func (pps *WorkerState) prepareAssets(assetAccounts map[string]uint64, client li
 	return
 }
 
-func signAndBroadcastTransaction(accounts map[string]uint64, sender string, tx transactions.Transaction, client libgoal.Client, cfg PpConfig) (txID string, err error) {
+func signAndBroadcastTransaction(accounts map[string]*pingPongAccount, sender string, tx transactions.Transaction, client libgoal.Client, cfg PpConfig) (txID string, err error) {
 	var signedTx transactions.SignedTxn
-	signedTx, err = signTxn(sender, tx, client, cfg)
+	signedTx, err = signTxn(sender, tx, accounts, cfg)
 	if err != nil {
 		fmt.Printf("Cannot sign trx %+v with account %v\nerror %v\n", tx, sender, err)
 		return
@@ -423,7 +460,7 @@ func signAndBroadcastTransaction(accounts map[string]uint64, sender string, tx t
 	if !cfg.Quiet {
 		fmt.Printf("Broadcast transaction %v\n", txID)
 	}
-	accounts[sender] -= tx.Fee.Raw
+	accounts[sender].balance -= tx.Fee.Raw
 
 	return
 }
@@ -585,7 +622,7 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 	return ops.Program, progAsm
 }
 
-func sendAsGroup(txgroup []transactions.Transaction, client libgoal.Client, h []byte) (err error) {
+func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client libgoal.Client, senders []string) (err error) {
 	if len(txgroup) == 0 {
 		err = fmt.Errorf("sendAsGroup: empty group")
 		return
@@ -596,9 +633,15 @@ func sendAsGroup(txgroup []transactions.Transaction, client libgoal.Client, h []
 		return
 	}
 	var stxgroup []transactions.SignedTxn
-	for _, txn := range txgroup {
+	for i, txn := range txgroup {
 		txn.Group = gid
-		signedTxn, signErr := client.SignTransactionWithWallet(h, nil, txn)
+		//signedTxn, signErr := client.SignTransactionWithWallet(h, nil, txn)
+		signedTxn, signErr := signTxn(senders[i], txn, pps.accounts, pps.cfg)
+		if err != nil {
+			fmt.Printf("Cannot sign trx %+v with account %v\nerror %v\n", txn, senders[i], err)
+			return
+		}
+
 		if signErr != nil {
 			fmt.Printf("Cannot sign app creation txn\n")
 			err = signErr
@@ -635,7 +678,7 @@ func getProto(client libgoal.Client) (config.ConsensusParams, error) {
 	return *proto, nil
 }
 
-func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, optIns map[uint64][]string, err error) {
+func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, optIns map[uint64][]string, err error) {
 	proto, err := getProto(client)
 	if err != nil {
 		return
@@ -686,13 +729,6 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 		}
 	}
 
-	// Get wallet handle token
-	var h []byte
-	h, err = client.GetUnencryptedWalletHandle()
-	if err != nil {
-		return
-	}
-
 	// create apps
 	for idx, appAccount := range appAccounts {
 		begin := idx * appsPerAcct
@@ -701,6 +737,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 			end = toCreate
 		}
 		var txgroup []transactions.Transaction
+		var senders []string
 		for i := begin; i < end; i++ {
 			var tx transactions.Transaction
 
@@ -730,10 +767,11 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 			tx.Note = note[:]
 
 			txgroup = append(txgroup, tx)
-			accounts[appAccount.Address] -= tx.Fee.Raw
+			accounts[appAccount.Address].balance -= tx.Fee.Raw
+			senders = append(senders, appAccount.Address)
 		}
 
-		err = sendAsGroup(txgroup, client, h)
+		err = pps.sendAsGroup(txgroup, client, senders)
 		if err != nil {
 			return
 		}
@@ -776,6 +814,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 		optIns = make(map[uint64][]string)
 		for addr := range accounts {
 			var txgroup []transactions.Transaction
+			var senders []string
 			permAppIndices := rand.Perm(len(aidxs))
 			for i := uint32(0); i < cfg.NumAppOptIn; i++ {
 				j := permAppIndices[i]
@@ -801,8 +840,9 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 				optIns[aidx] = append(optIns[aidx], addr)
 
 				txgroup = append(txgroup, tx)
+				senders = append(senders, addr)
 				if len(txgroup) == groupSize {
-					err = sendAsGroup(txgroup, client, h)
+					err = pps.sendAsGroup(txgroup, client, senders)
 					if err != nil {
 						return
 					}
@@ -811,7 +851,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 			}
 			// broadcast leftovers
 			if len(txgroup) > 0 {
-				err = sendAsGroup(txgroup, client, h)
+				err = pps.sendAsGroup(txgroup, client, senders)
 				if err != nil {
 					return
 				}
@@ -822,7 +862,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 	return
 }
 
-func takeTopAccounts(allAccounts map[string]uint64, numAccounts uint32, srcAccount string) (accounts map[string]uint64) {
+func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) {
 	allAddrs := make([]string, len(allAccounts))
 	var i int
 	for addr := range allAccounts {
@@ -833,12 +873,12 @@ func takeTopAccounts(allAccounts map[string]uint64, numAccounts uint32, srcAccou
 	sort.SliceStable(allAddrs, func(i, j int) bool {
 		amt1 := allAccounts[allAddrs[i]]
 		amt2 := allAccounts[allAddrs[j]]
-		return amt1 > amt2
+		return amt1.balance > amt2.balance
 	})
 
 	// Now populate a new map with just the accounts needed
 	accountsRequired := int(numAccounts + 1) // Participating and Src
-	accounts = make(map[string]uint64)
+	accounts = make(map[string]*pingPongAccount)
 	accounts[srcAccount] = allAccounts[srcAccount]
 	for _, addr := range allAddrs {
 		accounts[addr] = allAccounts[addr]
@@ -849,18 +889,23 @@ func takeTopAccounts(allAccounts map[string]uint64, numAccounts uint32, srcAccou
 	return
 }
 
-func generateAccounts(client libgoal.Client, allAccounts map[string]uint64, numAccounts uint32, wallet []byte) (map[string]uint64, error) {
+func generateAccounts(client libgoal.Client, allAccounts map[string]*pingPongAccount, numAccounts uint32) (map[string]*pingPongAccount, error) {
 	// Compute the number of accounts to generate
 	accountsRequired := int(numAccounts+1) - len(allAccounts)
 
+	var seed crypto.Seed
+
 	for accountsRequired > 0 {
 		accountsRequired--
-		addr, err := client.GenerateAddress(wallet)
-		if err != nil {
-			return allAccounts, err
-		}
 
-		allAccounts[addr] = 0
+		crypto.RandBytes(seed[:])
+		privateKey := crypto.GenerateSignatureSecrets(seed)
+		publicKey := basics.Address(privateKey.SignatureVerifier)
+
+		allAccounts[publicKey.String()] = &pingPongAccount{
+			sk: privateKey,
+			pk: publicKey,
+		}
 	}
 
 	return allAccounts, nil
